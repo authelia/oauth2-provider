@@ -196,9 +196,11 @@ func TestAccessToken(t *testing.T) {
 
 				rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
 				require.NoError(t, err)
+
 				var payload map[string]any
-				err = json.Unmarshal(rawPayload, &payload)
-				require.NoError(t, err)
+
+				require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
 				if scopeField == jwt.JWTScopeFieldList || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload["scp"]
 					require.True(t, ok)
@@ -209,6 +211,14 @@ func TestAccessToken(t *testing.T) {
 					require.True(t, ok)
 					assert.Equal(t, "email offline", scope)
 				}
+
+				rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+				require.NoError(t, err)
+				var header map[string]any
+
+				require.NoError(t, json.Unmarshal(rawHeader, &header))
+
+				assert.Equal(t, jwt.JWTHeaderTypeValueAccessTokenJWT, header[jwt.JWTHeaderKeyValueType])
 
 				extraClaimsSession, ok := c.r.GetSession().(goauth2.ExtraClaimsSession)
 				require.True(t, ok)

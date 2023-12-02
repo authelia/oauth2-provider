@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,10 +18,11 @@ import (
 
 	. "github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 func TestWriteIntrospectionError(t *testing.T) {
-	f := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	c := gomock.NewController(t)
 	defer c.Finish()
 
@@ -30,35 +30,35 @@ func TestWriteIntrospectionError(t *testing.T) {
 	rw.EXPECT().WriteHeader(http.StatusUnauthorized)
 	rw.EXPECT().Header().AnyTimes().Return(http.Header{})
 	rw.EXPECT().Write(gomock.Any())
-	f.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrRequestUnauthorized))
+	provider.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrRequestUnauthorized))
 
 	rw.EXPECT().WriteHeader(http.StatusBadRequest)
 	rw.EXPECT().Write(gomock.Any())
-	f.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrInvalidRequest))
+	provider.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrInvalidRequest))
 
 	rw.EXPECT().Write([]byte("{\"active\":false}\n"))
-	f.WriteIntrospectionError(context.Background(), rw, errors.New(""))
+	provider.WriteIntrospectionError(context.Background(), rw, errors.New(""))
 
 	rw.EXPECT().Write([]byte("{\"active\":false}\n"))
-	f.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrInactiveToken.WithWrap(ErrRequestUnauthorized)))
+	provider.WriteIntrospectionError(context.Background(), rw, errorsx.WithStack(ErrInactiveToken.WithWrap(ErrRequestUnauthorized)))
 
-	f.WriteIntrospectionError(context.Background(), rw, nil)
+	provider.WriteIntrospectionError(context.Background(), rw, nil)
 }
 
 func TestWriteIntrospectionResponse(t *testing.T) {
-	f := new(Fosite)
+	provider := new(Fosite)
 	c := gomock.NewController(t)
 	defer c.Finish()
 
 	rw := internal.NewMockResponseWriter(c)
 	rw.EXPECT().Write(gomock.Any()).AnyTimes()
-	f.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+	provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
 		AccessRequester: NewAccessRequest(nil),
 	})
 }
 
 func TestWriteIntrospectionResponseBody(t *testing.T) {
-	f := new(Fosite)
+	provider := new(Fosite)
 	ires := &IntrospectionResponse{}
 	rw := httptest.NewRecorder()
 
@@ -129,7 +129,7 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 	} {
 		t.Run(c.description, func(t *testing.T) {
 			c.setup()
-			f.WriteIntrospectionResponse(context.Background(), rw, ires)
+			provider.WriteIntrospectionResponse(context.Background(), rw, ires)
 			var params struct {
 				Active   bool   `json:"active"`
 				Exp      *int64 `json:"exp"`

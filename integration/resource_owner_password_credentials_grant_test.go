@@ -28,7 +28,7 @@ func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
 }
 
 func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.AccessTokenStrategy) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 
 	defer ts.Close()
@@ -64,7 +64,7 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.Acc
 				oauthClient.ClientID = "custom-lifespan-client"
 			},
 			check: func(t *testing.T, token *goauth.Token) {
-				s, err := fositeStore.GetAccessTokenSession(context.TODO(), strings.Split(token.AccessToken, ".")[1], nil)
+				s, err := store.GetAccessTokenSession(context.TODO(), strings.Split(token.AccessToken, ".")[1], nil)
 				require.NoError(t, err)
 				atExp := s.GetSession().GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)

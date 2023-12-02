@@ -29,17 +29,17 @@ func TestHierarchicScopeStrategy(t *testing.T) {
 	assert.False(t, strategy(scopes, "bar"))
 	assert.False(t, strategy(scopes, "baz"))
 
-	scopes = []string{"fosite.key.create", "fosite.key.get", "fosite.key.delete", "fosite.key.update"}
-	assert.True(t, strategy(scopes, "fosite.key.delete"))
-	assert.True(t, strategy(scopes, "fosite.key.get"))
-	assert.True(t, strategy(scopes, "fosite.key.get"))
-	assert.True(t, strategy(scopes, "fosite.key.update"))
+	scopes = []string{"authelia.key.create", "authelia.key.get", "authelia.key.delete", "authelia.key.update"}
+	assert.True(t, strategy(scopes, "authelia.key.delete"))
+	assert.True(t, strategy(scopes, "authelia.key.get"))
+	assert.True(t, strategy(scopes, "authelia.key.get"))
+	assert.True(t, strategy(scopes, "authelia.key.update"))
 
-	scopes = []string{"hydra", "openid", "offline"}
+	scopes = []string{"authelia", "openid", "offline"}
 	assert.False(t, strategy(scopes, "foo.bar"))
 	assert.False(t, strategy(scopes, "foo"))
-	assert.True(t, strategy(scopes, "hydra"))
-	assert.True(t, strategy(scopes, "hydra.bar"))
+	assert.True(t, strategy(scopes, "authelia"))
+	assert.True(t, strategy(scopes, "authelia.bar"))
 	assert.True(t, strategy(scopes, "openid"))
 	assert.True(t, strategy(scopes, "openid.baz.bar"))
 	assert.True(t, strategy(scopes, "offline"))

@@ -9,11 +9,11 @@ import (
 	"encoding/base64"
 	"regexp"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 var _ goauth2.TokenEndpointHandler = (*Handler)(nil)

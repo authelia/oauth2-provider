@@ -6,8 +6,9 @@ package goauth2
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 func (f *Fosite) NewAccessResponse(ctx context.Context, requester AccessRequester) (AccessResponder, error) {

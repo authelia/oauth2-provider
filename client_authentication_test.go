@@ -72,7 +72,7 @@ func TestAuthenticateClient(t *testing.T) {
 	const at = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 	hasher := &BCrypt{Config: &Config{HashCost: 6}}
-	f := &Fosite{
+	provider := &Fosite{
 		Store: storage.NewMemoryStore(),
 		Config: &Config{
 			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
@@ -519,9 +519,9 @@ func TestAuthenticateClient(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
 			store := storage.NewMemoryStore()
 			store.Clients[tc.client.ID] = tc.client
-			f.Store = store
+			provider.Store = store
 
-			c, err := f.AuthenticateClient(context.Background(), tc.r, tc.form)
+			c, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
 			if tc.expectErr != nil {
 				require.EqualError(t, err, tc.expectErr.Error())
 				return
@@ -566,8 +566,8 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.Clients[client.ID] = client
 
-	hasher := &BCrypt{&Config{HashCost: 6}}
-	f := &Fosite{
+	hasher := &BCrypt{Config: &Config{HashCost: 6}}
+	provider := &Fosite{
 		Store: store,
 		Config: &Config{
 			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
@@ -584,12 +584,12 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		"aud": "token-url",
 	}, key, "kid-foo")}, "client_assertion_type": []string{at}}
 
-	c, err := f.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.NoError(t, err, "%#v", err)
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
-	c, err = f.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
 	assert.Nil(t, c)

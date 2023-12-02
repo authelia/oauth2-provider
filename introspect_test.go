@@ -48,7 +48,7 @@ func TestIntrospect(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := new(Config)
-	f := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
+	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
 	req.Header.Add("Authorization", "bearer some-token")
@@ -103,7 +103,7 @@ func TestIntrospect(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			_, _, err := f.IntrospectToken(context.TODO(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
+			_, _, err := provider.IntrospectToken(context.TODO(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
 			} else {

@@ -8,9 +8,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 const (

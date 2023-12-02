@@ -17,7 +17,7 @@ import (
 )
 
 func TestWriteAuthorizeResponse(t *testing.T) {
-	oauth2 := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
 	ctrl := gomock.NewController(t)
 	rw := NewMockResponseWriter(ctrl)
@@ -205,7 +205,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 	} {
 		t.Logf("Starting test case %d", k)
 		c.setup()
-		oauth2.WriteAuthorizeResponse(context.Background(), rw, ar, resp)
+		provider.WriteAuthorizeResponse(context.Background(), rw, ar, resp)
 		c.expect()
 		header = http.Header{}
 		t.Logf("Passed test case %d", k)

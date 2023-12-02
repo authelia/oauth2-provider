@@ -28,14 +28,14 @@ func TestAuthorizeCodeFlowWithPublicClient(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	fositeStore.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {

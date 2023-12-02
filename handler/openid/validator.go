@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ory/go-convenience/stringslice"
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
+	"github.com/authelia/goauth2/internal/stringslice"
 	"github.com/authelia/goauth2/token/jwt"
 )
 

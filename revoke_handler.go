@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // NewRevocationRequest handles incoming token revocation requests and

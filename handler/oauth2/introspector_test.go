@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 func TestIntrospectToken(t *testing.T) {

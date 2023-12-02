@@ -11,11 +11,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 	"golang.org/x/text/language"
 
 	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 var (
@@ -257,9 +257,6 @@ type (
 		catalog     i18n.MessageCatalog
 		lang        language.Tag
 	}
-	stackTracer interface {
-		StackTrace() errors.StackTrace
-	}
 )
 
 var (
@@ -268,7 +265,7 @@ var (
 	_ errorsx.RequestIDCarrier  = new(RFC6749Error)
 	_ errorsx.StatusCarrier     = new(RFC6749Error)
 	_ errorsx.StatusCodeCarrier = new(RFC6749Error)
-	// _ errorsx.DetailsCarrier = new(RFC6749Error)
+	_ errorsx.DetailsCarrier    = new(RFC6749Error)
 )
 
 func ErrorToRFC6749Error(err error) *RFC6749Error {
@@ -291,7 +288,7 @@ func (e *RFC6749Error) StackTrace() (trace errors.StackTrace) {
 		return
 	}
 
-	if st := stackTracer(nil); stderr.As(e.cause, &st) {
+	if st := errorsx.StackTracer(nil); stderr.As(e.cause, &st) {
 		trace = st.StackTrace()
 	}
 
@@ -317,7 +314,7 @@ func (e RFC6749Error) WithLegacyFormat(useLegacyFormat bool) *RFC6749Error {
 }
 
 func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
-	if st := stackTracer(nil); !stderr.As(e.cause, &st) {
+	if st := errorsx.StackTracer(nil); !stderr.As(e.cause, &st) {
 		e.Wrap(errorsx.WithStack(err))
 	} else {
 		e.Wrap(err)
@@ -351,6 +348,10 @@ func (e *RFC6749Error) RequestID() string {
 
 func (e *RFC6749Error) Reason() string {
 	return e.HintField
+}
+
+func (e *RFC6749Error) Details() map[string]any {
+	return nil
 }
 
 func (e *RFC6749Error) StatusCode() int {

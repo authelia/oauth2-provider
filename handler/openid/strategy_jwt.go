@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/mohae/deepcopy"
-	"github.com/ory/go-convenience/stringslice"
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
+	"github.com/authelia/goauth2/internal/stringslice"
 	"github.com/authelia/goauth2/token/jwt"
 )
 
@@ -30,7 +30,7 @@ type Session interface {
 	goauth2.Session
 }
 
-// IDTokenSession is a session container for the id token
+// DefaultSession is a session container for the id token.
 type DefaultSession struct {
 	Claims    *jwt.IDTokenClaims              `json:"id_token_claims"`
 	Headers   *jwt.Headers                    `json:"headers"`

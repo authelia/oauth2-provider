@@ -77,7 +77,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 	reqJWK := httptest.NewServer(hJWK)
 	defer reqJWK.Close()
 
-	f := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy()}}
+	provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy()}}
 	for k, tc := range []struct {
 		client Client
 		form   url.Values
@@ -194,19 +194,19 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 				},
 			}
 
-			err := f.authorizeRequestParametersFromOpenIDConnectRequest(context.Background(), req, false)
+			err := provider.authorizeRequestParametersFromOpenIDConnectRequest(context.Background(), req, false)
 			if tc.expectErr != nil {
 				require.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
 				if tc.expectErrReason != "" {
-					real := new(RFC6749Error)
-					require.True(t, errors.As(err, &real))
-					assert.EqualValues(t, tc.expectErrReason, real.Reason())
+					actual := new(RFC6749Error)
+					require.True(t, errors.As(err, &actual))
+					assert.EqualValues(t, tc.expectErrReason, actual.Reason())
 				}
 			} else {
 				if err != nil {
-					real := new(RFC6749Error)
-					errors.As(err, &real)
-					require.NoErrorf(t, err, "Hint: %v\nDebug:%v", real.HintField, real.DebugField)
+					actual := new(RFC6749Error)
+					errors.As(err, &actual)
+					require.NoErrorf(t, err, "Hint: %v\nDebug:%v", actual.HintField, actual.DebugField)
 				}
 				require.NoErrorf(t, err, "%+v", err)
 				require.Equal(t, len(tc.expectForm), len(req.Form))

@@ -4,11 +4,11 @@
 package goauth2
 
 import (
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 	"golang.org/x/text/language"
 
 	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // AddLocalizerToErr augments the error object with the localizer

@@ -6,10 +6,9 @@ package openid
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 	"github.com/authelia/goauth2/token/jwt"
 )
 

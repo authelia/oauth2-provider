@@ -33,7 +33,7 @@ func TestNewAccessRequest(t *testing.T) {
 
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -198,7 +198,7 @@ func TestNewAccessRequest(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -223,7 +223,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 	client := &DefaultClient{}
 	anotherClient := &DefaultClient{ID: "another"}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -326,7 +326,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -359,7 +359,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -435,7 +435,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

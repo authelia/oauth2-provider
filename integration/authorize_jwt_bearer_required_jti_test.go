@@ -91,7 +91,7 @@ func TestAuthorizeJWTBearerRequiredJtiSuite(t *testing.T) {
 			GrantTypeJWTBearerIssuedDateOptional: true,
 			TokenURL:                             tokenURL,
 		},
-		fositeStore,
+		store,
 		jwtStrategy,
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,

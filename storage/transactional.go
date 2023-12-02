@@ -7,7 +7,7 @@ import (
 	"context"
 )
 
-// A storage provider that has support for transactions should implement this interface to ensure atomicity for certain flows
+// Transactional represents a storage provider that has support for transactions should implement this interface to ensure atomicity for certain flows
 // that require transactional semantics. Fosite will call these methods (when atomicity is required) if and only if the storage
 // provider has implemented `Transactional`. It is expected that the storage provider will examine context for an existing transaction
 // each time a database operation is to be performed.

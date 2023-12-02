@@ -25,6 +25,5 @@ In an effort to assist users who wish to use this library we aim to maintain the
 ## TODO
 
 * Consolidate JWT and JOSE dependencies
-* Remove unecessary dependencies and abstract them
+* Remove unecessary dependencies and/or abstract them
 * Apply downstream fixes
-* Remove github.com/ory/x (yoink relevant parts)

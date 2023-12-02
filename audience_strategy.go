@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ory/x/errorsx"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 type AudienceMatchingStrategy func(haystack []string, needle []string) error

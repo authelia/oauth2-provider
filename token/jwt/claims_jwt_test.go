@@ -15,7 +15,7 @@ import (
 var jwtClaims = &JWTClaims{
 	Subject:   "peter",
 	IssuedAt:  time.Now().UTC().Round(time.Second),
-	Issuer:    "fosite",
+	Issuer:    "authelia",
 	NotBefore: time.Now().UTC().Round(time.Second),
 	Audience:  []string{"tests"},
 	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),

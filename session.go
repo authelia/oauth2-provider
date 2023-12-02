@@ -14,12 +14,12 @@ import (
 type Session interface {
 	// SetExpiresAt sets the expiration time of a token.
 	//
-	//  session.SetExpiresAt(fosite.AccessToken, time.Now().UTC().Add(time.Hour))
+	//  session.SetExpiresAt(goauth2.AccessToken, time.Now().UTC().Add(time.Hour))
 	SetExpiresAt(key TokenType, exp time.Time)
 
 	// GetExpiresAt returns the expiration time of a token if set, or time.IsZero() if not.
 	//
-	//  session.GetExpiresAt(fosite.AccessToken)
+	//  session.GetExpiresAt(goauth2.AccessToken)
 	GetExpiresAt(key TokenType) time.Time
 
 	// GetUsername returns the username, if set. This is optional and only used during token introspection.

@@ -39,13 +39,13 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	fositeStore.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
@@ -149,12 +149,12 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 }
 
 func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	oauthClient = newOAuth2Client(ts)
 	state := "12345678901234567890"

@@ -7,9 +7,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 const (

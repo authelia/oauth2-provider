@@ -49,14 +49,14 @@ func TestRefreshTokenFlow(t *testing.T) {
 	fc := new(goauth2.Config)
 	fc.RefreshTokenLifespan = -1
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
-	f := compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
+	f := compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	state := "1234567890"
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	refreshCheckClient := &goauth2.DefaultClient{
 		ID:            "refresh-client",
@@ -68,8 +68,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 		Audience:      []string{"https://www.ory.sh/api"},
 	}
 
-	fositeStore.Clients["refresh-client"] = refreshCheckClient
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["refresh-client"] = refreshCheckClient
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	for _, c := range []struct {
 		description   string
@@ -163,12 +163,12 @@ func TestRefreshTokenFlow(t *testing.T) {
 				fc = new(goauth2.Config)
 				fc.RefreshTokenLifespan = time.Nanosecond
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
-				f = compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
+				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
-				fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			pass: false,
 		},
@@ -178,12 +178,12 @@ func TestRefreshTokenFlow(t *testing.T) {
 				fc = new(goauth2.Config)
 				fc.RefreshTokenLifespan = time.Minute
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
-				f = compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
+				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
-				fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{}

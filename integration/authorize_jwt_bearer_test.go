@@ -409,7 +409,7 @@ func TestAuthorizeJWTBearerSuite(t *testing.T) {
 			GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
 			TokenURL:                             tokenURL,
 		},
-		fositeStore,
+		store,
 		jwtStrategy,
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,

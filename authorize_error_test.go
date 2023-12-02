@@ -423,7 +423,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			oauth2 := &Fosite{
+			provider := &Fosite{
 				Config: &Config{
 					SendDebugMessagesToClients: c.debug,
 					UseLegacyErrorFormat:       !c.doNotUseLegacyFormat,
@@ -436,7 +436,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			req := NewMockAuthorizeRequester(ctrl)
 
 			c.mock(rw, req)
-			oauth2.WriteAuthorizeError(context.Background(), rw, req, c.err)
+			provider.WriteAuthorizeError(context.Background(), rw, req, c.err)
 			c.checkHeader(t, k)
 			header = http.Header{}
 		})

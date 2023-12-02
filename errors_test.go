@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 func TestRFC6749Error(t *testing.T) {
@@ -19,7 +20,7 @@ func TestRFC6749Error(t *testing.T) {
 		wrap := new(RFC6749Error)
 		wrap.Wrap(orig)
 
-		assert.EqualValues(t, orig.(stackTracer).StackTrace(), wrap.StackTrace())
+		assert.EqualValues(t, orig.(errorsx.StackTracer).StackTrace(), wrap.StackTrace())
 	})
 
 	t.Run("case=wrap_self", func(t *testing.T) {

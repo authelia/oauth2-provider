@@ -92,11 +92,11 @@ func (j *JWTSession) Clone() goauth2.Session {
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.
 // The returned value is a copy of JWTSession claims.
-func (s *JWTSession) GetExtraClaims() map[string]interface{} {
-	if s == nil {
+func (j *JWTSession) GetExtraClaims() map[string]interface{} {
+	if j == nil {
 		return nil
 	}
 
 	// We make a clone so that WithScopeField does not change the original value.
-	return s.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
+	return j.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
 }

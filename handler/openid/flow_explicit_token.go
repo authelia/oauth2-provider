@@ -6,10 +6,10 @@ package openid
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 func (c *OpenIDConnectExplicitHandler) HandleTokenEndpointRequest(ctx context.Context, request goauth2.AccessRequester) error {

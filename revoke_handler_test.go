@@ -30,7 +30,7 @@ func TestNewRevocationRequest(t *testing.T) {
 
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -193,7 +193,7 @@ func TestNewRevocationRequest(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.RevocationHandlers = c.handlers
-			err := fosite.NewRevocationRequest(ctx, r)
+			err := provider.NewRevocationRequest(ctx, r)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -211,7 +211,7 @@ func TestWriteRevocationResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := &Config{ClientSecretsHasher: hasher}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 
 	type args struct {
 		rw  *httptest.ResponseRecorder
@@ -245,7 +245,7 @@ func TestWriteRevocationResponse(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		fosite.WriteRevocationResponse(context.Background(), tc.input.rw, tc.input.err)
+		provider.WriteRevocationResponse(context.Background(), tc.input.rw, tc.input.err)
 		assert.Equal(t, tc.expectCode, tc.input.rw.Code)
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
@@ -33,14 +33,14 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy int
 	c := new(goauth2.Config)
 	c.EnforcePKCE = true
 	c.EnablePKCEPlainChallengeMethod = true
-	f := compose.Compose(c, fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &goauth2.DefaultSession{})
+	provider := compose.Compose(c, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, provider, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	fositeStore.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var authCodeUrl string
 	var verifier string

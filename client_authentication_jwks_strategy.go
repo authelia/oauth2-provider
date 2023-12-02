@@ -11,7 +11,8 @@ import (
 	"github.com/dgraph-io/ristretto"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/ory/x/errorsx"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 const defaultJWKSFetcherStrategyCachePrefix = "github.com/authelia/goauth2.DefaultJWKSFetcherStrategy:"

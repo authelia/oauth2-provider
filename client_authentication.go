@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v3"
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
+	"github.com/authelia/goauth2/internal/errorsx"
 	"github.com/authelia/goauth2/token/jwt"
 )
 
@@ -53,7 +53,7 @@ func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConne
 }
 
 // AuthenticateClient authenticates client requests using the configured strategy
-// `Fosite.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
+// `goauth2.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
 func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (Client, error) {
 	if s := f.Config.GetClientAuthenticationStrategy(ctx); s != nil {
 		return s(ctx, r, form)

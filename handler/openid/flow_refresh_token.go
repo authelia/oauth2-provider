@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 type OpenIDConnectRefreshHandler struct {

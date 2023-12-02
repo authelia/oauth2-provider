@@ -57,7 +57,7 @@ func TestUnsignedToken(t *testing.T) {
 			tk, err := jwt.ParseSigned(rawToken)
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[jose.HeaderKey("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[("typ")])
 		})
 	}
 }
@@ -86,19 +86,19 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[jose.HeaderKey("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[("typ")])
 		})
 	}
 }
 
-var keyFuncError error = fmt.Errorf("error loading key")
+var keyFuncError = fmt.Errorf("error loading key")
 
 var (
-	jwtTestDefaultKey *rsa.PublicKey = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	defaultKeyFunc    Keyfunc        = func(t *Token) (interface{}, error) { return jwtTestDefaultKey, nil }
-	emptyKeyFunc      Keyfunc        = func(t *Token) (interface{}, error) { return nil, nil }
-	errorKeyFunc      Keyfunc        = func(t *Token) (interface{}, error) { return nil, keyFuncError }
-	nilKeyFunc        Keyfunc        = nil
+	jwtTestDefaultKey         = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
+	defaultKeyFunc    Keyfunc = func(t *Token) (interface{}, error) { return jwtTestDefaultKey, nil }
+	emptyKeyFunc      Keyfunc = func(t *Token) (interface{}, error) { return nil, nil }
+	errorKeyFunc      Keyfunc = func(t *Token) (interface{}, error) { return nil, keyFuncError }
+	nilKeyFunc        Keyfunc = nil
 )
 
 // Many test cases where taken from https://github.com/dgrijalva/jwt-go/blob/master/parser_test.go

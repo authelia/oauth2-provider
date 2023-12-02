@@ -145,7 +145,7 @@ type Fosite struct {
 	Config Configurator
 }
 
-// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to fosite.MinParameterEntropy.
+// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to goauth2.MinParameterEntropy.
 func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	if mp := f.Config.GetMinParameterEntropy(ctx); mp > 0 {
 		return mp

@@ -46,7 +46,7 @@ func TestIntrospectToken(t *testing.T) {
 }
 
 func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, introspectionFactory compose.Factory) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 

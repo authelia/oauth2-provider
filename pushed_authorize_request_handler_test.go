@@ -36,7 +36,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		ClientSecretsHasher:      hasher,
 	}
 
-	fosite := &Fosite{
+	provider := &Fosite{
 		Store:  store,
 		Config: config,
 	}
@@ -47,7 +47,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 	specialCharRedir, _ := url.Parse("web+application://callback")
 	for _, c := range []struct {
 		desc          string
-		conf          *Fosite
+		provider      *Fosite
 		r             *http.Request
 		query         url.Values
 		expectedError error
@@ -56,8 +56,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 	}{
 		/* empty request */
 		{
-			desc: "empty request fails",
-			conf: fosite,
+			desc:     "empty request fails",
+			provider: provider,
 			r: &http.Request{
 				Method: "POST",
 			},
@@ -67,7 +67,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		/* invalid redirect uri */
 		{
 			desc:          "invalid redirect uri fails",
-			conf:          fosite,
+			provider:      provider,
 			query:         url.Values{"redirect_uri": []string{"invalid"}},
 			expectedError: ErrInvalidClient,
 			mock:          func() {},
@@ -75,15 +75,15 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		/* invalid client */
 		{
 			desc:          "invalid client fails",
-			conf:          fosite,
+			provider:      provider,
 			query:         url.Values{"redirect_uri": []string{"https://foo.bar/cb"}},
 			expectedError: ErrInvalidClient,
 			mock:          func() {},
 		},
 		/* redirect client mismatch */
 		{
-			desc: "client and request redirects mismatch",
-			conf: fosite,
+			desc:     "client and request redirects mismatch",
+			provider: provider,
 			query: url.Values{
 				"client_id":     []string{"1234"},
 				"client_secret": []string{"1234"},
@@ -96,8 +96,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* redirect client mismatch */
 		{
-			desc: "client and request redirects mismatch",
-			conf: fosite,
+			desc:     "client and request redirects mismatch",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  []string{""},
 				"client_id":     []string{"1234"},
@@ -111,8 +111,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* redirect client mismatch */
 		{
-			desc: "client and request redirects mismatch",
-			conf: fosite,
+			desc:     "client and request redirects mismatch",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  []string{"https://foo.bar/cb"},
 				"client_id":     []string{"1234"},
@@ -126,8 +126,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* no state */
 		{
-			desc: "no state",
-			conf: fosite,
+			desc:     "no state",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  []string{"https://foo.bar/cb"},
 				"client_id":     []string{"1234"},
@@ -142,8 +142,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* short state */
 		{
-			desc: "short state",
-			conf: fosite,
+			desc:     "short state",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -159,8 +159,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because scope not given */
 		{
-			desc: "should fail because client does not have scope baz",
-			conf: fosite,
+			desc:     "should fail because client does not have scope baz",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -177,8 +177,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because scope not given */
 		{
-			desc: "should fail because client does not have scope baz",
-			conf: fosite,
+			desc:     "should fail because client does not have scope baz",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -200,8 +200,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* success case */
 		{
-			desc: "should pass",
-			conf: fosite,
+			desc:     "should pass",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -239,8 +239,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* repeated audience parameter */
 		{
-			desc: "repeated audience parameter",
-			conf: fosite,
+			desc:     "repeated audience parameter",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -278,8 +278,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* repeated audience parameter with tricky values */
 		{
-			desc: "repeated audience parameter with tricky values",
-			conf: fosite,
+			desc:     "repeated audience parameter with tricky values",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -317,8 +317,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* redirect_uri with special character in protocol*/
 		{
-			desc: "redirect_uri with special character",
-			conf: fosite,
+			desc:     "redirect_uri with special character",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"web+application://callback"},
 				"client_id":     {"1234"},
@@ -356,8 +356,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* audience with double spaces between values */
 		{
-			desc: "audience with double spaces between values",
-			conf: fosite,
+			desc:     "audience with double spaces between values",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -395,8 +395,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because unknown response_mode*/
 		{
-			desc: "should fail because unknown response_mode",
-			conf: fosite,
+			desc:     "should fail because unknown response_mode",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -414,8 +414,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because response_mode is requested but the OAuth 2.0 client doesn't support response mode */
 		{
-			desc: "should fail because response_mode is requested but the OAuth 2.0 client doesn't support response mode",
-			conf: fosite,
+			desc:     "should fail because response_mode is requested but the OAuth 2.0 client doesn't support response mode",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -433,8 +433,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because requested response mode is not allowed */
 		{
-			desc: "should fail because requested response mode is not allowed",
-			conf: fosite,
+			desc:     "should fail because requested response mode is not allowed",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -460,8 +460,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* success with response mode */
 		{
-			desc: "success with response mode",
-			conf: fosite,
+			desc:     "success with response mode",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -507,8 +507,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* determine correct response mode if default */
 		{
-			desc: "success with response mode",
-			conf: fosite,
+			desc:     "success with response mode",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -553,8 +553,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* determine correct response mode if default */
 		{
-			desc: "success with response mode",
-			conf: fosite,
+			desc:     "success with response mode",
+			provider: provider,
 			query: url.Values{
 				"redirect_uri":  {"https://foo.bar/cb"},
 				"client_id":     {"1234"},
@@ -599,8 +599,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because request_uri is included */
 		{
-			desc: "should fail because request_uri is provided in the request",
-			conf: fosite,
+			desc:     "should fail because request_uri is provided in the request",
+			provider: provider,
 			query: url.Values{
 				"request_uri":   {"https://foo.bar/ru"},
 				"redirect_uri":  {"https://foo.bar/cb"},
@@ -619,8 +619,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		},
 		/* fails because of invalid client credentials */
 		{
-			desc: "should fail because of invalid client creds",
-			conf: fosite,
+			desc:     "should fail because of invalid client creds",
+			provider: provider,
 			query: url.Values{
 				"request_uri":   {"https://foo.bar/ru"},
 				"redirect_uri":  {"https://foo.bar/cb"},
@@ -652,7 +652,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				}
 			}
 
-			ar, err := c.conf.NewPushedAuthorizeRequest(ctx, c.r)
+			ar, err := c.provider.NewPushedAuthorizeRequest(ctx, c.r)
 			if c.expectedError != nil {
 				assert.EqualError(t, err, c.expectedError.Error(), "Stack: %s", string(debug.Stack()))
 				// https://github.com/ory/hydra/issues/1642

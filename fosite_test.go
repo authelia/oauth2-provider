@@ -58,9 +58,9 @@ func TestPushedAuthorizedRequestHandlers(t *testing.T) {
 }
 
 func TestMinParameterEntropy(t *testing.T) {
-	f := Fosite{Config: new(Config)}
-	assert.Equal(t, MinParameterEntropy, f.GetMinParameterEntropy(context.Background()))
+	provider := Fosite{Config: new(Config)}
+	assert.Equal(t, MinParameterEntropy, provider.GetMinParameterEntropy(context.Background()))
 
-	f = Fosite{Config: &Config{MinParameterEntropy: 42}}
-	assert.Equal(t, 42, f.GetMinParameterEntropy(context.Background()))
+	provider = Fosite{Config: &Config{MinParameterEntropy: 42}}
+	assert.Equal(t, 42, provider.GetMinParameterEntropy(context.Background()))
 }

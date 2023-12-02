@@ -47,7 +47,7 @@ var (
 	secondPrivateKey, _ = rsa.GenerateKey(rand.Reader, 2048)
 )
 
-var fositeStore = &storage.MemoryStore{
+var store = &storage.MemoryStore{
 	Clients: map[string]goauth2.Client{
 		"my-client": &goauth2.DefaultClient{
 			ID:            "my-client",

@@ -11,7 +11,8 @@ import (
 
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
-	"github.com/ory/x/errorsx"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // Token represets a JWT Token
@@ -157,7 +158,7 @@ func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
 	return ParseWithClaims(tokenString, MapClaims{}, keyFunc)
 }
 
-// Parse, validate, and return a token.
+// ParseWithClaims parses, validates, and returns a token.
 // keyFunc will receive the parsed token and should return the key for validating.
 // If everything is kosher, err will be nil
 func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token, error) {

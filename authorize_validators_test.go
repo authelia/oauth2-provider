@@ -15,7 +15,7 @@ import (
 )
 
 func TestValidateResponseTypes(t *testing.T) {
-	f := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	for k, tc := range []struct {
 		rt        string
 		art       []string
@@ -72,7 +72,7 @@ func TestValidateResponseTypes(t *testing.T) {
 			ar := NewAuthorizeRequest()
 			ar.Request.Client = &DefaultClient{ResponseTypes: tc.art}
 
-			err := f.validateResponseTypes(r, ar)
+			err := provider.validateResponseTypes(r, ar)
 			if tc.expectErr {
 				require.Error(t, err)
 			} else {

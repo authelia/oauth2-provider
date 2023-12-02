@@ -9,8 +9,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ory/x/errorsx"
 	"golang.org/x/text/language"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // NewIntrospectionRequest initiates token introspection as defined in

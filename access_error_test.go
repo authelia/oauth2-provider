@@ -20,7 +20,7 @@ import (
 )
 
 func TestWriteAccessError(t *testing.T) {
-	f := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
 	ctrl := gomock.NewController(t)
 	rw := NewMockResponseWriter(ctrl)
@@ -30,14 +30,14 @@ func TestWriteAccessError(t *testing.T) {
 	rw.EXPECT().WriteHeader(http.StatusBadRequest)
 	rw.EXPECT().Write(gomock.Any())
 
-	f.WriteAccessError(context.Background(), rw, nil, ErrInvalidRequest)
+	provider.WriteAccessError(context.Background(), rw, nil, ErrInvalidRequest)
 }
 
 func TestWriteAccessError_RFC6749(t *testing.T) {
 	// https://tools.ietf.org/html/rfc6749#section-5.2
 
 	config := new(Config)
-	f := &Fosite{Config: config}
+	provider := &Fosite{Config: config}
 
 	for k, c := range []struct {
 		err                *RFC6749Error
@@ -62,7 +62,7 @@ func TestWriteAccessError_RFC6749(t *testing.T) {
 			config.UseLegacyErrorFormat = c.includeExtraFields
 
 			rw := httptest.NewRecorder()
-			f.WriteAccessError(context.Background(), rw, nil, c.err)
+			provider.WriteAccessError(context.Background(), rw, nil, c.err)
 
 			var params struct {
 				Error       string `json:"error"`             // specified by RFC, required

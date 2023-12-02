@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // Implements

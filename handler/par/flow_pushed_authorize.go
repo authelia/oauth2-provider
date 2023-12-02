@@ -10,9 +10,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 	"github.com/authelia/goauth2/token/hmac"
 )
 

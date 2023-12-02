@@ -22,7 +22,7 @@ func TestNewAccessResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := &Config{}
-	f := &Fosite{Config: config}
+	provider := &Fosite{Config: config}
 	for k, c := range []struct {
 		handlers  TokenEndpointHandlers
 		mock      func()
@@ -75,7 +75,7 @@ func TestNewAccessResponse(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			config.TokenEndpointHandlers = c.handlers
 			c.mock()
-			ar, err := f.NewAccessResponse(context.TODO(), nil)
+			ar, err := provider.NewAccessResponse(context.TODO(), nil)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

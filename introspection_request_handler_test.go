@@ -30,7 +30,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
 
 	config := new(Config)
-	f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+	provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 	httpreq := &http.Request{
 		Method: "POST",
 		Header: http.Header{
@@ -69,7 +69,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			res, err := f.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
+			res, err := provider.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
 			require.NoError(t, err)
 			assert.Equal(t, c.expectedATT, res.GetAccessTokenType())
 			assert.Equal(t, c.expectedTU, res.GetTokenUse())

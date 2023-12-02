@@ -6,8 +6,9 @@ package goauth2
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 const DefaultBCryptWorkFactor = 12

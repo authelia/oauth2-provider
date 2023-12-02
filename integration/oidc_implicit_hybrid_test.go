@@ -36,12 +36,12 @@ func TestOIDCImplicitFlow(t *testing.T) {
 	}
 	f := compose.ComposeAllEnabled(&goauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
-	}, fositeStore, gen.MustRSAKey())
+	}, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state = "12345678901234567890"
 	for k, c := range []struct {

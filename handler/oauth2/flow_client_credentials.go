@@ -7,9 +7,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 var _ goauth2.TokenEndpointHandler = (*ClientCredentialsGrantHandler)(nil)
@@ -23,7 +22,7 @@ type ClientCredentialsGrantHandler struct {
 	}
 }
 
-// IntrospectTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.4.2
+// HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.4.2
 func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request goauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(goauth2.ErrUnknownRequest)

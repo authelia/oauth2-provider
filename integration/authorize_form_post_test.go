@@ -43,18 +43,18 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 		},
 	}
 	config := &goauth2.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
-	f := compose.ComposeAllEnabled(config, fositeStore, gen.MustRSAKey())
+	f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	defaultClient := fositeStore.Clients["my-client"].(*goauth2.DefaultClient)
+	defaultClient := store.Clients["my-client"].(*goauth2.DefaultClient)
 	defaultClient.RedirectURIs[0] = ts.URL + "/callback"
 	responseModeClient := &goauth2.DefaultResponseModeClient{
 		DefaultClient: defaultClient,
 		ResponseModes: []goauth2.ResponseModeType{goauth2.ResponseModeFormPost, goauth2.ResponseModeFormPost, "decorated_form_post"},
 	}
-	fositeStore.Clients["response-mode-client"] = responseModeClient
+	store.Clients["response-mode-client"] = responseModeClient
 	oauthClient.ClientID = "response-mode-client"
 
 	var state string
@@ -175,7 +175,7 @@ func testFormPost(state *string, customResponse bool, c formPostTestCase, oauthC
 		resp, err := client.Get(authURL)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-		code, state, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(fositeStore.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
+		code, state, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
 		require.NoError(t, err)
 		c.check(t, state, code, iDToken, token, cparam, errResp)
 	}

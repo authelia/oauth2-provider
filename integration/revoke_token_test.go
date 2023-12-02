@@ -26,7 +26,7 @@ func TestRevokeToken(t *testing.T) {
 }
 
 func runRevokeTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 
 	defer ts.Close()

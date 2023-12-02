@@ -17,7 +17,7 @@ func TestSession(t *testing.T) {
 }
 
 func TestZeroSession(t *testing.T) {
-	var s *DefaultSession = new(DefaultSession)
+	var s = new(DefaultSession)
 	assert.Empty(t, s.GetSubject())
 	assert.Empty(t, s.GetUsername())
 	assert.Empty(t, s.Clone())

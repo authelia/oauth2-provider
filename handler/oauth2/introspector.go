@@ -6,9 +6,8 @@ package oauth2
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 type coreValidatorConfigProvider interface {

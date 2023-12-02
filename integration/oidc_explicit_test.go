@@ -35,7 +35,7 @@ func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
 
 func TestOpenIDConnectExplicitFlow(t *testing.T) {
 	f := compose.ComposeAllEnabled(&goauth2.Config{
-		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}, fositeStore, gen.MustRSAKey())
+		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}, store, gen.MustRSAKey())
 
 	for k, c := range []struct {
 		description    string
@@ -121,7 +121,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			defer ts.Close()
 
 			oauthClient := newOAuth2Client(ts)
-			fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+			store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 			resp, err := http.Get(c.setup(oauthClient))
 			require.NoError(t, err)

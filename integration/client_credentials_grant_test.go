@@ -49,13 +49,13 @@ func introspect(t *testing.T, ts *httptest.Server, token string, p interface{}, 
 }
 
 func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	fositeStore.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 	for k, c := range []struct {
 		description string
 		setup       func()
@@ -100,7 +100,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
 				assert.Equal(t, "goauth2", gjson.GetBytes(j, "scope").String())
-				atReq, ok := fositeStore.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
+				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
 				atExp := atReq.GetSession().GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(time.Hour), atExp, time.Minute)
@@ -120,7 +120,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
 				assert.Equal(t, "goauth2", gjson.GetBytes(j, "scope").String())
 
-				atReq, ok := fositeStore.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
+				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
 				atExp := atReq.GetSession().GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan), atExp, time.Minute)

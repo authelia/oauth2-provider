@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ory/x/errorsx"
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 // NewPushedAuthorizeResponse executes the handlers and builds the response

@@ -11,7 +11,8 @@ import (
 	"time"
 
 	jjson "github.com/go-jose/go-jose/v3/json"
-	"github.com/ory/x/errorsx"
+
+	"github.com/authelia/goauth2/internal/errorsx"
 )
 
 var TimeFunc = time.Now
@@ -23,7 +24,7 @@ var TimeFunc = time.Now
 // This is the default claims type if you don't supply one
 type MapClaims map[string]interface{}
 
-// Compares the aud claim against cmp.
+// VerifyAudience compares the aud claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 	var aud []string
@@ -46,7 +47,7 @@ func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 	return verifyAud(aud, cmp, req)
 }
 
-// Compares the exp claim against cmp.
+// VerifyExpiresAt compares the exp claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 	if v, ok := m.toInt64("exp"); ok {
@@ -55,7 +56,7 @@ func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 	return !req
 }
 
-// Compares the iat claim against cmp.
+// VerifyIssuedAt compares the iat claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
 	if v, ok := m.toInt64("iat"); ok {
@@ -64,14 +65,14 @@ func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
 	return !req
 }
 
-// Compares the iss claim against cmp.
+// VerifyIssuer compares the iss claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyIssuer(cmp string, req bool) bool {
 	iss, _ := m["iss"].(string)
 	return verifyIss(iss, cmp, req)
 }
 
-// Compares the nbf claim against cmp.
+// VerifyNotBefore compares the nbf claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyNotBefore(cmp int64, req bool) bool {
 	if v, ok := m.toInt64("nbf"); ok {
@@ -102,7 +103,7 @@ func (m MapClaims) toInt64(claim string) (int64, bool) {
 	return 0, false
 }
 
-// Validates time based claims "exp, iat, nbf".
+// Valid validates time based claims "exp, iat, nbf".
 // There is no accounting for clock skew.
 // As well, if any of the above claims are not in the token, it will still
 // be considered a valid claim.

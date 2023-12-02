@@ -25,7 +25,7 @@ func ptr(d time.Duration) *time.Duration {
 	return &d
 }
 
-var TestLifespans goauth2.ClientLifespanConfig = goauth2.ClientLifespanConfig{
+var TestLifespans = goauth2.ClientLifespanConfig{
 	AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
 	AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
 	AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),

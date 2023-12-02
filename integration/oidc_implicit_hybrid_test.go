@@ -107,6 +107,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			var callbackURL *url.URL
 
 			authURL := strings.Replace(oauthClient.AuthCodeURL(state), "response_type=code", "response_type="+c.responseType, -1) + "&nonce=" + c.nonce
+
 			client := &http.Client{
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
 					callbackURL = req.URL

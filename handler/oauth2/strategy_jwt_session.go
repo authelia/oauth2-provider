@@ -40,8 +40,15 @@ func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 
 func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	if j.JWTHeader == nil {
-		j.JWTHeader = &jwt.Headers{}
+		j.JWTHeader = &jwt.Headers{
+			Extra: map[string]any{
+				jwt.JWTHeaderKeyValueType: jwt.JWTHeaderTypeValueAccessTokenJWT,
+			},
+		}
+	} else if j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] == nil {
+		j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] = jwt.JWTHeaderTypeValueAccessTokenJWT
 	}
+
 	return j.JWTHeader
 }
 

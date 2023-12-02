@@ -71,12 +71,12 @@ func TestJWTHeaders(t *testing.T) {
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
 			jwtHeaders:   map[string]interface{}{},
-			expectedType: "JWT",
+			expectedType: JWTHeaderTypeValueJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]interface{}{"typ": "at+jwt"},
-			expectedType: "at+jwt",
+			jwtHeaders:   map[string]interface{}{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
+			expectedType: JWTHeaderTypeValueAccessTokenJWT,
 		},
 	}
 	for _, tc := range testCases {
@@ -86,7 +86,7 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JWTHeaderKeyValueType)])
 		})
 	}
 }

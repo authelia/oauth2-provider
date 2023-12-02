@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/errorsx"
 	"github.com/authelia/goauth2/token/jwt"
 )
 
@@ -74,7 +75,9 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token strin
 		return "", err
 	}
 
-	// TODO: From here we assume it is an access token, but how do we know it is really and that is not an ID token?
+	if !IsJWTProfileAccessToken(t) {
+		return "", errorsx.WithStack(goauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
+	}
 
 	requester := AccessTokenJWTToRequest(t)
 
@@ -85,4 +88,23 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token strin
 	accessRequest.Merge(requester)
 
 	return goauth2.AccessToken, nil
+}
+
+// IsJWTProfileAccessToken validates a *jwt.Token is actually a RFC9068 JWT Profile Access Token by checking the
+// relevant header as per https://datatracker.ietf.org/doc/html/rfc9068#section-2.1 which explicitly states that
+// the header MUST include a typ of 'at+jwt' or 'application/at+jwt' with a preference of 'at+jwt'.
+func IsJWTProfileAccessToken(token *jwt.Token) bool {
+	var (
+		raw any
+		typ string
+		ok  bool
+	)
+
+	if raw, ok = token.Header[jwt.JWTHeaderKeyValueType]; !ok {
+		return false
+	}
+
+	typ, ok = raw.(string)
+
+	return ok && (typ == jwt.JWTHeaderTypeValueAccessTokenJWT || typ == "application/at+jwt")
 }

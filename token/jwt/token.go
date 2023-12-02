@@ -33,8 +33,16 @@ const (
 	// This key should be use to correctly sign and verify alg:none JWT tokens
 	UnsafeAllowNoneSignatureType unsafeNoneMagicConstant = "none signing method allowed"
 
-	JWTHeaderType      = jose.HeaderKey("typ")
-	JWTHeaderTypeValue = "JWT"
+	JWTHeaderType = jose.HeaderKey(JWTHeaderKeyValueType)
+)
+
+const (
+	JWTHeaderKeyValueType = "typ"
+)
+
+const (
+	JWTHeaderTypeValueJWT            = "JWT"
+	JWTHeaderTypeValueAccessTokenJWT = "at+jwt"
 )
 
 type unsafeNoneMagicConstant string
@@ -65,7 +73,7 @@ func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
 
 func (t *Token) toJoseHeader() map[jose.HeaderKey]interface{} {
 	h := map[jose.HeaderKey]interface{}{
-		JWTHeaderType: JWTHeaderTypeValue,
+		JWTHeaderType: JWTHeaderTypeValueJWT,
 	}
 	for k, v := range t.Header {
 		h[jose.HeaderKey(k)] = v
@@ -110,7 +118,7 @@ func (t *Token) SignedString(k interface{}) (rawToken string, err error) {
 func unsignedToken(t *Token) (string, error) {
 	t.Header["alg"] = "none"
 	if _, ok := t.Header[string(JWTHeaderType)]; !ok {
-		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValue
+		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValueJWT
 	}
 	hbytes, err := json.Marshal(&t.Header)
 	if err != nil {

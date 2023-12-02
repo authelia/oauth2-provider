@@ -16,10 +16,6 @@ import (
 	"github.com/authelia/goauth2/handler/oauth2"
 )
 
-type stackTracer interface {
-	StackTrace() errors.StackTrace
-}
-
 func tokenRevocationHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := goauth2.NewContext()
@@ -123,7 +119,6 @@ func authCallbackHandler(t *testing.T) func(rw http.ResponseWriter, req *http.Re
 			rw.WriteHeader(http.StatusNotAcceptable)
 			rw.Write([]byte("error: " + q.Get("error")))
 		}
-
 	}
 }
 

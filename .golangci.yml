@@ -1,16 +1,65 @@
+---
+run:
+  timeout: 3m
+
+linters-settings:
+  forbidigo:
+    forbid:
+      - p: ^print.*$
+        msg: Do not commit print statements.
+      - p: ^fmt\.Print.*$
+        pkg: ^fmt$
+        msg: Do not commit print statements.
+    analyze-types: true
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocyclo:
+    min-complexity: 15
+  godot:
+    check-all: true
+  goimports:
+    local-prefixes: github.com/authelia/goauth2
+  revive:
+    confidence: 0.8
+
 linters:
   enable:
+    - asciicheck
+    - forbidigo
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
     - gosec
-  disable:
-    - ineffassign
-    - deadcode
-    - unused
-    - structcheck
-    - gosimple
-    - bodyclose
-    - staticcheck
+    - misspell
+    - nolintlint
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
 
-run:
-  skip-files:
-    - ".+_test.go"
-    - ".+_test_.+.go"
+issues:
+  exclude:
+    - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked  # yamllint disable-line rule:line-length
+    - func name will be used as test\.Test.* by other packages, and that stutters; consider calling this
+    - (possible misuse of unsafe.Pointer|should have signature)
+    - ineffective break statement. Did you mean to break out of the outer loop
+    - Use of unsafe calls should be audited
+    - Subprocess launch(ed with variable|ing should be audited)
+    - (G104|G307)
+    - (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
+    - Potential file inclusion via variable
+  exclude-rules:
+    - path: internal/commands/
+      linters:
+        - forbidigo
+    - path: cmd/
+      linters:
+        - forbidigo
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+...

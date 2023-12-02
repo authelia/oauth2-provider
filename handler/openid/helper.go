@@ -54,7 +54,6 @@ func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time
 }
 
 func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, ar goauth2.Requester, resp goauth2.AuthorizeResponder) error {
-
 	token, err := i.generateIDToken(ctx, lifespan, ar)
 	if err != nil {
 		return err

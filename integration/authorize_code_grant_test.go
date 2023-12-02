@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -130,11 +131,11 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
-				httpClient := oauthClient.Client(goauth.NoContext, token)
+				httpClient := oauthClient.Client(context.TODO(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -162,7 +163,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy interface{}) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+	token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 	require.NoError(t, err)
 	require.NotEmpty(t, token.AccessToken)
 
@@ -174,7 +175,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy interface{}) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, err = oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+	_, err = oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 	require.Error(t, err)
 
 	resp, err = http.DefaultClient.Get(ts.URL + "/info")

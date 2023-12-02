@@ -4,13 +4,13 @@
 package integration_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/parnurzeal/gorequest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
 
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/compose"
@@ -28,10 +28,11 @@ func TestRevokeToken(t *testing.T) {
 func runRevokeTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
 	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
+
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	token, err := oauthClient.Token(goauth.NoContext)
+	token, err := oauthClient.Token(context.TODO())
 	require.NoError(t, err)
 
 	resp, _, errs := gorequest.New().Post(ts.URL+"/revoke").

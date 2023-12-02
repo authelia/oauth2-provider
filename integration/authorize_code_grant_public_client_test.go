@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -95,11 +96,11 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
-				httpClient := oauthClient.Client(goauth.NoContext, token)
+				httpClient := oauthClient.Client(context.TODO(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

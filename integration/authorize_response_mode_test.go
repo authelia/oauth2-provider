@@ -159,7 +159,6 @@ func TestAuthorizeResponseModes(t *testing.T) {
 				responseModeClient.ResponseModes = []goauth2.ResponseModeType{goauth2.ResponseModeQuery}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
-				//assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 				assert.Equal(t, "Insecure response_mode 'query' for the response_type '[token code]'.", err["HintField"])
@@ -178,7 +177,6 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
 				f.(*goauth2.Fosite).Config.(*goauth2.Config).UseLegacyErrorFormat = true // reset
 
-				//assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.Contains(t, err["DescriptionField"], "Insecure response_mode 'query' for the response_type '[token code]'.")
 				assert.Empty(t, err["HintField"])

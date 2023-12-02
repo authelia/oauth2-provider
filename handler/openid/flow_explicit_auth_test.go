@@ -96,7 +96,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func() OpenIDConnectExplicitHandler {
 				h, store := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
 				aresp.EXPECT().GetCode().AnyTimes().Return("codeexample")
-				store.EXPECT().CreateOpenIDConnectSession(nil, "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).Return(errors.New(""))
+				store.EXPECT().CreateOpenIDConnectSession(context.TODO(), "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).Return(errors.New(""))
 				return h
 			},
 			expectErr: goauth2.ErrServerError,
@@ -105,14 +105,14 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			description: "should pass",
 			setup: func() OpenIDConnectExplicitHandler {
 				h, store := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
-				store.EXPECT().CreateOpenIDConnectSession(nil, "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).AnyTimes().Return(nil)
+				store.EXPECT().CreateOpenIDConnectSession(context.TODO(), "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).AnyTimes().Return(nil)
 				return h
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			h := c.setup()
-			err := h.HandleAuthorizeEndpointRequest(nil, areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

@@ -81,7 +81,6 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		return "", "", "", token, customParameters, rFC6749Error, err
 	}
 
-	//doc>html>body
 	body := findBody(doc.FirstChild.FirstChild)
 	if body.Data != "body" {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("Malformed html")
@@ -122,7 +121,6 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 			} else if attr.Key == "value" {
 				v = attr.Val
 			}
-
 		}
 
 		switch k {

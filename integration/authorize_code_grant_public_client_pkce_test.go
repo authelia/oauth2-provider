@@ -4,9 +4,10 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -100,7 +101,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy int
 				require.NoError(t, err)
 				defer resp.Body.Close()
 
-				body, err := ioutil.ReadAll(resp.Body)
+				body, err := io.ReadAll(resp.Body)
 				require.NoError(t, err)
 
 				if c.tokenStatusCode != 0 {
@@ -117,7 +118,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy int
 
 				require.NotEmpty(t, token.AccessToken, "Got body: %s", string(body))
 
-				httpClient := oauthClient.Client(goauth.NoContext, &token)
+				httpClient := oauthClient.Client(context.TODO(), &token)
 				resp, err = httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

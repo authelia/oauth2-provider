@@ -56,7 +56,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					description: "should fail because authcode not found",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
-						code, _, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Set("code", code)
 					},
@@ -76,7 +76,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					description: "should fail because validation failed",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, "bar", areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), "bar", areq))
 					},
 					expectErr: goauth2.ErrInvalidRequest,
 				},
@@ -94,11 +94,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						},
 					},
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with offline scope and refresh token",
 					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
@@ -124,11 +124,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with refresh token always provided",
 					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
@@ -154,11 +154,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with no refresh token",
 					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
@@ -183,11 +183,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						},
 					},
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should not have refresh token",
 					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
@@ -219,7 +219,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					}
 
 					aresp := goauth2.NewAccessResponse()
-					err := h.PopulateTokenEndpointResponse(nil, c.areq, aresp)
+					err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
 
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
@@ -291,7 +291,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because authcode could not be retrieved (1)",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						token, _, err := strategy.GenerateAuthorizeCode(nil, nil)
+						token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 					},
@@ -327,11 +327,11 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because client mismatch",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(nil, nil)
+						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, signature, authreq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
 					expectErr: goauth2.ErrInvalidGrant,
 				},
@@ -353,11 +353,11 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because redirect uri was set during /authorize call, but not in /token call",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(nil, nil)
+						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, signature, authreq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
 					expectErr: goauth2.ErrInvalidGrant,
 				},
@@ -381,11 +381,11 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should pass",
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(nil, nil)
+						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form = url.Values{"code": {token}}
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, signature, authreq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
 				},
 				{
@@ -406,12 +406,12 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.RefreshToken))
 					},
 					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						code, sig, err := strategy.GenerateAuthorizeCode(nil, nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(nil, sig, areq))
-						require.NoError(t, store.InvalidateAuthorizeCodeSession(nil, sig))
+						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
+						require.NoError(t, store.InvalidateAuthorizeCodeSession(context.TODO(), sig))
 					},
 					description: "should fail because code has been used already",
 					expectErr:   goauth2.ErrInvalidGrant,
@@ -454,7 +454,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			RequestedAt:  time.Now().UTC(),
 		},
 	}
-	token, _, err := strategy.GenerateAuthorizeCode(nil, nil)
+	token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 	require.NoError(t, err)
 	request.Form = url.Values{"code": {token}}
 	response := goauth2.NewAccessResponse()

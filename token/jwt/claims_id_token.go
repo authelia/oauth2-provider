@@ -110,7 +110,6 @@ func (c *IDTokenClaims) ToMap() map[string]interface{} {
 	}
 
 	return ret
-
 }
 
 // Add will add a key-value pair to the extra field

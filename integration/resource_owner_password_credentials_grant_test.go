@@ -4,13 +4,13 @@
 package integration_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
 	goauth "golang.org/x/oauth2"
 
 	"github.com/authelia/goauth2"
@@ -30,10 +30,13 @@ func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
 func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.AccessTokenStrategy) {
 	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
+
 	defer ts.Close()
 
 	var username, password string
+
 	oauthClient := newOAuth2Client(ts)
+
 	for k, c := range []struct {
 		description string
 		setup       func()
@@ -61,7 +64,7 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.Acc
 				oauthClient.ClientID = "custom-lifespan-client"
 			},
 			check: func(t *testing.T, token *goauth.Token) {
-				s, err := fositeStore.GetAccessTokenSession(nil, strings.Split(token.AccessToken, ".")[1], nil)
+				s, err := fositeStore.GetAccessTokenSession(context.TODO(), strings.Split(token.AccessToken, ".")[1], nil)
 				require.NoError(t, err)
 				atExp := s.GetSession().GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)
@@ -74,8 +77,9 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.Acc
 	} {
 		c.setup()
 
-		token, err := oauthClient.PasswordCredentialsToken(oauth2.NoContext, username, password)
+		token, err := oauthClient.PasswordCredentialsToken(context.TODO(), username, password)
 		require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
+
 		if !c.err {
 			assert.NotEmpty(t, token.AccessToken, "(%d) %s\n%s", k, c.description, token)
 

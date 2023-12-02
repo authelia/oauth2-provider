@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -116,7 +117,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy interface{}) {
 					Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 				}
 
-				httpClient := oauthClient.Client(goauth.NoContext, token)
+				httpClient := oauthClient.Client(context.TODO(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

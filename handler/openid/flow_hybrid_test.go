@@ -335,7 +335,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			h := c.setup()
-			err := h.HandleAuthorizeEndpointRequest(nil, areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

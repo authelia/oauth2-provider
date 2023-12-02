@@ -245,7 +245,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			ar := goauth2.NewAuthorizeRequest()
 			ar.Form.Add("code_challenge", tc.challenge)
 			ar.Form.Add("code_challenge_method", tc.method)
-			require.NoError(t, s.CreatePKCERequestSession(nil, fmt.Sprintf("valid-code-%d", k), ar))
+			require.NoError(t, s.CreatePKCERequestSession(context.TODO(), fmt.Sprintf("valid-code-%d", k), ar))
 
 			r := goauth2.NewAccessRequest(nil)
 			r.Client = tc.client

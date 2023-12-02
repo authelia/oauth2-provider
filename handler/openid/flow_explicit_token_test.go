@@ -25,7 +25,7 @@ func TestHandleTokenEndpointRequest(t *testing.T) {
 	areq.Client = &goauth2.DefaultClient{
 		//ResponseTypes: goauth2.Arguments{"id_token"},
 	}
-	assert.EqualError(t, h.HandleTokenEndpointRequest(nil, areq), goauth2.ErrUnknownRequest.Error())
+	assert.EqualError(t, h.HandleTokenEndpointRequest(context.TODO(), areq), goauth2.ErrUnknownRequest.Error())
 }
 
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
@@ -47,7 +47,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
 				req.GrantTypes = goauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(nil, ErrNoSessionFound)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
 			expectErr: goauth2.ErrUnknownRequest,
 		},
@@ -56,7 +56,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
 				req.GrantTypes = goauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(nil, errors.New(""))
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
 			},
 			expectErr: goauth2.ErrServerError,
 		},
@@ -65,7 +65,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
 				req.GrantTypes = goauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(goauth2.NewAuthorizeRequest(), nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(goauth2.NewAuthorizeRequest(), nil)
 			},
 			expectErr: goauth2.ErrMisconfiguration,
 		},
@@ -79,7 +79,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.Form.Set("code", "foobar")
 				storedReq := goauth2.NewAuthorizeRequest()
 				storedReq.GrantedScope = goauth2.Arguments{"openid"}
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: goauth2.ErrUnauthorizedClient,
 		},
@@ -101,7 +101,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = goauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
@@ -131,7 +131,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = goauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
@@ -157,7 +157,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq := goauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = goauth2.Arguments{"openid"}
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: goauth2.ErrServerError,
 		},
@@ -169,7 +169,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq := goauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope("openid")
-				store.EXPECT().GetOpenIDConnectSession(nil, "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: goauth2.ErrServerError,
 		},
@@ -208,7 +208,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			}
 
 			c.setup(store, areq)
-			err := h.PopulateTokenEndpointResponse(nil, areq, aresp)
+			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

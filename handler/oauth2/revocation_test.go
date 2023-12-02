@@ -4,6 +4,7 @@
 package oauth2
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -20,6 +21,7 @@ func TestRevokeToken(t *testing.T) {
 	atStrat := internal.NewMockAccessTokenStrategy(ctrl)
 	rtStrat := internal.NewMockRefreshTokenStrategy(ctrl)
 	ar := internal.NewMockAccessRequester(ctrl)
+
 	defer ctrl.Finish()
 
 	h := TokenRevocationHandler{
@@ -28,8 +30,10 @@ func TestRevokeToken(t *testing.T) {
 		AccessTokenStrategy:    atStrat,
 	}
 
-	var token string
-	var tokenType goauth2.TokenType
+	var (
+		token     string
+		tokenType goauth2.TokenType
+	)
 
 	for k, c := range []struct {
 		description string
@@ -235,7 +239,7 @@ func TestRevokeToken(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.mock()
-			err := h.RevokeToken(nil, token, tokenType, c.client)
+			err := h.RevokeToken(context.TODO(), token, tokenType, c.client)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

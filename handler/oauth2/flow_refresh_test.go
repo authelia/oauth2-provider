@@ -64,7 +64,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.GrantTypes = goauth2.Arguments{"refresh_token"}
 						areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"refresh_token"}}
 
-						token, _, err := strategy.GenerateRefreshToken(nil, nil)
+						token, _, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("refresh_token", token)
 					},
@@ -79,11 +79,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							GrantTypes: goauth2.Arguments{"refresh_token"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:       &goauth2.DefaultClient{ID: ""},
 							GrantedScope: []string{"offline"},
 							Session:      sess,
@@ -102,11 +102,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo", "offline"},
 							RequestedScope: goauth2.Arguments{"foo", "bar", "offline"},
@@ -127,11 +127,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							GrantTypes: goauth2.Arguments{"refresh_token"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo", "offline"},
 							RequestedScope: goauth2.Arguments{"foo", "offline"},
@@ -153,11 +153,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo", "offline"},
 							RequestedScope: goauth2.Arguments{"foo", "bar", "offline"},
@@ -191,11 +191,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 
 						areq.Client.(*goauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo", "offline"},
 							RequestedScope: goauth2.Arguments{"foo", "bar", "offline"},
@@ -225,11 +225,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo"},
 							RequestedScope: goauth2.Arguments{"foo", "bar"},
@@ -252,11 +252,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(nil, sig, &goauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &goauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   goauth2.Arguments{"foo"},
 							RequestedScope: goauth2.Arguments{"foo", "bar"},
@@ -286,7 +286,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
@@ -298,10 +298,10 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
 						}
-						err = store.CreateRefreshTokenSession(nil, sig, req)
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, req)
 						require.NoError(t, err)
 
-						err = store.RevokeRefreshToken(nil, req.ID)
+						err = store.RevokeRefreshToken(context.TODO(), req.ID)
 						require.NoError(t, err)
 					},
 					expectErr: goauth2.ErrInactiveToken,
@@ -325,7 +325,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					areq.Form = url.Values{}
 					c.setup(config)
 
-					err := handler.HandleTokenEndpointRequest(nil, areq)
+					err := handler.HandleTokenEndpointRequest(context.TODO(), areq)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error())
 					} else {
@@ -459,21 +459,21 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 						areq.RequestedScope = goauth2.Arguments{"foo", "bar"}
 						areq.GrantedScope = goauth2.Arguments{"foo", "bar"}
 
-						token, signature, err := strategy.GenerateRefreshToken(nil, nil)
+						token, signature, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
-						require.NoError(t, store.CreateRefreshTokenSession(nil, signature, areq))
+						require.NoError(t, store.CreateRefreshTokenSession(context.TODO(), signature, areq))
 						areq.Form.Add("refresh_token", token)
 					},
 					check: func(t *testing.T) {
 						signature := strategy.RefreshTokenSignature(context.Background(), areq.Form.Get("refresh_token"))
 
 						// The old refresh token should be deleted
-						_, err := store.GetRefreshTokenSession(nil, signature, nil)
+						_, err := store.GetRefreshTokenSession(context.TODO(), signature, nil)
 						require.Error(t, err)
 
 						assert.Equal(t, "req-id", areq.ID)
-						require.NoError(t, strategy.ValidateAccessToken(nil, areq, aresp.GetAccessToken()))
-						require.NoError(t, strategy.ValidateRefreshToken(nil, areq, aresp.ToMap()["refresh_token"].(string)))
+						require.NoError(t, strategy.ValidateAccessToken(context.TODO(), areq, aresp.GetAccessToken()))
+						require.NoError(t, strategy.ValidateRefreshToken(context.TODO(), areq, aresp.ToMap()["refresh_token"].(string)))
 						assert.Equal(t, "bearer", aresp.GetTokenType())
 						assert.NotEmpty(t, aresp.ToMap()["expires_in"])
 						assert.Equal(t, "foo bar", aresp.ToMap()["scope"])
@@ -499,7 +499,7 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 
 					c.setup(config)
 
-					err := h.PopulateTokenEndpointResponse(nil, areq, aresp)
+					err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 					if c.expectErr != nil {
 						assert.EqualError(t, err, c.expectErr.Error())
 					} else {

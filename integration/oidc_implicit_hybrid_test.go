@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -104,6 +105,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			c.setup()
 
 			var callbackURL *url.URL
+
 			authURL := strings.Replace(oauthClient.AuthCodeURL(state), "response_type=code", "response_type="+c.responseType, -1) + "&nonce=" + c.nonce
 			client := &http.Client{
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -111,6 +113,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 					return errors.New("Dont follow redirects")
 				},
 			}
+
 			resp, err := client.Get(authURL)
 			require.Error(t, err)
 
@@ -150,7 +153,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 				Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 			}
 
-			httpClient := oauthClient.Client(oauth2.NoContext, token)
+			httpClient := oauthClient.Client(context.TODO(), token)
 			resp, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)

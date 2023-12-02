@@ -30,7 +30,7 @@ type Handler struct {
 
 var _ goauth2.TokenEndpointHandler = (*Handler)(nil)
 
-var verifierWrongFormat = regexp.MustCompile("[^\\w\\.\\-~]")
+var verifierWrongFormat = regexp.MustCompile(`[^\w.~-]`)
 
 func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar goauth2.AuthorizeRequester, resp goauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
@@ -194,7 +194,6 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request goauth
 			return errorsx.WithStack(goauth2.ErrInvalidGrant.
 				WithHint("The PKCE code challenge did not match the code verifier."))
 		}
-		break
 	case "plain":
 		fallthrough
 	default:

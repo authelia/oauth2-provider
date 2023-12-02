@@ -433,7 +433,6 @@ func TestParser_Parse(t *testing.T) {
 				if err == nil {
 					t.Errorf("[%v] Expecting error.  Didn't get one.", data.name)
 				} else {
-
 					ve := err.(*ValidationError)
 					// compare the bitfield part of the error
 					if e := ve.Errors; e != data.errors {

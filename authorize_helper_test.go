@@ -6,7 +6,7 @@ package goauth2_test
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
@@ -281,13 +281,12 @@ func TestWriteAuthorizeFormPostResponse(t *testing.T) {
 		},
 	} {
 		var responseBuffer bytes.Buffer
+
 		redirectURL := "https://localhost:8080/cb"
-		//parameters :=
 		goauth2.WriteAuthorizeFormPostResponse(redirectURL, c.parameters, goauth2.DefaultFormPostTemplate, &responseBuffer)
-		code, state, _, _, customParams, _, err := internal.ParseFormPostResponse(redirectURL, ioutil.NopCloser(bytes.NewReader(responseBuffer.Bytes())))
+		code, state, _, _, customParams, _, err := internal.ParseFormPostResponse(redirectURL, io.NopCloser(bytes.NewReader(responseBuffer.Bytes())))
 		assert.NoError(t, err, "case %d", d)
 		c.check(code, state, customParams, d)
-
 	}
 }
 

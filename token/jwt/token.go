@@ -79,8 +79,8 @@ func (t *Token) SignedString(k interface{}) (rawToken string, err error) {
 	if _, ok := k.(unsafeNoneMagicConstant); ok {
 		rawToken, err = unsignedToken(t)
 		return
-
 	}
+
 	var signer jose.Signer
 	key := jose.SigningKey{
 		Algorithm: t.Method,

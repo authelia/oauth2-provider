@@ -4,6 +4,7 @@
 package oauth2
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -23,6 +24,7 @@ func TestIntrospectToken(t *testing.T) {
 	store := internal.NewMockCoreStorage(ctrl)
 	chgen := internal.NewMockCoreStrategy(ctrl)
 	areq := goauth2.NewAccessRequest(nil)
+
 	defer ctrl.Finish()
 
 	config := &goauth2.Config{}
@@ -44,9 +46,9 @@ func TestIntrospectToken(t *testing.T) {
 			setup: func() {
 				httpreq.Header.Set("Authorization", "bearer")
 				chgen.EXPECT().AccessTokenSignature(gomock.Any(), "").Return("")
-				store.EXPECT().GetAccessTokenSession(nil, "", nil).Return(nil, errors.New(""))
+				store.EXPECT().GetAccessTokenSession(context.TODO(), "", nil).Return(nil, errors.New(""))
 				chgen.EXPECT().RefreshTokenSignature(gomock.Any(), "").Return("")
-				store.EXPECT().GetRefreshTokenSession(nil, "", nil).Return(nil, errors.New(""))
+				store.EXPECT().GetRefreshTokenSession(context.TODO(), "", nil).Return(nil, errors.New(""))
 			},
 			expectErr: goauth2.ErrRequestUnauthorized,
 		},
@@ -55,19 +57,19 @@ func TestIntrospectToken(t *testing.T) {
 			setup: func() {
 				httpreq.Header.Set("Authorization", "bearer 1234")
 				chgen.EXPECT().AccessTokenSignature(gomock.Any(), "1234").AnyTimes().Return("asdf")
-				store.EXPECT().GetAccessTokenSession(nil, "asdf", nil).Return(nil, errors.New(""))
+				store.EXPECT().GetAccessTokenSession(context.TODO(), "asdf", nil).Return(nil, errors.New(""))
 				chgen.EXPECT().RefreshTokenSignature(gomock.Any(), "1234").Return("asdf")
-				store.EXPECT().GetRefreshTokenSession(nil, "asdf", nil).Return(nil, errors.New(""))
+				store.EXPECT().GetRefreshTokenSession(context.TODO(), "asdf", nil).Return(nil, errors.New(""))
 			},
 			expectErr: goauth2.ErrRequestUnauthorized,
 		},
 		{
 			description: "should fail because validation fails",
 			setup: func() {
-				store.EXPECT().GetAccessTokenSession(nil, "asdf", nil).AnyTimes().Return(areq, nil)
-				chgen.EXPECT().ValidateAccessToken(nil, areq, "1234").Return(errorsx.WithStack(goauth2.ErrTokenExpired))
+				store.EXPECT().GetAccessTokenSession(context.TODO(), "asdf", nil).AnyTimes().Return(areq, nil)
+				chgen.EXPECT().ValidateAccessToken(context.TODO(), areq, "1234").Return(errorsx.WithStack(goauth2.ErrTokenExpired))
 				chgen.EXPECT().RefreshTokenSignature(gomock.Any(), "1234").Return("asdf")
-				store.EXPECT().GetRefreshTokenSession(nil, "asdf", nil).Return(nil, errors.New(""))
+				store.EXPECT().GetRefreshTokenSession(context.TODO(), "asdf", nil).Return(nil, errors.New(""))
 			},
 			expectErr: goauth2.ErrTokenExpired,
 		},
@@ -75,21 +77,21 @@ func TestIntrospectToken(t *testing.T) {
 			description: "should fail because access token invalid",
 			setup: func() {
 				config.DisableRefreshTokenValidation = true
-				chgen.EXPECT().ValidateAccessToken(nil, areq, "1234").Return(errorsx.WithStack(goauth2.ErrInvalidTokenFormat))
+				chgen.EXPECT().ValidateAccessToken(context.TODO(), areq, "1234").Return(errorsx.WithStack(goauth2.ErrInvalidTokenFormat))
 			},
 			expectErr: goauth2.ErrInvalidTokenFormat,
 		},
 		{
 			description: "should pass",
 			setup: func() {
-				chgen.EXPECT().ValidateAccessToken(nil, areq, "1234").Return(nil)
+				chgen.EXPECT().ValidateAccessToken(context.TODO(), areq, "1234").Return(nil)
 			},
 			expectTU: goauth2.AccessToken,
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			tu, err := v.IntrospectToken(nil, goauth2.AccessTokenFromRequest(httpreq), goauth2.AccessToken, areq, []string{})
+			tu, err := v.IntrospectToken(context.TODO(), goauth2.AccessTokenFromRequest(httpreq), goauth2.AccessToken, areq, []string{})
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

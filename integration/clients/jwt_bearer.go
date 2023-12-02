@@ -8,7 +8,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -95,7 +94,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 
 	defer response.Body.Close()
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +118,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 func (c *JWTBearer) getRequestBodyReader(assertion string, scope []string) (io.Reader, error) {
 	data := url.Values{}
 	data.Set("grant_type", jwtBearerGrantType)
-	data.Set("assertion", string(assertion))
+	data.Set("assertion", assertion)
 
 	if len(scope) != 0 {
 		data.Set("scope", strings.Join(scope, " "))

@@ -11,7 +11,7 @@ import (
 // StringInSlice returns true if needle exists in haystack
 func StringInSlice(needle string, haystack []string) bool {
 	for _, b := range haystack {
-		if strings.ToLower(b) == strings.ToLower(needle) {
+		if strings.EqualFold(b, needle) {
 			return true
 		}
 	}

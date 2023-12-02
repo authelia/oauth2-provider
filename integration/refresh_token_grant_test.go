@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -50,6 +51,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 	f := compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
+
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
@@ -65,9 +67,10 @@ func TestRefreshTokenFlow(t *testing.T) {
 		Scopes:        []string{"goauth2", "offline", "openid"},
 		Audience:      []string{"https://www.ory.sh/api"},
 	}
-	fositeStore.Clients["refresh-client"] = refreshCheckClient
 
+	fositeStore.Clients["refresh-client"] = refreshCheckClient
 	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+
 	for _, c := range []struct {
 		description   string
 		setup         func(t *testing.T)
@@ -195,13 +198,13 @@ func TestRefreshTokenFlow(t *testing.T) {
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
-				tokenSource := oauthClient.TokenSource(oauth2.NoContext, original)
+				tokenSource := oauthClient.TokenSource(context.TODO(), original)
 				_, err := tokenSource.Token()
 				require.Error(t, err)
 				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
 
 				refreshed.Expiry = refreshed.Expiry.Add(-time.Hour * 24)
-				tokenSource = oauthClient.TokenSource(oauth2.NoContext, refreshed)
+				tokenSource = oauthClient.TokenSource(context.TODO(), refreshed)
 				_, err = tokenSource.Token()
 				require.Error(t, err)
 				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
@@ -233,7 +236,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				return
 			}
 
-			token, err := oauthClient.Exchange(oauth2.NoContext, resp.Request.URL.Query().Get("code"))
+			token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 			require.NoError(t, err)
 			require.NotEmpty(t, token.AccessToken)
 
@@ -246,7 +249,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				c.beforeRefresh(t)
 			}
 
-			tokenSource := oauthClient.TokenSource(oauth2.NoContext, token)
+			tokenSource := oauthClient.TokenSource(context.TODO(), token)
 
 			// This sleep guarantees time difference in exp/iat
 			time.Sleep(time.Second * 2)

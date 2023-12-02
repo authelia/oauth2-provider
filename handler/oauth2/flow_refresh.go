@@ -68,7 +68,6 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		scopeNames := strings.Join(c.Config.GetRefreshTokenScopes(ctx), " or ")
 		hint := fmt.Sprintf("The OAuth 2.0 Client was not granted scope %s and may thus not perform the 'refresh_token' authorization grant.", scopeNames)
 		return errorsx.WithStack(goauth2.ErrScopeNotGranted.WithHint(hint))
-
 	}
 
 	// The authorization server MUST ... and ensure that the refresh token was issued to the authenticated client

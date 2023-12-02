@@ -4,6 +4,7 @@
 package oauth2
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -90,7 +91,7 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.mock()
-			err := h.HandleTokenEndpointRequest(nil, areq)
+			err := h.HandleTokenEndpointRequest(context.TODO(), areq)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {
@@ -147,14 +148,14 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 				areq.GrantTypes = goauth2.Arguments{"client_credentials"}
 				areq.Session = &goauth2.DefaultSession{}
 				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"client_credentials"}}
-				chgen.EXPECT().GenerateAccessToken(nil, areq).Return("tokenfoo.bar", "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("tokenfoo.bar", "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.mock()
-			err := h.PopulateTokenEndpointResponse(nil, areq, aresp)
+			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {

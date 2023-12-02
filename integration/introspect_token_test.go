@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"github.com/parnurzeal/gorequest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
 
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/compose"
@@ -51,9 +51,9 @@ func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, i
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	a, err := oauthClient.Token(goauth.NoContext)
+	a, err := oauthClient.Token(context.TODO())
 	require.NoError(t, err)
-	b, err := oauthClient.Token(goauth.NoContext)
+	b, err := oauthClient.Token(context.TODO())
 	require.NoError(t, err)
 
 	for k, c := range []struct {

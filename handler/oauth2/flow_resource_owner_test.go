@@ -4,6 +4,7 @@
 package oauth2
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"testing"
@@ -70,24 +71,23 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				areq.Form.Set("password", "pan")
 				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
 
-				store.EXPECT().Authenticate(nil, "peter", "pan").Return(goauth2.ErrNotFound)
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(goauth2.ErrNotFound)
 			},
 			expectErr: goauth2.ErrInvalidGrant,
 		},
 		{
 			description: "should fail because error on lookup",
 			setup: func(config *goauth2.Config) {
-				store.EXPECT().Authenticate(nil, "peter", "pan").Return(errors.New(""))
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(errors.New(""))
 			},
 			expectErr: goauth2.ErrServerError,
 		},
 		{
 			description: "should pass",
 			setup: func(config *goauth2.Config) {
-				store.EXPECT().Authenticate(nil, "peter", "pan").Return(nil)
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(nil)
 			},
 			check: func(areq *goauth2.AccessRequest) {
-				//assert.NotEmpty(t, areq.GetSession().GetExpiresAt(goauth2.AccessToken))
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.AccessToken))
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.RefreshToken))
 			},
@@ -109,7 +109,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				Config: config,
 			}
 			c.setup(config)
-			err := h.HandleTokenEndpointRequest(nil, areq)
+			err := h.HandleTokenEndpointRequest(context.TODO(), areq)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
@@ -155,8 +155,8 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should pass",
 			setup: func(config *goauth2.Config) {
 				areq.GrantTypes = goauth2.Arguments{"password"}
-				chgen.EXPECT().GenerateAccessToken(nil, areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.Nil(t, aresp.GetExtra("refresh_token"), "unexpected refresh token")
@@ -167,10 +167,10 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(config *goauth2.Config) {
 				areq.GrantTypes = goauth2.Arguments{"password"}
 				areq.GrantScope("offline")
-				rtstr.EXPECT().GenerateRefreshToken(nil, areq).Return(mockRT, "bar", nil)
-				store.EXPECT().CreateRefreshTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
-				chgen.EXPECT().GenerateAccessToken(nil, areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
+				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
@@ -181,10 +181,10 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(config *goauth2.Config) {
 				config.RefreshTokenScopes = []string{}
 				areq.GrantTypes = goauth2.Arguments{"password"}
-				rtstr.EXPECT().GenerateRefreshToken(nil, areq).Return(mockRT, "bar", nil)
-				store.EXPECT().CreateRefreshTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
-				chgen.EXPECT().GenerateAccessToken(nil, areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
+				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
@@ -208,7 +208,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				RefreshTokenStrategy: rtstr, Config: config,
 			}
 			c.setup(config)
-			err := h.PopulateTokenEndpointResponse(nil, areq, aresp)
+			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {

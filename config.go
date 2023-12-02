@@ -275,7 +275,7 @@ type RevocationHandlersProvider interface {
 	GetRevocationHandlers(ctx context.Context) RevocationHandlers
 }
 
-// PushedAuthorizeEndpointHandlersProvider returns the provider for configuring the PAR handlers.
+// PushedAuthorizeRequestHandlersProvider returns the provider for configuring the PAR handlers.
 type PushedAuthorizeRequestHandlersProvider interface {
 	// GetPushedAuthorizeEndpointHandlers returns the handlers.
 	GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers

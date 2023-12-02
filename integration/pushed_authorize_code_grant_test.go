@@ -4,9 +4,10 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
 
 	"github.com/authelia/goauth2"
 	"github.com/authelia/goauth2/compose"
@@ -32,12 +32,14 @@ func TestPushedAuthorizeCodeFlow(t *testing.T) {
 func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{Subject: "foo-sub"})
+
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
+
 	for k, c := range []struct {
 		description    string
 		setup          func()
@@ -159,11 +161,11 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 
 			require.NotEmpty(t, resp.Request.URL.Query().Get("code"), "Auth code is empty")
 
-			token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+			token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 			require.NoError(t, err)
 			require.NotEmpty(t, token.AccessToken)
 
-			httpClient := oauthClient.Client(goauth.NoContext, token)
+			httpClient := oauthClient.Client(context.TODO(), token)
 			resp, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -179,10 +181,12 @@ func checkStatusAndGetBody(t *testing.T, resp *http.Response, expectedStatusCode
 	defer resp.Body.Close()
 
 	require.Equal(t, expectedStatusCode, resp.StatusCode)
-	b, err := ioutil.ReadAll(resp.Body)
+
+	b, err := io.ReadAll(resp.Body)
 	if err == nil {
 		fmt.Printf("PAR response: body=%s\n", string(b))
 	}
+
 	if expectedStatusCode != resp.StatusCode {
 		return nil, fmt.Errorf("Invalid status code %d", resp.StatusCode)
 	}

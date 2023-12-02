@@ -24,17 +24,17 @@ import (
 func TestUnsignedToken(t *testing.T) {
 	var testCases = []struct {
 		name         string
-		jwtHeaders   map[string]interface{}
+		jwtHeaders   map[string]any
 		expectedType string
 	}{
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
-			jwtHeaders:   map[string]interface{}{},
+			jwtHeaders:   map[string]any{},
 			expectedType: "JWT",
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]interface{}{"typ": "at+jwt"},
+			jwtHeaders:   map[string]any{"typ": "at+jwt"},
 			expectedType: "at+jwt",
 		},
 	}
@@ -65,17 +65,17 @@ func TestUnsignedToken(t *testing.T) {
 func TestJWTHeaders(t *testing.T) {
 	var testCases = []struct {
 		name         string
-		jwtHeaders   map[string]interface{}
+		jwtHeaders   map[string]any
 		expectedType string
 	}{
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
-			jwtHeaders:   map[string]interface{}{},
+			jwtHeaders:   map[string]any{},
 			expectedType: JWTHeaderTypeValueJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]interface{}{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
+			jwtHeaders:   map[string]any{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
 			expectedType: JWTHeaderTypeValueAccessTokenJWT,
 		},
 	}
@@ -95,9 +95,9 @@ var keyFuncError = fmt.Errorf("error loading key")
 
 var (
 	jwtTestDefaultKey         = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	defaultKeyFunc    Keyfunc = func(t *Token) (interface{}, error) { return jwtTestDefaultKey, nil }
-	emptyKeyFunc      Keyfunc = func(t *Token) (interface{}, error) { return nil, nil }
-	errorKeyFunc      Keyfunc = func(t *Token) (interface{}, error) { return nil, keyFuncError }
+	defaultKeyFunc    Keyfunc = func(t *Token) (any, error) { return jwtTestDefaultKey, nil }
+	emptyKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, nil }
+	errorKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, keyFuncError }
 	nilKeyFunc        Keyfunc = nil
 )
 
@@ -108,9 +108,9 @@ func TestParser_Parse(t *testing.T) {
 	var (
 		defaultES256PrivateKey = gen.MustES256Key()
 		defaultSigningKey      = parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
-		publicECDSAKey         = func(*Token) (interface{}, error) { return &defaultES256PrivateKey.PublicKey, nil }
-		noneKey                = func(*Token) (interface{}, error) { return UnsafeAllowNoneSignatureType, nil }
-		randomKey              = func(*Token) (interface{}, error) {
+		publicECDSAKey         = func(*Token) (any, error) { return &defaultES256PrivateKey.PublicKey, nil }
+		noneKey                = func(*Token) (any, error) { return UnsafeAllowNoneSignatureType, nil }
+		randomKey              = func(*Token) (any, error) {
 			k, err := rsa.GenerateKey(rand.Reader, 2048)
 			require.NoError(t, err)
 			return &k.PublicKey, nil
@@ -124,7 +124,7 @@ func TestParser_Parse(t *testing.T) {
 	}
 	type generate struct {
 		claims     MapClaims
-		signingKey interface{}             // defaultSigningKey
+		signingKey any                     // defaultSigningKey
 		method     jose.SignatureAlgorithm // default RS256
 	}
 	type given struct {
@@ -448,7 +448,7 @@ func TestParser_Parse(t *testing.T) {
 	}
 }
 
-func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key interface{}) string {
+func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
 	s, e := token.SignedString(key)
 
@@ -459,7 +459,7 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key interface{}) st
 	return s
 }
 
-func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]interface{}, key interface{}) string {
+func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
 	s, e := token.SignedString(key)
@@ -481,7 +481,7 @@ func parseRSAPublicKeyFromPEM(key []byte) *rsa.PublicKey {
 	}
 
 	// Parse the key
-	var parsedKey interface{}
+	var parsedKey any
 	if parsedKey, err = x509.ParsePKIXPublicKey(block.Bytes); err != nil {
 		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
 			parsedKey = cert.PublicKey
@@ -508,7 +508,7 @@ func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
 		panic("unable to decode")
 	}
 
-	var parsedKey interface{}
+	var parsedKey any
 	if parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
 		if parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
 			panic(err)

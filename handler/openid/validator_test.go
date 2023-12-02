@@ -23,7 +23,7 @@ func TestValidatePrompt(t *testing.T) {
 	}
 	var j = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (interface{}, error) {
+			GetPrivateKey: func(_ context.Context) (any, error) {
 				return key, nil
 			}},
 		Config: &goauth2.Config{

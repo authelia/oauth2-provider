@@ -42,7 +42,7 @@ type defaultSession struct {
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
 	var idStrategy = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (interface{}, error) {
+			GetPrivateKey: func(_ context.Context) (any, error) {
 				return gen.MustRSAKey(), nil
 			},
 		},
@@ -53,7 +53,7 @@ func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybrid
 
 	var j = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (interface{}, error) {
+			GetPrivateKey: func(_ context.Context) (any, error) {
 				return key, nil
 			},
 		},

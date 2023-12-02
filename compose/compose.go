@@ -10,7 +10,7 @@ import (
 	"github.com/authelia/goauth2/token/jwt"
 )
 
-type Factory func(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{}
+type Factory func(config goauth2.Configurator, storage any, strategy any) any
 
 // Compose takes a config, a storage, a strategy and handlers to instantiate an OAuth2Provider:
 //
@@ -33,8 +33,8 @@ type Factory func(config goauth2.Configurator, storage interface{}, strategy int
 //			// for a complete list refer to the docs of this package
 //	 )
 //
-// Compose makes use of interface{} types in order to be able to handle a all types of stores, strategies and handlers.
-func Compose(config *goauth2.Config, storage interface{}, strategy interface{}, factories ...Factory) goauth2.OAuth2Provider {
+// Compose makes use of any types in order to be able to handle a all types of stores, strategies and handlers.
+func Compose(config *goauth2.Config, storage any, strategy any, factories ...Factory) goauth2.OAuth2Provider {
 	f := goauth2.NewOAuth2Provider(storage.(goauth2.Storage), config)
 	for _, factory := range factories {
 		res := factory(config, storage, strategy)
@@ -59,8 +59,8 @@ func Compose(config *goauth2.Config, storage interface{}, strategy interface{}, 
 }
 
 // ComposeAllEnabled returns a goauth2 instance with all OAuth2 and OpenID Connect handlers enabled.
-func ComposeAllEnabled(config *goauth2.Config, storage interface{}, key interface{}) goauth2.OAuth2Provider {
-	keyGetter := func(context.Context) (interface{}, error) {
+func ComposeAllEnabled(config *goauth2.Config, storage any, key any) goauth2.OAuth2Provider {
+	keyGetter := func(context.Context) (any, error) {
 		return key, nil
 	}
 	return Compose(

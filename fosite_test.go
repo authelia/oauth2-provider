@@ -31,7 +31,7 @@ func TestTokenEndpointHandlers(t *testing.T) {
 	hs.Append(h)
 	hs.Append(h)
 	// do some crazy type things and make sure dupe detection works
-	var f interface{} = &oauth2.AuthorizeExplicitGrantHandler{}
+	var f any = &oauth2.AuthorizeExplicitGrantHandler{}
 	hs.Append(&oauth2.AuthorizeExplicitGrantHandler{})
 	hs.Append(f.(TokenEndpointHandler))
 	require.Len(t, hs, 1)

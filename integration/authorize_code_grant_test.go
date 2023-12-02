@@ -38,7 +38,7 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 	}
 }
 
-func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
+func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
@@ -148,7 +148,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 	}
 }
 
-func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy interface{}) {
+func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()

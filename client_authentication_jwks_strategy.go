@@ -41,7 +41,7 @@ func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) JW
 		MaxCost:     10000,
 		BufferItems: 64,
 		Metrics:     false,
-		Cost: func(value interface{}) int64 {
+		Cost: func(value any) int64 {
 			return 1
 		},
 	})

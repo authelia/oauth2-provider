@@ -290,10 +290,10 @@ type AuthorizeRequester interface {
 // AccessResponder is a token endpoint's response.
 type AccessResponder interface {
 	// SetExtra sets a key value pair for the access response.
-	SetExtra(key string, value interface{})
+	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) interface{}
+	GetExtra(key string) any
 
 	SetExpiresIn(time.Duration)
 
@@ -312,7 +312,7 @@ type AccessResponder interface {
 	GetTokenType() (token string)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]interface{}
+	ToMap() map[string]any
 }
 
 // AuthorizeResponder is an authorization endpoint's response.
@@ -351,13 +351,13 @@ type PushedAuthorizeResponder interface {
 	AddHeader(key, value string)
 
 	// SetExtra sets a key value pair for the response.
-	SetExtra(key string, value interface{})
+	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) interface{}
+	GetExtra(key string) any
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]interface{}
+	ToMap() map[string]any
 }
 
 // G11NContext is the globalization context

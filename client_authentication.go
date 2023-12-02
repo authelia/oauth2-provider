@@ -26,7 +26,7 @@ type ClientAuthenticationStrategy func(context.Context, *http.Request, url.Value
 // #nosec:gosec G101 - False Positive
 const clientAssertionJWTBearerType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
-func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (interface{}, error) {
+func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (any, error) {
 	if set := oidcClient.GetJSONWebKeys(); set != nil {
 		return findPublicKey(t, set, expectsRSAKey)
 	}
@@ -73,7 +73,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 		var clientID string
 		var client Client
 
-		token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (any, error) {
 			var err error
 			clientID, _, err = clientCredentialsFromRequestBody(form, false)
 			if err != nil {
@@ -179,7 +179,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 			return nil, err
 		}
 
-		if auds, ok := claims["aud"].([]interface{}); !ok {
+		if auds, ok := claims["aud"].([]any); !ok {
 			if !claims.VerifyAudience(f.Config.GetTokenURL(ctx), true) {
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("Claim 'audience' from 'client_assertion' must match the authorization server's token endpoint '%s'.", f.Config.GetTokenURL(ctx)))
 			}
@@ -254,7 +254,7 @@ func (f *Fosite) checkClientSecret(ctx context.Context, client Client, clientSec
 	return err
 }
 
-func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (interface{}, error) {
+func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (any, error) {
 	keys := set.Keys
 	if len(keys) == 0 {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The retrieved JSON Web Key Set does not contain any key."))

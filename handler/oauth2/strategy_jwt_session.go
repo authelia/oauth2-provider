@@ -99,7 +99,7 @@ func (j *JWTSession) Clone() goauth2.Session {
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.
 // The returned value is a copy of JWTSession claims.
-func (j *JWTSession) GetExtraClaims() map[string]interface{} {
+func (j *JWTSession) GetExtraClaims() map[string]any {
 	if j == nil {
 		return nil
 	}

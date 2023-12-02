@@ -43,7 +43,7 @@ type Header struct {
 type JWTBearerPayload struct {
 	*jwt.Claims
 
-	PrivateClaims map[string]interface{}
+	PrivateClaims map[string]any
 }
 
 func (c *JWTBearer) SetPrivateKey(keyID string, privateKey *rsa.PrivateKey) error {

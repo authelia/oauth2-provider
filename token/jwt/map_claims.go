@@ -20,9 +20,9 @@ var TimeFunc = time.Now
 // MapClaims provides backwards compatible validations not available in `go-jose`.
 // It was taken from [here](https://raw.githubusercontent.com/form3tech-oss/jwt-go/master/map_claims.go).
 //
-// Claims type that uses the map[string]interface{} for JSON decoding
+// Claims type that uses the map[string]any for JSON decoding
 // This is the default claims type if you don't supply one
-type MapClaims map[string]interface{}
+type MapClaims map[string]any
 
 // VerifyAudience compares the aud claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
@@ -31,7 +31,7 @@ func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 	switch v := m["aud"].(type) {
 	case []string:
 		aud = v
-	case []interface{}:
+	case []any:
 		for _, a := range v {
 			vs, ok := a.(string)
 			if !ok {
@@ -140,7 +140,7 @@ func (m MapClaims) UnmarshalJSON(b []byte) error {
 	// If issue is closed with a better solution
 	// this custom Unmarshal method can be removed
 	d := jjson.NewDecoder(bytes.NewReader(b))
-	mp := map[string]interface{}(m)
+	mp := map[string]any(m)
 	d.SetNumberType(jjson.UnmarshalIntOrFloat)
 	if err := d.Decode(&mp); err != nil {
 		return errorsx.WithStack(err)

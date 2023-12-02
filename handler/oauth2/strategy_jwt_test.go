@@ -24,7 +24,7 @@ var rsaKey = gen.MustRSAKey()
 
 var j = &DefaultJWTStrategy{
 	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (interface{}, error) {
+		GetPrivateKey: func(_ context.Context) (any, error) {
 			return rsaKey, nil
 		},
 	},
@@ -45,10 +45,10 @@ var jwtValidCase = func(tokenType goauth2.TokenType) *goauth2.Request {
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
 			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(time.Hour),
@@ -74,10 +74,10 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType goauth2.TokenType) *goaut
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
 			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType:            time.Now().UTC().Add(time.Hour),
@@ -104,10 +104,10 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.R
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
 			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType:            time.Now().UTC().Add(time.Hour),
@@ -138,10 +138,10 @@ var jwtExpiredCase = func(tokenType goauth2.TokenType) *goauth2.Request {
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
 				ExpiresAt: time.Now().UTC().Add(-time.Minute),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
 			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(-time.Hour),
@@ -196,13 +196,13 @@ func TestAccessToken(t *testing.T) {
 
 				rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
 				require.NoError(t, err)
-				var payload map[string]interface{}
+				var payload map[string]any
 				err = json.Unmarshal(rawPayload, &payload)
 				require.NoError(t, err)
 				if scopeField == jwt.JWTScopeFieldList || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload["scp"]
 					require.True(t, ok)
-					assert.Equal(t, []interface{}{"email", "offline"}, scope)
+					assert.Equal(t, []any{"email", "offline"}, scope)
 				}
 				if scopeField == jwt.JWTScopeFieldString || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload["scope"]

@@ -787,7 +787,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createRandomTestJWK() jose.JS
 	return s.createJWK(privateKey.Public(), strconv.Itoa(mrand.Int()))
 }
 
-func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createJWK(key interface{}, keyID string) jose.JSONWebKey {
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createJWK(key any, keyID string) jose.JSONWebKey {
 	return jose.JSONWebKey{
 		Key:       key,
 		KeyID:     keyID,

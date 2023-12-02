@@ -21,7 +21,7 @@ import (
 
 var strat = &DefaultStrategy{
 	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (interface{}, error) {
+		GetPrivateKey: func(_ context.Context) (any, error) {
 			return gen.MustRSAKey(), nil
 		},
 	},
@@ -135,7 +135,7 @@ func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
 	defer ctrl.Finish()
 
 	headers := &jwt.Headers{
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"alg": "RS384",
 		},
 	}
@@ -156,7 +156,7 @@ func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
 	defer ctrl.Finish()
 
 	headers := &jwt.Headers{
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"alg": "R",
 		},
 	}
@@ -177,7 +177,7 @@ func TestGetAccessTokenHashWithMissingKeyLength(t *testing.T) {
 	defer ctrl.Finish()
 
 	headers := &jwt.Headers{
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"alg": "RS",
 		},
 	}

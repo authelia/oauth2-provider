@@ -10,12 +10,12 @@ import (
 
 func NewAccessResponse() *AccessResponse {
 	return &AccessResponse{
-		Extra: map[string]interface{}{},
+		Extra: map[string]any{},
 	}
 }
 
 type AccessResponse struct {
-	Extra       map[string]interface{}
+	Extra       map[string]any
 	AccessToken string
 	TokenType   string
 }
@@ -28,11 +28,11 @@ func (a *AccessResponse) SetExpiresIn(expiresIn time.Duration) {
 	a.SetExtra("expires_in", int64(expiresIn/time.Second))
 }
 
-func (a *AccessResponse) SetExtra(key string, value interface{}) {
+func (a *AccessResponse) SetExtra(key string, value any) {
 	a.Extra[key] = value
 }
 
-func (a *AccessResponse) GetExtra(key string) interface{} {
+func (a *AccessResponse) GetExtra(key string) any {
 	return a.Extra[key]
 }
 
@@ -52,7 +52,7 @@ func (a *AccessResponse) GetTokenType() string {
 	return a.TokenType
 }
 
-func (a *AccessResponse) ToMap() map[string]interface{} {
+func (a *AccessResponse) ToMap() map[string]any {
 	a.Extra["access_token"] = a.GetAccessToken()
 	a.Extra["token_type"] = a.GetTokenType()
 	return a.Extra

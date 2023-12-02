@@ -22,7 +22,7 @@ func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, ar AuthorizeReq
 
 	var resp = &PushedAuthorizeResponse{
 		Header: http.Header{},
-		Extra:  map[string]interface{}{},
+		Extra:  map[string]any{},
 	}
 
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, ar)

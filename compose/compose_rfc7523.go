@@ -11,7 +11,7 @@ import (
 
 // RFC7523AssertionGrantFactory creates an OAuth2 Authorize JWT Grant (using JWTs as Authorization Grants) handler
 // and registers an access token, refresh token and authorize code validator.
-func RFC7523AssertionGrantFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func RFC7523AssertionGrantFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &rfc7523.Handler{
 		Storage: storage.(rfc7523.RFC7523KeyStorage),
 		HandleHelper: &oauth2.HandleHelper{

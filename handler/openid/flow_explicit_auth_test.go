@@ -27,7 +27,7 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 
 	var j = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (interface{}, error) {
+			GetPrivateKey: func(ctx context.Context) (any, error) {
 				return key, nil
 			},
 		},

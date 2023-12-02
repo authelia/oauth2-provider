@@ -253,7 +253,7 @@ type (
 
 		// Fields for globalization
 		hintIDField string
-		hintArgs    []interface{}
+		hintArgs    []any
 		catalog     i18n.MessageCatalog
 		lang        language.Tag
 	}
@@ -362,7 +362,7 @@ func (e *RFC6749Error) Cause() error {
 	return e.cause
 }
 
-func (e *RFC6749Error) WithHintf(hint string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 	err := *e
 	if err.hintIDField == "" {
 		err.hintIDField = hint
@@ -384,7 +384,7 @@ func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 }
 
 // WithHintIDOrDefaultf accepts the ID of the hint message
-func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...any) *RFC6749Error {
 	err := *e
 	err.hintIDField = ID
 	err.hintArgs = args
@@ -410,7 +410,7 @@ func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 	return &err
 }
 
-func (e *RFC6749Error) WithDebugf(debug string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
 	return e.WithDebug(fmt.Sprintf(debug, args...))
 }
 

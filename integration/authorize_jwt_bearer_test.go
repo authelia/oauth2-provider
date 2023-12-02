@@ -100,7 +100,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithExtraClaim() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-		PrivateClaims: map[string]interface{}{"extraClaim": "extraClaimValue"},
+		PrivateClaims: map[string]any{"extraClaim": "extraClaimValue"},
 	}, []string{"goauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
@@ -153,7 +153,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponse() {
 			NotBefore: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 			ID:        uuid.New().String(),
 		},
-		PrivateClaims: map[string]interface{}{"random": "random"},
+		PrivateClaims: map[string]any{"random": "random"},
 	}, nil)
 
 	s.assertSuccessResponse(s.T(), token, err)

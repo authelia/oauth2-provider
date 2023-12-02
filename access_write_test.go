@@ -27,7 +27,7 @@ func TestWriteAccessResponse(t *testing.T) {
 	rw.EXPECT().Header().AnyTimes().Return(header)
 	rw.EXPECT().WriteHeader(http.StatusOK)
 	rw.EXPECT().Write(gomock.Any())
-	resp.EXPECT().ToMap().Return(map[string]interface{}{})
+	resp.EXPECT().ToMap().Return(map[string]any{})
 
 	provider.WriteAccessResponse(context.Background(), rw, ar, resp)
 	assert.Equal(t, "application/json;charset=UTF-8", header.Get("Content-Type"))

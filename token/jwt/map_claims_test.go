@@ -36,7 +36,7 @@ func Test_mapClaims_empty_list_aud(t *testing.T) {
 
 func Test_mapClaims_list_interface_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []interface{}{"foo"},
+		"aud": []any{"foo"},
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", true)

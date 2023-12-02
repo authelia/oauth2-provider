@@ -30,7 +30,7 @@ func TestGetExpiresIn(t *testing.T) {
 func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	areq := &goauth2.AccessRequest{}
-	aresp := &goauth2.AccessResponse{Extra: map[string]interface{}{}}
+	aresp := &goauth2.AccessResponse{Extra: map[string]any{}}
 	accessStrat := internal.NewMockAccessTokenStrategy(ctrl)
 	accessStore := internal.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()

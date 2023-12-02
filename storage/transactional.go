@@ -27,7 +27,7 @@ type Transactional interface {
 
 // MaybeBeginTx is a helper function that can be used to initiate a transaction if the supplied storage
 // implements the `Transactional` interface.
-func MaybeBeginTx(ctx context.Context, storage interface{}) (context.Context, error) {
+func MaybeBeginTx(ctx context.Context, storage any) (context.Context, error) {
 	// the type assertion checks whether the dynamic type of `storage` implements `Transactional`
 	txnStorage, transactional := storage.(Transactional)
 	if transactional {
@@ -39,7 +39,7 @@ func MaybeBeginTx(ctx context.Context, storage interface{}) (context.Context, er
 
 // MaybeCommitTx is a helper function that can be used to commit a transaction if the supplied storage
 // implements the `Transactional` interface.
-func MaybeCommitTx(ctx context.Context, storage interface{}) error {
+func MaybeCommitTx(ctx context.Context, storage any) error {
 	txnStorage, transactional := storage.(Transactional)
 	if transactional {
 		return txnStorage.Commit(ctx)
@@ -50,7 +50,7 @@ func MaybeCommitTx(ctx context.Context, storage interface{}) error {
 
 // MaybeRollbackTx is a helper function that can be used to rollback a transaction if the supplied storage
 // implements the `Transactional` interface.
-func MaybeRollbackTx(ctx context.Context, storage interface{}) error {
+func MaybeRollbackTx(ctx context.Context, storage any) error {
 	txnStorage, transactional := storage.(Transactional)
 	if transactional {
 		return txnStorage.Rollback(ctx)

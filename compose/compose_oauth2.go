@@ -11,7 +11,7 @@ import (
 
 // OAuth2AuthorizeExplicitFactory creates an OAuth2 authorize code grant ("authorize explicit flow") handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2AuthorizeExplicitFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2AuthorizeExplicitFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.AuthorizeExplicitGrantHandler{
 		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
 		RefreshTokenStrategy:   strategy.(oauth2.RefreshTokenStrategy),
@@ -24,7 +24,7 @@ func OAuth2AuthorizeExplicitFactory(config goauth2.Configurator, storage interfa
 
 // OAuth2ClientCredentialsGrantFactory creates an OAuth2 client credentials grant handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2ClientCredentialsGrantFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2ClientCredentialsGrantFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.ClientCredentialsGrantHandler{
 		HandleHelper: &oauth2.HandleHelper{
 			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
@@ -37,7 +37,7 @@ func OAuth2ClientCredentialsGrantFactory(config goauth2.Configurator, storage in
 
 // OAuth2RefreshTokenGrantFactory creates an OAuth2 refresh grant handler and registers
 // an access token, refresh token and authorize code validator.nmj
-func OAuth2RefreshTokenGrantFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2RefreshTokenGrantFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.RefreshTokenGrantHandler{
 		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
 		RefreshTokenStrategy:   strategy.(oauth2.RefreshTokenStrategy),
@@ -48,7 +48,7 @@ func OAuth2RefreshTokenGrantFactory(config goauth2.Configurator, storage interfa
 
 // OAuth2AuthorizeImplicitFactory creates an OAuth2 implicit grant ("authorize implicit flow") handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2AuthorizeImplicitFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2AuthorizeImplicitFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.AuthorizeImplicitGrantTypeHandler{
 		AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
 		AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
@@ -62,7 +62,7 @@ func OAuth2AuthorizeImplicitFactory(config goauth2.Configurator, storage interfa
 // Deprecated: This factory is deprecated as a means to communicate that the ROPC grant type is widely discouraged and
 // is at the time of this writing going to be omitted in the OAuth 2.1 spec. For more information on why this grant type
 // is discouraged see: https://www.scottbrady91.com/oauth/why-the-resource-owner-password-credentials-grant-type-is-not-authentication-nor-suitable-for-modern-applications
-func OAuth2ResourceOwnerPasswordCredentialsFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2ResourceOwnerPasswordCredentialsFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.ResourceOwnerPasswordCredentialsGrantHandler{
 		ResourceOwnerPasswordCredentialsGrantStorage: storage.(oauth2.ResourceOwnerPasswordCredentialsGrantStorage),
 		HandleHelper: &oauth2.HandleHelper{
@@ -76,7 +76,7 @@ func OAuth2ResourceOwnerPasswordCredentialsFactory(config goauth2.Configurator, 
 }
 
 // OAuth2TokenRevocationFactory creates an OAuth2 token revocation handler.
-func OAuth2TokenRevocationFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2TokenRevocationFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.TokenRevocationHandler{
 		TokenRevocationStorage: storage.(oauth2.TokenRevocationStorage),
 		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
@@ -86,7 +86,7 @@ func OAuth2TokenRevocationFactory(config goauth2.Configurator, storage interface
 
 // OAuth2TokenIntrospectionFactory creates an OAuth2 token introspection handler and registers
 // an access token and refresh token validator.
-func OAuth2TokenIntrospectionFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2TokenIntrospectionFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.CoreValidator{
 		CoreStrategy: strategy.(oauth2.CoreStrategy),
 		CoreStorage:  storage.(oauth2.CoreStorage),
@@ -101,7 +101,7 @@ func OAuth2TokenIntrospectionFactory(config goauth2.Configurator, storage interf
 //
 // Due to the stateless nature of this factory, THE BUILT-IN REVOCATION MECHANISMS WILL NOT WORK.
 // If you need revocation, you can validate JWTs statefully, using the other factories.
-func OAuth2StatelessJWTIntrospectionFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2StatelessJWTIntrospectionFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &oauth2.StatelessJWTValidator{
 		Signer: strategy.(jwt.Signer),
 		Config: config,

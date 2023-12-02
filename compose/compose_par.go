@@ -9,7 +9,7 @@ import (
 )
 
 // PushedAuthorizeHandlerFactory creates the basic PAR handler
-func PushedAuthorizeHandlerFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func PushedAuthorizeHandlerFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &par.PushedAuthorizeHandler{
 		Storage: storage,
 		Config:  config,

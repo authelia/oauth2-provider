@@ -22,8 +22,8 @@ import (
 // It provides method signatures compatible with jwt-go but implemented
 // using go-json
 type Token struct {
-	Header map[string]interface{} // The first segment of the token
-	Claims MapClaims              // The second segment of the token
+	Header map[string]any // The first segment of the token
+	Claims MapClaims      // The second segment of the token
 	Method jose.SignatureAlgorithm
 	valid  bool
 }
@@ -67,12 +67,12 @@ func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
 	return &Token{
 		Claims: claims,
 		Method: method,
-		Header: map[string]interface{}{},
+		Header: map[string]any{},
 	}
 }
 
-func (t *Token) toJoseHeader() map[jose.HeaderKey]interface{} {
-	h := map[jose.HeaderKey]interface{}{
+func (t *Token) toJoseHeader() map[jose.HeaderKey]any {
+	h := map[jose.HeaderKey]any{
 		JWTHeaderType: JWTHeaderTypeValueJWT,
 	}
 	for k, v := range t.Header {
@@ -84,7 +84,7 @@ func (t *Token) toJoseHeader() map[jose.HeaderKey]interface{} {
 // SignedString provides a compatible `jwt-go` Token.SignedString method
 //
 // > Get the complete, signed token
-func (t *Token) SignedString(k interface{}) (rawToken string, err error) {
+func (t *Token) SignedString(k any) (rawToken string, err error) {
 	if _, ok := k.(unsafeNoneMagicConstant); ok {
 		rawToken, err = unsignedToken(t)
 		return
@@ -103,10 +103,10 @@ func (t *Token) SignedString(k interface{}) (rawToken string, err error) {
 	}
 
 	// A explicit conversion from type alias MapClaims
-	// to map[string]interface{} is required because the
+	// to map[string]any is required because the
 	// go-jose CompactSerialize() only support explicit maps
 	// as claims or structs but not type aliases from maps.
-	claims := map[string]interface{}(t.Claims)
+	claims := map[string]any(t.Claims)
 	rawToken, err = jwt.Signed(signer).Claims(claims).CompactSerialize()
 	if err != nil {
 		err = &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
@@ -141,7 +141,7 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 
 	// copy headers
 	h := parsedToken.Headers[0]
-	token.Header = map[string]interface{}{
+	token.Header = map[string]any{
 		"alg": h.Algorithm,
 	}
 	if h.KeyID != "" {
@@ -160,7 +160,7 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 // the key for verification.  The function receives the parsed,
 // but unverified Token.  This allows you to use properties in the
 // Header of the token (such as `kid`) to identify which key to use.
-type Keyfunc func(*Token) (interface{}, error)
+type Keyfunc func(*Token) (any, error)
 
 func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
 	return ParseWithClaims(tokenString, MapClaims{}, keyFunc)
@@ -242,7 +242,7 @@ func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token
 
 // if underline value of v is not a pointer
 // it creates a pointer of it and returns it
-func pointer(v interface{}) interface{} {
+func pointer(v any) any {
 	if reflect.ValueOf(v).Kind() != reflect.Ptr {
 		value := reflect.New(reflect.ValueOf(v).Type())
 		value.Elem().Set(reflect.ValueOf(v))

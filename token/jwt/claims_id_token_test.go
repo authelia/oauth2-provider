@@ -35,12 +35,12 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		CodeHash:                            "barfoo",
 		AuthenticationContextClassReference: "acr",
 		AuthenticationMethodsReferences:     []string{"amr"},
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"foo": "bar",
 			"baz": "bar",
 		},
 	}
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"jti":       idTokenClaims.JTI,
 		"sub":       idTokenClaims.Subject,
 		"iat":       idTokenClaims.IssuedAt.Unix(),
@@ -58,7 +58,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 	}, idTokenClaims.ToMap())
 
 	idTokenClaims.Nonce = "foobar"
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"jti":       idTokenClaims.JTI,
 		"sub":       idTokenClaims.Subject,
 		"iat":       idTokenClaims.IssuedAt.Unix(),

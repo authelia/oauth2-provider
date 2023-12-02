@@ -37,7 +37,7 @@ type DefaultSession struct {
 	ExpiresAt map[TokenType]time.Time `json:"expires_at"`
 	Username  string                  `json:"username"`
 	Subject   string                  `json:"subject"`
-	Extra     map[string]interface{}  `json:"extra"`
+	Extra     map[string]any          `json:"extra"`
 }
 
 func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
@@ -86,18 +86,18 @@ func (s *DefaultSession) Clone() Session {
 type ExtraClaimsSession interface {
 	// GetExtraClaims returns a map to store extra claims.
 	// The returned value can be modified in-place.
-	GetExtraClaims() map[string]interface{}
+	GetExtraClaims() map[string]any
 }
 
 // GetExtraClaims implements ExtraClaimsSession for DefaultSession.
 // The returned value can be modified in-place.
-func (s *DefaultSession) GetExtraClaims() map[string]interface{} {
+func (s *DefaultSession) GetExtraClaims() map[string]any {
 	if s == nil {
 		return nil
 	}
 
 	if s.Extra == nil {
-		s.Extra = make(map[string]interface{})
+		s.Extra = make(map[string]any)
 	}
 
 	return s.Extra

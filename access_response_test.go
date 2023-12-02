@@ -20,7 +20,7 @@ func TestAccessResponse(t *testing.T) {
 	assert.Equal(t, "access", ar.GetAccessToken())
 	assert.Equal(t, "bearer", ar.GetTokenType())
 	assert.Equal(t, "bar", ar.GetExtra("foo"))
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"access_token": "access",
 		"token_type":   "bearer",
 		"foo":          "bar",

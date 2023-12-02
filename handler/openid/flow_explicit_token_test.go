@@ -106,7 +106,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
-				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
-				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 
 			var j = &DefaultStrategy{
 				Signer: &jwt.DefaultSigner{
-					GetPrivateKey: func(ctx context.Context) (interface{}, error) {
+					GetPrivateKey: func(ctx context.Context) (any, error) {
 						return key, nil
 					},
 				},

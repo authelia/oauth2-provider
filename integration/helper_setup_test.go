@@ -187,7 +187,7 @@ var defaultRSAKey = gen.MustRSAKey()
 
 var jwtStrategy = &oauth2.DefaultJWTStrategy{
 	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(ctx context.Context) (interface{}, error) {
+		GetPrivateKey: func(ctx context.Context) (any, error) {
 			return defaultRSAKey, nil
 		},
 	},

@@ -10,7 +10,7 @@ import (
 )
 
 // OAuth2PKCEFactory creates a PKCE handler.
-func OAuth2PKCEFactory(config goauth2.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OAuth2PKCEFactory(config goauth2.Configurator, storage any, strategy any) any {
 	return &pkce.Handler{
 		AuthorizeCodeStrategy: strategy.(oauth2.AuthorizeCodeStrategy),
 		Storage:               storage.(pkce.PKCERequestStorage),

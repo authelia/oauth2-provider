@@ -29,7 +29,7 @@ func TestAuthorizeCodeFlowWithPublicClientAndPKCE(t *testing.T) {
 	}
 }
 
-func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy interface{}) {
+func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any) {
 	c := new(goauth2.Config)
 	c.EnforcePKCE = true
 	c.EnablePKCEPlainChallengeMethod = true

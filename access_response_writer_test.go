@@ -66,7 +66,7 @@ func TestNewAccessResponse(t *testing.T) {
 			},
 			handlers: TokenEndpointHandlers{handler},
 			expect: &AccessResponse{
-				Extra:       map[string]interface{}{},
+				Extra:       map[string]any{},
 				AccessToken: "foo",
 				TokenType:   "bar",
 			},

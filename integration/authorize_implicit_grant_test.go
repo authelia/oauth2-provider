@@ -32,7 +32,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 	}
 }
 
-func runTestAuthorizeImplicitGrant(t *testing.T, strategy interface{}) {
+func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()

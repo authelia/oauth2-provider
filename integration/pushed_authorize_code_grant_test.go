@@ -29,7 +29,7 @@ func TestPushedAuthorizeCodeFlow(t *testing.T) {
 	}
 }
 
-func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
+func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
 	ts := mockServer(t, f, &goauth2.DefaultSession{Subject: "foo-sub"})
 
@@ -128,7 +128,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 				return
 			}
 
-			m := map[string]interface{}{}
+			m := map[string]any{}
 			err = json.Unmarshal(body, &m)
 
 			assert.NoError(t, err, "Error occurred when unamrshaling the body: %v", err)

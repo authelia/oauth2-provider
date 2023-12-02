@@ -9,13 +9,13 @@ import (
 
 // Mapper is the interface used internally to map key-value pairs
 type Mapper interface {
-	ToMap() map[string]interface{}
-	Add(key string, value interface{})
-	Get(key string) interface{}
+	ToMap() map[string]any
+	Add(key string, value any)
+	Get(key string) any
 }
 
 // ToString will return a string representation of a map
-func ToString(i interface{}) string {
+func ToString(i any) string {
 	if i == nil {
 		return ""
 	}
@@ -34,7 +34,7 @@ func ToString(i interface{}) string {
 }
 
 // ToTime will try to convert a given input to a time.Time structure
-func ToTime(i interface{}) time.Time {
+func ToTime(i any) time.Time {
 	if i == nil {
 		return time.Time{}
 	}
@@ -51,9 +51,9 @@ func ToTime(i interface{}) time.Time {
 }
 
 // Filter will filter out elements based on keys in a given input map na key-slice
-func Filter(elements map[string]interface{}, keys ...string) map[string]interface{} {
+func Filter(elements map[string]any, keys ...string) map[string]any {
 	var keyIdx = make(map[string]bool)
-	var result = make(map[string]interface{})
+	var result = make(map[string]any)
 
 	for _, key := range keys {
 		keyIdx[key] = true
@@ -69,8 +69,8 @@ func Filter(elements map[string]interface{}, keys ...string) map[string]interfac
 }
 
 // Copy will copy all elements in a map and return a new representational map
-func Copy(elements map[string]interface{}) (result map[string]interface{}) {
-	result = make(map[string]interface{}, len(elements))
+func Copy(elements map[string]any) (result map[string]any) {
+	result = make(map[string]any, len(elements))
 	for k, v := range elements {
 		result[k] = v
 	}

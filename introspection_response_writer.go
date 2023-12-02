@@ -186,7 +186,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"active": true,
 	}
 

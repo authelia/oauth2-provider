@@ -44,7 +44,7 @@ func (m *MockPushedAuthorizeEndpointHandler) HandlePushedAuthorizeEndpointReques
 }
 
 // HandlePushedAuthorizeEndpointRequest indicates an expected call of HandlePushedAuthorizeEndpointRequest
-func (mr *MockPushedAuthorizeEndpointHandlerMockRecorder) HandlePushedAuthorizeEndpointRequest(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockPushedAuthorizeEndpointHandlerMockRecorder) HandlePushedAuthorizeEndpointRequest(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandlePushedAuthorizeEndpointRequest", reflect.TypeOf((*MockPushedAuthorizeEndpointHandler)(nil).HandlePushedAuthorizeEndpointRequest), arg0, arg1, arg2)
 }

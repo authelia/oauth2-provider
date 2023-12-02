@@ -6,7 +6,7 @@ package integration_test
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -179,7 +179,7 @@ func checkStatusAndGetBody(t *testing.T, resp *http.Response, expectedStatusCode
 	defer resp.Body.Close()
 
 	require.Equal(t, expectedStatusCode, resp.StatusCode)
-	b, err := io.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	if err == nil {
 		fmt.Printf("PAR response: body=%s\n", string(b))
 	}

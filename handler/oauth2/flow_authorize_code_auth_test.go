@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -162,7 +161,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
 					aresp := fosite.NewAuthorizeResponse()
-					err := c.handler.HandleAuthorizeEndpointRequest(context.Background(), c.areq, aresp)
+					err := c.handler.HandleAuthorizeEndpointRequest(nil, c.areq, aresp)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error())
 					} else {

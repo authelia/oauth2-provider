@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/ory/x/errorsx"
-	"github.com/ory/x/otelx"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/pkg/errors"
 )
@@ -38,10 +36,7 @@ func AccessTokenFromRequest(req *http.Request) string {
 	return split[1]
 }
 
-func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (_ TokenUse, _ AccessRequester, err error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer("github.com/ory/fosite").Start(ctx, "Fosite.IntrospectToken")
-	defer otelx.End(span, &err)
-
+func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (TokenUse, AccessRequester, error) {
 	var found = false
 	var foundTokenUse TokenUse = ""
 

@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -46,7 +45,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					GrantTypes:    fosite.Arguments{"implicit"},
 					ResponseTypes: fosite.Arguments{"token"},
 				}
-				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).Return("", "", errors.New(""))
+				chgen.EXPECT().GenerateAccessToken(nil, areq).Return("", "", errors.New(""))
 			},
 			expectErr: fosite.ErrServerError,
 		},
@@ -81,8 +80,8 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			description: "should fail because persistence failed",
 			setup: func() {
 				areq.RequestedAudience = fosite.Arguments{"https://www.ory.sh/api"}
-				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).AnyTimes().Return("access.ats", "ats", nil)
-				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
+				chgen.EXPECT().GenerateAccessToken(nil, areq).AnyTimes().Return("access.ats", "ats", nil)
+				store.EXPECT().CreateAccessTokenSession(nil, "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},
 			expectErr: fosite.ErrServerError,
 		},
@@ -92,7 +91,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 				areq.State = "state"
 				areq.GrantedScope = fosite.Arguments{"scope"}
 
-				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
+				store.EXPECT().CreateAccessTokenSession(nil, "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 
 				aresp.EXPECT().AddParameter("access_token", "access.ats")
 				aresp.EXPECT().AddParameter("expires_in", gomock.Any())
@@ -105,7 +104,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			err := h.HandleAuthorizeEndpointRequest(context.Background(), areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(nil, areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {
@@ -152,16 +151,16 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 		TokenLifespans: &internal.TestLifespans,
 	}
 
-	store.EXPECT().CreateAccessTokenSession(gomock.Any(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
+	store.EXPECT().CreateAccessTokenSession(nil, "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 
 	aresp.EXPECT().AddParameter("access_token", "access.ats")
 	aresp.EXPECT().AddParameter("expires_in", gomock.Any())
 	aresp.EXPECT().AddParameter("token_type", "bearer")
 	aresp.EXPECT().AddParameter("state", "state")
 	aresp.EXPECT().AddParameter("scope", "scope")
-	chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).AnyTimes().Return("access.ats", "ats", nil)
+	chgen.EXPECT().GenerateAccessToken(nil, areq).AnyTimes().Return("access.ats", "ats", nil)
 
-	err := h.HandleAuthorizeEndpointRequest(context.Background(), areq, aresp)
+	err := h.HandleAuthorizeEndpointRequest(nil, areq, aresp)
 	assert.NoError(t, err)
 	assert.Equal(t, fosite.ResponseModeFragment, areq.GetResponseMode())
 

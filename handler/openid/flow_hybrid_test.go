@@ -34,6 +34,12 @@ var hmacStrategy = &oauth2.HMACSHAStrategy{
 	},
 }
 
+type defaultSession struct {
+	Claims  *jwt.IDTokenClaims
+	Headers *jwt.Headers
+	*fosite.DefaultSession
+}
+
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
 	var idStrategy = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
@@ -85,6 +91,20 @@ func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybrid
 		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
 		OpenIDConnectRequestStorage:   storage.NewMemoryStore(),
 	}
+}
+
+func (s *defaultSession) IDTokenHeaders() *jwt.Headers {
+	if s.Headers == nil {
+		s.Headers = &jwt.Headers{}
+	}
+	return s.Headers
+}
+
+func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
+	if s.Claims == nil {
+		s.Claims = &jwt.IDTokenClaims{}
+	}
+	return s.Claims
 }
 
 func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
@@ -316,7 +336,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			h := c.setup()
-			err := h.HandleAuthorizeEndpointRequest(context.Background(), areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(nil, areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

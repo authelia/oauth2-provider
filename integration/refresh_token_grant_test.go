@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -197,13 +196,13 @@ func TestRefreshTokenFlow(t *testing.T) {
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
-				tokenSource := oauthClient.TokenSource(context.Background(), original)
+				tokenSource := oauthClient.TokenSource(oauth2.NoContext, original)
 				_, err := tokenSource.Token()
 				require.Error(t, err)
 				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
 
 				refreshed.Expiry = refreshed.Expiry.Add(-time.Hour * 24)
-				tokenSource = oauthClient.TokenSource(context.Background(), refreshed)
+				tokenSource = oauthClient.TokenSource(oauth2.NoContext, refreshed)
 				_, err = tokenSource.Token()
 				require.Error(t, err)
 				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
@@ -235,7 +234,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				return
 			}
 
-			token, err := oauthClient.Exchange(context.Background(), resp.Request.URL.Query().Get("code"))
+			token, err := oauthClient.Exchange(oauth2.NoContext, resp.Request.URL.Query().Get("code"))
 			require.NoError(t, err)
 			require.NotEmpty(t, token.AccessToken)
 
@@ -248,7 +247,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				c.beforeRefresh(t)
 			}
 
-			tokenSource := oauthClient.TokenSource(context.Background(), token)
+			tokenSource := oauthClient.TokenSource(oauth2.NoContext, token)
 
 			// This sleep guarantees time difference in exp/iat
 			time.Sleep(time.Second * 2)

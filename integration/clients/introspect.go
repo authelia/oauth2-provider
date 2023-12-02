@@ -6,7 +6,7 @@ package clients
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -54,7 +54,7 @@ func (c *Introspect) IntrospectToken(
 
 	defer response.Body.Close()
 
-	body, err := io.ReadAll(response.Body)
+	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}

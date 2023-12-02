@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -14,13 +14,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/pkg/errors"
-
 	"github.com/go-jose/go-jose/v3"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func mustGenerateAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {

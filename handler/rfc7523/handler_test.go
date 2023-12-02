@@ -15,15 +15,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/handler/oauth2"
-
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/internal"
 )
 
 // Define the suite, and absorb the built-in basic suite
@@ -37,7 +36,7 @@ type AuthorizeJWTGrantRequestHandlerTestSuite struct {
 	mockStore               *internal.MockRFC7523KeyStorage
 	mockAccessTokenStrategy *internal.MockAccessTokenStrategy
 	mockAccessTokenStore    *internal.MockAccessTokenStorage
-	accessRequest           *fosite.AccessRequest
+	accessRequest           *goauth2.AccessRequest
 	handler                 *Handler
 }
 
@@ -65,14 +64,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 	s.mockStore = internal.NewMockRFC7523KeyStorage(s.mockCtrl)
 	s.mockAccessTokenStrategy = internal.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
-	s.accessRequest = fosite.NewAccessRequest(new(fosite.DefaultSession))
+	s.accessRequest = goauth2.NewAccessRequest(new(goauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &fosite.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
+	s.accessRequest.Client = &goauth2.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
 	s.handler = &Handler{
 		Storage: s.mockStore,
-		Config: &fosite.Config{
-			ScopeStrategy:                        fosite.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:             fosite.DefaultAudienceMatchingStrategy,
+		Config: &goauth2.Config{
+			ScopeStrategy:                        goauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy:             goauth2.DefaultAudienceMatchingStrategy,
 			TokenURL:                             "https://www.example.com/token",
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,
@@ -82,7 +81,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 		HandleHelper: &oauth2.HandleHelper{
 			AccessTokenStrategy: s.mockAccessTokenStrategy,
 			AccessTokenStorage:  s.mockAccessTokenStore,
-			Config: &fosite.Config{
+			Config: &goauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
@@ -103,25 +102,25 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithInvalidGrantTy
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrUnknownRequest))
-	s.EqualError(err, fosite.ErrUnknownRequest.Error(), "expected error, because of invalid grant type")
+	s.True(errors.Is(err, goauth2.ErrUnknownRequest))
+	s.EqualError(err, goauth2.ErrUnknownRequest.Error(), "expected error, because of invalid grant type")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
 	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
-	s.accessRequest.Client = &fosite.DefaultClient{GrantTypes: []string{"authorization_code"}}
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerCanSkipClientAuth = false
+	s.accessRequest.Client = &goauth2.DefaultClient{GrantTypes: []string{"authorization_code"}}
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrUnauthorizedClient))
-	s.EqualError(err, fosite.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
+	s.True(errors.Is(err, goauth2.ErrUnauthorizedClient))
+	s.EqualError(err, goauth2.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
 	s.Equal(
 		"The OAuth 2.0 Client is not allowed to use authorization grant \"urn:ietf:params:oauth:grant-type:jwt-bearer\".",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -133,11 +132,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithoutAssertion()
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidRequest))
-	s.EqualError(err, fosite.ErrInvalidRequest.Error(), "expected error, because of missing assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidRequest))
+	s.EqualError(err, goauth2.ErrInvalidRequest.Error(), "expected error, because of missing assertion")
 	s.Equal(
 		"The assertion request parameter must be set when using grant_type of 'urn:ietf:params:oauth:grant-type:jwt-bearer'.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -150,11 +149,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAsser
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of malformed assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of malformed assertion")
 	s.Equal(
 		"Unable to parse JSON Web Token passed in \"assertion\" request parameter.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -170,11 +169,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIs
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing issuer claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing issuer claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain an \"iss\" (issuer) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -190,11 +189,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSu
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing subject claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing subject claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain a \"sub\" (subject) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -205,20 +204,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToChec
 	cl := s.createStandardClaim()
 	keyID := "my_key"
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(nil, fosite.ErrNotFound)
+	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(nil, goauth2.ErrNotFound)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing public key to check assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing public key to check assertion")
 	s.Equal(
 		fmt.Sprintf(
 			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
 			cl.Issuer, cl.Subject,
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -229,20 +228,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToChe
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(nil, fosite.ErrNotFound)
+	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(nil, goauth2.ErrNotFound)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing public keys to check assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing public keys to check assertion")
 	s.Equal(
 		fmt.Sprintf(
 			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
 			cl.Issuer, cl.Subject,
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -260,9 +259,9 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAsse
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because wrong public key was registered for assertion")
-	s.Equal("Unable to verify the integrity of the 'assertion' value.", fosite.ErrorToRFC6749Error(err).HintField)
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because wrong public key was registered for assertion")
+	s.Equal("Unable to verify the integrity of the 'assertion' value.", goauth2.ErrorToRFC6749Error(err).HintField)
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAssertionSignature() {
@@ -278,14 +277,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAss
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because wrong public keys was registered for assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because wrong public keys was registered for assertion")
 	s.Equal(
 		fmt.Sprintf(
 			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
 			cl.Issuer, cl.Subject,
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -304,11 +303,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing audience claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing audience claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -327,14 +326,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of invalid audience claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of invalid audience claim in assertion")
 	s.Equal(
 		fmt.Sprintf(
 			"The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim containing a value \"%s\" that identifies the authorization server as an intended audience.",
 			s.handler.Config.GetTokenURL(ctx),
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -353,11 +352,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion()
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing expiration claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing expiration claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain an \"exp\" (expiration time) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -376,11 +375,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because assertion expired")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because assertion expired")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter expired.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -400,14 +399,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBefor
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, nbf claim in assertion indicates, that assertion can not be accepted now")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, nbf claim in assertion indicates, that assertion can not be accepted now")
 	s.Equal(
 		fmt.Sprintf(
 			"The JWT in \"assertion\" request parameter contains an \"nbf\" (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
 			nbf.Format(time.RFC3339),
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -419,7 +418,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIssuedDateOptional = false
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
@@ -427,11 +426,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing iat claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing iat claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain an \"iat\" (issued at) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -444,8 +443,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 	issuedAt := time.Now().AddDate(0, 0, -31)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = jwt.NewNumericDate(issuedAt)
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIssuedDateOptional = false
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
@@ -453,15 +452,15 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because assertion was issued far in the past")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because assertion was issued far in the past")
 	s.Equal(
 		fmt.Sprintf(
 			"The JWT in \"assertion\" request parameter contains an \"exp\" (expiration time) claim with value \"%s\" that is unreasonably far in the future, considering token issued at \"%s\".",
 			cl.Expiry.Time().Format(time.RFC3339),
 			cl.IssuedAt.Time().Format(time.RFC3339),
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -474,8 +473,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	cl := s.createStandardClaim()
 	cl.IssuedAt = jwt.NewNumericDate(time.Now().AddDate(0, 0, -15))
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 20))
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIssuedDateOptional = false
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
@@ -483,15 +482,15 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because assertion will expire unreasonably far in the future.")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because assertion will expire unreasonably far in the future.")
 	s.Equal(
 		fmt.Sprintf(
 			"The JWT in \"assertion\" request parameter contains an \"exp\" (expiration time) claim with value \"%s\" that is unreasonably far in the future, considering token issued at \"%s\".",
 			cl.Expiry.Time().Format(time.RFC3339),
 			cl.IssuedAt.Time().Format(time.RFC3339),
 		),
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -504,8 +503,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 31))
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIssuedDateOptional = true
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
@@ -513,8 +512,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because assertion will expire unreasonably far in the future.")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because assertion will expire unreasonably far in the future.")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredTokenID() {
@@ -532,11 +531,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredT
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidGrant))
-	s.EqualError(err, fosite.ErrInvalidGrant.Error(), "expected error, because of missing jti claim in assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidGrant))
+	s.EqualError(err, goauth2.ErrInvalidGrant.Error(), "expected error, because of missing jti claim in assertion")
 	s.Equal(
 		"The JWT in \"assertion\" request parameter MUST contain an \"jti\" (JWT ID) claim.",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -555,8 +554,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrJTIKnown))
-	s.EqualError(err, fosite.ErrJTIKnown.Error(), "expected error, because assertion was used")
+	s.True(errors.Is(err, goauth2.ErrJTIKnown))
+	s.EqualError(err, goauth2.ErrJTIKnown.Error(), "expected error, because assertion was used")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUsed() {
@@ -568,14 +567,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUs
 	cl := s.createStandardClaim()
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, fosite.ErrServerError)
+	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, goauth2.ErrServerError)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrServerError))
-	s.EqualError(err, fosite.ErrServerError.Error(), "expected error, because error occurred while trying to check if jwt was used")
+	s.True(errors.Is(err, goauth2.ErrServerError))
+	s.EqualError(err, goauth2.ErrServerError.Error(), "expected error, because error occurred while trying to check if jwt was used")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed() {
@@ -589,14 +588,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed()
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(fosite.ErrServerError)
+	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(goauth2.ErrServerError)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrServerError))
-	s.EqualError(err, fosite.ErrServerError.Error(), "expected error, because error occurred while trying to mark jwt as used")
+	s.True(errors.Is(err, goauth2.ErrServerError))
+	s.EqualError(err, goauth2.ErrServerError.Error(), "expected error, because error occurred while trying to mark jwt as used")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKeyScope() {
@@ -609,15 +608,15 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKey
 
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, fosite.ErrServerError)
+	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, goauth2.ErrServerError)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrServerError))
-	s.EqualError(err, fosite.ErrServerError.Error(), "expected error, because error occurred while fetching public key scopes")
+	s.True(errors.Is(err, goauth2.ErrServerError))
+	s.EqualError(err, goauth2.ErrServerError.Error(), "expected error, because error occurred while fetching public key scopes")
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScopes() {
@@ -638,11 +637,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScope
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrInvalidScope))
-	s.EqualError(err, fosite.ErrInvalidScope.Error(), "expected error, because requested scopes don't match allowed scope for this assertion")
+	s.True(errors.Is(err, goauth2.ErrInvalidScope))
+	s.EqualError(err, goauth2.ErrInvalidScope.Error(), "expected error, because requested scopes don't match allowed scope for this assertion")
 	s.Equal(
 		"The public key registered for issuer \"trusted_issuer\" and subject \"some_ro\" is not allowed to request scope \"some_scope\".",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -695,7 +694,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTID
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIDOptional = true
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIDOptional = true
 	cl.ID = ""
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
@@ -716,7 +715,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIs
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerIssuedDateOptional = true
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
@@ -737,8 +736,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestIsValidWhenClientA
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Client = &fosite.DefaultClient{}
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerCanSkipClientAuth = true
+	s.accessRequest.Client = &goauth2.DefaultClient{}
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = true
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
@@ -812,8 +811,8 @@ type AuthorizeJWTGrantPopulateTokenEndpointTestSuite struct {
 	mockStore               *internal.MockRFC7523KeyStorage
 	mockAccessTokenStrategy *internal.MockAccessTokenStrategy
 	mockAccessTokenStore    *internal.MockAccessTokenStorage
-	accessRequest           *fosite.AccessRequest
-	accessResponse          *fosite.AccessResponse
+	accessRequest           *goauth2.AccessRequest
+	accessResponse          *goauth2.AccessResponse
 	handler                 *Handler
 }
 
@@ -841,15 +840,15 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 	s.mockStore = internal.NewMockRFC7523KeyStorage(s.mockCtrl)
 	s.mockAccessTokenStrategy = internal.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
-	s.accessRequest = fosite.NewAccessRequest(new(fosite.DefaultSession))
+	s.accessRequest = goauth2.NewAccessRequest(new(goauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &fosite.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
-	s.accessResponse = fosite.NewAccessResponse()
+	s.accessRequest.Client = &goauth2.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
+	s.accessResponse = goauth2.NewAccessResponse()
 	s.handler = &Handler{
 		Storage: s.mockStore,
-		Config: &fosite.Config{
-			ScopeStrategy:                        fosite.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:             fosite.DefaultAudienceMatchingStrategy,
+		Config: &goauth2.Config{
+			ScopeStrategy:                        goauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy:             goauth2.DefaultAudienceMatchingStrategy,
 			TokenURL:                             "https://www.example.com/token",
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,
@@ -859,7 +858,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 		HandleHelper: &oauth2.HandleHelper{
 			AccessTokenStrategy: s.mockAccessTokenStrategy,
 			AccessTokenStorage:  s.mockAccessTokenStore,
-			Config: &fosite.Config{
+			Config: &goauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
@@ -880,25 +879,25 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestRequestWithInvalid
 	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrUnknownRequest))
-	s.EqualError(err, fosite.ErrUnknownRequest.Error(), "expected error, because of invalid grant type")
+	s.True(errors.Is(err, goauth2.ErrUnknownRequest))
+	s.EqualError(err, goauth2.ErrUnknownRequest.Error(), "expected error, because of invalid grant type")
 }
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
 	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
-	s.accessRequest.Client = &fosite.DefaultClient{GrantTypes: []string{"authorization_code"}}
-	s.handler.Config.(*fosite.Config).GrantTypeJWTBearerCanSkipClientAuth = false
+	s.accessRequest.Client = &goauth2.DefaultClient{GrantTypes: []string{"authorization_code"}}
+	s.handler.Config.(*goauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
 	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
 
 	// assert
-	s.True(errors.Is(err, fosite.ErrUnauthorizedClient))
-	s.EqualError(err, fosite.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
+	s.True(errors.Is(err, goauth2.ErrUnauthorizedClient))
+	s.EqualError(err, goauth2.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
 	s.Equal(
 		"The OAuth 2.0 Client is not allowed to use authorization grant \"urn:ietf:params:oauth:grant-type:jwt-bearer\".",
-		fosite.ErrorToRFC6749Error(err).HintField,
+		goauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
 
@@ -927,8 +926,8 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedS
 }
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedSuccessfullyWithCustomLifespan() {
-	s.accessRequest.Client = &fosite.DefaultClientWithCustomTokenLifespans{
-		DefaultClient: &fosite.DefaultClient{
+	s.accessRequest.Client = &goauth2.DefaultClientWithCustomTokenLifespans{
+		DefaultClient: &goauth2.DefaultClient{
 			GrantTypes: []string{grantTypeJWTBearer},
 		},
 		TokenLifespans: &internal.TestLifespans,

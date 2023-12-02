@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/oauth2"
 )
 
 func TestRevokeToken(t *testing.T) {
@@ -26,8 +26,8 @@ func TestRevokeToken(t *testing.T) {
 }
 
 func runRevokeTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)

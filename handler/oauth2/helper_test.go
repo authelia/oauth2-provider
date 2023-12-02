@@ -8,29 +8,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal"
 )
 
 func TestGetExpiresIn(t *testing.T) {
 	now := time.Now().UTC()
-	r := fosite.NewAccessRequest(&fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken: now.Add(time.Hour),
+	r := goauth2.NewAccessRequest(&goauth2.DefaultSession{
+		ExpiresAt: map[goauth2.TokenType]time.Time{
+			goauth2.AccessToken: now.Add(time.Hour),
 		},
 	})
-	assert.Equal(t, time.Hour, getExpiresIn(r, fosite.AccessToken, time.Millisecond, now))
+	assert.Equal(t, time.Hour, getExpiresIn(r, goauth2.AccessToken, time.Millisecond, now))
 }
 
 func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	areq := &fosite.AccessRequest{}
-	aresp := &fosite.AccessResponse{Extra: map[string]interface{}{}}
+	areq := &goauth2.AccessRequest{}
+	aresp := &goauth2.AccessResponse{Extra: map[string]interface{}{}}
 	accessStrat := internal.NewMockAccessTokenStrategy(ctrl)
 	accessStore := internal.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()
@@ -38,12 +38,12 @@ func TestIssueAccessToken(t *testing.T) {
 	helper := HandleHelper{
 		AccessTokenStorage:  accessStore,
 		AccessTokenStrategy: accessStrat,
-		Config: &fosite.Config{
+		Config: &goauth2.Config{
 			AccessTokenLifespan: time.Hour,
 		},
 	}
 
-	areq.Session = &fosite.DefaultSession{}
+	areq.Session = &goauth2.DefaultSession{}
 	for k, c := range []struct {
 		mock func()
 		err  error

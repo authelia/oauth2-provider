@@ -6,11 +6,11 @@ package pkce
 import (
 	"context"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
 type PKCERequestStorage interface {
-	GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error)
-	CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error
+	GetPKCERequestSession(ctx context.Context, signature string, session goauth2.Session) (goauth2.Requester, error)
+	CreatePKCERequestSession(ctx context.Context, signature string, requester goauth2.Requester) error
 	DeletePKCERequestSession(ctx context.Context, signature string) error
 }

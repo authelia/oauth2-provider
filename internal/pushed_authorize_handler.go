@@ -7,9 +7,9 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
 // MockPushedAuthorizeEndpointHandler is a mock of PushedAuthorizeEndpointHandler interface
@@ -36,7 +36,7 @@ func (m *MockPushedAuthorizeEndpointHandler) EXPECT() *MockPushedAuthorizeEndpoi
 }
 
 // HandlePushedAuthorizeEndpointRequest mocks base method
-func (m *MockPushedAuthorizeEndpointHandler) HandlePushedAuthorizeEndpointRequest(arg0 context.Context, arg1 fosite.AuthorizeRequester, arg2 fosite.PushedAuthorizeResponder) error {
+func (m *MockPushedAuthorizeEndpointHandler) HandlePushedAuthorizeEndpointRequest(arg0 context.Context, arg1 goauth2.AuthorizeRequester, arg2 goauth2.PushedAuthorizeResponder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandlePushedAuthorizeEndpointRequest", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

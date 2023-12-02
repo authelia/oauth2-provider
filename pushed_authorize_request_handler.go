@@ -1,15 +1,16 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
 	"errors"
 	"net/http"
 
-	"github.com/ory/fosite/i18n"
 	"github.com/ory/x/errorsx"
+
+	"github.com/authelia/goauth2/i18n"
 )
 
 const (

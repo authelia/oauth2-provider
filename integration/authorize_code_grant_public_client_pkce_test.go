@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2" // "github.com/stretchr/testify/assert"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/oauth2" // "github.com/stretchr/testify/assert"
 )
 
 func TestAuthorizeCodeFlowWithPublicClientAndPKCE(t *testing.T) {
@@ -29,17 +29,17 @@ func TestAuthorizeCodeFlowWithPublicClientAndPKCE(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy interface{}) {
-	c := new(fosite.Config)
+	c := new(goauth2.Config)
 	c.EnforcePKCE = true
 	c.EnablePKCEPlainChallengeMethod = true
 	f := compose.Compose(c, fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	fositeStore.Clients["public-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var authCodeUrl string
 	var verifier string

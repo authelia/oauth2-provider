@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/text/language"
 
-	"github.com/ory/fosite/i18n"
+	"github.com/authelia/goauth2/i18n"
 )
 
 func TestRFC6749Error(t *testing.T) {

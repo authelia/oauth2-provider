@@ -12,16 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 type introspectionResponse struct {
@@ -46,7 +45,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			Username: "peteru",
 		},
 	}
-	fc := new(fosite.Config)
+	fc := new(goauth2.Config)
 	fc.RefreshTokenLifespan = -1
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 	f := compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
@@ -55,20 +54,20 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 	oauthClient := newOAuth2Client(ts)
 	state := "1234567890"
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
-	refreshCheckClient := &fosite.DefaultClient{
+	refreshCheckClient := &goauth2.DefaultClient{
 		ID:            "refresh-client",
 		Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 		RedirectURIs:  []string{ts.URL + "/callback"},
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-		Scopes:        []string{"fosite", "offline", "openid"},
+		Scopes:        []string{"goauth2", "offline", "openid"},
 		Audience:      []string{"https://www.ory.sh/api"},
 	}
 	fositeStore.Clients["refresh-client"] = refreshCheckClient
 
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 	for _, c := range []struct {
 		description   string
 		setup         func(t *testing.T)
@@ -81,7 +80,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			description: "should fail because refresh scope missing",
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"fosite"}
+				oauthClient.Scopes = []string{"goauth2"}
 			},
 			pass: false,
 		},
@@ -101,7 +100,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			description: "should pass and yield id token",
 			params:      []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"fosite", "offline", "openid"}
+				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
@@ -135,7 +134,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			description: "should fail because scope is no longer allowed",
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"fosite", "offline", "openid"}
+				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Scopes = []string{"offline", "openid"}
@@ -147,8 +146,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 			params:      []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"fosite", "offline", "openid"}
-				refreshCheckClient.Scopes = []string{"fosite", "offline", "openid"}
+				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
+				refreshCheckClient.Scopes = []string{"goauth2", "offline", "openid"}
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{"https://www.not-ory.sh/api"}
@@ -158,30 +157,30 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			description: "should fail with expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(fosite.Config)
+				fc = new(goauth2.Config)
 				fc.RefreshTokenLifespan = time.Nanosecond
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				f = compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"fosite", "offline", "openid"}
-				fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
+				fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			pass: false,
 		},
 		{
 			description: "should pass with limited but not expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(fosite.Config)
+				fc = new(goauth2.Config)
 				fc.RefreshTokenLifespan = time.Minute
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				f = compose.ComposeAllEnabled(fc, fositeStore, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"fosite", "offline", "openid"}
-				fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
+				fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{}

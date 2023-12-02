@@ -11,19 +11,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 type formPostTestCase struct {
@@ -44,17 +42,17 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	config := &fosite.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+	config := &goauth2.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
 	f := compose.ComposeAllEnabled(config, fositeStore, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	defaultClient := fositeStore.Clients["my-client"].(*fosite.DefaultClient)
+	defaultClient := fositeStore.Clients["my-client"].(*goauth2.DefaultClient)
 	defaultClient.RedirectURIs[0] = ts.URL + "/callback"
-	responseModeClient := &fosite.DefaultResponseModeClient{
+	responseModeClient := &goauth2.DefaultResponseModeClient{
 		DefaultClient: defaultClient,
-		ResponseModes: []fosite.ResponseModeType{fosite.ResponseModeFormPost, fosite.ResponseModeFormPost, "decorated_form_post"},
+		ResponseModes: []goauth2.ResponseModeType{goauth2.ResponseModeFormPost, goauth2.ResponseModeFormPost, "decorated_form_post"},
 	}
 	fositeStore.Clients["response-mode-client"] = responseModeClient
 	oauthClient.ClientID = "response-mode-client"
@@ -201,22 +199,22 @@ func decorateCheck(cf checkFunc) checkFunc {
 type decoratedFormPostResponse struct {
 }
 
-func (m *decoratedFormPostResponse) ResponseModes() fosite.ResponseModeTypes {
-	return fosite.ResponseModeTypes{"decorated_form_post"}
+func (m *decoratedFormPostResponse) ResponseModes() goauth2.ResponseModeTypes {
+	return goauth2.ResponseModeTypes{"decorated_form_post"}
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) {
+func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar goauth2.AuthorizeRequester, resp goauth2.AuthorizeResponder) {
 	rw.Header().Add("Content-Type", "text/html;charset=UTF-8")
 	resp.AddParameter("custom_param", "foo")
-	fosite.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), fosite.GetPostFormHTMLTemplate(ctx,
-		fosite.NewOAuth2Provider(nil, new(fosite.Config))), rw)
+	goauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), goauth2.GetPostFormHTMLTemplate(ctx,
+		goauth2.NewOAuth2Provider(nil, new(goauth2.Config))), rw)
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar fosite.AuthorizeRequester, err error) {
-	rfcerr := fosite.ErrorToRFC6749Error(err)
+func (m *decoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar goauth2.AuthorizeRequester, err error) {
+	rfcerr := goauth2.ErrorToRFC6749Error(err)
 	errors := rfcerr.ToValues()
 	errors.Set("state", ar.GetState())
 	errors.Add("custom_err_param", "bar")
-	fosite.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, fosite.GetPostFormHTMLTemplate(ctx,
-		fosite.NewOAuth2Provider(nil, new(fosite.Config))), rw)
+	goauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, goauth2.GetPostFormHTMLTemplate(ctx,
+		goauth2.NewOAuth2Provider(nil, new(goauth2.Config))), rw)
 }

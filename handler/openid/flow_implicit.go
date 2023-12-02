@@ -8,9 +8,9 @@ import (
 
 	"github.com/ory/x/errorsx"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 type OpenIDConnectImplicitHandler struct {
@@ -21,13 +21,13 @@ type OpenIDConnectImplicitHandler struct {
 	RS256JWTStrategy                  *jwt.DefaultSigner
 
 	Config interface {
-		fosite.IDTokenLifespanProvider
-		fosite.MinParameterEntropyProvider
-		fosite.ScopeStrategyProvider
+		goauth2.IDTokenLifespanProvider
+		goauth2.MinParameterEntropyProvider
+		goauth2.ScopeStrategyProvider
 	}
 }
 
-func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {
+func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar goauth2.AuthorizeRequester, resp goauth2.AuthorizeResponder) error {
 	if !(ar.GetGrantedScopes().Has("openid") && (ar.GetResponseTypes().Has("token", "id_token") || ar.GetResponseTypes().ExactOne("id_token"))) {
 		return nil
 	} else if ar.GetResponseTypes().Has("code") {
@@ -35,29 +35,29 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return nil
 	}
 
-	ar.SetDefaultResponseMode(fosite.ResponseModeFragment)
+	ar.SetDefaultResponseMode(goauth2.ResponseModeFragment)
 
 	if !ar.GetClient().GetGrantTypes().Has("implicit") {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+		return errorsx.WithStack(goauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
 	// Disabled because this is already handled at the authorize_request_handler
 	//if ar.GetResponseTypes().ExactOne("id_token") && !ar.GetClient().GetResponseTypes().Has("id_token") {
-	//	return errorsx.WithStack(fosite.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
+	//	return errorsx.WithStack(goauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
 	//} else if ar.GetResponseTypes().Matches("token", "id_token") && !ar.GetClient().GetResponseTypes().Has("token", "id_token") {
-	//	return errorsx.WithStack(fosite.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token and id_token"))
+	//	return errorsx.WithStack(goauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token and id_token"))
 	//}
 
 	if nonce := ar.GetRequestForm().Get("nonce"); len(nonce) == 0 {
-		return errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))
+		return errorsx.WithStack(goauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))
 	} else if len(nonce) < c.Config.GetMinParameterEntropy(ctx) {
-		return errorsx.WithStack(fosite.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
+		return errorsx.WithStack(goauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
 	}
 
 	client := ar.GetClient()
 	for _, scope := range ar.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
-			return errorsx.WithStack(fosite.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(goauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -87,7 +87,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		resp.AddParameter("state", ar.GetState())
 	}
 
-	idTokenLifespan := fosite.GetEffectiveLifespan(ar.GetClient(), fosite.GrantTypeImplicit, fosite.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	idTokenLifespan := goauth2.GetEffectiveLifespan(ar.GetClient(), goauth2.GrantTypeImplicit, goauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 	if err := c.IssueImplicitIDToken(ctx, idTokenLifespan, ar, resp); err != nil {
 		return errorsx.WithStack(err)
 	}

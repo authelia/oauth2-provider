@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal"
 )
 
 func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
@@ -27,13 +27,13 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 		HandleHelper: &HandleHelper{
 			AccessTokenStorage:  store,
 			AccessTokenStrategy: chgen,
-			Config: &fosite.Config{
+			Config: &goauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
-		Config: &fosite.Config{
-			ScopeStrategy:            fosite.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+		Config: &goauth2.Config{
+			ScopeStrategy:            goauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
 		},
 	}
 	for k, c := range []struct {
@@ -44,32 +44,32 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   fosite.ErrUnknownRequest,
+			expectErr:   goauth2.ErrUnknownRequest,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(fosite.Arguments{""})
+				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{""})
 			},
 		},
 		{
 			description: "should fail because audience not valid",
-			expectErr:   fosite.ErrInvalidRequest,
+			expectErr:   goauth2.ErrInvalidRequest,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(fosite.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
 				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.ory.sh/not-api"})
-				areq.EXPECT().GetClient().Return(&fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
+					GrantTypes: goauth2.Arguments{"client_credentials"},
 					Audience:   []string{"https://www.ory.sh/api"},
 				})
 			},
 		},
 		{
 			description: "should fail because scope not valid",
-			expectErr:   fosite.ErrInvalidScope,
+			expectErr:   goauth2.ErrInvalidScope,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(fosite.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
-				areq.EXPECT().GetClient().Return(&fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
+					GrantTypes: goauth2.Arguments{"client_credentials"},
 					Scopes:     []string{"foo"},
 				})
 			},
@@ -77,12 +77,12 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			mock: func() {
-				areq.EXPECT().GetSession().Return(new(fosite.DefaultSession))
-				areq.EXPECT().GetGrantTypes().Return(fosite.Arguments{"client_credentials"})
+				areq.EXPECT().GetSession().Return(new(goauth2.DefaultSession))
+				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetRequestedAudience().Return([]string{})
-				areq.EXPECT().GetClient().Return(&fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
+					GrantTypes: goauth2.Arguments{"client_credentials"},
 					Scopes:     []string{"foo", "bar", "baz"},
 				})
 			},
@@ -104,20 +104,20 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := internal.NewMockClientCredentialsGrantStorage(ctrl)
 	chgen := internal.NewMockAccessTokenStrategy(ctrl)
-	areq := fosite.NewAccessRequest(new(fosite.DefaultSession))
-	aresp := fosite.NewAccessResponse()
+	areq := goauth2.NewAccessRequest(new(goauth2.DefaultSession))
+	aresp := goauth2.NewAccessResponse()
 	defer ctrl.Finish()
 
 	h := ClientCredentialsGrantHandler{
 		HandleHelper: &HandleHelper{
 			AccessTokenStorage:  store,
 			AccessTokenStrategy: chgen,
-			Config: &fosite.Config{
+			Config: &goauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
-		Config: &fosite.Config{
-			ScopeStrategy: fosite.HierarchicScopeStrategy,
+		Config: &goauth2.Config{
+			ScopeStrategy: goauth2.HierarchicScopeStrategy,
 		},
 	}
 	for k, c := range []struct {
@@ -128,25 +128,25 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   fosite.ErrUnknownRequest,
+			expectErr:   goauth2.ErrUnknownRequest,
 			mock: func() {
-				areq.GrantTypes = fosite.Arguments{""}
+				areq.GrantTypes = goauth2.Arguments{""}
 			},
 		},
 		{
 			description: "should fail because grant_type not allowed",
-			expectErr:   fosite.ErrUnauthorizedClient,
+			expectErr:   goauth2.ErrUnauthorizedClient,
 			mock: func() {
-				areq.GrantTypes = fosite.Arguments{"client_credentials"}
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"authorization_code"}}
+				areq.GrantTypes = goauth2.Arguments{"client_credentials"}
+				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"authorization_code"}}
 			},
 		},
 		{
 			description: "should pass",
 			mock: func() {
-				areq.GrantTypes = fosite.Arguments{"client_credentials"}
-				areq.Session = &fosite.DefaultSession{}
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"client_credentials"}}
+				areq.GrantTypes = goauth2.Arguments{"client_credentials"}
+				areq.Session = &goauth2.DefaultSession{}
+				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"client_credentials"}}
 				chgen.EXPECT().GenerateAccessToken(nil, areq).Return("tokenfoo.bar", "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(nil, "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},

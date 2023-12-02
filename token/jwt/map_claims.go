@@ -11,7 +11,6 @@ import (
 	"time"
 
 	jjson "github.com/go-jose/go-jose/v3/json"
-
 	"github.com/ory/x/errorsx"
 )
 

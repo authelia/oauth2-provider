@@ -7,19 +7,19 @@ import (
 	"context"
 	"time"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 type StatelessJWTValidator struct {
 	jwt.Signer
 	Config interface {
-		fosite.ScopeStrategyProvider
+		goauth2.ScopeStrategyProvider
 	}
 }
 
-// AccessTokenJWTToRequest tries to reconstruct fosite.Request from a JWT.
-func AccessTokenJWTToRequest(token *jwt.Token) fosite.Requester {
+// AccessTokenJWTToRequest tries to reconstruct goauth2.Request from a JWT.
+func AccessTokenJWTToRequest(token *jwt.Token) goauth2.Requester {
 	mapClaims := token.Claims
 	claims := jwt.JWTClaims{}
 	claims.FromMapClaims(mapClaims)
@@ -44,9 +44,9 @@ func AccessTokenJWTToRequest(token *jwt.Token) fosite.Requester {
 		}
 	}
 
-	return &fosite.Request{
+	return &goauth2.Request{
 		RequestedAt: requestedAt,
-		Client: &fosite.DefaultClient{
+		Client: &goauth2.DefaultClient{
 			ID: clientId,
 		},
 		// We do not really know which scopes were requested, so we set them to granted.
@@ -57,8 +57,8 @@ func AccessTokenJWTToRequest(token *jwt.Token) fosite.Requester {
 			JWTHeader: &jwt.Headers{
 				Extra: token.Header,
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
-				fosite.AccessToken: claims.ExpiresAt,
+			ExpiresAt: map[goauth2.TokenType]time.Time{
+				goauth2.AccessToken: claims.ExpiresAt,
 			},
 			Subject: claims.Subject,
 		},
@@ -68,7 +68,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) fosite.Requester {
 	}
 }
 
-func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse fosite.TokenUse, accessRequest fosite.AccessRequester, scopes []string) (fosite.TokenUse, error) {
+func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse goauth2.TokenUse, accessRequest goauth2.AccessRequester, scopes []string) (goauth2.TokenUse, error) {
 	t, err := validate(ctx, v.Signer, token)
 	if err != nil {
 		return "", err
@@ -79,10 +79,10 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token strin
 	requester := AccessTokenJWTToRequest(t)
 
 	if err := matchScopes(v.Config.GetScopeStrategy(ctx), requester.GetGrantedScopes(), scopes); err != nil {
-		return fosite.AccessToken, err
+		return goauth2.AccessToken, err
 	}
 
 	accessRequest.Merge(requester)
 
-	return fosite.AccessToken, nil
+	return goauth2.AccessToken, nil
 }

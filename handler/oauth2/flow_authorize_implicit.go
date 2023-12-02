@@ -11,10 +11,10 @@ import (
 
 	"github.com/ory/x/errorsx"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
-var _ fosite.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
+var _ goauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
 
 // AuthorizeImplicitGrantTypeHandler is a response handler for the Authorize Code grant using the implicit grant type
 // as defined in https://tools.ietf.org/html/rfc6749#section-4.2
@@ -24,33 +24,33 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	AccessTokenStorage AccessTokenStorage
 
 	Config interface {
-		fosite.AccessTokenLifespanProvider
-		fosite.ScopeStrategyProvider
-		fosite.AudienceStrategyProvider
+		goauth2.AccessTokenLifespanProvider
+		goauth2.ScopeStrategyProvider
+		goauth2.AudienceStrategyProvider
 	}
 }
 
-func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {
+func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar goauth2.AuthorizeRequester, resp goauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !ar.GetResponseTypes().ExactOne("token") {
 		return nil
 	}
 
-	ar.SetDefaultResponseMode(fosite.ResponseModeFragment)
+	ar.SetDefaultResponseMode(goauth2.ResponseModeFragment)
 
 	// Disabled because this is already handled at the authorize_request_handler
 	// if !ar.GetClient().GetResponseTypes().Has("token") {
-	// 	 return errorsx.WithStack(fosite.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token"))
+	// 	 return errorsx.WithStack(goauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token"))
 	// }
 
 	if !ar.GetClient().GetGrantTypes().Has("implicit") {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+		return errorsx.WithStack(goauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
 	client := ar.GetClient()
 	for _, scope := range ar.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
-			return errorsx.WithStack(fosite.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(goauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -64,24 +64,24 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	return c.IssueImplicitAccessToken(ctx, ar, resp)
 }
 
-func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context.Context, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {
+func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context.Context, ar goauth2.AuthorizeRequester, resp goauth2.AuthorizeResponder) error {
 	// Only override expiry if none is set.
-	atLifespan := fosite.GetEffectiveLifespan(ar.GetClient(), fosite.GrantTypeImplicit, fosite.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	if ar.GetSession().GetExpiresAt(fosite.AccessToken).IsZero() {
-		ar.GetSession().SetExpiresAt(fosite.AccessToken, time.Now().UTC().Add(atLifespan).Round(time.Second))
+	atLifespan := goauth2.GetEffectiveLifespan(ar.GetClient(), goauth2.GrantTypeImplicit, goauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	if ar.GetSession().GetExpiresAt(goauth2.AccessToken).IsZero() {
+		ar.GetSession().SetExpiresAt(goauth2.AccessToken, time.Now().UTC().Add(atLifespan).Round(time.Second))
 	}
 
 	// Generate the code
 	token, signature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, ar)
 	if err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(goauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
 	if err := c.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, ar.Sanitize([]string{})); err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(goauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 	resp.AddParameter("access_token", token)
-	resp.AddParameter("expires_in", strconv.FormatInt(int64(getExpiresIn(ar, fosite.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
+	resp.AddParameter("expires_in", strconv.FormatInt(int64(getExpiresIn(ar, goauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
 	resp.AddParameter("token_type", "bearer")
 	resp.AddParameter("state", ar.GetState())
 	resp.AddParameter("scope", strings.Join(ar.GetGrantedScopes(), " "))

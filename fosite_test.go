@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package goauth2_test
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/par"
+	. "github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/handler/par"
 )
 
 func TestAuthorizeEndpointHandlers(t *testing.T) {

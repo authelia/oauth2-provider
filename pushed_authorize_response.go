@@ -1,9 +1,11 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // PushedAuthorizeResponse is the response object for PAR
 type PushedAuthorizeResponse struct {

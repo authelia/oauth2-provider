@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/internal"
 )
 
 func TestAuthorizeCodeFlow(t *testing.T) {
@@ -38,13 +38,13 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	fositeStore.Clients["custom-lifespan-client"].(*fosite.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
@@ -81,12 +81,12 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 				state = "12345678901234567890"
 			},
 			check: func(t *testing.T, r *http.Response, _ *goauth.Token) {
-				var b fosite.AccessRequest
-				b.Client = new(fosite.DefaultClient)
+				var b goauth2.AccessRequest
+				b.Client = new(goauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,
@@ -104,19 +104,19 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.ClientID = "custom-lifespan-client"
-				oauthClient.Scopes = []string{"fosite", "offline"}
+				oauthClient.Scopes = []string{"goauth2", "offline"}
 				state = "12345678901234567890"
 			},
 			check: func(t *testing.T, r *http.Response, token *goauth.Token) {
-				var b fosite.AccessRequest
-				b.Client = new(fosite.DefaultClient)
+				var b goauth2.AccessRequest
+				b.Client = new(goauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				atExp := b.Session.GetExpiresAt(fosite.AccessToken)
+				atExp := b.Session.GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan), atExp, time.Minute)
 				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan, atExpIn, time.Minute)
-				rtExp := b.Session.GetExpiresAt(fosite.RefreshToken)
+				rtExp := b.Session.GetExpiresAt(goauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},
 			authStatusCode: http.StatusOK,
@@ -148,12 +148,12 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 }
 
 func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	oauthClient = newOAuth2Client(ts)
 	state := "12345678901234567890"

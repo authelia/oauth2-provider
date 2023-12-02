@@ -11,16 +11,16 @@ import (
 
 	"github.com/ory/x/errorsx"
 
-	"github.com/ory/fosite"
-	enigma "github.com/ory/fosite/token/hmac"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/token/hmac"
 )
 
 type HMACSHAStrategy struct {
-	Enigma *enigma.HMACStrategy
+	Enigma *hmac.HMACStrategy
 	Config interface {
-		fosite.AccessTokenLifespanProvider
-		fosite.RefreshTokenLifespanProvider
-		fosite.AuthorizeCodeLifespanProvider
+		goauth2.AccessTokenLifespanProvider
+		goauth2.RefreshTokenLifespanProvider
+		goauth2.AuthorizeCodeLifespanProvider
 	}
 	prefix *string
 }
@@ -28,9 +28,11 @@ type HMACSHAStrategy struct {
 func (h *HMACSHAStrategy) AccessTokenSignature(ctx context.Context, token string) string {
 	return h.Enigma.Signature(token)
 }
+
 func (h *HMACSHAStrategy) RefreshTokenSignature(ctx context.Context, token string) string {
 	return h.Enigma.Signature(token)
 }
+
 func (h *HMACSHAStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
 	return h.Enigma.Signature(token)
 }
@@ -54,7 +56,7 @@ func (h *HMACSHAStrategy) setPrefix(token, part string) string {
 	return h.getPrefix(part) + token
 }
 
-func (h *HMACSHAStrategy) GenerateAccessToken(ctx context.Context, _ fosite.Requester) (token string, signature string, err error) {
+func (h *HMACSHAStrategy) GenerateAccessToken(ctx context.Context, _ goauth2.Requester) (token string, signature string, err error) {
 	token, sig, err := h.Enigma.Generate(ctx)
 	if err != nil {
 		return "", "", err
@@ -63,20 +65,20 @@ func (h *HMACSHAStrategy) GenerateAccessToken(ctx context.Context, _ fosite.Requ
 	return h.setPrefix(token, "at"), sig, nil
 }
 
-func (h *HMACSHAStrategy) ValidateAccessToken(ctx context.Context, r fosite.Requester, token string) (err error) {
-	var exp = r.GetSession().GetExpiresAt(fosite.AccessToken)
+func (h *HMACSHAStrategy) ValidateAccessToken(ctx context.Context, r goauth2.Requester, token string) (err error) {
+	var exp = r.GetSession().GetExpiresAt(goauth2.AccessToken)
 	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetAccessTokenLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(fosite.ErrTokenExpired.WithHintf("Access token expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAccessTokenLifespan(ctx))))
+		return errorsx.WithStack(goauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAccessTokenLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
-		return errorsx.WithStack(fosite.ErrTokenExpired.WithHintf("Access token expired at '%s'.", exp))
+		return errorsx.WithStack(goauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", exp))
 	}
 
 	return h.Enigma.Validate(ctx, h.trimPrefix(token, "at"))
 }
 
-func (h *HMACSHAStrategy) GenerateRefreshToken(ctx context.Context, _ fosite.Requester) (token string, signature string, err error) {
+func (h *HMACSHAStrategy) GenerateRefreshToken(ctx context.Context, _ goauth2.Requester) (token string, signature string, err error) {
 	token, sig, err := h.Enigma.Generate(ctx)
 	if err != nil {
 		return "", "", err
@@ -85,21 +87,21 @@ func (h *HMACSHAStrategy) GenerateRefreshToken(ctx context.Context, _ fosite.Req
 	return h.setPrefix(token, "rt"), sig, nil
 }
 
-func (h *HMACSHAStrategy) ValidateRefreshToken(ctx context.Context, r fosite.Requester, token string) (err error) {
-	var exp = r.GetSession().GetExpiresAt(fosite.RefreshToken)
+func (h *HMACSHAStrategy) ValidateRefreshToken(ctx context.Context, r goauth2.Requester, token string) (err error) {
+	var exp = r.GetSession().GetExpiresAt(goauth2.RefreshToken)
 	if exp.IsZero() {
 		// Unlimited lifetime
 		return h.Enigma.Validate(ctx, h.trimPrefix(token, "rt"))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
-		return errorsx.WithStack(fosite.ErrTokenExpired.WithHintf("Refresh token expired at '%s'.", exp))
+		return errorsx.WithStack(goauth2.ErrTokenExpired.WithHintf("Refresh token expired at '%s'.", exp))
 	}
 
 	return h.Enigma.Validate(ctx, h.trimPrefix(token, "rt"))
 }
 
-func (h *HMACSHAStrategy) GenerateAuthorizeCode(ctx context.Context, _ fosite.Requester) (token string, signature string, err error) {
+func (h *HMACSHAStrategy) GenerateAuthorizeCode(ctx context.Context, _ goauth2.Requester) (token string, signature string, err error) {
 	token, sig, err := h.Enigma.Generate(ctx)
 	if err != nil {
 		return "", "", err
@@ -108,14 +110,14 @@ func (h *HMACSHAStrategy) GenerateAuthorizeCode(ctx context.Context, _ fosite.Re
 	return h.setPrefix(token, "ac"), sig, nil
 }
 
-func (h *HMACSHAStrategy) ValidateAuthorizeCode(ctx context.Context, r fosite.Requester, token string) (err error) {
-	var exp = r.GetSession().GetExpiresAt(fosite.AuthorizeCode)
+func (h *HMACSHAStrategy) ValidateAuthorizeCode(ctx context.Context, r goauth2.Requester, token string) (err error) {
+	var exp = r.GetSession().GetExpiresAt(goauth2.AuthorizeCode)
 	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetAuthorizeCodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(fosite.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAuthorizeCodeLifespan(ctx))))
+		return errorsx.WithStack(goauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAuthorizeCodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
-		return errorsx.WithStack(fosite.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", exp))
+		return errorsx.WithStack(goauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", exp))
 	}
 
 	return h.Enigma.Validate(ctx, h.trimPrefix(token, "ac"))

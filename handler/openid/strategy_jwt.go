@@ -8,14 +8,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/mohae/deepcopy"
+	"github.com/ory/go-convenience/stringslice"
+	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
-	"github.com/ory/go-convenience/stringslice"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 const defaultExpiryTime = time.Hour
@@ -28,16 +27,16 @@ type Session interface {
 	// Session should store this pointer and return always the same pointer.
 	IDTokenHeaders() *jwt.Headers
 
-	fosite.Session
+	goauth2.Session
 }
 
 // IDTokenSession is a session container for the id token
 type DefaultSession struct {
-	Claims    *jwt.IDTokenClaims             `json:"id_token_claims"`
-	Headers   *jwt.Headers                   `json:"headers"`
-	ExpiresAt map[fosite.TokenType]time.Time `json:"expires_at"`
-	Username  string                         `json:"username"`
-	Subject   string                         `json:"subject"`
+	Claims    *jwt.IDTokenClaims              `json:"id_token_claims"`
+	Headers   *jwt.Headers                    `json:"headers"`
+	ExpiresAt map[goauth2.TokenType]time.Time `json:"expires_at"`
+	Username  string                          `json:"username"`
+	Subject   string                          `json:"subject"`
 }
 
 func NewDefaultSession() *DefaultSession {
@@ -49,24 +48,24 @@ func NewDefaultSession() *DefaultSession {
 	}
 }
 
-func (s *DefaultSession) Clone() fosite.Session {
+func (s *DefaultSession) Clone() goauth2.Session {
 	if s == nil {
 		return nil
 	}
 
-	return deepcopy.Copy(s).(fosite.Session)
+	return deepcopy.Copy(s).(goauth2.Session)
 }
 
-func (s *DefaultSession) SetExpiresAt(key fosite.TokenType, exp time.Time) {
+func (s *DefaultSession) SetExpiresAt(key goauth2.TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
-		s.ExpiresAt = make(map[fosite.TokenType]time.Time)
+		s.ExpiresAt = make(map[goauth2.TokenType]time.Time)
 	}
 	s.ExpiresAt[key] = exp
 }
 
-func (s *DefaultSession) GetExpiresAt(key fosite.TokenType) time.Time {
+func (s *DefaultSession) GetExpiresAt(key goauth2.TokenType) time.Time {
 	if s.ExpiresAt == nil {
-		s.ExpiresAt = make(map[fosite.TokenType]time.Time)
+		s.ExpiresAt = make(map[goauth2.TokenType]time.Time)
 	}
 
 	if _, ok := s.ExpiresAt[key]; !ok {
@@ -112,28 +111,28 @@ type DefaultStrategy struct {
 	jwt.Signer
 
 	Config interface {
-		fosite.IDTokenIssuerProvider
-		fosite.IDTokenLifespanProvider
-		fosite.MinParameterEntropyProvider
+		goauth2.IDTokenIssuerProvider
+		goauth2.IDTokenLifespanProvider
+		goauth2.MinParameterEntropyProvider
 	}
 }
 
 // GenerateIDToken returns a JWT string.
 //
 // lifespan is ignored if requester.GetSession().IDTokenClaims().ExpiresAt is not zero.
-func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, requester fosite.Requester) (token string, err error) {
+func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, requester goauth2.Requester) (token string, err error) {
 	if lifespan == 0 {
 		lifespan = defaultExpiryTime
 	}
 
 	sess, ok := requester.GetSession().(Session)
 	if !ok {
-		return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because session must be of type fosite/handler/openid.Session."))
+		return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type goauth2/handler/openid.Session."))
 	}
 
 	claims := sess.IDTokenClaims()
 	if claims.Subject == "" {
-		return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
+		return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}
 
 	if requester.GetRequestForm().Get("grant_type") != "refresh_token" {
@@ -144,35 +143,35 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 		// Adds a bit of wiggle room for timing issues
 		if claims.AuthTime.After(time.Now().UTC().Add(time.Second * 5)) {
-			return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
+			return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
 
 		if maxAge > 0 {
 			if claims.AuthTime.IsZero() {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
 			} else if claims.RequestedAt.IsZero() {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because requested at claim is required when max_age is set."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because requested at claim is required when max_age is set."))
 			} else if claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt) {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
 			}
 		}
 
 		prompt := requester.GetRequestForm().Get("prompt")
 		if prompt != "" {
 			if claims.AuthTime.IsZero() {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in id token claims."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in id token claims."))
 			}
 		}
 
 		switch prompt {
 		case "none":
 			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.After(claims.RequestedAt) {
-				return "", errorsx.WithStack(fosite.ErrServerError.
+				return "", errorsx.WithStack(goauth2.ErrServerError.
 					WithDebugf("Failed to generate id token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
 			}
 		case "login":
 			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.Before(claims.RequestedAt) {
-				return "", errorsx.WithStack(fosite.ErrServerError.
+				return "", errorsx.WithStack(goauth2.ErrServerError.
 					WithDebugf("Failed to generate id token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
 			}
 		}
@@ -189,13 +188,13 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
 			} else if err != nil {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebugf("Unable to decode id token from 'id_token_hint' parameter because %s.", err.Error()))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode id token from 'id_token_hint' parameter because %s.", err.Error()))
 			}
 
 			if hintSub, _ := tokenHint.Claims["sub"].(string); hintSub == "" {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Provided id token from 'id_token_hint' does not have a subject."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Provided id token from 'id_token_hint' does not have a subject."))
 			} else if hintSub != claims.Subject {
-				return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Subject from authorization mismatches id token subject from 'id_token_hint'."))
+				return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Subject from authorization mismatches id token subject from 'id_token_hint'."))
 			}
 		}
 	}
@@ -205,7 +204,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	if claims.ExpiresAt.Before(time.Now().UTC()) {
-		return "", errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to generate id token because expiry claim can not be in the past."))
+		return "", errorsx.WithStack(goauth2.ErrServerError.WithDebug("Failed to generate id token because expiry claim can not be in the past."))
 	}
 
 	if claims.AuthTime.IsZero() {
@@ -220,7 +219,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	if nonce := requester.GetRequestForm().Get("nonce"); len(nonce) == 0 {
 	} else if len(nonce) > 0 && len(nonce) < h.Config.GetMinParameterEntropy(ctx) {
 		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
-		return "", errorsx.WithStack(fosite.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))
+		return "", errorsx.WithStack(goauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))
 	} else if len(nonce) > 0 {
 		claims.Nonce = nonce
 	}

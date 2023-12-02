@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -12,9 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/asaskevich/govalidator"
+	"github.com/ory/x/errorsx"
 )
 
 var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<html>

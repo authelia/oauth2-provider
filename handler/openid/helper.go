@@ -12,14 +12,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
 type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }
 
-func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester fosite.AccessRequester, responder fosite.AccessResponder) string {
+func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester goauth2.AccessRequester, responder goauth2.AccessResponder) string {
 	token := responder.GetAccessToken()
 	// The session should always be a openid.Session but best to safely cast
 	if session, ok := requester.GetSession().(Session); ok {
@@ -44,7 +44,7 @@ func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester 
 	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2])
 }
 
-func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, fosr fosite.Requester) (token string, err error) {
+func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, fosr goauth2.Requester) (token string, err error) {
 	token, err = i.IDTokenStrategy.GenerateIDToken(ctx, lifespan, fosr)
 	if err != nil {
 		return "", err
@@ -53,7 +53,7 @@ func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time
 	return token, nil
 }
 
-func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, ar fosite.Requester, resp fosite.AuthorizeResponder) error {
+func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, ar goauth2.Requester, resp goauth2.AuthorizeResponder) error {
 
 	token, err := i.generateIDToken(ctx, lifespan, ar)
 	if err != nil {
@@ -63,7 +63,7 @@ func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan
 	return nil
 }
 
-func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, ar fosite.Requester, resp fosite.AccessResponder) error {
+func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, ar goauth2.Requester, resp goauth2.AccessResponder) error {
 	token, err := i.generateIDToken(ctx, lifespan, ar)
 	if err != nil {
 		return err

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -13,12 +13,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/go-jose/go-jose/v3"
+	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 // ClientAuthenticationStrategy provides a method signature for authenticating a client request

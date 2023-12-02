@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/oauth2"
 )
 
 func TestIntrospectToken(t *testing.T) {
@@ -46,8 +46,8 @@ func TestIntrospectToken(t *testing.T) {
 }
 
 func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, introspectionFactory compose.Factory) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
@@ -73,7 +73,7 @@ func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, i
 				return s.Set("Authorization", "bearer "+a.AccessToken)
 			},
 			isActive: true,
-			scopes:   "fosite",
+			scopes:   "goauth2",
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
@@ -117,7 +117,7 @@ func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, i
 			assert.Len(t, errs, 0)
 			assert.Equal(t, c.isActive, res.Active)
 			if c.isActive {
-				assert.Equal(t, "fosite", res.Scope)
+				assert.Equal(t, "goauth2", res.Scope)
 				assert.True(t, res.ExpiresAt > 0)
 				assert.True(t, res.IssuedAt > 0)
 				assert.True(t, res.IssuedAt < res.ExpiresAt)

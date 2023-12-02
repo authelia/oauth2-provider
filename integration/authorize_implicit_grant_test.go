@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/oauth2"
 )
 
 func TestAuthorizeImplicitFlow(t *testing.T) {
@@ -32,12 +32,12 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 }
 
 func runTestAuthorizeImplicitGrant(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
@@ -69,15 +69,15 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy interface{}) {
 			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"fosite"}
+				oauthClient.Scopes = []string{"goauth2"}
 			},
 			check: func(t *testing.T, r *http.Response) {
-				var b fosite.AccessRequest
-				b.Client = new(fosite.DefaultClient)
+				var b goauth2.AccessRequest
+				b.Client = new(goauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,

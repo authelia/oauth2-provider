@@ -13,10 +13,10 @@ import (
 	"golang.org/x/oauth2"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	hst "github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	hst "github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/internal"
 )
 
 func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
@@ -28,8 +28,8 @@ func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
 }
 
 func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.AccessTokenStrategy) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	f := compose.Compose(new(goauth2.Config), fositeStore, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
+	ts := mockServer(t, f, &goauth2.DefaultSession{})
 	defer ts.Close()
 
 	var username, password string
@@ -63,11 +63,11 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hst.Acc
 			check: func(t *testing.T, token *goauth.Token) {
 				s, err := fositeStore.GetAccessTokenSession(nil, strings.Split(token.AccessToken, ".")[1], nil)
 				require.NoError(t, err)
-				atExp := s.GetSession().GetExpiresAt(fosite.AccessToken)
+				atExp := s.GetSession().GetExpiresAt(goauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)
 				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.PasswordGrantAccessTokenLifespan, atExpIn, time.Minute)
-				rtExp := s.GetSession().GetExpiresAt(fosite.RefreshToken)
+				rtExp := s.GetSession().GetExpiresAt(goauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},
 		},

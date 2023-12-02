@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package goauth2_test
 
 import (
 	"testing"
@@ -57,6 +57,7 @@ func RequireObjectKeysEqual(t *testing.T, a, b interface{}, keys ...string) {
 		require.Equal(t, c, d, "%s", k)
 	}
 }
+
 func RequireObjectKeysNotEqual(t *testing.T, a, b interface{}, keys ...string) {
 	assert.True(t, len(keys) > 0, "No key provided.")
 	for _, k := range keys {

@@ -126,7 +126,7 @@ func (c *JWTClaims) ToMap() map[string]interface{} {
 	}
 
 	if c.Scope != nil {
-		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of fosite.
+		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of goauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
 			ret["scp"] = c.Scope
 		}

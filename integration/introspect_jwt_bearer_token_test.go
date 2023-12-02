@@ -10,15 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/integration/clients"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/integration/clients"
 )
 
 type introspectJWTBearerTokenSuite struct {
@@ -35,7 +34,7 @@ type introspectJWTBearerTokenSuite struct {
 }
 
 func (s *introspectJWTBearerTokenSuite) SetupTest() {
-	s.scopes = []string{"fosite"}
+	s.scopes = []string{"goauth2"}
 	s.audience = []string{tokenURL, "https://example.com"}
 
 	s.clientTokenPayload = &clients.JWTBearerPayload{
@@ -60,7 +59,7 @@ func (s *introspectJWTBearerTokenSuite) SetupTest() {
 func (s *introspectJWTBearerTokenSuite) TestSuccessResponseWithMultipleScopesToken() {
 	ctx := context.Background()
 
-	scopes := []string{"fosite", "docker"}
+	scopes := []string{"goauth2", "docker"}
 	token, err := s.getJWTClient().GetToken(ctx, s.clientTokenPayload, scopes)
 	require.NoError(s.T(), err)
 
@@ -228,7 +227,7 @@ func (s *introspectJWTBearerTokenSuite) assertUnauthorizedResponse(
 
 func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 	provider := compose.Compose(
-		&fosite.Config{
+		&goauth2.Config{
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: true,
@@ -241,7 +240,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 		compose.RFC7523AssertionGrantFactory,
 		compose.OAuth2TokenIntrospectionFactory,
 	)
-	testServer := mockServer(t, provider, &fosite.DefaultSession{})
+	testServer := mockServer(t, provider, &goauth2.DefaultSession{})
 	defer testServer.Close()
 
 	client := newJWTBearerAppClient(testServer)
@@ -256,7 +255,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 			Audience: []string{tokenURL},
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
-	}, []string{"fosite"})
+	}, []string{"goauth2"})
 	if err != nil {
 		assert.Nil(t, err)
 	}

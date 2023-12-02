@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/integration/clients"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/integration/clients"
 )
 
 type authorizeJWTBearerRequiredJtiSuite struct {
@@ -36,7 +36,7 @@ func (s *authorizeJWTBearerRequiredJtiSuite) TestBadResponseWithoutJTI() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"fosite"})
+	}, []string{"goauth2"})
 
 	s.assertBadResponse(s.T(), token, err)
 }
@@ -53,7 +53,7 @@ func (s *authorizeJWTBearerRequiredJtiSuite) TestSuccessResponseWithJTI() {
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 			ID:       uuid.New().String(),
 		},
-	}, []string{"fosite"})
+	}, []string{"goauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -85,7 +85,7 @@ func (s *authorizeJWTBearerRequiredJtiSuite) assertBadResponse(t *testing.T, tok
 
 func TestAuthorizeJWTBearerRequiredJtiSuite(t *testing.T) {
 	provider := compose.Compose(
-		&fosite.Config{
+		&goauth2.Config{
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         false,
 			GrantTypeJWTBearerIssuedDateOptional: true,
@@ -96,7 +96,7 @@ func TestAuthorizeJWTBearerRequiredJtiSuite(t *testing.T) {
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,
 	)
-	testServer := mockServer(t, provider, &fosite.DefaultSession{})
+	testServer := mockServer(t, provider, &goauth2.DefaultSession{})
 	defer testServer.Close()
 
 	client := newJWTBearerAppClient(testServer)

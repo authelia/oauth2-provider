@@ -8,15 +8,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 // expose key to verify id_token
@@ -24,7 +23,7 @@ var key = gen.MustRSAKey()
 
 func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *internal.MockOpenIDConnectRequestStorage) {
 	store := internal.NewMockOpenIDConnectRequestStorage(ctrl)
-	config := &fosite.Config{MinParameterEntropy: minParameterEntropy}
+	config := &goauth2.Config{MinParameterEntropy: minParameterEntropy}
 
 	var j = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
@@ -50,7 +49,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	aresp := internal.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
-	areq := fosite.NewAuthorizeRequest()
+	areq := goauth2.NewAuthorizeRequest()
 
 	session := NewDefaultSession()
 	session.Claims.Subject = "foo"
@@ -64,48 +63,48 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass because not responsible for handling an empty response type",
 			setup: func() OpenIDConnectExplicitHandler {
-				h, _ := makeOpenIDConnectExplicitHandler(ctrl, fosite.MinParameterEntropy)
-				areq.ResponseTypes = fosite.Arguments{""}
+				h, _ := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{""}
 				return h
 			},
 		},
 		{
 			description: "should pass because scope openid is not set",
 			setup: func() OpenIDConnectExplicitHandler {
-				h, _ := makeOpenIDConnectExplicitHandler(ctrl, fosite.MinParameterEntropy)
-				areq.ResponseTypes = fosite.Arguments{"code"}
-				areq.Client = &fosite.DefaultClient{
-					ResponseTypes: fosite.Arguments{"code"},
+				h, _ := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{"code"}
+				areq.Client = &goauth2.DefaultClient{
+					ResponseTypes: goauth2.Arguments{"code"},
 				}
-				areq.RequestedScope = fosite.Arguments{""}
+				areq.RequestedScope = goauth2.Arguments{""}
 				return h
 			},
 		},
 		{
 			description: "should fail because no code set",
 			setup: func() OpenIDConnectExplicitHandler {
-				h, _ := makeOpenIDConnectExplicitHandler(ctrl, fosite.MinParameterEntropy)
-				areq.GrantedScope = fosite.Arguments{"openid"}
+				h, _ := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
+				areq.GrantedScope = goauth2.Arguments{"openid"}
 				areq.Form.Set("nonce", "11111111111111111111111111111")
 				aresp.EXPECT().GetCode().Return("")
 				return h
 			},
-			expectErr: fosite.ErrMisconfiguration,
+			expectErr: goauth2.ErrMisconfiguration,
 		},
 		{
 			description: "should fail because lookup fails",
 			setup: func() OpenIDConnectExplicitHandler {
-				h, store := makeOpenIDConnectExplicitHandler(ctrl, fosite.MinParameterEntropy)
+				h, store := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
 				aresp.EXPECT().GetCode().AnyTimes().Return("codeexample")
 				store.EXPECT().CreateOpenIDConnectSession(nil, "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).Return(errors.New(""))
 				return h
 			},
-			expectErr: fosite.ErrServerError,
+			expectErr: goauth2.ErrServerError,
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectExplicitHandler {
-				h, store := makeOpenIDConnectExplicitHandler(ctrl, fosite.MinParameterEntropy)
+				h, store := makeOpenIDConnectExplicitHandler(ctrl, goauth2.MinParameterEntropy)
 				store.EXPECT().CreateOpenIDConnectSession(nil, "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).AnyTimes().Return(nil)
 				return h
 			},

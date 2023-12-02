@@ -12,17 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
 )
 
 type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
 
-func tokenRevocationHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenRevocationHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := fosite.NewContext()
+		ctx := goauth2.NewContext()
 		err := oauth2.NewRevocationRequest(ctx, req)
 		if err != nil {
 			t.Logf("Revoke request failed because %+v", err)
@@ -31,9 +31,9 @@ func tokenRevocationHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session 
 	}
 }
 
-func tokenIntrospectionHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenIntrospectionHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := fosite.NewContext()
+		ctx := goauth2.NewContext()
 		ar, err := oauth2.NewIntrospectionRequest(ctx, req, session)
 		if err != nil {
 			t.Logf("Introspection request failed because: %+v", err)
@@ -45,13 +45,13 @@ func tokenIntrospectionHandler(t *testing.T, oauth2 fosite.OAuth2Provider, sessi
 	}
 }
 
-func tokenInfoHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenInfoHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := fosite.NewContext()
-		_, resp, err := oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(req), fosite.AccessToken, session)
+		ctx := goauth2.NewContext()
+		_, resp, err := oauth2.IntrospectToken(ctx, goauth2.AccessTokenFromRequest(req), goauth2.AccessToken, session)
 		if err != nil {
 			t.Logf("Info request failed because: %+v", err)
-			var e *fosite.RFC6749Error
+			var e *goauth2.RFC6749Error
 			require.True(t, errors.As(err, &e))
 			http.Error(rw, e.DescriptionField, e.CodeField)
 			return
@@ -65,9 +65,9 @@ func tokenInfoHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite
 	}
 }
 
-func authEndpointHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite.Session) func(rw http.ResponseWriter, req *http.Request) {
+func authEndpointHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := fosite.NewContext()
+		ctx := goauth2.NewContext()
 
 		ar, err := oauth2.NewAuthorizeRequest(ctx, req)
 		if err != nil {
@@ -77,8 +77,8 @@ func authEndpointHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fos
 			return
 		}
 
-		if ar.GetRequestedScopes().Has("fosite") {
-			ar.GrantScope("fosite")
+		if ar.GetRequestedScopes().Has("goauth2") {
+			ar.GrantScope("goauth2")
 		}
 
 		if ar.GetRequestedScopes().Has("offline") {
@@ -127,10 +127,10 @@ func authCallbackHandler(t *testing.T) func(rw http.ResponseWriter, req *http.Re
 	}
 }
 
-func tokenEndpointHandler(t *testing.T, provider fosite.OAuth2Provider) func(rw http.ResponseWriter, req *http.Request) {
+func tokenEndpointHandler(t *testing.T, provider goauth2.OAuth2Provider) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		req.ParseMultipartForm(1 << 20)
-		ctx := fosite.NewContext()
+		ctx := goauth2.NewContext()
 
 		accessRequest, err := provider.NewAccessRequest(ctx, req, &oauth2.JWTSession{})
 		if err != nil {
@@ -140,8 +140,8 @@ func tokenEndpointHandler(t *testing.T, provider fosite.OAuth2Provider) func(rw 
 			return
 		}
 
-		if accessRequest.GetRequestedScopes().Has("fosite") {
-			accessRequest.GrantScope("fosite")
+		if accessRequest.GetRequestedScopes().Has("goauth2") {
+			accessRequest.GrantScope("goauth2")
 		}
 
 		response, err := provider.NewAccessResponse(ctx, accessRequest)
@@ -156,9 +156,9 @@ func tokenEndpointHandler(t *testing.T, provider fosite.OAuth2Provider) func(rw 
 	}
 }
 
-func pushedAuthorizeRequestHandler(t *testing.T, oauth2 fosite.OAuth2Provider, session fosite.Session) func(rw http.ResponseWriter, req *http.Request) {
+func pushedAuthorizeRequestHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := fosite.NewContext()
+		ctx := goauth2.NewContext()
 
 		ar, err := oauth2.NewPushedAuthorizeRequest(ctx, req)
 		if err != nil {

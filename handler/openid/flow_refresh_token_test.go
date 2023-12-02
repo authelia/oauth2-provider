@@ -11,53 +11,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
-	h := &OpenIDConnectRefreshHandler{Config: &fosite.Config{}}
+	h := &OpenIDConnectRefreshHandler{Config: &goauth2.Config{}}
 	for _, c := range []struct {
-		areq        *fosite.AccessRequest
+		areq        *goauth2.AccessRequest
 		expectedErr error
 		description string
 	}{
 		{
 			description: "should not pass because grant_type is wrong",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: fosite.ErrUnknownRequest,
+			expectedErr: goauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because grant_type is right but scope is missing",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: fosite.ErrUnknownRequest,
+			expectedErr: goauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because client may not execute this grant type",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client:       &fosite.DefaultClient{},
+					Client:       &goauth2.DefaultClient{},
 				},
 			},
-			expectedErr: fosite.ErrUnauthorizedClient,
+			expectedErr: goauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should pass",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &fosite.DefaultClient{
+					Client: &goauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -84,8 +84,8 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 				return key, nil
 			},
 		},
-		Config: &fosite.Config{
-			MinParameterEntropy: fosite.MinParameterEntropy,
+		Config: &goauth2.Config{
+			MinParameterEntropy: goauth2.MinParameterEntropy,
 		},
 	}
 
@@ -93,52 +93,52 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: j,
 		},
-		Config: &fosite.Config{},
+		Config: &goauth2.Config{},
 	}
 	for _, c := range []struct {
-		areq        *fosite.AccessRequest
+		areq        *goauth2.AccessRequest
 		expectedErr error
-		check       func(t *testing.T, aresp *fosite.AccessResponse)
+		check       func(t *testing.T, aresp *goauth2.AccessResponse)
 		description string
 	}{
 		{
 			description: "should not pass because grant_type is wrong",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: fosite.ErrUnknownRequest,
+			expectedErr: goauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because grant_type is right but scope is missing",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: fosite.ErrUnknownRequest,
+			expectedErr: goauth2.ErrUnknownRequest,
 		},
 		// Disabled because this is already handled at the authorize_request_handler
 		//{
 		//	description: "should not pass because client may not ask for id_token",
-		//	areq: &fosite.AccessRequest{
+		//	areq: &goauth2.AccessRequest{
 		//		GrantTypes: []string{"refresh_token"},
-		//		Request: fosite.Request{
+		//		Request: goauth2.Request{
 		//			GrantedScope: []string{"openid"},
-		//			Client: &fosite.DefaultClient{
+		//			Client: &goauth2.DefaultClient{
 		//				GrantTypes: []string{"refresh_token"},
 		//			},
 		//		},
 		//	},
-		//	expectedErr: fosite.ErrUnknownRequest,
+		//	expectedErr: goauth2.ErrUnknownRequest,
 		//},
 		{
 			description: "should pass",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &fosite.DefaultClient{
+					Client: &goauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -150,7 +150,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			check: func(t *testing.T, aresp *fosite.AccessResponse) {
+			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
@@ -166,12 +166,12 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		},
 		{
 			description: "should pass",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &fosite.DefaultClientWithCustomTokenLifespans{
-						DefaultClient: &fosite.DefaultClient{
+					Client: &goauth2.DefaultClientWithCustomTokenLifespans{
+						DefaultClient: &goauth2.DefaultClient{
 							GrantTypes: []string{"refresh_token"},
 							//ResponseTypes: []string{"id_token"},
 						},
@@ -185,7 +185,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			check: func(t *testing.T, aresp *fosite.AccessResponse) {
+			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
@@ -201,11 +201,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		},
 		{
 			description: "should fail because missing subject claim",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &fosite.DefaultClient{
+					Client: &goauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -215,24 +215,24 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			expectedErr: fosite.ErrServerError,
+			expectedErr: goauth2.ErrServerError,
 		},
 		{
 			description: "should fail because missing session",
-			areq: &fosite.AccessRequest{
+			areq: &goauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: fosite.Request{
+				Request: goauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &fosite.DefaultClient{
+					Client: &goauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 					},
 				},
 			},
-			expectedErr: fosite.ErrServerError,
+			expectedErr: goauth2.ErrServerError,
 		},
 	} {
 		t.Run("case="+c.description, func(t *testing.T) {
-			aresp := fosite.NewAccessResponse()
+			aresp := goauth2.NewAccessResponse()
 			err := h.PopulateTokenEndpointResponse(nil, c.areq, aresp)
 			if c.expectedErr != nil {
 				require.EqualError(t, err, c.expectedErr.Error(), "%v", err)

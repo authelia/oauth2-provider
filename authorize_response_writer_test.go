@@ -1,19 +1,19 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package goauth2_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	. "github.com/ory/fosite"
-	. "github.com/ory/fosite/internal"
+	"github.com/authelia/goauth2"
+	. "github.com/authelia/goauth2"
+	. "github.com/authelia/goauth2/internal"
 )
 
 func TestNewAuthorizeResponse(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				ar.EXPECT().GetResponseTypes().Return([]string{"token", "code"})
 			},
 			isErr:     true,
-			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, fosite.Arguments{"token", "code"}),
+			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, goauth2.Arguments{"token", "code"}),
 		},
 	} {
 		c.mock()

@@ -3,7 +3,9 @@
 
 package jwt
 
-import "time"
+import (
+	"time"
+)
 
 // Mapper is the interface used internally to map key-value pairs
 type Mapper interface {

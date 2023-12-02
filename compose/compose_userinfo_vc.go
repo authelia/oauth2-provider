@@ -4,13 +4,13 @@
 package compose
 
 import (
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/verifiable"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/verifiable"
 )
 
 // OIDCUserinfoVerifiableCredentialFactory creates a verifiable credentials
 // handler.
-func OIDCUserinfoVerifiableCredentialFactory(config fosite.Configurator, storage, strategy any) any {
+func OIDCUserinfoVerifiableCredentialFactory(config goauth2.Configurator, storage, strategy any) any {
 	return &verifiable.Handler{
 		NonceManager: storage.(verifiable.NonceManager),
 		Config:       config,

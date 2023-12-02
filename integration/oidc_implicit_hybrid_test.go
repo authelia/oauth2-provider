@@ -12,17 +12,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func TestOIDCImplicitFlow(t *testing.T) {
@@ -34,14 +33,14 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	f := compose.ComposeAllEnabled(&fosite.Config{
+	f := compose.ComposeAllEnabled(&goauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
 	}, fositeStore, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state = "12345678901234567890"
 	for k, c := range []struct {
@@ -57,7 +56,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			description:  "should pass without id token",
 			responseType: "token",
 			setup: func() {
-				oauthClient.Scopes = []string{"fosite"}
+				oauthClient.Scopes = []string{"goauth2"}
 			},
 			hasToken: true,
 		},
@@ -67,7 +66,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			nonce:        "1111111111111111",
 			description:  "should pass id token (id_token token)",
 			setup: func() {
-				oauthClient.Scopes = []string{"fosite", "openid"}
+				oauthClient.Scopes = []string{"goauth2", "openid"}
 			},
 			hasToken:   true,
 			hasIdToken: true,

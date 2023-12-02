@@ -9,9 +9,9 @@ package internal
 import (
 	"context"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
+	fosite "github.com/authelia/goauth2"
 )
 
 // Mock of AuthorizeCodeGrantStorage interface

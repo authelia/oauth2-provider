@@ -12,17 +12,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
@@ -34,7 +33,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	f := compose.ComposeAllEnabled(&fosite.Config{
+	f := compose.ComposeAllEnabled(&goauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
 	}, fositeStore, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
@@ -46,7 +45,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 	oauthClient.ClientID = "public-client"
 	oauthClient.Scopes = []string{"openid"}
 
-	fositeStore.Clients["public-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	fositeStore.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state = "12345678901234567890"
 	for k, c := range []struct {

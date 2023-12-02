@@ -12,21 +12,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/go-jose/go-jose/v3"
 	"github.com/gorilla/mux"
 	goauth "golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/integration/clients"
-	"github.com/ory/fosite/storage"
-	"github.com/ory/fosite/token/hmac"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/integration/clients"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/storage"
+	"github.com/authelia/goauth2/token/hmac"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 const (
@@ -49,36 +48,36 @@ var (
 )
 
 var fositeStore = &storage.MemoryStore{
-	Clients: map[string]fosite.Client{
-		"my-client": &fosite.DefaultClient{
+	Clients: map[string]goauth2.Client{
+		"my-client": &goauth2.DefaultClient{
 			ID:            "my-client",
 			Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 			GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-			Scopes:        []string{"fosite", "offline", "openid"},
+			Scopes:        []string{"goauth2", "offline", "openid"},
 			Audience:      []string{tokenURL},
 		},
-		"custom-lifespan-client": &fosite.DefaultClientWithCustomTokenLifespans{
-			DefaultClient: &fosite.DefaultClient{
+		"custom-lifespan-client": &goauth2.DefaultClientWithCustomTokenLifespans{
+			DefaultClient: &goauth2.DefaultClient{
 				ID:             "custom-lifespan-client",
 				Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
 				RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
 				RedirectURIs:   []string{"http://localhost:3846/callback"},
 				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
 				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:         []string{"fosite", "openid", "photos", "offline"},
+				Scopes:         []string{"goauth2", "openid", "photos", "offline"},
 			},
 			TokenLifespans: &internal.TestLifespans,
 		},
-		"public-client": &fosite.DefaultClient{
+		"public-client": &goauth2.DefaultClient{
 			ID:            "public-client",
 			Secret:        []byte{},
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{"id_token", "code", "code id_token"},
 			GrantTypes:    []string{"refresh_token", "authorization_code"},
-			Scopes:        []string{"fosite", "offline", "openid"},
+			Scopes:        []string{"goauth2", "offline", "openid"},
 			Audience:      []string{tokenURL},
 		},
 	},
@@ -94,25 +93,25 @@ var fositeStore = &storage.MemoryStore{
 			firstJWTBearerSubject,
 			firstKeyID,
 			firstPrivateKey.Public(),
-			[]string{"fosite", "gitlab", "example.com", "docker"},
+			[]string{"goauth2", "gitlab", "example.com", "docker"},
 		),
 		secondJWTBearerIssuer: createIssuerPublicKey(
 			secondJWTBearerIssuer,
 			secondJWTBearerSubject,
 			secondKeyID,
 			secondPrivateKey.Public(),
-			[]string{"fosite"},
+			[]string{"goauth2"},
 		),
 	},
 	BlacklistedJTIs:        map[string]time.Time{},
 	AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
-	PKCES:                  map[string]fosite.Requester{},
-	AccessTokens:           map[string]fosite.Requester{},
+	PKCES:                  map[string]goauth2.Requester{},
+	AccessTokens:           map[string]goauth2.Requester{},
 	RefreshTokens:          map[string]storage.StoreRefreshToken{},
-	IDSessions:             map[string]fosite.Requester{},
+	IDSessions:             map[string]goauth2.Requester{},
 	AccessTokenRequestIDs:  map[string]string{},
 	RefreshTokenRequestIDs: map[string]string{},
-	PARSessions:            map[string]fosite.AuthorizeRequester{},
+	PARSessions:            map[string]goauth2.AuthorizeRequester{},
 }
 
 type defaultSession struct {
@@ -150,7 +149,7 @@ func newOAuth2Client(ts *httptest.Server) *goauth.Config {
 		ClientID:     "my-client",
 		ClientSecret: "foobar",
 		RedirectURL:  ts.URL + "/callback",
-		Scopes:       []string{"fosite"},
+		Scopes:       []string{"goauth2"},
 		Endpoint: goauth.Endpoint{
 			TokenURL:  ts.URL + tokenRelativePath,
 			AuthURL:   ts.URL + "/auth",
@@ -163,7 +162,7 @@ func newOAuth2AppClient(ts *httptest.Server) *clientcredentials.Config {
 	return &clientcredentials.Config{
 		ClientID:     "my-client",
 		ClientSecret: "foobar",
-		Scopes:       []string{"fosite"},
+		Scopes:       []string{"goauth2"},
 		TokenURL:     ts.URL + tokenRelativePath,
 	}
 }
@@ -174,28 +173,29 @@ func newJWTBearerAppClient(ts *httptest.Server) *clients.JWTBearer {
 
 var hmacStrategy = &oauth2.HMACSHAStrategy{
 	Enigma: &hmac.HMACStrategy{
-		Config: &fosite.Config{
+		Config: &goauth2.Config{
 			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows"),
 		},
 	},
-	Config: &fosite.Config{
+	Config: &goauth2.Config{
 		AccessTokenLifespan:   accessTokenLifespan,
 		AuthorizeCodeLifespan: authCodeLifespan,
 	},
 }
 
 var defaultRSAKey = gen.MustRSAKey()
+
 var jwtStrategy = &oauth2.DefaultJWTStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(ctx context.Context) (interface{}, error) {
 			return defaultRSAKey, nil
 		},
 	},
-	Config:          &fosite.Config{},
+	Config:          &goauth2.Config{},
 	HMACSHAStrategy: hmacStrategy,
 }
 
-func mockServer(t *testing.T, f fosite.OAuth2Provider, session fosite.Session) *httptest.Server {
+func mockServer(t *testing.T, f goauth2.OAuth2Provider, session goauth2.Session) *httptest.Server {
 	router := mux.NewRouter()
 	router.HandleFunc("/auth", authEndpointHandler(t, f, session))
 	router.HandleFunc(tokenRelativePath, tokenEndpointHandler(t, f))

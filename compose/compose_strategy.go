@@ -6,11 +6,11 @@ package compose
 import (
 	"context"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/hmac"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/handler/openid"
+	"github.com/authelia/goauth2/token/hmac"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 type CommonStrategy struct {
@@ -20,13 +20,13 @@ type CommonStrategy struct {
 }
 
 type HMACSHAStrategyConfigurator interface {
-	fosite.AccessTokenLifespanProvider
-	fosite.RefreshTokenLifespanProvider
-	fosite.AuthorizeCodeLifespanProvider
-	fosite.TokenEntropyProvider
-	fosite.GlobalSecretProvider
-	fosite.RotatedGlobalSecretsProvider
-	fosite.HMACHashingProvider
+	goauth2.AccessTokenLifespanProvider
+	goauth2.RefreshTokenLifespanProvider
+	goauth2.AuthorizeCodeLifespanProvider
+	goauth2.TokenEntropyProvider
+	goauth2.GlobalSecretProvider
+	goauth2.RotatedGlobalSecretsProvider
+	goauth2.HMACHashingProvider
 }
 
 func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *oauth2.HMACSHAStrategy {
@@ -36,7 +36,7 @@ func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *oauth2.HMACSHASt
 	}
 }
 
-func NewOAuth2JWTStrategy(keyGetter func(context.Context) (interface{}, error), strategy *oauth2.HMACSHAStrategy, config fosite.Configurator) *oauth2.DefaultJWTStrategy {
+func NewOAuth2JWTStrategy(keyGetter func(context.Context) (interface{}, error), strategy *oauth2.HMACSHAStrategy, config goauth2.Configurator) *oauth2.DefaultJWTStrategy {
 	return &oauth2.DefaultJWTStrategy{
 		Signer:          &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		HMACSHAStrategy: strategy,
@@ -44,7 +44,7 @@ func NewOAuth2JWTStrategy(keyGetter func(context.Context) (interface{}, error), 
 	}
 }
 
-func NewOpenIDConnectStrategy(keyGetter func(context.Context) (interface{}, error), config fosite.Configurator) *openid.DefaultStrategy {
+func NewOpenIDConnectStrategy(keyGetter func(context.Context) (interface{}, error), config goauth2.Configurator) *openid.DefaultStrategy {
 	return &openid.DefaultStrategy{
 		Signer: &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		Config: config,

@@ -9,16 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/integration/clients"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/compose"
+	"github.com/authelia/goauth2/integration/clients"
 )
 
 type authorizeJWTBearerRequiredIATSuite struct {
@@ -38,7 +37,7 @@ func (s *authorizeJWTBearerRequiredIATSuite) TestBadResponseWithoutIssuedAt() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			ID:       uuid.New().String(),
 		},
-	}, []string{"fosite"})
+	}, []string{"goauth2"})
 
 	s.assertBadResponse(s.T(), token, err)
 }
@@ -55,7 +54,7 @@ func (s *authorizeJWTBearerRequiredIATSuite) TestSuccessResponseWithIssuedAt() {
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 			ID:       uuid.New().String(),
 		},
-	}, []string{"fosite"})
+	}, []string{"goauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -87,7 +86,7 @@ func (s *authorizeJWTBearerRequiredIATSuite) assertBadResponse(t *testing.T, tok
 
 func TestAuthorizeJWTBearerRequiredIATSuite(t *testing.T) {
 	provider := compose.Compose(
-		&fosite.Config{
+		&goauth2.Config{
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: false,
@@ -98,7 +97,7 @@ func TestAuthorizeJWTBearerRequiredIATSuite(t *testing.T) {
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,
 	)
-	testServer := mockServer(t, provider, &fosite.DefaultSession{})
+	testServer := mockServer(t, provider, &goauth2.DefaultSession{})
 	defer testServer.Close()
 
 	client := newJWTBearerAppClient(testServer)

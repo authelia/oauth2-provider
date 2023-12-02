@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package goauth2_test
 
 import (
 	"context"
@@ -16,19 +16,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
-
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/go-jose/go-jose/v3"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite/token/jwt"
-
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
+	. "github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/storage"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {

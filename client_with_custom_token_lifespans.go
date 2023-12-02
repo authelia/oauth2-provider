@@ -1,9 +1,11 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
-import "time"
+import (
+	"time"
+)
 
 // GetEffectiveLifespan either maps GrantType x TokenType to the client's configured lifespan, or returns the fallback value.
 func GetEffectiveLifespan(c Client, gt GrantType, tt TokenType, fallback time.Duration) time.Duration {

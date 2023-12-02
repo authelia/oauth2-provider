@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/ory/fosite/i18n"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 // AuthorizeCodeLifespanProvider returns the provider for configuring the authorization code lifespan.

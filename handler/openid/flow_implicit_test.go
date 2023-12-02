@@ -10,23 +10,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/storage"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/handler/oauth2"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/storage"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImplicitHandler {
-	config := &fosite.Config{
+	config := &goauth2.Config{
 		MinParameterEntropy: minParameterEntropy,
 		AccessTokenLifespan: time.Hour,
-		ScopeStrategy:       fosite.HierarchicScopeStrategy,
+		ScopeStrategy:       goauth2.HierarchicScopeStrategy,
 	}
 
 	var idStrategy = &DefaultStrategy{
@@ -65,9 +64,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	aresp := fosite.NewAuthorizeResponse()
-	areq := fosite.NewAuthorizeRequest()
-	areq.Session = new(fosite.DefaultSession)
+	aresp := goauth2.NewAuthorizeResponse()
+	areq := goauth2.NewAuthorizeRequest()
+	areq.Session = new(goauth2.DefaultSession)
 
 	for k, c := range []struct {
 		description string
@@ -78,102 +77,102 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
 				areq.State = "foostate"
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"token", "id_token"}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{}
-				areq.GrantedScope = fosite.Arguments{"openid"}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{}
+				areq.GrantedScope = goauth2.Arguments{"openid"}
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"token", "id_token"}
-				areq.RequestedScope = fosite.Arguments{"openid"}
-				areq.Client = &fosite.DefaultClient{
-					GrantTypes:    fosite.Arguments{},
-					ResponseTypes: fosite.Arguments{},
-					Scopes:        []string{"openid", "fosite"},
+				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
+				areq.RequestedScope = goauth2.Arguments{"openid"}
+				areq.Client = &goauth2.DefaultClient{
+					GrantTypes:    goauth2.Arguments{},
+					ResponseTypes: goauth2.Arguments{},
+					Scopes:        []string{"openid", "goauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
-			expectErr: fosite.ErrInvalidGrant,
+			expectErr: goauth2.ErrInvalidGrant,
 		},
 		// Disabled because this is already handled at the authorize_request_handler
 		//{
 		//	description: "should not do anything because request requirements are not met",
 		//	setup: func() OpenIDConnectImplicitHandler {
-		//		areq.ResponseTypes = fosite.Arguments{"token", "id_token"}
-		//		areq.RequestedScope = fosite.Arguments{"openid"}
-		//		areq.Client = &fosite.DefaultClient{
-		//			GrantTypes:    fosite.Arguments{"implicit"},
-		//			ResponseTypes: fosite.Arguments{},
-		//			RequestedScope:        []string{"openid", "fosite"},
+		//		areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
+		//		areq.RequestedScope = goauth2.Arguments{"openid"}
+		//		areq.Client = &goauth2.DefaultClient{
+		//			GrantTypes:    goauth2.Arguments{"implicit"},
+		//			ResponseTypes: goauth2.Arguments{},
+		//			RequestedScope:        []string{"openid", "goauth2"},
 		//		}
-		//		return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+		//		return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 		//	},
-		//	expectErr: fosite.ErrInvalidGrant,
+		//	expectErr: goauth2.ErrInvalidGrant,
 		//},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
-				areq.RequestedScope = fosite.Arguments{"openid"}
-				areq.Client = &fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"implicit"},
-					//ResponseTypes: fosite.Arguments{"token", "id_token"},
-					Scopes: []string{"openid", "fosite"},
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				areq.RequestedScope = goauth2.Arguments{"openid"}
+				areq.Client = &goauth2.DefaultClient{
+					GrantTypes: goauth2.Arguments{"implicit"},
+					//ResponseTypes: goauth2.Arguments{"token", "id_token"},
+					Scopes: []string{"openid", "goauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
-			expectErr: fosite.ErrInvalidRequest,
+			expectErr: goauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
 				areq.Form = url.Values{"nonce": {"short"}}
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
-				areq.RequestedScope = fosite.Arguments{"openid"}
-				areq.Client = &fosite.DefaultClient{
-					GrantTypes:    fosite.Arguments{"implicit"},
-					ResponseTypes: fosite.Arguments{"token", "id_token"},
-					Scopes:        []string{"openid", "fosite"},
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				areq.RequestedScope = goauth2.Arguments{"openid"}
+				areq.Client = &goauth2.DefaultClient{
+					GrantTypes:    goauth2.Arguments{"implicit"},
+					ResponseTypes: goauth2.Arguments{"token", "id_token"},
+					Scopes:        []string{"openid", "goauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
-			expectErr: fosite.ErrInsufficientEntropy,
+			expectErr: goauth2.ErrInsufficientEntropy,
 		},
 		{
 			description: "should fail because session not set",
 			setup: func() OpenIDConnectImplicitHandler {
 				areq.Form = url.Values{"nonce": {"long-enough"}}
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
-				areq.RequestedScope = fosite.Arguments{"openid"}
-				areq.Client = &fosite.DefaultClient{
-					GrantTypes:    fosite.Arguments{"implicit"},
-					ResponseTypes: fosite.Arguments{"token", "id_token"},
-					Scopes:        []string{"openid", "fosite"},
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				areq.RequestedScope = goauth2.Arguments{"openid"}
+				areq.Client = &goauth2.DefaultClient{
+					GrantTypes:    goauth2.Arguments{"implicit"},
+					ResponseTypes: goauth2.Arguments{"token", "id_token"},
+					Scopes:        []string{"openid", "goauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 			expectErr: ErrInvalidSession,
 		},
@@ -188,14 +187,14 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Subject: "peter",
 				}
 				areq.Form.Add("nonce", "some-random-foo-nonce-wow")
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
@@ -210,7 +209,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass with nondefault id token lifespan",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = fosite.NewAuthorizeResponse()
+				aresp = goauth2.NewAuthorizeResponse()
 				areq.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
@@ -218,16 +217,16 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Headers: &jwt.Headers{},
 					Subject: "peter",
 				}
-				areq.ResponseTypes = fosite.Arguments{"id_token"}
-				areq.Client = &fosite.DefaultClientWithCustomTokenLifespans{
-					DefaultClient: &fosite.DefaultClient{
-						GrantTypes:    fosite.Arguments{"implicit"},
-						ResponseTypes: fosite.Arguments{"token", "id_token"},
-						Scopes:        []string{"openid", "fosite"},
+				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				areq.Client = &goauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &goauth2.DefaultClient{
+						GrantTypes:    goauth2.Arguments{"implicit"},
+						ResponseTypes: goauth2.Arguments{"token", "id_token"},
+						Scopes:        []string{"openid", "goauth2"},
 					},
 				}
-				areq.Client.(*fosite.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				areq.Client.(*goauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 			check: func() {
 				idToken := aresp.GetParameters().Get("id_token")
@@ -241,9 +240,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = fosite.NewAuthorizeResponse()
-				areq.ResponseTypes = fosite.Arguments{"token", "id_token"}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				aresp = goauth2.NewAuthorizeResponse()
+				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
@@ -253,21 +252,21 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan).UTC(), *internal.ExtractJwtExpClaim(t, idToken), time.Minute)
 
 				assert.NotEmpty(t, aresp.GetParameters().Get("access_token"))
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.Session.GetExpiresAt(fosite.AccessToken), time.Minute)
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.Session.GetExpiresAt(goauth2.AccessToken), time.Minute)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = fosite.Arguments{"id_token", "token"}
-				areq.RequestedScope = fosite.Arguments{"fosite", "openid"}
-				return makeOpenIDConnectImplicitHandler(fosite.MinParameterEntropy)
+				areq.ResponseTypes = goauth2.Arguments{"id_token", "token"}
+				areq.RequestedScope = goauth2.Arguments{"goauth2", "openid"}
+				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("id_token"))
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
 				assert.NotEmpty(t, aresp.GetParameters().Get("access_token"))
-				assert.Equal(t, fosite.ResponseModeFragment, areq.GetResponseMode())
+				assert.Equal(t, goauth2.ResponseModeFragment, areq.GetResponseMode())
 			},
 		},
 		{

@@ -18,14 +18,14 @@ import (
 	"golang.org/x/net/html"
 	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
 func ptr(d time.Duration) *time.Duration {
 	return &d
 }
 
-var TestLifespans fosite.ClientLifespanConfig = fosite.ClientLifespanConfig{
+var TestLifespans goauth2.ClientLifespanConfig = goauth2.ClientLifespanConfig{
 	AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
 	AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
 	AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),

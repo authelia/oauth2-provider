@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 var strat = &DefaultStrategy{
@@ -26,8 +25,8 @@ var strat = &DefaultStrategy{
 			return gen.MustRSAKey(), nil
 		},
 	},
-	Config: &fosite.Config{
-		MinParameterEntropy: fosite.MinParameterEntropy,
+	Config: &goauth2.Config{
+		MinParameterEntropy: goauth2.MinParameterEntropy,
 	},
 }
 
@@ -38,7 +37,7 @@ func TestGenerateIDToken(t *testing.T) {
 	chgen := internal.NewMockOpenIDConnectTokenStrategy(ctrl)
 	defer ctrl.Finish()
 
-	ar := fosite.NewAccessRequest(nil)
+	ar := goauth2.NewAccessRequest(nil)
 	sess := &DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Subject: "peter",
@@ -84,7 +83,7 @@ func TestIssueExplicitToken(t *testing.T) {
 	resp := internal.NewMockAccessResponder(ctrl)
 	defer ctrl.Finish()
 
-	ar := fosite.NewAuthorizeRequest()
+	ar := goauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
 		Subject: "peter",
@@ -101,7 +100,7 @@ func TestIssueImplicitToken(t *testing.T) {
 	resp := internal.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
-	ar := fosite.NewAuthorizeRequest()
+	ar := goauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
 		Subject: "peter",

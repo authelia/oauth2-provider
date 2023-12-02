@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -9,9 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"golang.org/x/text/language"
-
 	"github.com/ory/x/errorsx"
+	"golang.org/x/text/language"
 )
 
 // NewIntrospectionRequest initiates token introspection as defined in

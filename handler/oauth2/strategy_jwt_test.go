@@ -12,36 +12,36 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/internal/gen"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 var rsaKey = gen.MustRSAKey()
+
 var j = &DefaultJWTStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(_ context.Context) (interface{}, error) {
 			return rsaKey, nil
 		},
 	},
-	Config: &fosite.Config{},
+	Config: &goauth2.Config{},
 }
 
 // returns a valid JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given fosite.TokenType.
-var jwtValidCase = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+// the given goauth2.TokenType.
+var jwtValidCase = func(tokenType goauth2.TokenType) *goauth2.Request {
+	r := &goauth2.Request{
+		Client: &goauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "goauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -50,7 +50,7 @@ var jwtValidCase = func(tokenType fosite.TokenType) *fosite.Request {
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]interface{}),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(time.Hour),
 			},
 		},
@@ -63,14 +63,14 @@ var jwtValidCase = func(tokenType fosite.TokenType) *fosite.Request {
 	return r
 }
 
-var jwtValidCaseWithZeroRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+var jwtValidCaseWithZeroRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.Request {
+	r := &goauth2.Request{
+		Client: &goauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "goauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -79,9 +79,9 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType fosite.TokenType) *fosite
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]interface{}),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
-				tokenType:           time.Now().UTC().Add(time.Hour),
-				fosite.RefreshToken: {},
+			ExpiresAt: map[goauth2.TokenType]time.Time{
+				tokenType:            time.Now().UTC().Add(time.Hour),
+				goauth2.RefreshToken: {},
 			},
 		},
 	}
@@ -93,14 +93,14 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType fosite.TokenType) *fosite
 	return r
 }
 
-var jwtValidCaseWithRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+var jwtValidCaseWithRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.Request {
+	r := &goauth2.Request{
+		Client: &goauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "goauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -109,9 +109,9 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Req
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]interface{}),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
-				tokenType:           time.Now().UTC().Add(time.Hour),
-				fosite.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
+			ExpiresAt: map[goauth2.TokenType]time.Time{
+				tokenType:            time.Now().UTC().Add(time.Hour),
+				goauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
 			},
 		},
 	}
@@ -125,15 +125,15 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Req
 
 // returns an expired JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given fosite.TokenType.
-var jwtExpiredCase = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+// the given goauth2.TokenType.
+var jwtExpiredCase = func(tokenType goauth2.TokenType) *goauth2.Request {
+	r := &goauth2.Request{
+		Client: &goauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "goauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -143,7 +143,7 @@ var jwtExpiredCase = func(tokenType fosite.TokenType) *fosite.Request {
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]interface{}),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[goauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(-time.Hour),
 			},
 		},
@@ -163,28 +163,28 @@ func TestAccessToken(t *testing.T) {
 		jwt.JWTScopeFieldBoth,
 	} {
 		for k, c := range []struct {
-			r    *fosite.Request
+			r    *goauth2.Request
 			pass bool
 		}{
 			{
-				r:    jwtValidCase(fosite.AccessToken),
+				r:    jwtValidCase(goauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtExpiredCase(fosite.AccessToken),
+				r:    jwtExpiredCase(goauth2.AccessToken),
 				pass: false,
 			},
 			{
-				r:    jwtValidCaseWithZeroRefreshExpiry(fosite.AccessToken),
+				r:    jwtValidCaseWithZeroRefreshExpiry(goauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtValidCaseWithRefreshExpiry(fosite.AccessToken),
+				r:    jwtValidCaseWithRefreshExpiry(goauth2.AccessToken),
 				pass: true,
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/%d", s, k), func(t *testing.T) {
-				j.Config = &fosite.Config{
+				j.Config = &goauth2.Config{
 					JWTScopeClaimKey: scopeField,
 				}
 				token, signature, err := j.GenerateAccessToken(context.Background(), c.r)
@@ -210,7 +210,7 @@ func TestAccessToken(t *testing.T) {
 					assert.Equal(t, "email offline", scope)
 				}
 
-				extraClaimsSession, ok := c.r.GetSession().(fosite.ExtraClaimsSession)
+				extraClaimsSession, ok := c.r.GetSession().(goauth2.ExtraClaimsSession)
 				require.True(t, ok)
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])

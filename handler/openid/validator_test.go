@@ -13,21 +13,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func TestValidatePrompt(t *testing.T) {
-	config := &fosite.Config{
-		MinParameterEntropy: fosite.MinParameterEntropy,
+	config := &goauth2.Config{
+		MinParameterEntropy: goauth2.MinParameterEntropy,
 	}
 	var j = &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
 			GetPrivateKey: func(_ context.Context) (interface{}, error) {
 				return key, nil
 			}},
-		Config: &fosite.Config{
-			MinParameterEntropy: fosite.MinParameterEntropy,
+		Config: &goauth2.Config{
+			MinParameterEntropy: goauth2.MinParameterEntropy,
 		},
 	}
 
@@ -251,10 +251,10 @@ func TestValidatePrompt(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
 			t.Logf("%s", tc.idTokenHint)
-			err := v.ValidatePrompt(context.TODO(), &fosite.AuthorizeRequest{
-				Request: fosite.Request{
+			err := v.ValidatePrompt(context.TODO(), &goauth2.AuthorizeRequest{
+				Request: goauth2.Request{
 					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},
-					Client:  &fosite.DefaultClient{Public: tc.isPublic},
+					Client:  &goauth2.DefaultClient{Public: tc.isPublic},
 					Session: tc.s,
 				},
 				RedirectURI: parse(tc.redirectURL),

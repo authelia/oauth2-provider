@@ -3,7 +3,9 @@
 
 package storage
 
-import "context"
+import (
+	"context"
+)
 
 // A storage provider that has support for transactions should implement this interface to ensure atomicity for certain flows
 // that require transactional semantics. Fosite will call these methods (when atomicity is required) if and only if the storage

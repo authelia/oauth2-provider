@@ -11,60 +11,60 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/hmac"
+	"github.com/authelia/goauth2"
+	"github.com/authelia/goauth2/token/hmac"
 )
 
 var hmacshaStrategy = HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &fosite.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &fosite.Config{
+	Enigma: &hmac.HMACStrategy{Config: &goauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+	Config: &goauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
 }
 
-var hmacExpiredCase = fosite.Request{
-	Client: &fosite.DefaultClient{
+var hmacExpiredCase = goauth2.Request{
+	Client: &goauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken:   time.Now().UTC().Add(-time.Hour),
-			fosite.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
-			fosite.RefreshToken:  time.Now().UTC().Add(-time.Hour),
+	Session: &goauth2.DefaultSession{
+		ExpiresAt: map[goauth2.TokenType]time.Time{
+			goauth2.AccessToken:   time.Now().UTC().Add(-time.Hour),
+			goauth2.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
+			goauth2.RefreshToken:  time.Now().UTC().Add(-time.Hour),
 		},
 	},
 }
 
-var hmacValidCase = fosite.Request{
-	Client: &fosite.DefaultClient{
+var hmacValidCase = goauth2.Request{
+	Client: &goauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken:   time.Now().UTC().Add(time.Hour),
-			fosite.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			fosite.RefreshToken:  time.Now().UTC().Add(time.Hour),
+	Session: &goauth2.DefaultSession{
+		ExpiresAt: map[goauth2.TokenType]time.Time{
+			goauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			goauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			goauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
 		},
 	},
 }
 
-var hmacValidZeroTimeRefreshCase = fosite.Request{
-	Client: &fosite.DefaultClient{
+var hmacValidZeroTimeRefreshCase = goauth2.Request{
+	Client: &goauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken:   time.Now().UTC().Add(time.Hour),
-			fosite.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			fosite.RefreshToken:  {},
+	Session: &goauth2.DefaultSession{
+		ExpiresAt: map[goauth2.TokenType]time.Time{
+			goauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			goauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			goauth2.RefreshToken:  {},
 		},
 	},
 }
 
 func TestHMACAccessToken(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    goauth2.Request
 		pass bool
 	}{
 		{
@@ -103,7 +103,7 @@ func TestHMACAccessToken(t *testing.T) {
 
 func TestHMACRefreshToken(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    goauth2.Request
 		pass bool
 	}{
 		{
@@ -142,7 +142,7 @@ func TestHMACRefreshToken(t *testing.T) {
 
 func TestHMACAuthorizeCode(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    goauth2.Request
 		pass bool
 	}{
 		{

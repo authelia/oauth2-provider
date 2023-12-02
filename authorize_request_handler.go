@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -11,14 +11,12 @@ import (
 	"strings"
 
 	"github.com/go-jose/go-jose/v3"
-
-	"github.com/ory/fosite/i18n"
-	"github.com/ory/fosite/token/jwt"
+	"github.com/ory/go-convenience/stringslice"
 	"github.com/ory/x/errorsx"
-
 	"github.com/pkg/errors"
 
-	"github.com/ory/go-convenience/stringslice"
+	"github.com/authelia/goauth2/i18n"
+	"github.com/authelia/goauth2/token/jwt"
 )
 
 func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {

@@ -15,9 +15,7 @@ import (
 	"strings"
 
 	"github.com/go-jose/go-jose/v3"
-
 	"github.com/ory/x/errorsx"
-
 	"github.com/pkg/errors"
 )
 

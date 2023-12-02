@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"encoding/json"
@@ -11,12 +11,11 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/ory/x/errorsx"
+	"github.com/pkg/errors"
 	"golang.org/x/text/language"
 
-	"github.com/ory/fosite/i18n"
-	"github.com/ory/x/errorsx"
-
-	"github.com/pkg/errors"
+	"github.com/authelia/goauth2/i18n"
 )
 
 var (

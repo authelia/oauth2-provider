@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package goauth2
 
 import (
 	"context"
@@ -12,14 +12,13 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
+	"github.com/go-jose/go-jose/v3"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
-
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/go-jose/go-jose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/authelia/goauth2/internal/gen"
 )
 
 func initServerWithKey(t *testing.T) *httptest.Server {

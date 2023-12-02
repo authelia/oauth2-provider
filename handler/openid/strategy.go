@@ -7,9 +7,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/ory/fosite"
+	"github.com/authelia/goauth2"
 )
 
 type OpenIDConnectTokenStrategy interface {
-	GenerateIDToken(ctx context.Context, lifespan time.Duration, requester fosite.Requester) (token string, err error)
+	GenerateIDToken(ctx context.Context, lifespan time.Duration, requester goauth2.Requester) (token string, err error)
 }

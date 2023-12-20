@@ -14,96 +14,96 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestHandleTokenEndpointRequest(t *testing.T) {
-	h := &OpenIDConnectExplicitHandler{Config: &goauth2.Config{}}
-	areq := goauth2.NewAccessRequest(nil)
-	areq.Client = &goauth2.DefaultClient{
-		//ResponseTypes: goauth2.Arguments{"id_token"},
+	h := &OpenIDConnectExplicitHandler{Config: &oauth2.Config{}}
+	areq := oauth2.NewAccessRequest(nil)
+	areq.Client = &oauth2.DefaultClient{
+		//ResponseTypes: oauth2.Arguments{"id_token"},
 	}
-	assert.EqualError(t, h.HandleTokenEndpointRequest(context.TODO(), areq), goauth2.ErrUnknownRequest.Error())
+	assert.EqualError(t, h.HandleTokenEndpointRequest(context.TODO(), areq), oauth2.ErrUnknownRequest.Error())
 }
 
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 	for k, c := range []struct {
 		description string
-		setup       func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest)
+		setup       func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
 		expectErr   error
-		check       func(t *testing.T, aresp *goauth2.AccessResponse)
+		check       func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
 			description: "should fail because current request has invalid grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"some_other_grant_type"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"some_other_grant_type"}
 			},
-			expectErr: goauth2.ErrUnknownRequest,
+			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should fail because storage lookup returns not found",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
-			expectErr: goauth2.ErrUnknownRequest,
+			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should fail because storage lookup fails",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because stored request is missing openid scope",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(goauth2.NewAuthorizeRequest(), nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
 			},
-			expectErr: goauth2.ErrMisconfiguration,
+			expectErr: oauth2.ErrMisconfiguration,
 		},
 		{
 			description: "should fail because current request's client does not have authorization_code grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.Client = &goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"some_other_grant_type"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"some_other_grant_type"},
 				}
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				storedReq := goauth2.NewAuthorizeRequest()
-				storedReq.GrantedScope = goauth2.Arguments{"openid"}
+				storedReq := oauth2.NewAuthorizeRequest()
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: goauth2.ErrUnauthorizedClient,
+			expectErr: oauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should pass with custom client lifespans",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.Client = &goauth2.DefaultClientWithCustomTokenLifespans{
-					DefaultClient: &goauth2.DefaultClient{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
 					},
 					TokenLifespans: &internal.TestLifespans,
 				}
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
-				storedReq := goauth2.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = goauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
@@ -118,22 +118,22 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.Client = &goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"authorization_code"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"authorization_code"},
 				}
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
-				storedReq := goauth2.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = goauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
@@ -148,30 +148,30 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because stored request's session is missing subject claim",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: ""},
 				}
-				storedReq := goauth2.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = goauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because stored request is missing session",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *goauth2.AccessRequest) {
-				req.GrantTypes = goauth2.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				storedReq := goauth2.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope("openid")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
@@ -185,8 +185,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				Headers: &jwt.Headers{},
 			}
-			aresp := goauth2.NewAccessResponse()
-			areq := goauth2.NewAccessRequest(session)
+			aresp := oauth2.NewAccessResponse()
+			areq := oauth2.NewAccessRequest(session)
 
 			var j = &DefaultStrategy{
 				Signer: &jwt.DefaultSigner{
@@ -194,8 +194,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 						return key, nil
 					},
 				},
-				Config: &goauth2.Config{
-					MinParameterEntropy: goauth2.MinParameterEntropy,
+				Config: &oauth2.Config{
+					MinParameterEntropy: oauth2.MinParameterEntropy,
 				},
 			}
 
@@ -204,7 +204,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				IDTokenHandleHelper: &IDTokenHandleHelper{
 					IDTokenStrategy: j,
 				},
-				Config: &goauth2.Config{},
+				Config: &oauth2.Config{},
 			}
 
 			c.setup(store, areq)

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-const defaultJWKSFetcherStrategyCachePrefix = "github.com/authelia/goauth2.DefaultJWKSFetcherStrategy:"
+const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
 
 // JWKSFetcherStrategy is a strategy which pulls (optionally caches) JSON Web Key Sets from a location,
 // typically a client's jwks_uri.

@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/integration/clients"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/integration/clients"
 )
 
 type introspectJWTBearerTokenSuite struct {
@@ -34,7 +34,7 @@ type introspectJWTBearerTokenSuite struct {
 }
 
 func (s *introspectJWTBearerTokenSuite) SetupTest() {
-	s.scopes = []string{"goauth2"}
+	s.scopes = []string{"oauth2"}
 	s.audience = []string{tokenURL, "https://example.com"}
 
 	s.clientTokenPayload = &clients.JWTBearerPayload{
@@ -59,7 +59,7 @@ func (s *introspectJWTBearerTokenSuite) SetupTest() {
 func (s *introspectJWTBearerTokenSuite) TestSuccessResponseWithMultipleScopesToken() {
 	ctx := context.Background()
 
-	scopes := []string{"goauth2", "docker"}
+	scopes := []string{"oauth2", "docker"}
 	token, err := s.getJWTClient().GetToken(ctx, s.clientTokenPayload, scopes)
 	require.NoError(s.T(), err)
 
@@ -227,7 +227,7 @@ func (s *introspectJWTBearerTokenSuite) assertUnauthorizedResponse(
 
 func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 	provider := compose.Compose(
-		&goauth2.Config{
+		&oauth2.Config{
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: true,
@@ -240,7 +240,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 		compose.RFC7523AssertionGrantFactory,
 		compose.OAuth2TokenIntrospectionFactory,
 	)
-	testServer := mockServer(t, provider, &goauth2.DefaultSession{})
+	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer testServer.Close()
 
 	client := newJWTBearerAppClient(testServer)
@@ -255,7 +255,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 			Audience: []string{tokenURL},
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 	if err != nil {
 		assert.Nil(t, err)
 	}

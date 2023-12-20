@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/storage"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
@@ -29,71 +29,71 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 			var h AuthorizeExplicitGrantHandler
 			for _, c := range []struct {
-				areq        *goauth2.AccessRequest
+				areq        *oauth2.AccessRequest
 				description string
-				setup       func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config)
-				check       func(t *testing.T, aresp *goauth2.AccessResponse)
+				setup       func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config)
+				check       func(t *testing.T, aresp *oauth2.AccessResponse)
 				expectErr   error
 			}{
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"123"},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"123"},
 					},
 					description: "should fail because not responsible",
-					expectErr:   goauth2.ErrUnknownRequest,
+					expectErr:   oauth2.ErrUnknownRequest,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							Session:     &goauth2.DefaultSession{},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					description: "should fail because authcode not found",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Set("code", code)
 					},
-					expectErr: goauth2.ErrServerError,
+					expectErr: oauth2.ErrServerError,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{"code": []string{"foo.bar"}},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							Session:     &goauth2.DefaultSession{},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					description: "should fail because validation failed",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), "bar", areq))
 					},
-					expectErr: goauth2.ErrInvalidRequest,
+					expectErr: oauth2.ErrInvalidRequest,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code", "refresh_token"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
 							},
-							GrantedScope: goauth2.Arguments{"foo", "offline"},
-							Session:      &goauth2.DefaultSession{},
+							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
@@ -101,7 +101,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with offline scope and refresh token",
-					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
 						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
@@ -110,19 +110,19 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code", "refresh_token"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
 							},
-							GrantedScope: goauth2.Arguments{"foo"},
-							Session:      &goauth2.DefaultSession{},
+							GrantedScope: oauth2.Arguments{"foo"},
+							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with refresh token always provided",
-					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
 						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
@@ -140,19 +140,19 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							GrantedScope: goauth2.Arguments{},
-							Session:      &goauth2.DefaultSession{},
+							GrantedScope: oauth2.Arguments{},
+							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with no refresh token",
-					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
 						assert.Empty(t, aresp.GetExtra("refresh_token"))
@@ -170,19 +170,19 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							GrantedScope: goauth2.Arguments{"foo"},
-							Session:      &goauth2.DefaultSession{},
+							GrantedScope: oauth2.Arguments{"foo"},
+							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, config *goauth2.Config) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
@@ -190,7 +190,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should not have refresh token",
-					check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
 						assert.Empty(t, aresp.GetExtra("refresh_token"))
@@ -200,9 +200,9 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
-					config := &goauth2.Config{
-						ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+					config := &oauth2.Config{
+						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 						AccessTokenLifespan:      time.Minute,
 						RefreshTokenScopes:       []string{"offline"},
 					}
@@ -218,7 +218,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						c.setup(t, c.areq, config)
 					}
 
-					aresp := goauth2.NewAccessResponse()
+					aresp := oauth2.NewAccessResponse()
 					err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
 
 					if c.expectErr != nil {
@@ -247,140 +247,140 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				CoreStorage:            store,
 				AuthorizeCodeStrategy:  &hmacshaStrategy,
 				TokenRevocationStorage: store,
-				Config: &goauth2.Config{
-					ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 					AuthorizeCodeLifespan:    time.Minute,
 				},
 			}
 			for i, c := range []struct {
-				areq        *goauth2.AccessRequest
-				authreq     *goauth2.AuthorizeRequest
+				areq        *oauth2.AccessRequest
+				authreq     *oauth2.AuthorizeRequest
 				description string
-				setup       func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest)
-				check       func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest)
+				setup       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest)
+				check       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest)
 				expectErr   error
 			}{
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"12345678"},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"12345678"},
 					},
 					description: "should fail because not responsible",
-					expectErr:   goauth2.ErrUnknownRequest,
+					expectErr:   oauth2.ErrUnknownRequest,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
-							Client:      &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
-							Session:     &goauth2.DefaultSession{},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					description: "should fail because client is not granted this grant type",
-					expectErr:   goauth2.ErrUnauthorizedClient,
+					expectErr:   oauth2.ErrUnauthorizedClient,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
-							Client:      &goauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
-							Session:     &goauth2.DefaultSession{},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
+							Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					description: "should fail because authcode could not be retrieved (1)",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 					},
-					expectErr: goauth2.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form:        url.Values{"code": {"foo.bar"}},
-							Client:      &goauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
-							Session:     &goauth2.DefaultSession{},
+							Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					description: "should fail because authcode validation failed",
-					expectErr:   goauth2.ErrInvalidGrant,
+					expectErr:   oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
-							Client:      &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Session:     &goauth2.DefaultSession{},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					authreq: &goauth2.AuthorizeRequest{
-						Request: goauth2.Request{
-							Client:         &goauth2.DefaultClient{ID: "bar"},
-							RequestedScope: goauth2.Arguments{"a", "b"},
+					authreq: &oauth2.AuthorizeRequest{
+						Request: oauth2.Request{
+							Client:         &oauth2.DefaultClient{ID: "bar"},
+							RequestedScope: oauth2.Arguments{"a", "b"},
 						},
 					},
 					description: "should fail because client mismatch",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
-					expectErr: goauth2.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
-							Client:      &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Session:     &goauth2.DefaultSession{},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					authreq: &goauth2.AuthorizeRequest{
-						Request: goauth2.Request{
-							Client:  &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+					authreq: &oauth2.AuthorizeRequest{
+						Request: oauth2.Request{
+							Client:  &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
 							Form:    url.Values{"redirect_uri": []string{"request-redir"}},
-							Session: &goauth2.DefaultSession{},
+							Session: &oauth2.DefaultSession{},
 						},
 					},
 					description: "should fail because redirect uri was set during /authorize call, but not in /token call",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form = url.Values{"code": {token}}
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
-					expectErr: goauth2.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
-							Client:      &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
 							Form:        url.Values{"redirect_uri": []string{"request-redir"}},
-							Session:     &goauth2.DefaultSession{},
+							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					authreq: &goauth2.AuthorizeRequest{
-						Request: goauth2.Request{
-							Client:         &goauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Session:        &goauth2.DefaultSession{},
-							RequestedScope: goauth2.Arguments{"a", "b"},
+					authreq: &oauth2.AuthorizeRequest{
+						Request: oauth2.Request{
+							Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+							Session:        &oauth2.DefaultSession{},
+							RequestedScope: oauth2.Arguments{"a", "b"},
 							RequestedAt:    time.Now().UTC(),
 						},
 					},
 					description: "should pass",
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 
@@ -389,23 +389,23 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 				},
 				{
-					areq: &goauth2.AccessRequest{
-						GrantTypes: goauth2.Arguments{"authorization_code"},
-						Request: goauth2.Request{
+					areq: &oauth2.AccessRequest{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+						Request: oauth2.Request{
 							Form: url.Values{},
-							Client: &goauth2.DefaultClient{
-								GrantTypes: goauth2.Arguments{"authorization_code"},
+							Client: &oauth2.DefaultClient{
+								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							GrantedScope: goauth2.Arguments{"foo", "offline"},
-							Session:      &goauth2.DefaultSession{},
+							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					check: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.RefreshToken))
+					check: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
-					setup: func(t *testing.T, areq *goauth2.AccessRequest, authreq *goauth2.AuthorizeRequest) {
+					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("code", code)
@@ -414,7 +414,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						require.NoError(t, store.InvalidateAuthorizeCodeSession(context.TODO(), sig))
 					},
 					description: "should fail because code has been used already",
-					expectErr:   goauth2.ErrInvalidGrant,
+					expectErr:   oauth2.ErrInvalidGrant,
 				},
 			} {
 				t.Run(fmt.Sprintf("case=%d/description=%s", i, c.description), func(t *testing.T) {
@@ -443,21 +443,21 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	var mockTransactional *internal.MockTransactional
 	var mockCoreStore *internal.MockCoreStorage
 	strategy := hmacshaStrategy
-	request := &goauth2.AccessRequest{
-		GrantTypes: goauth2.Arguments{"authorization_code"},
-		Request: goauth2.Request{
-			Client: &goauth2.DefaultClient{
-				GrantTypes: goauth2.Arguments{"authorization_code", "refresh_token"},
+	request := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{"authorization_code"},
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{
+				GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
 			},
-			GrantedScope: goauth2.Arguments{"offline"},
-			Session:      &goauth2.DefaultSession{},
+			GrantedScope: oauth2.Arguments{"offline"},
+			Session:      &oauth2.DefaultSession{},
 			RequestedAt:  time.Now().UTC(),
 		},
 	}
 	token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 	require.NoError(t, err)
 	request.Form = url.Values{"code": {token}}
-	response := goauth2.NewAccessResponse()
+	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
 
 	// some storage implementation that has support for transactions, notice the embedded type `storage.Transactional`
@@ -528,7 +528,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: goauth2.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "transaction should be rolled back if `CreateAccessTokenSession` returns an error",
@@ -558,7 +558,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: goauth2.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "should result in a server error if transaction cannot be created",
@@ -573,7 +573,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					BeginTX(propagatedContext).
 					Return(nil, errors.New("Whoops, unable to create transaction!"))
 			},
-			expectError: goauth2.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "should result in a server error if transaction cannot be rolled back",
@@ -598,7 +598,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(errors.New("Whoops, unable to rollback transaction!")).
 					Times(1)
 			},
-			expectError: goauth2.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "should result in a server error if transaction cannot be committed",
@@ -638,7 +638,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: goauth2.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 	} {
 		t.Run(fmt.Sprintf("scenario=%s", testCase.description), func(t *testing.T) {
@@ -657,9 +657,9 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 				AccessTokenStrategy:   &strategy,
 				RefreshTokenStrategy:  &strategy,
 				AuthorizeCodeStrategy: &strategy,
-				Config: &goauth2.Config{
-					ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 					AuthorizeCodeLifespan:    time.Minute,
 				},
 			}

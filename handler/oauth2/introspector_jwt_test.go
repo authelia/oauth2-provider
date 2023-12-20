@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIntrospectJWT(t *testing.T) {
@@ -26,13 +26,13 @@ func TestIntrospectJWT(t *testing.T) {
 				return rsaKey, nil
 			},
 		},
-		Config: &goauth2.Config{},
+		Config: &oauth2.Config{},
 	}
 
 	var v = &StatelessJWTValidator{
 		Signer: strat,
-		Config: &goauth2.Config{
-			ScopeStrategy: goauth2.HierarchicScopeStrategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
 	}
 
@@ -45,17 +45,17 @@ func TestIntrospectJWT(t *testing.T) {
 		{
 			description: "should fail because jwt is expired",
 			token: func() string {
-				jwt := jwtExpiredCase(goauth2.AccessToken)
+				jwt := jwtExpiredCase(oauth2.AccessToken)
 				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
-			expectErr: goauth2.ErrTokenExpired,
+			expectErr: oauth2.ErrTokenExpired,
 		},
 		{
 			description: "should pass because scope was granted",
 			token: func() string {
-				jwt := jwtValidCase(goauth2.AccessToken)
+				jwt := jwtValidCase(oauth2.AccessToken)
 				jwt.GrantedScope = []string{"foo", "bar"}
 				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
@@ -66,18 +66,18 @@ func TestIntrospectJWT(t *testing.T) {
 		{
 			description: "should fail because scope was not granted",
 			token: func() string {
-				jwt := jwtValidCase(goauth2.AccessToken)
+				jwt := jwtValidCase(oauth2.AccessToken)
 				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
 			scopes:    []string{"foo"},
-			expectErr: goauth2.ErrInvalidScope,
+			expectErr: oauth2.ErrInvalidScope,
 		},
 		{
 			description: "should fail because signature is invalid",
 			token: func() string {
-				jwt := jwtValidCase(goauth2.AccessToken)
+				jwt := jwtValidCase(oauth2.AccessToken)
 				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				parts := strings.Split(token, ".")
@@ -88,12 +88,12 @@ func TestIntrospectJWT(t *testing.T) {
 				parts[1] = base64.RawURLEncoding.EncodeToString([]byte(s))
 				return strings.Join(parts, ".")
 			},
-			expectErr: goauth2.ErrTokenSignatureMismatch,
+			expectErr: oauth2.ErrTokenSignatureMismatch,
 		},
 		{
 			description: "should pass",
 			token: func() string {
-				jwt := jwtValidCase(goauth2.AccessToken)
+				jwt := jwtValidCase(oauth2.AccessToken)
 				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
@@ -105,8 +105,8 @@ func TestIntrospectJWT(t *testing.T) {
 				c.scopes = []string{}
 			}
 
-			areq := goauth2.NewAccessRequest(nil)
-			_, err := v.IntrospectToken(context.TODO(), c.token(), goauth2.AccessToken, areq, c.scopes)
+			areq := oauth2.NewAccessRequest(nil)
+			_, err := v.IntrospectToken(context.TODO(), c.token(), oauth2.AccessToken, areq, c.scopes)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
@@ -124,20 +124,20 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 			return gen.MustRSAKey(), nil
 		},
 		},
-		Config: &goauth2.Config{},
+		Config: &oauth2.Config{},
 	}
 
 	v := &StatelessJWTValidator{
 		Signer: strat,
 	}
 
-	jwt := jwtValidCase(goauth2.AccessToken)
+	jwt := jwtValidCase(oauth2.AccessToken)
 	token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 	assert.NoError(b, err)
-	areq := goauth2.NewAccessRequest(nil)
+	areq := oauth2.NewAccessRequest(nil)
 
 	for n := 0; n < b.N; n++ {
-		_, err = v.IntrospectToken(context.TODO(), token, goauth2.AccessToken, areq, []string{})
+		_, err = v.IntrospectToken(context.TODO(), token, oauth2.AccessToken, areq, []string{})
 	}
 
 	assert.NoError(b, err)

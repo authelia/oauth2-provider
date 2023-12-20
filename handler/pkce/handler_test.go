@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/storage"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/storage"
 )
 
 type mockCodeStrategy struct {
@@ -26,24 +26,24 @@ func (m *mockCodeStrategy) AuthorizeCodeSignature(ctx context.Context, token str
 	return m.signature
 }
 
-func (m *mockCodeStrategy) GenerateAuthorizeCode(ctx context.Context, requester goauth2.Requester) (token string, signature string, err error) {
+func (m *mockCodeStrategy) GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error) {
 	return "", "", nil
 }
 
-func (m *mockCodeStrategy) ValidateAuthorizeCode(ctx context.Context, requester goauth2.Requester, token string) (err error) {
+func (m *mockCodeStrategy) ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) (err error) {
 	return nil
 }
 
 func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
-	var config goauth2.Config
+	var config oauth2.Config
 	h := &Handler{
 		Storage:               storage.NewMemoryStore(),
-		AuthorizeCodeStrategy: new(oauth2.HMACSHAStrategy),
+		AuthorizeCodeStrategy: new(hoauth2.HMACSHAStrategy),
 		Config:                &config,
 	}
-	w := goauth2.NewAuthorizeResponse()
-	r := goauth2.NewAuthorizeRequest()
-	c := &goauth2.DefaultClient{}
+	w := oauth2.NewAuthorizeResponse()
+	r := oauth2.NewAuthorizeRequest()
+	c := &oauth2.DefaultClient{}
 	r.Client = c
 
 	w.AddParameter("code", "foo")
@@ -51,13 +51,13 @@ func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
 	r.Form.Add("code_challenge", "challenge")
 	r.Form.Add("code_challenge_method", "plain")
 
-	r.ResponseTypes = goauth2.Arguments{}
+	r.ResponseTypes = oauth2.Arguments{}
 	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.ResponseTypes = goauth2.Arguments{"code"}
+	r.ResponseTypes = oauth2.Arguments{"code"}
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.ResponseTypes = goauth2.Arguments{"code", "id_token"}
+	r.ResponseTypes = oauth2.Arguments{"code", "id_token"}
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
 	c.Public = true
@@ -83,9 +83,9 @@ func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
 func TestPKCEHandlerValidate(t *testing.T) {
 	s := storage.NewMemoryStore()
 	ms := &mockCodeStrategy{}
-	config := &goauth2.Config{}
+	config := &oauth2.Config{}
 	h := &Handler{Storage: s, AuthorizeCodeStrategy: ms, Config: config}
-	pc := &goauth2.DefaultClient{Public: true}
+	pc := &oauth2.DefaultClient{Public: true}
 
 	s256verifier := "KGCt4m8AmjUvIR5ArTByrmehjtbxn1A49YpTZhsH8N7fhDr7LQayn9xx6mck"
 	hash := sha256.New()
@@ -102,12 +102,12 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		verifier    string
 		code        string
 		expectErr   error
-		client      *goauth2.DefaultClient
+		client      *oauth2.DefaultClient
 	}{
 		{
 			d:         "fails because not auth code flow",
 			grant:     "not_authorization_code",
-			expectErr: goauth2.ErrUnknownRequest,
+			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			d:           "passes with private client",
@@ -115,7 +115,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			method:      "plain",
-			client:      &goauth2.DefaultClient{Public: false},
+			client:      &oauth2.DefaultClient{Public: false},
 			enablePlain: true,
 			force:       true,
 			code:        "valid-code-1",
@@ -123,7 +123,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		{
 			d:         "fails because invalid code",
 			grant:     "authorization_code",
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 			client:    pc,
 			code:      "invalid-code-2",
 		},
@@ -138,7 +138,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			grant:     "authorization_code",
 			challenge: "foo",
 			client:    pc,
-			expectErr: goauth2.ErrInvalidRequest,
+			expectErr: oauth2.ErrInvalidRequest,
 			code:      "valid-code-4",
 		},
 		{
@@ -171,7 +171,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:      pc,
 			enablePlain: true,
 			code:        "valid-code-7",
-			expectErr:   goauth2.ErrInvalidGrant,
+			expectErr:   oauth2.ErrInvalidGrant,
 		},
 		{
 			d:           "fails because challenge and verifier do not match",
@@ -181,7 +181,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:      pc,
 			enablePlain: true,
 			code:        "valid-code-8",
-			expectErr:   goauth2.ErrInvalidGrant,
+			expectErr:   oauth2.ErrInvalidGrant,
 		},
 		{
 			d:         "fails because verifier is too short",
@@ -192,7 +192,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:    pc,
 			force:     true,
 			code:      "valid-code-9a",
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			d:         "fails because verifier is too long",
@@ -203,7 +203,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:    pc,
 			force:     true,
 			code:      "valid-code-10",
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			d:         "fails because verifier is malformed",
@@ -214,7 +214,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:    pc,
 			force:     true,
 			code:      "valid-code-11",
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			d:         "fails because challenge and verifier do not match",
@@ -225,7 +225,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			client:    pc,
 			force:     true,
 			code:      "valid-code-12",
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			d:         "passes because challenge and verifier match",
@@ -242,14 +242,14 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			config.EnablePKCEPlainChallengeMethod = tc.enablePlain
 			config.EnforcePKCE = tc.force
 			ms.signature = tc.code
-			ar := goauth2.NewAuthorizeRequest()
+			ar := oauth2.NewAuthorizeRequest()
 			ar.Form.Add("code_challenge", tc.challenge)
 			ar.Form.Add("code_challenge_method", tc.method)
 			require.NoError(t, s.CreatePKCERequestSession(context.TODO(), fmt.Sprintf("valid-code-%d", k), ar))
 
-			r := goauth2.NewAccessRequest(nil)
+			r := oauth2.NewAccessRequest(nil)
 			r.Client = tc.client
-			r.GrantTypes = goauth2.Arguments{tc.grant}
+			r.GrantTypes = oauth2.Arguments{tc.grant}
 			r.Form.Add("code_verifier", tc.verifier)
 			if tc.expectErr == nil {
 				require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), r))
@@ -270,7 +270,7 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 		challenge   string
 		method      string
 		expectErr   bool
-		client      *goauth2.DefaultClient
+		client      *oauth2.DefaultClient
 	}{
 		{
 			d: "should pass because pkce is not enforced",
@@ -290,7 +290,7 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 		{
 			d:           "should fail because forcePublic is enabled, the client is public, and no challenge was given",
 			forcePublic: true,
-			client:      &goauth2.DefaultClient{Public: true},
+			client:      &oauth2.DefaultClient{Public: true},
 			expectErr:   true,
 			method:      "S256",
 		},
@@ -323,14 +323,14 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 		{
 			d:           "should pass because forcePublic is enabled with challenge given and method is S256",
 			forcePublic: true,
-			client:      &goauth2.DefaultClient{Public: true},
+			client:      &oauth2.DefaultClient{Public: true},
 			method:      "S256",
 			challenge:   "challenge",
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
 			h := &Handler{
-				Config: &goauth2.Config{
+				Config: &oauth2.Config{
 					EnforcePKCE:                    tc.force,
 					EnforcePKCEForPublicClients:    tc.forcePublic,
 					EnablePKCEPlainChallengeMethod: tc.enablePlain,

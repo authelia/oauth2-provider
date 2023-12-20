@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
-	"github.com/authelia/goauth2/internal/errorsx"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // ClientAuthenticationStrategy provides a method signature for authenticating a client request
@@ -55,7 +55,7 @@ func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConne
 }
 
 // AuthenticateClient authenticates client requests using the configured strategy
-// `goauth2.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
+// `oauth2.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
 func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (Client, error) {
 	if s := f.Config.GetClientAuthenticationStrategy(ctx); s != nil {
 		return s(ctx, r, form)

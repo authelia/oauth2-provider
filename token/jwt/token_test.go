@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2/internal/gen"
+	"authelia.com/provider/oauth2/internal/gen"
 )
 
 func TestUnsignedToken(t *testing.T) {

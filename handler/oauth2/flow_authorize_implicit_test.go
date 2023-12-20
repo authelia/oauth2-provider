@@ -14,16 +14,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	areq := goauth2.NewAuthorizeRequest()
-	areq.Session = new(goauth2.DefaultSession)
+	areq := oauth2.NewAuthorizeRequest()
+	areq.Session = new(oauth2.DefaultSession)
 	h, store, chgen, aresp := makeAuthorizeImplicitGrantTypeHandler(ctrl)
 
 	for k, c := range []struct {
@@ -34,62 +34,62 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 		{
 			description: "should pass because not responsible for handling the response type",
 			setup: func() {
-				areq.ResponseTypes = goauth2.Arguments{"a"}
+				areq.ResponseTypes = oauth2.Arguments{"a"}
 			},
 		},
 		{
 			description: "should fail because access token generation failed",
 			setup: func() {
-				areq.ResponseTypes = goauth2.Arguments{"token"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{"implicit"},
-					ResponseTypes: goauth2.Arguments{"token"},
+				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{"implicit"},
+					ResponseTypes: oauth2.Arguments{"token"},
 				}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("", "", errors.New(""))
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because scope invalid",
 			setup: func() {
-				areq.ResponseTypes = goauth2.Arguments{"token"}
-				areq.RequestedScope = goauth2.Arguments{"scope"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{"implicit"},
-					ResponseTypes: goauth2.Arguments{"token"},
+				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.RequestedScope = oauth2.Arguments{"scope"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{"implicit"},
+					ResponseTypes: oauth2.Arguments{"token"},
 				}
 			},
-			expectErr: goauth2.ErrInvalidScope,
+			expectErr: oauth2.ErrInvalidScope,
 		},
 		{
 			description: "should fail because audience invalid",
 			setup: func() {
-				areq.ResponseTypes = goauth2.Arguments{"token"}
-				areq.RequestedScope = goauth2.Arguments{"scope"}
-				areq.RequestedAudience = goauth2.Arguments{"https://www.ory.sh/not-api"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{"implicit"},
-					ResponseTypes: goauth2.Arguments{"token"},
+				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.RequestedScope = oauth2.Arguments{"scope"}
+				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/not-api"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{"implicit"},
+					ResponseTypes: oauth2.Arguments{"token"},
 					Scopes:        []string{"scope"},
 					Audience:      []string{"https://www.ory.sh/api"},
 				}
 			},
-			expectErr: goauth2.ErrInvalidRequest,
+			expectErr: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should fail because persistence failed",
 			setup: func() {
-				areq.RequestedAudience = goauth2.Arguments{"https://www.ory.sh/api"}
+				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/api"}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).AnyTimes().Return("access.ats", "ats", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should pass",
 			setup: func() {
 				areq.State = "state"
-				areq.GrantedScope = goauth2.Arguments{"scope"}
+				areq.GrantedScope = oauth2.Arguments{"scope"}
 
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 
@@ -123,10 +123,10 @@ func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeIm
 	h := AuthorizeImplicitGrantTypeHandler{
 		AccessTokenStorage:  store,
 		AccessTokenStrategy: chgen,
-		Config: &goauth2.Config{
+		Config: &oauth2.Config{
 			AccessTokenLifespan:      time.Hour,
-			ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 		},
 	}
 
@@ -137,17 +137,17 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	areq := goauth2.NewAuthorizeRequest()
-	areq.Session = new(goauth2.DefaultSession)
+	areq := oauth2.NewAuthorizeRequest()
+	areq.Session = new(oauth2.DefaultSession)
 	h, store, chgen, aresp := makeAuthorizeImplicitGrantTypeHandler(ctrl)
 
 	areq.State = "state"
-	areq.GrantedScope = goauth2.Arguments{"scope"}
-	areq.ResponseTypes = goauth2.Arguments{"token"}
-	areq.Client = &goauth2.DefaultClientWithCustomTokenLifespans{
-		DefaultClient: &goauth2.DefaultClient{
-			GrantTypes:    goauth2.Arguments{"implicit"},
-			ResponseTypes: goauth2.Arguments{"token"},
+	areq.GrantedScope = oauth2.Arguments{"scope"}
+	areq.ResponseTypes = oauth2.Arguments{"token"}
+	areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+		DefaultClient: &oauth2.DefaultClient{
+			GrantTypes:    oauth2.Arguments{"implicit"},
+			ResponseTypes: oauth2.Arguments{"token"},
 		},
 		TokenLifespans: &internal.TestLifespans,
 	}
@@ -163,7 +163,7 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 
 	err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
 	assert.NoError(t, err)
-	assert.Equal(t, goauth2.ResponseModeFragment, areq.GetResponseMode())
+	assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
 
-	internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan), areq.Session.GetExpiresAt(goauth2.AccessToken), time.Minute)
+	internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan), areq.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
 }

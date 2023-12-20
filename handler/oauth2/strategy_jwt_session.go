@@ -8,8 +8,8 @@ import (
 
 	"github.com/mohae/deepcopy"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type JWTSessionContainer interface {
@@ -19,14 +19,14 @@ type JWTSessionContainer interface {
 	// GetJWTHeader returns the header.
 	GetJWTHeader() *jwt.Headers
 
-	goauth2.Session
+	oauth2.Session
 }
 
 // JWTSession Container for the JWT session.
 type JWTSession struct {
 	JWTClaims *jwt.JWTClaims
 	JWTHeader *jwt.Headers
-	ExpiresAt map[goauth2.TokenType]time.Time
+	ExpiresAt map[oauth2.TokenType]time.Time
 	Username  string
 	Subject   string
 }
@@ -52,16 +52,16 @@ func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	return j.JWTHeader
 }
 
-func (j *JWTSession) SetExpiresAt(key goauth2.TokenType, exp time.Time) {
+func (j *JWTSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if j.ExpiresAt == nil {
-		j.ExpiresAt = make(map[goauth2.TokenType]time.Time)
+		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
 	j.ExpiresAt[key] = exp
 }
 
-func (j *JWTSession) GetExpiresAt(key goauth2.TokenType) time.Time {
+func (j *JWTSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if j.ExpiresAt == nil {
-		j.ExpiresAt = make(map[goauth2.TokenType]time.Time)
+		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
 
 	if _, ok := j.ExpiresAt[key]; !ok {
@@ -89,12 +89,12 @@ func (j *JWTSession) GetSubject() string {
 	return j.Subject
 }
 
-func (j *JWTSession) Clone() goauth2.Session {
+func (j *JWTSession) Clone() oauth2.Session {
 	if j == nil {
 		return nil
 	}
 
-	return deepcopy.Copy(j).(goauth2.Session)
+	return deepcopy.Copy(j).(oauth2.Session)
 }
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.

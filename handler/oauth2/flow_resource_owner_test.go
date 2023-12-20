@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -24,81 +24,81 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 	store := internal.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
 	defer ctrl.Finish()
 
-	areq := goauth2.NewAccessRequest(new(goauth2.DefaultSession))
+	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	areq.Form = url.Values{}
 	for k, c := range []struct {
 		description string
-		setup       func(config *goauth2.Config)
+		setup       func(config *oauth2.Config)
 		expectErr   error
-		check       func(areq *goauth2.AccessRequest)
+		check       func(areq *oauth2.AccessRequest)
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   goauth2.ErrUnknownRequest,
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{"123"}
+			expectErr:   oauth2.ErrUnknownRequest,
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"123"}
 			},
 		},
 		{
 			description: "should fail because scope missing",
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{"password"}
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"password"}, Scopes: []string{}}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{}}
 				areq.RequestedScope = []string{"foo-scope"}
 			},
-			expectErr: goauth2.ErrInvalidScope,
+			expectErr: oauth2.ErrInvalidScope,
 		},
 		{
 			description: "should fail because audience missing",
-			setup: func(config *goauth2.Config) {
-				areq.RequestedAudience = goauth2.Arguments{"https://www.ory.sh/api"}
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}}
+			setup: func(config *oauth2.Config) {
+				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/api"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: goauth2.ErrInvalidRequest,
+			expectErr: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should fail because invalid grant_type specified",
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{"password"}
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"authorization_code"}, Scopes: []string{"foo-scope"}}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"authorization_code"}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: goauth2.ErrUnauthorizedClient,
+			expectErr: oauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should fail because invalid credentials",
-			setup: func(config *goauth2.Config) {
+			setup: func(config *oauth2.Config) {
 				areq.Form.Set("username", "peter")
 				areq.Form.Set("password", "pan")
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
 
-				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(goauth2.ErrNotFound)
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(oauth2.ErrNotFound)
 			},
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			description: "should fail because error on lookup",
-			setup: func(config *goauth2.Config) {
+			setup: func(config *oauth2.Config) {
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(errors.New(""))
 			},
-			expectErr: goauth2.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should pass",
-			setup: func(config *goauth2.Config) {
+			setup: func(config *oauth2.Config) {
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(nil)
 			},
-			check: func(areq *goauth2.AccessRequest) {
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.AccessToken))
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(goauth2.RefreshToken))
+			check: func(areq *oauth2.AccessRequest) {
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			config := &goauth2.Config{
+			config := &oauth2.Config{
 				AccessTokenLifespan:      time.Hour,
 				RefreshTokenLifespan:     time.Hour,
-				ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 			}
 			h := ResourceOwnerPasswordCredentialsGrantHandler{
 				ResourceOwnerPasswordCredentialsGrantStorage: store,
@@ -132,29 +132,29 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	mockRT := "refreshtoken.bar.foo"
 	defer ctrl.Finish()
 
-	var areq *goauth2.AccessRequest
-	var aresp *goauth2.AccessResponse
-	config := &goauth2.Config{}
+	var areq *oauth2.AccessRequest
+	var aresp *oauth2.AccessResponse
+	config := &oauth2.Config{}
 	var h ResourceOwnerPasswordCredentialsGrantHandler
 	h.Config = config
 
 	for k, c := range []struct {
 		description string
-		setup       func(*goauth2.Config)
+		setup       func(*oauth2.Config)
 		expectErr   error
 		expect      func()
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   goauth2.ErrUnknownRequest,
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{""}
+			expectErr:   oauth2.ErrUnknownRequest,
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{""}
 			},
 		},
 		{
 			description: "should pass",
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{"password"}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
@@ -164,8 +164,8 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass - offline scope",
-			setup: func(config *goauth2.Config) {
-				areq.GrantTypes = goauth2.Arguments{"password"}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
 				areq.GrantScope("offline")
 				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
 				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
@@ -178,9 +178,9 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass - refresh token without offline scope",
-			setup: func(config *goauth2.Config) {
+			setup: func(config *oauth2.Config) {
 				config.RefreshTokenScopes = []string{}
-				areq.GrantTypes = goauth2.Arguments{"password"}
+				areq.GrantTypes = oauth2.Arguments{"password"}
 				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
 				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
@@ -192,10 +192,10 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			areq = goauth2.NewAccessRequest(nil)
-			aresp = goauth2.NewAccessResponse()
-			areq.Session = &goauth2.DefaultSession{}
-			config := &goauth2.Config{
+			areq = oauth2.NewAccessRequest(nil)
+			aresp = oauth2.NewAccessResponse()
+			areq.Session = &oauth2.DefaultSession{}
+			config := &oauth2.Config{
 				RefreshTokenScopes:  []string{"offline"},
 				AccessTokenLifespan: time.Hour,
 			}

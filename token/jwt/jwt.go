@@ -17,7 +17,7 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type Signer interface {

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"time"
@@ -14,12 +14,12 @@ import (
 type Session interface {
 	// SetExpiresAt sets the expiration time of a token.
 	//
-	//  session.SetExpiresAt(goauth2.AccessToken, time.Now().UTC().Add(time.Hour))
+	//  session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
 	SetExpiresAt(key TokenType, exp time.Time)
 
 	// GetExpiresAt returns the expiration time of a token if set, or time.IsZero() if not.
 	//
-	//  session.GetExpiresAt(goauth2.AccessToken)
+	//  session.GetExpiresAt(oauth2.AccessToken)
 	GetExpiresAt(key TokenType) time.Time
 
 	// GetUsername returns the username, if set. This is optional and only used during token introspection.

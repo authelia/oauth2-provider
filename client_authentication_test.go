@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"context"
@@ -22,10 +22,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	. "github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/storage"
-	"github.com/authelia/goauth2/token/jwt"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {

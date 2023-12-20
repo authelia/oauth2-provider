@@ -15,13 +15,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type introspectionResponse struct {
@@ -46,7 +46,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			Username: "peteru",
 		},
 	}
-	fc := new(goauth2.Config)
+	fc := new(oauth2.Config)
 	fc.RefreshTokenLifespan = -1
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 	f := compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
@@ -56,34 +56,34 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 	oauthClient := newOAuth2Client(ts)
 	state := "1234567890"
-	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
-	refreshCheckClient := &goauth2.DefaultClient{
+	refreshCheckClient := &oauth2.DefaultClient{
 		ID:            "refresh-client",
 		Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 		RedirectURIs:  []string{ts.URL + "/callback"},
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-		Scopes:        []string{"goauth2", "offline", "openid"},
+		Scopes:        []string{"oauth2", "offline", "openid"},
 		Audience:      []string{"https://www.ory.sh/api"},
 	}
 
 	store.Clients["refresh-client"] = refreshCheckClient
-	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	for _, c := range []struct {
 		description   string
 		setup         func(t *testing.T)
 		pass          bool
-		params        []oauth2.AuthCodeOption
-		check         func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse)
+		params        []xoauth2.AuthCodeOption
+		check         func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse)
 		beforeRefresh func(t *testing.T)
 		mockServer    func(t *testing.T) *httptest.Server
 	}{
 		{
 			description: "should fail because refresh scope missing",
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"goauth2"}
+				oauthClient.Scopes = []string{"oauth2"}
 			},
 			pass: false,
 		},
@@ -93,7 +93,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				oauthClient.Scopes = []string{"offline"}
 			},
 			pass: true,
-			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
+			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
 				assert.NotEqual(t, original.RefreshToken, refreshed.RefreshToken)
 				assert.NotEqual(t, original.AccessToken, refreshed.AccessToken)
 				assert.Nil(t, refreshed.Extra("id_token"))
@@ -101,12 +101,12 @@ func TestRefreshTokenFlow(t *testing.T) {
 		},
 		{
 			description: "should pass and yield id token",
-			params:      []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
 			},
 			pass: true,
-			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
+			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
 				assert.NotEqual(t, original.RefreshToken, refreshed.RefreshToken)
 				assert.NotEqual(t, original.AccessToken, refreshed.AccessToken)
 				assert.NotEqual(t, original.Extra("id_token"), refreshed.Extra("id_token"))
@@ -137,7 +137,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			description: "should fail because scope is no longer allowed",
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Scopes = []string{"offline", "openid"}
@@ -146,11 +146,11 @@ func TestRefreshTokenFlow(t *testing.T) {
 		},
 		{
 			description: "should fail because audience is no longer allowed",
-			params:      []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
-				refreshCheckClient.Scopes = []string{"goauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				refreshCheckClient.Scopes = []string{"oauth2", "offline", "openid"}
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{"https://www.not-ory.sh/api"}
@@ -160,36 +160,36 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			description: "should fail with expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(goauth2.Config)
+				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Nanosecond
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
-				store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			pass: false,
 		},
 		{
 			description: "should pass with limited but not expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(goauth2.Config)
+				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Minute
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"goauth2", "offline", "openid"}
-				store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{}
 			},
 			pass:  true,
-			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {},
+			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {},
 		},
 		{
 			description: "should deny access if original token was reused",
@@ -197,17 +197,17 @@ func TestRefreshTokenFlow(t *testing.T) {
 				oauthClient.Scopes = []string{"offline"}
 			},
 			pass: true,
-			check: func(t *testing.T, original, refreshed *oauth2.Token, or, rr *introspectionResponse) {
+			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
 				tokenSource := oauthClient.TokenSource(context.TODO(), original)
 				_, err := tokenSource.Token()
 				require.Error(t, err)
-				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
+				require.Equal(t, http.StatusUnauthorized, err.(*xoauth2.RetrieveError).Response.StatusCode)
 
 				refreshed.Expiry = refreshed.Expiry.Add(-time.Hour * 24)
 				tokenSource = oauthClient.TokenSource(context.TODO(), refreshed)
 				_, err = tokenSource.Token()
 				require.Error(t, err)
-				require.Equal(t, http.StatusUnauthorized, err.(*oauth2.RetrieveError).Response.StatusCode)
+				require.Equal(t, http.StatusUnauthorized, err.(*xoauth2.RetrieveError).Response.StatusCode)
 			},
 		},
 	} {

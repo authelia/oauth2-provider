@@ -7,31 +7,31 @@ import (
 	"context"
 	"time"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-var _ goauth2.TokenEndpointHandler = (*ClientCredentialsGrantHandler)(nil)
+var _ oauth2.TokenEndpointHandler = (*ClientCredentialsGrantHandler)(nil)
 
 type ClientCredentialsGrantHandler struct {
 	*HandleHelper
 	Config interface {
-		goauth2.ScopeStrategyProvider
-		goauth2.AudienceStrategyProvider
-		goauth2.AccessTokenLifespanProvider
+		oauth2.ScopeStrategyProvider
+		oauth2.AudienceStrategyProvider
+		oauth2.AccessTokenLifespanProvider
 	}
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.4.2
-func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request goauth2.AccessRequester) error {
+func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
-		return errorsx.WithStack(goauth2.ErrUnknownRequest)
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	client := request.GetClient()
 	for _, scope := range request.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
-			return errorsx.WithStack(goauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -40,37 +40,37 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	// The client MUST authenticate with the authorization server as described in Section 3.2.1.
-	// This requirement is already fulfilled because goauth2 requires all token requests to be authenticated as described
+	// This requirement is already fulfilled because oauth2 requires all token requests to be authenticated as described
 	// in https://tools.ietf.org/html/rfc6749#section-3.2.1
 	if client.IsPublic() {
-		return errorsx.WithStack(goauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))
 	}
 	// if the client is not public, he has already been authenticated by the access request handler.
 
-	atLifespan := goauth2.GetEffectiveLifespan(client, goauth2.GrantTypeClientCredentials, goauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(goauth2.AccessToken, time.Now().UTC().Add(atLifespan))
+	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan))
 	return nil
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.4.3
-func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request goauth2.AccessRequester, response goauth2.AccessResponder) error {
+func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
-		return errorsx.WithStack(goauth2.ErrUnknownRequest)
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	if !request.GetClient().GetGrantTypes().Has("client_credentials") {
-		return errorsx.WithStack(goauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
 	}
 
-	atLifespan := goauth2.GetEffectiveLifespan(request.GetClient(), goauth2.GrantTypeClientCredentials, goauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	return c.IssueAccessToken(ctx, atLifespan, request, response)
 }
 
-func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, requester goauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester goauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "client_credentials".
 	return requester.GetGrantTypes().ExactOne("client_credentials")

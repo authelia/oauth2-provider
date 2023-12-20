@@ -15,7 +15,7 @@ We however:
 
 In an effort to assist users who wish to use this library we aim to maintain the following list of differences:
 
-* Module path changed from `github.com/ory/fosite` to `github.com/authelia/goauth2`.
+* Module path changed from `github.com/ory/fosite` to `github.com/authelia/oauth2`.
 * Minimum dependency is go version 1.21.
 * Removal of the following dependencies:
   * `go.opentelemetry.io/otel`

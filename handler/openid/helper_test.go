@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var strat = &DefaultStrategy{
@@ -25,8 +25,8 @@ var strat = &DefaultStrategy{
 			return gen.MustRSAKey(), nil
 		},
 	},
-	Config: &goauth2.Config{
-		MinParameterEntropy: goauth2.MinParameterEntropy,
+	Config: &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
 	},
 }
 
@@ -37,7 +37,7 @@ func TestGenerateIDToken(t *testing.T) {
 	chgen := internal.NewMockOpenIDConnectTokenStrategy(ctrl)
 	defer ctrl.Finish()
 
-	ar := goauth2.NewAccessRequest(nil)
+	ar := oauth2.NewAccessRequest(nil)
 	sess := &DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Subject: "peter",
@@ -82,7 +82,7 @@ func TestIssueExplicitToken(t *testing.T) {
 	resp := internal.NewMockAccessResponder(ctrl)
 	defer ctrl.Finish()
 
-	ar := goauth2.NewAuthorizeRequest()
+	ar := oauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
 		Subject: "peter",
@@ -99,7 +99,7 @@ func TestIssueImplicitToken(t *testing.T) {
 	resp := internal.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
-	ar := goauth2.NewAuthorizeRequest()
+	ar := oauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
 		Subject: "peter",

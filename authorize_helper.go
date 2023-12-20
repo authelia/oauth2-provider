@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/authelia/goauth2/internal/errorsx"
-	"github.com/authelia/goauth2/internal/urls"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/urls"
 )
 
 var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<html>

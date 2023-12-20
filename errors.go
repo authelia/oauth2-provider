@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"encoding/json"
@@ -14,8 +14,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/text/language"
 
-	"github.com/authelia/goauth2/i18n"
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 var (

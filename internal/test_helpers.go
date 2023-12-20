@@ -16,16 +16,16 @@ import (
 	cristaljwt "github.com/cristalhq/jwt/v4"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
+	"authelia.com/provider/oauth2"
 )
 
 func ptr(d time.Duration) *time.Duration {
 	return &d
 }
 
-var TestLifespans = goauth2.ClientLifespanConfig{
+var TestLifespans = oauth2.ClientLifespanConfig{
 	AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
 	AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
 	AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),
@@ -71,8 +71,8 @@ func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
 	return &claims.ExpiresAt.Time
 }
 
-func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token goauth.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
-	token = goauth.Token{}
+func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token xoauth2.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
+	token = xoauth2.Token{}
 	rFC6749Error = map[string]string{}
 	customParameters = url.Values{}
 

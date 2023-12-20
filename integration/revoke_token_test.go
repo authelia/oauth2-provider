@@ -12,22 +12,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestRevokeToken(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runRevokeTokenTest(t, strategy)
 	}
 }
 
-func runRevokeTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
-	ts := mockServer(t, f, &goauth2.DefaultSession{})
+func runRevokeTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{})
 
 	defer ts.Close()
 

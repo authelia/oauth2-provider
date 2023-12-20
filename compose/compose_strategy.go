@@ -6,45 +6,45 @@ package compose
 import (
 	"context"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/token/hmac"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/token/hmac"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type CommonStrategy struct {
-	oauth2.CoreStrategy
+	hoauth2.CoreStrategy
 	openid.OpenIDConnectTokenStrategy
 	jwt.Signer
 }
 
 type HMACSHAStrategyConfigurator interface {
-	goauth2.AccessTokenLifespanProvider
-	goauth2.RefreshTokenLifespanProvider
-	goauth2.AuthorizeCodeLifespanProvider
-	goauth2.TokenEntropyProvider
-	goauth2.GlobalSecretProvider
-	goauth2.RotatedGlobalSecretsProvider
-	goauth2.HMACHashingProvider
+	oauth2.AccessTokenLifespanProvider
+	oauth2.RefreshTokenLifespanProvider
+	oauth2.AuthorizeCodeLifespanProvider
+	oauth2.TokenEntropyProvider
+	oauth2.GlobalSecretProvider
+	oauth2.RotatedGlobalSecretsProvider
+	oauth2.HMACHashingProvider
 }
 
-func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *oauth2.HMACSHAStrategy {
-	return &oauth2.HMACSHAStrategy{
+func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACSHAStrategy {
+	return &hoauth2.HMACSHAStrategy{
 		Enigma: &hmac.HMACStrategy{Config: config},
 		Config: config,
 	}
 }
 
-func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *oauth2.HMACSHAStrategy, config goauth2.Configurator) *oauth2.DefaultJWTStrategy {
-	return &oauth2.DefaultJWTStrategy{
+func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *hoauth2.HMACSHAStrategy, config oauth2.Configurator) *hoauth2.DefaultJWTStrategy {
+	return &hoauth2.DefaultJWTStrategy{
 		Signer:          &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		HMACSHAStrategy: strategy,
 		Config:          config,
 	}
 }
 
-func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), config goauth2.Configurator) *openid.DefaultStrategy {
+func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), config oauth2.Configurator) *openid.DefaultStrategy {
 	return &openid.DefaultStrategy{
 		Signer: &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		Config: config,

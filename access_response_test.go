@@ -1,14 +1,14 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/authelia/goauth2"
+	. "authelia.com/provider/oauth2"
 )
 
 func TestAccessResponse(t *testing.T) {

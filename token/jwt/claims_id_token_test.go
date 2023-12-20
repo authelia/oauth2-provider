@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/authelia/goauth2/token/jwt"
+	. "authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIDTokenAssert(t *testing.T) {

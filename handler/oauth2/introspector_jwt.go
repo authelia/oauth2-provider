@@ -7,20 +7,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/errorsx"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type StatelessJWTValidator struct {
 	jwt.Signer
 	Config interface {
-		goauth2.ScopeStrategyProvider
+		oauth2.ScopeStrategyProvider
 	}
 }
 
-// AccessTokenJWTToRequest tries to reconstruct goauth2.Request from a JWT.
-func AccessTokenJWTToRequest(token *jwt.Token) goauth2.Requester {
+// AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT.
+func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	mapClaims := token.Claims
 	claims := jwt.JWTClaims{}
 	claims.FromMapClaims(mapClaims)
@@ -45,9 +45,9 @@ func AccessTokenJWTToRequest(token *jwt.Token) goauth2.Requester {
 		}
 	}
 
-	return &goauth2.Request{
+	return &oauth2.Request{
 		RequestedAt: requestedAt,
-		Client: &goauth2.DefaultClient{
+		Client: &oauth2.DefaultClient{
 			ID: clientId,
 		},
 		// We do not really know which scopes were requested, so we set them to granted.
@@ -58,8 +58,8 @@ func AccessTokenJWTToRequest(token *jwt.Token) goauth2.Requester {
 			JWTHeader: &jwt.Headers{
 				Extra: token.Header,
 			},
-			ExpiresAt: map[goauth2.TokenType]time.Time{
-				goauth2.AccessToken: claims.ExpiresAt,
+			ExpiresAt: map[oauth2.TokenType]time.Time{
+				oauth2.AccessToken: claims.ExpiresAt,
 			},
 			Subject: claims.Subject,
 		},
@@ -69,25 +69,25 @@ func AccessTokenJWTToRequest(token *jwt.Token) goauth2.Requester {
 	}
 }
 
-func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse goauth2.TokenUse, accessRequest goauth2.AccessRequester, scopes []string) (goauth2.TokenUse, error) {
+func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (oauth2.TokenUse, error) {
 	t, err := validate(ctx, v.Signer, token)
 	if err != nil {
 		return "", err
 	}
 
 	if !IsJWTProfileAccessToken(t) {
-		return "", errorsx.WithStack(goauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
+		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
 	}
 
 	requester := AccessTokenJWTToRequest(t)
 
 	if err := matchScopes(v.Config.GetScopeStrategy(ctx), requester.GetGrantedScopes(), scopes); err != nil {
-		return goauth2.AccessToken, err
+		return oauth2.AccessToken, err
 	}
 
 	accessRequest.Merge(requester)
 
-	return goauth2.AccessToken, nil
+	return oauth2.AccessToken, nil
 }
 
 // IsJWTProfileAccessToken validates a *jwt.Token is actually a RFC9068 JWT Profile Access Token by checking the

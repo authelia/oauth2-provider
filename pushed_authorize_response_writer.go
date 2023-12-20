@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 // NewPushedAuthorizeResponse executes the handlers and builds the response

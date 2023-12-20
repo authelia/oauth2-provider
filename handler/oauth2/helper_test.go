@@ -13,24 +13,24 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestGetExpiresIn(t *testing.T) {
 	now := time.Now().UTC()
-	r := goauth2.NewAccessRequest(&goauth2.DefaultSession{
-		ExpiresAt: map[goauth2.TokenType]time.Time{
-			goauth2.AccessToken: now.Add(time.Hour),
+	r := oauth2.NewAccessRequest(&oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken: now.Add(time.Hour),
 		},
 	})
-	assert.Equal(t, time.Hour, getExpiresIn(r, goauth2.AccessToken, time.Millisecond, now))
+	assert.Equal(t, time.Hour, getExpiresIn(r, oauth2.AccessToken, time.Millisecond, now))
 }
 
 func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	areq := &goauth2.AccessRequest{}
-	aresp := &goauth2.AccessResponse{Extra: map[string]any{}}
+	areq := &oauth2.AccessRequest{}
+	aresp := &oauth2.AccessResponse{Extra: map[string]any{}}
 	accessStrat := internal.NewMockAccessTokenStrategy(ctrl)
 	accessStore := internal.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()
@@ -38,12 +38,12 @@ func TestIssueAccessToken(t *testing.T) {
 	helper := HandleHelper{
 		AccessTokenStorage:  accessStore,
 		AccessTokenStrategy: accessStrat,
-		Config: &goauth2.Config{
+		Config: &oauth2.Config{
 			AccessTokenLifespan: time.Hour,
 		},
 	}
 
-	areq.Session = &goauth2.DefaultSession{}
+	areq.Session = &oauth2.DefaultSession{}
 	for k, c := range []struct {
 		mock func()
 		err  error

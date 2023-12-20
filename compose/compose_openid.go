@@ -4,16 +4,16 @@
 package compose
 
 import (
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // OpenIDConnectExplicitFactory creates an OpenID Connect explicit ("authorize code flow") grant handler.
 //
 // **Important note:** You must add this handler *after* you have added an OAuth2 authorize code handler!
-func OpenIDConnectExplicitFactory(config goauth2.Configurator, storage any, strategy any) any {
+func OpenIDConnectExplicitFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &openid.OpenIDConnectExplicitHandler{
 		OpenIDConnectRequestStorage: storage.(openid.OpenIDConnectRequestStorage),
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
@@ -27,7 +27,7 @@ func OpenIDConnectExplicitFactory(config goauth2.Configurator, storage any, stra
 // OpenIDConnectRefreshFactory creates a handler for refreshing openid connect tokens.
 //
 // **Important note:** You must add this handler *after* you have added an OAuth2 authorize code handler!
-func OpenIDConnectRefreshFactory(config goauth2.Configurator, _ any, strategy any) any {
+func OpenIDConnectRefreshFactory(config oauth2.Configurator, _ any, strategy any) any {
 	return &openid.OpenIDConnectRefreshHandler{
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
 			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
@@ -39,11 +39,11 @@ func OpenIDConnectRefreshFactory(config goauth2.Configurator, _ any, strategy an
 // OpenIDConnectImplicitFactory creates an OpenID Connect implicit ("implicit flow") grant handler.
 //
 // **Important note:** You must add this handler *after* you have added an OAuth2 authorize code handler!
-func OpenIDConnectImplicitFactory(config goauth2.Configurator, storage any, strategy any) any {
+func OpenIDConnectImplicitFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &openid.OpenIDConnectImplicitHandler{
-		AuthorizeImplicitGrantTypeHandler: &oauth2.AuthorizeImplicitGrantTypeHandler{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+		AuthorizeImplicitGrantTypeHandler: &hoauth2.AuthorizeImplicitGrantTypeHandler{
+			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 			Config:              config,
 		},
 		Config: config,
@@ -57,19 +57,19 @@ func OpenIDConnectImplicitFactory(config goauth2.Configurator, storage any, stra
 // OpenIDConnectHybridFactory creates an OpenID Connect hybrid grant handler.
 //
 // **Important note:** You must add this handler *after* you have added an OAuth2 authorize code handler!
-func OpenIDConnectHybridFactory(config goauth2.Configurator, storage any, strategy any) any {
+func OpenIDConnectHybridFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &openid.OpenIDConnectHybridHandler{
-		AuthorizeExplicitGrantHandler: &oauth2.AuthorizeExplicitGrantHandler{
-			AccessTokenStrategy:   strategy.(oauth2.AccessTokenStrategy),
-			RefreshTokenStrategy:  strategy.(oauth2.RefreshTokenStrategy),
-			AuthorizeCodeStrategy: strategy.(oauth2.AuthorizeCodeStrategy),
-			CoreStorage:           storage.(oauth2.CoreStorage),
+		AuthorizeExplicitGrantHandler: &hoauth2.AuthorizeExplicitGrantHandler{
+			AccessTokenStrategy:   strategy.(hoauth2.AccessTokenStrategy),
+			RefreshTokenStrategy:  strategy.(hoauth2.RefreshTokenStrategy),
+			AuthorizeCodeStrategy: strategy.(hoauth2.AuthorizeCodeStrategy),
+			CoreStorage:           storage.(hoauth2.CoreStorage),
 			Config:                config,
 		},
 		Config: config,
-		AuthorizeImplicitGrantTypeHandler: &oauth2.AuthorizeImplicitGrantTypeHandler{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+		AuthorizeImplicitGrantTypeHandler: &hoauth2.AuthorizeImplicitGrantTypeHandler{
+			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 			Config:              config,
 		},
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{

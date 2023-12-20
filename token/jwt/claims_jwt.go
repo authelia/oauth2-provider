@@ -126,7 +126,7 @@ func (c *JWTClaims) ToMap() map[string]any {
 	}
 
 	if c.Scope != nil {
-		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of goauth2.
+		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of oauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
 			ret["scp"] = c.Scope
 		}

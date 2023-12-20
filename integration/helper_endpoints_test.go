@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -12,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
-func tokenRevocationHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenRevocationHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := goauth2.NewContext()
+		ctx := context.Background()
 		err := oauth2.NewRevocationRequest(ctx, req)
 		if err != nil {
 			t.Logf("Revoke request failed because %+v", err)
@@ -27,9 +28,9 @@ func tokenRevocationHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session
 	}
 }
 
-func tokenIntrospectionHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenIntrospectionHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := goauth2.NewContext()
+		ctx := context.Background()
 		ar, err := oauth2.NewIntrospectionRequest(ctx, req, session)
 		if err != nil {
 			t.Logf("Introspection request failed because: %+v", err)
@@ -41,13 +42,13 @@ func tokenIntrospectionHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, sess
 	}
 }
 
-func tokenInfoHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
+func tokenInfoHandler(t *testing.T, provider oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := goauth2.NewContext()
-		_, resp, err := oauth2.IntrospectToken(ctx, goauth2.AccessTokenFromRequest(req), goauth2.AccessToken, session)
+		ctx := context.Background()
+		_, resp, err := provider.IntrospectToken(ctx, oauth2.AccessTokenFromRequest(req), oauth2.AccessToken, session)
 		if err != nil {
 			t.Logf("Info request failed because: %+v", err)
-			var e *goauth2.RFC6749Error
+			var e *oauth2.RFC6749Error
 			require.True(t, errors.As(err, &e))
 			http.Error(rw, e.DescriptionField, e.CodeField)
 			return
@@ -61,20 +62,20 @@ func tokenInfoHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goaut
 	}
 }
 
-func authEndpointHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
+func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := goauth2.NewContext()
+		ctx := oauth2.NewContext()
 
-		ar, err := oauth2.NewAuthorizeRequest(ctx, req)
+		ar, err := provider.NewAuthorizeRequest(ctx, req)
 		if err != nil {
 			t.Logf("Access request failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
-			oauth2.WriteAuthorizeError(req.Context(), rw, ar, err)
+			provider.WriteAuthorizeError(req.Context(), rw, ar, err)
 			return
 		}
 
-		if ar.GetRequestedScopes().Has("goauth2") {
-			ar.GrantScope("goauth2")
+		if ar.GetRequestedScopes().Has("oauth2") {
+			ar.GrantScope("oauth2")
 		}
 
 		if ar.GetRequestedScopes().Has("offline") {
@@ -92,15 +93,15 @@ func authEndpointHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session go
 		// Normally, this would be the place where you would check if the user is logged in and gives his consent.
 		// For this test, let's assume that the user exists, is logged in, and gives his consent...
 
-		response, err := oauth2.NewAuthorizeResponse(ctx, ar, session)
+		response, err := provider.NewAuthorizeResponse(ctx, ar, session)
 		if err != nil {
 			t.Logf("Access request failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
-			oauth2.WriteAuthorizeError(req.Context(), rw, ar, err)
+			provider.WriteAuthorizeError(req.Context(), rw, ar, err)
 			return
 		}
 
-		oauth2.WriteAuthorizeResponse(req.Context(), rw, ar, response)
+		provider.WriteAuthorizeResponse(req.Context(), rw, ar, response)
 	}
 }
 
@@ -122,12 +123,12 @@ func authCallbackHandler(t *testing.T) func(rw http.ResponseWriter, req *http.Re
 	}
 }
 
-func tokenEndpointHandler(t *testing.T, provider goauth2.OAuth2Provider) func(rw http.ResponseWriter, req *http.Request) {
+func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		req.ParseMultipartForm(1 << 20)
-		ctx := goauth2.NewContext()
+		ctx := oauth2.NewContext()
 
-		accessRequest, err := provider.NewAccessRequest(ctx, req, &oauth2.JWTSession{})
+		accessRequest, err := provider.NewAccessRequest(ctx, req, &hoauth2.JWTSession{})
 		if err != nil {
 			t.Logf("Access request failed because: %+v", err)
 			t.Logf("Request: %+v", accessRequest)
@@ -135,8 +136,8 @@ func tokenEndpointHandler(t *testing.T, provider goauth2.OAuth2Provider) func(rw
 			return
 		}
 
-		if accessRequest.GetRequestedScopes().Has("goauth2") {
-			accessRequest.GrantScope("goauth2")
+		if accessRequest.GetRequestedScopes().Has("oauth2") {
+			accessRequest.GrantScope("oauth2")
 		}
 
 		response, err := provider.NewAccessResponse(ctx, accessRequest)
@@ -151,26 +152,26 @@ func tokenEndpointHandler(t *testing.T, provider goauth2.OAuth2Provider) func(rw
 	}
 }
 
-func pushedAuthorizeRequestHandler(t *testing.T, oauth2 goauth2.OAuth2Provider, session goauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
+func pushedAuthorizeRequestHandler(t *testing.T, provider oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		ctx := goauth2.NewContext()
+		ctx := oauth2.NewContext()
 
-		ar, err := oauth2.NewPushedAuthorizeRequest(ctx, req)
+		ar, err := provider.NewPushedAuthorizeRequest(ctx, req)
 		if err != nil {
 			t.Logf("PAR request failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
-			oauth2.WritePushedAuthorizeError(ctx, rw, ar, err)
+			provider.WritePushedAuthorizeError(ctx, rw, ar, err)
 			return
 		}
 
-		response, err := oauth2.NewPushedAuthorizeResponse(ctx, ar, session)
+		response, err := provider.NewPushedAuthorizeResponse(ctx, ar, session)
 		if err != nil {
 			t.Logf("PAR response failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
-			oauth2.WritePushedAuthorizeError(ctx, rw, ar, err)
+			provider.WritePushedAuthorizeError(ctx, rw, ar, err)
 			return
 		}
 
-		oauth2.WritePushedAuthorizeResponse(ctx, rw, ar, response)
+		provider.WritePushedAuthorizeResponse(ctx, rw, ar, response)
 	}
 }

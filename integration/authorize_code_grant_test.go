@@ -13,17 +13,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestAuthorizeCodeFlow(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runAuthorizeCodeGrantTest(t, strategy)
@@ -31,7 +31,7 @@ func TestAuthorizeCodeFlow(t *testing.T) {
 }
 
 func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runAuthorizeCodeGrantDupeCodeTest(t, strategy)
@@ -39,25 +39,25 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
-	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	store.Clients["custom-lifespan-client"].(*goauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["custom-lifespan-client"].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
 		description    string
 		setup          func()
-		check          func(t *testing.T, r *http.Response, token *goauth.Token)
-		params         []goauth.AuthCodeOption
+		check          func(t *testing.T, r *http.Response, token *xoauth2.Token)
+		params         []xoauth2.AuthCodeOption
 		authStatusCode int
 	}{
 		{
 			description: "should fail because of audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
@@ -66,7 +66,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 		},
 		{
 			description: "should fail because of scope",
-			params:      []goauth.AuthCodeOption{},
+			params:      []xoauth2.AuthCodeOption{},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"not-exist"}
@@ -76,18 +76,18 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
 			},
-			check: func(t *testing.T, r *http.Response, _ *goauth.Token) {
-				var b goauth2.AccessRequest
-				b.Client = new(goauth2.DefaultClient)
+			check: func(t *testing.T, r *http.Response, _ *xoauth2.Token) {
+				var b oauth2.AccessRequest
+				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,
@@ -105,19 +105,19 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.ClientID = "custom-lifespan-client"
-				oauthClient.Scopes = []string{"goauth2", "offline"}
+				oauthClient.Scopes = []string{"oauth2", "offline"}
 				state = "12345678901234567890"
 			},
-			check: func(t *testing.T, r *http.Response, token *goauth.Token) {
-				var b goauth2.AccessRequest
-				b.Client = new(goauth2.DefaultClient)
+			check: func(t *testing.T, r *http.Response, token *xoauth2.Token) {
+				var b oauth2.AccessRequest
+				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				atExp := b.Session.GetExpiresAt(goauth2.AccessToken)
+				atExp := b.Session.GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan), atExp, time.Minute)
 				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan, atExpIn, time.Minute)
-				rtExp := b.Session.GetExpiresAt(goauth2.RefreshToken)
+				rtExp := b.Session.GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},
 			authStatusCode: http.StatusOK,
@@ -149,12 +149,12 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 }
 
 func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
-	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &goauth2.DefaultSession{})
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	oauthClient = newOAuth2Client(ts)
 	state := "12345678901234567890"

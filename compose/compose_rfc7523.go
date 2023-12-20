@@ -4,19 +4,19 @@
 package compose
 
 import (
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/handler/rfc7523"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/rfc7523"
 )
 
 // RFC7523AssertionGrantFactory creates an OAuth2 Authorize JWT Grant (using JWTs as Authorization Grants) handler
 // and registers an access token, refresh token and authorize code validator.
-func RFC7523AssertionGrantFactory(config goauth2.Configurator, storage any, strategy any) any {
+func RFC7523AssertionGrantFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc7523.Handler{
 		Storage: storage.(rfc7523.RFC7523KeyStorage),
-		HandleHelper: &oauth2.HandleHelper{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+		HandleHelper: &hoauth2.HandleHelper{
+			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 			Config:              config,
 		},
 		Config: config,

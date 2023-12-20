@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"context"
@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	. "github.com/authelia/goauth2"
-	. "github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/internal"
 )
 
 func TestNewAuthorizeResponse(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				ar.EXPECT().GetResponseTypes().Return([]string{"token", "code"})
 			},
 			isErr:     true,
-			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, goauth2.Arguments{"token", "code"}),
+			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, oauth2.Arguments{"token", "code"}),
 		},
 	} {
 		c.mock()

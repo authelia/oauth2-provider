@@ -7,9 +7,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/authelia/goauth2"
+	"authelia.com/provider/oauth2"
 )
 
 type OpenIDConnectTokenStrategy interface {
-	GenerateIDToken(ctx context.Context, lifespan time.Duration, requester goauth2.Requester) (token string, err error)
+	GenerateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error)
 }

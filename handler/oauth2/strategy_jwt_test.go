@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var rsaKey = gen.MustRSAKey()
@@ -28,20 +28,20 @@ var j = &DefaultJWTStrategy{
 			return rsaKey, nil
 		},
 	},
-	Config: &goauth2.Config{},
+	Config: &oauth2.Config{},
 }
 
 // returns a valid JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given goauth2.TokenType.
-var jwtValidCase = func(tokenType goauth2.TokenType) *goauth2.Request {
-	r := &goauth2.Request{
-		Client: &goauth2.DefaultClient{
+// the given oauth2.TokenType.
+var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "goauth2",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -50,7 +50,7 @@ var jwtValidCase = func(tokenType goauth2.TokenType) *goauth2.Request {
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[goauth2.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(time.Hour),
 			},
 		},
@@ -63,14 +63,14 @@ var jwtValidCase = func(tokenType goauth2.TokenType) *goauth2.Request {
 	return r
 }
 
-var jwtValidCaseWithZeroRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.Request {
-	r := &goauth2.Request{
-		Client: &goauth2.DefaultClient{
+var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "goauth2",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -79,9 +79,9 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType goauth2.TokenType) *goaut
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[goauth2.TokenType]time.Time{
-				tokenType:            time.Now().UTC().Add(time.Hour),
-				goauth2.RefreshToken: {},
+			ExpiresAt: map[oauth2.TokenType]time.Time{
+				tokenType:           time.Now().UTC().Add(time.Hour),
+				oauth2.RefreshToken: {},
 			},
 		},
 	}
@@ -93,14 +93,14 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType goauth2.TokenType) *goaut
 	return r
 }
 
-var jwtValidCaseWithRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.Request {
-	r := &goauth2.Request{
-		Client: &goauth2.DefaultClient{
+var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "goauth2",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -109,9 +109,9 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.R
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[goauth2.TokenType]time.Time{
-				tokenType:            time.Now().UTC().Add(time.Hour),
-				goauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
+			ExpiresAt: map[oauth2.TokenType]time.Time{
+				tokenType:           time.Now().UTC().Add(time.Hour),
+				oauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
 			},
 		},
 	}
@@ -125,15 +125,15 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType goauth2.TokenType) *goauth2.R
 
 // returns an expired JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given goauth2.TokenType.
-var jwtExpiredCase = func(tokenType goauth2.TokenType) *goauth2.Request {
-	r := &goauth2.Request{
-		Client: &goauth2.DefaultClient{
+// the given oauth2.TokenType.
+var jwtExpiredCase = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "goauth2",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
@@ -143,7 +143,7 @@ var jwtExpiredCase = func(tokenType goauth2.TokenType) *goauth2.Request {
 			JWTHeader: &jwt.Headers{
 				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[goauth2.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(-time.Hour),
 			},
 		},
@@ -163,28 +163,28 @@ func TestAccessToken(t *testing.T) {
 		jwt.JWTScopeFieldBoth,
 	} {
 		for k, c := range []struct {
-			r    *goauth2.Request
+			r    *oauth2.Request
 			pass bool
 		}{
 			{
-				r:    jwtValidCase(goauth2.AccessToken),
+				r:    jwtValidCase(oauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtExpiredCase(goauth2.AccessToken),
+				r:    jwtExpiredCase(oauth2.AccessToken),
 				pass: false,
 			},
 			{
-				r:    jwtValidCaseWithZeroRefreshExpiry(goauth2.AccessToken),
+				r:    jwtValidCaseWithZeroRefreshExpiry(oauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtValidCaseWithRefreshExpiry(goauth2.AccessToken),
+				r:    jwtValidCaseWithRefreshExpiry(oauth2.AccessToken),
 				pass: true,
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/%d", s, k), func(t *testing.T) {
-				j.Config = &goauth2.Config{
+				j.Config = &oauth2.Config{
 					JWTScopeClaimKey: scopeField,
 				}
 				token, signature, err := j.GenerateAccessToken(context.Background(), c.r)
@@ -220,7 +220,7 @@ func TestAccessToken(t *testing.T) {
 
 				assert.Equal(t, jwt.JWTHeaderTypeValueAccessTokenJWT, header[jwt.JWTHeaderKeyValueType])
 
-				extraClaimsSession, ok := c.r.GetSession().(goauth2.ExtraClaimsSession)
+				extraClaimsSession, ok := c.r.GetSession().(oauth2.ExtraClaimsSession)
 				require.True(t, ok)
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])

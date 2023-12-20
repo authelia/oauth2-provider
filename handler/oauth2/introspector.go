@@ -6,16 +6,16 @@ package oauth2
 import (
 	"context"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type coreValidatorConfigProvider interface {
-	goauth2.ScopeStrategyProvider
-	goauth2.DisableRefreshTokenValidationProvider
+	oauth2.ScopeStrategyProvider
+	oauth2.DisableRefreshTokenValidationProvider
 }
 
-var _ goauth2.TokenIntrospector = (*CoreValidator)(nil)
+var _ oauth2.TokenIntrospector = (*CoreValidator)(nil)
 
 type CoreValidator struct {
 	CoreStrategy
@@ -23,53 +23,53 @@ type CoreValidator struct {
 	Config coreValidatorConfigProvider
 }
 
-func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUse goauth2.TokenUse, accessRequest goauth2.AccessRequester, scopes []string) (goauth2.TokenUse, error) {
+func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (oauth2.TokenUse, error) {
 	if c.Config.GetDisableRefreshTokenValidation(ctx) {
 		if err := c.introspectAccessToken(ctx, token, accessRequest, scopes); err != nil {
 			return "", err
 		}
-		return goauth2.AccessToken, nil
+		return oauth2.AccessToken, nil
 	}
 
 	var err error
 	switch tokenUse {
-	case goauth2.RefreshToken:
+	case oauth2.RefreshToken:
 		if err = c.introspectRefreshToken(ctx, token, accessRequest, scopes); err == nil {
-			return goauth2.RefreshToken, nil
+			return oauth2.RefreshToken, nil
 		} else if err = c.introspectAccessToken(ctx, token, accessRequest, scopes); err == nil {
-			return goauth2.AccessToken, nil
+			return oauth2.AccessToken, nil
 		}
 		return "", err
 	}
 
 	if err = c.introspectAccessToken(ctx, token, accessRequest, scopes); err == nil {
-		return goauth2.AccessToken, nil
+		return oauth2.AccessToken, nil
 	} else if err := c.introspectRefreshToken(ctx, token, accessRequest, scopes); err == nil {
-		return goauth2.RefreshToken, nil
+		return oauth2.RefreshToken, nil
 	}
 
 	return "", err
 }
 
-func matchScopes(ss goauth2.ScopeStrategy, granted, scopes []string) error {
+func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 	for _, scope := range scopes {
 		if scope == "" {
 			continue
 		}
 
 		if !ss(granted, scope) {
-			return errorsx.WithStack(goauth2.ErrInvalidScope.WithHintf("The request scope '%s' has not been granted or is not allowed to be requested.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The request scope '%s' has not been granted or is not allowed to be requested.", scope))
 		}
 	}
 
 	return nil
 }
 
-func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, accessRequest goauth2.AccessRequester, scopes []string) error {
+func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, accessRequest oauth2.AccessRequester, scopes []string) error {
 	sig := c.CoreStrategy.AccessTokenSignature(ctx, token)
 	or, err := c.CoreStorage.GetAccessTokenSession(ctx, sig, accessRequest.GetSession())
 	if err != nil {
-		return errorsx.WithStack(goauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
 	} else if err := c.CoreStrategy.ValidateAccessToken(ctx, or, token); err != nil {
 		return err
 	}
@@ -82,12 +82,12 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 	return nil
 }
 
-func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string, accessRequest goauth2.AccessRequester, scopes []string) error {
+func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string, accessRequest oauth2.AccessRequester, scopes []string) error {
 	sig := c.CoreStrategy.RefreshTokenSignature(ctx, token)
 	or, err := c.CoreStorage.GetRefreshTokenSession(ctx, sig, accessRequest.GetSession())
 
 	if err != nil {
-		return errorsx.WithStack(goauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
 	} else if err := c.CoreStrategy.ValidateRefreshToken(ctx, or, token); err != nil {
 		return err
 	}

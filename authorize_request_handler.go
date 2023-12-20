@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
-	"github.com/authelia/goauth2/i18n"
-	"github.com/authelia/goauth2/internal/errorsx"
-	"github.com/authelia/goauth2/internal/stringslice"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/stringslice"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {

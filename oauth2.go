@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -36,9 +36,9 @@ const (
 	BearerAccessToken string = "bearer"
 )
 
-// OAuth2Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
+// Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
 // Check Fosite for an implementation of this interface.
-type OAuth2Provider interface {
+type Provider interface {
 	// NewAuthorizeRequest returns an AuthorizeRequest.
 	//
 	// The following specs must be considered in any implementation of this method:

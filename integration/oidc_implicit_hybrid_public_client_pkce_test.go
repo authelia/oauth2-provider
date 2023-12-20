@@ -15,13 +15,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
@@ -33,7 +33,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	f := compose.ComposeAllEnabled(&goauth2.Config{
+	f := compose.ComposeAllEnabled(&oauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
 	}, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
@@ -45,7 +45,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 	oauthClient.ClientID = "public-client"
 	oauthClient.Scopes = []string{"openid"}
 
-	store.Clients["public-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state = "12345678901234567890"
 	for k, c := range []struct {
@@ -105,7 +105,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, resp.StatusCode, http.StatusOK)
-			token := goauth.Token{}
+			token := xoauth2.Token{}
 			require.NoError(t, json.Unmarshal(body, &token))
 
 			require.NotEmpty(t, token.AccessToken, "Got body: %s", string(body))

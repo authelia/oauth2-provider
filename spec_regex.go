@@ -1,4 +1,4 @@
-package goauth2
+package oauth2
 
 import (
 	"regexp"

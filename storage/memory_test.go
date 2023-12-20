@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/authelia/goauth2"
+	"authelia.com/provider/oauth2"
 )
 
 func TestMemoryStore_Authenticate(t *testing.T) {
@@ -43,7 +43,7 @@ func TestMemoryStore_Authenticate(t *testing.T) {
 				},
 			},
 			// ResourceOwnerPasswordCredentialsGrantHandler expects ErrNotFound
-			wantErr: goauth2.ErrNotFound,
+			wantErr: oauth2.ErrNotFound,
 		},
 	}
 	for _, tt := range tests {

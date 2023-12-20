@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type AudienceMatchingStrategy func(haystack []string, needle []string) error

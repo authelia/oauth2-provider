@@ -6,11 +6,11 @@ package pkce
 import (
 	"context"
 
-	"github.com/authelia/goauth2"
+	"authelia.com/provider/oauth2"
 )
 
 type PKCERequestStorage interface {
-	GetPKCERequestSession(ctx context.Context, signature string, session goauth2.Session) (goauth2.Requester, error)
-	CreatePKCERequestSession(ctx context.Context, signature string, requester goauth2.Requester) error
+	GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
+	CreatePKCERequestSession(ctx context.Context, signature string, requester oauth2.Requester) error
 	DeletePKCERequestSession(ctx context.Context, signature string) error
 }

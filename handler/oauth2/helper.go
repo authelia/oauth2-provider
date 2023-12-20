@@ -7,12 +7,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/authelia/goauth2"
+	"authelia.com/provider/oauth2"
 )
 
 type HandleHelperConfigProvider interface {
-	goauth2.AccessTokenLifespanProvider
-	goauth2.RefreshTokenLifespanProvider
+	oauth2.AccessTokenLifespanProvider
+	oauth2.RefreshTokenLifespanProvider
 }
 
 type HandleHelper struct {
@@ -21,7 +21,7 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester goauth2.AccessRequester, responder goauth2.AccessResponder) error {
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
 	token, signature, err := h.AccessTokenStrategy.GenerateAccessToken(ctx, requester)
 	if err != nil {
 		return err
@@ -31,12 +31,12 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 
 	responder.SetAccessToken(token)
 	responder.SetTokenType("bearer")
-	responder.SetExpiresIn(getExpiresIn(requester, goauth2.AccessToken, defaultLifespan, time.Now().UTC()))
+	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	return nil
 }
 
-func getExpiresIn(r goauth2.Requester, key goauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
+func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan
 	}

@@ -4,15 +4,15 @@
 package compose
 
 import (
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/handler/pkce"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/pkce"
 )
 
 // OAuth2PKCEFactory creates a PKCE handler.
-func OAuth2PKCEFactory(config goauth2.Configurator, storage any, strategy any) any {
+func OAuth2PKCEFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &pkce.Handler{
-		AuthorizeCodeStrategy: strategy.(oauth2.AuthorizeCodeStrategy),
+		AuthorizeCodeStrategy: strategy.(hoauth2.AuthorizeCodeStrategy),
 		Storage:               storage.(pkce.PKCERequestStorage),
 		Config:                config,
 	}

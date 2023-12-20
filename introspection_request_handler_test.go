@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"context"
@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	. "github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/storage"
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
@@ -78,8 +78,8 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 }
 
 func TestIntrospectionResponse(t *testing.T) {
-	r := &goauth2.IntrospectionResponse{
-		AccessRequester: goauth2.NewAccessRequest(nil),
+	r := &oauth2.IntrospectionResponse{
+		AccessRequester: oauth2.NewAccessRequest(nil),
 		Active:          true,
 	}
 

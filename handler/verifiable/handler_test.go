@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 type mockNonceManager struct{ t *testing.T }
@@ -38,7 +38,7 @@ func TestHandler(t *testing.T) {
 		defer ctrl.Finish()
 
 		req := internal.NewMockAccessRequester(ctrl)
-		req.EXPECT().GetGrantedScopes().Return(goauth2.Arguments{"openid", draftScope}).AnyTimes()
+		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{"openid", draftScope}).AnyTimes()
 
 		resp := internal.NewMockAccessResponder(ctrl)
 		resp.EXPECT().GetAccessToken().Return("fake access token")
@@ -56,18 +56,18 @@ func TestHandler(t *testing.T) {
 		defer ctrl.Finish()
 
 		req := internal.NewMockAccessRequester(ctrl)
-		req.EXPECT().GetGrantedScopes().Return(goauth2.Arguments{"openid"}).AnyTimes()
+		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{"openid"}).AnyTimes()
 
 		resp := internal.NewMockAccessResponder(ctrl)
 
-		assert.ErrorIs(t, handler.HandleTokenEndpointRequest(ctx, req), goauth2.ErrUnknownRequest)
-		assert.ErrorIs(t, handler.PopulateTokenEndpointResponse(ctx, req, resp), goauth2.ErrUnknownRequest)
+		assert.ErrorIs(t, handler.HandleTokenEndpointRequest(ctx, req), oauth2.ErrUnknownRequest)
+		assert.ErrorIs(t, handler.PopulateTokenEndpointResponse(ctx, req, resp), oauth2.ErrUnknownRequest)
 	})
 }
 
 func newHandler(t *testing.T) *Handler {
 	return &Handler{
-		Config:       new(goauth2.Config),
+		Config:       new(oauth2.Config),
 		NonceManager: &mockNonceManager{t: t},
 	}
 }

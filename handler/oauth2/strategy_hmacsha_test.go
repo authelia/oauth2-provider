@@ -11,60 +11,60 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/token/hmac"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/hmac"
 )
 
 var hmacshaStrategy = HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &goauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &goauth2.Config{
+	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+	Config: &oauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
 }
 
-var hmacExpiredCase = goauth2.Request{
-	Client: &goauth2.DefaultClient{
+var hmacExpiredCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &goauth2.DefaultSession{
-		ExpiresAt: map[goauth2.TokenType]time.Time{
-			goauth2.AccessToken:   time.Now().UTC().Add(-time.Hour),
-			goauth2.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
-			goauth2.RefreshToken:  time.Now().UTC().Add(-time.Hour),
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(-time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
+			oauth2.RefreshToken:  time.Now().UTC().Add(-time.Hour),
 		},
 	},
 }
 
-var hmacValidCase = goauth2.Request{
-	Client: &goauth2.DefaultClient{
+var hmacValidCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &goauth2.DefaultSession{
-		ExpiresAt: map[goauth2.TokenType]time.Time{
-			goauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
-			goauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			goauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
 		},
 	},
 }
 
-var hmacValidZeroTimeRefreshCase = goauth2.Request{
-	Client: &goauth2.DefaultClient{
+var hmacValidZeroTimeRefreshCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &goauth2.DefaultSession{
-		ExpiresAt: map[goauth2.TokenType]time.Time{
-			goauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
-			goauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			goauth2.RefreshToken:  {},
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			oauth2.RefreshToken:  {},
 		},
 	},
 }
 
 func TestHMACAccessToken(t *testing.T) {
 	for k, c := range []struct {
-		r    goauth2.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{
@@ -103,7 +103,7 @@ func TestHMACAccessToken(t *testing.T) {
 
 func TestHMACRefreshToken(t *testing.T) {
 	for k, c := range []struct {
-		r    goauth2.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{
@@ -142,7 +142,7 @@ func TestHMACRefreshToken(t *testing.T) {
 
 func TestHMACAuthorizeCode(t *testing.T) {
 	for k, c := range []struct {
-		r    goauth2.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{

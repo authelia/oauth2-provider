@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestIsLocalhost(t *testing.T) {
@@ -32,7 +32,7 @@ func TestIsLocalhost(t *testing.T) {
 		{expect: true, rawurl: "https://test.localhost"},
 	} {
 		u, _ := url.Parse(c.rawurl)
-		assert.Equal(t, c.expect, goauth2.IsLocalhost(u), "case %d", k)
+		assert.Equal(t, c.expect, oauth2.IsLocalhost(u), "case %d", k)
 	}
 }
 
@@ -49,172 +49,172 @@ func TestIsLocalhost(t *testing.T) {
 // of pre-registered redirect URIs (see Section 5.2.3.5).
 func TestDoesClientWhiteListRedirect(t *testing.T) {
 	for k, c := range []struct {
-		client   goauth2.Client
+		client   oauth2.Client
 		url      string
 		isError  bool
 		expected string
 	}{
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{""}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{""}},
 			url:     "https://foo.com/cb",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"wta://auth"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"wta://auth"}},
 			url:      "wta://auth",
 			expected: "wta://auth",
 			isError:  false,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"wta:///auth"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"wta:///auth"}},
 			url:      "wta:///auth",
 			expected: "wta:///auth",
 			isError:  false,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"wta://foo/auth"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"wta://foo/auth"}},
 			url:      "wta://foo/auth",
 			expected: "wta://foo/auth",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
 			url:     "https://foo.com/cb",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
 			url:      "",
 			isError:  false,
 			expected: "https://bar.com/cb",
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{""}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{""}},
 			url:     "",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
 			url:      "https://bar.com/cb",
 			isError:  false,
 			expected: "https://bar.com/cb",
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
 			url:     "https://bar.com/cb123",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
 			url:      "http://[::1]:1024",
 			expected: "http://[::1]:1024",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
 			url:     "http://[::1]:1024/cb",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://[::1]/cb"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]/cb"}},
 			url:      "http://[::1]:1024/cb",
 			expected: "http://[::1]:1024/cb",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
 			url:     "http://foo.bar/bar",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
 			url:      "http://127.0.0.1:1024",
 			expected: "http://127.0.0.1:1024",
 			isError:  false,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/cb"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/cb"}},
 			url:      "http://127.0.0.1:64000/cb",
 			expected: "http://127.0.0.1:64000/cb",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
 			url:     "http://127.0.0.1:64000/cb",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
 			url:      "http://127.0.0.1",
 			expected: "http://127.0.0.1",
 			isError:  false,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/Cb"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/Cb"}},
 			url:      "http://127.0.0.1:8080/Cb",
 			expected: "http://127.0.0.1:8080/Cb",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
 			url:     "http://foo.bar/bar",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
 			url:     ":/invalid.uri)bar",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
 			url:     "http://127.0.0.1:8080/Cb",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
 			url:     "http://127.0.0.1:8080/cb?foo=bar",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
 			url:      "http://127.0.0.1:8080/cb?foo=bar",
 			expected: "http://127.0.0.1:8080/cb?foo=bar",
 			isError:  false,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
 			url:     "http://127.0.0.1:8080/cb?baz=bar&foo=bar",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar&baz=bar"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar&baz=bar"}},
 			url:     "http://127.0.0.1:8080/cb?baz=bar&foo=bar",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"https://www.ory.sh/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"https://www.ory.sh/cb"}},
 			url:     "http://127.0.0.1:8080/cb",
 			isError: true,
 		},
 		{
-			client:  &goauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
 			url:     "https://www.ory.sh/cb",
 			isError: true,
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"web+application://callback"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"web+application://callback"}},
 			url:      "web+application://callback",
 			isError:  false,
 			expected: "web+application://callback",
 		},
 		{
-			client:   &goauth2.DefaultClient{RedirectURIs: []string{"https://google.com/?foo=bar%20foo+baz"}},
+			client:   &oauth2.DefaultClient{RedirectURIs: []string{"https://google.com/?foo=bar%20foo+baz"}},
 			url:      "https://google.com/?foo=bar%20foo+baz",
 			isError:  false,
 			expected: "https://google.com/?foo=bar%20foo+baz",
 		},
 	} {
-		redir, err := goauth2.MatchRedirectURIWithClientRedirectURIs(c.url, c.client)
+		redir, err := oauth2.MatchRedirectURIWithClientRedirectURIs(c.url, c.client)
 		assert.Equal(t, c.isError, err != nil, "%d: %+v", k, c)
 		if err == nil {
 			require.NotNil(t, redir, "%d", k)
@@ -242,7 +242,7 @@ func TestIsRedirectURISecure(t *testing.T) {
 	} {
 		uu, err := url.Parse(c.u)
 		require.NoError(t, err)
-		assert.Equal(t, !c.err, goauth2.IsRedirectURISecure(context.Background(), uu), "case %d", d)
+		assert.Equal(t, !c.err, oauth2.IsRedirectURISecure(context.Background(), uu), "case %d", d)
 	}
 }
 
@@ -283,7 +283,7 @@ func TestWriteAuthorizeFormPostResponse(t *testing.T) {
 		var responseBuffer bytes.Buffer
 
 		redirectURL := "https://localhost:8080/cb"
-		goauth2.WriteAuthorizeFormPostResponse(redirectURL, c.parameters, goauth2.DefaultFormPostTemplate, &responseBuffer)
+		oauth2.WriteAuthorizeFormPostResponse(redirectURL, c.parameters, oauth2.DefaultFormPostTemplate, &responseBuffer)
 		code, state, _, _, customParams, _, err := internal.ParseFormPostResponse(redirectURL, io.NopCloser(bytes.NewReader(responseBuffer.Bytes())))
 		assert.NoError(t, err, "case %d", d)
 		c.check(code, state, customParams, d)
@@ -308,7 +308,7 @@ func TestIsRedirectURISecureStrict(t *testing.T) {
 	} {
 		uu, err := url.Parse(c.u)
 		require.NoError(t, err)
-		assert.Equal(t, !c.err, goauth2.IsRedirectURISecureStrict(uu), "case %d", d)
+		assert.Equal(t, !c.err, oauth2.IsRedirectURISecureStrict(uu), "case %d", d)
 	}
 }
 
@@ -328,7 +328,7 @@ func TestURLSetFragment(t *testing.T) {
 	} {
 		uu, err := url.Parse(c.u)
 		require.NoError(t, err)
-		goauth2.URLSetFragment(uu, c.f)
+		oauth2.URLSetFragment(uu, c.f)
 		tURL, err := url.Parse(uu.String())
 		require.NoError(t, err)
 		r := ParseURLFragment(tURL.Fragment)

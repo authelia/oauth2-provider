@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/integration/clients"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/integration/clients"
 )
 
 type authorizeJWTBearerSuite struct {
@@ -36,7 +36,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithRequiredParamsOnly() {
 			Audience: []string{tokenURL},
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -52,7 +52,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithMultipleAudienceInAsser
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -68,7 +68,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithMultipleScopesInRequest
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2", "gitlab"})
+	}, []string{"oauth2", "gitlab"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -101,7 +101,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithExtraClaim() {
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
 		PrivateClaims: map[string]any{"extraClaim": "extraClaimValue"},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -118,7 +118,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithNotBeforeClaim() {
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -135,7 +135,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseWithJTIClaim() {
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 			ID:       uuid.New().String(),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertSuccessResponse(s.T(), token, err)
 }
@@ -170,7 +170,7 @@ func (s *authorizeJWTBearerSuite) TestBadResponseWithExpiredJWT() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertBadResponse(s.T(), token, err)
 }
@@ -186,7 +186,7 @@ func (s *authorizeJWTBearerSuite) TestBadResponseWithExpiryMaxDuration() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(365 * 24 * time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2"})
+	}, []string{"oauth2"})
 
 	s.assertBadResponse(s.T(), token, err)
 }
@@ -370,7 +370,7 @@ func (s *authorizeJWTBearerSuite) TestBadResponseWithWrongScope() {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
-	}, []string{"goauth2", "permission"})
+	}, []string{"oauth2", "permission"})
 
 	s.assertBadResponse(s.T(), token, err)
 }
@@ -402,7 +402,7 @@ func (s *authorizeJWTBearerSuite) assertBadResponse(t *testing.T, token *clients
 
 func TestAuthorizeJWTBearerSuite(t *testing.T) {
 	provider := compose.Compose(
-		&goauth2.Config{
+		&oauth2.Config{
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: true,
@@ -414,7 +414,7 @@ func TestAuthorizeJWTBearerSuite(t *testing.T) {
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,
 	)
-	testServer := mockServer(t, provider, &goauth2.DefaultSession{})
+	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer testServer.Close()
 
 	client := newJWTBearerAppClient(testServer)

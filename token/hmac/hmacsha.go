@@ -17,15 +17,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type HMACStrategyConfigurator interface {
-	goauth2.TokenEntropyProvider
-	goauth2.GlobalSecretProvider
-	goauth2.RotatedGlobalSecretsProvider
-	goauth2.HMACHashingProvider
+	oauth2.TokenEntropyProvider
+	oauth2.GlobalSecretProvider
+	oauth2.RotatedGlobalSecretsProvider
+	oauth2.HMACHashingProvider
 }
 
 // HMACStrategy is responsible for generating and validating challenges.
@@ -108,7 +108,7 @@ func (c *HMACStrategy) Validate(ctx context.Context, token string) (err error) {
 	for _, key := range keys {
 		if err = c.validate(ctx, key, token); err == nil {
 			return nil
-		} else if errors.Is(err, goauth2.ErrTokenSignatureMismatch) {
+		} else if errors.Is(err, oauth2.ErrTokenSignatureMismatch) {
 		} else {
 			return err
 		}
@@ -131,13 +131,13 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 
 	split := strings.Split(token, ".")
 	if len(split) != 2 {
-		return errorsx.WithStack(goauth2.ErrInvalidTokenFormat)
+		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat)
 	}
 
 	tokenKey := split[0]
 	tokenSignature := split[1]
 	if tokenKey == "" || tokenSignature == "" {
-		return errorsx.WithStack(goauth2.ErrInvalidTokenFormat)
+		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat)
 	}
 
 	decodedTokenSignature, err := b64.DecodeString(tokenSignature)
@@ -153,7 +153,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 	expectedMAC := c.generateHMAC(ctx, decodedTokenKey, &signingKey)
 	if !hmac.Equal(expectedMAC, decodedTokenSignature) {
 		// Hash is invalid
-		return errorsx.WithStack(goauth2.ErrTokenSignatureMismatch)
+		return errorsx.WithStack(oauth2.ErrTokenSignatureMismatch)
 	}
 
 	return nil

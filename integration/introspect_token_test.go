@@ -13,15 +13,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestIntrospectToken(t *testing.T) {
 	for _, c := range []struct {
 		description string
-		strategy    oauth2.AccessTokenStrategy
+		strategy    hoauth2.AccessTokenStrategy
 		factory     compose.Factory
 	}{
 		{
@@ -45,9 +45,9 @@ func TestIntrospectToken(t *testing.T) {
 	}
 }
 
-func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, introspectionFactory compose.Factory) {
-	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
-	ts := mockServer(t, f, &goauth2.DefaultSession{})
+func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, introspectionFactory compose.Factory) {
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
@@ -73,7 +73,7 @@ func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, i
 				return s.Set("Authorization", "bearer "+a.AccessToken)
 			},
 			isActive: true,
-			scopes:   "goauth2",
+			scopes:   "oauth2",
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
@@ -117,7 +117,7 @@ func runIntrospectTokenTest(t *testing.T, strategy oauth2.AccessTokenStrategy, i
 			assert.Len(t, errs, 0)
 			assert.Equal(t, c.isActive, res.Active)
 			if c.isActive {
-				assert.Equal(t, "goauth2", res.Scope)
+				assert.Equal(t, "oauth2", res.Scope)
 				assert.True(t, res.ExpiresAt > 0)
 				assert.True(t, res.IssuedAt > 0)
 				assert.True(t, res.IssuedAt < res.ExpiresAt)

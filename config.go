@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2
+package oauth2
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/authelia/goauth2/i18n"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // AuthorizeCodeLifespanProvider returns the provider for configuring the authorization code lifespan.

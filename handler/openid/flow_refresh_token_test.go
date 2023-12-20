@@ -11,53 +11,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
-	h := &OpenIDConnectRefreshHandler{Config: &goauth2.Config{}}
+	h := &OpenIDConnectRefreshHandler{Config: &oauth2.Config{}}
 	for _, c := range []struct {
-		areq        *goauth2.AccessRequest
+		areq        *oauth2.AccessRequest
 		expectedErr error
 		description string
 	}{
 		{
 			description: "should not pass because grant_type is wrong",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: goauth2.ErrUnknownRequest,
+			expectedErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because grant_type is right but scope is missing",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: goauth2.ErrUnknownRequest,
+			expectedErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because client may not execute this grant type",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client:       &goauth2.DefaultClient{},
+					Client:       &oauth2.DefaultClient{},
 				},
 			},
-			expectedErr: goauth2.ErrUnauthorizedClient,
+			expectedErr: oauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should pass",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &goauth2.DefaultClient{
+					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -84,8 +84,8 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 				return key, nil
 			},
 		},
-		Config: &goauth2.Config{
-			MinParameterEntropy: goauth2.MinParameterEntropy,
+		Config: &oauth2.Config{
+			MinParameterEntropy: oauth2.MinParameterEntropy,
 		},
 	}
 
@@ -93,52 +93,52 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: j,
 		},
-		Config: &goauth2.Config{},
+		Config: &oauth2.Config{},
 	}
 	for _, c := range []struct {
-		areq        *goauth2.AccessRequest
+		areq        *oauth2.AccessRequest
 		expectedErr error
-		check       func(t *testing.T, aresp *goauth2.AccessResponse)
+		check       func(t *testing.T, aresp *oauth2.AccessResponse)
 		description string
 	}{
 		{
 			description: "should not pass because grant_type is wrong",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: goauth2.ErrUnknownRequest,
+			expectedErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should not pass because grant_type is right but scope is missing",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: goauth2.ErrUnknownRequest,
+			expectedErr: oauth2.ErrUnknownRequest,
 		},
 		// Disabled because this is already handled at the authorize_request_handler
 		//{
 		//	description: "should not pass because client may not ask for id_token",
-		//	areq: &goauth2.AccessRequest{
+		//	areq: &oauth2.AccessRequest{
 		//		GrantTypes: []string{"refresh_token"},
-		//		Request: goauth2.Request{
+		//		Request: oauth2.Request{
 		//			GrantedScope: []string{"openid"},
-		//			Client: &goauth2.DefaultClient{
+		//			Client: &oauth2.DefaultClient{
 		//				GrantTypes: []string{"refresh_token"},
 		//			},
 		//		},
 		//	},
-		//	expectedErr: goauth2.ErrUnknownRequest,
+		//	expectedErr: oauth2.ErrUnknownRequest,
 		//},
 		{
 			description: "should pass",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &goauth2.DefaultClient{
+					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -150,7 +150,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
@@ -166,12 +166,12 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		},
 		{
 			description: "should pass",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &goauth2.DefaultClientWithCustomTokenLifespans{
-						DefaultClient: &goauth2.DefaultClient{
+					Client: &oauth2.DefaultClientWithCustomTokenLifespans{
+						DefaultClient: &oauth2.DefaultClient{
 							GrantTypes: []string{"refresh_token"},
 							//ResponseTypes: []string{"id_token"},
 						},
@@ -185,7 +185,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			check: func(t *testing.T, aresp *goauth2.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
@@ -201,11 +201,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		},
 		{
 			description: "should fail because missing subject claim",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &goauth2.DefaultClient{
+					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 						//ResponseTypes: []string{"id_token"},
 					},
@@ -215,24 +215,24 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			expectedErr: goauth2.ErrServerError,
+			expectedErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because missing session",
-			areq: &goauth2.AccessRequest{
+			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"refresh_token"},
-				Request: goauth2.Request{
+				Request: oauth2.Request{
 					GrantedScope: []string{"openid"},
-					Client: &goauth2.DefaultClient{
+					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{"refresh_token"},
 					},
 				},
 			},
-			expectedErr: goauth2.ErrServerError,
+			expectedErr: oauth2.ErrServerError,
 		},
 	} {
 		t.Run("case="+c.description, func(t *testing.T) {
-			aresp := goauth2.NewAccessResponse()
+			aresp := oauth2.NewAccessResponse()
 			err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
 			if c.expectedErr != nil {
 				require.EqualError(t, err, c.expectedErr.Error(), "%v", err)

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
@@ -28,13 +28,13 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 		HandleHelper: &HandleHelper{
 			AccessTokenStorage:  store,
 			AccessTokenStrategy: chgen,
-			Config: &goauth2.Config{
+			Config: &oauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
-		Config: &goauth2.Config{
-			ScopeStrategy:            goauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: goauth2.DefaultAudienceMatchingStrategy,
+		Config: &oauth2.Config{
+			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 		},
 	}
 	for k, c := range []struct {
@@ -45,32 +45,32 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   goauth2.ErrUnknownRequest,
+			expectErr:   oauth2.ErrUnknownRequest,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{""})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{""})
 			},
 		},
 		{
 			description: "should fail because audience not valid",
-			expectErr:   goauth2.ErrInvalidRequest,
+			expectErr:   oauth2.ErrInvalidRequest,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
 				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.ory.sh/not-api"})
-				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"client_credentials"},
 					Audience:   []string{"https://www.ory.sh/api"},
 				})
 			},
 		},
 		{
 			description: "should fail because scope not valid",
-			expectErr:   goauth2.ErrInvalidScope,
+			expectErr:   oauth2.ErrInvalidScope,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
-				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"client_credentials"},
 					Scopes:     []string{"foo"},
 				})
 			},
@@ -78,12 +78,12 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			mock: func() {
-				areq.EXPECT().GetSession().Return(new(goauth2.DefaultSession))
-				areq.EXPECT().GetGrantTypes().Return(goauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetSession().Return(new(oauth2.DefaultSession))
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetRequestedAudience().Return([]string{})
-				areq.EXPECT().GetClient().Return(&goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"client_credentials"},
+				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"client_credentials"},
 					Scopes:     []string{"foo", "bar", "baz"},
 				})
 			},
@@ -105,20 +105,20 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := internal.NewMockClientCredentialsGrantStorage(ctrl)
 	chgen := internal.NewMockAccessTokenStrategy(ctrl)
-	areq := goauth2.NewAccessRequest(new(goauth2.DefaultSession))
-	aresp := goauth2.NewAccessResponse()
+	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
+	aresp := oauth2.NewAccessResponse()
 	defer ctrl.Finish()
 
 	h := ClientCredentialsGrantHandler{
 		HandleHelper: &HandleHelper{
 			AccessTokenStorage:  store,
 			AccessTokenStrategy: chgen,
-			Config: &goauth2.Config{
+			Config: &oauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
 		},
-		Config: &goauth2.Config{
-			ScopeStrategy: goauth2.HierarchicScopeStrategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
 	}
 	for k, c := range []struct {
@@ -129,25 +129,25 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   goauth2.ErrUnknownRequest,
+			expectErr:   oauth2.ErrUnknownRequest,
 			mock: func() {
-				areq.GrantTypes = goauth2.Arguments{""}
+				areq.GrantTypes = oauth2.Arguments{""}
 			},
 		},
 		{
 			description: "should fail because grant_type not allowed",
-			expectErr:   goauth2.ErrUnauthorizedClient,
+			expectErr:   oauth2.ErrUnauthorizedClient,
 			mock: func() {
-				areq.GrantTypes = goauth2.Arguments{"client_credentials"}
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"authorization_code"}}
+				areq.GrantTypes = oauth2.Arguments{"client_credentials"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"authorization_code"}}
 			},
 		},
 		{
 			description: "should pass",
 			mock: func() {
-				areq.GrantTypes = goauth2.Arguments{"client_credentials"}
-				areq.Session = &goauth2.DefaultSession{}
-				areq.Client = &goauth2.DefaultClient{GrantTypes: goauth2.Arguments{"client_credentials"}}
+				areq.GrantTypes = oauth2.Arguments{"client_credentials"}
+				areq.Session = &oauth2.DefaultSession{}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"client_credentials"}}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("tokenfoo.bar", "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},

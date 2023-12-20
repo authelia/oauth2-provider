@@ -17,15 +17,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestAuthorizeImplicitFlow(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runTestAuthorizeImplicitGrant(t, strategy)
@@ -33,24 +33,24 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 }
 
 func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
-	f := compose.Compose(new(goauth2.Config), store, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &goauth2.DefaultSession{})
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
 		description    string
 		setup          func()
 		check          func(t *testing.T, r *http.Response)
-		params         []goauth.AuthCodeOption
+		params         []xoauth2.AuthCodeOption
 		authStatusCode int
 	}{
 		{
 			description: "should fail because of audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
 			setup: func() {
 				state = "12345678901234567890"
 			},
@@ -58,7 +58,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 		},
 		{
 			description: "should fail because of scope",
-			params:      []goauth.AuthCodeOption{},
+			params:      []xoauth2.AuthCodeOption{},
 			setup: func() {
 				oauthClient.Scopes = []string{"not-exist"}
 				state = "12345678901234567890"
@@ -67,18 +67,18 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"goauth2"}
+				oauthClient.Scopes = []string{"oauth2"}
 			},
 			check: func(t *testing.T, r *http.Response) {
-				var b goauth2.AccessRequest
-				b.Client = new(goauth2.DefaultClient)
+				var b oauth2.AccessRequest
+				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, goauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,
@@ -110,7 +110,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 				require.NoError(t, err)
 				expires, err := strconv.Atoi(fragment.Get("expires_in"))
 				require.NoError(t, err)
-				token := &goauth.Token{
+				token := &xoauth2.Token{
 					AccessToken:  fragment.Get("access_token"),
 					TokenType:    fragment.Get("token_type"),
 					RefreshToken: fragment.Get("refresh_token"),

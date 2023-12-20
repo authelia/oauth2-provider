@@ -7,8 +7,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal/errorsx"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 const (
@@ -19,16 +19,16 @@ const (
 
 type Handler struct {
 	Config interface {
-		goauth2.VerifiableCredentialsNonceLifespanProvider
+		oauth2.VerifiableCredentialsNonceLifespanProvider
 	}
 	NonceManager
 }
 
-var _ goauth2.TokenEndpointHandler = (*Handler)(nil)
+var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
 
-func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request goauth2.AccessRequester) error {
+func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
-		return errorsx.WithStack(goauth2.ErrUnknownRequest)
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	return nil
@@ -36,11 +36,11 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request goauth
 
 func (c *Handler) PopulateTokenEndpointResponse(
 	ctx context.Context,
-	request goauth2.AccessRequester,
-	response goauth2.AccessResponder,
+	request oauth2.AccessRequester,
+	response oauth2.AccessResponder,
 ) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
-		return errorsx.WithStack(goauth2.ErrUnknownRequest)
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	lifespan := c.Config.GetVerifiableCredentialsNonceLifespan(ctx)
@@ -56,10 +56,10 @@ func (c *Handler) PopulateTokenEndpointResponse(
 	return nil
 }
 
-func (c *Handler) CanSkipClientAuth(context.Context, goauth2.AccessRequester) bool {
+func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, requester goauth2.AccessRequester) bool {
+func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
 	return requester.GetGrantedScopes().Has("openid", draftScope)
 }

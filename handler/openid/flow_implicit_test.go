@@ -13,19 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/handler/oauth2"
-	"github.com/authelia/goauth2/internal"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/storage"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImplicitHandler {
-	config := &goauth2.Config{
+	config := &oauth2.Config{
 		MinParameterEntropy: minParameterEntropy,
 		AccessTokenLifespan: time.Hour,
-		ScopeStrategy:       goauth2.HierarchicScopeStrategy,
+		ScopeStrategy:       oauth2.HierarchicScopeStrategy,
 	}
 
 	var idStrategy = &DefaultStrategy{
@@ -47,7 +47,7 @@ func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImpl
 	}
 
 	return OpenIDConnectImplicitHandler{
-		AuthorizeImplicitGrantTypeHandler: &oauth2.AuthorizeImplicitGrantTypeHandler{
+		AuthorizeImplicitGrantTypeHandler: &hoauth2.AuthorizeImplicitGrantTypeHandler{
 			Config:              config,
 			AccessTokenStrategy: hmacStrategy,
 			AccessTokenStorage:  storage.NewMemoryStore(),
@@ -64,9 +64,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	aresp := goauth2.NewAuthorizeResponse()
-	areq := goauth2.NewAuthorizeRequest()
-	areq.Session = new(goauth2.DefaultSession)
+	aresp := oauth2.NewAuthorizeResponse()
+	areq := oauth2.NewAuthorizeRequest()
+	areq.Session = new(oauth2.DefaultSession)
 
 	for k, c := range []struct {
 		description string
@@ -77,102 +77,102 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
 				areq.State = "foostate"
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				areq.ResponseTypes = oauth2.Arguments{"token", "id_token"}
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{}
-				areq.GrantedScope = goauth2.Arguments{"openid"}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				areq.ResponseTypes = oauth2.Arguments{}
+				areq.GrantedScope = oauth2.Arguments{"openid"}
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
-				areq.RequestedScope = goauth2.Arguments{"openid"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{},
-					ResponseTypes: goauth2.Arguments{},
-					Scopes:        []string{"openid", "goauth2"},
+				areq.ResponseTypes = oauth2.Arguments{"token", "id_token"}
+				areq.RequestedScope = oauth2.Arguments{"openid"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{},
+					ResponseTypes: oauth2.Arguments{},
+					Scopes:        []string{"openid", "oauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: goauth2.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		// Disabled because this is already handled at the authorize_request_handler
 		//{
 		//	description: "should not do anything because request requirements are not met",
 		//	setup: func() OpenIDConnectImplicitHandler {
-		//		areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
-		//		areq.RequestedScope = goauth2.Arguments{"openid"}
-		//		areq.Client = &goauth2.DefaultClient{
-		//			GrantTypes:    goauth2.Arguments{"implicit"},
-		//			ResponseTypes: goauth2.Arguments{},
-		//			RequestedScope:        []string{"openid", "goauth2"},
+		//		areq.ResponseTypes = oauth2.Arguments{"token", "id_token"}
+		//		areq.RequestedScope = oauth2.Arguments{"openid"}
+		//		areq.Client = &oauth2.DefaultClient{
+		//			GrantTypes:    oauth2.Arguments{"implicit"},
+		//			ResponseTypes: oauth2.Arguments{},
+		//			RequestedScope:        []string{"openid", "oauth2"},
 		//		}
-		//		return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+		//		return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 		//	},
-		//	expectErr: goauth2.ErrInvalidGrant,
+		//	expectErr: oauth2.ErrInvalidGrant,
 		//},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
-				areq.RequestedScope = goauth2.Arguments{"openid"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes: goauth2.Arguments{"implicit"},
-					//ResponseTypes: goauth2.Arguments{"token", "id_token"},
-					Scopes: []string{"openid", "goauth2"},
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
+				areq.RequestedScope = oauth2.Arguments{"openid"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"implicit"},
+					//ResponseTypes: oauth2.Arguments{"token", "id_token"},
+					Scopes: []string{"openid", "oauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: goauth2.ErrInvalidRequest,
+			expectErr: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
 				areq.Form = url.Values{"nonce": {"short"}}
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
-				areq.RequestedScope = goauth2.Arguments{"openid"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{"implicit"},
-					ResponseTypes: goauth2.Arguments{"token", "id_token"},
-					Scopes:        []string{"openid", "goauth2"},
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
+				areq.RequestedScope = oauth2.Arguments{"openid"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{"implicit"},
+					ResponseTypes: oauth2.Arguments{"token", "id_token"},
+					Scopes:        []string{"openid", "oauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: goauth2.ErrInsufficientEntropy,
+			expectErr: oauth2.ErrInsufficientEntropy,
 		},
 		{
 			description: "should fail because session not set",
 			setup: func() OpenIDConnectImplicitHandler {
 				areq.Form = url.Values{"nonce": {"long-enough"}}
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
-				areq.RequestedScope = goauth2.Arguments{"openid"}
-				areq.Client = &goauth2.DefaultClient{
-					GrantTypes:    goauth2.Arguments{"implicit"},
-					ResponseTypes: goauth2.Arguments{"token", "id_token"},
-					Scopes:        []string{"openid", "goauth2"},
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
+				areq.RequestedScope = oauth2.Arguments{"openid"}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{"implicit"},
+					ResponseTypes: oauth2.Arguments{"token", "id_token"},
+					Scopes:        []string{"openid", "oauth2"},
 				}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			expectErr: ErrInvalidSession,
 		},
@@ -187,14 +187,14 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Subject: "peter",
 				}
 				areq.Form.Add("nonce", "some-random-foo-nonce-wow")
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
@@ -209,7 +209,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass with nondefault id token lifespan",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = goauth2.NewAuthorizeResponse()
+				aresp = oauth2.NewAuthorizeResponse()
 				areq.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
@@ -217,16 +217,16 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Headers: &jwt.Headers{},
 					Subject: "peter",
 				}
-				areq.ResponseTypes = goauth2.Arguments{"id_token"}
-				areq.Client = &goauth2.DefaultClientWithCustomTokenLifespans{
-					DefaultClient: &goauth2.DefaultClient{
-						GrantTypes:    goauth2.Arguments{"implicit"},
-						ResponseTypes: goauth2.Arguments{"token", "id_token"},
-						Scopes:        []string{"openid", "goauth2"},
+				areq.ResponseTypes = oauth2.Arguments{"id_token"}
+				areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes:    oauth2.Arguments{"implicit"},
+						ResponseTypes: oauth2.Arguments{"token", "id_token"},
+						Scopes:        []string{"openid", "oauth2"},
 					},
 				}
-				areq.Client.(*goauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				areq.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
 				idToken := aresp.GetParameters().Get("id_token")
@@ -240,9 +240,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = goauth2.NewAuthorizeResponse()
-				areq.ResponseTypes = goauth2.Arguments{"token", "id_token"}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				aresp = oauth2.NewAuthorizeResponse()
+				areq.ResponseTypes = oauth2.Arguments{"token", "id_token"}
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
@@ -252,21 +252,21 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan).UTC(), *internal.ExtractJwtExpClaim(t, idToken), time.Minute)
 
 				assert.NotEmpty(t, aresp.GetParameters().Get("access_token"))
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.Session.GetExpiresAt(goauth2.AccessToken), time.Minute)
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = goauth2.Arguments{"id_token", "token"}
-				areq.RequestedScope = goauth2.Arguments{"goauth2", "openid"}
-				return makeOpenIDConnectImplicitHandler(goauth2.MinParameterEntropy)
+				areq.ResponseTypes = oauth2.Arguments{"id_token", "token"}
+				areq.RequestedScope = oauth2.Arguments{"oauth2", "openid"}
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
 				assert.NotEmpty(t, aresp.GetParameters().Get("id_token"))
 				assert.NotEmpty(t, aresp.GetParameters().Get("state"))
 				assert.NotEmpty(t, aresp.GetParameters().Get("access_token"))
-				assert.Equal(t, goauth2.ResponseModeFragment, areq.GetResponseMode())
+				assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
 			},
 		},
 		{

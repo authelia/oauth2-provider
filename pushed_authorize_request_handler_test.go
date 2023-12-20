@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package goauth2_test
+package oauth2_test
 
 import (
 	"fmt"
@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	. "github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/internal"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 // Should pass

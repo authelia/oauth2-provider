@@ -14,13 +14,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/authelia/goauth2"
-	"github.com/authelia/goauth2/compose"
-	"github.com/authelia/goauth2/handler/openid"
-	"github.com/authelia/goauth2/internal/gen"
-	"github.com/authelia/goauth2/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
@@ -34,12 +34,12 @@ func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
 }
 
 func TestOpenIDConnectExplicitFlow(t *testing.T) {
-	f := compose.ComposeAllEnabled(&goauth2.Config{
+	f := compose.ComposeAllEnabled(&oauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}, store, gen.MustRSAKey())
 
 	for k, c := range []struct {
 		description    string
-		setup          func(oauthClient *oauth2.Config) string
+		setup          func(oauthClient *xoauth2.Config) string
 		authStatusCode int
 		authCodeURL    string
 		session        *defaultSession
@@ -49,7 +49,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		{
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should pass",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=11234123"
 			},
@@ -58,7 +58,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		{
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail registered single redirect uri but no redirect uri in request",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				oauthClient.RedirectURL = ""
 
@@ -70,7 +70,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		{
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail because nonce is not long enough",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1"
 			},
@@ -80,7 +80,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		{
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail because state is not long enough",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("123") + "&nonce=1234567890"
 			},
@@ -94,7 +94,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				AuthTime:    time.Now().Add(time.Second).UTC(),
 			}),
 			description: "should pass",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
@@ -107,7 +107,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				AuthTime:    time.Now().Add(time.Second).UTC(),
 			}),
 			description: "should not pass missing redirect uri",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
@@ -122,7 +122,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				AuthTime:    time.Now().Add(-time.Minute).UTC(),
 			}),
 			description: "should fail because authentication was in the past",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
@@ -136,7 +136,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				AuthTime:    time.Now().Add(-time.Minute).UTC(),
 			}),
 			description: "should pass because authorization was in the past and no login was required",
-			setup: func(oauthClient *oauth2.Config) string {
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=none"
 			},
@@ -148,7 +148,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			defer ts.Close()
 
 			oauthClient := newOAuth2Client(ts)
-			store.Clients["my-client"].(*goauth2.DefaultClient).RedirectURIs = []string{ts.URL + "/callback"}
+			store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs = []string{ts.URL + "/callback"}
 
 			resp, err := http.Get(c.setup(oauthClient))
 			require.NoError(t, err)

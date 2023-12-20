@@ -5,13 +5,12 @@ package openid
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"testing"
 	"time"
 
-	cristaljwt "github.com/cristalhq/jwt/v4"
+	xjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -309,10 +308,14 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				idToken := aresp.GetParameters().Get("id_token")
 				assert.NotEmpty(t, idToken)
 				assert.True(t, areq.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
-				jwt, err := cristaljwt.ParseNoVerify([]byte(idToken))
+
+				parser := xjwt.NewParser()
+
+				claims := &xjwt.RegisteredClaims{}
+
+				_, _, err := parser.ParseUnverified(idToken, claims)
+
 				require.NoError(t, err)
-				claims := &cristaljwt.RegisteredClaims{}
-				require.NoError(t, json.Unmarshal(jwt.Claims(), claims))
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.ExpiresAt.Time, time.Minute)
 
 				assert.NotEmpty(t, aresp.GetParameters().Get("access_token"))

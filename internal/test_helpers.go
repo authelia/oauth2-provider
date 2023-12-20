@@ -4,7 +4,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	cristaljwt "github.com/cristalhq/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 	xoauth2 "golang.org/x/oauth2"
@@ -61,13 +60,17 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 }
 
 func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
-	jwt, err := cristaljwt.ParseNoVerify([]byte(token))
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+
+	claims := &jwt.RegisteredClaims{}
+
+	_, _, err := parser.ParseUnverified(token, claims)
 	require.NoError(t, err)
-	claims := &cristaljwt.RegisteredClaims{}
-	require.NoError(t, json.Unmarshal(jwt.Claims(), claims))
+
 	if claims.ExpiresAt == nil {
 		return nil
 	}
+
 	return &claims.ExpiresAt.Time
 }
 

@@ -6,9 +6,10 @@ package oauth2_test
 import (
 	"testing"
 
-	"github.com/oleiade/reflections"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/internal/reflection"
 )
 
 func TestAssertObjectsAreEqualByKeys(t *testing.T) {
@@ -28,9 +29,9 @@ func TestAssertObjectsAreEqualByKeys(t *testing.T) {
 func AssertObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 	assert.True(t, len(keys) > 0, "No key provided.")
 	for _, k := range keys {
-		c, err := reflections.GetField(a, k)
+		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
-		d, err := reflections.GetField(b, k)
+		d, err := reflection.GetField(b, k)
 		assert.NoError(t, err)
 		assert.Equal(t, c, d, "field: %s", k)
 	}
@@ -39,9 +40,9 @@ func AssertObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 func AssertObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
 	assert.True(t, len(keys) > 0, "No key provided.")
 	for _, k := range keys {
-		c, err := reflections.GetField(a, k)
+		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
-		d, err := reflections.GetField(b, k)
+		d, err := reflection.GetField(b, k)
 		assert.NoError(t, err)
 		assert.NotEqual(t, c, d, "%s", k)
 	}
@@ -50,9 +51,9 @@ func AssertObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
 func RequireObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 	assert.True(t, len(keys) > 0, "No key provided.")
 	for _, k := range keys {
-		c, err := reflections.GetField(a, k)
+		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
-		d, err := reflections.GetField(b, k)
+		d, err := reflection.GetField(b, k)
 		assert.NoError(t, err)
 		require.Equal(t, c, d, "%s", k)
 	}
@@ -61,9 +62,9 @@ func RequireObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 func RequireObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
 	assert.True(t, len(keys) > 0, "No key provided.")
 	for _, k := range keys {
-		c, err := reflections.GetField(a, k)
+		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
-		d, err := reflections.GetField(b, k)
+		d, err := reflection.GetField(b, k)
 		assert.NoError(t, err)
 		require.NotEqual(t, c, d, "%s", k)
 	}

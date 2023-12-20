@@ -65,7 +65,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
 		Scopes:        []string{"oauth2", "offline", "openid"},
-		Audience:      []string{"https://www.ory.sh/api"},
+		Audience:      []string{"https://www.authelia.com/api"},
 	}
 
 	store.Clients["refresh-client"] = refreshCheckClient
@@ -101,7 +101,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		},
 		{
 			description: "should pass and yield id token",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
 				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
 			},
@@ -146,14 +146,14 @@ func TestRefreshTokenFlow(t *testing.T) {
 		},
 		{
 			description: "should fail because audience is no longer allowed",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
 				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
 				refreshCheckClient.Scopes = []string{"oauth2", "offline", "openid"}
 			},
 			beforeRefresh: func(t *testing.T) {
-				refreshCheckClient.Audience = []string{"https://www.not-ory.sh/api"}
+				refreshCheckClient.Audience = []string{"https://https://www.not-authelia.com//api"}
 			},
 			pass: false,
 		},

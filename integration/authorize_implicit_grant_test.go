@@ -50,7 +50,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 	}{
 		{
 			description: "should fail because of audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/not-api")},
 			setup: func() {
 				state = "12345678901234567890"
 			},
@@ -67,7 +67,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"oauth2"}
@@ -77,8 +77,8 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,

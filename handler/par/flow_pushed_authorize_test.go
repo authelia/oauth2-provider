@@ -81,9 +81,9 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &oauth2.DefaultClient{
 						ResponseTypes: oauth2.Arguments{"code"},
 						RedirectURIs:  []string{"https://asdf.com/cb"},
-						Audience:      []string{"https://www.ory.sh/api"},
+						Audience:      []string{"https://www.authelia.com/api"},
 					},
-					RequestedAudience: []string{"https://www.ory.sh/not-api"},
+					RequestedAudience: []string{"https://www.authelia.com/not-api"},
 				},
 				RedirectURI: parseURL("https://asdf.com/cb"),
 			},
@@ -98,9 +98,9 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &oauth2.DefaultClient{
 						ResponseTypes: oauth2.Arguments{"code"},
 						RedirectURIs:  []string{"https://asdf.de/cb"},
-						Audience:      []string{"https://www.ory.sh/api"},
+						Audience:      []string{"https://www.authelia.com/api"},
 					},
-					RequestedAudience: []string{"https://www.ory.sh/api"},
+					RequestedAudience: []string{"https://www.authelia.com/api"},
 					GrantedScope:      oauth2.Arguments{"a", "b"},
 					Session: &oauth2.DefaultSession{
 						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},

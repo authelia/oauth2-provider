@@ -56,10 +56,10 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			mock: func() {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
-				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.ory.sh/not-api"})
+				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.authelia.com/not-api"})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"client_credentials"},
-					Audience:   []string{"https://www.ory.sh/api"},
+					Audience:   []string{"https://www.authelia.com/api"},
 				})
 			},
 		},

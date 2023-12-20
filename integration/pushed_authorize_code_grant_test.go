@@ -50,7 +50,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	}{
 		{
 			description: "should fail because of audience",
-			params:      map[string]string{"audience": "https://www.ory.sh/not-api"},
+			params:      map[string]string{"audience": "https://www.authelia.com/not-api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
@@ -71,7 +71,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      map[string]string{"audience": "https://www.ory.sh/api"},
+			params:      map[string]string{"audience": "https://www.authelia.com/api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
@@ -81,8 +81,8 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			parStatusCode:  http.StatusCreated,

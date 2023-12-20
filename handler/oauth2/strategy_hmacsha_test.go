@@ -80,11 +80,11 @@ func TestHMACAccessToken(t *testing.T) {
 			token, signature, err := hmacshaStrategy.GenerateAccessToken(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
-			assert.Contains(t, token, "ory_at_")
+			assert.Contains(t, token, "authelia_at_")
 
 			for k, token := range []string{
 				token,
-				strings.TrimPrefix(token, "ory_at_"),
+				strings.TrimPrefix(token, "authelia_at_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
 					err = hmacshaStrategy.ValidateAccessToken(nil, &c.r, token)
@@ -119,11 +119,11 @@ func TestHMACRefreshToken(t *testing.T) {
 			token, signature, err := hmacshaStrategy.GenerateRefreshToken(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
-			assert.Contains(t, token, "ory_rt_")
+			assert.Contains(t, token, "authelia_rt_")
 
 			for k, token := range []string{
 				token,
-				strings.TrimPrefix(token, "ory_rt_"),
+				strings.TrimPrefix(token, "authelia_rt_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
 					err = hmacshaStrategy.ValidateRefreshToken(nil, &c.r, token)
@@ -158,11 +158,11 @@ func TestHMACAuthorizeCode(t *testing.T) {
 			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
-			assert.Contains(t, token, "ory_ac_")
+			assert.Contains(t, token, "authelia_ac_")
 
 			for k, token := range []string{
 				token,
-				strings.TrimPrefix(token, "ory_ac_"),
+				strings.TrimPrefix(token, "authelia_ac_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
 					err = hmacshaStrategy.ValidateAuthorizeCode(nil, &c.r, token)

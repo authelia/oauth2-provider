@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"github.com/go-jose/go-jose/v3"
@@ -54,7 +54,7 @@ type OpenIDConnectClient interface {
 	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
 	GetJSONWebKeys() *jose.JSONWebKeySet
 
-	// GetJSONWebKeys returns the URL for lookup of JSON Web Key Set containing the
+	// GetJSONWebKeysURI returns the URL for lookup of JSON Web Key Set containing the
 	// public key used by the client to authenticate.
 	GetJSONWebKeysURI() string
 
@@ -73,7 +73,7 @@ type OpenIDConnectClient interface {
 
 // ResponseModeClient represents a client capable of handling response_mode
 type ResponseModeClient interface {
-	// GetResponseMode returns the response modes that client is allowed to send
+	// GetResponseModes returns the response modes that client is allowed to send
 	GetResponseModes() []ResponseModeType
 }
 
@@ -142,7 +142,8 @@ func (c *DefaultClient) GetGrantTypes() Arguments {
 	if len(c.GrantTypes) == 0 {
 		return Arguments{"authorization_code"}
 	}
-	return Arguments(c.GrantTypes)
+
+	return c.GrantTypes
 }
 
 func (c *DefaultClient) GetResponseTypes() Arguments {
@@ -154,7 +155,8 @@ func (c *DefaultClient) GetResponseTypes() Arguments {
 	if len(c.ResponseTypes) == 0 {
 		return Arguments{"code"}
 	}
-	return Arguments(c.ResponseTypes)
+
+	return c.ResponseTypes
 }
 
 func (c *DefaultOpenIDConnectClient) GetJSONWebKeysURI() string {

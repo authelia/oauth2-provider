@@ -13,10 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite/storage"
-
-	"github.com/ory/fosite"
-	. "github.com/ory/fosite/handler/par"
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/handler/par"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func parseURL(uu string) *url.URL {
@@ -29,58 +28,58 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 	store := storage.NewMemoryStore()
 	handler := PushedAuthorizeHandler{
 		Storage: store,
-		Config: &fosite.Config{
+		Config: &oauth2.Config{
 			PushedAuthorizeContextLifespan:  30 * time.Minute,
 			PushedAuthorizeRequestURIPrefix: requestURIPrefix,
-			ScopeStrategy:                   fosite.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:        fosite.DefaultAudienceMatchingStrategy,
+			ScopeStrategy:                   oauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy:        oauth2.DefaultAudienceMatchingStrategy,
 		},
 	}
 	for _, c := range []struct {
 		handler     PushedAuthorizeHandler
-		areq        *fosite.AuthorizeRequest
+		areq        *oauth2.AuthorizeRequest
 		description string
 		expectErr   error
-		expect      func(t *testing.T, areq *fosite.AuthorizeRequest, aresp *fosite.PushedAuthorizeResponse)
+		expect      func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse)
 	}{
 		{
 			handler: handler,
-			areq: &fosite.AuthorizeRequest{
-				ResponseTypes: fosite.Arguments{""},
-				Request:       *fosite.NewRequest(),
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{""},
+				Request:       *oauth2.NewRequest(),
 			},
 			description: "should pass because not responsible for handling an empty response type",
 		},
 		{
 			handler: handler,
-			areq: &fosite.AuthorizeRequest{
-				ResponseTypes: fosite.Arguments{"foo"},
-				Request:       *fosite.NewRequest(),
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"foo"},
+				Request:       *oauth2.NewRequest(),
 			},
 			description: "should pass because not responsible for handling an invalid response type",
 		},
 		{
 			handler: handler,
-			areq: &fosite.AuthorizeRequest{
-				ResponseTypes: fosite.Arguments{"code"},
-				Request: fosite.Request{
-					Client: &fosite.DefaultClient{
-						ResponseTypes: fosite.Arguments{"code"},
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"code"},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{"code"},
 						RedirectURIs:  []string{"http://asdf.com/cb"},
 					},
 				},
 				RedirectURI: parseURL("http://asdf.com/cb"),
 			},
 			description: "should fail because redirect uri is not https",
-			expectErr:   fosite.ErrInvalidRequest,
+			expectErr:   oauth2.ErrInvalidRequest,
 		},
 		{
 			handler: handler,
-			areq: &fosite.AuthorizeRequest{
-				ResponseTypes: fosite.Arguments{"code"},
-				Request: fosite.Request{
-					Client: &fosite.DefaultClient{
-						ResponseTypes: fosite.Arguments{"code"},
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"code"},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{"code"},
 						RedirectURIs:  []string{"https://asdf.com/cb"},
 						Audience:      []string{"https://www.ory.sh/api"},
 					},
@@ -89,22 +88,22 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				RedirectURI: parseURL("https://asdf.com/cb"),
 			},
 			description: "should fail because audience doesn't match",
-			expectErr:   fosite.ErrInvalidRequest,
+			expectErr:   oauth2.ErrInvalidRequest,
 		},
 		{
 			handler: handler,
-			areq: &fosite.AuthorizeRequest{
-				ResponseTypes: fosite.Arguments{"code"},
-				Request: fosite.Request{
-					Client: &fosite.DefaultClient{
-						ResponseTypes: fosite.Arguments{"code"},
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"code"},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{"code"},
 						RedirectURIs:  []string{"https://asdf.de/cb"},
 						Audience:      []string{"https://www.ory.sh/api"},
 					},
 					RequestedAudience: []string{"https://www.ory.sh/api"},
-					GrantedScope:      fosite.Arguments{"a", "b"},
-					Session: &fosite.DefaultSession{
-						ExpiresAt: map[fosite.TokenType]time.Time{fosite.AccessToken: time.Now().UTC().Add(time.Hour)},
+					GrantedScope:      oauth2.Arguments{"a", "b"},
+					Session: &oauth2.DefaultSession{
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 					},
 					RequestedAt: time.Now().UTC(),
 				},
@@ -112,7 +111,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				RedirectURI: parseURL("https://asdf.de/cb"),
 			},
 			description: "should pass",
-			expect: func(t *testing.T, areq *fosite.AuthorizeRequest, aresp *fosite.PushedAuthorizeResponse) {
+			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
 				requestURI := aresp.RequestURI
 				assert.NotEmpty(t, requestURI)
 				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
@@ -120,7 +119,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 		},
 	} {
 		t.Run("case="+c.description, func(t *testing.T) {
-			aresp := &fosite.PushedAuthorizeResponse{}
+			aresp := &oauth2.PushedAuthorizeResponse{}
 			err := c.handler.HandlePushedAuthorizeEndpointRequest(context.Background(), c.areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

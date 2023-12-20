@@ -1,18 +1,16 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
 	"net/http"
 	"strings"
 
-	"github.com/ory/x/errorsx"
-	"github.com/ory/x/otelx"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/pkg/errors"
+
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type TokenIntrospector interface {
@@ -38,10 +36,7 @@ func AccessTokenFromRequest(req *http.Request) string {
 	return split[1]
 }
 
-func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (_ TokenUse, _ AccessRequester, err error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer("github.com/ory/fosite").Start(ctx, "Fosite.IntrospectToken")
-	defer otelx.End(span, &err)
-
+func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (TokenUse, AccessRequester, error) {
 	var found = false
 	var foundTokenUse TokenUse = ""
 

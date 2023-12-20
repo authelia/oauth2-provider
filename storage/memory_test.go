@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
 )
 
 func TestMemoryStore_Authenticate(t *testing.T) {
@@ -43,7 +43,7 @@ func TestMemoryStore_Authenticate(t *testing.T) {
 				},
 			},
 			// ResourceOwnerPasswordCredentialsGrantHandler expects ErrNotFound
-			wantErr: fosite.ErrNotFound,
+			wantErr: oauth2.ErrNotFound,
 		},
 	}
 	for _, tt := range tests {

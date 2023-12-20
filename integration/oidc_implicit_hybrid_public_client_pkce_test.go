@@ -12,17 +12,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
@@ -34,9 +33,9 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	f := compose.ComposeAllEnabled(&fosite.Config{
+	f := compose.ComposeAllEnabled(&oauth2.Config{
 		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
-	}, fositeStore, gen.MustRSAKey())
+	}, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
@@ -46,7 +45,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 	oauthClient.ClientID = "public-client"
 	oauthClient.Scopes = []string{"openid"}
 
-	fositeStore.Clients["public-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state = "12345678901234567890"
 	for k, c := range []struct {
@@ -79,6 +78,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 					return errors.New("Dont follow redirects")
 				},
 			}
+
 			resp, err := client.Get(authURL)
 			require.Error(t, err)
 
@@ -105,7 +105,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, resp.StatusCode, http.StatusOK)
-			token := goauth.Token{}
+			token := xoauth2.Token{}
 			require.NoError(t, json.Unmarshal(body, &token))
 
 			require.NotEmpty(t, token.AccessToken, "Got body: %s", string(body))

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"time"
@@ -14,12 +14,12 @@ import (
 type Session interface {
 	// SetExpiresAt sets the expiration time of a token.
 	//
-	//  session.SetExpiresAt(fosite.AccessToken, time.Now().UTC().Add(time.Hour))
+	//  session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
 	SetExpiresAt(key TokenType, exp time.Time)
 
 	// GetExpiresAt returns the expiration time of a token if set, or time.IsZero() if not.
 	//
-	//  session.GetExpiresAt(fosite.AccessToken)
+	//  session.GetExpiresAt(oauth2.AccessToken)
 	GetExpiresAt(key TokenType) time.Time
 
 	// GetUsername returns the username, if set. This is optional and only used during token introspection.
@@ -37,7 +37,7 @@ type DefaultSession struct {
 	ExpiresAt map[TokenType]time.Time `json:"expires_at"`
 	Username  string                  `json:"username"`
 	Subject   string                  `json:"subject"`
-	Extra     map[string]interface{}  `json:"extra"`
+	Extra     map[string]any          `json:"extra"`
 }
 
 func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
@@ -86,18 +86,18 @@ func (s *DefaultSession) Clone() Session {
 type ExtraClaimsSession interface {
 	// GetExtraClaims returns a map to store extra claims.
 	// The returned value can be modified in-place.
-	GetExtraClaims() map[string]interface{}
+	GetExtraClaims() map[string]any
 }
 
 // GetExtraClaims implements ExtraClaimsSession for DefaultSession.
 // The returned value can be modified in-place.
-func (s *DefaultSession) GetExtraClaims() map[string]interface{} {
+func (s *DefaultSession) GetExtraClaims() map[string]any {
 	if s == nil {
 		return nil
 	}
 
 	if s.Extra == nil {
-		s.Extra = make(map[string]interface{})
+		s.Extra = make(map[string]any)
 	}
 
 	return s.Extra

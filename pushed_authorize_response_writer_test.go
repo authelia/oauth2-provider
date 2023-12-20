@@ -1,18 +1,18 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	. "github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/internal"
 )
 
 func TestNewPushedAuthorizeResponse(t *testing.T) {
@@ -22,7 +22,7 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	oauth2 := &Fosite{
+	provider := &Fosite{
 		Config: &Config{
 			PushedAuthorizeEndpointHandlers: PushedAuthorizeEndpointHandlers{handlers[0]},
 		},
@@ -49,7 +49,7 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 		},
 	} {
 		c.mock()
-		responder, err := oauth2.NewPushedAuthorizeResponse(ctx, ar, new(DefaultSession))
+		responder, err := provider.NewPushedAuthorizeResponse(ctx, ar, new(DefaultSession))
 		assert.Equal(t, c.isErr, err != nil, "%d: %s", k, err)
 		if err != nil {
 			assert.Equal(t, c.expectErr, err, "%d: %s", k, err)

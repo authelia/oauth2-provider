@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -12,9 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ory/x/errorsx"
-
-	"github.com/asaskevich/govalidator"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/urls"
 )
 
 var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<html>
@@ -24,9 +23,9 @@ var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<ht
    <body onload="javascript:document.forms[0].submit()">
       <form method="post" action="{{ .RedirURL }}">
          {{ range $key,$value := .Parameters }}
-            {{ range $parameter:= $value}}
-		      <input type="hidden" name="{{$key}}" value="{{$parameter}}"/>
-            {{end}}
+            {{ range $parameter:= $value }}
+		      <input type="hidden" name="{{ $key }}" value="{{ $parameter }}"/>
+            {{ end }}
          {{ end }}
       </form>
    </body>
@@ -161,7 +160,7 @@ func isLoopbackAddress(address string) bool {
 //   - https://tools.ietf.org/html/rfc6819#section-5.1.1
 func IsValidRedirectURI(redirectURI *url.URL) bool {
 	// We need to explicitly check for a scheme
-	if !govalidator.IsRequestURL(redirectURI.String()) {
+	if !urls.IsRequestURL(redirectURI.String()) {
 		return false
 	}
 

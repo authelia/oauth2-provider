@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -11,12 +11,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestNewRevocationRequest(t *testing.T) {
@@ -26,9 +26,11 @@ func TestNewRevocationRequest(t *testing.T) {
 	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
+	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -85,7 +87,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Secret = []byte("foo")
 				client.Public = false
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
 			},
 		},
 		{
@@ -101,7 +103,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Secret = []byte("foo")
 				client.Public = false
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -120,7 +122,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Secret = []byte("foo")
 				client.Public = false
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -156,7 +158,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Secret = []byte("foo")
 				client.Public = false
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -175,7 +177,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Secret = []byte("foo")
 				client.Public = false
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -191,7 +193,7 @@ func TestNewRevocationRequest(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.RevocationHandlers = c.handlers
-			err := fosite.NewRevocationRequest(ctx, r)
+			err := provider.NewRevocationRequest(ctx, r)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -209,7 +211,7 @@ func TestWriteRevocationResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := &Config{ClientSecretsHasher: hasher}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 
 	type args struct {
 		rw  *httptest.ResponseRecorder
@@ -243,7 +245,7 @@ func TestWriteRevocationResponse(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		fosite.WriteRevocationResponse(context.Background(), tc.input.rw, tc.input.err)
+		provider.WriteRevocationResponse(context.Background(), tc.input.rw, tc.input.err)
 		assert.Equal(t, tc.expectCode, tc.input.rw.Code)
 	}
 }

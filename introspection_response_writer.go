@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -186,7 +186,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"active": true,
 	}
 

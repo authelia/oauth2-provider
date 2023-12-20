@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -51,7 +51,9 @@ func NewDefaultResponseModeHandler() *DefaultResponseModeHandler {
 type DefaultResponseModeHandler struct{}
 
 func (d *DefaultResponseModeHandler) ResponseModes() ResponseModeTypes { return nil }
+
 func (d *DefaultResponseModeHandler) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, resp AuthorizeResponder) {
 }
+
 func (d *DefaultResponseModeHandler) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error) {
 }

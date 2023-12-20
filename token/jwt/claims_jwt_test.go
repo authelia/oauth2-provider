@@ -9,26 +9,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/ory/fosite/token/jwt"
+	. "authelia.com/provider/oauth2/token/jwt"
 )
 
 var jwtClaims = &JWTClaims{
 	Subject:   "peter",
 	IssuedAt:  time.Now().UTC().Round(time.Second),
-	Issuer:    "fosite",
+	Issuer:    "authelia",
 	NotBefore: time.Now().UTC().Round(time.Second),
 	Audience:  []string{"tests"},
 	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),
 	JTI:       "abcdef",
 	Scope:     []string{"email", "offline"},
-	Extra: map[string]interface{}{
+	Extra: map[string]any{
 		"foo": "bar",
 		"baz": "bar",
 	},
 	ScopeField: JWTScopeFieldList,
 }
 
-var jwtClaimsMap = map[string]interface{}{
+var jwtClaimsMap = map[string]any{
 	"sub": jwtClaims.Subject,
 	"iat": jwtClaims.IssuedAt.Unix(),
 	"iss": jwtClaims.Issuer,
@@ -79,7 +79,7 @@ func TestScopeFieldString(t *testing.T) {
 	jwtClaimsMapWithString := jwtClaims.ToMap()
 	delete(jwtClaimsMapWithString, "scp")
 	jwtClaimsMapWithString["scope"] = "email offline"
-	assert.Equal(t, jwtClaimsMapWithString, map[string]interface{}(jwtClaimsWithString.ToMapClaims()))
+	assert.Equal(t, jwtClaimsMapWithString, map[string]any(jwtClaimsWithString.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithString)
 	assert.Equal(t, jwtClaimsWithString, &claims)
@@ -90,7 +90,7 @@ func TestScopeFieldBoth(t *testing.T) {
 	// Making a copy of jwtClaimsMap
 	jwtClaimsMapWithBoth := jwtClaims.ToMap()
 	jwtClaimsMapWithBoth["scope"] = "email offline"
-	assert.Equal(t, jwtClaimsMapWithBoth, map[string]interface{}(jwtClaimsWithBoth.ToMapClaims()))
+	assert.Equal(t, jwtClaimsMapWithBoth, map[string]any(jwtClaimsWithBoth.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithBoth)
 	assert.Equal(t, jwtClaimsWithBoth, &claims)

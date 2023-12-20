@@ -6,7 +6,7 @@ package oauth2
 import (
 	"context"
 
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
 )
 
 type CoreStrategy interface {
@@ -17,18 +17,18 @@ type CoreStrategy interface {
 
 type AccessTokenStrategy interface {
 	AccessTokenSignature(ctx context.Context, token string) string
-	GenerateAccessToken(ctx context.Context, requester fosite.Requester) (token string, signature string, err error)
-	ValidateAccessToken(ctx context.Context, requester fosite.Requester, token string) (err error)
+	GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	ValidateAccessToken(ctx context.Context, requester oauth2.Requester, token string) (err error)
 }
 
 type RefreshTokenStrategy interface {
 	RefreshTokenSignature(ctx context.Context, token string) string
-	GenerateRefreshToken(ctx context.Context, requester fosite.Requester) (token string, signature string, err error)
-	ValidateRefreshToken(ctx context.Context, requester fosite.Requester, token string) (err error)
+	GenerateRefreshToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	ValidateRefreshToken(ctx context.Context, requester oauth2.Requester, token string) (err error)
 }
 
 type AuthorizeCodeStrategy interface {
 	AuthorizeCodeSignature(ctx context.Context, token string) string
-	GenerateAuthorizeCode(ctx context.Context, requester fosite.Requester) (token string, signature string, err error)
-	ValidateAuthorizeCode(ctx context.Context, requester fosite.Requester, token string) (err error)
+	GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) (err error)
 }

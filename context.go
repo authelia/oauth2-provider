@@ -1,9 +1,11 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
-import "context"
+import (
+	"context"
+)
 
 func NewContext() context.Context {
 	return context.Background()

@@ -1,16 +1,18 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // PushedAuthorizeResponse is the response object for PAR
 type PushedAuthorizeResponse struct {
 	RequestURI string `json:"request_uri"`
 	ExpiresIn  int    `json:"expires_in"`
 	Header     http.Header
-	Extra      map[string]interface{}
+	Extra      map[string]any
 }
 
 // GetRequestURI gets
@@ -44,17 +46,17 @@ func (a *PushedAuthorizeResponse) AddHeader(key, value string) {
 }
 
 // SetExtra sets
-func (a *PushedAuthorizeResponse) SetExtra(key string, value interface{}) {
+func (a *PushedAuthorizeResponse) SetExtra(key string, value any) {
 	a.Extra[key] = value
 }
 
 // GetExtra gets
-func (a *PushedAuthorizeResponse) GetExtra(key string) interface{} {
+func (a *PushedAuthorizeResponse) GetExtra(key string) any {
 	return a.Extra[key]
 }
 
 // ToMap converts to a map
-func (a *PushedAuthorizeResponse) ToMap() map[string]interface{} {
+func (a *PushedAuthorizeResponse) ToMap() map[string]any {
 	a.Extra["request_uri"] = a.RequestURI
 	a.Extra["expires_in"] = a.ExpiresIn
 	return a.Extra

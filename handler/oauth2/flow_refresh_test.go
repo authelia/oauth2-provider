@@ -10,24 +10,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-
-	"github.com/ory/fosite/internal"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
-	var areq *fosite.AccessRequest
-	sess := &fosite.DefaultSession{Subject: "othersub"}
-	expiredSess := &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.RefreshToken: time.Now().UTC().Add(-time.Hour),
+	var areq *oauth2.AccessRequest
+	sess := &oauth2.DefaultSession{Subject: "othersub"}
+	expiredSess := &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.RefreshToken: time.Now().UTC().Add(-time.Hour),
 		},
 	}
 
@@ -39,130 +37,130 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 			var handler *RefreshTokenGrantHandler
 			for _, c := range []struct {
 				description string
-				setup       func(config *fosite.Config)
+				setup       func(config *oauth2.Config)
 				expectErr   error
 				expect      func(t *testing.T)
 			}{
 				{
 					description: "should fail because not responsible",
-					expectErr:   fosite.ErrUnknownRequest,
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"123"}
+					expectErr:   oauth2.ErrUnknownRequest,
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"123"}
 					},
 				},
 				{
 					description: "should fail because token invalid",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"refresh_token"}}
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"refresh_token"}}
 
 						areq.Form.Add("refresh_token", "some.refreshtokensig")
 					},
-					expectErr: fosite.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because token is valid but does not exist",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"refresh_token"}}
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"refresh_token"}}
 
-						token, _, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, _, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 						areq.Form.Add("refresh_token", token)
 					},
-					expectErr: fosite.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because client mismatches",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
-							Client:       &fosite.DefaultClient{ID: ""},
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
+							Client:       &oauth2.DefaultClient{ID: ""},
 							GrantedScope: []string{"offline"},
 							Session:      sess,
 						})
 						require.NoError(t, err)
 					},
-					expectErr: fosite.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because token is expired",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo", "offline"},
-							RequestedScope: fosite.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
 							Session:        expiredSess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
 						})
 						require.NoError(t, err)
 					},
-					expectErr: fosite.ErrInvalidGrant,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because offline scope has been granted but client no longer allowed to request it",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo", "offline"},
-							RequestedScope: fosite.Arguments{"foo", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "offline"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
 						})
 						require.NoError(t, err)
 					},
-					expectErr: fosite.ErrInvalidScope,
+					expectErr: oauth2.ErrInvalidScope,
 				},
 				{
 					description: "should pass",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo", "offline"},
-							RequestedScope: fosite.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -172,35 +170,35 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
-						assert.Equal(t, fosite.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, fosite.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.RefreshToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 				},
 				{
 					description: "should pass with custom client lifespans",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClientWithCustomTokenLifespans{
-							DefaultClient: &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+							DefaultClient: &oauth2.DefaultClient{
 								ID:         "foo",
-								GrantTypes: fosite.Arguments{"refresh_token"},
+								GrantTypes: oauth2.Arguments{"refresh_token"},
 								Scopes:     []string{"foo", "bar", "offline"},
 							},
 						}
 
-						areq.Client.(*fosite.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+						areq.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo", "offline"},
-							RequestedScope: fosite.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -210,58 +208,58 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
-						assert.Equal(t, fosite.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, fosite.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
-						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantAccessTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(fosite.AccessToken), time.Minute)
-						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantRefreshTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(fosite.RefreshToken), time.Minute)
+						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantAccessTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.AccessToken), time.Minute)
+						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantRefreshTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.RefreshToken), time.Minute)
 					},
 				},
 				{
 					description: "should fail without offline scope",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 							Scopes:     []string{"foo", "bar"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo"},
-							RequestedScope: fosite.Arguments{"foo", "bar"},
+							GrantedScope:   oauth2.Arguments{"foo"},
+							RequestedScope: oauth2.Arguments{"foo", "bar"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
 						})
 						require.NoError(t, err)
 					},
-					expectErr: fosite.ErrScopeNotGranted,
+					expectErr: oauth2.ErrScopeNotGranted,
 				},
 				{
 					description: "should pass without offline scope when configured to allow refresh tokens",
-					setup: func(config *fosite.Config) {
+					setup: func(config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 							Scopes:     []string{"foo", "bar"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						err = store.CreateRefreshTokenSession(context.Background(), sig, &fosite.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo"},
-							RequestedScope: fosite.Arguments{"foo", "bar"},
+							GrantedScope:   oauth2.Arguments{"foo"},
+							RequestedScope: oauth2.Arguments{"foo", "bar"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -271,50 +269,50 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
-						assert.Equal(t, fosite.Arguments{"foo"}, areq.GrantedScope)
-						assert.Equal(t, fosite.Arguments{"foo", "bar"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo"}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.RefreshToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 				},
 				{
 					description: "should deny access on token reuse",
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.Client = &fosite.DefaultClient{
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: fosite.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{"refresh_token"},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
-						req := &fosite.Request{
+						req := &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   fosite.Arguments{"foo", "offline"},
-							RequestedScope: fosite.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
 						}
-						err = store.CreateRefreshTokenSession(context.Background(), sig, req)
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, req)
 						require.NoError(t, err)
 
-						err = store.RevokeRefreshToken(context.Background(), req.ID)
+						err = store.RevokeRefreshToken(context.TODO(), req.ID)
 						require.NoError(t, err)
 					},
-					expectErr: fosite.ErrInactiveToken,
+					expectErr: oauth2.ErrInactiveToken,
 				},
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
-					config := &fosite.Config{
+					config := &oauth2.Config{
 						AccessTokenLifespan:      time.Hour,
 						RefreshTokenLifespan:     time.Hour,
-						ScopeStrategy:            fosite.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 						RefreshTokenScopes:       []string{"offline"},
 					}
 					handler = &RefreshTokenGrantHandler{
@@ -323,11 +321,11 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						Config:                 config,
 					}
 
-					areq = fosite.NewAccessRequest(&fosite.DefaultSession{})
+					areq = oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 					areq.Form = url.Values{}
 					c.setup(config)
 
-					err := handler.HandleTokenEndpointRequest(context.Background(), areq)
+					err := handler.HandleTokenEndpointRequest(context.TODO(), areq)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error())
 					} else {
@@ -346,7 +344,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	var mockTransactional *internal.MockTransactional
 	var mockRevocationStore *internal.MockTokenRevocationStorage
-	request := fosite.NewAccessRequest(&fosite.DefaultSession{})
+	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 	propagatedContext := context.Background()
 
 	type transactionalStore struct {
@@ -362,15 +360,15 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should revoke session on token reuse",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
-				request.Client = &fosite.DefaultClient{
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.Client = &oauth2.DefaultClient{
 					ID:         "foo",
-					GrantTypes: fosite.Arguments{"refresh_token"},
+					GrantTypes: oauth2.Arguments{"refresh_token"},
 				}
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(request, fosite.ErrInactiveToken).
+					Return(request, oauth2.ErrInactiveToken).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -398,7 +396,7 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInactiveToken,
+			expectError: oauth2.ErrInactiveToken,
 		},
 	} {
 		t.Run(fmt.Sprintf("scenario=%s", testCase.description), func(t *testing.T) {
@@ -416,10 +414,10 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				AccessTokenStrategy:  &hmacshaStrategy,
 				RefreshTokenStrategy: &hmacshaStrategy,
-				Config: &fosite.Config{
+				Config: &oauth2.Config{
 					AccessTokenLifespan:      time.Hour,
-					ScopeStrategy:            fosite.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 				},
 			}
 
@@ -431,8 +429,8 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
-	var areq *fosite.AccessRequest
-	var aresp *fosite.AccessResponse
+	var areq *oauth2.AccessRequest
+	var aresp *oauth2.AccessResponse
 
 	for k, strategy := range map[string]CoreStrategy{
 		"hmac": &hmacshaStrategy,
@@ -442,40 +440,40 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 
 			for _, c := range []struct {
 				description string
-				setup       func(config *fosite.Config)
+				setup       func(config *oauth2.Config)
 				check       func(t *testing.T)
 				expectErr   error
 			}{
 				{
 					description: "should fail because not responsible",
-					expectErr:   fosite.ErrUnknownRequest,
-					setup: func(config *fosite.Config) {
-						areq.GrantTypes = fosite.Arguments{"313"}
+					expectErr:   oauth2.ErrUnknownRequest,
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"313"}
 					},
 				},
 				{
 					description: "should pass",
-					setup: func(config *fosite.Config) {
+					setup: func(config *oauth2.Config) {
 						areq.ID = "req-id"
-						areq.GrantTypes = fosite.Arguments{"refresh_token"}
-						areq.RequestedScope = fosite.Arguments{"foo", "bar"}
-						areq.GrantedScope = fosite.Arguments{"foo", "bar"}
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.RequestedScope = oauth2.Arguments{"foo", "bar"}
+						areq.GrantedScope = oauth2.Arguments{"foo", "bar"}
 
-						token, signature, err := strategy.GenerateRefreshToken(context.Background(), nil)
+						token, signature, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
-						require.NoError(t, store.CreateRefreshTokenSession(context.Background(), signature, areq))
+						require.NoError(t, store.CreateRefreshTokenSession(context.TODO(), signature, areq))
 						areq.Form.Add("refresh_token", token)
 					},
 					check: func(t *testing.T) {
 						signature := strategy.RefreshTokenSignature(context.Background(), areq.Form.Get("refresh_token"))
 
 						// The old refresh token should be deleted
-						_, err := store.GetRefreshTokenSession(context.Background(), signature, nil)
+						_, err := store.GetRefreshTokenSession(context.TODO(), signature, nil)
 						require.Error(t, err)
 
 						assert.Equal(t, "req-id", areq.ID)
-						require.NoError(t, strategy.ValidateAccessToken(context.Background(), areq, aresp.GetAccessToken()))
-						require.NoError(t, strategy.ValidateRefreshToken(context.Background(), areq, aresp.ToMap()["refresh_token"].(string)))
+						require.NoError(t, strategy.ValidateAccessToken(context.TODO(), areq, aresp.GetAccessToken()))
+						require.NoError(t, strategy.ValidateRefreshToken(context.TODO(), areq, aresp.ToMap()["refresh_token"].(string)))
 						assert.Equal(t, "bearer", aresp.GetTokenType())
 						assert.NotEmpty(t, aresp.ToMap()["expires_in"])
 						assert.Equal(t, "foo bar", aresp.ToMap()["scope"])
@@ -483,10 +481,10 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
-					config := &fosite.Config{
+					config := &oauth2.Config{
 						AccessTokenLifespan:      time.Hour,
-						ScopeStrategy:            fosite.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 					}
 					h := RefreshTokenGrantHandler{
 						TokenRevocationStorage: store,
@@ -494,14 +492,14 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 						AccessTokenStrategy:    strategy,
 						Config:                 config,
 					}
-					areq = fosite.NewAccessRequest(&fosite.DefaultSession{})
-					aresp = fosite.NewAccessResponse()
-					areq.Client = &fosite.DefaultClient{}
+					areq = oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+					aresp = oauth2.NewAccessResponse()
+					areq.Client = &oauth2.DefaultClient{}
 					areq.Form = url.Values{}
 
 					c.setup(config)
 
-					err := h.PopulateTokenEndpointResponse(context.Background(), areq, aresp)
+					err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 					if c.expectErr != nil {
 						assert.EqualError(t, err, c.expectErr.Error())
 					} else {
@@ -520,8 +518,8 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 	var mockTransactional *internal.MockTransactional
 	var mockRevocationStore *internal.MockTokenRevocationStorage
-	request := fosite.NewAccessRequest(&fosite.DefaultSession{})
-	response := fosite.NewAccessResponse()
+	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
 
 	// some storage implementation that has support for transactions, notice the embedded type `storage.Transactional`
@@ -538,7 +536,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be committed successfully if no errors occur",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -579,7 +577,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be rolled back if call to `GetRefreshTokenSession` results in an error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -596,13 +594,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
-			description: "should result in a fosite.ErrInvalidRequest if `GetRefreshTokenSession` results in a " +
-				"fosite.ErrNotFound error",
+			description: "should result in a oauth2.ErrInvalidRequest if `GetRefreshTokenSession` results in a " +
+				"oauth2.ErrNotFound error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -611,7 +609,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
-					Return(nil, fosite.ErrNotFound).
+					Return(nil, oauth2.ErrNotFound).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -619,12 +617,12 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "transaction should be rolled back if call to `RevokeAccessToken` results in an error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -646,13 +644,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
-			description: "should result in a fosite.ErrInvalidRequest if call to `RevokeAccessToken` results in a " +
-				"fosite.ErrSerializationFailure error",
+			description: "should result in a oauth2.ErrInvalidRequest if call to `RevokeAccessToken` results in a " +
+				"oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -666,7 +664,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(fosite.ErrSerializationFailure).
+					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -674,13 +672,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
-			description: "should result in a fosite.ErrInactiveToken if call to `RevokeAccessToken` results in a " +
-				"fosite.ErrInvalidRequest error",
+			description: "should result in a oauth2.ErrInactiveToken if call to `RevokeAccessToken` results in a " +
+				"oauth2.ErrInvalidRequest error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -689,7 +687,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
-					Return(nil, fosite.ErrInactiveToken).
+					Return(nil, oauth2.ErrInactiveToken).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -697,12 +695,12 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "transaction should be rolled back if call to `RevokeRefreshTokenMaybeGracePeriod` results in an error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -729,13 +727,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
-			description: "should result in a fosite.ErrInvalidRequest if call to `RevokeRefreshTokenMaybeGracePeriod` results in a " +
-				"fosite.ErrSerializationFailure error",
+			description: "should result in a oauth2.ErrInvalidRequest if call to `RevokeRefreshTokenMaybeGracePeriod` results in a " +
+				"oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -754,7 +752,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(fosite.ErrSerializationFailure).
+					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -762,11 +760,11 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
-			description: "should result in a fosite.ErrInvalidRequest if call to `CreateAccessTokenSession` results in " +
-				"a fosite.ErrSerializationFailure error",
+			description: "should result in a oauth2.ErrInvalidRequest if call to `CreateAccessTokenSession` results in " +
+				"a oauth2.ErrSerializationFailure error",
 			setup: func() {
 				mockTransactional.
 					EXPECT().
@@ -791,7 +789,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(fosite.ErrSerializationFailure).
+					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -799,7 +797,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "transaction should be rolled back if call to `CreateAccessTokenSession` results in an error",
@@ -835,12 +833,12 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "transaction should be rolled back if call to `CreateRefreshTokenSession` results in an error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -877,13 +875,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
-			description: "should result in a fosite.ErrInvalidRequest if call to `CreateRefreshTokenSession` results in " +
-				"a fosite.ErrSerializationFailure error",
+			description: "should result in a oauth2.ErrInvalidRequest if call to `CreateRefreshTokenSession` results in " +
+				"a oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -912,7 +910,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(fosite.ErrSerializationFailure).
+					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -920,24 +918,24 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should result in a server error if transaction cannot be created",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
 					Return(nil, errors.New("Could not create transaction!")).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "should result in a server error if transaction cannot be rolled back",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -946,7 +944,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
-					Return(nil, fosite.ErrNotFound).
+					Return(nil, oauth2.ErrNotFound).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -954,12 +952,12 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(errors.New("Could not rollback transaction!")).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
 			description: "should result in a server error if transaction cannot be committed",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1001,13 +999,13 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrServerError,
+			expectError: oauth2.ErrServerError,
 		},
 		{
-			description: "should result in a `fosite.ErrInvalidRequest` if transaction fails to commit due to a " +
-				"`fosite.ErrSerializationFailure` error",
+			description: "should result in a `oauth2.ErrInvalidRequest` if transaction fails to commit due to a " +
+				"`oauth2.ErrSerializationFailure` error",
 			setup: func() {
-				request.GrantTypes = fosite.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{"refresh_token"}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1041,7 +1039,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockTransactional.
 					EXPECT().
 					Commit(propagatedContext).
-					Return(fosite.ErrSerializationFailure).
+					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -1049,7 +1047,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: fosite.ErrInvalidRequest,
+			expectError: oauth2.ErrInvalidRequest,
 		},
 	} {
 		t.Run(fmt.Sprintf("scenario=%s", testCase.description), func(t *testing.T) {
@@ -1068,10 +1066,10 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				AccessTokenStrategy:  &hmacshaStrategy,
 				RefreshTokenStrategy: &hmacshaStrategy,
-				Config: &fosite.Config{
+				Config: &oauth2.Config{
 					AccessTokenLifespan:      time.Hour,
-					ScopeStrategy:            fosite.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 				},
 			}
 

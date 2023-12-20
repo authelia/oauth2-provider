@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -9,16 +9,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ory/x/errorsx"
-	"github.com/ory/x/otelx"
-	"go.opentelemetry.io/otel/trace"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 // NewPushedAuthorizeResponse executes the handlers and builds the response
-func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (_ PushedAuthorizeResponder, err error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer("github.com/ory/fosite").Start(ctx, "Fosite.NewPushedAuthorizeResponse")
-	defer otelx.End(span, &err)
-
+func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (PushedAuthorizeResponder, error) {
 	// Get handlers. If no handlers are defined, this is considered a misconfigured Fosite instance.
 	handlersProvider, ok := f.Config.(PushedAuthorizeRequestHandlersProvider)
 	if !ok {
@@ -27,7 +22,7 @@ func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, ar AuthorizeReq
 
 	var resp = &PushedAuthorizeResponse{
 		Header: http.Header{},
-		Extra:  map[string]interface{}{},
+		Extra:  map[string]any{},
 	}
 
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, ar)

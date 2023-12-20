@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestRevokeToken(t *testing.T) {
@@ -21,6 +21,7 @@ func TestRevokeToken(t *testing.T) {
 	atStrat := internal.NewMockAccessTokenStrategy(ctrl)
 	rtStrat := internal.NewMockRefreshTokenStrategy(ctrl)
 	ar := internal.NewMockAccessRequester(ctrl)
+
 	defer ctrl.Finish()
 
 	h := TokenRevocationHandler{
@@ -29,38 +30,40 @@ func TestRevokeToken(t *testing.T) {
 		AccessTokenStrategy:    atStrat,
 	}
 
-	var token string
-	var tokenType fosite.TokenType
+	var (
+		token     string
+		tokenType oauth2.TokenType
+	)
 
 	for k, c := range []struct {
 		description string
 		mock        func()
 		expectErr   error
-		client      fosite.Client
+		client      oauth2.Client
 	}{
 		{
 			description: "should fail - token was issued to another client",
-			expectErr:   fosite.ErrUnauthorizedClient,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			expectErr:   oauth2.ErrUnauthorizedClient,
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "foo"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "foo"})
 			},
 		},
 		{
 			description: "should pass - refresh token discovery first; refresh token found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
 				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any())
 				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any())
 			},
@@ -68,14 +71,14 @@ func TestRevokeToken(t *testing.T) {
 		{
 			description: "should pass - access token discovery first; access token found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
 				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any())
 				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any())
 			},
@@ -83,17 +86,17 @@ func TestRevokeToken(t *testing.T) {
 		{
 			description: "should pass - refresh token discovery first; refresh token not found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
 				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any())
 				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any())
 			},
@@ -101,17 +104,17 @@ func TestRevokeToken(t *testing.T) {
 		{
 			description: "should pass - access token discovery first; access token not found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
 				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any())
 				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any())
 			},
@@ -119,83 +122,83 @@ func TestRevokeToken(t *testing.T) {
 		{
 			description: "should pass - refresh token discovery first; both tokens not found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 			},
 		},
 		{
 			description: "should pass - access token discovery first; both tokens not found",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 			},
 		},
 		{
 
 			description: "should pass - refresh token discovery first; refresh token is inactive",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrInactiveToken)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrInactiveToken)
 
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 			},
 		},
 		{
 			description: "should pass - access token discovery first; refresh token is inactive",
 			expectErr:   nil,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrInactiveToken)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrInactiveToken)
 			},
 		},
 		{
 			description: "should fail - store error for access token get",
-			expectErr:   fosite.ErrTemporarilyUnavailable,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			expectErr:   oauth2.ErrTemporarilyUnavailable,
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("random error"))
 
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 			},
 		},
 		{
 			description: "should fail - store error for refresh token get",
-			expectErr:   fosite.ErrTemporarilyUnavailable,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			expectErr:   oauth2.ErrTemporarilyUnavailable,
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
-				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fosite.ErrNotFound)
+				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("random error"))
@@ -203,40 +206,40 @@ func TestRevokeToken(t *testing.T) {
 		},
 		{
 			description: "should fail - store error for access token revoke",
-			expectErr:   fosite.ErrTemporarilyUnavailable,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			expectErr:   oauth2.ErrTemporarilyUnavailable,
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.AccessToken
+				tokenType = oauth2.AccessToken
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
-				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any()).Return(fosite.ErrNotFound)
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
+				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any()).Return(oauth2.ErrNotFound)
 				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any()).Return(fmt.Errorf("random error"))
 			},
 		},
 		{
 			description: "should fail - store error for refresh token revoke",
-			expectErr:   fosite.ErrTemporarilyUnavailable,
-			client:      &fosite.DefaultClient{ID: "bar"},
+			expectErr:   oauth2.ErrTemporarilyUnavailable,
+			client:      &oauth2.DefaultClient{ID: "bar"},
 			mock: func() {
 				token = "foo"
-				tokenType = fosite.RefreshToken
+				tokenType = oauth2.RefreshToken
 				rtStrat.EXPECT().RefreshTokenSignature(gomock.Any(), token)
 				store.EXPECT().GetRefreshTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(ar, nil)
 
 				ar.EXPECT().GetID()
-				ar.EXPECT().GetClient().Return(&fosite.DefaultClient{ID: "bar"})
+				ar.EXPECT().GetClient().Return(&oauth2.DefaultClient{ID: "bar"})
 				store.EXPECT().RevokeRefreshToken(gomock.Any(), gomock.Any()).Return(fmt.Errorf("random error"))
-				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any()).Return(fosite.ErrNotFound)
+				store.EXPECT().RevokeAccessToken(gomock.Any(), gomock.Any()).Return(oauth2.ErrNotFound)
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.mock()
-			err := h.RevokeToken(context.Background(), token, tokenType, c.client)
+			err := h.RevokeToken(context.TODO(), token, tokenType, c.client)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

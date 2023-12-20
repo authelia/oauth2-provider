@@ -1,22 +1,17 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
 	"net/http"
 	"net/url"
 
-	"github.com/ory/x/errorsx"
-	"github.com/ory/x/otelx"
-	"go.opentelemetry.io/otel/trace"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-func (f *Fosite) NewAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (_ AuthorizeResponder, err error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer("github.com/ory/fosite").Start(ctx, "Fosite.NewAuthorizeResponse")
-	defer otelx.End(span, &err)
-
+func (f *Fosite) NewAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (AuthorizeResponder, error) {
 	var resp = &AuthorizeResponse{
 		Header:     http.Header{},
 		Parameters: url.Values{},

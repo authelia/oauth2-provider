@@ -1,19 +1,19 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	. "github.com/ory/fosite"
-	. "github.com/ory/fosite/internal"
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/internal"
 )
 
 func TestNewAuthorizeResponse(t *testing.T) {
@@ -23,7 +23,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	oauth2 := &Fosite{Config: &Config{AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handlers[0]}}}
+	provider := &Fosite{Config: &Config{AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handlers[0]}}}
 	duo := &Fosite{Config: &Config{AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
 	ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession))).AnyTimes()
 	fooErr := errors.New("foo")
@@ -50,7 +50,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 		},
 		{
 			mock: func() {
-				oauth2 = duo
+				provider = duo
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
@@ -61,7 +61,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 		},
 		{
 			mock: func() {
-				oauth2 = duo
+				provider = duo
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
 			},
@@ -70,7 +70,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 		},
 		{
 			mock: func() {
-				oauth2 = duo
+				provider = duo
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
@@ -79,11 +79,11 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				ar.EXPECT().GetResponseTypes().Return([]string{"token", "code"})
 			},
 			isErr:     true,
-			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, fosite.Arguments{"token", "code"}),
+			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, oauth2.Arguments{"token", "code"}),
 		},
 	} {
 		c.mock()
-		responder, err := oauth2.NewAuthorizeResponse(ctx, ar, new(DefaultSession))
+		responder, err := provider.NewAuthorizeResponse(ctx, ar, new(DefaultSession))
 		assert.Equal(t, c.isErr, err != nil, "%d: %s", k, err)
 		if err != nil {
 			assert.Equal(t, c.expectErr, err, "%d: %s", k, err)

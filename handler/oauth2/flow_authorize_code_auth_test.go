@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func parseUrl(uu string) *url.URL {
@@ -31,56 +31,56 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			handler := AuthorizeExplicitGrantHandler{
 				CoreStorage:           store,
 				AuthorizeCodeStrategy: strategy,
-				Config: &fosite.Config{
-					AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
-					ScopeStrategy:            fosite.HierarchicScopeStrategy,
+				Config: &oauth2.Config{
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 				},
 			}
 			for _, c := range []struct {
 				handler     AuthorizeExplicitGrantHandler
-				areq        *fosite.AuthorizeRequest
+				areq        *oauth2.AuthorizeRequest
 				description string
 				expectErr   error
-				expect      func(t *testing.T, areq *fosite.AuthorizeRequest, aresp *fosite.AuthorizeResponse)
+				expect      func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse)
 			}{
 				{
 					handler: handler,
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{""},
-						Request:       *fosite.NewRequest(),
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{""},
+						Request:       *oauth2.NewRequest(),
 					},
 					description: "should pass because not responsible for handling an empty response type",
 				},
 				{
 					handler: handler,
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{"foo"},
-						Request:       *fosite.NewRequest(),
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{"foo"},
+						Request:       *oauth2.NewRequest(),
 					},
 					description: "should pass because not responsible for handling an invalid response type",
 				},
 				{
 					handler: handler,
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{"code"},
-						Request: fosite.Request{
-							Client: &fosite.DefaultClient{
-								ResponseTypes: fosite.Arguments{"code"},
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{"code"},
+						Request: oauth2.Request{
+							Client: &oauth2.DefaultClient{
+								ResponseTypes: oauth2.Arguments{"code"},
 								RedirectURIs:  []string{"http://asdf.com/cb"},
 							},
 						},
 						RedirectURI: parseUrl("http://asdf.com/cb"),
 					},
 					description: "should fail because redirect uri is not https",
-					expectErr:   fosite.ErrInvalidRequest,
+					expectErr:   oauth2.ErrInvalidRequest,
 				},
 				{
 					handler: handler,
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{"code"},
-						Request: fosite.Request{
-							Client: &fosite.DefaultClient{
-								ResponseTypes: fosite.Arguments{"code"},
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{"code"},
+						Request: oauth2.Request{
+							Client: &oauth2.DefaultClient{
+								ResponseTypes: oauth2.Arguments{"code"},
 								RedirectURIs:  []string{"https://asdf.com/cb"},
 								Audience:      []string{"https://www.ory.sh/api"},
 							},
@@ -89,22 +89,22 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 						RedirectURI: parseUrl("https://asdf.com/cb"),
 					},
 					description: "should fail because audience doesn't match",
-					expectErr:   fosite.ErrInvalidRequest,
+					expectErr:   oauth2.ErrInvalidRequest,
 				},
 				{
 					handler: handler,
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{"code"},
-						Request: fosite.Request{
-							Client: &fosite.DefaultClient{
-								ResponseTypes: fosite.Arguments{"code"},
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{"code"},
+						Request: oauth2.Request{
+							Client: &oauth2.DefaultClient{
+								ResponseTypes: oauth2.Arguments{"code"},
 								RedirectURIs:  []string{"https://asdf.de/cb"},
 								Audience:      []string{"https://www.ory.sh/api"},
 							},
 							RequestedAudience: []string{"https://www.ory.sh/api"},
-							GrantedScope:      fosite.Arguments{"a", "b"},
-							Session: &fosite.DefaultSession{
-								ExpiresAt: map[fosite.TokenType]time.Time{fosite.AccessToken: time.Now().UTC().Add(time.Hour)},
+							GrantedScope:      oauth2.Arguments{"a", "b"},
+							Session: &oauth2.DefaultSession{
+								ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 							},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -112,37 +112,37 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 						RedirectURI: parseUrl("https://asdf.de/cb"),
 					},
 					description: "should pass",
-					expect: func(t *testing.T, areq *fosite.AuthorizeRequest, aresp *fosite.AuthorizeResponse) {
+					expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
 						code := aresp.GetParameters().Get("code")
 						assert.NotEmpty(t, code)
 
 						assert.Equal(t, strings.Join(areq.GrantedScope, " "), aresp.GetParameters().Get("scope"))
 						assert.Equal(t, areq.State, aresp.GetParameters().Get("state"))
-						assert.Equal(t, fosite.ResponseModeQuery, areq.GetResponseMode())
+						assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
 					},
 				},
 				{
 					handler: AuthorizeExplicitGrantHandler{
 						CoreStorage:           store,
 						AuthorizeCodeStrategy: strategy,
-						Config: &fosite.Config{
-							ScopeStrategy:            fosite.HierarchicScopeStrategy,
-							AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+						Config: &oauth2.Config{
+							ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+							AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 							OmitRedirectScopeParam:   true,
 						},
 					},
-					areq: &fosite.AuthorizeRequest{
-						ResponseTypes: fosite.Arguments{"code"},
-						Request: fosite.Request{
-							Client: &fosite.DefaultClient{
-								ResponseTypes: fosite.Arguments{"code"},
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{"code"},
+						Request: oauth2.Request{
+							Client: &oauth2.DefaultClient{
+								ResponseTypes: oauth2.Arguments{"code"},
 								RedirectURIs:  []string{"https://asdf.de/cb"},
 								Audience:      []string{"https://www.ory.sh/api"},
 							},
 							RequestedAudience: []string{"https://www.ory.sh/api"},
-							GrantedScope:      fosite.Arguments{"a", "b"},
-							Session: &fosite.DefaultSession{
-								ExpiresAt: map[fosite.TokenType]time.Time{fosite.AccessToken: time.Now().UTC().Add(time.Hour)},
+							GrantedScope:      oauth2.Arguments{"a", "b"},
+							Session: &oauth2.DefaultSession{
+								ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 							},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -150,19 +150,19 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 						RedirectURI: parseUrl("https://asdf.de/cb"),
 					},
 					description: "should pass but no scope in redirect uri",
-					expect: func(t *testing.T, areq *fosite.AuthorizeRequest, aresp *fosite.AuthorizeResponse) {
+					expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
 						code := aresp.GetParameters().Get("code")
 						assert.NotEmpty(t, code)
 
 						assert.Empty(t, aresp.GetParameters().Get("scope"))
 						assert.Equal(t, areq.State, aresp.GetParameters().Get("state"))
-						assert.Equal(t, fosite.ResponseModeQuery, areq.GetResponseMode())
+						assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
 					},
 				},
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
-					aresp := fosite.NewAuthorizeResponse()
-					err := c.handler.HandleAuthorizeEndpointRequest(context.Background(), c.areq, aresp)
+					aresp := oauth2.NewAuthorizeResponse()
+					err := c.handler.HandleAuthorizeEndpointRequest(context.TODO(), c.areq, aresp)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error())
 					} else {

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -36,9 +36,9 @@ const (
 	BearerAccessToken string = "bearer"
 )
 
-// OAuth2Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
+// Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
 // Check Fosite for an implementation of this interface.
-type OAuth2Provider interface {
+type Provider interface {
 	// NewAuthorizeRequest returns an AuthorizeRequest.
 	//
 	// The following specs must be considered in any implementation of this method:
@@ -58,7 +58,7 @@ type OAuth2Provider interface {
 	NewAuthorizeRequest(ctx context.Context, req *http.Request) (AuthorizeRequester, error)
 
 	// NewAuthorizeResponse iterates through all response type handlers and returns their result or
-	// ErrUnsupportedResponseType if none of the handler's were able to handle it.
+	// ErrUnsupportedResponseType if none of the handlers were able to handle it.
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://tools.ietf.org/html/rfc6749#section-3.1.1
@@ -176,7 +176,7 @@ type IntrospectionResponder interface {
 	// IsActive returns true if the introspected token is active and false otherwise.
 	IsActive() bool
 
-	// AccessRequester returns nil when IsActive() is false and the original access request object otherwise.
+	// GetAccessRequester returns the AccessRequester which returns nil when IsActive() is false and the original access request object otherwise.
 	GetAccessRequester() AccessRequester
 
 	// GetTokenUse optionally returns the type of the token that was introspected. This could be "access_token", "refresh_token",
@@ -217,7 +217,7 @@ type Requester interface {
 	// AppendRequestedScope appends a scope to the request.
 	AppendRequestedScope(scope string)
 
-	// GetGrantScopes returns all granted scopes.
+	// GetGrantedScopes returns all granted scopes.
 	GetGrantedScopes() (grantedScopes Arguments)
 
 	// GetGrantedAudience returns all granted audiences.
@@ -247,7 +247,7 @@ type Requester interface {
 
 // AccessRequester is a token endpoint's request context.
 type AccessRequester interface {
-	// GetGrantType returns the requests grant type.
+	// GetGrantTypes returns the requests grant type.
 	GetGrantTypes() (grantTypes Arguments)
 
 	Requester
@@ -290,10 +290,10 @@ type AuthorizeRequester interface {
 // AccessResponder is a token endpoint's response.
 type AccessResponder interface {
 	// SetExtra sets a key value pair for the access response.
-	SetExtra(key string, value interface{})
+	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) interface{}
+	GetExtra(key string) any
 
 	SetExpiresIn(time.Duration)
 
@@ -305,14 +305,14 @@ type AccessResponder interface {
 	// SetTokenType set's the responses mandatory token type
 	SetTokenType(tokenType string)
 
-	// SetAccessToken returns the responses access token.
+	// GetAccessToken returns the responses access token.
 	GetAccessToken() (token string)
 
 	// GetTokenType returns the responses token type.
 	GetTokenType() (token string)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]interface{}
+	ToMap() map[string]any
 }
 
 // AuthorizeResponder is an authorization endpoint's response.
@@ -323,7 +323,7 @@ type AuthorizeResponder interface {
 	// GetHeader returns the response's header
 	GetHeader() (header http.Header)
 
-	// AddHeader adds an header key value pair to the response
+	// AddHeader adds a header key value pair to the response
 	AddHeader(key, value string)
 
 	// GetParameters returns the response's parameters
@@ -347,17 +347,17 @@ type PushedAuthorizeResponder interface {
 	// GetHeader returns the response's header
 	GetHeader() (header http.Header)
 
-	// AddHeader adds an header key value pair to the response
+	// AddHeader adds a header key value pair to the response
 	AddHeader(key, value string)
 
 	// SetExtra sets a key value pair for the response.
-	SetExtra(key string, value interface{})
+	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) interface{}
+	GetExtra(key string) any
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]interface{}
+	ToMap() map[string]any
 }
 
 // G11NContext is the globalization context

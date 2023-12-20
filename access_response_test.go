@@ -1,14 +1,14 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/ory/fosite"
+	. "authelia.com/provider/oauth2"
 )
 
 func TestAccessResponse(t *testing.T) {
@@ -20,7 +20,7 @@ func TestAccessResponse(t *testing.T) {
 	assert.Equal(t, "access", ar.GetAccessToken())
 	assert.Equal(t, "bearer", ar.GetTokenType())
 	assert.Equal(t, "bar", ar.GetExtra("foo"))
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"access_token": "access",
 		"token_type":   "bearer",
 		"foo":          "bar",

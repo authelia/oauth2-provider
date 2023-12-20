@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"net/url"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/ory/fosite"
+	. "authelia.com/provider/oauth2"
 )
 
 func TestRequest(t *testing.T) {

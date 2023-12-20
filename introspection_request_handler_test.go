@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -10,16 +10,16 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/storage"
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
@@ -30,7 +30,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
 
 	config := new(Config)
-	f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+	provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 	httpreq := &http.Request{
 		Method: "POST",
 		Header: http.Header{
@@ -69,16 +69,17 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			res, err := f.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
+			res, err := provider.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
 			require.NoError(t, err)
 			assert.Equal(t, c.expectedATT, res.GetAccessTokenType())
 			assert.Equal(t, c.expectedTU, res.GetTokenUse())
 		})
 	}
 }
+
 func TestIntrospectionResponse(t *testing.T) {
-	r := &fosite.IntrospectionResponse{
-		AccessRequester: fosite.NewAccessRequest(nil),
+	r := &oauth2.IntrospectionResponse{
+		AccessRequester: oauth2.NewAccessRequest(nil),
 		Active:          true,
 	}
 

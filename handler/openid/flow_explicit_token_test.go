@@ -9,104 +9,104 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestHandleTokenEndpointRequest(t *testing.T) {
-	h := &OpenIDConnectExplicitHandler{Config: &fosite.Config{}}
-	areq := fosite.NewAccessRequest(nil)
-	areq.Client = &fosite.DefaultClient{
-		//ResponseTypes: fosite.Arguments{"id_token"},
+	h := &OpenIDConnectExplicitHandler{Config: &oauth2.Config{}}
+	areq := oauth2.NewAccessRequest(nil)
+	areq.Client = &oauth2.DefaultClient{
+		//ResponseTypes: oauth2.Arguments{"id_token"},
 	}
-	assert.EqualError(t, h.HandleTokenEndpointRequest(context.Background(), areq), fosite.ErrUnknownRequest.Error())
+	assert.EqualError(t, h.HandleTokenEndpointRequest(context.TODO(), areq), oauth2.ErrUnknownRequest.Error())
 }
 
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 	for k, c := range []struct {
 		description string
-		setup       func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest)
+		setup       func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
 		expectErr   error
-		check       func(t *testing.T, aresp *fosite.AccessResponse)
+		check       func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
 			description: "should fail because current request has invalid grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"some_other_grant_type"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"some_other_grant_type"}
 			},
-			expectErr: fosite.ErrUnknownRequest,
+			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should fail because storage lookup returns not found",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, ErrNoSessionFound)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
-			expectErr: fosite.ErrUnknownRequest,
+			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should fail because storage lookup fails",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, errors.New(""))
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
 			},
-			expectErr: fosite.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because stored request is missing openid scope",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(fosite.NewAuthorizeRequest(), nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
 			},
-			expectErr: fosite.ErrMisconfiguration,
+			expectErr: oauth2.ErrMisconfiguration,
 		},
 		{
 			description: "should fail because current request's client does not have authorization_code grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.Client = &fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"some_other_grant_type"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"some_other_grant_type"},
 				}
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				storedReq := fosite.NewAuthorizeRequest()
-				storedReq.GrantedScope = fosite.Arguments{"openid"}
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				storedReq := oauth2.NewAuthorizeRequest()
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: fosite.ErrUnauthorizedClient,
+			expectErr: oauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should pass with custom client lifespans",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.Client = &fosite.DefaultClientWithCustomTokenLifespans{
-					DefaultClient: &fosite.DefaultClient{
-						GrantTypes: fosite.Arguments{"authorization_code"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
 					},
 					TokenLifespans: &internal.TestLifespans,
 				}
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
-				storedReq := fosite.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = fosite.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			check: func(t *testing.T, aresp *fosite.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
-				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
@@ -118,25 +118,25 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.Client = &fosite.DefaultClient{
-					GrantTypes: fosite.Arguments{"authorization_code"},
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"authorization_code"},
 				}
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
-				storedReq := fosite.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = fosite.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
 				storedReq.Form.Set("nonce", "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			check: func(t *testing.T, aresp *fosite.AccessResponse) {
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
 				idToken, _ := aresp.GetExtra("id_token").(string)
-				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
@@ -148,30 +148,30 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because stored request's session is missing subject claim",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: ""},
 				}
-				storedReq := fosite.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = fosite.Arguments{"openid"}
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: fosite.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should fail because stored request is missing session",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *fosite.AccessRequest) {
-				req.GrantTypes = fosite.Arguments{"authorization_code"}
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
-				storedReq := fosite.NewAuthorizeRequest()
+				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope("openid")
-				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: fosite.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
@@ -185,17 +185,17 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				Headers: &jwt.Headers{},
 			}
-			aresp := fosite.NewAccessResponse()
-			areq := fosite.NewAccessRequest(session)
+			aresp := oauth2.NewAccessResponse()
+			areq := oauth2.NewAccessRequest(session)
 
 			var j = &DefaultStrategy{
 				Signer: &jwt.DefaultSigner{
-					GetPrivateKey: func(ctx context.Context) (interface{}, error) {
+					GetPrivateKey: func(ctx context.Context) (any, error) {
 						return key, nil
 					},
 				},
-				Config: &fosite.Config{
-					MinParameterEntropy: fosite.MinParameterEntropy,
+				Config: &oauth2.Config{
+					MinParameterEntropy: oauth2.MinParameterEntropy,
 				},
 			}
 
@@ -204,11 +204,11 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				IDTokenHandleHelper: &IDTokenHandleHelper{
 					IDTokenStrategy: j,
 				},
-				Config: &fosite.Config{},
+				Config: &oauth2.Config{},
 			}
 
 			c.setup(store, areq)
-			err := h.PopulateTokenEndpointResponse(context.Background(), areq, aresp)
+			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

@@ -12,45 +12,45 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var rsaKey = gen.MustRSAKey()
+
 var j = &DefaultJWTStrategy{
 	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (interface{}, error) {
+		GetPrivateKey: func(_ context.Context) (any, error) {
 			return rsaKey, nil
 		},
 	},
-	Config: &fosite.Config{},
+	Config: &oauth2.Config{},
 }
 
 // returns a valid JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given fosite.TokenType.
-var jwtValidCase = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+// the given oauth2.TokenType.
+var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(time.Hour),
 			},
 		},
@@ -63,25 +63,25 @@ var jwtValidCase = func(tokenType fosite.TokenType) *fosite.Request {
 	return r
 }
 
-var jwtValidCaseWithZeroRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType:           time.Now().UTC().Add(time.Hour),
-				fosite.RefreshToken: {},
+				oauth2.RefreshToken: {},
 			},
 		},
 	}
@@ -93,25 +93,25 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType fosite.TokenType) *fosite
 	return r
 }
 
-var jwtValidCaseWithRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType:           time.Now().UTC().Add(time.Hour),
-				fosite.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
+				oauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
 			},
 		},
 	}
@@ -125,25 +125,25 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType fosite.TokenType) *fosite.Req
 
 // returns an expired JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
-// the given fosite.TokenType.
-var jwtExpiredCase = func(tokenType fosite.TokenType) *fosite.Request {
-	r := &fosite.Request{
-		Client: &fosite.DefaultClient{
+// the given oauth2.TokenType.
+var jwtExpiredCase = func(tokenType oauth2.TokenType) *oauth2.Request {
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{
 			Secret: []byte("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "fosite",
+				Issuer:    "oauth2",
 				Subject:   "peter",
 				IssuedAt:  time.Now().UTC(),
 				NotBefore: time.Now().UTC(),
 				ExpiresAt: time.Now().UTC().Add(-time.Minute),
-				Extra:     map[string]interface{}{"foo": "bar"},
+				Extra:     map[string]any{"foo": "bar"},
 			},
 			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]interface{}),
+				Extra: make(map[string]any),
 			},
-			ExpiresAt: map[fosite.TokenType]time.Time{
+			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType: time.Now().UTC().Add(-time.Hour),
 			},
 		},
@@ -163,28 +163,28 @@ func TestAccessToken(t *testing.T) {
 		jwt.JWTScopeFieldBoth,
 	} {
 		for k, c := range []struct {
-			r    *fosite.Request
+			r    *oauth2.Request
 			pass bool
 		}{
 			{
-				r:    jwtValidCase(fosite.AccessToken),
+				r:    jwtValidCase(oauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtExpiredCase(fosite.AccessToken),
+				r:    jwtExpiredCase(oauth2.AccessToken),
 				pass: false,
 			},
 			{
-				r:    jwtValidCaseWithZeroRefreshExpiry(fosite.AccessToken),
+				r:    jwtValidCaseWithZeroRefreshExpiry(oauth2.AccessToken),
 				pass: true,
 			},
 			{
-				r:    jwtValidCaseWithRefreshExpiry(fosite.AccessToken),
+				r:    jwtValidCaseWithRefreshExpiry(oauth2.AccessToken),
 				pass: true,
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/%d", s, k), func(t *testing.T) {
-				j.Config = &fosite.Config{
+				j.Config = &oauth2.Config{
 					JWTScopeClaimKey: scopeField,
 				}
 				token, signature, err := j.GenerateAccessToken(context.Background(), c.r)
@@ -196,13 +196,15 @@ func TestAccessToken(t *testing.T) {
 
 				rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
 				require.NoError(t, err)
-				var payload map[string]interface{}
-				err = json.Unmarshal(rawPayload, &payload)
-				require.NoError(t, err)
+
+				var payload map[string]any
+
+				require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
 				if scopeField == jwt.JWTScopeFieldList || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload["scp"]
 					require.True(t, ok)
-					assert.Equal(t, []interface{}{"email", "offline"}, scope)
+					assert.Equal(t, []any{"email", "offline"}, scope)
 				}
 				if scopeField == jwt.JWTScopeFieldString || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload["scope"]
@@ -210,7 +212,15 @@ func TestAccessToken(t *testing.T) {
 					assert.Equal(t, "email offline", scope)
 				}
 
-				extraClaimsSession, ok := c.r.GetSession().(fosite.ExtraClaimsSession)
+				rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+				require.NoError(t, err)
+				var header map[string]any
+
+				require.NoError(t, json.Unmarshal(rawHeader, &header))
+
+				assert.Equal(t, jwt.JWTHeaderTypeValueAccessTokenJWT, header[jwt.JWTHeaderKeyValueType])
+
+				extraClaimsSession, ok := c.r.GetSession().(oauth2.ExtraClaimsSession)
 				require.True(t, ok)
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])

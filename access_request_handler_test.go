@@ -1,22 +1,23 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestNewAccessRequest(t *testing.T) {
@@ -28,9 +29,11 @@ func TestNewAccessRequest(t *testing.T) {
 	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
+	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -118,7 +121,7 @@ func TestNewAccessRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
 			},
 			handlers: TokenEndpointHandlers{handler},
 		},
@@ -135,7 +138,7 @@ func TestNewAccessRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(ErrServerError)
 			},
 			handlers: TokenEndpointHandlers{handler},
@@ -152,7 +155,7 @@ func TestNewAccessRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: TokenEndpointHandlers{handler},
@@ -195,7 +198,7 @@ func TestNewAccessRequest(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -220,7 +223,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 	client := &DefaultClient{}
 	anotherClient := &DefaultClient{ID: "another"}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -323,7 +326,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -352,9 +355,11 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
+	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+
 	client := &DefaultClient{}
 	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	fosite := &Fosite{Store: store, Config: config}
+	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
 		form      url.Values
@@ -375,7 +380,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New("hash err"))
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New("hash err"))
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method:    "POST",
@@ -393,7 +398,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 				handlerWithClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -430,7 +435,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			c.mock()
 			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := fosite.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -24,82 +24,81 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 	store := internal.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
 	defer ctrl.Finish()
 
-	areq := fosite.NewAccessRequest(new(fosite.DefaultSession))
+	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	areq.Form = url.Values{}
 	for k, c := range []struct {
 		description string
-		setup       func(config *fosite.Config)
+		setup       func(config *oauth2.Config)
 		expectErr   error
-		check       func(areq *fosite.AccessRequest)
+		check       func(areq *oauth2.AccessRequest)
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   fosite.ErrUnknownRequest,
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{"123"}
+			expectErr:   oauth2.ErrUnknownRequest,
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"123"}
 			},
 		},
 		{
 			description: "should fail because scope missing",
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{"password"}
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"password"}, Scopes: []string{}}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{}}
 				areq.RequestedScope = []string{"foo-scope"}
 			},
-			expectErr: fosite.ErrInvalidScope,
+			expectErr: oauth2.ErrInvalidScope,
 		},
 		{
 			description: "should fail because audience missing",
-			setup: func(config *fosite.Config) {
-				areq.RequestedAudience = fosite.Arguments{"https://www.ory.sh/api"}
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"password"}, Scopes: []string{"foo-scope"}}
+			setup: func(config *oauth2.Config) {
+				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/api"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: fosite.ErrInvalidRequest,
+			expectErr: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should fail because invalid grant_type specified",
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{"password"}
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"authorization_code"}, Scopes: []string{"foo-scope"}}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"authorization_code"}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: fosite.ErrUnauthorizedClient,
+			expectErr: oauth2.ErrUnauthorizedClient,
 		},
 		{
 			description: "should fail because invalid credentials",
-			setup: func(config *fosite.Config) {
+			setup: func(config *oauth2.Config) {
 				areq.Form.Set("username", "peter")
 				areq.Form.Set("password", "pan")
-				areq.Client = &fosite.DefaultClient{GrantTypes: fosite.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
 
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(fosite.ErrNotFound)
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(oauth2.ErrNotFound)
 			},
-			expectErr: fosite.ErrInvalidGrant,
+			expectErr: oauth2.ErrInvalidGrant,
 		},
 		{
 			description: "should fail because error on lookup",
-			setup: func(config *fosite.Config) {
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(errors.New(""))
+			setup: func(config *oauth2.Config) {
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(errors.New(""))
 			},
-			expectErr: fosite.ErrServerError,
+			expectErr: oauth2.ErrServerError,
 		},
 		{
 			description: "should pass",
-			setup: func(config *fosite.Config) {
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(nil)
+			setup: func(config *oauth2.Config) {
+				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(nil)
 			},
-			check: func(areq *fosite.AccessRequest) {
-				//assert.NotEmpty(t, areq.GetSession().GetExpiresAt(fosite.AccessToken))
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.AccessToken))
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(fosite.RefreshToken))
+			check: func(areq *oauth2.AccessRequest) {
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			config := &fosite.Config{
+			config := &oauth2.Config{
 				AccessTokenLifespan:      time.Hour,
 				RefreshTokenLifespan:     time.Hour,
-				ScopeStrategy:            fosite.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: fosite.DefaultAudienceMatchingStrategy,
+				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 			}
 			h := ResourceOwnerPasswordCredentialsGrantHandler{
 				ResourceOwnerPasswordCredentialsGrantStorage: store,
@@ -110,7 +109,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				Config: config,
 			}
 			c.setup(config)
-			err := h.HandleTokenEndpointRequest(context.Background(), areq)
+			err := h.HandleTokenEndpointRequest(context.TODO(), areq)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
@@ -133,31 +132,31 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	mockRT := "refreshtoken.bar.foo"
 	defer ctrl.Finish()
 
-	var areq *fosite.AccessRequest
-	var aresp *fosite.AccessResponse
-	config := &fosite.Config{}
+	var areq *oauth2.AccessRequest
+	var aresp *oauth2.AccessResponse
+	config := &oauth2.Config{}
 	var h ResourceOwnerPasswordCredentialsGrantHandler
 	h.Config = config
 
 	for k, c := range []struct {
 		description string
-		setup       func(*fosite.Config)
+		setup       func(*oauth2.Config)
 		expectErr   error
 		expect      func()
 	}{
 		{
 			description: "should fail because not responsible",
-			expectErr:   fosite.ErrUnknownRequest,
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{""}
+			expectErr:   oauth2.ErrUnknownRequest,
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{""}
 			},
 		},
 		{
 			description: "should pass",
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{"password"}
-				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.Nil(t, aresp.GetExtra("refresh_token"), "unexpected refresh token")
@@ -165,13 +164,13 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass - offline scope",
-			setup: func(config *fosite.Config) {
-				areq.GrantTypes = fosite.Arguments{"password"}
+			setup: func(config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{"password"}
 				areq.GrantScope("offline")
-				rtstr.EXPECT().GenerateRefreshToken(gomock.Any(), areq).Return(mockRT, "bar", nil)
-				store.EXPECT().CreateRefreshTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
-				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
+				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
@@ -179,13 +178,13 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass - refresh token without offline scope",
-			setup: func(config *fosite.Config) {
+			setup: func(config *oauth2.Config) {
 				config.RefreshTokenScopes = []string{}
-				areq.GrantTypes = fosite.Arguments{"password"}
-				rtstr.EXPECT().GenerateRefreshToken(gomock.Any(), areq).Return(mockRT, "bar", nil)
-				store.EXPECT().CreateRefreshTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
-				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).Return(mockAT, "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				areq.GrantTypes = oauth2.Arguments{"password"}
+				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
+				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
 				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
@@ -193,10 +192,10 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			areq = fosite.NewAccessRequest(nil)
-			aresp = fosite.NewAccessResponse()
-			areq.Session = &fosite.DefaultSession{}
-			config := &fosite.Config{
+			areq = oauth2.NewAccessRequest(nil)
+			aresp = oauth2.NewAccessResponse()
+			areq.Session = &oauth2.DefaultSession{}
+			config := &oauth2.Config{
 				RefreshTokenScopes:  []string{"offline"},
 				AccessTokenLifespan: time.Hour,
 			}
@@ -209,7 +208,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				RefreshTokenStrategy: rtstr, Config: config,
 			}
 			c.setup(config)
-			err := h.PopulateTokenEndpointResponse(context.Background(), areq, aresp)
+			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {

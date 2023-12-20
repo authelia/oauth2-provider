@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,47 +11,60 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/hmac"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/hmac"
 )
 
 var hmacshaStrategy = HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &fosite.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &fosite.Config{
+	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+	Config: &oauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
 }
 
-var hmacExpiredCase = fosite.Request{
-	Client: &fosite.DefaultClient{
+var hmacExpiredCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken:   time.Now().UTC().Add(-time.Hour),
-			fosite.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
-			fosite.RefreshToken:  time.Now().UTC().Add(-time.Hour),
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(-time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
+			oauth2.RefreshToken:  time.Now().UTC().Add(-time.Hour),
 		},
 	},
 }
 
-var hmacValidCase = fosite.Request{
-	Client: &fosite.DefaultClient{
+var hmacValidCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
 		Secret: []byte("foobarfoobarfoobarfoobar"),
 	},
-	Session: &fosite.DefaultSession{
-		ExpiresAt: map[fosite.TokenType]time.Time{
-			fosite.AccessToken:   time.Now().UTC().Add(time.Hour),
-			fosite.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			fosite.RefreshToken:  time.Now().UTC().Add(time.Hour),
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
+		},
+	},
+}
+
+var hmacValidZeroTimeRefreshCase = oauth2.Request{
+	Client: &oauth2.DefaultClient{
+		Secret: []byte("foobarfoobarfoobarfoobar"),
+	},
+	Session: &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+			oauth2.RefreshToken:  {},
 		},
 	},
 }
 
 func TestHMACAccessToken(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{
@@ -65,7 +77,7 @@ func TestHMACAccessToken(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAccessToken(context.Background(), &c.r)
+			token, signature, err := hmacshaStrategy.GenerateAccessToken(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "ory_at_")
@@ -75,7 +87,7 @@ func TestHMACAccessToken(t *testing.T) {
 				strings.TrimPrefix(token, "ory_at_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAccessToken(context.Background(), &c.r, token)
+					err = hmacshaStrategy.ValidateAccessToken(nil, &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)
@@ -91,7 +103,7 @@ func TestHMACAccessToken(t *testing.T) {
 
 func TestHMACRefreshToken(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{
@@ -104,7 +116,7 @@ func TestHMACRefreshToken(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateRefreshToken(context.Background(), &c.r)
+			token, signature, err := hmacshaStrategy.GenerateRefreshToken(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "ory_rt_")
@@ -114,7 +126,7 @@ func TestHMACRefreshToken(t *testing.T) {
 				strings.TrimPrefix(token, "ory_rt_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateRefreshToken(context.Background(), &c.r, token)
+					err = hmacshaStrategy.ValidateRefreshToken(nil, &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)
@@ -130,7 +142,7 @@ func TestHMACRefreshToken(t *testing.T) {
 
 func TestHMACAuthorizeCode(t *testing.T) {
 	for k, c := range []struct {
-		r    fosite.Request
+		r    oauth2.Request
 		pass bool
 	}{
 		{
@@ -143,7 +155,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(context.Background(), &c.r)
+			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(nil, &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "ory_ac_")
@@ -153,7 +165,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 				strings.TrimPrefix(token, "ory_ac_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAuthorizeCode(context.Background(), &c.r, token)
+					err = hmacshaStrategy.ValidateAuthorizeCode(nil, &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)

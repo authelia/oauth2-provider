@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,42 +12,42 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestAuthorizeCodeFlowWithPublicClient(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runAuthorizeCodeGrantWithPublicClientTest(t, strategy)
 	}
 }
 
-func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{Subject: "foo-sub"})
+func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	fositeStore.Clients["public-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
 		description    string
 		setup          func()
 		check          func(t *testing.T, r *http.Response)
-		params         []goauth.AuthCodeOption
+		params         []xoauth2.AuthCodeOption
 		authStatusCode int
 	}{
 		{
 			description: "should fail because of audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/not-api")},
 			setup: func() {
 				state = "12345678901234567890"
 			},
@@ -54,7 +55,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{
 		},
 		{
 			description: "should fail because of scope",
-			params:      []goauth.AuthCodeOption{},
+			params:      []xoauth2.AuthCodeOption{},
 			setup: func() {
 				oauthClient.Scopes = []string{"not-exist"}
 				state = "12345678901234567890"
@@ -63,18 +64,18 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{
 		},
 		{
 			description: "should pass with proper audience",
-			params:      []goauth.AuthCodeOption{goauth.SetAuthURLParam("audience", "https://www.ory.sh/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.ory.sh/api")},
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"fosite"}
+				oauthClient.Scopes = []string{"oauth2"}
 			},
 			check: func(t *testing.T, r *http.Response) {
-				var b fosite.AccessRequest
-				b.Client = new(fosite.DefaultClient)
+				var b oauth2.AccessRequest
+				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			authStatusCode: http.StatusOK,
@@ -95,11 +96,11 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy interface{
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
-				httpClient := oauthClient.Client(goauth.NoContext, token)
+				httpClient := oauthClient.Client(context.TODO(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

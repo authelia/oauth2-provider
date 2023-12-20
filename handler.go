@@ -1,14 +1,14 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
 )
 
 type AuthorizeEndpointHandler interface {
-	// HandleAuthorizeRequest handles an authorize endpoint request. To extend the handler's capabilities, the http request
+	// HandleAuthorizeEndpointRequest handles an authorize endpoint request. To extend the handler's capabilities, the http request
 	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
 	// the authorize request, he must return nil and NOT modify session nor responder neither requester.
 	//
@@ -36,7 +36,7 @@ type TokenEndpointHandler interface {
 	// before HandleTokenEndpointRequest to decide, if AccessRequester will contain authenticated client.
 	CanSkipClientAuth(ctx context.Context, requester AccessRequester) bool
 
-	// CanHandleRequest indicates, if TokenEndpointHandler can handle this request or not. If true,
+	// CanHandleTokenEndpointRequest indicates, if TokenEndpointHandler can handle this request or not. If true,
 	// HandleTokenEndpointRequest can be called.
 	CanHandleTokenEndpointRequest(ctx context.Context, requester AccessRequester) bool
 }
@@ -61,7 +61,7 @@ type RevocationHandler interface {
 
 // PushedAuthorizeEndpointHandler is the interface that handles PAR (https://datatracker.ietf.org/doc/html/rfc9126)
 type PushedAuthorizeEndpointHandler interface {
-	// HandlePushedAuthorizeRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
+	// HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
 	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
 	// the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
 	HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester AuthorizeRequester, responder PushedAuthorizeResponder) error

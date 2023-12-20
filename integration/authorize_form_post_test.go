@@ -11,19 +11,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type formPostTestCase struct {
@@ -33,7 +31,7 @@ type formPostTestCase struct {
 	responseType string
 }
 
-type checkFunc func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string)
+type checkFunc func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string)
 
 func TestAuthorizeFormPostResponseMode(t *testing.T) {
 	session := &defaultSession{
@@ -44,19 +42,19 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	config := &fosite.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
-	f := compose.ComposeAllEnabled(config, fositeStore, gen.MustRSAKey())
+	config := &oauth2.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+	f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	defaultClient := fositeStore.Clients["my-client"].(*fosite.DefaultClient)
+	defaultClient := store.Clients["my-client"].(*oauth2.DefaultClient)
 	defaultClient.RedirectURIs[0] = ts.URL + "/callback"
-	responseModeClient := &fosite.DefaultResponseModeClient{
+	responseModeClient := &oauth2.DefaultResponseModeClient{
 		DefaultClient: defaultClient,
-		ResponseModes: []fosite.ResponseModeType{fosite.ResponseModeFormPost, fosite.ResponseModeFormPost, "decorated_form_post"},
+		ResponseModes: []oauth2.ResponseModeType{oauth2.ResponseModeFormPost, oauth2.ResponseModeFormPost, "decorated_form_post"},
 	}
-	fositeStore.Clients["response-mode-client"] = responseModeClient
+	store.Clients["response-mode-client"] = responseModeClient
 	oauthClient.ClientID = "response-mode-client"
 
 	var state string
@@ -68,7 +66,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, token.TokenType)
 				assert.NotEmpty(t, token.AccessToken)
@@ -83,7 +81,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, iDToken)
 			},
@@ -94,7 +92,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 			},
@@ -106,7 +104,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, token.TokenType)
@@ -121,7 +119,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, iDToken)
@@ -137,7 +135,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, iDToken)
@@ -149,7 +147,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
@@ -165,10 +163,10 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 	}
 }
 
-func testFormPost(state *string, customResponse bool, c formPostTestCase, oauthClient *goauth.Config, responseMode string) func(t *testing.T) {
+func testFormPost(state *string, customResponse bool, c formPostTestCase, oauthClient *xoauth2.Config, responseMode string) func(t *testing.T) {
 	return func(t *testing.T) {
 		c.setup()
-		authURL := strings.Replace(oauthClient.AuthCodeURL(*state, goauth.SetAuthURLParam("response_mode", responseMode), goauth.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
+		authURL := strings.Replace(oauthClient.AuthCodeURL(*state, xoauth2.SetAuthURLParam("response_mode", responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
 		client := &http.Client{
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return errors.New("Dont follow redirects")
@@ -177,14 +175,14 @@ func testFormPost(state *string, customResponse bool, c formPostTestCase, oauthC
 		resp, err := client.Get(authURL)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-		code, state, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(fositeStore.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
+		code, state, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
 		require.NoError(t, err)
 		c.check(t, state, code, iDToken, token, cparam, errResp)
 	}
 }
 
 func decorateCheck(cf checkFunc) checkFunc {
-	return func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, cparam url.Values, err map[string]string) {
+	return func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 		cf(t, stateFromServer, code, token, iDToken, cparam, err)
 		if len(err) > 0 {
 			assert.Contains(t, cparam, "custom_err_param")
@@ -201,22 +199,22 @@ func decorateCheck(cf checkFunc) checkFunc {
 type decoratedFormPostResponse struct {
 }
 
-func (m *decoratedFormPostResponse) ResponseModes() fosite.ResponseModeTypes {
-	return fosite.ResponseModeTypes{"decorated_form_post"}
+func (m *decoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
+	return oauth2.ResponseModeTypes{"decorated_form_post"}
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) {
+func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) {
 	rw.Header().Add("Content-Type", "text/html;charset=UTF-8")
 	resp.AddParameter("custom_param", "foo")
-	fosite.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), fosite.GetPostFormHTMLTemplate(ctx,
-		fosite.NewOAuth2Provider(nil, new(fosite.Config))), rw)
+	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), oauth2.GetPostFormHTMLTemplate(ctx,
+		oauth2.New(nil, new(oauth2.Config))), rw)
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar fosite.AuthorizeRequester, err error) {
-	rfcerr := fosite.ErrorToRFC6749Error(err)
+func (m *decoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, err error) {
+	rfcerr := oauth2.ErrorToRFC6749Error(err)
 	errors := rfcerr.ToValues()
 	errors.Set("state", ar.GetState())
 	errors.Add("custom_err_param", "bar")
-	fosite.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, fosite.GetPostFormHTMLTemplate(ctx,
-		fosite.NewOAuth2Provider(nil, new(fosite.Config))), rw)
+	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, oauth2.GetPostFormHTMLTemplate(ctx,
+		oauth2.New(nil, new(oauth2.Config))), rw)
 }

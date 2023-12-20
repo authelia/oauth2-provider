@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -9,11 +9,9 @@ import (
 	"net/url"
 	"strings"
 
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/text/language"
 
-	"github.com/ory/x/errorsx"
-	"github.com/ory/x/otelx"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 // NewIntrospectionRequest initiates token introspection as defined in
@@ -95,10 +93,7 @@ import (
 //	Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
 //
 //	token=mF_9.B5f-4.1JqM&token_type_hint=access_token
-func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (_ IntrospectionResponder, err error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer("github.com/ory/fosite").Start(ctx, "Fosite.NewIntrospectionRequest")
-	defer otelx.End(span, &err)
-
+func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (IntrospectionResponder, error) {
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
 	if r.Method != "POST" {

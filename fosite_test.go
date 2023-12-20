@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/par"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/par"
 )
 
 func TestAuthorizeEndpointHandlers(t *testing.T) {
@@ -31,7 +31,7 @@ func TestTokenEndpointHandlers(t *testing.T) {
 	hs.Append(h)
 	hs.Append(h)
 	// do some crazy type things and make sure dupe detection works
-	var f interface{} = &oauth2.AuthorizeExplicitGrantHandler{}
+	var f any = &oauth2.AuthorizeExplicitGrantHandler{}
 	hs.Append(&oauth2.AuthorizeExplicitGrantHandler{})
 	hs.Append(f.(TokenEndpointHandler))
 	require.Len(t, hs, 1)
@@ -58,9 +58,9 @@ func TestPushedAuthorizedRequestHandlers(t *testing.T) {
 }
 
 func TestMinParameterEntropy(t *testing.T) {
-	f := Fosite{Config: new(Config)}
-	assert.Equal(t, MinParameterEntropy, f.GetMinParameterEntropy(context.Background()))
+	provider := Fosite{Config: new(Config)}
+	assert.Equal(t, MinParameterEntropy, provider.GetMinParameterEntropy(context.Background()))
 
-	f = Fosite{Config: &Config{MinParameterEntropy: 42}}
-	assert.Equal(t, 42, f.GetMinParameterEntropy(context.Background()))
+	provider = Fosite{Config: &Config{MinParameterEntropy: 42}}
+	assert.Equal(t, 42, provider.GetMinParameterEntropy(context.Background()))
 }

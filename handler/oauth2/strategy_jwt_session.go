@@ -8,8 +8,8 @@ import (
 
 	"github.com/mohae/deepcopy"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type JWTSessionContainer interface {
@@ -19,14 +19,14 @@ type JWTSessionContainer interface {
 	// GetJWTHeader returns the header.
 	GetJWTHeader() *jwt.Headers
 
-	fosite.Session
+	oauth2.Session
 }
 
 // JWTSession Container for the JWT session.
 type JWTSession struct {
 	JWTClaims *jwt.JWTClaims
 	JWTHeader *jwt.Headers
-	ExpiresAt map[fosite.TokenType]time.Time
+	ExpiresAt map[oauth2.TokenType]time.Time
 	Username  string
 	Subject   string
 }
@@ -40,21 +40,28 @@ func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 
 func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	if j.JWTHeader == nil {
-		j.JWTHeader = &jwt.Headers{}
+		j.JWTHeader = &jwt.Headers{
+			Extra: map[string]any{
+				jwt.JWTHeaderKeyValueType: jwt.JWTHeaderTypeValueAccessTokenJWT,
+			},
+		}
+	} else if j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] == nil {
+		j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] = jwt.JWTHeaderTypeValueAccessTokenJWT
 	}
+
 	return j.JWTHeader
 }
 
-func (j *JWTSession) SetExpiresAt(key fosite.TokenType, exp time.Time) {
+func (j *JWTSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if j.ExpiresAt == nil {
-		j.ExpiresAt = make(map[fosite.TokenType]time.Time)
+		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
 	j.ExpiresAt[key] = exp
 }
 
-func (j *JWTSession) GetExpiresAt(key fosite.TokenType) time.Time {
+func (j *JWTSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if j.ExpiresAt == nil {
-		j.ExpiresAt = make(map[fosite.TokenType]time.Time)
+		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
 
 	if _, ok := j.ExpiresAt[key]; !ok {
@@ -82,21 +89,21 @@ func (j *JWTSession) GetSubject() string {
 	return j.Subject
 }
 
-func (j *JWTSession) Clone() fosite.Session {
+func (j *JWTSession) Clone() oauth2.Session {
 	if j == nil {
 		return nil
 	}
 
-	return deepcopy.Copy(j).(fosite.Session)
+	return deepcopy.Copy(j).(oauth2.Session)
 }
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.
 // The returned value is a copy of JWTSession claims.
-func (s *JWTSession) GetExtraClaims() map[string]interface{} {
-	if s == nil {
+func (j *JWTSession) GetExtraClaims() map[string]any {
+	if j == nil {
 		return nil
 	}
 
 	// We make a clone so that WithScopeField does not change the original value.
-	return s.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
+	return j.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
 }

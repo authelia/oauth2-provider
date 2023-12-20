@@ -7,12 +7,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
 )
 
 type HandleHelperConfigProvider interface {
-	fosite.AccessTokenLifespanProvider
-	fosite.RefreshTokenLifespanProvider
+	oauth2.AccessTokenLifespanProvider
+	oauth2.RefreshTokenLifespanProvider
 }
 
 type HandleHelper struct {
@@ -21,7 +21,7 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester fosite.AccessRequester, responder fosite.AccessResponder) error {
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
 	token, signature, err := h.AccessTokenStrategy.GenerateAccessToken(ctx, requester)
 	if err != nil {
 		return err
@@ -31,12 +31,12 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 
 	responder.SetAccessToken(token)
 	responder.SetTokenType("bearer")
-	responder.SetExpiresIn(getExpiresIn(requester, fosite.AccessToken, defaultLifespan, time.Now().UTC()))
+	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	return nil
 }
 
-func getExpiresIn(r fosite.Requester, key fosite.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
+func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan
 	}

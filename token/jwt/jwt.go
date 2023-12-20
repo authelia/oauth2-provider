@@ -15,10 +15,9 @@ import (
 	"strings"
 
 	"github.com/go-jose/go-jose/v3"
-
-	"github.com/ory/x/errorsx"
-
 	"github.com/pkg/errors"
+
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type Signer interface {
@@ -32,7 +31,7 @@ type Signer interface {
 
 var SHA256HashSize = crypto.SHA256.Size()
 
-type GetPrivateKeyFunc func(ctx context.Context) (interface{}, error)
+type GetPrivateKeyFunc func(ctx context.Context) (any, error)
 
 // DefaultSigner is responsible for generating and validating JWT challenges
 type DefaultSigner struct {
@@ -140,7 +139,7 @@ func (j *DefaultSigner) GetSigningMethodLength(ctx context.Context) int {
 	return SHA256HashSize
 }
 
-func generateToken(claims MapClaims, header Mapper, signingMethod jose.SignatureAlgorithm, privateKey interface{}) (rawToken string, sig string, err error) {
+func generateToken(claims MapClaims, header Mapper, signingMethod jose.SignatureAlgorithm, privateKey any) (rawToken string, sig string, err error) {
 	if header == nil || claims == nil {
 		err = errors.New("either claims or header is nil")
 		return
@@ -158,12 +157,12 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	return
 }
 
-func decodeToken(token string, verificationKey interface{}) (*Token, error) {
-	keyFunc := func(*Token) (interface{}, error) { return verificationKey, nil }
+func decodeToken(token string, verificationKey any) (*Token, error) {
+	keyFunc := func(*Token) (any, error) { return verificationKey, nil }
 	return ParseWithClaims(token, MapClaims{}, keyFunc)
 }
 
-func validateToken(tokenStr string, verificationKey interface{}) (string, error) {
+func validateToken(tokenStr string, verificationKey any) (string, error) {
 	_, err := decodeToken(tokenStr, verificationKey)
 	if err != nil {
 		return "", err
@@ -188,7 +187,7 @@ func hashSHA256(in []byte) ([]byte, error) {
 	return hash.Sum([]byte{}), nil
 }
 
-func assign(a, b map[string]interface{}) map[string]interface{} {
+func assign(a, b map[string]any) map[string]any {
 	for k, w := range b {
 		if _, ok := a[k]; ok {
 			continue

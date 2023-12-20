@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -12,9 +12,8 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/ory/fosite/token/jwt"
-
-	"github.com/ory/fosite/i18n"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const (
@@ -95,10 +94,10 @@ type Config struct {
 	// codes or other information. Proceed with caution!
 	SendDebugMessagesToClients bool
 
-	// ScopeStrategy sets the scope strategy that should be supported, for example fosite.WildcardScopeStrategy.
+	// ScopeStrategy sets the scope strategy that should be supported, for example oauth2.WildcardScopeStrategy.
 	ScopeStrategy ScopeStrategy
 
-	// AudienceMatchingStrategy sets the audience matching strategy that should be supported, defaults to fosite.DefaultsAudienceMatchingStrategy.
+	// AudienceMatchingStrategy sets the audience matching strategy that should be supported, defaults to oauth2.DefaultsAudienceMatchingStrategy.
 	AudienceMatchingStrategy AudienceMatchingStrategy
 
 	// EnforcePKCE, if set to true, requires clients to perform authorize code flows with PKCE. Defaults to false.
@@ -119,7 +118,7 @@ type Config struct {
 	TokenURL string
 
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
-	// client authentication method is used. Defaults to fosite.DefaultJWKSFetcherStrategy.
+	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
 	JWKSFetcherStrategy JWKSFetcherStrategy
 
 	// TokenEntropy indicates the entropy of the random string, used as the "message" part of the HMAC token.
@@ -132,7 +131,7 @@ type Config struct {
 	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens.
 	RefreshTokenScopes []string
 
-	// MinParameterEntropy controls the minimum size of state and nonce parameters. Defaults to fosite.MinParameterEntropy.
+	// MinParameterEntropy controls the minimum size of state and nonce parameters. Defaults to oauth2.MinParameterEntropy.
 	MinParameterEntropy int
 
 	// UseLegacyErrorFormat controls whether the legacy error format (with `error_debug`, `error_hint`, ...)
@@ -379,7 +378,7 @@ func (c *Config) GetAccessTokenLifespan(_ context.Context) time.Duration {
 	return c.AccessTokenLifespan
 }
 
-// GetNonceLifespan returns how long a nonce should be valid. Defaults to one hour.
+// GetVerifiableCredentialsNonceLifespan returns how long a nonce should be valid. Defaults to one hour.
 func (c *Config) GetVerifiableCredentialsNonceLifespan(_ context.Context) time.Duration {
 	if c.VerifiableCredentialsNonceLifespan == 0 {
 		return time.Hour
@@ -420,7 +419,7 @@ func (c *Config) GetTokenEntropy(_ context.Context) int {
 	return c.TokenEntropy
 }
 
-// GetRedirectSecureChecker returns the checker to check if redirect URI is secure. Defaults to fosite.IsRedirectURISecure.
+// GetRedirectSecureChecker returns the checker to check if redirect URI is secure. Defaults to oauth2.IsRedirectURISecure.
 func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Context, *url.URL) bool {
 	if c.RedirectSecureChecker == nil {
 		return IsRedirectURISecure
@@ -436,7 +435,7 @@ func (c *Config) GetRefreshTokenScopes(_ context.Context) []string {
 	return c.RefreshTokenScopes
 }
 
-// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to fosite.MinParameterEntropy.
+// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.
 func (c *Config) GetMinParameterEntropy(_ context.Context) int {
 	if c.MinParameterEntropy == 0 {
 		return MinParameterEntropy
@@ -458,8 +457,8 @@ func (c *Config) GetJWTMaxDuration(_ context.Context) time.Duration {
 
 // GetClientAuthenticationStrategy returns the configured client authentication strategy.
 // Defaults to nil.
-// Note that on a nil strategy `fosite.Fosite` fallbacks to its default client authentication strategy
-// `fosite.Fosite.DefaultClientAuthenticationStrategy`
+// Note that on a nil strategy `oauth2.Fosite` fallbacks to its default client authentication strategy
+// `oauth2.Fosite.DefaultClientAuthenticationStrategy`
 func (c *Config) GetClientAuthenticationStrategy(_ context.Context) ClientAuthenticationStrategy {
 	return c.ClientAuthenticationStrategy
 }

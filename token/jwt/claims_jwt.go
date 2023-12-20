@@ -52,7 +52,7 @@ type JWTClaims struct {
 	NotBefore  time.Time
 	ExpiresAt  time.Time
 	Scope      []string
-	Extra      map[string]interface{}
+	Extra      map[string]any
 	ScopeField JWTScopeFieldEnum
 }
 
@@ -80,7 +80,7 @@ func (c *JWTClaims) WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContai
 }
 
 // ToMap will transform the headers to a map structure
-func (c *JWTClaims) ToMap() map[string]interface{} {
+func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
@@ -126,7 +126,7 @@ func (c *JWTClaims) ToMap() map[string]interface{} {
 	}
 
 	if c.Scope != nil {
-		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of fosite.
+		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of oauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
 			ret["scp"] = c.Scope
 		}
@@ -142,8 +142,8 @@ func (c *JWTClaims) ToMap() map[string]interface{} {
 }
 
 // FromMap will set the claims based on a mapping
-func (c *JWTClaims) FromMap(m map[string]interface{}) {
-	c.Extra = make(map[string]interface{})
+func (c *JWTClaims) FromMap(m map[string]any) {
+	c.Extra = make(map[string]any)
 	for k, v := range m {
 		switch k {
 		case "jti":
@@ -179,7 +179,7 @@ func (c *JWTClaims) FromMap(m map[string]interface{}) {
 				} else if c.ScopeField == JWTScopeFieldUnset {
 					c.ScopeField = JWTScopeFieldList
 				}
-			case []interface{}:
+			case []any:
 				c.Scope = make([]string, len(s))
 				for i, vi := range s {
 					if s, ok := vi.(string); ok {
@@ -207,7 +207,7 @@ func (c *JWTClaims) FromMap(m map[string]interface{}) {
 	}
 }
 
-func toTime(v interface{}, def time.Time) (t time.Time) {
+func toTime(v any, def time.Time) (t time.Time) {
 	t = def
 	switch a := v.(type) {
 	case float64:
@@ -219,15 +219,15 @@ func toTime(v interface{}, def time.Time) (t time.Time) {
 }
 
 // Add will add a key-value pair to the extra field
-func (c *JWTClaims) Add(key string, value interface{}) {
+func (c *JWTClaims) Add(key string, value any) {
 	if c.Extra == nil {
-		c.Extra = make(map[string]interface{})
+		c.Extra = make(map[string]any)
 	}
 	c.Extra[key] = value
 }
 
 // Get will get a value from the extra field based on a given key
-func (c JWTClaims) Get(key string) interface{} {
+func (c JWTClaims) Get(key string) any {
 	return c.ToMap()[key]
 }
 

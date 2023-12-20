@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
+	"github.com/go-jose/go-jose/v3"
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/ory/x/errorsx"
-
-	"github.com/go-jose/go-jose/v3"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-const defaultJWKSFetcherStrategyCachePrefix = "github.com/ory/fosite.DefaultJWKSFetcherStrategy:"
+const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
 
 // JWKSFetcherStrategy is a strategy which pulls (optionally caches) JSON Web Key Sets from a location,
 // typically a client's jwks_uri.
@@ -42,7 +41,7 @@ func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) JW
 		MaxCost:     10000,
 		BufferItems: 64,
 		Metrics:     false,
-		Cost: func(value interface{}) int64 {
+		Cost: func(value any) int64 {
 			return 1
 		},
 	})

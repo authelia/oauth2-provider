@@ -4,12 +4,12 @@
 package compose
 
 import (
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/par"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/par"
 )
 
 // PushedAuthorizeHandlerFactory creates the basic PAR handler
-func PushedAuthorizeHandlerFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
+func PushedAuthorizeHandlerFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &par.PushedAuthorizeHandler{
 		Storage: storage,
 		Config:  config,

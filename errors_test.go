@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"testing"
@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/text/language"
 
-	"github.com/ory/fosite/i18n"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 func TestRFC6749Error(t *testing.T) {
@@ -19,7 +20,7 @@ func TestRFC6749Error(t *testing.T) {
 		wrap := new(RFC6749Error)
 		wrap.Wrap(orig)
 
-		assert.EqualValues(t, orig.(stackTracer).StackTrace(), wrap.StackTrace())
+		assert.EqualValues(t, orig.(errorsx.StackTracer).StackTrace(), wrap.StackTrace())
 	})
 
 	t.Run("case=wrap_self", func(t *testing.T) {

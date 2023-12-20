@@ -1,19 +1,19 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
 	"fmt"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestNewAccessResponse(t *testing.T) {
@@ -22,7 +22,7 @@ func TestNewAccessResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := &Config{}
-	f := &Fosite{Config: config}
+	provider := &Fosite{Config: config}
 	for k, c := range []struct {
 		handlers  TokenEndpointHandlers
 		mock      func()
@@ -66,7 +66,7 @@ func TestNewAccessResponse(t *testing.T) {
 			},
 			handlers: TokenEndpointHandlers{handler},
 			expect: &AccessResponse{
-				Extra:       map[string]interface{}{},
+				Extra:       map[string]any{},
 				AccessToken: "foo",
 				TokenType:   "bar",
 			},
@@ -75,7 +75,7 @@ func TestNewAccessResponse(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			config.TokenEndpointHandlers = c.handlers
 			c.mock()
-			ar, err := f.NewAccessResponse(context.TODO(), nil)
+			ar, err := provider.NewAccessResponse(context.TODO(), nil)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

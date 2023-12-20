@@ -12,21 +12,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/pkg/errors"
-
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/token/jwt"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestAuthorizeResponseModes(t *testing.T) {
@@ -38,28 +34,28 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			Headers: &jwt.Headers{},
 		},
 	}
-	f := compose.ComposeAllEnabled(&fosite.Config{
+	provider := compose.ComposeAllEnabled(&oauth2.Config{
 		UseLegacyErrorFormat: true,
 		GlobalSecret:         []byte("some-secret-thats-random-some-secret-thats-random-"),
-	}, fositeStore, gen.MustRSAKey())
-	ts := mockServer(t, f, session)
+	}, store, gen.MustRSAKey())
+	ts := mockServer(t, provider, session)
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	defaultClient := fositeStore.Clients["my-client"].(*fosite.DefaultClient)
+	defaultClient := store.Clients["my-client"].(*oauth2.DefaultClient)
 	defaultClient.RedirectURIs[0] = ts.URL + "/callback"
-	responseModeClient := &fosite.DefaultResponseModeClient{
+	responseModeClient := &oauth2.DefaultResponseModeClient{
 		DefaultClient: defaultClient,
-		ResponseModes: []fosite.ResponseModeType{},
+		ResponseModes: []oauth2.ResponseModeType{},
 	}
-	fositeStore.Clients["response-mode-client"] = responseModeClient
+	store.Clients["response-mode-client"] = responseModeClient
 	oauthClient.ClientID = "response-mode-client"
 
 	var state string
 	for k, c := range []struct {
 		description  string
 		setup        func()
-		check        func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string)
+		check        func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string)
 		responseType string
 		responseMode string
 	}{
@@ -70,9 +66,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeQuery}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 				assert.Equal(t, "Insecure response_mode 'query' for the response_type '[id_token token]'.", err["HintField"])
@@ -85,9 +81,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeFormPost}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, token.TokenType)
 				assert.NotEmpty(t, token.AccessToken)
@@ -102,9 +98,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeQuery}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 				assert.Equal(t, "The client is not allowed to request response_mode 'form_post'.", err["HintField"])
@@ -117,11 +113,11 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeQuery}
-				f.(*fosite.Fosite).Config.(*fosite.Config).UseLegacyErrorFormat = false
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
-				f.(*fosite.Fosite).Config.(*fosite.Config).UseLegacyErrorFormat = true // reset
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.Contains(t, err["DescriptionField"], "The client is not allowed to request response_mode 'form_post'.")
 				assert.Empty(t, err["HintField"])
@@ -133,9 +129,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseMode: "fragment",
 			setup: func() {
 				state = "12345678901234567890"
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeFragment}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFragment}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 			},
@@ -146,9 +142,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseMode: "form_post",
 			setup: func() {
 				state = "12345678901234567890"
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeFormPost}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 			},
@@ -160,10 +156,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeQuery}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
-				//assert.EqualValues(t, state, stateFromServer)
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 				assert.Equal(t, "Insecure response_mode 'query' for the response_type '[token code]'.", err["HintField"])
@@ -176,13 +171,12 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeQuery}
-				f.(*fosite.Fosite).Config.(*fosite.Config).UseLegacyErrorFormat = false
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
-				f.(*fosite.Fosite).Config.(*fosite.Config).UseLegacyErrorFormat = true // reset
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
 
-				//assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.Contains(t, err["DescriptionField"], "Insecure response_mode 'query' for the response_type '[token code]'.")
 				assert.Empty(t, err["HintField"])
@@ -196,9 +190,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"openid"}
-				responseModeClient.ResponseModes = []fosite.ResponseModeType{fosite.ResponseModeFormPost}
+				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
-			check: func(t *testing.T, stateFromServer string, code string, token goauth.Token, iDToken string, err map[string]string) {
+			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, token.TokenType)
@@ -209,7 +203,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.setup()
-			authURL := strings.Replace(oauthClient.AuthCodeURL(state, goauth.SetAuthURLParam("response_mode", c.responseMode), goauth.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
+			authURL := strings.Replace(oauthClient.AuthCodeURL(state, xoauth2.SetAuthURLParam("response_mode", c.responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
 
 			var (
 				callbackURL *url.URL
@@ -225,28 +219,27 @@ func TestAuthorizeResponseModes(t *testing.T) {
 
 			var (
 				code, state, iDToken string
-				token                goauth.Token
+				token                xoauth2.Token
 				errResp              map[string]string
 			)
 
 			resp, err := client.Get(authURL)
-			if fosite.ResponseModeType(c.responseMode) == fosite.ResponseModeFragment {
+			if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeFragment {
 				// fragment
 				require.EqualError(t, errors.Unwrap(err), redirErr.Error())
 				fragment, err := url.ParseQuery(callbackURL.Fragment)
 				require.NoError(t, err)
 				code, state, iDToken, token, errResp = getParameters(t, fragment)
-			} else if fosite.ResponseModeType(c.responseMode) == fosite.ResponseModeQuery {
+			} else if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeQuery {
 				// query
 				require.EqualError(t, errors.Unwrap(err), redirErr.Error())
 				query, err := url.ParseQuery(callbackURL.RawQuery)
 				require.NoError(t, err)
 				code, state, iDToken, token, errResp = getParameters(t, query)
-			} else if fosite.ResponseModeType(c.responseMode) == fosite.ResponseModeFormPost {
+			} else if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeFormPost {
 				// form_post
 				require.NoError(t, err)
-				code, state, iDToken, token, _, errResp, err = internal.ParseFormPostResponse(fositeStore.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
-				require.NoError(t, err)
+				code, state, iDToken, token, _, errResp, err = internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
 			} else {
 				t.FailNow()
 			}
@@ -256,7 +249,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	}
 }
 
-func getParameters(t *testing.T, param url.Values) (code, state, iDToken string, token goauth.Token, errResp map[string]string) {
+func getParameters(t *testing.T, param url.Values) (code, state, iDToken string, token xoauth2.Token, errResp map[string]string) {
 	errResp = make(map[string]string)
 	if param.Get("error") != "" {
 		errResp["ErrorField"] = param.Get("error")
@@ -266,7 +259,7 @@ func getParameters(t *testing.T, param url.Values) (code, state, iDToken string,
 		code = param.Get("code")
 		state = param.Get("state")
 		iDToken = param.Get("id_token")
-		token = goauth.Token{
+		token = xoauth2.Token{
 			AccessToken:  param.Get("access_token"),
 			TokenType:    param.Get("token_type"),
 			RefreshToken: param.Get("refresh_token"),

@@ -9,31 +9,30 @@ import (
 	"encoding/base64"
 	"regexp"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/pkg/errors"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-var _ fosite.TokenEndpointHandler = (*Handler)(nil)
+var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
 
 type Handler struct {
-	AuthorizeCodeStrategy oauth2.AuthorizeCodeStrategy
+	AuthorizeCodeStrategy hoauth2.AuthorizeCodeStrategy
 	Storage               PKCERequestStorage
 	Config                interface {
-		fosite.EnforcePKCEProvider
-		fosite.EnforcePKCEForPublicClientsProvider
-		fosite.EnablePKCEPlainChallengeMethodProvider
+		oauth2.EnforcePKCEProvider
+		oauth2.EnforcePKCEForPublicClientsProvider
+		oauth2.EnablePKCEPlainChallengeMethodProvider
 	}
 }
 
-var _ fosite.TokenEndpointHandler = (*Handler)(nil)
+var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
 
-var verifierWrongFormat = regexp.MustCompile("[^\\w\\.\\-~]")
+var verifierWrongFormat = regexp.MustCompile(`[^\w.~-]`)
 
-func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {
+func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !ar.GetResponseTypes().Has("code") {
 		return nil
@@ -49,7 +48,7 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.
 
 	code := resp.GetCode()
 	if len(code) == 0 {
-		return errorsx.WithStack(fosite.ErrServerError.WithDebug("The PKCE handler must be loaded after the authorize code handler."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The PKCE handler must be loaded after the authorize code handler."))
 	}
 
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
@@ -57,13 +56,13 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.
 		"code_challenge",
 		"code_challenge_method",
 	})); err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
 	return nil
 }
 
-func (c *Handler) validate(ctx context.Context, challenge, method string, client fosite.Client) error {
+func (c *Handler) validate(ctx context.Context, challenge, method string, client oauth2.Client) error {
 	if challenge == "" {
 		// If the server requires Proof Key for Code Exchange (PKCE) by OAuth
 		// clients and the client does not send the "code_challenge" in
@@ -72,12 +71,12 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 		// "error_description" or the response of "error_uri" SHOULD explain the
 		// nature of error, e.g., code challenge required.
 		if c.Config.GetEnforcePKCE(ctx) {
-			return errorsx.WithStack(fosite.ErrInvalidRequest.
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
 				WithHint("Clients must include a code_challenge when performing the authorize code flow, but it is missing.").
 				WithDebug("The server is configured in a way that enforces PKCE for clients."))
 		}
 		if c.Config.GetEnforcePKCEForPublicClients(ctx) && client.IsPublic() {
-			return errorsx.WithStack(fosite.ErrInvalidRequest.
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
 				WithHint("This client must include a code_challenge when performing the authorize code flow, but it is missing.").
 				WithDebug("The server is configured in a way that enforces PKCE for this client."))
 		}
@@ -97,20 +96,20 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 		fallthrough
 	case "":
 		if !c.Config.GetEnablePKCEPlainChallengeMethod(ctx) {
-			return errorsx.WithStack(fosite.ErrInvalidRequest.
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
 				WithHint("Clients must use code_challenge_method=S256, plain is not allowed.").
 				WithDebug("The server is configured in a way that enforces PKCE S256 as challenge method for clients."))
 		}
 	default:
-		return errorsx.WithStack(fosite.ErrInvalidRequest.
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.
 			WithHint("The code_challenge_method is not supported, use S256 instead."))
 	}
 	return nil
 }
 
-func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request fosite.AccessRequester) error {
+func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
-		return errorsx.WithStack(fosite.ErrUnknownRequest)
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	// code_verifier
@@ -124,14 +123,14 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request fosite
 	code := request.GetRequestForm().Get("code")
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 	authorizeRequest, err := c.Storage.GetPKCERequestSession(ctx, signature, request.GetSession())
-	if errors.Is(err, fosite.ErrNotFound) {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request").WithWrap(err).WithDebug(err.Error()))
+	if errors.Is(err, oauth2.ErrNotFound) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request").WithWrap(err).WithDebug(err.Error()))
 	} else if err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
 	if err := c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
 	challenge := authorizeRequest.GetRequestForm().Get("code_challenge")
@@ -153,13 +152,13 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request fosite
 
 	// Validation
 	if len(verifier) < 43 {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The PKCE code verifier must be at least 43 characters."))
 	} else if len(verifier) > 128 {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The PKCE code verifier can not be longer than 128 characters."))
 	} else if verifierWrongFormat.MatchString(verifier) {
-		return errorsx.WithStack(fosite.ErrInvalidGrant.
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
 	}
 
@@ -188,19 +187,18 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request fosite
 	case "S256":
 		hash := sha256.New()
 		if _, err := hash.Write([]byte(verifier)); err != nil {
-			return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 
 		if base64.RawURLEncoding.EncodeToString(hash.Sum([]byte{})) != challenge {
-			return errorsx.WithStack(fosite.ErrInvalidGrant.
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.
 				WithHint("The PKCE code challenge did not match the code verifier."))
 		}
-		break
 	case "plain":
 		fallthrough
 	default:
 		if verifier != challenge {
-			return errorsx.WithStack(fosite.ErrInvalidGrant.
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.
 				WithHint("The PKCE code challenge did not match the code verifier."))
 		}
 	}
@@ -208,15 +206,15 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request fosite
 	return nil
 }
 
-func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, requester fosite.AccessRequester, responder fosite.AccessResponder) error {
+func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
 	return nil
 }
 
-func (c *Handler) CanSkipClientAuth(ctx context.Context, requester fosite.AccessRequester) bool {
+func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) bool {
+func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "authorization_code"
 	return requester.GetGrantTypes().ExactOne("authorization_code")

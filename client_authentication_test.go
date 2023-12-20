@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -16,19 +16,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
-
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/go-jose/go-jose/v3"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite/token/jwt"
-
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
@@ -63,7 +60,7 @@ func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priv
 
 // returns an http basic authorization header, encoded using application/x-www-form-urlencoded
 func clientBasicAuthHeader(clientID, clientSecret string) http.Header {
-	creds := url.QueryEscape(clientID) + ":" + url.QueryEscape(clientSecret)
+	creds := clientID + ":" + clientSecret
 	return http.Header{
 		"Authorization": {
 			"Basic " + base64.StdEncoding.EncodeToString([]byte(creds)),
@@ -75,7 +72,7 @@ func TestAuthenticateClient(t *testing.T) {
 	const at = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 	hasher := &BCrypt{Config: &Config{HashCost: 6}}
-	f := &Fosite{
+	provider := &Fosite{
 		Store: storage.NewMemoryStore(),
 		Config: &Config{
 			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
@@ -118,7 +115,9 @@ func TestAuthenticateClient(t *testing.T) {
 	var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, json.NewEncoder(w).Encode(rsaJwks))
 	}
+
 	ts := httptest.NewServer(h)
+
 	defer ts.Close()
 
 	for k, tc := range []struct {
@@ -221,6 +220,12 @@ func TestAuthenticateClient(t *testing.T) {
 			r:      &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
 		},
 		{
+			d:      "should pass because client is confidential and id and secret match in header with special characters",
+			client: &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: complexSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
+			form:   url.Values{},
+			r:      &http.Request{Header: clientBasicAuthHeader("foo", "foo %66%6F%6F@$<§!✓")},
+		},
+		{
 			d:      "should pass because client is confidential and id and rotated secret match in header",
 			client: &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: []byte("invalid_hash"), RotatedSecrets: [][]byte{barSecret}}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:   url.Values{},
@@ -254,18 +259,18 @@ func TestAuthenticateClient(t *testing.T) {
 			expectErr: ErrInvalidClient,
 		},
 		{
-			d:         "should fail because client id is not encoded using application/x-www-form-urlencoded",
+			d:         "should fail because client id is not valid",
 			client:    &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: barSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{"Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
-			expectErr: ErrInvalidRequest,
+			expectErr: ErrInvalidClient,
 		},
 		{
-			d:         "should fail because client secret is not encoded using application/x-www-form-urlencoded",
+			d:         "should fail because client secret is not valid",
 			client:    &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: barSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{"Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
-			expectErr: ErrInvalidRequest,
+			expectErr: ErrInvalidClient,
 		},
 		{
 			d:         "should fail because client is confidential and id does not exist in header",
@@ -520,9 +525,9 @@ func TestAuthenticateClient(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
 			store := storage.NewMemoryStore()
 			store.Clients[tc.client.ID] = tc.client
-			f.Store = store
+			provider.Store = store
 
-			c, err := f.AuthenticateClient(context.Background(), tc.r, tc.form)
+			c, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
 			if tc.expectErr != nil {
 				require.EqualError(t, err, tc.expectErr.Error())
 				return
@@ -567,8 +572,8 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.Clients[client.ID] = client
 
-	hasher := &BCrypt{&Config{HashCost: 6}}
-	f := &Fosite{
+	hasher := &BCrypt{Config: &Config{HashCost: 6}}
+	provider := &Fosite{
 		Store: store,
 		Config: &Config{
 			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
@@ -585,12 +590,12 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		"aud": "token-url",
 	}, key, "kid-foo")}, "client_assertion_type": []string{at}}
 
-	c, err := f.AuthenticateClient(context.Background(), new(http.Request), formValues)
+	c, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.NoError(t, err, "%#v", err)
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
-	c, err = f.AuthenticateClient(context.Background(), new(http.Request), formValues)
+	c, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
 	assert.Nil(t, c)

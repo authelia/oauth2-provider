@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,30 +15,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestPushedAuthorizeCodeFlow(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runPushedAuthorizeCodeGrantTest(t, strategy)
 	}
 }
 
-func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{Subject: "foo-sub"})
+func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{Subject: "foo-sub"})
+
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
+
 	for k, c := range []struct {
 		description    string
 		setup          func()
@@ -75,12 +77,12 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 				state = "12345678901234567890"
 			},
 			check: func(t *testing.T, r *http.Response) {
-				var b fosite.AccessRequest
-				b.Client = new(fosite.DefaultClient)
+				var b oauth2.AccessRequest
+				b.Client = new(oauth2.DefaultClient)
 				b.Session = new(defaultSession)
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
-				assert.EqualValues(t, fosite.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.RequestedAudience)
+				assert.EqualValues(t, oauth2.Arguments{"https://www.ory.sh/api"}, b.GrantedAudience)
 				assert.EqualValues(t, "foo-sub", b.Session.(*defaultSession).Subject)
 			},
 			parStatusCode:  http.StatusCreated,
@@ -126,7 +128,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 				return
 			}
 
-			m := map[string]interface{}{}
+			m := map[string]any{}
 			err = json.Unmarshal(body, &m)
 
 			assert.NoError(t, err, "Error occurred when unamrshaling the body: %v", err)
@@ -159,11 +161,11 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy interface{}) {
 
 			require.NotEmpty(t, resp.Request.URL.Query().Get("code"), "Auth code is empty")
 
-			token, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+			token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
 			require.NoError(t, err)
 			require.NotEmpty(t, token.AccessToken)
 
-			httpClient := oauthClient.Client(goauth.NoContext, token)
+			httpClient := oauthClient.Client(context.TODO(), token)
 			resp, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -179,10 +181,12 @@ func checkStatusAndGetBody(t *testing.T, resp *http.Response, expectedStatusCode
 	defer resp.Body.Close()
 
 	require.Equal(t, expectedStatusCode, resp.StatusCode)
+
 	b, err := io.ReadAll(resp.Body)
 	if err == nil {
 		fmt.Printf("PAR response: body=%s\n", string(b))
 	}
+
 	if expectedStatusCode != resp.StatusCode {
 		return nil, fmt.Errorf("Invalid status code %d", resp.StatusCode)
 	}

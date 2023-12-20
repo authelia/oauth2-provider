@@ -6,9 +6,8 @@ package openid
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
-
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 type OpenIDConnectExplicitHandler struct {
@@ -17,14 +16,16 @@ type OpenIDConnectExplicitHandler struct {
 	OpenIDConnectRequestValidator *OpenIDConnectRequestValidator
 
 	Config interface {
-		fosite.IDTokenLifespanProvider
+		oauth2.IDTokenLifespanProvider
 	}
 
 	*IDTokenHandleHelper
 }
 
-var _ fosite.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
-var _ fosite.TokenEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
+	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
+)
 
 var oidcParameters = []string{"grant_type",
 	"max_age",
@@ -34,17 +35,17 @@ var oidcParameters = []string{"grant_type",
 	"nonce",
 }
 
-func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar fosite.AuthorizeRequester, resp fosite.AuthorizeResponder) error {
+func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	if !(ar.GetGrantedScopes().Has("openid") && ar.GetResponseTypes().ExactOne("code")) {
 		return nil
 	}
 
 	//if !ar.GetClient().GetResponseTypes().Has("id_token", "code") {
-	//	return errorsx.WithStack(fosite.ErrInvalidRequest.WithDebug("The client is not allowed to use response type id_token and code"))
+	//	return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client is not allowed to use response type id_token and code"))
 	//}
 
 	if len(resp.GetCode()) == 0 {
-		return errorsx.WithStack(fosite.ErrMisconfiguration.WithDebug("The authorization code has not been issued yet, indicating a broken code configuration."))
+		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The authorization code has not been issued yet, indicating a broken code configuration."))
 	}
 
 	if err := c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, ar); err != nil {
@@ -52,7 +53,7 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, resp.GetCode(), ar.Sanitize(oidcParameters)); err != nil {
-		return errorsx.WithStack(fosite.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
 	// there is no need to check for https, because it has already been checked by core.explicit

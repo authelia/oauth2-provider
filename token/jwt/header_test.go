@@ -13,7 +13,7 @@ func TestHeaderToMap(t *testing.T) {
 	header := &Headers{}
 	header.Add("foo", "bar")
 	assert.Equal(t, "bar", header.Get("foo"))
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"foo": "bar",
 	}, header.ToMap())
 }

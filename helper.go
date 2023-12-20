@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 // StringInSlice returns true if needle exists in haystack
 func StringInSlice(needle string, haystack []string) bool {
 	for _, b := range haystack {
-		if strings.ToLower(b) == strings.ToLower(needle) {
+		if strings.EqualFold(b, needle) {
 			return true
 		}
 	}

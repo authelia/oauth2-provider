@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"testing"
@@ -17,7 +17,7 @@ func TestSession(t *testing.T) {
 }
 
 func TestZeroSession(t *testing.T) {
-	var s *DefaultSession = new(DefaultSession)
+	var s = new(DefaultSession)
 	assert.Empty(t, s.GetSubject())
 	assert.Empty(t, s.GetUsername())
 	assert.Empty(t, s.Clone())

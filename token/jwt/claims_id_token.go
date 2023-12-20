@@ -11,24 +11,24 @@ import (
 
 // IDTokenClaims represent the claims used in open id connect requests
 type IDTokenClaims struct {
-	JTI                                 string                 `json:"jti"`
-	Issuer                              string                 `json:"iss"`
-	Subject                             string                 `json:"sub"`
-	Audience                            []string               `json:"aud"`
-	Nonce                               string                 `json:"nonce"`
-	ExpiresAt                           time.Time              `json:"exp"`
-	IssuedAt                            time.Time              `json:"iat"`
-	RequestedAt                         time.Time              `json:"rat"`
-	AuthTime                            time.Time              `json:"auth_time"`
-	AccessTokenHash                     string                 `json:"at_hash"`
-	AuthenticationContextClassReference string                 `json:"acr"`
-	AuthenticationMethodsReferences     []string               `json:"amr"`
-	CodeHash                            string                 `json:"c_hash"`
-	Extra                               map[string]interface{} `json:"ext"`
+	JTI                                 string         `json:"jti"`
+	Issuer                              string         `json:"iss"`
+	Subject                             string         `json:"sub"`
+	Audience                            []string       `json:"aud"`
+	Nonce                               string         `json:"nonce"`
+	ExpiresAt                           time.Time      `json:"exp"`
+	IssuedAt                            time.Time      `json:"iat"`
+	RequestedAt                         time.Time      `json:"rat"`
+	AuthTime                            time.Time      `json:"auth_time"`
+	AccessTokenHash                     string         `json:"at_hash"`
+	AuthenticationContextClassReference string         `json:"acr"`
+	AuthenticationMethodsReferences     []string       `json:"amr"`
+	CodeHash                            string         `json:"c_hash"`
+	Extra                               map[string]any `json:"ext"`
 }
 
 // ToMap will transform the headers to a map structure
-func (c *IDTokenClaims) ToMap() map[string]interface{} {
+func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
@@ -110,19 +110,18 @@ func (c *IDTokenClaims) ToMap() map[string]interface{} {
 	}
 
 	return ret
-
 }
 
 // Add will add a key-value pair to the extra field
-func (c *IDTokenClaims) Add(key string, value interface{}) {
+func (c *IDTokenClaims) Add(key string, value any) {
 	if c.Extra == nil {
-		c.Extra = make(map[string]interface{})
+		c.Extra = make(map[string]any)
 	}
 	c.Extra[key] = value
 }
 
 // Get will get a value from the extra field based on a given key
-func (c *IDTokenClaims) Get(key string) interface{} {
+func (c *IDTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
 }
 

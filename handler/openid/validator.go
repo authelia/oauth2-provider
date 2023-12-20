@@ -9,20 +9,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ory/x/errorsx"
-
 	"github.com/pkg/errors"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
-	"github.com/ory/go-convenience/stringslice"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/internal/stringslice"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var defaultPrompts = []string{"login", "none", "consent", "select_account"}
 
 type openIDConnectRequestValidatorConfigProvider interface {
-	fosite.RedirectSecureCheckerProvider
-	fosite.AllowedPromptsProvider
+	oauth2.RedirectSecureCheckerProvider
+	oauth2.AllowedPromptsProvider
 }
 
 type OpenIDConnectRequestValidator struct {
@@ -37,9 +36,9 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Signer, config openIDConnectR
 	}
 }
 
-func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req fosite.AuthorizeRequester) error {
+func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req oauth2.AuthorizeRequester) error {
 	// prompt is case sensitive!
-	requiredPrompt := fosite.RemoveEmpty(strings.Split(req.GetRequestForm().Get("prompt"), " "))
+	requiredPrompt := oauth2.RemoveEmpty(strings.Split(req.GetRequestForm().Get("prompt"), " "))
 
 	if req.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
@@ -63,7 +62,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		checker := v.Config.GetRedirectSecureChecker(ctx)
 		if stringslice.Has(requiredPrompt, "none") {
 			if !checker(ctx, req.GetRedirectURI()) {
-				return errorsx.WithStack(fosite.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but \"prompt=none\" was requested."))
+				return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but \"prompt=none\" was requested."))
 			}
 		}
 	}
@@ -74,12 +73,12 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 	}
 
 	if !isWhitelisted(requiredPrompt, availablePrompts) {
-		return errorsx.WithStack(fosite.ErrInvalidRequest.WithHintf("Used unknown value '%s' for prompt parameter", requiredPrompt))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Used unknown value '%s' for prompt parameter", requiredPrompt))
 	}
 
 	if stringslice.Has(requiredPrompt, "none") && len(requiredPrompt) > 1 {
 		// If this parameter contains none with any other value, an error is returned.
-		return errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
 	maxAge, err := strconv.ParseInt(req.GetRequestForm().Get("max_age"), 10, 64)
@@ -89,42 +88,42 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 
 	session, ok := req.GetSession().(Session)
 	if !ok {
-		return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because session is not of type fosite/handler/openid.Session."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because session is not of type oauth2/handler/openid.Session."))
 	}
 
 	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
-		return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because session subject is empty."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because session subject is empty."))
 	}
 
 	// Adds a bit of wiggle room for timing issues
 	if claims.AuthTime.After(time.Now().UTC().Add(time.Second * 5)) {
-		return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 	}
 
 	if maxAge > 0 {
 		if claims.AuthTime.IsZero() {
-			return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
 		} else if claims.RequestedAt.IsZero() {
-			return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
 		} else if claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt) {
-			return errorsx.WithStack(fosite.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
 		}
 	}
 
 	if stringslice.Has(requiredPrompt, "none") {
 		if claims.AuthTime.IsZero() {
-			return errorsx.WithStack(fosite.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
 		if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.After(claims.RequestedAt) {
 			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
-			return errorsx.WithStack(fosite.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
 		}
 	}
 
 	if stringslice.Has(requiredPrompt, "login") {
 		if claims.AuthTime.Before(claims.RequestedAt) {
-			return errorsx.WithStack(fosite.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
 		}
 	}
 
@@ -138,13 +137,13 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok
 	} else if err != nil {
-		return errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebug(err.Error()))
 	}
 
 	if hintSub, _ := tokenHint.Claims["sub"].(string); hintSub == "" {
-		return errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided id token from id_token_hint does not have a subject."))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided id token from id_token_hint does not have a subject."))
 	} else if hintSub != claims.Subject {
-		return errorsx.WithStack(fosite.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided id token from id_token_hint does not match the current session's subject."))
+		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided id token from id_token_hint does not match the current session's subject."))
 	}
 
 	return nil

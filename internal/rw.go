@@ -9,7 +9,7 @@ package internal
 import (
 	"net/http"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 // Mock of ResponseWriter interface
@@ -50,7 +50,7 @@ func (_m *MockResponseWriter) Write(_param0 []byte) (int, error) {
 	return ret0, ret1
 }
 
-func (_mr *_MockResponseWriterRecorder) Write(arg0 interface{}) *gomock.Call {
+func (_mr *_MockResponseWriterRecorder) Write(arg0 any) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Write", arg0)
 }
 
@@ -58,6 +58,6 @@ func (_m *MockResponseWriter) WriteHeader(_param0 int) {
 	_m.ctrl.Call(_m, "WriteHeader", _param0)
 }
 
-func (_mr *_MockResponseWriterRecorder) WriteHeader(arg0 interface{}) *gomock.Call {
+func (_mr *_MockResponseWriterRecorder) WriteHeader(arg0 any) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "WriteHeader", arg0)
 }

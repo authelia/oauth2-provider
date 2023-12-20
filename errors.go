@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"encoding/json"
@@ -11,12 +11,11 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/pkg/errors"
 	"golang.org/x/text/language"
 
-	"github.com/ory/fosite/i18n"
-	"github.com/ory/x/errorsx"
-
-	"github.com/pkg/errors"
+	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 var (
@@ -254,12 +253,9 @@ type (
 
 		// Fields for globalization
 		hintIDField string
-		hintArgs    []interface{}
+		hintArgs    []any
 		catalog     i18n.MessageCatalog
 		lang        language.Tag
-	}
-	stackTracer interface {
-		StackTrace() errors.StackTrace
 	}
 )
 
@@ -269,7 +265,7 @@ var (
 	_ errorsx.RequestIDCarrier  = new(RFC6749Error)
 	_ errorsx.StatusCarrier     = new(RFC6749Error)
 	_ errorsx.StatusCodeCarrier = new(RFC6749Error)
-	// _ errorsx.DetailsCarrier = new(RFC6749Error)
+	_ errorsx.DetailsCarrier    = new(RFC6749Error)
 )
 
 func ErrorToRFC6749Error(err error) *RFC6749Error {
@@ -292,7 +288,7 @@ func (e *RFC6749Error) StackTrace() (trace errors.StackTrace) {
 		return
 	}
 
-	if st := stackTracer(nil); stderr.As(e.cause, &st) {
+	if st := errorsx.StackTracer(nil); stderr.As(e.cause, &st) {
 		trace = st.StackTrace()
 	}
 
@@ -318,7 +314,7 @@ func (e RFC6749Error) WithLegacyFormat(useLegacyFormat bool) *RFC6749Error {
 }
 
 func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
-	if st := stackTracer(nil); !stderr.As(e.cause, &st) {
+	if st := errorsx.StackTracer(nil); !stderr.As(e.cause, &st) {
 		e.Wrap(errorsx.WithStack(err))
 	} else {
 		e.Wrap(err)
@@ -354,6 +350,10 @@ func (e *RFC6749Error) Reason() string {
 	return e.HintField
 }
 
+func (e *RFC6749Error) Details() map[string]any {
+	return nil
+}
+
 func (e *RFC6749Error) StatusCode() int {
 	return e.CodeField
 }
@@ -362,7 +362,7 @@ func (e *RFC6749Error) Cause() error {
 	return e.cause
 }
 
-func (e *RFC6749Error) WithHintf(hint string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 	err := *e
 	if err.hintIDField == "" {
 		err.hintIDField = hint
@@ -384,7 +384,7 @@ func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 }
 
 // WithHintIDOrDefaultf accepts the ID of the hint message
-func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...any) *RFC6749Error {
 	err := *e
 	err.hintIDField = ID
 	err.hintArgs = args
@@ -410,7 +410,7 @@ func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 	return &err
 }
 
-func (e *RFC6749Error) WithDebugf(debug string, args ...interface{}) *RFC6749Error {
+func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
 	return e.WithDebug(fmt.Sprintf(debug, args...))
 }
 

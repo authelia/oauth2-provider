@@ -6,11 +6,11 @@ package pkce
 import (
 	"context"
 
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
 )
 
 type PKCERequestStorage interface {
-	GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error)
-	CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error
+	GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
+	CreatePKCERequestSession(ctx context.Context, signature string, requester oauth2.Requester) error
 	DeletePKCERequestSession(ctx context.Context, signature string) error
 }

@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -11,16 +11,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	. "github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/internal"
 )
 
 func TestWriteAccessError(t *testing.T) {
-	f := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
 	ctrl := gomock.NewController(t)
 	rw := NewMockResponseWriter(ctrl)
@@ -30,14 +30,14 @@ func TestWriteAccessError(t *testing.T) {
 	rw.EXPECT().WriteHeader(http.StatusBadRequest)
 	rw.EXPECT().Write(gomock.Any())
 
-	f.WriteAccessError(context.Background(), rw, nil, ErrInvalidRequest)
+	provider.WriteAccessError(context.Background(), rw, nil, ErrInvalidRequest)
 }
 
 func TestWriteAccessError_RFC6749(t *testing.T) {
 	// https://tools.ietf.org/html/rfc6749#section-5.2
 
 	config := new(Config)
-	f := &Fosite{Config: config}
+	provider := &Fosite{Config: config}
 
 	for k, c := range []struct {
 		err                *RFC6749Error
@@ -62,7 +62,7 @@ func TestWriteAccessError_RFC6749(t *testing.T) {
 			config.UseLegacyErrorFormat = c.includeExtraFields
 
 			rw := httptest.NewRecorder()
-			f.WriteAccessError(context.Background(), rw, nil, c.err)
+			provider.WriteAccessError(context.Background(), rw, nil, c.err)
 
 			var params struct {
 				Error       string `json:"error"`             // specified by RFC, required

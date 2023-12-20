@@ -1,24 +1,25 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
-
-	"github.com/ory/x/errorsx"
 
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // ClientAuthenticationStrategy provides a method signature for authenticating a client request
@@ -27,7 +28,7 @@ type ClientAuthenticationStrategy func(context.Context, *http.Request, url.Value
 // #nosec:gosec G101 - False Positive
 const clientAssertionJWTBearerType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
-func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (interface{}, error) {
+func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (any, error) {
 	if set := oidcClient.GetJSONWebKeys(); set != nil {
 		return findPublicKey(t, set, expectsRSAKey)
 	}
@@ -54,7 +55,7 @@ func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConne
 }
 
 // AuthenticateClient authenticates client requests using the configured strategy
-// `Fosite.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
+// `oauth2.ClientAuthenticationStrategy`, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`
 func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (Client, error) {
 	if s := f.Config.GetClientAuthenticationStrategy(ctx); s != nil {
 		return s(ctx, r, form)
@@ -74,7 +75,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 		var clientID string
 		var client Client
 
-		token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (any, error) {
 			var err error
 			clientID, _, err = clientCredentialsFromRequestBody(form, false)
 			if err != nil {
@@ -180,7 +181,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 			return nil, err
 		}
 
-		if auds, ok := claims["aud"].([]interface{}); !ok {
+		if auds, ok := claims["aud"].([]any); !ok {
 			if !claims.VerifyAudience(f.Config.GetTokenURL(ctx), true) {
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("Claim 'audience' from 'client_assertion' must match the authorization server's token endpoint '%s'.", f.Config.GetTokenURL(ctx)))
 			}
@@ -255,7 +256,7 @@ func (f *Fosite) checkClientSecret(ctx context.Context, client Client, clientSec
 	return err
 }
 
-func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (interface{}, error) {
+func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (any, error) {
 	keys := set.Keys
 	if len(keys) == 0 {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The retrieved JSON Web Key Set does not contain any key."))
@@ -292,25 +293,74 @@ func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (i
 	}
 }
 
-func clientCredentialsFromRequest(r *http.Request, form url.Values) (clientID, clientSecret string, err error) {
-	if id, secret, ok := r.BasicAuth(); !ok {
-		return clientCredentialsFromRequestBody(form, true)
-	} else if clientID, err = url.QueryUnescape(id); err != nil {
-		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'.").WithWrap(err).WithDebug(err.Error()))
-	} else if clientSecret, err = url.QueryUnescape(secret); err != nil {
-		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'.").WithWrap(err).WithDebug(err.Error()))
-	}
+func clientCredentialsFromRequest(r *http.Request, form url.Values) (id, secret string, err error) {
+	var ok bool
 
-	return clientID, clientSecret, nil
+	switch id, secret, ok, err = clientCredentialsFromBasicAuth(r); {
+	case err != nil:
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data.").WithWrap(err).WithDebug(err.Error()))
+	case ok:
+		return id, secret, nil
+	default:
+		return clientCredentialsFromRequestBody(form, true)
+	}
 }
 
-func clientCredentialsFromRequestBody(form url.Values, forceID bool) (clientID, clientSecret string, err error) {
-	clientID = form.Get("client_id")
-	clientSecret = form.Get("client_secret")
+func clientCredentialsFromBasicAuth(r *http.Request) (id, secret string, ok bool, err error) {
+	auth := r.Header.Get("Authorization")
 
-	if clientID == "" && forceID {
+	if auth == "" {
+		return "", "", false, nil
+	}
+
+	scheme, value, ok := strings.Cut(auth, " ")
+
+	if !ok {
+		return "", "", false, errors.New("failed to parse http authorization header: invalid scheme: the scheme was missing")
+	}
+
+	if !strings.EqualFold(scheme, "Basic") {
+		return "", "", false, fmt.Errorf("failed to parse http authorization header: invalid scheme: expected the Basic scheme but received %s", scheme)
+	}
+
+	c, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to parse http authorization header: invalid value: malformed base64 data: %w", err)
+	}
+
+	cs := string(c)
+
+	id, secret, ok = strings.Cut(cs, ":")
+	if !ok {
+		return "", "", false, errors.New("failed to parse http authorization header: invalid value: the basic scheme separator was missing")
+	}
+
+	if len(id) != 0 && !RegexSpecificationVSCHAR.MatchString(id) {
+		return "", "", false, errorsx.WithStack(ErrInvalidRequest.WithHint("The client id in the HTTP request had an invalid character."))
+	}
+
+	if len(secret) != 0 && !RegexSpecificationVSCHAR.MatchString(secret) {
+		return "", "", false, errorsx.WithStack(ErrInvalidRequest.WithHint("The client secret in the HTTP request had an invalid character."))
+	}
+
+	return id, secret, true, nil
+}
+
+func clientCredentialsFromRequestBody(form url.Values, forceID bool) (id, secret string, err error) {
+	id = form.Get("client_id")
+	secret = form.Get("client_secret")
+
+	if id == "" && forceID {
 		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("Client credentials missing or malformed in both HTTP Authorization header and HTTP POST body."))
 	}
 
-	return clientID, clientSecret, nil
+	if len(id) != 0 && !RegexSpecificationVSCHAR.MatchString(id) {
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client id in the HTTP request had an invalid character."))
+	}
+
+	if len(secret) != 0 && !RegexSpecificationVSCHAR.MatchString(secret) {
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client secret in the HTTP request had an invalid character."))
+	}
+
+	return id, secret, nil
 }

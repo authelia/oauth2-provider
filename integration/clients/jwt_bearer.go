@@ -21,6 +21,7 @@ const jwtBearerGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 
 type JWTBearer struct {
 	tokenURL string
+	header   *Header
 	client   *http.Client
 
 	Signer jose.Signer
@@ -42,7 +43,7 @@ type Header struct {
 type JWTBearerPayload struct {
 	*jwt.Claims
 
-	PrivateClaims map[string]interface{}
+	PrivateClaims map[string]any
 }
 
 func (c *JWTBearer) SetPrivateKey(keyID string, privateKey *rsa.PrivateKey) error {
@@ -117,7 +118,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 func (c *JWTBearer) getRequestBodyReader(assertion string, scope []string) (io.Reader, error) {
 	data := url.Values{}
 	data.Set("grant_type", jwtBearerGrantType)
-	data.Set("assertion", string(assertion))
+	data.Set("assertion", assertion)
 
 	if len(scope) != 0 {
 		data.Set("scope", strings.Join(scope, " "))

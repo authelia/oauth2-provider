@@ -10,32 +10,32 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIntrospectJWT(t *testing.T) {
 	rsaKey := gen.MustRSAKey()
 	strat := &DefaultJWTStrategy{
 		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (interface{}, error) {
+			GetPrivateKey: func(_ context.Context) (any, error) {
 				return rsaKey, nil
 			},
 		},
-		Config: &fosite.Config{},
+		Config: &oauth2.Config{},
 	}
 
 	var v = &StatelessJWTValidator{
 		Signer: strat,
-		Config: &fosite.Config{
-			ScopeStrategy: fosite.HierarchicScopeStrategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
 	}
+
 	for k, c := range []struct {
 		description string
 		token       func() string
@@ -45,19 +45,19 @@ func TestIntrospectJWT(t *testing.T) {
 		{
 			description: "should fail because jwt is expired",
 			token: func() string {
-				jwt := jwtExpiredCase(fosite.AccessToken)
-				token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+				jwt := jwtExpiredCase(oauth2.AccessToken)
+				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
-			expectErr: fosite.ErrTokenExpired,
+			expectErr: oauth2.ErrTokenExpired,
 		},
 		{
 			description: "should pass because scope was granted",
 			token: func() string {
-				jwt := jwtValidCase(fosite.AccessToken)
+				jwt := jwtValidCase(oauth2.AccessToken)
 				jwt.GrantedScope = []string{"foo", "bar"}
-				token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
@@ -66,19 +66,19 @@ func TestIntrospectJWT(t *testing.T) {
 		{
 			description: "should fail because scope was not granted",
 			token: func() string {
-				jwt := jwtValidCase(fosite.AccessToken)
-				token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+				jwt := jwtValidCase(oauth2.AccessToken)
+				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
 			scopes:    []string{"foo"},
-			expectErr: fosite.ErrInvalidScope,
+			expectErr: oauth2.ErrInvalidScope,
 		},
 		{
 			description: "should fail because signature is invalid",
 			token: func() string {
-				jwt := jwtValidCase(fosite.AccessToken)
-				token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+				jwt := jwtValidCase(oauth2.AccessToken)
+				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				parts := strings.Split(token, ".")
 				require.Len(t, parts, 3, "%s - %v", token, parts)
@@ -88,13 +88,13 @@ func TestIntrospectJWT(t *testing.T) {
 				parts[1] = base64.RawURLEncoding.EncodeToString([]byte(s))
 				return strings.Join(parts, ".")
 			},
-			expectErr: fosite.ErrTokenSignatureMismatch,
+			expectErr: oauth2.ErrTokenSignatureMismatch,
 		},
 		{
 			description: "should pass",
 			token: func() string {
-				jwt := jwtValidCase(fosite.AccessToken)
-				token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+				jwt := jwtValidCase(oauth2.AccessToken)
+				token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 				assert.NoError(t, err)
 				return token
 			},
@@ -105,8 +105,8 @@ func TestIntrospectJWT(t *testing.T) {
 				c.scopes = []string{}
 			}
 
-			areq := fosite.NewAccessRequest(nil)
-			_, err := v.IntrospectToken(context.Background(), c.token(), fosite.AccessToken, areq, c.scopes)
+			areq := oauth2.NewAccessRequest(nil)
+			_, err := v.IntrospectToken(context.TODO(), c.token(), oauth2.AccessToken, areq, c.scopes)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
@@ -120,24 +120,24 @@ func TestIntrospectJWT(t *testing.T) {
 
 func BenchmarkIntrospectJWT(b *testing.B) {
 	strat := &DefaultJWTStrategy{
-		Signer: &jwt.DefaultSigner{GetPrivateKey: func(_ context.Context) (interface{}, error) {
+		Signer: &jwt.DefaultSigner{GetPrivateKey: func(_ context.Context) (any, error) {
 			return gen.MustRSAKey(), nil
 		},
 		},
-		Config: &fosite.Config{},
+		Config: &oauth2.Config{},
 	}
 
 	v := &StatelessJWTValidator{
 		Signer: strat,
 	}
 
-	jwt := jwtValidCase(fosite.AccessToken)
-	token, _, err := strat.GenerateAccessToken(context.Background(), jwt)
+	jwt := jwtValidCase(oauth2.AccessToken)
+	token, _, err := strat.GenerateAccessToken(context.TODO(), jwt)
 	assert.NoError(b, err)
-	areq := fosite.NewAccessRequest(nil)
+	areq := oauth2.NewAccessRequest(nil)
 
 	for n := 0; n < b.N; n++ {
-		_, err = v.IntrospectToken(context.Background(), token, fosite.AccessToken, areq, []string{})
+		_, err = v.IntrospectToken(context.TODO(), token, oauth2.AccessToken, areq, []string{})
 	}
 
 	assert.NoError(b, err)

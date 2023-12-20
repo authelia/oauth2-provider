@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,35 +12,35 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2" // "github.com/stretchr/testify/assert"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
 func TestAuthorizeCodeFlowWithPublicClientAndPKCE(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runAuthorizeCodeGrantWithPublicClientAndPKCETest(t, strategy)
 	}
 }
 
-func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy interface{}) {
-	c := new(fosite.Config)
+func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any) {
+	c := new(oauth2.Config)
 	c.EnforcePKCE = true
 	c.EnablePKCEPlainChallengeMethod = true
-	f := compose.Compose(c, fositeStore, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+	provider := compose.Compose(c, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	fositeStore.Clients["public-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var authCodeUrl string
 	var verifier string
@@ -85,7 +86,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy int
 
 			if resp.StatusCode == http.StatusOK {
 				// This should fail because no verifier was given
-				// _, err := oauthClient.Exchange(goauth.NoContext, resp.Request.URL.Query().Get("code"))
+				// _, err := oauthClient.Exchange(xoauth2.NoContext, resp.Request.URL.Query().Get("code"))
 				// require.Error(t, err)
 				// require.Empty(t, token.AccessToken)
 				t.Logf("Got redirect url: %s", resp.Request.URL)
@@ -105,19 +106,19 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy int
 
 				if c.tokenStatusCode != 0 {
 					require.Equal(t, c.tokenStatusCode, resp.StatusCode)
-					token := goauth.Token{}
+					token := xoauth2.Token{}
 					require.NoError(t, json.Unmarshal(body, &token))
 					require.Empty(t, token.AccessToken)
 					return
 				}
 
 				assert.Equal(t, resp.StatusCode, http.StatusOK)
-				token := goauth.Token{}
+				token := xoauth2.Token{}
 				require.NoError(t, json.Unmarshal(body, &token))
 
 				require.NotEmpty(t, token.AccessToken, "Got body: %s", string(body))
 
-				httpClient := oauthClient.Client(goauth.NoContext, &token)
+				httpClient := oauthClient.Client(context.TODO(), &token)
 				resp, err = httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

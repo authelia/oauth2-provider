@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,23 +18,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/internal"
+	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestClientCredentialsFlow(t *testing.T) {
-	for _, strategy := range []oauth2.AccessTokenStrategy{
+	for _, strategy := range []hoauth2.AccessTokenStrategy{
 		hmacStrategy,
 	} {
 		runClientCredentialsGrantTest(t, strategy)
 	}
 }
 
-func introspect(t *testing.T, ts *httptest.Server, token string, p interface{}, username, password string) {
+func introspect(t *testing.T, ts *httptest.Server, token string, p any, username, password string) {
 	req, err := http.NewRequest("POST", ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
 	require.NoError(t, err)
 	req.SetBasicAuth(username, password)
@@ -47,19 +48,19 @@ func introspect(t *testing.T, ts *httptest.Server, token string, p interface{}, 
 	require.NoError(t, json.Unmarshal(body, p))
 }
 
-func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(fosite.Config), fositeStore, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &fosite.DefaultSession{})
+func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
+	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
+	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	fositeStore.Clients["my-client"].(*fosite.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	fositeStore.Clients["custom-lifespan-client"].(*fosite.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients["custom-lifespan-client"].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 	for k, c := range []struct {
 		description string
 		setup       func()
 		err         bool
-		check       func(t *testing.T, token *goauth.Token)
+		check       func(t *testing.T, token *xoauth2.Token)
 		params      url.Values
 	}{
 		{
@@ -73,7 +74,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 			description: "should fail because of ungranted audience",
 			params:      url.Values{"audience": {"https://www.ory.sh/not-api"}},
 			setup: func() {
-				oauthClient.Scopes = []string{"fosite"}
+				oauthClient.Scopes = []string{"oauth2"}
 			},
 			err: true,
 		},
@@ -82,26 +83,26 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 			description: "should pass",
 			setup: func() {
 			},
-			check: func(t *testing.T, token *goauth.Token) {
+			check: func(t *testing.T, token *xoauth2.Token) {
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "fosite", gjson.GetBytes(j, "scope").String())
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() {
 			},
-			check: func(t *testing.T, token *goauth.Token) {
+			check: func(t *testing.T, token *xoauth2.Token) {
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "fosite", gjson.GetBytes(j, "scope").String())
-				atReq, ok := fositeStore.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
+				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
-				atExp := atReq.GetSession().GetExpiresAt(fosite.AccessToken)
+				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(time.Hour), atExp, time.Minute)
 				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
 				internal.RequireEqualDuration(t, time.Hour, atExpIn, time.Minute)
@@ -112,20 +113,20 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 			setup: func() {
 				oauthClient.ClientID = "custom-lifespan-client"
 			},
-			check: func(t *testing.T, token *goauth.Token) {
+			check: func(t *testing.T, token *xoauth2.Token) {
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "fosite", gjson.GetBytes(j, "scope").String())
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
 
-				atReq, ok := fositeStore.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
+				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
-				atExp := atReq.GetSession().GetExpiresAt(fosite.AccessToken)
+				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan), atExp, time.Minute)
 				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan, atExpIn, time.Minute)
-				rtExp := atReq.GetSession().GetExpiresAt(fosite.RefreshToken)
+				rtExp := atReq.GetSession().GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Time{}, rtExp, time.Minute)
 			},
 		},
@@ -134,7 +135,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy oauth2.AccessTokenStra
 			c.setup()
 
 			oauthClient.EndpointParams = c.params
-			token, err := oauthClient.Token(goauth.NoContext)
+			token, err := oauthClient.Token(context.TODO())
 			require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
 			if !c.err {
 				assert.NotEmpty(t, token.AccessToken, "(%d) %s\n%s", k, c.description, token)

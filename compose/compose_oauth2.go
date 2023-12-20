@@ -4,31 +4,31 @@
 package compose
 
 import (
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/token/jwt"
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // OAuth2AuthorizeExplicitFactory creates an OAuth2 authorize code grant ("authorize explicit flow") handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2AuthorizeExplicitFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.AuthorizeExplicitGrantHandler{
-		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
-		RefreshTokenStrategy:   strategy.(oauth2.RefreshTokenStrategy),
-		AuthorizeCodeStrategy:  strategy.(oauth2.AuthorizeCodeStrategy),
-		CoreStorage:            storage.(oauth2.CoreStorage),
-		TokenRevocationStorage: storage.(oauth2.TokenRevocationStorage),
+func OAuth2AuthorizeExplicitFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.AuthorizeExplicitGrantHandler{
+		AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),
+		RefreshTokenStrategy:   strategy.(hoauth2.RefreshTokenStrategy),
+		AuthorizeCodeStrategy:  strategy.(hoauth2.AuthorizeCodeStrategy),
+		CoreStorage:            storage.(hoauth2.CoreStorage),
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 		Config:                 config,
 	}
 }
 
 // OAuth2ClientCredentialsGrantFactory creates an OAuth2 client credentials grant handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2ClientCredentialsGrantFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.ClientCredentialsGrantHandler{
-		HandleHelper: &oauth2.HandleHelper{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+func OAuth2ClientCredentialsGrantFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.ClientCredentialsGrantHandler{
+		HandleHelper: &hoauth2.HandleHelper{
+			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 			Config:              config,
 		},
 		Config: config,
@@ -37,21 +37,21 @@ func OAuth2ClientCredentialsGrantFactory(config fosite.Configurator, storage int
 
 // OAuth2RefreshTokenGrantFactory creates an OAuth2 refresh grant handler and registers
 // an access token, refresh token and authorize code validator.nmj
-func OAuth2RefreshTokenGrantFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.RefreshTokenGrantHandler{
-		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
-		RefreshTokenStrategy:   strategy.(oauth2.RefreshTokenStrategy),
-		TokenRevocationStorage: storage.(oauth2.TokenRevocationStorage),
+func OAuth2RefreshTokenGrantFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.RefreshTokenGrantHandler{
+		AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),
+		RefreshTokenStrategy:   strategy.(hoauth2.RefreshTokenStrategy),
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 		Config:                 config,
 	}
 }
 
 // OAuth2AuthorizeImplicitFactory creates an OAuth2 implicit grant ("authorize implicit flow") handler and registers
 // an access token, refresh token and authorize code validator.
-func OAuth2AuthorizeImplicitFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.AuthorizeImplicitGrantTypeHandler{
-		AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-		AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+func OAuth2AuthorizeImplicitFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.AuthorizeImplicitGrantTypeHandler{
+		AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+		AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 		Config:              config,
 	}
 }
@@ -62,34 +62,34 @@ func OAuth2AuthorizeImplicitFactory(config fosite.Configurator, storage interfac
 // Deprecated: This factory is deprecated as a means to communicate that the ROPC grant type is widely discouraged and
 // is at the time of this writing going to be omitted in the OAuth 2.1 spec. For more information on why this grant type
 // is discouraged see: https://www.scottbrady91.com/oauth/why-the-resource-owner-password-credentials-grant-type-is-not-authentication-nor-suitable-for-modern-applications
-func OAuth2ResourceOwnerPasswordCredentialsFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.ResourceOwnerPasswordCredentialsGrantHandler{
-		ResourceOwnerPasswordCredentialsGrantStorage: storage.(oauth2.ResourceOwnerPasswordCredentialsGrantStorage),
-		HandleHelper: &oauth2.HandleHelper{
-			AccessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-			AccessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+func OAuth2ResourceOwnerPasswordCredentialsFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.ResourceOwnerPasswordCredentialsGrantHandler{
+		ResourceOwnerPasswordCredentialsGrantStorage: storage.(hoauth2.ResourceOwnerPasswordCredentialsGrantStorage),
+		HandleHelper: &hoauth2.HandleHelper{
+			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
+			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),
 			Config:              config,
 		},
-		RefreshTokenStrategy: strategy.(oauth2.RefreshTokenStrategy),
+		RefreshTokenStrategy: strategy.(hoauth2.RefreshTokenStrategy),
 		Config:               config,
 	}
 }
 
 // OAuth2TokenRevocationFactory creates an OAuth2 token revocation handler.
-func OAuth2TokenRevocationFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.TokenRevocationHandler{
-		TokenRevocationStorage: storage.(oauth2.TokenRevocationStorage),
-		AccessTokenStrategy:    strategy.(oauth2.AccessTokenStrategy),
-		RefreshTokenStrategy:   strategy.(oauth2.RefreshTokenStrategy),
+func OAuth2TokenRevocationFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.TokenRevocationHandler{
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
+		AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),
+		RefreshTokenStrategy:   strategy.(hoauth2.RefreshTokenStrategy),
 	}
 }
 
 // OAuth2TokenIntrospectionFactory creates an OAuth2 token introspection handler and registers
 // an access token and refresh token validator.
-func OAuth2TokenIntrospectionFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.CoreValidator{
-		CoreStrategy: strategy.(oauth2.CoreStrategy),
-		CoreStorage:  storage.(oauth2.CoreStorage),
+func OAuth2TokenIntrospectionFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.CoreValidator{
+		CoreStrategy: strategy.(hoauth2.CoreStrategy),
+		CoreStorage:  storage.(hoauth2.CoreStorage),
 		Config:       config,
 	}
 }
@@ -101,8 +101,8 @@ func OAuth2TokenIntrospectionFactory(config fosite.Configurator, storage interfa
 //
 // Due to the stateless nature of this factory, THE BUILT-IN REVOCATION MECHANISMS WILL NOT WORK.
 // If you need revocation, you can validate JWTs statefully, using the other factories.
-func OAuth2StatelessJWTIntrospectionFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
-	return &oauth2.StatelessJWTValidator{
+func OAuth2StatelessJWTIntrospectionFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.StatelessJWTValidator{
 		Signer: strategy.(jwt.Signer),
 		Config: config,
 	}

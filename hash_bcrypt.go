@@ -1,14 +1,14 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
 
-	"github.com/ory/x/errorsx"
-
 	"golang.org/x/crypto/bcrypt"
+
+	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
 const DefaultBCryptWorkFactor = 12

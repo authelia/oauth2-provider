@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite
+package oauth2
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func (a *PushedAuthorizeEndpointHandlers) Append(h PushedAuthorizeEndpointHandle
 	*a = append(*a, h)
 }
 
-var _ OAuth2Provider = (*Fosite)(nil)
+var _ Provider = (*Fosite)(nil)
 
 type Configurator interface {
 	IDTokenIssuerProvider
@@ -134,18 +134,18 @@ type Configurator interface {
 	UseLegacyErrorFormatProvider
 }
 
-func NewOAuth2Provider(s Storage, c Configurator) *Fosite {
-	return &Fosite{Store: s, Config: c}
+func New(store Storage, config Configurator) *Fosite {
+	return &Fosite{Store: store, Config: config}
 }
 
-// Fosite implements OAuth2Provider.
+// Fosite implements Provider.
 type Fosite struct {
 	Store Storage
 
 	Config Configurator
 }
 
-// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to fosite.MinParameterEntropy.
+// GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.
 func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	if mp := f.Config.GetMinParameterEntropy(ctx); mp > 0 {
 		return mp

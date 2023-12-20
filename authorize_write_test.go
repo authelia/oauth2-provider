@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -9,15 +9,15 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	. "github.com/ory/fosite/internal"
+	. "authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/internal"
 )
 
 func TestWriteAuthorizeResponse(t *testing.T) {
-	oauth2 := &Fosite{Config: new(Config)}
+	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
 	ctrl := gomock.NewController(t)
 	rw := NewMockResponseWriter(ctrl)
@@ -205,7 +205,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 	} {
 		t.Logf("Starting test case %d", k)
 		c.setup()
-		oauth2.WriteAuthorizeResponse(context.Background(), rw, ar, resp)
+		provider.WriteAuthorizeResponse(context.Background(), rw, ar, resp)
 		c.expect()
 		header = http.Header{}
 		t.Logf("Passed test case %d", k)

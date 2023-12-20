@@ -61,7 +61,7 @@ func (l *DefaultLocaleBundle) Init() error {
 	return nil
 }
 
-func (c *defaultMessageCatalog) GetMessage(ID string, tag language.Tag, v ...interface{}) string {
+func (c *defaultMessageCatalog) GetMessage(ID string, tag language.Tag, v ...any) string {
 	matchedTag, _, _ := c.matcher.Match(tag)
 	p := message.NewPrinter(matchedTag)
 

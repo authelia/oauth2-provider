@@ -13,28 +13,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/fosite/internal/gen"
-
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/internal/gen"
 )
 
 func TestUnsignedToken(t *testing.T) {
 	var testCases = []struct {
 		name         string
-		jwtHeaders   map[string]interface{}
+		jwtHeaders   map[string]any
 		expectedType string
 	}{
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
-			jwtHeaders:   map[string]interface{}{},
+			jwtHeaders:   map[string]any{},
 			expectedType: "JWT",
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]interface{}{"typ": "at+jwt"},
+			jwtHeaders:   map[string]any{"typ": "at+jwt"},
 			expectedType: "at+jwt",
 		},
 	}
@@ -57,7 +57,7 @@ func TestUnsignedToken(t *testing.T) {
 			tk, err := jwt.ParseSigned(rawToken)
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[jose.HeaderKey("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[("typ")])
 		})
 	}
 }
@@ -65,18 +65,18 @@ func TestUnsignedToken(t *testing.T) {
 func TestJWTHeaders(t *testing.T) {
 	var testCases = []struct {
 		name         string
-		jwtHeaders   map[string]interface{}
+		jwtHeaders   map[string]any
 		expectedType string
 	}{
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
-			jwtHeaders:   map[string]interface{}{},
-			expectedType: "JWT",
+			jwtHeaders:   map[string]any{},
+			expectedType: JWTHeaderTypeValueJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]interface{}{"typ": "at+jwt"},
-			expectedType: "at+jwt",
+			jwtHeaders:   map[string]any{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
+			expectedType: JWTHeaderTypeValueAccessTokenJWT,
 		},
 	}
 	for _, tc := range testCases {
@@ -86,18 +86,19 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[jose.HeaderKey("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JWTHeaderKeyValueType)])
 		})
 	}
 }
 
-var keyFuncError error = fmt.Errorf("error loading key")
+var keyFuncError = fmt.Errorf("error loading key")
+
 var (
-	jwtTestDefaultKey *rsa.PublicKey = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	defaultKeyFunc    Keyfunc        = func(t *Token) (interface{}, error) { return jwtTestDefaultKey, nil }
-	emptyKeyFunc      Keyfunc        = func(t *Token) (interface{}, error) { return nil, nil }
-	errorKeyFunc      Keyfunc        = func(t *Token) (interface{}, error) { return nil, keyFuncError }
-	nilKeyFunc        Keyfunc        = nil
+	jwtTestDefaultKey         = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
+	defaultKeyFunc    Keyfunc = func(t *Token) (any, error) { return jwtTestDefaultKey, nil }
+	emptyKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, nil }
+	errorKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, keyFuncError }
+	nilKeyFunc        Keyfunc = nil
 )
 
 // Many test cases where taken from https://github.com/dgrijalva/jwt-go/blob/master/parser_test.go
@@ -107,9 +108,9 @@ func TestParser_Parse(t *testing.T) {
 	var (
 		defaultES256PrivateKey = gen.MustES256Key()
 		defaultSigningKey      = parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
-		publicECDSAKey         = func(*Token) (interface{}, error) { return &defaultES256PrivateKey.PublicKey, nil }
-		noneKey                = func(*Token) (interface{}, error) { return UnsafeAllowNoneSignatureType, nil }
-		randomKey              = func(*Token) (interface{}, error) {
+		publicECDSAKey         = func(*Token) (any, error) { return &defaultES256PrivateKey.PublicKey, nil }
+		noneKey                = func(*Token) (any, error) { return UnsafeAllowNoneSignatureType, nil }
+		randomKey              = func(*Token) (any, error) {
 			k, err := rsa.GenerateKey(rand.Reader, 2048)
 			require.NoError(t, err)
 			return &k.PublicKey, nil
@@ -123,7 +124,7 @@ func TestParser_Parse(t *testing.T) {
 	}
 	type generate struct {
 		claims     MapClaims
-		signingKey interface{}             // defaultSigningKey
+		signingKey any                     // defaultSigningKey
 		method     jose.SignatureAlgorithm // default RS256
 	}
 	type given struct {
@@ -432,7 +433,6 @@ func TestParser_Parse(t *testing.T) {
 				if err == nil {
 					t.Errorf("[%v] Expecting error.  Didn't get one.", data.name)
 				} else {
-
 					ve := err.(*ValidationError)
 					// compare the bitfield part of the error
 					if e := ve.Errors; e != data.errors {
@@ -448,7 +448,7 @@ func TestParser_Parse(t *testing.T) {
 	}
 }
 
-func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key interface{}) string {
+func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
 	s, e := token.SignedString(key)
 
@@ -459,7 +459,7 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key interface{}) st
 	return s
 }
 
-func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]interface{}, key interface{}) string {
+func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
 	s, e := token.SignedString(key)
@@ -481,7 +481,7 @@ func parseRSAPublicKeyFromPEM(key []byte) *rsa.PublicKey {
 	}
 
 	// Parse the key
-	var parsedKey interface{}
+	var parsedKey any
 	if parsedKey, err = x509.ParsePKIXPublicKey(block.Bytes); err != nil {
 		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
 			parsedKey = cert.PublicKey
@@ -508,7 +508,7 @@ func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
 		panic("unable to decode")
 	}
 
-	var parsedKey interface{}
+	var parsedKey any
 	if parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
 		if parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
 			panic(err)

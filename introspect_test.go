@@ -1,7 +1,7 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-package fosite_test
+package oauth2_test
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
-	. "github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/internal"
-	"github.com/ory/fosite/storage"
+	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/storage"
 )
 
 func TestAccessTokenFromRequestNoToken(t *testing.T) {
@@ -48,7 +48,7 @@ func TestIntrospect(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := new(Config)
-	f := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
+	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
 	req.Header.Add("Authorization", "bearer some-token")
@@ -71,7 +71,7 @@ func TestIntrospect(t *testing.T) {
 			scopes:      []string{"foo"},
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
+				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
 			},
 			expectErr: ErrRequestUnauthorized,
 		},
@@ -79,14 +79,14 @@ func TestIntrospect(t *testing.T) {
 			description: "should fail",
 			scopes:      []string{"foo"},
 			setup: func() {
-				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
+				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
 			},
 			expectErr: ErrInvalidClient,
 		},
 		{
 			description: "should pass",
 			setup: func() {
-				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, accessRequest AccessRequester, _ []string) {
+				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, accessRequest AccessRequester, _ []string) {
 					accessRequest.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
@@ -95,7 +95,7 @@ func TestIntrospect(t *testing.T) {
 			description: "should pass",
 			scopes:      []string{"bar"},
 			setup: func() {
-				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, accessRequest AccessRequester, _ []string) {
+				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, accessRequest AccessRequester, _ []string) {
 					accessRequest.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
@@ -103,7 +103,7 @@ func TestIntrospect(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			_, _, err := f.IntrospectToken(context.Background(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
+			_, _, err := provider.IntrospectToken(context.TODO(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
 			} else {

@@ -4,7 +4,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,19 +12,19 @@ import (
 	"testing"
 	"time"
 
-	cristaljwt "github.com/cristalhq/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
-	goauth "golang.org/x/oauth2"
+	xoauth2 "golang.org/x/oauth2"
 
-	"github.com/ory/fosite"
+	"authelia.com/provider/oauth2"
 )
 
 func ptr(d time.Duration) *time.Duration {
 	return &d
 }
 
-var TestLifespans fosite.ClientLifespanConfig = fosite.ClientLifespanConfig{
+var TestLifespans = oauth2.ClientLifespanConfig{
 	AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
 	AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
 	AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),
@@ -61,18 +60,22 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 }
 
 func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
-	jwt, err := cristaljwt.ParseNoVerify([]byte(token))
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+
+	claims := &jwt.RegisteredClaims{}
+
+	_, _, err := parser.ParseUnverified(token, claims)
 	require.NoError(t, err)
-	claims := &cristaljwt.RegisteredClaims{}
-	require.NoError(t, json.Unmarshal(jwt.Claims(), claims))
+
 	if claims.ExpiresAt == nil {
 		return nil
 	}
+
 	return &claims.ExpiresAt.Time
 }
 
-func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token goauth.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
-	token = goauth.Token{}
+func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token xoauth2.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
+	token = xoauth2.Token{}
 	rFC6749Error = map[string]string{}
 	customParameters = url.Values{}
 
@@ -81,7 +84,6 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		return "", "", "", token, customParameters, rFC6749Error, err
 	}
 
-	//doc>html>body
 	body := findBody(doc.FirstChild.FirstChild)
 	if body.Data != "body" {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("Malformed html")
@@ -122,7 +124,6 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 			} else if attr.Key == "value" {
 				v = attr.Val
 			}
-
 		}
 
 		switch k {

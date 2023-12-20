@@ -3,7 +3,9 @@
 
 package jwt
 
-import "testing"
+import (
+	"testing"
+)
 
 // Test taken from taken from [here](https://raw.githubusercontent.com/form3tech-oss/jwt-go/master/map_claims_test.go).
 func Test_mapClaims_list_aud(t *testing.T) {
@@ -31,9 +33,10 @@ func Test_mapClaims_empty_list_aud(t *testing.T) {
 		t.Fatalf("Failed to verify claims, wanted: %v got %v", want, got)
 	}
 }
+
 func Test_mapClaims_list_interface_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []interface{}{"foo"},
+		"aud": []any{"foo"},
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", true)
@@ -42,6 +45,7 @@ func Test_mapClaims_list_interface_aud(t *testing.T) {
 		t.Fatalf("Failed to verify claims, wanted: %v got %v", want, got)
 	}
 }
+
 func Test_mapClaims_string_aud(t *testing.T) {
 	mapClaims := MapClaims{
 		"aud": "foo",
@@ -65,6 +69,7 @@ func Test_mapClaims_list_aud_no_match(t *testing.T) {
 		t.Fatalf("Failed to verify claims, wanted: %v got %v", want, got)
 	}
 }
+
 func Test_mapClaims_string_aud_fail(t *testing.T) {
 	mapClaims := MapClaims{
 		"aud": "bar",

@@ -51,7 +51,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because audience missing",
 			setup: func(config *oauth2.Config) {
-				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/api"}
+				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}}
 			},
 			expectErr: oauth2.ErrInvalidRequest,
@@ -69,7 +69,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			setup: func(config *oauth2.Config) {
 				areq.Form.Set("username", "peter")
 				areq.Form.Set("password", "pan")
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.ory.sh/api"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(oauth2.ErrNotFound)
 			},

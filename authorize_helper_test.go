@@ -192,13 +192,13 @@ func TestDoesClientWhiteListRedirect(t *testing.T) {
 			isError: true,
 		},
 		{
-			client:  &oauth2.DefaultClient{RedirectURIs: []string{"https://www.ory.sh/cb"}},
+			client:  &oauth2.DefaultClient{RedirectURIs: []string{"https://www.authelia.com/cb"}},
 			url:     "http://127.0.0.1:8080/cb",
 			isError: true,
 		},
 		{
 			client:  &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
-			url:     "https://www.ory.sh/cb",
+			url:     "https://www.authelia.com/cb",
 			isError: true,
 		},
 		{

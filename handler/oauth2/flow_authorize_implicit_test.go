@@ -66,12 +66,12 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			setup: func() {
 				areq.ResponseTypes = oauth2.Arguments{"token"}
 				areq.RequestedScope = oauth2.Arguments{"scope"}
-				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/not-api"}
+				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/not-api"}
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{"implicit"},
 					ResponseTypes: oauth2.Arguments{"token"},
 					Scopes:        []string{"scope"},
-					Audience:      []string{"https://www.ory.sh/api"},
+					Audience:      []string{"https://www.authelia.com/api"},
 				}
 			},
 			expectErr: oauth2.ErrInvalidRequest,
@@ -79,7 +79,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 		{
 			description: "should fail because persistence failed",
 			setup: func() {
-				areq.RequestedAudience = oauth2.Arguments{"https://www.ory.sh/api"}
+				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).AnyTimes().Return("access.ats", "ats", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},

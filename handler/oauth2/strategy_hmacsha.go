@@ -38,7 +38,7 @@ func (h *HMACSHAStrategy) AuthorizeCodeSignature(ctx context.Context, token stri
 
 func (h *HMACSHAStrategy) getPrefix(part string) string {
 	if h.prefix == nil {
-		prefix := "ory_%s_"
+		prefix := "authelia_%s_"
 		h.prefix = &prefix
 	} else if len(*h.prefix) == 0 {
 		return ""

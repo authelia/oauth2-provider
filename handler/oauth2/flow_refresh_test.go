@@ -396,7 +396,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						err = store.RevokeRefreshToken(context.TODO(), req.ID)
 						require.NoError(t, err)
 					},
-					expectErr: oauth2.ErrInactiveToken,
+					expectErr: oauth2.ErrInvalidGrant,
 				},
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
@@ -488,7 +488,7 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: oauth2.ErrInactiveToken,
+			expectError: oauth2.ErrInvalidGrant,
 		},
 	} {
 		t.Run(fmt.Sprintf("scenario=%s", testCase.description), func(t *testing.T) {

@@ -46,9 +46,10 @@ following list of differences:
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/f4652d60c850d167da00e2d2fe9096776eff9465)</sup>
   - [ ] Decode id_token_hint with correct signer
   - [ ] Write Revocation Response does not correctly error
-  - [ ] Invalid Token base 64 error not mapped to RFC
+  - ~~Invalid Token base 64 error not mapped to RFC~~
   - [ ] Auth Request omitted Response Mode not validated
-  - [ ] Refresh Grant if Token Invalid/Expired status is not 400
+  - [x] Refresh Grant if Token Invalid/Expired status is not 400
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/8e58bcae054dffbad1c920e0bbaa022dfac71f66)</sup>
   - [ ] Access Token iat in JWT Profile always original iat
 - Features:
   - [ ] Customizable Token Prefix

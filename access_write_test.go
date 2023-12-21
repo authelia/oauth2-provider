@@ -13,6 +13,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestWriteAccessResponse(t *testing.T) {
@@ -30,7 +31,7 @@ func TestWriteAccessResponse(t *testing.T) {
 	resp.EXPECT().ToMap().Return(map[string]any{})
 
 	provider.WriteAccessResponse(context.Background(), rw, ar, resp)
-	assert.Equal(t, "application/json;charset=UTF-8", header.Get("Content-Type"))
-	assert.Equal(t, "no-store", header.Get("Cache-Control"))
-	assert.Equal(t, "no-cache", header.Get("Pragma"))
+	assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+	assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+	assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 }

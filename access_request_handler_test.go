@@ -18,6 +18,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestNewAccessRequest(t *testing.T) {
@@ -54,7 +55,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock:      func() {},
 			expectErr: ErrInvalidRequest,
@@ -63,19 +64,19 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
-				"client_id":  {""},
+				consts.FormParameterGrantType: {"foo"},
+				consts.FormParameterClientID:  {""},
 			},
 			expectErr: ErrInvalidRequest,
 			mock:      func() {},
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr: ErrInvalidClient,
 			mock: func() {
@@ -85,22 +86,22 @@ func TestNewAccessRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "GET",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr: ErrInvalidRequest,
 			mock:      func() {},
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr: ErrInvalidClient,
 			mock: func() {
@@ -110,11 +111,11 @@ func TestNewAccessRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr: ErrInvalidClient,
 			mock: func() {
@@ -127,11 +128,11 @@ func TestNewAccessRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr: ErrServerError,
 			mock: func() {
@@ -145,11 +146,11 @@ func TestNewAccessRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
@@ -168,11 +169,11 @@ func TestNewAccessRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
@@ -195,10 +196,11 @@ func TestNewAccessRequest(t *testing.T) {
 				Form:     c.form,
 				Method:   c.method,
 			}
+
 			c.mock()
-			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
+
+			ar, err := provider.NewAccessRequest(context.TODO(), r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -245,7 +247,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 		// No registered handlers -> error
 		{
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
@@ -257,10 +259,10 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 		// Handler can skip client auth and ignores missing client.
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				// despite error from storage, we should success, because client auth is not required
@@ -279,7 +281,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 		// Should pass if no auth is set in the header and can skip!
 		{
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
@@ -296,10 +298,10 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 		// Should also pass if client auth is set!
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(anotherClient, nil).Times(1)
@@ -371,10 +373,10 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 	}{
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
@@ -389,10 +391,10 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
@@ -414,7 +416,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 		{
 			header: http.Header{},
 			form: url.Values{
-				"grant_type": {"foo"},
+				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
@@ -433,9 +435,8 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				Method:   c.method,
 			}
 			c.mock()
-			ctx := NewContext()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(context.TODO(), r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

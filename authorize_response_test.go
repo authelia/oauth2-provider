@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeResponse(t *testing.T) {
@@ -16,7 +18,7 @@ func TestAuthorizeResponse(t *testing.T) {
 
 	ar.AddHeader("foo", "foo")
 
-	ar.AddParameter("code", "bar")
+	ar.AddParameter(consts.FormParameterAuthorizationCode, "bar")
 	assert.Equal(t, "bar", ar.GetCode())
 
 	assert.Equal(t, "bar", ar.GetParameters().Get("foo"))

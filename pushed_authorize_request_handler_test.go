@@ -16,6 +16,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Should pass
@@ -76,7 +77,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		{
 			desc:          "invalid client fails",
 			provider:      provider,
-			query:         url.Values{"redirect_uri": []string{"https://foo.bar/cb"}},
+			query:         url.Values{consts.FormParameterRedirectURI: []string{"https://foo.bar/cb"}},
 			expectedError: ErrInvalidClient,
 			mock:          func() {},
 		},
@@ -85,8 +86,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "client and request redirects mismatch",
 			provider: provider,
 			query: url.Values{
-				"client_id":     []string{"1234"},
-				"client_secret": []string{"1234"},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
@@ -99,9 +100,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "client and request redirects mismatch",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  []string{""},
-				"client_id":     []string{"1234"},
-				"client_secret": []string{"1234"},
+				consts.FormParameterRedirectURI:  []string{""},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
@@ -114,9 +115,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "client and request redirects mismatch",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  []string{"https://foo.bar/cb"},
-				"client_id":     []string{"1234"},
-				"client_secret": []string{"1234"},
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
@@ -129,10 +130,10 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "no state",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  []string{"https://foo.bar/cb"},
-				"client_id":     []string{"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": []string{"code"},
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 			},
 			expectedError: ErrInvalidState,
 			mock: func() {
@@ -145,11 +146,11 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "short state",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code"},
-				"state":         {"short"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: {"code"},
+				consts.FormParameterState:        {"short"},
 			},
 			expectedError: ErrInvalidState,
 			mock: func() {
@@ -162,12 +163,12 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because client does not have scope baz",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar baz"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar baz"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, Secret: []byte("1234")}, nil).MaxTimes(2)
@@ -180,18 +181,18 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because client does not have scope baz",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"},
-					Audience: []string{"https://cloud.ory.sh/api"},
+					Audience: []string{"https://cloud.authelia.com/api"},
 					Secret:   []byte("1234"),
 				}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
@@ -203,20 +204,20 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should pass",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
-					ResponseTypes: []string{"code token"},
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
-					Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 					Secret:        []byte("1234"),
 				}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
@@ -227,13 +228,13 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultClient{
-						ResponseTypes: []string{"code token"}, RedirectURIs: []string{"https://foo.bar/cb"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:   []byte("1234"),
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -242,37 +243,37 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "repeated audience parameter",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
-					ResponseTypes: []string{"code token"},
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
-					Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 					Secret:        []byte("1234"),
 				}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultClient{
-						ResponseTypes: []string{"code token"}, RedirectURIs: []string{"https://foo.bar/cb"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:   []byte("1234"),
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -281,17 +282,17 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "repeated audience parameter with tricky values",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"test value", ""},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"test value", ""},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
-					ResponseTypes: []string{"code token"},
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"test value"},
@@ -301,11 +302,11 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultClient{
-						ResponseTypes: []string{"code token"}, RedirectURIs: []string{"https://foo.bar/cb"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:   []string{"foo", "bar"},
 						Audience: []string{"test value"},
 						Secret:   []byte("1234"),
@@ -320,37 +321,37 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "redirect_uri with special character",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"web+application://callback"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"web+application://callback"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
-					ResponseTypes: []string{"code token"},
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"web+application://callback"},
 					Scopes:        []string{"foo", "bar"},
-					Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 					Secret:        []byte("1234"),
 				}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   specialCharRedir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultClient{
-						ResponseTypes: []string{"code token"}, RedirectURIs: []string{"web+application://callback"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"web+application://callback"},
 						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:   []byte("1234"),
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -359,37 +360,37 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "audience with double spaces between values",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api  https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api  https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
-					ResponseTypes: []string{"code token"},
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
-					Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 					Secret:        []byte("1234"),
 				}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultClient{
-						ResponseTypes: []string{"code token"}, RedirectURIs: []string{"https://foo.bar/cb"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:   []byte("1234"),
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -398,16 +399,16 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because unknown response_mode",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"unknown"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {"unknown"},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}, Secret: []byte("1234")}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expectedError: ErrUnsupportedResponseMode,
@@ -417,16 +418,16 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because response_mode is requested but the OAuth 2.0 client doesn't support response mode",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"form_post"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}, Secret: []byte("1234")}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expectedError: ErrUnsupportedResponseMode,
@@ -436,20 +437,20 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because requested response mode is not allowed",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"form_post"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
-						ResponseTypes: []string{"code token"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 						Secret:        []byte("1234"),
 					},
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
@@ -463,22 +464,22 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "success with response mode",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"form_post"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
-						ResponseTypes: []string{"code token"},
-						Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
+						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:        []byte("1234"),
 					},
 					ResponseModes: []ResponseModeType{ResponseModeFormPost},
@@ -487,21 +488,21 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
 						DefaultClient: &DefaultClient{
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
-							ResponseTypes: []string{"code token"},
-							Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
+							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 							Secret:        []byte("1234"),
 						},
 						ResponseModes: []ResponseModeType{ResponseModeFormPost},
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -510,21 +511,21 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "success with response mode",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: {"code"},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
-						ResponseTypes: []string{"code"},
-						Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:        []byte("1234"),
 					},
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
@@ -533,21 +534,21 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
 						DefaultClient: &DefaultClient{
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
-							ResponseTypes: []string{"code"},
-							Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+							ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 							Secret:        []byte("1234"),
 						},
 						ResponseModes: []ResponseModeType{ResponseModeQuery},
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -556,21 +557,21 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "success with response mode",
 			provider: provider,
 			query: url.Values{
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"audience":      {"https://cloud.ory.sh/api https://www.authelia.com/api"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
-						ResponseTypes: []string{"code token"},
-						Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
+						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 						Secret:        []byte("1234"),
 					},
 					ResponseModes: []ResponseModeType{ResponseModeFragment},
@@ -579,21 +580,21 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
-				ResponseTypes: []string{"code", "token"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
 						DefaultClient: &DefaultClient{
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
-							ResponseTypes: []string{"code token"},
-							Audience:      []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
+							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 							Secret:        []byte("1234"),
 						},
 						ResponseModes: []ResponseModeType{ResponseModeFragment},
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"https://cloud.ory.sh/api", "https://www.authelia.com/api"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 				},
 			},
 		},
@@ -602,17 +603,17 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because request_uri is provided in the request",
 			provider: provider,
 			query: url.Values{
-				"request_uri":   {"https://foo.bar/ru"},
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"1234"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"form_post"},
+				consts.FormParameterRequestURI:   {"https://foo.bar/ru"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}, Secret: []byte("1234")}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expectedError: ErrInvalidRequest.WithHint("The request must not contain 'request_uri'."),
@@ -622,17 +623,17 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			desc:     "should fail because of invalid client creds",
 			provider: provider,
 			query: url.Values{
-				"request_uri":   {"https://foo.bar/ru"},
-				"redirect_uri":  {"https://foo.bar/cb"},
-				"client_id":     {"1234"},
-				"client_secret": []string{"4321"},
-				"response_type": {"code token"},
-				"state":         {"strong-state"},
-				"scope":         {"foo bar"},
-				"response_mode": {"form_post"},
+				consts.FormParameterRequestURI:   {"https://foo.bar/ru"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"4321"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}, Secret: []byte("1234")}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
 				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("4321"))).Return(fmt.Errorf("invalid hash"))
 			},
 			expectedError: ErrInvalidClient,

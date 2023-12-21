@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
@@ -68,7 +69,7 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 				require.NoError(t, err)
 				atExp := s.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)
-				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
+				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.PasswordGrantAccessTokenLifespan, atExpIn, time.Minute)
 				rtExp := s.GetSession().GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantRefreshTokenLifespan), rtExp, time.Minute)

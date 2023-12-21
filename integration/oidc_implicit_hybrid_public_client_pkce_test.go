@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -43,7 +44,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 
 	oauthClient.ClientSecret = ""
 	oauthClient.ClientID = "public-client"
-	oauthClient.Scopes = []string{"openid"}
+	oauthClient.Scopes = []string{consts.ScopeOpenID}
 
 	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
@@ -86,17 +87,17 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			fragment, err := url.ParseQuery(callbackURL.Fragment)
 			require.NoError(t, err)
 
-			code := fragment.Get("code")
+			code := fragment.Get(consts.FormParameterAuthorizationCode)
 			assert.NotEmpty(t, code)
 
-			assert.NotEmpty(t, fragment.Get("id_token"))
+			assert.NotEmpty(t, fragment.Get(consts.AccessResponseIDToken))
 
 			resp, err = http.PostForm(oauthClient.Endpoint.TokenURL, url.Values{
-				"code":          {code},
-				"grant_type":    {"authorization_code"},
-				"client_id":     {"public-client"},
-				"redirect_uri":  {ts.URL + "/callback"},
-				"code_verifier": {c.codeVerifier},
+				consts.FormParameterAuthorizationCode: {code},
+				consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
+				consts.FormParameterClientID:          {"public-client"},
+				consts.FormParameterRedirectURI:       {ts.URL + "/callback"},
+				consts.FormParameterCodeVerifier:      {c.codeVerifier},
 			})
 			require.NoError(t, err)
 			defer resp.Body.Close()

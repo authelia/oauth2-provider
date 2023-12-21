@@ -68,7 +68,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			nonce:        "1111111111111111",
 			description:  "should pass id token (id_token token)",
 			setup: func() {
-				oauthClient.Scopes = []string{"oauth2", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOpenID}
 			},
 			hasToken:   true,
 			hasIdToken: true,

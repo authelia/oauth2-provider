@@ -86,7 +86,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:       &oauth2.DefaultClient{ID: ""},
-							GrantedScope: []string{"offline"},
+							GrantedScope: []string{consts.ScopeOffline},
 							Session:      sess,
 						})
 						require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
-							Scopes:     []string{"foo", "bar", "offline"},
+							Scopes:     []string{"foo", "bar", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
@@ -109,8 +109,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        expiredSess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -134,8 +134,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -151,7 +151,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
-							Scopes:     []string{"foo", "bar", "offline"},
+							Scopes:     []string{"foo", "bar", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
@@ -160,8 +160,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -171,8 +171,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
-						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
@@ -185,7 +185,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{"refresh_token"},
-							Scopes:     []string{"foo", "bar", "baz", "offline"},
+							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
@@ -195,8 +195,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add("scope", "foo bar baz offline")
 						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -204,8 +204,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						require.NoError(t, err)
 					},
 					expect: func(t *testing.T) {
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline}, areq.RequestedScope)
 					},
 				},
 				{
@@ -215,7 +215,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{"refresh_token"},
-							Scopes:     []string{"foo", "bar", "baz", "offline"},
+							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
@@ -223,12 +223,12 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 
 						areq.Form.Add("refresh_token", token)
 						areq.Form.Add("scope", "foo bar offline")
-						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", "offline"})
+						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
 						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -236,8 +236,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						require.NoError(t, err)
 					},
 					expect: func(t *testing.T) {
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", consts.ScopeOffline}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", consts.ScopeOffline}, areq.RequestedScope)
 					},
 				},
 				{
@@ -247,7 +247,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{"refresh_token"},
-							Scopes:     []string{"foo", "bar", "baz", "offline"},
+							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
@@ -255,12 +255,12 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 
 						areq.Form.Add("refresh_token", token)
 						areq.Form.Add("scope", "foo bar offline")
-						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", "offline"})
+						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
 						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "baz", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "baz", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -277,7 +277,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							DefaultClient: &oauth2.DefaultClient{
 								ID:         "foo",
 								GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
-								Scopes:     []string{"foo", "bar", "offline"},
+								Scopes:     []string{"foo", "bar", consts.ScopeOffline},
 							},
 						}
 
@@ -289,8 +289,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -300,8 +300,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
-						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
 						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantAccessTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.AccessToken), time.Minute)
 						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantRefreshTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.RefreshToken), time.Minute)

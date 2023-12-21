@@ -16,3 +16,12 @@ const (
 const (
 	ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 )
+
+const (
+	PrefixRequestURI = "urn:ietf:params:oauth:request_uri:"
+)
+
+const (
+	TokenTypeAccessToken  = "access_token"
+	TokenTypeRefreshToken = "refresh_token"
+)

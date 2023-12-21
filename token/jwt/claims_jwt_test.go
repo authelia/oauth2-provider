@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -20,7 +21,7 @@ var jwtClaims = &JWTClaims{
 	Audience:  []string{"tests"},
 	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),
 	JTI:       "abcdef",
-	Scope:     []string{"email", "offline"},
+	Scope:     []string{consts.ScopeEmail, consts.ScopeOffline},
 	Extra: map[string]any{
 		"foo": "bar",
 		"baz": "bar",
@@ -29,16 +30,16 @@ var jwtClaims = &JWTClaims{
 }
 
 var jwtClaimsMap = map[string]any{
-	"sub": jwtClaims.Subject,
-	"iat": jwtClaims.IssuedAt.Unix(),
-	"iss": jwtClaims.Issuer,
-	"nbf": jwtClaims.NotBefore.Unix(),
-	"aud": jwtClaims.Audience,
-	"exp": jwtClaims.ExpiresAt.Unix(),
-	"jti": jwtClaims.JTI,
-	"scp": []string{"email", "offline"},
-	"foo": jwtClaims.Extra["foo"],
-	"baz": jwtClaims.Extra["baz"],
+	consts.ClaimSubject:          jwtClaims.Subject,
+	consts.ClaimIssuedAt:         jwtClaims.IssuedAt.Unix(),
+	consts.ClaimIssuer:           jwtClaims.Issuer,
+	consts.ClaimNotBefore:        jwtClaims.NotBefore.Unix(),
+	consts.ClaimAudience:         jwtClaims.Audience,
+	consts.ClaimExpirationTime:   jwtClaims.ExpiresAt.Unix(),
+	consts.ClaimJWTID:            jwtClaims.JTI,
+	consts.ClaimScopeNonStandard: []string{consts.ScopeEmail, consts.ScopeOffline},
+	"foo":                        jwtClaims.Extra["foo"],
+	"baz":                        jwtClaims.Extra["baz"],
 }
 
 func TestClaimAddGetString(t *testing.T) {

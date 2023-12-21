@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeCodeFlowWithPublicClientAndPKCE(t *testing.T) {
@@ -92,11 +93,11 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 				t.Logf("Got redirect url: %s", resp.Request.URL)
 
 				resp, err := http.PostForm(ts.URL+"/token", url.Values{
-					"code":          {resp.Request.URL.Query().Get("code")},
-					"grant_type":    {"authorization_code"},
-					"client_id":     {"public-client"},
-					"redirect_uri":  {ts.URL + "/callback"},
-					"code_verifier": {verifier},
+					consts.FormParameterAuthorizationCode: {resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode)},
+					consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
+					consts.FormParameterClientID:          {"public-client"},
+					consts.FormParameterRedirectURI:       {ts.URL + "/callback"},
+					consts.FormParameterCodeVerifier:      {verifier},
 				})
 				require.NoError(t, err)
 				defer resp.Body.Close()

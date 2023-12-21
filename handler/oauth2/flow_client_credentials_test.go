@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {

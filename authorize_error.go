@@ -13,19 +13,19 @@ import (
 )
 
 func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error) {
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	if f.ResponseModeHandler(ctx).ResponseModes().Has(ar.GetResponseMode()) {
 		f.ResponseModeHandler(ctx).WriteAuthorizeError(ctx, rw, ar, err)
 		return
 	}
 
-	rfcerr := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(ar))
+	rfc := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(ar))
 	if !ar.IsRedirectURIValid() {
-		rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
-		js, err := json.Marshal(rfcerr)
+		js, err := json.Marshal(rfc)
 		if err != nil {
 			if f.Config.GetSendDebugMessagesToClients(ctx) {
 				errorMessage := EscapeJSONString(err.Error())
@@ -36,7 +36,7 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 			return
 		}
 
-		rw.WriteHeader(rfcerr.CodeField)
+		rw.WriteHeader(rfc.CodeField)
 		_, _ = rw.Write(js)
 		return
 	}
@@ -46,12 +46,12 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 	// The endpoint URI MUST NOT include a fragment component.
 	redirectURI.Fragment = ""
 
-	errors := rfcerr.ToValues()
+	errors := rfc.ToValues()
 	errors.Set(consts.FormParameterState, ar.GetState())
 
 	var redirectURIString string
 	if ar.GetResponseMode() == ResponseModeFormPost {
-		rw.Header().Set("Content-Type", "text/html;charset=UTF-8")
+		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeTextHTML)
 		WriteAuthorizeFormPostResponse(redirectURI.String(), errors, GetPostFormHTMLTemplate(ctx, f), rw)
 		return
 	} else if ar.GetResponseMode() == ResponseModeFragment {
@@ -66,6 +66,6 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 		redirectURIString = redirectURI.String()
 	}
 
-	rw.Header().Set("Location", redirectURIString)
+	rw.Header().Set(consts.HeaderLocation, redirectURIString)
 	rw.WriteHeader(http.StatusSeeOther)
 }

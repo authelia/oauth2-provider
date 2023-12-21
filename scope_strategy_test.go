@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestHierarchicScopeStrategy(t *testing.T) {
@@ -35,14 +37,14 @@ func TestHierarchicScopeStrategy(t *testing.T) {
 	assert.True(t, strategy(scopes, "authelia.key.get"))
 	assert.True(t, strategy(scopes, "authelia.key.update"))
 
-	scopes = []string{"authelia", "openid", "offline"}
+	scopes = []string{"authelia", consts.ScopeOpenID, consts.ScopeOffline}
 	assert.False(t, strategy(scopes, "foo.bar"))
 	assert.False(t, strategy(scopes, "foo"))
 	assert.True(t, strategy(scopes, "authelia"))
 	assert.True(t, strategy(scopes, "authelia.bar"))
-	assert.True(t, strategy(scopes, "openid"))
+	assert.True(t, strategy(scopes, consts.ScopeOpenID))
 	assert.True(t, strategy(scopes, "openid.baz.bar"))
-	assert.True(t, strategy(scopes, "offline"))
+	assert.True(t, strategy(scopes, consts.ScopeOffline))
 	assert.True(t, strategy(scopes, "offline.baz.bar.baz"))
 }
 
@@ -113,8 +115,8 @@ func TestWildcardScopeStrategy(t *testing.T) {
 	assert.True(t, strategy(scopes, "hydra.clients"))
 	assert.True(t, strategy(scopes, "hydra.clients.get"))
 	assert.True(t, strategy(scopes, "hydra"))
-	assert.True(t, strategy(scopes, "offline"))
-	assert.True(t, strategy(scopes, "openid"))
+	assert.True(t, strategy(scopes, consts.ScopeOffline))
+	assert.True(t, strategy(scopes, consts.ScopeOpenID))
 }
 
 func TestExactScopeStrategy2ScopeStrategy(t *testing.T) {

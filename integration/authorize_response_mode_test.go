@@ -63,10 +63,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should give err because implicit grant with response mode query",
 			responseType: "id_token%20token",
-			responseMode: "query",
+			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -78,10 +78,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should pass implicit grant with response mode form_post",
 			responseType: "id_token%20token",
-			responseMode: "form_post",
+			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -95,10 +95,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should fail because response mode form_post is not allowed by the client",
 			responseType: "id_token%20token",
-			responseMode: "form_post",
+			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -110,10 +110,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should fail because response mode form_post is not allowed by the client without legacy format",
 			responseType: "id_token%20token",
-			responseMode: "form_post",
+			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
@@ -126,8 +126,8 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should pass Authorization code grant test with response mode fragment",
-			responseType: "code",
-			responseMode: "fragment",
+			responseType: consts.ResponseTypeAuthorizationCodeFlow,
+			responseMode: consts.ResponseModeFragment,
 			setup: func() {
 				state = "12345678901234567890"
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFragment}
@@ -140,7 +140,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should pass Authorization code grant test with response mode form_post",
 			responseType: "code",
-			responseMode: "form_post",
+			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
@@ -153,10 +153,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should fail Hybrid grant test with query",
 			responseType: "token%20code",
-			responseMode: "query",
+			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -168,10 +168,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should fail Hybrid grant test with query without legacy fields",
 			responseType: "token%20code",
-			responseMode: "query",
+			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
@@ -187,10 +187,10 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		{
 			description:  "Should pass Hybrid grant test with form_post",
 			responseType: "token%20code",
-			responseMode: "form_post",
+			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {

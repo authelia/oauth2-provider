@@ -15,6 +15,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Test for
@@ -61,9 +62,9 @@ func TestWriteAuthorizeError(t *testing.T) {
 				rw.EXPECT().Write(gomock.Any())
 			},
 			checkHeader: func(t *testing.T, k int) {
-				assert.Equal(t, "application/json;charset=UTF-8", header.Get("Content-Type"))
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 1
@@ -74,17 +75,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeQuery).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 2
@@ -96,17 +97,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeQuery).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.+Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.+with-debug&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 3
@@ -117,17 +118,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeQuery).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.+Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 4
@@ -137,17 +138,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeDefault).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 5
@@ -157,17 +158,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeQuery).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&foo=bar&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 6
@@ -184,10 +185,10 @@ func TestWriteAuthorizeError(t *testing.T) {
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=unsupported_grant_type&error_description=The+authorization+grant+type+is+not+supported+by+the+authorization+server.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b)
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 7
@@ -204,10 +205,10 @@ func TestWriteAuthorizeError(t *testing.T) {
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 8
@@ -224,10 +225,10 @@ func TestWriteAuthorizeError(t *testing.T) {
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 9
@@ -237,17 +238,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 10
@@ -258,17 +259,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/#error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 11
@@ -280,19 +281,19 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.+Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.+with-debug&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.NotContains(t, header.Get("Location"), "error_hint")
-				assert.NotContains(t, header.Get("Location"), "error_debug")
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.NotContains(t, header.Get(consts.HeaderLocation), "error_hint")
+				assert.NotContains(t, header.Get(consts.HeaderLocation), "error_debug")
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 12
@@ -303,20 +304,20 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.+Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.NotContains(t, header.Get("Location"), "error_hint")
-				assert.NotContains(t, header.Get("Location"), "error_debug")
-				assert.NotContains(t, header.Get("Location"), "with-debug")
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.NotContains(t, header.Get(consts.HeaderLocation), "error_hint")
+				assert.NotContains(t, header.Get(consts.HeaderLocation), "error_debug")
+				assert.NotContains(t, header.Get(consts.HeaderLocation), "with-debug")
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 13
@@ -326,17 +327,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 14
@@ -347,17 +348,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"code", "token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 15
@@ -368,17 +369,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"id_token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeImplicitFlowIDToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 16
@@ -389,17 +390,17 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFragment).AnyTimes()
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, k int) {
 				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&state=foostate")
-				b, _ := url.Parse(header.Get("Location"))
-				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get("Location"), a.String())
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
+				b, _ := url.Parse(header.Get(consts.HeaderLocation))
+				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 			},
 		},
 		// 17
@@ -410,15 +411,15 @@ func TestWriteAuthorizeError(t *testing.T) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
-				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{"token"}))
+				req.EXPECT().GetResponseTypes().AnyTimes().Return(Arguments([]string{consts.ResponseTypeImplicitFlowToken}))
 				req.EXPECT().GetResponseMode().Return(ResponseModeFormPost).Times(2)
 				rw.EXPECT().Header().Times(3).Return(header)
 				rw.EXPECT().Write(gomock.Any()).AnyTimes()
 			},
 			checkHeader: func(t *testing.T, k int) {
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
-				assert.Equal(t, "text/html;charset=UTF-8", header.Get("Content-Type"))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
+				assert.Equal(t, consts.ContentTypeTextHTML, header.Get(consts.HeaderContentType))
 			},
 		},
 	} {

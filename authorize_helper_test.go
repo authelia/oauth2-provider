@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestIsLocalhost(t *testing.T) {
@@ -252,28 +253,28 @@ func TestWriteAuthorizeFormPostResponse(t *testing.T) {
 		check      func(code string, state string, customParams url.Values, d int)
 	}{
 		{
-			parameters: url.Values{"code": {"lshr755nsg39fgur"}, "state": {"924659540232"}},
+			parameters: url.Values{consts.FormParameterAuthorizationCode: {"lshr755nsg39fgur"}, consts.FormParameterState: {"924659540232"}},
 			check: func(code string, state string, customParams url.Values, d int) {
 				assert.Equal(t, "lshr755nsg39fgur", code, "case %d", d)
 				assert.Equal(t, "924659540232", state, "case %d", d)
 			},
 		},
 		{
-			parameters: url.Values{"code": {"lshr75*ns-39f+ur"}, "state": {"9a:* <&)"}},
+			parameters: url.Values{consts.FormParameterAuthorizationCode: {"lshr75*ns-39f+ur"}, consts.FormParameterState: {"9a:* <&)"}},
 			check: func(code string, state string, customParams url.Values, d int) {
 				assert.Equal(t, "lshr75*ns-39f+ur", code, "case %d", d)
 				assert.Equal(t, "9a:* <&)", state, "case %d", d)
 			},
 		},
 		{
-			parameters: url.Values{"code": {"1234"}, "custom": {"test2", "test3"}},
+			parameters: url.Values{consts.FormParameterAuthorizationCode: {"1234"}, "custom": {"test2", "test3"}},
 			check: func(code string, state string, customParams url.Values, d int) {
 				assert.Equal(t, "1234", code, "case %d", d)
 				assert.Equal(t, []string{"test2", "test3"}, customParams["custom"], "case %d", d)
 			},
 		},
 		{
-			parameters: url.Values{"code": {"1234"}, "custom": {"<b>Bold</b>"}},
+			parameters: url.Values{consts.FormParameterAuthorizationCode: {"1234"}, "custom": {"<b>Bold</b>"}},
 			check: func(code string, state string, customParams url.Values, d int) {
 				assert.Equal(t, "1234", code, "case %d", d)
 				assert.Equal(t, "<b>Bold</b>", customParams.Get("custom"), "case %d", d)
@@ -309,31 +310,6 @@ func TestIsRedirectURISecureStrict(t *testing.T) {
 		uu, err := url.Parse(c.u)
 		require.NoError(t, err)
 		assert.Equal(t, !c.err, oauth2.IsRedirectURISecureStrict(uu), "case %d", d)
-	}
-}
-
-func TestURLSetFragment(t *testing.T) {
-	for d, c := range []struct {
-		u string
-		a string
-		f url.Values
-	}{
-		{u: "http://google.com", a: "http://google.com#code=567060896", f: url.Values{"code": []string{"567060896"}}},
-		{u: "http://google.com", a: "http://google.com#code=567060896&scope=read", f: url.Values{"code": []string{"567060896"}, "scope": []string{"read"}}},
-		{u: "http://google.com", a: "http://google.com#code=567060896&scope=read%20mail", f: url.Values{"code": []string{"567060896j"}, "scope": []string{"read mail"}}},
-		{u: "http://google.com", a: "http://google.com#code=567060896&scope=read+write", f: url.Values{"code": []string{"567060896"}, "scope": []string{"read+write"}}},
-		{u: "http://google.com", a: "http://google.com#code=567060896&scope=api:*", f: url.Values{"code": []string{"567060896"}, "scope": []string{"api:*"}}},
-		{u: "https://google.com?foo=bar", a: "https://google.com?foo=bar#code=567060896", f: url.Values{"code": []string{"567060896"}}},
-		{u: "http://localhost?foo=bar&baz=foo", a: "http://localhost?foo=bar&baz=foo#code=567060896", f: url.Values{"code": []string{"567060896"}}},
-	} {
-		uu, err := url.Parse(c.u)
-		require.NoError(t, err)
-		oauth2.URLSetFragment(uu, c.f)
-		tURL, err := url.Parse(uu.String())
-		require.NoError(t, err)
-		r := ParseURLFragment(tURL.Fragment)
-		assert.Equal(t, c.f.Get("code"), r.Get("code"), "case %d", d)
-		assert.Equal(t, c.f.Get("scope"), r.Get("scope"), "case %d", d)
 	}
 }
 

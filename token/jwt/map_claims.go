@@ -10,9 +10,9 @@ import (
 	"errors"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	jjson "github.com/go-jose/go-jose/v3/json"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 

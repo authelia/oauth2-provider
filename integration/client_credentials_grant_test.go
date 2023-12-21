@@ -24,6 +24,7 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestClientCredentialsFlow(t *testing.T) {
@@ -38,7 +39,7 @@ func introspect(t *testing.T, ts *httptest.Server, token string, p any, username
 	req, err := http.NewRequest("POST", ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
 	require.NoError(t, err)
 	req.SetBasicAuth(username, password)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 	r, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer r.Body.Close()
@@ -86,8 +87,8 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			check: func(t *testing.T, token *xoauth2.Token) {
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
+				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
 			},
 		},
 		{
@@ -98,13 +99,13 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
+				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
 				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(time.Hour), atExp, time.Minute)
-				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
+				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, time.Hour, atExpIn, time.Minute)
 			},
 		},
@@ -117,14 +118,14 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 				var j json.RawMessage
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, "client_id").String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, "scope").String())
+				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
+				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
 
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
 				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan), atExp, time.Minute)
-				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
+				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan, atExpIn, time.Minute)
 				rtExp := atReq.GetSession().GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Time{}, rtExp, time.Minute)

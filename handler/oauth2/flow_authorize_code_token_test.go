@@ -89,7 +89,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							Client: &oauth2.DefaultClient{
 								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
 							},
-							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
@@ -205,7 +205,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 						AccessTokenLifespan:      time.Minute,
-						RefreshTokenScopes:       []string{"offline"},
+						RefreshTokenScopes:       []string{consts.ScopeOffline},
 					}
 					h = AuthorizeExplicitGrantHandler{
 						CoreStorage:           store,
@@ -294,7 +294,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form = url.Values{"code": {token}}
+						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
@@ -356,7 +356,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form = url.Values{"code": {token}}
+						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
@@ -385,7 +385,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form = url.Values{"code": {token}}
+						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
 				},
@@ -397,7 +397,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 							Client: &oauth2.DefaultClient{
 								GrantTypes: oauth2.Arguments{"authorization_code"},
 							},
-							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
@@ -450,14 +450,14 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			Client: &oauth2.DefaultClient{
 				GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
 			},
-			GrantedScope: oauth2.Arguments{"offline"},
+			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},
 			RequestedAt:  time.Now().UTC(),
 		},
 	}
 	token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 	require.NoError(t, err)
-	request.Form = url.Values{"code": {token}}
+	request.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
 

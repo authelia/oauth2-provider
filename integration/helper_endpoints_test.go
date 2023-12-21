@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func tokenRevocationHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
@@ -78,12 +79,12 @@ func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.
 			ar.GrantScope("oauth2")
 		}
 
-		if ar.GetRequestedScopes().Has("offline") {
-			ar.GrantScope("offline")
+		if ar.GetRequestedScopes().Has(consts.ScopeOffline) {
+			ar.GrantScope(consts.ScopeOffline)
 		}
 
-		if ar.GetRequestedScopes().Has("openid") {
-			ar.GrantScope("openid")
+		if ar.GetRequestedScopes().Has(consts.ScopeOpenID) {
+			ar.GrantScope(consts.ScopeOpenID)
 		}
 
 		for _, a := range ar.GetRequestedAudience() {

@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Enum for different types of scope encoding.

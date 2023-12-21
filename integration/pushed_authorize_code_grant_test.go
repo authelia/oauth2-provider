@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestPushedAuthorizeCodeFlow(t *testing.T) {
@@ -50,7 +51,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	}{
 		{
 			description: "should fail because of audience",
-			params:      map[string]string{"audience": "https://www.authelia.com/not-api"},
+			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/not-api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
@@ -71,7 +72,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      map[string]string{"audience": "https://www.authelia.com/api"},
+			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = "12345678901234567890"
@@ -103,12 +104,12 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 			// build request from the OAuth client
 			data := url.Values{}
-			data.Set("client_id", oauthClient.ClientID)
-			data.Set("client_secret", oauthClient.ClientSecret)
-			data.Set("response_type", "code")
-			data.Set("state", state)
-			data.Set("scope", strings.Join(oauthClient.Scopes, " "))
-			data.Set("redirect_uri", oauthClient.RedirectURL)
+			data.Set(consts.FormParameterClientID, oauthClient.ClientID)
+			data.Set(consts.FormParameterClientSecret, oauthClient.ClientSecret)
+			data.Set(consts.FormParameterResponseType, consts.ResponseTypeAuthorizationCodeFlow)
+			data.Set(consts.FormParameterState, state)
+			data.Set(consts.FormParameterScope, strings.Join(oauthClient.Scopes, " "))
+			data.Set(consts.FormParameterRedirectURI, oauthClient.RedirectURL)
 			for k, v := range c.params {
 				data.Set(k, v)
 			}
@@ -116,7 +117,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			req, err := http.NewRequest("POST", ts.URL+"/par", strings.NewReader(data.Encode()))
 			require.NoError(t, err)
 
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Add(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 			resp, err := http.DefaultClient.Do(req)
 
 			require.NoError(t, err)
@@ -134,23 +135,23 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			assert.NoError(t, err, "Error occurred when unamrshaling the body: %v", err)
 
 			// validate request_uri
-			requestURI, _ := m["request_uri"].(string)
+			requestURI, _ := m[consts.FormParameterRequestURI].(string)
 			assert.NotEmpty(t, requestURI, "request_uri is empty")
 			assert.Condition(t, func() bool {
-				return strings.HasPrefix(requestURI, "urn:ietf:params:oauth:request_uri:")
+				return strings.HasPrefix(requestURI, consts.PrefixRequestURI)
 			}, "PAR Prefix is incorrect: %s", requestURI)
 
 			// validate expires_in
-			assert.EqualValues(t, 300, int(m["expires_in"].(float64)), "Invalid expires_in value=%v", m["expires_in"])
+			assert.EqualValues(t, 300, int(m[consts.AccessResponseExpiresIn].(float64)), "Invalid expires_in value=%v", m[consts.AccessResponseExpiresIn])
 
 			// call authorize
 			data = url.Values{}
-			data.Set("client_id", oauthClient.ClientID)
-			data.Set("request_uri", m["request_uri"].(string))
+			data.Set(consts.FormParameterClientID, oauthClient.ClientID)
+			data.Set(consts.FormParameterRequestURI, m[consts.FormParameterRequestURI].(string))
 			req, err = http.NewRequest("POST", ts.URL+"/auth", strings.NewReader(data.Encode()))
 			require.NoError(t, err)
 
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Add(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 
 			resp, err = http.DefaultClient.Do(req)
 			require.NoError(t, err)

@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -50,7 +51,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should pass",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=11234123"
 			},
 			authStatusCode: http.StatusOK,
@@ -59,7 +60,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail registered single redirect uri but no redirect uri in request",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				oauthClient.RedirectURL = ""
 
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=11234123"
@@ -71,7 +72,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail because nonce is not long enough",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1"
 			},
 			authStatusCode: http.StatusOK,
@@ -81,7 +82,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail because state is not long enough",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("123") + "&nonce=1234567890"
 			},
 			expectAuthErr:  "invalid_state",
@@ -95,7 +96,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			}),
 			description: "should pass",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
 			authStatusCode: http.StatusOK,
@@ -109,7 +110,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			description: "should not pass missing redirect uri",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -123,7 +124,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			}),
 			description: "should fail because authentication was in the past",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
 			authStatusCode: http.StatusNotAcceptable, // code from internal test callback handler when error occurs
@@ -137,7 +138,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			}),
 			description: "should pass because authorization was in the past and no login was required",
 			setup: func(oauthClient *xoauth2.Config) string {
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=none"
 			},
 			authStatusCode: http.StatusOK,

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -47,9 +48,9 @@ func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.Respo
 		wh.Set(k, rh.Get(k))
 	}
 
-	wh.Set("Cache-Control", "no-store")
-	wh.Set("Pragma", "no-cache")
-	wh.Set("Content-Type", "application/json;charset=UTF-8")
+	wh.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	wh.Set(consts.HeaderPragma, consts.PragmaNoCache)
+	wh.Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	js, err := json.Marshal(resp.ToMap())
 	if err != nil {
@@ -57,7 +58,7 @@ func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.Respo
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	rw.WriteHeader(http.StatusCreated)
 	_, _ = rw.Write(js)
@@ -65,9 +66,9 @@ func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.Respo
 
 // WritePushedAuthorizeError writes the PAR error
 func (f *Fosite) WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error) {
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
-	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	sendDebugMessagesToClient := f.Config.GetSendDebugMessagesToClients(ctx)
 	rfcerr := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).

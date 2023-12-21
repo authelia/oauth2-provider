@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -64,7 +65,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		RedirectURIs:  []string{ts.URL + "/callback"},
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-		Scopes:        []string{"oauth2", "offline", "openid"},
+		Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
 		Audience:      []string{"https://www.authelia.com/api"},
 	}
 
@@ -90,7 +91,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			description: "should pass but not yield id token",
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"offline"}
+				oauthClient.Scopes = []string{consts.ScopeOffline}
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
@@ -103,7 +104,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			description: "should pass and yield id token",
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
@@ -137,10 +138,10 @@ func TestRefreshTokenFlow(t *testing.T) {
 			description: "should fail because scope is no longer allowed",
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 			},
 			beforeRefresh: func(t *testing.T) {
-				refreshCheckClient.Scopes = []string{"offline", "openid"}
+				refreshCheckClient.Scopes = []string{consts.ScopeOffline, consts.ScopeOpenID}
 			},
 			pass: false,
 		},
@@ -149,8 +150,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
-				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
-				refreshCheckClient.Scopes = []string{"oauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
+				refreshCheckClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 			},
 			beforeRefresh: func(t *testing.T) {
 				refreshCheckClient.Audience = []string{"https://https://www.not-authelia.com//api"}
@@ -167,7 +168,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 				store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			pass: false,
@@ -182,7 +183,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				ts = mockServer(t, f, session)
 
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.Scopes = []string{"oauth2", "offline", "openid"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 				store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 			},
 			beforeRefresh: func(t *testing.T) {
@@ -194,7 +195,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			description: "should deny access if original token was reused",
 			setup: func(t *testing.T) {
-				oauthClient.Scopes = []string{"offline"}
+				oauthClient.Scopes = []string{consts.ScopeOffline}
 			},
 			pass: true,
 			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
@@ -218,7 +219,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				req, err := http.NewRequest("POST", ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
 				require.NoError(t, err)
 				req.SetBasicAuth("refresh-client", "foobar")
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 				r, err := http.DefaultClient.Do(req)
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, r.StatusCode)

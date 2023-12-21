@@ -5,15 +5,17 @@ package oauth2
 
 import (
 	"net/url"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type ResponseModeType string
 
 const (
 	ResponseModeDefault  = ResponseModeType("")
-	ResponseModeFormPost = ResponseModeType("form_post")
-	ResponseModeQuery    = ResponseModeType("query")
-	ResponseModeFragment = ResponseModeType("fragment")
+	ResponseModeFormPost = ResponseModeType(consts.ResponseModeFormPost)
+	ResponseModeQuery    = ResponseModeType(consts.ResponseModeQuery)
+	ResponseModeFragment = ResponseModeType(consts.ResponseModeFragment)
 )
 
 // AuthorizeRequest is an implementation of AuthorizeRequester

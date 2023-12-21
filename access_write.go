@@ -7,11 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, responder AccessResponder) {
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	js, err := json.Marshal(responder.ToMap())
 	if err != nil {
@@ -19,7 +21,7 @@ func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	rw.WriteHeader(http.StatusOK)
 	_, _ = rw.Write(js)

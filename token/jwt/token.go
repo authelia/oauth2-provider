@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 

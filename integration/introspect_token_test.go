@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestIntrospectToken(t *testing.T) {
@@ -70,28 +71,28 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set("Authorization", "bearer "+a.AccessToken)
+				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: true,
 			scopes:   "oauth2",
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set("Authorization", "bearer "+a.AccessToken)
+				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: true,
 			scopes:   "",
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set("Authorization", "bearer "+a.AccessToken)
+				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: false,
 			scopes:   "foo",
 		},
 		{
 			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set("Authorization", "bearer "+b.AccessToken)
+				return s.Set(consts.HeaderAuthorization, "bearer "+b.AccessToken)
 			},
 			isActive: false,
 			scopes:   "",

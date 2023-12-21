@@ -23,7 +23,7 @@ func AccessTokenFromRequest(req *http.Request) string {
 	// - Form-Encoded Body Parameter. Recommended, more likely to appear. e.g.: Authorization: Bearer mytoken123
 	// - URI Query Parameter e.g. access_token=mytoken123
 
-	auth := req.Header.Get("Authorization")
+	auth := req.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
 	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token

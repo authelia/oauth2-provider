@@ -17,6 +17,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestNewRevocationRequest(t *testing.T) {
@@ -56,18 +57,18 @@ func TestNewRevocationRequest(t *testing.T) {
 			header: http.Header{},
 			method: "POST",
 			form: url.Values{
-				"token": {"foo"},
+				consts.FormParameterToken: {"foo"},
 			},
 			mock:      func() {},
 			expectErr: ErrInvalidRequest,
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token": {"foo"},
+				consts.FormParameterToken: {"foo"},
 			},
 			expectErr: ErrInvalidClient,
 			mock: func() {
@@ -76,11 +77,11 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token": {"foo"},
+				consts.FormParameterToken: {"foo"},
 			},
 			expectErr: ErrInvalidClient,
 			mock: func() {
@@ -92,11 +93,11 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token": {"foo"},
+				consts.FormParameterToken: {"foo"},
 			},
 			expectErr: nil,
 			mock: func() {
@@ -110,12 +111,12 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token":           {"foo"},
-				"token_type_hint": {"access_token"},
+				consts.FormParameterToken:         {"foo"},
+				consts.FormParameterTokenTypeHint: {consts.TokenTypeAccessToken},
 			},
 			expectErr: nil,
 			mock: func() {
@@ -129,12 +130,12 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "")},
+				consts.HeaderAuthorization: {basicAuth("foo", "")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token":           {"foo"},
-				"token_type_hint": {"refresh_token"},
+				consts.FormParameterToken:         {"foo"},
+				consts.FormParameterTokenTypeHint: {consts.TokenTypeRefreshToken},
 			},
 			expectErr: nil,
 			mock: func() {
@@ -146,12 +147,12 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token":           {"foo"},
-				"token_type_hint": {"refresh_token"},
+				consts.FormParameterToken:         {"foo"},
+				consts.FormParameterTokenTypeHint: {consts.TokenTypeRefreshToken},
 			},
 			expectErr: nil,
 			mock: func() {
@@ -165,12 +166,12 @@ func TestNewRevocationRequest(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				"Authorization": {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			method: "POST",
 			form: url.Values{
-				"token":           {"foo"},
-				"token_type_hint": {"bar"},
+				consts.FormParameterToken:         {"foo"},
+				consts.FormParameterTokenTypeHint: {"bar"},
 			},
 			expectErr: nil,
 			mock: func() {
@@ -191,9 +192,9 @@ func TestNewRevocationRequest(t *testing.T) {
 				Method:   c.method,
 			}
 			c.mock()
-			ctx := NewContext()
+
 			config.RevocationHandlers = c.handlers
-			err := provider.NewRevocationRequest(ctx, r)
+			err := provider.NewRevocationRequest(context.TODO(), r)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

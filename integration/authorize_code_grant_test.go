@@ -20,6 +20,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeCodeFlow(t *testing.T) {
@@ -105,7 +106,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.ClientID = "custom-lifespan-client"
-				oauthClient.Scopes = []string{"oauth2", "offline"}
+				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline}
 				state = "12345678901234567890"
 			},
 			check: func(t *testing.T, r *http.Response, token *xoauth2.Token) {
@@ -115,7 +116,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
 				atExp := b.Session.GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan), atExp, time.Minute)
-				atExpIn := time.Duration(token.Extra("expires_in").(float64)) * time.Second
+				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan, atExpIn, time.Minute)
 				rtExp := b.Session.GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantRefreshTokenLifespan), rtExp, time.Minute)
@@ -169,7 +170,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 
 	req, err := http.NewRequest("GET", ts.URL+"/info", nil)
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set(consts.HeaderAuthorization, "Bearer "+token.AccessToken)
 
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)

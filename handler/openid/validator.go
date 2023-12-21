@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/token/jwt"

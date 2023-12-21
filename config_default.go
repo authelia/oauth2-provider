@@ -10,14 +10,15 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 
 	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const (
-	defaultPARPrefix          = "urn:ietf:params:oauth:request_uri:"
+	defaultPARPrefix          = consts.PrefixRequestURI
 	defaultPARContextLifetime = 5 * time.Minute
 )
 
@@ -430,7 +431,7 @@ func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Contex
 // GetRefreshTokenScopes returns which scopes will provide refresh tokens.
 func (c *Config) GetRefreshTokenScopes(_ context.Context) []string {
 	if c.RefreshTokenScopes == nil {
-		return []string{"offline", "offline_access"}
+		return []string{consts.ScopeOffline, consts.ScopeOfflineAccess}
 	}
 	return c.RefreshTokenScopes
 }

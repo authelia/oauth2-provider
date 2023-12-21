@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -64,7 +65,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			responseType: "id_token%20token",
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
@@ -76,10 +77,10 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 		},
 		{
 			description:  "implicit grant #2 test with form_post",
-			responseType: "id_token",
+			responseType: consts.ResponseTypeImplicitFlowIDToken,
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
@@ -88,7 +89,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 		},
 		{
 			description:  "Authorization code grant test with form_post",
-			responseType: "code",
+			responseType: consts.ResponseTypeAuthorizationCodeFlow,
 			setup: func() {
 				state = "12345678901234567890"
 			},
@@ -102,7 +103,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			responseType: "token%20code",
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
@@ -117,7 +118,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			responseType: "token%20id_token%20code",
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
@@ -133,7 +134,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			responseType: "id_token%20code",
 			setup: func() {
 				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"openid"}
+				oauthClient.Scopes = []string{consts.ScopeOpenID}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.EqualValues(t, state, stateFromServer)
@@ -155,7 +156,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 		},
 	} {
 		// Test canonical form_post
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), testFormPost(&state, false, c, oauthClient, "form_post"))
+		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), testFormPost(&state, false, c, oauthClient, consts.ResponseModeFormPost))
 
 		// Test decorated form_post response
 		c.check = decorateCheck(c.check)
@@ -204,7 +205,7 @@ func (m *decoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 }
 
 func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) {
-	rw.Header().Add("Content-Type", "text/html;charset=UTF-8")
+	rw.Header().Add(consts.HeaderContentType, consts.ContentTypeTextHTML)
 	resp.AddParameter("custom_param", "foo")
 	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), oauth2.GetPostFormHTMLTemplate(ctx,
 		oauth2.New(nil, new(oauth2.Config))), rw)

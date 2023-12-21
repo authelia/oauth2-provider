@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/integration/clients"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
@@ -53,9 +54,9 @@ var store = &storage.MemoryStore{
 			ID:            "my-client",
 			Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
-			ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
-			GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-			Scopes:        []string{"oauth2", "offline", "openid"},
+			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+			GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
 			Audience:      []string{tokenURL},
 		},
 		"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
@@ -64,9 +65,9 @@ var store = &storage.MemoryStore{
 				Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
 				RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
 				RedirectURIs:   []string{"http://localhost:3846/callback"},
-				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:         []string{"oauth2", "openid", "photos", "offline"},
+				ResponseTypes:  []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+				GrantTypes:     []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 			TokenLifespans: &internal.TestLifespans,
 		},
@@ -75,9 +76,9 @@ var store = &storage.MemoryStore{
 			Secret:        []byte{},
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
-			ResponseTypes: []string{"id_token", "code", "code id_token"},
-			GrantTypes:    []string{"refresh_token", "authorization_code"},
-			Scopes:        []string{"oauth2", "offline", "openid"},
+			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},
+			GrantTypes:    []string{consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode},
+			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
 			Audience:      []string{tokenURL},
 		},
 	},

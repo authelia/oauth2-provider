@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type mockNonceManager struct{ t *testing.T }
@@ -57,7 +57,7 @@ func TestHandler(t *testing.T) {
 		defer ctrl.Finish()
 
 		req := internal.NewMockAccessRequester(ctrl)
-		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{"openid"}).AnyTimes()
+		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{consts.ScopeOpenID}).AnyTimes()
 
 		resp := internal.NewMockAccessResponder(ctrl)
 

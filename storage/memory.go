@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
+	jose "github.com/go-jose/go-jose/v3"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type MemoryUserRelation struct {
@@ -103,7 +104,7 @@ func NewExampleStore() *MemoryStore {
 				RedirectURIs:   []string{"http://localhost:3846/callback"},
 				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
 				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:         []string{"oauth2", "openid", "photos", "offline"},
+				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 			"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
 				DefaultClient: &oauth2.DefaultClient{
@@ -113,7 +114,7 @@ func NewExampleStore() *MemoryStore {
 					RedirectURIs:   []string{"http://localhost:3846/callback"},
 					ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
 					GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-					Scopes:         []string{"oauth2", "openid", "photos", "offline"},
+					Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 				},
 				TokenLifespans: &internal.TestLifespans,
 			},
@@ -124,7 +125,7 @@ func NewExampleStore() *MemoryStore {
 				RedirectURIs:   []string{"http://localhost:3846/callback"},
 				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
 				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:         []string{"oauth2", "openid", "photos", "offline"},
+				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 		},
 		Users: map[string]MemoryUserRelation{

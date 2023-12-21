@@ -19,6 +19,7 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -34,7 +35,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	httpreq := &http.Request{
 		Method: "POST",
 		Header: http.Header{
-			"Authorization": []string{"bearer some-token"},
+			consts.HeaderAuthorization: []string{"bearer some-token"},
 		},
 		PostForm: url.Values{
 			"token": []string{"introspect-token"},
@@ -122,7 +123,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						"Authorization": []string{"bearer some-token"},
+						consts.HeaderAuthorization: []string{"bearer some-token"},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
@@ -141,7 +142,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						"Authorization": []string{"bearer some-token"},
+						consts.HeaderAuthorization: []string{"bearer some-token"},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
@@ -160,7 +161,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 					Method: "POST",
 					Header: http.Header{
 						//Basic Authorization with username=encoded:client and password=encoded&password
-						"Authorization": []string{"Basic ZW5jb2RlZCUzQWNsaWVudDplbmNvZGVkJTI2cGFzc3dvcmQ="},
+						consts.HeaderAuthorization: []string{"Basic ZW5jb2RlZCUzQWNsaWVudDplbmNvZGVkJTI2cGFzc3dvcmQ="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
@@ -178,7 +179,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 					Method: "POST",
 					Header: http.Header{
 						//Basic Authorization with username=my-client and password=foobar
-						"Authorization": []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
+						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
@@ -196,7 +197,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 					Method: "POST",
 					Header: http.Header{
 						//Basic Authorization with username=my-client and password=foobaz
-						"Authorization": []string{"Basic bXktY2xpZW50OmZvb2Jheg=="},
+						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jheg=="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},

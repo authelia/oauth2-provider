@@ -87,7 +87,7 @@ func (c *Introspect) getRequest(
 		return nil, err
 	}
 
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 
 	for header, value := range header {
 		request.Header.Set(header, value)

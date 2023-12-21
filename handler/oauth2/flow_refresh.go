@@ -65,7 +65,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(e)
 		}
 
-		return errorsx.WithStack(oauth2.ErrInactiveToken.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
 	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The refresh token has not been found: %s", oauth2.ErrorToDebugRFC6749Error(err).Error()))
 	default:

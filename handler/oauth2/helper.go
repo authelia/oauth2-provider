@@ -30,7 +30,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	}
 
 	responder.SetAccessToken(token)
-	responder.SetTokenType("bearer")
+	responder.SetTokenType(oauth2.BearerAccessToken)
 	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	return nil

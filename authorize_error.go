@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error) {
@@ -45,7 +47,7 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 	redirectURI.Fragment = ""
 
 	errors := rfcerr.ToValues()
-	errors.Set("state", ar.GetState())
+	errors.Set(consts.FormParameterState, ar.GetState())
 
 	var redirectURIString string
 	if ar.GetResponseMode() == ResponseModeFormPost {

@@ -30,6 +30,10 @@ type OpenIDConnectHybridHandler struct {
 	}
 }
 
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectHybridHandler)(nil)
+)
+
 func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	if len(ar.GetResponseTypes()) < 2 {
 		return nil
@@ -112,8 +116,8 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		}
 		claims.CodeHash = hash
 
-		if ar.GetGrantedScopes().Has("openid") {
-			if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, resp.GetCode(), ar.Sanitize(oidcParameters)); err != nil {
+		if ar.GetGrantedScopes().Has(consts.ScopeOpenID) {
+			if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, resp.GetCode(), ar.Sanitize(oidcParameters)); err != nil {
 				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 			}
 		}
@@ -138,7 +142,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		resp.AddParameter(consts.FormParameterState, ar.GetState())
 	}
 
-	if !ar.GetGrantedScopes().Has("openid") || !ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
+	if !ar.GetGrantedScopes().Has(consts.ScopeOpenID) || !ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
 		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 		return nil
 	}

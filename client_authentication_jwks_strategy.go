@@ -118,7 +118,8 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 		}
 
 		var set jose.JSONWebKeySet
-		if err := json.NewDecoder(response.Body).Decode(&set); err != nil {
+
+		if err = json.NewDecoder(response.Body).Decode(&set); err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to decode JSON Web Keys from location '%s'. Please check for typos and if the URL returns valid JSON.", location).WithWrap(err).WithDebug(err.Error()))
 		}
 

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"testing"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,18 +47,18 @@ func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
 	c := &oauth2.DefaultClient{}
 	r.Client = c
 
-	w.AddParameter("code", "foo")
+	w.AddParameter(consts.FormParameterAuthorizationCode, "foo")
 
-	r.Form.Add("code_challenge", "challenge")
-	r.Form.Add("code_challenge_method", "plain")
+	r.Form.Set(consts.FormParameterCodeChallenge, "challenge")
+	r.Form.Set(consts.FormParameterCodeChallengeMethod, consts.PKCEChallengeMethodPlain)
 
 	r.ResponseTypes = oauth2.Arguments{}
 	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.ResponseTypes = oauth2.Arguments{"code"}
+	r.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.ResponseTypes = oauth2.Arguments{"code", "id_token"}
+	r.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
 	c.Public = true
@@ -71,12 +72,13 @@ func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
 	config.EnablePKCEPlainChallengeMethod = false
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.Form.Set("code_challenge_method", "S256")
-	r.Form.Set("code_challenge", "")
+	r.Form.Set(consts.FormParameterCodeChallenge, "")
+	r.Form.Set(consts.FormParameterCodeChallengeMethod, consts.PKCEChallengeMethodSHA256)
+
 	config.EnforcePKCE = true
 	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 
-	r.Form.Set("code_challenge", "challenge")
+	r.Form.Set(consts.FormParameterCodeChallenge, "challenge")
 	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
 }
 
@@ -111,7 +113,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:           "passes with private client",
-			grant:       "authorization_code",
+			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			method:      "plain",
@@ -122,20 +124,20 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "fails because invalid code",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			expectErr: oauth2.ErrInvalidGrant,
 			client:    pc,
 			code:      "invalid-code-2",
 		},
 		{
 			d:      "passes because auth code flow but pkce is not forced and no challenge given",
-			grant:  "authorization_code",
+			grant:  consts.GrantTypeAuthorizationCode,
 			client: pc,
 			code:   "valid-code-3",
 		},
 		{
 			d:         "fails because auth code flow and pkce challenge given but plain is disabled",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: "foo",
 			client:    pc,
 			expectErr: oauth2.ErrInvalidRequest,
@@ -143,7 +145,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:           "passes",
-			grant:       "authorization_code",
+			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			client:      pc,
@@ -153,10 +155,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:           "passes",
-			grant:       "authorization_code",
+			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      "plain",
+			method:      consts.PKCEChallengeMethodPlain,
 			client:      pc,
 			enablePlain: true,
 			force:       true,
@@ -164,10 +166,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:           "fails because challenge and verifier do not match",
-			grant:       "authorization_code",
+			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "not-foo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      "plain",
+			method:      consts.PKCEChallengeMethodPlain,
 			client:      pc,
 			enablePlain: true,
 			code:        "valid-code-7",
@@ -175,7 +177,7 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:           "fails because challenge and verifier do not match",
-			grant:       "authorization_code",
+			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "not-foonot-foonot-foonot-foonot-foonot-foonot-foonot-foo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			client:      pc,
@@ -185,10 +187,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "fails because verifier is too short",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: "foo",
 			verifier:  "foo",
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			client:    pc,
 			force:     true,
 			code:      "valid-code-9a",
@@ -196,10 +198,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "fails because verifier is too long",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: "foo",
 			verifier:  "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			client:    pc,
 			force:     true,
 			code:      "valid-code-10",
@@ -207,10 +209,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "fails because verifier is malformed",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: "foo",
 			verifier:  `(!"/$%Z&$T()/)OUZI>$"&=/T(PUOI>"%/)TUOI&/(O/()RGTE>=/(%"/()="$/)(=()=/R/()=))`,
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			client:    pc,
 			force:     true,
 			code:      "valid-code-11",
@@ -218,10 +220,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "fails because challenge and verifier do not match",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
 			verifier:  "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			client:    pc,
 			force:     true,
 			code:      "valid-code-12",
@@ -229,10 +231,10 @@ func TestPKCEHandlerValidate(t *testing.T) {
 		},
 		{
 			d:         "passes because challenge and verifier match",
-			grant:     "authorization_code",
+			grant:     consts.GrantTypeAuthorizationCode,
 			challenge: s256challenge,
 			verifier:  s256verifier,
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			client:    pc,
 			force:     true,
 			code:      "valid-code-13",
@@ -243,14 +245,14 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			config.EnforcePKCE = tc.force
 			ms.signature = tc.code
 			ar := oauth2.NewAuthorizeRequest()
-			ar.Form.Add("code_challenge", tc.challenge)
-			ar.Form.Add("code_challenge_method", tc.method)
+			ar.Form.Add(consts.FormParameterCodeChallenge, tc.challenge)
+			ar.Form.Add(consts.FormParameterCodeChallengeMethod, tc.method)
 			require.NoError(t, s.CreatePKCERequestSession(context.TODO(), fmt.Sprintf("valid-code-%d", k), ar))
 
 			r := oauth2.NewAccessRequest(nil)
 			r.Client = tc.client
 			r.GrantTypes = oauth2.Arguments{tc.grant}
-			r.Form.Add("code_verifier", tc.verifier)
+			r.Form.Add(consts.FormParameterCodeVerifier, tc.verifier)
 			if tc.expectErr == nil {
 				require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), r))
 			} else {
@@ -285,20 +287,20 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 			force:       true,
 			enablePlain: true,
 			expectErr:   true,
-			method:      "S256",
+			method:      consts.PKCEChallengeMethodSHA256,
 		},
 		{
 			d:           "should fail because forcePublic is enabled, the client is public, and no challenge was given",
 			forcePublic: true,
 			client:      &oauth2.DefaultClient{Public: true},
 			expectErr:   true,
-			method:      "S256",
+			method:      consts.PKCEChallengeMethodSHA256,
 		},
 		{
 			d:         "should fail because although force is enabled and a challenge was given, plain is disabled",
 			force:     true,
 			expectErr: true,
-			method:    "plain",
+			method:    consts.PKCEChallengeMethodPlain,
 			challenge: "challenge",
 		},
 		{
@@ -317,14 +319,14 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 		{
 			d:         "should pass because force is enabled with challenge given and method is S256",
 			force:     true,
-			method:    "S256",
+			method:    consts.PKCEChallengeMethodSHA256,
 			challenge: "challenge",
 		},
 		{
 			d:           "should pass because forcePublic is enabled with challenge given and method is S256",
 			forcePublic: true,
 			client:      &oauth2.DefaultClient{Public: true},
-			method:      "S256",
+			method:      consts.PKCEChallengeMethodSHA256,
 			challenge:   "challenge",
 		},
 	} {

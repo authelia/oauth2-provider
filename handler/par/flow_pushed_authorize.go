@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/hmac"
 )
@@ -18,8 +19,6 @@ import (
 const (
 	defaultPARKeyLength = 32
 )
-
-var b64 = base64.URLEncoding.WithPadding(base64.NoPadding)
 
 // PushedAuthorizeHandler handles the PAR request
 type PushedAuthorizeHandler struct {
@@ -41,7 +40,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint(oauth2.ErrorPARNotSupported).WithDebug(oauth2.DebugPARStorageInvalid))
 	}
 
-	if !ar.GetResponseTypes().HasOneOf("token", "code", "id_token") {
+	if !ar.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
 		return nil
 	}
 
@@ -71,7 +70,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHint("Unable to generate the random part of the request_uri.").WithWrap(err).WithDebug(err.Error()))
 	}
 
-	requestURI := fmt.Sprintf("%s%s", configProvider.GetPushedAuthorizeRequestURIPrefix(ctx), b64.EncodeToString(stateKey))
+	requestURI := fmt.Sprintf("%s%s", configProvider.GetPushedAuthorizeRequestURIPrefix(ctx), base64.RawURLEncoding.EncodeToString(stateKey))
 
 	// store
 	if err = storage.CreatePARSession(ctx, requestURI, ar); err != nil {

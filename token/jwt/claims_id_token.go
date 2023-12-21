@@ -6,6 +6,7 @@ package jwt
 import (
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
 )
 
@@ -32,81 +33,81 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
-		ret["sub"] = c.Subject
+		ret[consts.ClaimSubject] = c.Subject
 	} else {
-		delete(ret, "sub")
+		delete(ret, consts.ClaimSubject)
 	}
 
 	if c.Issuer != "" {
-		ret["iss"] = c.Issuer
+		ret[consts.ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, "iss")
+		delete(ret, consts.ClaimIssuer)
 	}
 
 	if c.JTI != "" {
-		ret["jti"] = c.JTI
+		ret[consts.ClaimJWTID] = c.JTI
 	} else {
-		ret["jti"] = uuid.New().String()
+		ret[consts.ClaimJWTID] = uuid.New().String()
 	}
 
 	if len(c.Audience) > 0 {
-		ret["aud"] = c.Audience
+		ret[consts.ClaimAudience] = c.Audience
 	} else {
-		ret["aud"] = []string{}
+		ret[consts.ClaimAudience] = []string{}
 	}
 
 	if !c.IssuedAt.IsZero() {
-		ret["iat"] = c.IssuedAt.Unix()
+		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, "iat")
+		delete(ret, consts.ClaimIssuedAt)
 	}
 
 	if !c.ExpiresAt.IsZero() {
-		ret["exp"] = c.ExpiresAt.Unix()
+		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
 	} else {
-		delete(ret, "exp")
+		delete(ret, consts.ClaimExpirationTime)
 	}
 
 	if !c.RequestedAt.IsZero() {
-		ret["rat"] = c.RequestedAt.Unix()
+		ret[consts.ClaimRequestedAt] = c.RequestedAt.Unix()
 	} else {
-		delete(ret, "rat")
+		delete(ret, consts.ClaimRequestedAt)
 	}
 
 	if len(c.Nonce) > 0 {
-		ret["nonce"] = c.Nonce
+		ret[consts.ClaimNonce] = c.Nonce
 	} else {
-		delete(ret, "nonce")
+		delete(ret, consts.ClaimNonce)
 	}
 
 	if len(c.AccessTokenHash) > 0 {
-		ret["at_hash"] = c.AccessTokenHash
+		ret[consts.ClaimAccessTokenHash] = c.AccessTokenHash
 	} else {
-		delete(ret, "at_hash")
+		delete(ret, consts.ClaimAccessTokenHash)
 	}
 
 	if len(c.CodeHash) > 0 {
-		ret["c_hash"] = c.CodeHash
+		ret[consts.ClaimCodeHash] = c.CodeHash
 	} else {
-		delete(ret, "c_hash")
+		delete(ret, consts.ClaimCodeHash)
 	}
 
 	if !c.AuthTime.IsZero() {
-		ret["auth_time"] = c.AuthTime.Unix()
+		ret[consts.ClaimAuthenticationTime] = c.AuthTime.Unix()
 	} else {
-		delete(ret, "auth_time")
+		delete(ret, consts.ClaimAuthenticationTime)
 	}
 
 	if len(c.AuthenticationContextClassReference) > 0 {
-		ret["acr"] = c.AuthenticationContextClassReference
+		ret[consts.ClaimAuthenticationContextClassReference] = c.AuthenticationContextClassReference
 	} else {
-		delete(ret, "acr")
+		delete(ret, consts.ClaimAuthenticationContextClassReference)
 	}
 
 	if len(c.AuthenticationMethodsReferences) > 0 {
-		ret["amr"] = c.AuthenticationMethodsReferences
+		ret[consts.ClaimAuthenticationMethodsReference] = c.AuthenticationMethodsReferences
 	} else {
-		delete(ret, "amr")
+		delete(ret, consts.ClaimAuthenticationMethodsReference)
 	}
 
 	return ret

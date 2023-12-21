@@ -2,6 +2,7 @@ package consts
 
 // Response Mode strings.
 const (
+	ResponseModeNone        = valueNone
 	ResponseModeFormPost    = "form_post"
 	ResponseModeQuery       = "query"
 	ResponseModeFragment    = "fragment"

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
@@ -33,19 +34,19 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 	// Even if a scope parameter is present in the Request Object value, a scope parameter MUST always be passed using
 	// the OAuth 2.0 request syntax containing the openid scope value to indicate to the underlying OAuth 2.0 logic that this is an OpenID Connect request.
 	// Source: http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth
-	if !scope.Has("openid") {
+	if !scope.Has(consts.ScopeOpenID) {
 		return nil
 	}
 
-	if len(request.Form.Get("request")+request.Form.Get("request_uri")) == 0 {
+	if len(request.Form.Get(consts.FormParameterRequest)+request.Form.Get(consts.FormParameterRequestURI)) == 0 {
 		return nil
-	} else if len(request.Form.Get("request")) > 0 && len(request.Form.Get("request_uri")) > 0 {
+	} else if len(request.Form.Get(consts.FormParameterRequest)) > 0 && len(request.Form.Get(consts.FormParameterRequestURI)) > 0 {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect parameters 'request' and 'request_uri' were both given, but you can use at most one."))
 	}
 
 	oidcClient, ok := request.Client.(OpenIDConnectClient)
 	if !ok {
-		if len(request.Form.Get("request_uri")) > 0 {
+		if len(request.Form.Get(consts.FormParameterRequestURI)) > 0 {
 			return errorsx.WithStack(ErrRequestURINotSupported.WithHint("OpenID Connect 'request_uri' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect capabilities."))
 		}
 		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 'request' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect capabilities."))
@@ -55,8 +56,8 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 'request' or 'request_uri' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered."))
 	}
 
-	assertion := request.Form.Get("request")
-	if location := request.Form.Get("request_uri"); len(location) > 0 {
+	assertion := request.Form.Get(consts.FormParameterRequest)
+	if location := request.Form.Get(consts.FormParameterRequestURI); len(location) > 0 {
 		if !stringslice.Has(oidcClient.GetRequestURIs(), location) {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Request URI '%s' is not whitelisted by the OAuth 2.0 Client.", location))
 		}
@@ -86,8 +87,8 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
 		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
 		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if oidcClient.GetRequestObjectSigningAlgorithm() != "" && oidcClient.GetRequestObjectSigningAlgorithm() != fmt.Sprintf("%s", t.Header["alg"]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header["alg"], oidcClient.GetRequestObjectSigningAlgorithm()))
+		if oidcClient.GetRequestObjectSigningAlgorithm() != "" && oidcClient.GetRequestObjectSigningAlgorithm() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], oidcClient.GetRequestObjectSigningAlgorithm()))
 		}
 
 		if t.Method == jwt.SigningMethodNone {
@@ -137,7 +138,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 	claims := token.Claims
 	// Reject the request if the "request_uri" authorization request
 	// parameter is provided.
-	if requestURI, _ := claims["request_uri"].(string); isPARRequest && requestURI != "" {
+	if requestURI, _ := claims[consts.FormParameterRequestURI].(string); isPARRequest && requestURI != "" {
 		return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
 	}
 
@@ -145,21 +146,21 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		request.Form.Set(k, fmt.Sprintf("%s", v))
 	}
 
-	claimScope := RemoveEmpty(strings.Split(request.Form.Get("scope"), " "))
+	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 	for _, s := range scope {
 		if !stringslice.Has(claimScope, s) {
 			claimScope = append(claimScope, s)
 		}
 	}
 
-	request.State = request.Form.Get("state")
-	request.Form.Set("scope", strings.Join(claimScope, " "))
+	request.State = request.Form.Get(consts.FormParameterState)
+	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 	return nil
 }
 
 func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *AuthorizeRequest) error {
 	// Fetch redirect URI from request
-	rawRedirURI := request.Form.Get("redirect_uri")
+	rawRedirURI := request.Form.Get(consts.FormParameterRedirectURI)
 
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
 	//
@@ -168,7 +169,7 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
 	//
 	// Note: as per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
-	if len(rawRedirURI) == 0 && request.GetRequestedScopes().Has("openid") {
+	if len(rawRedirURI) == 0 && request.GetRequestedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
 	}
 
@@ -184,7 +185,7 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 }
 
 func (f *Fosite) parseAuthorizeScope(_ *http.Request, request *AuthorizeRequest) error {
-	request.SetRequestedScopes(RemoveEmpty(strings.Split(request.Form.Get("scope"), " ")))
+	request.SetRequestedScopes(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " ")))
 
 	return nil
 }
@@ -205,7 +206,7 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 	// values, where the order of values does not matter (e.g., response
 	// type "a b" is the same as "b a").  The meaning of such composite
 	// response types is defined by their respective specifications.
-	responseTypes := RemoveEmpty(strings.Split(r.Form.Get("response_type"), " "))
+	responseTypes := RemoveEmpty(strings.Split(r.Form.Get(consts.FormParameterResponseType), " "))
 	if len(responseTypes) == 0 {
 		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("`The request is missing the 'response_type' parameter."))
 	}
@@ -227,7 +228,7 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 }
 
 func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
-	switch responseMode := r.Form.Get("response_mode"); responseMode {
+	switch responseMode := r.Form.Get(consts.FormParameterResponseMode); responseMode {
 	case string(ResponseModeDefault):
 		request.ResponseMode = ResponseModeDefault
 	case string(ResponseModeFragment):
@@ -280,13 +281,13 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, nil
 	}
 
-	requestURI := r.Form.Get("request_uri")
+	requestURI := r.Form.Get(consts.FormParameterRequestURI)
 	if requestURI == "" || !strings.HasPrefix(requestURI, configProvider.GetPushedAuthorizeRequestURIPrefix(ctx)) {
 		// nothing to do here
 		return false, nil
 	}
 
-	clientID := r.Form.Get("client_id")
+	clientID := r.Form.Get(consts.FormParameterClientID)
 
 	storage, ok := f.Store.(PARStorage)
 	if !ok {
@@ -307,7 +308,7 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	request.State = parRequest.GetState()
 	request.ResponseMode = parRequest.GetResponseMode()
 
-	if err := storage.DeletePARSession(ctx, requestURI); err != nil {
+	if err = storage.DeletePARSession(ctx, requestURI); err != nil {
 		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
@@ -336,7 +337,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	request.Form = r.Form
 
 	// Save state to the request to be returned in error conditions (https://github.com/ory/hydra/issues/1642)
-	request.State = request.Form.Get("state")
+	request.State = request.Form.Get(consts.FormParameterState)
 
 	// Check if this is a continuation from a pushed authorization request
 	if !isPARRequest {
@@ -350,7 +351,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 	}
 
-	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get("client_id"))
+	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID))
 	if err != nil {
 		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebug(err.Error()))
 	}
@@ -361,13 +362,13 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	//
 	// All other parse methods should come afterwards so that we ensure that the data is taken
 	// from the request_object if set.
-	if err := f.authorizeRequestParametersFromOpenIDConnectRequest(ctx, request, isPARRequest); err != nil {
+	if err = f.authorizeRequestParametersFromOpenIDConnectRequest(ctx, request, isPARRequest); err != nil {
 		return request, err
 	}
 
 	// The request context is now fully available and we can start processing the individual
 	// fields.
-	if err := f.ParseResponseMode(ctx, r, request); err != nil {
+	if err = f.ParseResponseMode(ctx, r, request); err != nil {
 		return request, err
 	}
 
@@ -387,7 +388,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
-	if len(request.Form.Get("registration")) > 0 {
+	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
 		return request, errorsx.WithStack(ErrRegistrationNotSupported)
 	}
 
@@ -402,7 +403,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	// A fallback handler to set the default response mode in cases where we can not reach the Authorize Handlers
 	// but still need the e.g. correct error response mode.
 	if request.GetResponseMode() == ResponseModeDefault {
-		if request.ResponseTypes.ExactOne("code") {
+		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 			request.SetDefaultResponseMode(ResponseModeQuery)
 		} else {
 			// If the response type is not `code` it is an implicit/hybrid (fragment) response mode.

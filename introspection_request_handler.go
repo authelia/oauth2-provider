@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/internal/errorsx"
@@ -104,9 +105,9 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
 	}
 
-	token := r.PostForm.Get("token")
-	tokenTypeHint := r.PostForm.Get("token_type_hint")
-	scope := r.PostForm.Get("scope")
+	token := r.PostForm.Get(consts.FormParameterToken)
+	tokenTypeHint := r.PostForm.Get(consts.FormParameterTokenTypeHint)
+	scope := r.PostForm.Get(consts.FormParameterScope)
 	if clientToken := AccessTokenFromRequest(r); clientToken != "" {
 		if token == clientToken {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Bearer and introspection token are identical."))
@@ -139,7 +140,7 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		}
 
 		// Enforce client authentication
-		if err := f.checkClientSecret(ctx, client, []byte(clientSecret)); err != nil {
+		if err = f.checkClientSecret(ctx, client, []byte(clientSecret)); err != nil {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
 		}
 	}

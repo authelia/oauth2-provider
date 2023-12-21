@@ -6,5 +6,5 @@ const (
 	ClientAuthMethodClientSecretPost  = "client_secret_post"
 	ClientAuthMethodClientSecretJWT   = "client_secret_jwt"
 	ClientAuthMethodPrivateKeyJWT     = "private_key_jwt"
-	ClientAuthMethodNone              = "none"
+	ClientAuthMethodNone              = valueNone
 )

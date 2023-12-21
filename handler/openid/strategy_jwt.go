@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 
@@ -135,8 +136,8 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}
 
-	if requester.GetRequestForm().Get("grant_type") != "refresh_token" {
-		maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get("max_age"), 10, 64)
+	if requester.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
+		maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
 		if err != nil {
 			maxAge = 0
 		}
@@ -164,12 +165,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		switch prompt {
-		case "none":
+		case consts.PromptTypeNone:
 			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.After(claims.RequestedAt) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
 					WithDebugf("Failed to generate id token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
 			}
-		case "login":
+		case consts.PromptTypeLogin:
 			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.Before(claims.RequestedAt) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
 					WithDebugf("Failed to generate id token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
@@ -178,11 +179,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 		// If acr_values was requested but no acr value was provided in the ID token, fall back to level 0 which means least
 		// confidence in authentication.
-		if requester.GetRequestForm().Get("acr_values") != "" && claims.AuthenticationContextClassReference == "" {
+		if requester.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues) != "" && claims.AuthenticationContextClassReference == "" {
 			claims.AuthenticationContextClassReference = "0"
 		}
 
-		if tokenHintString := requester.GetRequestForm().Get("id_token_hint"); tokenHintString != "" {
+		if tokenHintString := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
 			tokenHint, err := h.Signer.Decode(ctx, tokenHintString)
 			var ve *jwt.ValidationError
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
@@ -191,7 +192,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode id token from 'id_token_hint' parameter because %s.", err.Error()))
 			}
 
-			if hintSub, _ := tokenHint.Claims["sub"].(string); hintSub == "" {
+			if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Provided id token from 'id_token_hint' does not have a subject."))
 			} else if hintSub != claims.Subject {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Subject from authorization mismatches id token subject from 'id_token_hint'."))
@@ -216,7 +217,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	// OPTIONAL. String value used to associate a Client session with an ID Token, and to mitigate replay attacks.
-	if nonce := requester.GetRequestForm().Get("nonce"); len(nonce) == 0 {
+	if nonce := requester.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 	} else if len(nonce) > 0 && len(nonce) < h.Config.GetMinParameterEntropy(ctx) {
 		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
 		return "", errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))

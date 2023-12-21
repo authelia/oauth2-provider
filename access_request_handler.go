@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -59,9 +60,9 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return accessRequest, errors.New("Session must not be nil")
 	}
 
-	accessRequest.SetRequestedScopes(RemoveEmpty(strings.Split(r.PostForm.Get("scope"), " ")))
+	accessRequest.SetRequestedScopes(RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " ")))
 	accessRequest.SetRequestedAudience(GetAudiences(r.PostForm))
-	accessRequest.GrantTypes = RemoveEmpty(strings.Split(r.PostForm.Get("grant_type"), " "))
+	accessRequest.GrantTypes = RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterGrantType), " "))
 	if len(accessRequest.GrantTypes) < 1 {
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Request parameter 'grant_type' is missing"))
 	}

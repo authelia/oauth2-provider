@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -38,7 +39,7 @@ func TestHandler(t *testing.T) {
 		defer ctrl.Finish()
 
 		req := internal.NewMockAccessRequester(ctrl)
-		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{"openid", draftScope}).AnyTimes()
+		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{consts.ScopeOpenID, draftScope}).AnyTimes()
 
 		resp := internal.NewMockAccessResponder(ctrl)
 		resp.EXPECT().GetAccessToken().Return("fake access token")

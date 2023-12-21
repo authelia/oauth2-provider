@@ -67,7 +67,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					areq: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
-							Form: url.Values{"code": []string{"foo.bar"}},
+							Form: url.Values{consts.FormParameterAuthorizationCode: []string{"foo.bar"}},
 							Client: &oauth2.DefaultClient{
 								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 							},
@@ -104,10 +104,10 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					description: "should pass with offline scope and refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo offline", aresp.GetExtra("scope"))
+						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo offline", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
@@ -127,17 +127,17 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						config.RefreshTokenScopes = []string{}
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form.Add("code", code)
+						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with refresh token always provided",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo", aresp.GetExtra("scope"))
+						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{

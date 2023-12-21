@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
@@ -27,11 +28,11 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetGrantedScopes().Has("openid") {
+	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetClient().GetGrantTypes().Has("refresh_token") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"refresh_token\"."))
 	}
 
@@ -65,11 +66,11 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !requester.GetGrantedScopes().Has("openid") {
+	if !requester.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !requester.GetClient().GetGrantTypes().Has("refresh_token") {
+	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"refresh_token\"."))
 	}
 
@@ -104,5 +105,5 @@ func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, req
 func (c *OpenIDConnectRefreshHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "refresh_token"
-	return requester.GetGrantTypes().ExactOne("refresh_token")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }

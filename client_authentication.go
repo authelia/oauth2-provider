@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
@@ -24,9 +25,6 @@ import (
 
 // ClientAuthenticationStrategy provides a method signature for authenticating a client request
 type ClientAuthenticationStrategy func(context.Context, *http.Request, url.Values) (Client, error)
-
-// #nosec:gosec G101 - False Positive
-const clientAssertionJWTBearerType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 func (f *Fosite) findClientPublicJWK(ctx context.Context, oidcClient OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (any, error) {
 	if set := oidcClient.GetJSONWebKeys(); set != nil {
@@ -66,10 +64,10 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 // DefaultClientAuthenticationStrategy provides the fosite's default client authentication strategy,
 // HTTP Basic Authentication and JWT Bearer
 func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *http.Request, form url.Values) (Client, error) {
-	if assertionType := form.Get("client_assertion_type"); assertionType == clientAssertionJWTBearerType {
-		assertion := form.Get("client_assertion")
+	if assertionType := form.Get(consts.FormParameterClientAssertionType); assertionType == consts.ClientAssertionTypeJWTBearer {
+		assertion := form.Get(consts.FormParameterClientAssertion)
 		if len(assertion) == 0 {
-			return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The client_assertion request parameter must be set when using client_assertion_type of '%s'.", clientAssertionJWTBearerType))
+			return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The client_assertion request parameter must be set when using client_assertion_type of '%s'.", consts.ClientAssertionTypeJWTBearer))
 		}
 
 		var clientID string
@@ -84,7 +82,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 
 			if clientID == "" {
 				claims := t.Claims
-				if sub, ok := claims["sub"].(string); !ok {
+				if sub, ok := claims[consts.ClaimSubject].(string); !ok {
 					return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The claim 'sub' from the client_assertion JSON Web Token is undefined."))
 				} else {
 					clientID = sub
@@ -102,15 +100,15 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 			}
 
 			switch oidcClient.GetTokenEndpointAuthMethod() {
-			case "private_key_jwt":
+			case consts.ClientAuthMethodPrivateKeyJWT:
 				break
-			case "none":
+			case consts.ClientAuthMethodNone:
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHint("This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request."))
-			case "client_secret_post":
+			case consts.ClientAuthMethodClientSecretPost:
 				fallthrough
-			case "client_secret_basic":
+			case consts.ClientAuthMethodClientSecretBasic:
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however 'client_assertion' was provided in the request.", oidcClient.GetTokenEndpointAuthMethod()))
-			case "client_secret_jwt":
+			case consts.ClientAuthMethodClientSecretJWT:
 				fallthrough
 			default:
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however that method is not supported by this server.", oidcClient.GetTokenEndpointAuthMethod()))
@@ -142,7 +140,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value.").WithWrap(err).WithDebug(err.Error()))
 			}
 			return nil, err
-		} else if err := token.Claims.Valid(); err != nil {
+		} else if err = token.Claims.Valid(); err != nil {
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebug(err.Error()))
 		}
 
@@ -152,9 +150,9 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
 		} else if f.Config.GetTokenURL(ctx) == "" {
 			return nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server's token endpoint URL has not been set."))
-		} else if sub, ok := claims["sub"].(string); !ok || sub != clientID {
+		} else if sub, ok := claims[consts.ClaimSubject].(string); !ok || sub != clientID {
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
-		} else if jti, ok = claims["jti"].(string); !ok || len(jti) == 0 {
+		} else if jti, ok = claims[consts.ClaimJWTID].(string); !ok || len(jti) == 0 {
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'jti' from 'client_assertion' must be set but is not."))
 		} else if f.Store.ClientAssertionJWTValid(ctx, jti) != nil {
 			return nil, errorsx.WithStack(ErrJTIKnown.WithHint("Claim 'jti' from 'client_assertion' MUST only be used once."))
@@ -163,7 +161,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 		// type conversion according to jwt.MapClaims.VerifyExpiresAt
 		var expiry int64
 		err = nil
-		switch exp := claims["exp"].(type) {
+		switch exp := claims[consts.ClaimExpirationTime].(type) {
 		case float64:
 			expiry = int64(exp)
 		case int64:
@@ -177,11 +175,11 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 		if err != nil {
 			return nil, errorsx.WithStack(err)
 		}
-		if err := f.Store.SetClientAssertionJWT(ctx, jti, time.Unix(expiry, 0)); err != nil {
+		if err = f.Store.SetClientAssertionJWT(ctx, jti, time.Unix(expiry, 0)); err != nil {
 			return nil, err
 		}
 
-		if auds, ok := claims["aud"].([]any); !ok {
+		if auds, ok := claims[consts.ClaimAudience].([]any); !ok {
 			if !claims.VerifyAudience(f.Config.GetTokenURL(ctx), true) {
 				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("Claim 'audience' from 'client_assertion' must match the authorization server's token endpoint '%s'.", f.Config.GetTokenURL(ctx)))
 			}
@@ -216,11 +214,11 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 
 	if oidcClient, ok := client.(OpenIDConnectClient); !ok {
 		// If this isn't an OpenID Connect client then we actually don't care about any of this, just continue!
-	} else if ok && form.Get("client_id") != "" && form.Get("client_secret") != "" && oidcClient.GetTokenEndpointAuthMethod() != "client_secret_post" {
+	} else if ok && form.Get(consts.FormParameterClientID) != "" && form.Get(consts.FormParameterClientSecret) != "" && oidcClient.GetTokenEndpointAuthMethod() != consts.ClientAuthMethodClientSecretPost {
 		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The OAuth 2.0 Client supports client authentication method '%s', but method 'client_secret_post' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_post'.", oidcClient.GetTokenEndpointAuthMethod()))
-	} else if _, secret, basicOk := r.BasicAuth(); basicOk && ok && secret != "" && oidcClient.GetTokenEndpointAuthMethod() != "client_secret_basic" {
+	} else if _, secret, basicOk := r.BasicAuth(); basicOk && ok && secret != "" && oidcClient.GetTokenEndpointAuthMethod() != consts.ClientAuthMethodClientSecretBasic {
 		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The OAuth 2.0 Client supports client authentication method '%s', but method 'client_secret_basic' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_basic'.", oidcClient.GetTokenEndpointAuthMethod()))
-	} else if ok && oidcClient.GetTokenEndpointAuthMethod() != "none" && client.IsPublic() {
+	} else if ok && oidcClient.GetTokenEndpointAuthMethod() != consts.ClientAuthMethodNone && client.IsPublic() {
 		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The OAuth 2.0 Client supports client authentication method '%s', but method 'none' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'none'.", oidcClient.GetTokenEndpointAuthMethod()))
 	}
 
@@ -262,7 +260,7 @@ func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (a
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The retrieved JSON Web Key Set does not contain any key."))
 	}
 
-	kid, ok := t.Header["kid"].(string)
+	kid, ok := t.Header[consts.JSONWebTokenHeaderKeyIdentifier].(string)
 	if ok {
 		keys = set.Key(kid)
 	}
@@ -272,7 +270,7 @@ func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (a
 	}
 
 	for _, key := range keys {
-		if key.Use != "sig" {
+		if key.Use != consts.JSONWebTokenUseSignature {
 			continue
 		}
 		if expectsRSAKey {
@@ -347,8 +345,8 @@ func clientCredentialsFromBasicAuth(r *http.Request) (id, secret string, ok bool
 }
 
 func clientCredentialsFromRequestBody(form url.Values, forceID bool) (id, secret string, err error) {
-	id = form.Get("client_id")
-	secret = form.Get("client_secret")
+	id = form.Get(consts.FormParameterClientID)
+	secret = form.Get(consts.FormParameterClientSecret)
 
 	if id == "" && forceID {
 		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("Client credentials missing or malformed in both HTTP Authorization header and HTTP POST body."))

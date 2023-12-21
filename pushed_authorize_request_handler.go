@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -32,7 +33,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebug(err.Error()))
 	}
 	request.Form = r.Form
-	request.State = request.Form.Get("state")
+	request.State = request.Form.Get(consts.FormParameterState)
 
 	// Authenticate the client in the same way as at the token endpoint
 	// (Section 2.3 of [RFC6749]).
@@ -49,14 +50,14 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 	// Reject the request if the "request_uri" authorization request
 	// parameter is provided.
-	if r.Form.Get("request_uri") != "" {
+	if r.Form.Get(consts.FormParameterRequestURI) != "" {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("The request must not contain 'request_uri'."))
 	}
 
 	// For private_key_jwt or basic auth client authentication, "client_id" may not inside the form
 	// However this is required by NewAuthorizeRequest implementation
-	if len(r.Form.Get("client_id")) == 0 {
-		r.Form.Set("client_id", client.GetID())
+	if len(r.Form.Get(consts.ClaimClientIdentifier)) == 0 {
+		r.Form.Set(consts.ClaimClientIdentifier, client.GetID())
 	}
 
 	// Validate as if this is a new authorize request
@@ -65,7 +66,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return fr, err
 	}
 
-	if fr.GetRequestedScopes().Has("openid") && r.Form.Get("redirect_uri") == "" {
+	if fr.GetRequestedScopes().Has(consts.ScopeOpenID) && r.Form.Get(consts.FormParameterRedirectURI) == "" {
 		return fr, errorsx.WithStack(ErrInvalidRequest.WithHint("Query parameter 'redirect_uri' is required when performing an OpenID Connect flow."))
 	}
 

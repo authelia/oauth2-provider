@@ -5,6 +5,8 @@ package oauth2
 
 import (
 	"net/http"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // PushedAuthorizeResponse is the response object for PAR
@@ -57,7 +59,8 @@ func (a *PushedAuthorizeResponse) GetExtra(key string) any {
 
 // ToMap converts to a map
 func (a *PushedAuthorizeResponse) ToMap() map[string]any {
-	a.Extra["request_uri"] = a.RequestURI
-	a.Extra["expires_in"] = a.ExpiresIn
+	a.Extra[consts.FormParameterRequestURI] = a.RequestURI
+	a.Extra[consts.AccessResponseExpiresIn] = a.ExpiresIn
+
 	return a.Extra
 }

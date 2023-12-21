@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,8 +46,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should fail because storage lookup returns not found",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
 			expectErr: oauth2.ErrUnknownRequest,
@@ -54,8 +55,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should fail because storage lookup fails",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
 			},
 			expectErr: oauth2.ErrServerError,
@@ -63,8 +64,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should fail because stored request is missing openid scope",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
 			},
 			expectErr: oauth2.ErrMisconfiguration,
@@ -75,10 +76,10 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"some_other_grant_type"},
 				}
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedReq := oauth2.NewAuthorizeRequest()
-				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrUnauthorizedClient,
@@ -88,24 +89,24 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 					},
 					TokenLifespans: &internal.TestLifespans,
 				}
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = oauth2.Arguments{"openid"}
-				storedReq.Form.Set("nonce", "1111111111111111")
+				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				storedReq.Form.Set(consts.FormParameterNonce, "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.NotEmpty(t, aresp.GetExtra("id_token"))
-				idToken, _ := aresp.GetExtra("id_token").(string)
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseIDToken))
+				idToken, _ := aresp.GetExtra(consts.AccessResponseIDToken).(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
@@ -120,10 +121,10 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should pass",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
-					GrantTypes: oauth2.Arguments{"authorization_code"},
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 				}
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "peter"},
 				}
@@ -149,8 +150,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should fail because stored request's session is missing subject claim",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: ""},
 				}
@@ -164,8 +165,8 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should fail because stored request is missing session",
 			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
-				req.GrantTypes = oauth2.Arguments{"authorization_code"}
-				req.Form.Set("code", "foobar")
+				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope("openid")

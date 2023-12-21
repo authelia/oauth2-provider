@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 )
 
@@ -187,7 +188,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 
 	response := map[string]any{
-		"active": true,
+		consts.ClaimActive: true,
 	}
 
 	extraClaimsSession, ok := r.GetAccessRequester().GetSession().(ExtraClaimsSession)
@@ -196,7 +197,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case "exp", "client_id", "scope", "iat", "sub", "aud", "username":
+			case consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername:
 				continue
 			default:
 				response[name] = value
@@ -205,25 +206,25 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 
 	if !r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).IsZero() {
-		response["exp"] = r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).Unix()
+		response[consts.ClaimExpirationTime] = r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).Unix()
 	}
 	if r.GetAccessRequester().GetClient().GetID() != "" {
-		response["client_id"] = r.GetAccessRequester().GetClient().GetID()
+		response[consts.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()
 	}
 	if len(r.GetAccessRequester().GetGrantedScopes()) > 0 {
-		response["scope"] = strings.Join(r.GetAccessRequester().GetGrantedScopes(), " ")
+		response[consts.ClaimScope] = strings.Join(r.GetAccessRequester().GetGrantedScopes(), " ")
 	}
 	if !r.GetAccessRequester().GetRequestedAt().IsZero() {
-		response["iat"] = r.GetAccessRequester().GetRequestedAt().Unix()
+		response[consts.ClaimIssuedAt] = r.GetAccessRequester().GetRequestedAt().Unix()
 	}
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
-		response["sub"] = r.GetAccessRequester().GetSession().GetSubject()
+		response[consts.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
 	}
 	if len(r.GetAccessRequester().GetGrantedAudience()) > 0 {
-		response["aud"] = r.GetAccessRequester().GetGrantedAudience()
+		response[consts.ClaimAudience] = r.GetAccessRequester().GetGrantedAudience()
 	}
 	if r.GetAccessRequester().GetSession().GetUsername() != "" {
-		response["username"] = r.GetAccessRequester().GetSession().GetUsername()
+		response[consts.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}
 
 	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")

@@ -9,14 +9,13 @@ import (
 	"encoding/base64"
 	"regexp"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
-
-var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
 
 type Handler struct {
 	AuthorizeCodeStrategy hoauth2.AuthorizeCodeStrategy
@@ -28,18 +27,20 @@ type Handler struct {
 	}
 }
 
-var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)
 
 var verifierWrongFormat = regexp.MustCompile(`[^\w.~-]`)
 
 func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
-	if !ar.GetResponseTypes().Has("code") {
+	if !ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
-	challenge := ar.GetRequestForm().Get("code_challenge")
-	method := ar.GetRequestForm().Get("code_challenge_method")
+	challenge := ar.GetRequestForm().Get(consts.FormParameterCodeChallenge)
+	method := ar.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
 	client := ar.GetClient()
 
 	if err := c.validate(ctx, challenge, method, client); err != nil {
@@ -53,8 +54,8 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.
 
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 	if err := c.Storage.CreatePKCERequestSession(ctx, signature, ar.Sanitize([]string{
-		"code_challenge",
-		"code_challenge_method",
+		consts.FormParameterCodeChallenge,
+		consts.FormParameterCodeChallengeMethod,
 	})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
@@ -90,9 +91,9 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 	// "error_uri" SHOULD explain the nature of error, e.g., transform
 	// algorithm not supported.
 	switch method {
-	case "S256":
+	case consts.PKCEChallengeMethodSHA256:
 		break
-	case "plain":
+	case consts.PKCEChallengeMethodPlain:
 		fallthrough
 	case "":
 		if !c.Config.GetEnablePKCEPlainChallengeMethod(ctx) {
@@ -118,9 +119,9 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// The "code_challenge_method" is bound to the Authorization Code when
 	// the Authorization Code is issued.  That is the method that the token
 	// endpoint MUST use to verify the "code_verifier".
-	verifier := request.GetRequestForm().Get("code_verifier")
+	verifier := request.GetRequestForm().Get(consts.FormParameterCodeVerifier)
 
-	code := request.GetRequestForm().Get("code")
+	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 	authorizeRequest, err := c.Storage.GetPKCERequestSession(ctx, signature, request.GetSession())
 	if errors.Is(err, oauth2.ErrNotFound) {
@@ -129,14 +130,14 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	if err := c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
+	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	challenge := authorizeRequest.GetRequestForm().Get("code_challenge")
-	method := authorizeRequest.GetRequestForm().Get("code_challenge_method")
+	challenge := authorizeRequest.GetRequestForm().Get(consts.FormParameterCodeChallenge)
+	method := authorizeRequest.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
 	client := authorizeRequest.GetClient()
-	if err := c.validate(ctx, challenge, method, client); err != nil {
+	if err = c.validate(ctx, challenge, method, client); err != nil {
 		return err
 	}
 
@@ -184,9 +185,9 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// equal, an error response indicating "invalid_grant" as described in
 	// Section 5.2 of [RFC6749] MUST be returned.
 	switch method {
-	case "S256":
+	case consts.PKCEChallengeMethodSHA256:
 		hash := sha256.New()
-		if _, err := hash.Write([]byte(verifier)); err != nil {
+		if _, err = hash.Write([]byte(verifier)); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 
@@ -194,7 +195,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.
 				WithHint("The PKCE code challenge did not match the code verifier."))
 		}
-	case "plain":
+	case consts.PKCEChallengeMethodPlain:
 		fallthrough
 	default:
 		if verifier != challenge {
@@ -217,5 +218,5 @@ func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.Access
 func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "authorization_code"
-	return requester.GetGrantTypes().ExactOne("authorization_code")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

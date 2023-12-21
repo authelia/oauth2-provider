@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
 )
 
@@ -84,58 +85,58 @@ func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
-		ret["sub"] = c.Subject
+		ret[consts.ClaimSubject] = c.Subject
 	} else {
-		delete(ret, "sub")
+		delete(ret, consts.ClaimSubject)
 	}
 
 	if c.Issuer != "" {
-		ret["iss"] = c.Issuer
+		ret[consts.ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, "iss")
+		delete(ret, consts.ClaimIssuer)
 	}
 
 	if c.JTI != "" {
-		ret["jti"] = c.JTI
+		ret[consts.ClaimJWTID] = c.JTI
 	} else {
-		ret["jti"] = uuid.New().String()
+		ret[consts.ClaimJWTID] = uuid.New().String()
 	}
 
 	if len(c.Audience) > 0 {
-		ret["aud"] = c.Audience
+		ret[consts.ClaimAudience] = c.Audience
 	} else {
-		ret["aud"] = []string{}
+		ret[consts.ClaimAudience] = []string{}
 	}
 
 	if !c.IssuedAt.IsZero() {
-		ret["iat"] = c.IssuedAt.Unix()
+		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, "iat")
+		delete(ret, consts.ClaimIssuedAt)
 	}
 
 	if !c.NotBefore.IsZero() {
-		ret["nbf"] = c.NotBefore.Unix()
+		ret[consts.ClaimNotBefore] = c.NotBefore.Unix()
 	} else {
-		delete(ret, "nbf")
+		delete(ret, consts.ClaimNotBefore)
 	}
 
 	if !c.ExpiresAt.IsZero() {
-		ret["exp"] = c.ExpiresAt.Unix()
+		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
 	} else {
-		delete(ret, "exp")
+		delete(ret, consts.ClaimExpirationTime)
 	}
 
 	if c.Scope != nil {
 		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of oauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
-			ret["scp"] = c.Scope
+			ret[consts.ClaimScopeNonStandard] = c.Scope
 		}
 		if c.ScopeField == JWTScopeFieldString || c.ScopeField == JWTScopeFieldBoth {
-			ret["scope"] = strings.Join(c.Scope, " ")
+			ret[consts.ClaimScope] = strings.Join(c.Scope, " ")
 		}
 	} else {
-		delete(ret, "scp")
-		delete(ret, "scope")
+		delete(ret, consts.ClaimScopeNonStandard)
+		delete(ret, consts.ClaimScope)
 	}
 
 	return ret
@@ -146,31 +147,31 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
 	for k, v := range m {
 		switch k {
-		case "jti":
+		case consts.ClaimJWTID:
 			if s, ok := v.(string); ok {
 				c.JTI = s
 			}
-		case "sub":
+		case consts.ClaimSubject:
 			if s, ok := v.(string); ok {
 				c.Subject = s
 			}
-		case "iss":
+		case consts.ClaimIssuer:
 			if s, ok := v.(string); ok {
 				c.Issuer = s
 			}
-		case "aud":
+		case consts.ClaimAudience:
 			if s, ok := v.(string); ok {
 				c.Audience = []string{s}
 			} else if s, ok := v.([]string); ok {
 				c.Audience = s
 			}
-		case "iat":
+		case consts.ClaimIssuedAt:
 			c.IssuedAt = toTime(v, c.IssuedAt)
-		case "nbf":
+		case consts.ClaimNotBefore:
 			c.NotBefore = toTime(v, c.NotBefore)
-		case "exp":
+		case consts.ClaimExpirationTime:
 			c.ExpiresAt = toTime(v, c.ExpiresAt)
-		case "scp":
+		case consts.ClaimScopeNonStandard:
 			switch s := v.(type) {
 			case []string:
 				c.Scope = s
@@ -192,7 +193,7 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 					c.ScopeField = JWTScopeFieldList
 				}
 			}
-		case "scope":
+		case consts.ClaimScope:
 			if s, ok := v.(string); ok {
 				c.Scope = strings.Split(s, " ")
 				if c.ScopeField == JWTScopeFieldList {

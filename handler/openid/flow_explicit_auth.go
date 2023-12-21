@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -27,16 +28,17 @@ var (
 	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
 )
 
-var oidcParameters = []string{"grant_type",
-	"max_age",
-	"prompt",
-	"acr_values",
-	"id_token_hint",
-	"nonce",
+var oidcParameters = []string{
+	consts.FormParameterGrantType,
+	consts.FormParameterMaximumAge,
+	consts.FormParameterPrompt,
+	consts.FormParameterAuthenticationContextClassReferenceValues,
+	consts.FormParameterIDTokenHint,
+	consts.FormParameterNonce,
 }
 
 func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
-	if !(ar.GetGrantedScopes().Has("openid") && ar.GetResponseTypes().ExactOne("code")) {
+	if !(ar.GetGrantedScopes().Has(consts.ScopeOpenID) && ar.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
 	}
 

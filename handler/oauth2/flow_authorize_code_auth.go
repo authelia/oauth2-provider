@@ -10,12 +10,8 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
-)
-
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
 )
 
 // AuthorizeExplicitGrantHandler is a response handler for the Authorize Code grant using the explicit grant type
@@ -39,6 +35,11 @@ type AuthorizeExplicitGrantHandler struct {
 	}
 }
 
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
+	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
+)
+
 func (c *AuthorizeExplicitGrantHandler) secureChecker(ctx context.Context) func(context.Context, *url.URL) bool {
 	if c.Config.GetRedirectSecureChecker(ctx) == nil {
 		return oauth2.IsRedirectURISecure
@@ -48,7 +49,7 @@ func (c *AuthorizeExplicitGrantHandler) secureChecker(ctx context.Context) func(
 
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
-	if !ar.GetResponseTypes().ExactOne("code") {
+	if !ar.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
@@ -84,17 +85,19 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	}
 
 	ar.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
-	if err := c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, ar.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
+
+	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, ar.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	resp.AddParameter("code", code)
-	resp.AddParameter("state", ar.GetState())
+	resp.AddParameter(consts.FormParameterAuthorizationCode, code)
+	resp.AddParameter(consts.FormParameterState, ar.GetState())
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
-		resp.AddParameter("scope", strings.Join(ar.GetGrantedScopes(), " "))
+		resp.AddParameter(consts.FormParameterScope, strings.Join(ar.GetGrantedScopes(), " "))
 	}
 
-	ar.SetResponseTypeHandled("code")
+	ar.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
+
 	return nil
 }
 
@@ -103,5 +106,5 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 		return allowedList
 	}
 
-	return []string{"code", "redirect_uri"}
+	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
 }

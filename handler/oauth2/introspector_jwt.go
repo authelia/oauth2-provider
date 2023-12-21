@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -26,7 +27,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	claims.FromMapClaims(mapClaims)
 
 	requestedAt := claims.IssuedAt
-	requestedAtClaim, ok := mapClaims["rat"]
+	requestedAtClaim, ok := mapClaims[consts.ClaimRequestedAt]
 	if ok {
 		switch rat := requestedAtClaim.(type) {
 		case float64:
@@ -37,7 +38,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	}
 
 	clientId := ""
-	clientIdClaim, ok := mapClaims["client_id"]
+	clientIdClaim, ok := mapClaims[consts.ClaimClientIdentifier]
 	if ok {
 		switch id := clientIdClaim.(type) {
 		case string:

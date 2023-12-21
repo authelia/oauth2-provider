@@ -6,6 +6,8 @@ package oauth2
 import (
 	"net/http"
 	"net/url"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // AuthorizeResponse is an implementation of AuthorizeResponder
@@ -39,7 +41,7 @@ func (a *AuthorizeResponse) GetParameters() url.Values {
 }
 
 func (a *AuthorizeResponse) AddParameter(key, value string) {
-	if key == "code" {
+	if key == consts.FormParameterAuthorizationCode {
 		a.code = value
 	}
 	a.Parameters.Add(key, value)

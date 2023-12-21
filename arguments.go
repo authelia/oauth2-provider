@@ -3,17 +3,10 @@
 
 package oauth2
 
-import (
-	"strings"
-)
-
 type Arguments []string
 
-// Matches performs an case-insensitive, out-of-order check that the items
+// Matches performs an case-sensitive, out-of-order check that the items
 // provided exist and equal all of the args in arguments.
-// Note:
-//   - Providing a list that includes duplicate string-case items will return not
-//     matched.
 func (r Arguments) Matches(items ...string) bool {
 	if len(r) != len(items) {
 		return false
@@ -30,7 +23,28 @@ func (r Arguments) Matches(items ...string) bool {
 	return len(found) == len(r)
 }
 
-// Has checks, in a case-insensitive manner, that all of the items
+// MatchesFold performs an case-insensitive, out-of-order check that the items
+// provided exist and equal all of the args in arguments.
+// Note:
+//   - Providing a list that includes duplicate string-case items will return not
+//     matched.
+func (r Arguments) MatchesFold(items ...string) bool {
+	if len(r) != len(items) {
+		return false
+	}
+
+	found := make(map[string]bool)
+	for _, item := range items {
+		if !StringInSliceFold(item, r) {
+			return false
+		}
+		found[item] = true
+	}
+
+	return len(found) == len(r)
+}
+
+// Has checks, in a case-sensitive manner, that all of the items
 // provided exists in arguments.
 func (r Arguments) Has(items ...string) bool {
 	for _, item := range items {
@@ -42,7 +56,19 @@ func (r Arguments) Has(items ...string) bool {
 	return true
 }
 
-// HasOneOf checks, in a case-insensitive manner, that one of the items
+// HasFold checks, in a case-insensitive manner, that all of the items
+// provided exists in arguments.
+func (r Arguments) HasFold(items ...string) bool {
+	for _, item := range items {
+		if !StringInSliceFold(item, r) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// HasOneOf checks, in a case-sensitive manner, that one of the items
 // provided exists in arguments.
 func (r Arguments) HasOneOf(items ...string) bool {
 	for _, item := range items {
@@ -54,9 +80,16 @@ func (r Arguments) HasOneOf(items ...string) bool {
 	return false
 }
 
-// Deprecated: Use ExactOne, Matches or MatchesExact
-func (r Arguments) Exact(name string) bool {
-	return name == strings.Join(r, " ")
+// HasOneOfFold checks, in a case-sensitive manner, that one of the items
+// provided exists in arguments.
+func (r Arguments) HasOneOfFold(items ...string) bool {
+	for _, item := range items {
+		if StringInSliceFold(item, r) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ExactOne checks, by string case, that a single argument equals the provided

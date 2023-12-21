@@ -43,21 +43,6 @@ var exactTests = []exactTestCase{
 	},
 }
 
-func TestArgumentsExact(t *testing.T) {
-	testCases := append(exactTests, []exactTestCase{
-		{
-			args:   Arguments{"foo", "bar"},
-			exact:  "foo bar",
-			expect: true,
-		},
-	}...)
-
-	for k, c := range testCases {
-		assert.Equal(t, c.expect, c.args.Exact(c.exact), "%d", k)
-		t.Logf("Passed test case %d", k)
-	}
-}
-
 func TestArgumentsExactOne(t *testing.T) {
 	testCases := append(exactTests, []exactTestCase{
 		{
@@ -219,11 +204,11 @@ func TestArgumentsMatches(t *testing.T) {
 			is:     []string{"bar", "foo"},
 			expect: true,
 		},
-		// should allow case-insensitive matching.
+		// should not allow case-insensitive matching.
 		{
 			args:   Arguments{"fOo", "bar"},
 			is:     []string{"foo", "BaR"},
-			expect: true,
+			expect: false,
 		},
 		// should return non-matching if duplicate items exist.
 		{

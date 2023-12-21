@@ -11,6 +11,16 @@ import (
 // StringInSlice returns true if needle exists in haystack
 func StringInSlice(needle string, haystack []string) bool {
 	for _, b := range haystack {
+		if b == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// StringInSliceFold returns true if needle exists in haystack (case-insensitive).
+func StringInSliceFold(needle string, haystack []string) bool {
+	for _, b := range haystack {
 		if strings.EqualFold(b, needle) {
 			return true
 		}

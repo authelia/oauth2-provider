@@ -37,8 +37,10 @@ following list of differences:
     - [x] Original request id not set early enough
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6584d3495422a97ef9aba92e762ffaebce010dd0)</sup>
   - PKCE Flow
-    - [ ] Session generated needlessly
-    - [ ] Failure to fetch session causes an error even when not enforced
+    - [x] Session generated needlessly
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/dbdadf5dee92d13683eeacaa198c28d6704ddb1c)</sup>
+    - [x] Failure to fetch session causes an error even when not enforced
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/dbdadf5dee92d13683eeacaa198c28d6704ddb1c)</sup>
   - OpenID Flows:
     - [x] Absence of Redirect URI does not result in an error
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/f4652d60c850d167da00e2d2fe9096776eff9465)</sup>

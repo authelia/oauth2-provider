@@ -7,15 +7,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"testing"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -95,39 +96,43 @@ func TestPKCEHandlerValidate(t *testing.T) {
 	s256challenge := base64.RawURLEncoding.EncodeToString(hash.Sum([]byte{}))
 
 	for k, tc := range []struct {
-		d           string
-		grant       string
-		force       bool
-		enablePlain bool
-		challenge   string
-		method      string
-		verifier    string
-		code        string
-		expectErr   error
-		client      *oauth2.DefaultClient
+		d             string
+		grant         string
+		force         bool
+		enablePlain   bool
+		challenge     string
+		method        string
+		verifier      string
+		code          string
+		expectErr     error
+		expectErrDesc string
+		client        *oauth2.DefaultClient
 	}{
 		{
-			d:         "fails because not auth code flow",
-			grant:     "not_authorization_code",
-			expectErr: oauth2.ErrUnknownRequest,
+			d:             "fails because not auth code flow",
+			grant:         "not_authorization_code",
+			expectErr:     oauth2.ErrUnknownRequest,
+			expectErrDesc: "The handler is not responsible for this request.",
 		},
 		{
 			d:           "passes with private client",
 			grant:       consts.GrantTypeAuthorizationCode,
 			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
 			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      "plain",
+			method:      consts.PKCEChallengeMethodPlain,
 			client:      &oauth2.DefaultClient{Public: false},
 			enablePlain: true,
 			force:       true,
 			code:        "valid-code-1",
 		},
 		{
-			d:         "fails because invalid code",
-			grant:     consts.GrantTypeAuthorizationCode,
-			expectErr: oauth2.ErrInvalidGrant,
-			client:    pc,
-			code:      "invalid-code-2",
+			d:             "fails because invalid code",
+			grant:         consts.GrantTypeAuthorizationCode,
+			client:        pc,
+			code:          "invalid-code-2",
+			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to find initial PKCE data tied to this request. Could not find the requested resource(s).",
 		},
 		{
 			d:      "passes because auth code flow but pkce is not forced and no challenge given",
@@ -136,12 +141,13 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			code:   "valid-code-3",
 		},
 		{
-			d:         "fails because auth code flow and pkce challenge given but plain is disabled",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: "foo",
-			client:    pc,
-			expectErr: oauth2.ErrInvalidRequest,
-			code:      "valid-code-4",
+			d:             "fails because auth code flow and pkce challenge given but plain is disabled",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "foo",
+			client:        pc,
+			code:          "valid-code-4",
+			expectErr:     oauth2.ErrInvalidRequest,
+			expectErrDesc: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must use code_challenge_method=S256, plain is not allowed. The server is configured in a way that enforces PKCE S256 as challenge method for clients.",
 		},
 		{
 			d:           "passes",
@@ -165,69 +171,75 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			code:        "valid-code-6",
 		},
 		{
-			d:           "fails because challenge and verifier do not match",
-			grant:       consts.GrantTypeAuthorizationCode,
-			challenge:   "not-foo",
-			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      consts.PKCEChallengeMethodPlain,
-			client:      pc,
-			enablePlain: true,
-			code:        "valid-code-7",
-			expectErr:   oauth2.ErrInvalidGrant,
+			d:             "fails because challenge and verifier do not match",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "not-foo",
+			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
+			method:        consts.PKCEChallengeMethodPlain,
+			client:        pc,
+			enablePlain:   true,
+			code:          "valid-code-7",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
 		},
 		{
-			d:           "fails because challenge and verifier do not match",
-			grant:       consts.GrantTypeAuthorizationCode,
-			challenge:   "not-foonot-foonot-foonot-foonot-foonot-foonot-foonot-foo",
-			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			client:      pc,
-			enablePlain: true,
-			code:        "valid-code-8",
-			expectErr:   oauth2.ErrInvalidGrant,
+			d:             "fails because challenge and verifier do not match",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "not-foonot-foonot-foonot-foonot-foonot-foonot-foonot-foo",
+			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
+			client:        pc,
+			enablePlain:   true,
+			code:          "valid-code-8",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
 		},
 		{
-			d:         "fails because verifier is too short",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: "foo",
-			verifier:  "foo",
-			method:    consts.PKCEChallengeMethodSHA256,
-			client:    pc,
-			force:     true,
-			code:      "valid-code-9a",
-			expectErr: oauth2.ErrInvalidGrant,
+			d:             "fails because verifier is too short",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "foo",
+			verifier:      "foo",
+			method:        consts.PKCEChallengeMethodSHA256,
+			client:        pc,
+			force:         true,
+			code:          "valid-code-9",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must be at least 43 characters.",
 		},
 		{
-			d:         "fails because verifier is too long",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: "foo",
-			verifier:  "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:    consts.PKCEChallengeMethodSHA256,
-			client:    pc,
-			force:     true,
-			code:      "valid-code-10",
-			expectErr: oauth2.ErrInvalidGrant,
+			d:             "fails because verifier is too long",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "foo",
+			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
+			method:        consts.PKCEChallengeMethodSHA256,
+			client:        pc,
+			force:         true,
+			code:          "valid-code-10",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier can not be longer than 128 characters.",
 		},
 		{
-			d:         "fails because verifier is malformed",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: "foo",
-			verifier:  `(!"/$%Z&$T()/)OUZI>$"&=/T(PUOI>"%/)TUOI&/(O/()RGTE>=/(%"/()="$/)(=()=/R/()=))`,
-			method:    consts.PKCEChallengeMethodSHA256,
-			client:    pc,
-			force:     true,
-			code:      "valid-code-11",
-			expectErr: oauth2.ErrInvalidGrant,
+			d:             "fails because verifier is malformed",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "foo",
+			verifier:      `(!"/$%Z&$T()/)OUZI>$"&=/T(PUOI>"%/)TUOI&/(O/()RGTE>=/(%"/()="$/)(=()=/R/()=))`,
+			method:        consts.PKCEChallengeMethodSHA256,
+			client:        pc,
+			force:         true,
+			code:          "valid-code-11",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'.",
 		},
 		{
-			d:         "fails because challenge and verifier do not match",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			verifier:  "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			method:    consts.PKCEChallengeMethodSHA256,
-			client:    pc,
-			force:     true,
-			code:      "valid-code-12",
-			expectErr: oauth2.ErrInvalidGrant,
+			d:             "fails because challenge and verifier do not match",
+			grant:         consts.GrantTypeAuthorizationCode,
+			challenge:     "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
+			verifier:      "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
+			method:        consts.PKCEChallengeMethodSHA256,
+			client:        pc,
+			force:         true,
+			code:          "valid-code-12",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
 		},
 		{
 			d:         "passes because challenge and verifier match",
@@ -239,25 +251,58 @@ func TestPKCEHandlerValidate(t *testing.T) {
 			force:     true,
 			code:      "valid-code-13",
 		},
+		{
+			d:      "passes when not forced because no challenge or verifier",
+			grant:  consts.GrantTypeAuthorizationCode,
+			client: pc,
+			code:   "valid-code-14",
+		},
+		{
+			d:             "fails when not forced because verifier provided when no challenge",
+			grant:         consts.GrantTypeAuthorizationCode,
+			client:        pc,
+			code:          "valid-code-15",
+			verifier:      "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
+			expectErr:     oauth2.ErrInvalidGrant,
+			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier was provided but the code challenge was absent from the authorization request.",
+		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
 			config.EnablePKCEPlainChallengeMethod = tc.enablePlain
 			config.EnforcePKCE = tc.force
 			ms.signature = tc.code
 			ar := oauth2.NewAuthorizeRequest()
-			ar.Form.Add(consts.FormParameterCodeChallenge, tc.challenge)
-			ar.Form.Add(consts.FormParameterCodeChallengeMethod, tc.method)
+
+			if len(tc.challenge) != 0 {
+				ar.Form.Set(consts.FormParameterCodeChallenge, tc.challenge)
+			}
+
+			if len(tc.method) != 0 {
+				ar.Form.Set(consts.FormParameterCodeChallengeMethod, tc.method)
+			}
+
+			ar.Client = tc.client
+
 			require.NoError(t, s.CreatePKCERequestSession(context.TODO(), fmt.Sprintf("valid-code-%d", k), ar))
 
 			r := oauth2.NewAccessRequest(nil)
 			r.Client = tc.client
 			r.GrantTypes = oauth2.Arguments{tc.grant}
-			r.Form.Add(consts.FormParameterCodeVerifier, tc.verifier)
+
+			if len(tc.verifier) != 0 {
+				r.Form.Set(consts.FormParameterCodeVerifier, tc.verifier)
+			}
+
+			err := h.HandleTokenEndpointRequest(context.Background(), r)
+
 			if tc.expectErr == nil {
-				require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), r))
+				assert.NoError(t, err)
 			} else {
-				err := h.HandleTokenEndpointRequest(context.Background(), r)
-				require.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
+				assert.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
+
+				if len(tc.expectErrDesc) != 0 {
+					assert.EqualError(t, newtesterr(err), tc.expectErrDesc)
+				}
 			}
 		})
 	}
@@ -272,10 +317,15 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 		challenge   string
 		method      string
 		expectErr   bool
-		client      *oauth2.DefaultClient
+		client      oauth2.Client
 	}{
 		{
 			d: "should pass because pkce is not enforced",
+		},
+		{
+			d:           "ShouldHandleNilClient",
+			forcePublic: true,
+			expectErr:   true,
 		},
 		{
 			d:         "should fail because plain is not enabled and method is empty which defaults to plain",
@@ -346,4 +396,25 @@ func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newtesterr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var e *oauth2.RFC6749Error
+	if errors.As(err, &e) {
+		return &testerr{e}
+	}
+
+	return err
+}
+
+type testerr struct {
+	*oauth2.RFC6749Error
+}
+
+func (e *testerr) Error() string {
+	return e.RFC6749Error.WithExposeDebug(true).GetDescription()
 }

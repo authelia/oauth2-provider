@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,9 +56,9 @@ var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 			},
 		},
 	}
-	r.SetRequestedScopes([]string{"email", "offline"})
-	r.GrantScope("email")
-	r.GrantScope("offline")
+	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
+	r.GrantScope(consts.ScopeEmail)
+	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
 	return r
@@ -85,9 +86,9 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2
 			},
 		},
 	}
-	r.SetRequestedScopes([]string{"email", "offline"})
-	r.GrantScope("email")
-	r.GrantScope("offline")
+	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
+	r.GrantScope(consts.ScopeEmail)
+	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
 	return r
@@ -115,9 +116,9 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Req
 			},
 		},
 	}
-	r.SetRequestedScopes([]string{"email", "offline"})
-	r.GrantScope("email")
-	r.GrantScope("offline")
+	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
+	r.GrantScope(consts.ScopeEmail)
+	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
 	return r
@@ -148,9 +149,9 @@ var jwtExpiredCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 			},
 		},
 	}
-	r.SetRequestedScopes([]string{"email", "offline"})
-	r.GrantScope("email")
-	r.GrantScope("offline")
+	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
+	r.GrantScope(consts.ScopeEmail)
+	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
 	return r
@@ -202,12 +203,12 @@ func TestAccessToken(t *testing.T) {
 				require.NoError(t, json.Unmarshal(rawPayload, &payload))
 
 				if scopeField == jwt.JWTScopeFieldList || scopeField == jwt.JWTScopeFieldBoth {
-					scope, ok := payload["scp"]
+					scope, ok := payload[consts.ClaimScopeNonStandard]
 					require.True(t, ok)
 					assert.Equal(t, []any{"email", "offline"}, scope)
 				}
 				if scopeField == jwt.JWTScopeFieldString || scopeField == jwt.JWTScopeFieldBoth {
-					scope, ok := payload["scope"]
+					scope, ok := payload[consts.ClaimScope]
 					require.True(t, ok)
 					assert.Equal(t, "email offline", scope)
 				}
@@ -225,10 +226,10 @@ func TestAccessToken(t *testing.T) {
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])
 				// Returned, but will be ignored by the introspect handler.
-				assert.Equal(t, "peter", claims["sub"])
-				assert.Equal(t, []string{"group0"}, claims["aud"])
+				assert.Equal(t, "peter", claims[consts.ClaimSubject])
+				assert.Equal(t, []string{"group0"}, claims[consts.ClaimAudience])
 				// Scope field is always a string.
-				assert.Equal(t, "email offline", claims["scope"])
+				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
 				validate := j.signature(token)
 				err = j.ValidateAccessToken(context.Background(), c.r, token)

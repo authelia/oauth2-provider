@@ -109,7 +109,7 @@ func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler,
 		return false
 	}
 	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
-	if !request.GetClient().GetGrantTypes().Has("refresh_token") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return false
 	}
 	return true
@@ -120,7 +120,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	code := requester.GetRequestForm().Get("code")
+	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 	authorizeRequest, err := c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession())
 	if err != nil {
@@ -174,12 +174,12 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	}
 
 	responder.SetAccessToken(access)
-	responder.SetTokenType("bearer")
+	responder.SetTokenType(oauth2.BearerAccessToken)
 	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	if refresh != "" {
-		responder.SetExtra("refresh_token", refresh)
+		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	if err = storage.MaybeCommitTx(ctx, c.CoreStorage); err != nil {

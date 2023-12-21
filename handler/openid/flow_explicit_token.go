@@ -6,6 +6,7 @@ package openid
 import (
 	"context"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
@@ -21,18 +22,18 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, requester.GetRequestForm().Get("code"), requester)
+	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode), requester)
 	if errors.Is(err, ErrNoSessionFound) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebug(err.Error()))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	if !authorize.GetGrantedScopes().Has("openid") {
+	if !authorize.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration."))
 	}
 
-	if !requester.GetClient().GetGrantTypes().Has("authorization_code") {
+	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"authorization_code\"."))
 	}
 
@@ -64,5 +65,5 @@ func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, re
 }
 
 func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne("authorization_code")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

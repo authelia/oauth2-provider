@@ -375,7 +375,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
 							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
-							Scopes:     []string{"foo", "bar", "offline"},
+							Scopes:     []string{"foo", "bar", consts.ScopeOffline},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
@@ -384,8 +384,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						req := &oauth2.Request{
 							Client:         areq.Client,
-							GrantedScope:   oauth2.Arguments{"foo", "offline"},
-							RequestedScope: oauth2.Arguments{"foo", "bar", "offline"},
+							GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
 							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
@@ -405,7 +405,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						RefreshTokenLifespan:     time.Hour,
 						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-						RefreshTokenScopes:       []string{"offline"},
+						RefreshTokenScopes:       []string{consts.ScopeOffline},
 					}
 					handler = &RefreshTokenGrantHandler{
 						TokenRevocationStorage: store,
@@ -565,10 +565,10 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 
 						assert.Equal(t, "req-id", areq.ID)
 						require.NoError(t, strategy.ValidateAccessToken(context.TODO(), areq, aresp.GetAccessToken()))
-						require.NoError(t, strategy.ValidateRefreshToken(context.TODO(), areq, aresp.ToMap()["refresh_token"].(string)))
+						require.NoError(t, strategy.ValidateRefreshToken(context.TODO(), areq, aresp.ToMap()[consts.AccessResponseRefreshToken].(string)))
 						assert.Equal(t, oauth2.BearerAccessToken, aresp.GetTokenType())
-						assert.NotEmpty(t, aresp.ToMap()["expires_in"])
-						assert.Equal(t, "foo bar", aresp.ToMap()["scope"])
+						assert.NotEmpty(t, aresp.ToMap()[consts.AccessResponseExpiresIn])
+						assert.Equal(t, "foo bar", aresp.ToMap()[consts.AccessResponseScope])
 					},
 				},
 			} {

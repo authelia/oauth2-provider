@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -54,11 +55,11 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			description: "should fail because audience not valid",
 			expectErr:   oauth2.ErrInvalidRequest,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
 				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.authelia.com/not-api"})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
-					GrantTypes: oauth2.Arguments{"client_credentials"},
+					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Audience:   []string{"https://www.authelia.com/api"},
 				})
 			},
@@ -67,10 +68,10 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			description: "should fail because scope not valid",
 			expectErr:   oauth2.ErrInvalidScope,
 			mock: func() {
-				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
-					GrantTypes: oauth2.Arguments{"client_credentials"},
+					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo"},
 				})
 			},
@@ -79,11 +80,11 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			description: "should pass",
 			mock: func() {
 				areq.EXPECT().GetSession().Return(new(oauth2.DefaultSession))
-				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{"client_credentials"})
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetRequestedAudience().Return([]string{})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
-					GrantTypes: oauth2.Arguments{"client_credentials"},
+					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},
 				})
 			},
@@ -138,16 +139,16 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should fail because grant_type not allowed",
 			expectErr:   oauth2.ErrUnauthorizedClient,
 			mock: func() {
-				areq.GrantTypes = oauth2.Arguments{"client_credentials"}
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"authorization_code"}}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeClientCredentials}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}}
 			},
 		},
 		{
 			description: "should pass",
 			mock: func() {
-				areq.GrantTypes = oauth2.Arguments{"client_credentials"}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeClientCredentials}
 				areq.Session = &oauth2.DefaultSession{}
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"client_credentials"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials}}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("tokenfoo.bar", "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},

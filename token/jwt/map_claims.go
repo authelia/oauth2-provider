@@ -10,6 +10,7 @@ import (
 	"errors"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	jjson "github.com/go-jose/go-jose/v3/json"
 
 	"authelia.com/provider/oauth2/internal/errorsx"
@@ -28,7 +29,7 @@ type MapClaims map[string]any
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 	var aud []string
-	switch v := m["aud"].(type) {
+	switch v := m[consts.ClaimAudience].(type) {
 	case []string:
 		aud = v
 	case []any:
@@ -50,7 +51,7 @@ func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 // VerifyExpiresAt compares the exp claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64("exp"); ok {
+	if v, ok := m.toInt64(consts.ClaimExpirationTime); ok {
 		return verifyExp(v, cmp, req)
 	}
 	return !req
@@ -59,7 +60,7 @@ func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 // VerifyIssuedAt compares the iat claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64("iat"); ok {
+	if v, ok := m.toInt64(consts.ClaimIssuedAt); ok {
 		return verifyIat(v, cmp, req)
 	}
 	return !req
@@ -68,14 +69,14 @@ func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
 // VerifyIssuer compares the iss claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyIssuer(cmp string, req bool) bool {
-	iss, _ := m["iss"].(string)
+	iss, _ := m[consts.ClaimIssuer].(string)
 	return verifyIss(iss, cmp, req)
 }
 
 // VerifyNotBefore compares the nbf claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyNotBefore(cmp int64, req bool) bool {
-	if v, ok := m.toInt64("nbf"); ok {
+	if v, ok := m.toInt64(consts.ClaimNotBefore); ok {
 		return verifyNbf(v, cmp, req)
 	}
 

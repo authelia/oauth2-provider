@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 
 	"authelia.com/provider/oauth2"
@@ -40,7 +41,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("nonce", "some-secure-nonce-state")
+				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
 			},
 			expectErr: false,
 		},
@@ -54,8 +55,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("nonce", "some-secure-nonce-state")
-				req.Form.Set("max_age", "1234")
+				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+				req.Form.Set(consts.FormParameterMaximumAge, "1234")
 			},
 			expectErr: false,
 		},
@@ -68,7 +69,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("nonce", "some-secure-nonce-state")
+				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
 			},
 			expectErr: true,
 		},
@@ -80,8 +81,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("nonce", "some-secure-nonce-state")
-				req.Form.Set("max_age", "1234")
+				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+				req.Form.Set(consts.FormParameterMaximumAge, "1234")
 			},
 			expectErr: true,
 		},
@@ -91,7 +92,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					Claims:  &jwt.IDTokenClaims{},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("nonce", "some-secure-nonce-state")
+				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
 			},
 			expectErr: true,
 		},
@@ -117,7 +118,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("max_age", "60")
+				req.Form.Set(consts.FormParameterMaximumAge, "60")
 			},
 			expectErr: false,
 		},
@@ -131,7 +132,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("max_age", "60")
+				req.Form.Set(consts.FormParameterMaximumAge, "60")
 			},
 			expectErr: true,
 		},
@@ -146,7 +147,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("prompt", "none")
+				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 			},
 			expectErr: true,
 		},
@@ -161,8 +162,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("prompt", "none")
-				req.Form.Set("grant_type", "refresh_token")
+				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+				req.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
 			},
 			expectErr: false,
 		},
@@ -177,7 +178,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("prompt", "none")
+				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 			},
 			expectErr: false,
 		},
@@ -192,7 +193,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("prompt", "login")
+				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 			},
 			expectErr: false,
 		},
@@ -207,7 +208,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set("prompt", "login")
+				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 			},
 			expectErr: true,
 		},
@@ -228,7 +229,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				}))
-				req.Form.Set("id_token_hint", token)
+				req.Form.Set(consts.FormParameterIDTokenHint, token)
 			},
 			expectErr: false,
 		},
@@ -250,7 +251,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				}))
-				req.Form.Set("id_token_hint", token)
+				req.Form.Set(consts.FormParameterIDTokenHint, token)
 			},
 			expectErr: false,
 		},
@@ -268,7 +269,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "alice"}, Headers: &jwt.Headers{},
 				}))
-				req.Form.Set("id_token_hint", token)
+				req.Form.Set(consts.FormParameterIDTokenHint, token)
 			},
 			expectErr: true,
 		},

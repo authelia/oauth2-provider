@@ -27,8 +27,12 @@ type OpenIDConnectImplicitHandler struct {
 	}
 }
 
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
+)
+
 func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
-	if !(ar.GetGrantedScopes().Has("openid") && (ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || ar.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
+	if !(ar.GetGrantedScopes().Has(consts.ScopeOpenID) && (ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || ar.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
 		return nil
 	} else if ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		// hybrid flow

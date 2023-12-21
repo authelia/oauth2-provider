@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
 
@@ -33,7 +34,7 @@ const (
 	// This key should be use to correctly sign and verify alg:none JWT tokens
 	UnsafeAllowNoneSignatureType unsafeNoneMagicConstant = "none signing method allowed"
 
-	JWTHeaderType = jose.HeaderKey(JWTHeaderKeyValueType)
+	JWTHeaderType = jose.HeaderKey(consts.JSONWebTokenHeaderType)
 )
 
 const (
@@ -91,6 +92,7 @@ func (t *Token) SignedString(k any) (rawToken string, err error) {
 	}
 
 	var signer jose.Signer
+
 	key := jose.SigningKey{
 		Algorithm: t.Method,
 		Key:       k,
@@ -116,7 +118,7 @@ func (t *Token) SignedString(k any) (rawToken string, err error) {
 }
 
 func unsignedToken(t *Token) (string, error) {
-	t.Header["alg"] = "none"
+	t.Header[consts.JSONWebTokenHeaderAlgorithm] = "none"
 	if _, ok := t.Header[string(JWTHeaderType)]; !ok {
 		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValueJWT
 	}
@@ -142,10 +144,10 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	// copy headers
 	h := parsedToken.Headers[0]
 	token.Header = map[string]any{
-		"alg": h.Algorithm,
+		consts.JSONWebTokenHeaderAlgorithm: h.Algorithm,
 	}
 	if h.KeyID != "" {
-		token.Header["kid"] = h.KeyID
+		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = h.KeyID
 	}
 	for k, v := range h.ExtraHeaders {
 		token.Header[string(k)] = v
@@ -187,7 +189,7 @@ func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token
 		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
 	}
 
-	// creates an usafe token
+	// creates an unsafe token
 	token, err := newToken(parsedToken, claims)
 	if err != nil {
 		return nil, err

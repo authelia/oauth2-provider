@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,10 +63,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				{
 					handler: handler,
 					areq: &oauth2.AuthorizeRequest{
-						ResponseTypes: oauth2.Arguments{"code"},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 						Request: oauth2.Request{
 							Client: &oauth2.DefaultClient{
-								ResponseTypes: oauth2.Arguments{"code"},
+								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 								RedirectURIs:  []string{"http://asdf.com/cb"},
 							},
 						},
@@ -77,10 +78,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				{
 					handler: handler,
 					areq: &oauth2.AuthorizeRequest{
-						ResponseTypes: oauth2.Arguments{"code"},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 						Request: oauth2.Request{
 							Client: &oauth2.DefaultClient{
-								ResponseTypes: oauth2.Arguments{"code"},
+								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 								RedirectURIs:  []string{"https://asdf.com/cb"},
 								Audience:      []string{"https://www.authelia.com/api"},
 							},
@@ -94,10 +95,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				{
 					handler: handler,
 					areq: &oauth2.AuthorizeRequest{
-						ResponseTypes: oauth2.Arguments{"code"},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 						Request: oauth2.Request{
 							Client: &oauth2.DefaultClient{
-								ResponseTypes: oauth2.Arguments{"code"},
+								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 								RedirectURIs:  []string{"https://asdf.de/cb"},
 								Audience:      []string{"https://www.authelia.com/api"},
 							},
@@ -113,11 +114,11 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					},
 					description: "should pass",
 					expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
-						code := aresp.GetParameters().Get("code")
+						code := aresp.GetParameters().Get(consts.FormParameterAuthorizationCode)
 						assert.NotEmpty(t, code)
 
-						assert.Equal(t, strings.Join(areq.GrantedScope, " "), aresp.GetParameters().Get("scope"))
-						assert.Equal(t, areq.State, aresp.GetParameters().Get("state"))
+						assert.Equal(t, strings.Join(areq.GrantedScope, " "), aresp.GetParameters().Get(consts.FormParameterScope))
+						assert.Equal(t, areq.State, aresp.GetParameters().Get(consts.FormParameterState))
 						assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
 					},
 				},
@@ -132,10 +133,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 						},
 					},
 					areq: &oauth2.AuthorizeRequest{
-						ResponseTypes: oauth2.Arguments{"code"},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 						Request: oauth2.Request{
 							Client: &oauth2.DefaultClient{
-								ResponseTypes: oauth2.Arguments{"code"},
+								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 								RedirectURIs:  []string{"https://asdf.de/cb"},
 								Audience:      []string{"https://www.authelia.com/api"},
 							},
@@ -151,11 +152,11 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					},
 					description: "should pass but no scope in redirect uri",
 					expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
-						code := aresp.GetParameters().Get("code")
+						code := aresp.GetParameters().Get(consts.FormParameterAuthorizationCode)
 						assert.NotEmpty(t, code)
 
-						assert.Empty(t, aresp.GetParameters().Get("scope"))
-						assert.Equal(t, areq.State, aresp.GetParameters().Get("state"))
+						assert.Empty(t, aresp.GetParameters().Get(consts.FormParameterScope))
+						assert.Equal(t, areq.State, aresp.GetParameters().Get(consts.FormParameterState))
 						assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
 					},
 				},

@@ -107,7 +107,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 
 	token := &Token{}
 
-	if err := json.Unmarshal(body, token); err != nil {
+	if err = json.Unmarshal(body, token); err != nil {
 		return nil, err
 	}
 

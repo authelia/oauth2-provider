@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 
 	. "authelia.com/provider/oauth2/token/jwt"
@@ -18,7 +19,7 @@ func TestIDTokenAssert(t *testing.T) {
 	assert.Error(t, (&IDTokenClaims{ExpiresAt: time.Now().UTC().Add(-time.Hour)}).
 		ToMapClaims().Valid())
 
-	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()["jti"])
+	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()[consts.ClaimJWTID])
 }
 
 func TestIDTokenClaimsToMap(t *testing.T) {
@@ -26,7 +27,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		JTI:                                 "foo-id",
 		Subject:                             "peter",
 		IssuedAt:                            time.Now().UTC().Round(time.Second),
-		Issuer:                              "fosite",
+		Issuer:                              "authelia",
 		Audience:                            []string{"tests"},
 		ExpiresAt:                           time.Now().UTC().Add(time.Hour).Round(time.Second),
 		AuthTime:                            time.Now().UTC(),
@@ -41,38 +42,38 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		},
 	}
 	assert.Equal(t, map[string]any{
-		"jti":       idTokenClaims.JTI,
-		"sub":       idTokenClaims.Subject,
-		"iat":       idTokenClaims.IssuedAt.Unix(),
-		"rat":       idTokenClaims.RequestedAt.Unix(),
-		"iss":       idTokenClaims.Issuer,
-		"aud":       idTokenClaims.Audience,
-		"exp":       idTokenClaims.ExpiresAt.Unix(),
-		"foo":       idTokenClaims.Extra["foo"],
-		"baz":       idTokenClaims.Extra["baz"],
-		"at_hash":   idTokenClaims.AccessTokenHash,
-		"c_hash":    idTokenClaims.CodeHash,
-		"auth_time": idTokenClaims.AuthTime.Unix(),
-		"acr":       idTokenClaims.AuthenticationContextClassReference,
-		"amr":       idTokenClaims.AuthenticationMethodsReferences,
+		consts.ClaimJWTID:              idTokenClaims.JTI,
+		consts.ClaimSubject:            idTokenClaims.Subject,
+		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
+		consts.ClaimRequestedAt:        idTokenClaims.RequestedAt.Unix(),
+		consts.ClaimIssuer:             idTokenClaims.Issuer,
+		consts.ClaimAudience:           idTokenClaims.Audience,
+		consts.ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
+		"foo":                          idTokenClaims.Extra["foo"],
+		"baz":                          idTokenClaims.Extra["baz"],
+		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
+		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
+		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
+		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
+		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
 	}, idTokenClaims.ToMap())
 
 	idTokenClaims.Nonce = "foobar"
 	assert.Equal(t, map[string]any{
-		"jti":       idTokenClaims.JTI,
-		"sub":       idTokenClaims.Subject,
-		"iat":       idTokenClaims.IssuedAt.Unix(),
-		"rat":       idTokenClaims.RequestedAt.Unix(),
-		"iss":       idTokenClaims.Issuer,
-		"aud":       idTokenClaims.Audience,
-		"exp":       idTokenClaims.ExpiresAt.Unix(),
-		"foo":       idTokenClaims.Extra["foo"],
-		"baz":       idTokenClaims.Extra["baz"],
-		"at_hash":   idTokenClaims.AccessTokenHash,
-		"c_hash":    idTokenClaims.CodeHash,
-		"auth_time": idTokenClaims.AuthTime.Unix(),
-		"acr":       idTokenClaims.AuthenticationContextClassReference,
-		"amr":       idTokenClaims.AuthenticationMethodsReferences,
-		"nonce":     idTokenClaims.Nonce,
+		consts.ClaimJWTID:              idTokenClaims.JTI,
+		consts.ClaimSubject:            idTokenClaims.Subject,
+		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
+		consts.ClaimRequestedAt:        idTokenClaims.RequestedAt.Unix(),
+		consts.ClaimIssuer:             idTokenClaims.Issuer,
+		consts.ClaimAudience:           idTokenClaims.Audience,
+		consts.ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
+		"foo":                          idTokenClaims.Extra["foo"],
+		"baz":                          idTokenClaims.Extra["baz"],
+		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
+		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
+		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
+		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
+		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
+		consts.ClaimNonce: idTokenClaims.Nonce,
 	}, idTokenClaims.ToMap())
 }

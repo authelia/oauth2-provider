@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -58,7 +59,7 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetClient().GetGrantTypes().Has("client_credentials") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeClientCredentials) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
 	}
 
@@ -73,5 +74,5 @@ func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, r
 func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "client_credentials".
-	return requester.GetGrantTypes().ExactOne("client_credentials")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials)
 }

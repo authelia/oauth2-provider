@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/errorsx"
@@ -47,12 +48,12 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 		return err
 	}
 
-	token := r.PostForm.Get("token")
-	tokenTypeHint := TokenType(r.PostForm.Get("token_type_hint"))
+	token := r.PostForm.Get(consts.FormParameterToken)
+	tokenTypeHint := TokenType(r.PostForm.Get(consts.FormParameterTokenTypeHint))
 
 	var found = false
 	for _, loader := range f.Config.GetRevocationHandlers(ctx) {
-		if err := loader.RevokeToken(ctx, token, tokenTypeHint, client); err == nil {
+		if err = loader.RevokeToken(ctx, token, tokenTypeHint, client); err == nil {
 			found = true
 		} else if errors.Is(err, ErrUnknownRequest) {
 			// do nothing

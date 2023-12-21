@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -84,7 +85,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			description: "should fail because no code set",
 			setup: func() OpenIDConnectExplicitHandler {
 				h, _ := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
-				areq.GrantedScope = oauth2.Arguments{"openid"}
+				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				areq.Form.Set("nonce", "11111111111111111111111111111")
 				aresp.EXPECT().GetCode().Return("")
 				return h

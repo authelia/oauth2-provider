@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
@@ -17,7 +18,12 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-var defaultPrompts = []string{"login", "none", "consent", "select_account"}
+var defaultPrompts = []string{
+	consts.PromptTypeLogin,
+	consts.PromptTypeNone,
+	consts.PromptTypeConsent,
+	consts.PromptTypeSelectAccount,
+}
 
 type openIDConnectRequestValidatorConfigProvider interface {
 	oauth2.RedirectSecureCheckerProvider
@@ -38,7 +44,7 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Signer, config openIDConnectR
 
 func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req oauth2.AuthorizeRequester) error {
 	// prompt is case sensitive!
-	requiredPrompt := oauth2.RemoveEmpty(strings.Split(req.GetRequestForm().Get("prompt"), " "))
+	requiredPrompt := oauth2.RemoveEmpty(strings.Split(req.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
 	if req.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
@@ -60,7 +66,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		//  be processed as if no previous request had been approved.
 
 		checker := v.Config.GetRedirectSecureChecker(ctx)
-		if stringslice.Has(requiredPrompt, "none") {
+		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
 			if !checker(ctx, req.GetRedirectURI()) {
 				return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but \"prompt=none\" was requested."))
 			}
@@ -76,12 +82,12 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Used unknown value '%s' for prompt parameter", requiredPrompt))
 	}
 
-	if stringslice.Has(requiredPrompt, "none") && len(requiredPrompt) > 1 {
+	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
 		// If this parameter contains none with any other value, an error is returned.
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
-	maxAge, err := strconv.ParseInt(req.GetRequestForm().Get("max_age"), 10, 64)
+	maxAge, err := strconv.ParseInt(req.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
 	if err != nil {
 		maxAge = 0
 	}
@@ -111,7 +117,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		}
 	}
 
-	if stringslice.Has(requiredPrompt, "none") {
+	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
 		if claims.AuthTime.IsZero() {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
@@ -121,13 +127,13 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		}
 	}
 
-	if stringslice.Has(requiredPrompt, "login") {
+	if stringslice.Has(requiredPrompt, consts.PromptTypeLogin) {
 		if claims.AuthTime.Before(claims.RequestedAt) {
 			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
 		}
 	}
 
-	idTokenHint := req.GetRequestForm().Get("id_token_hint")
+	idTokenHint := req.GetRequestForm().Get(consts.FormParameterIDTokenHint)
 	if idTokenHint == "" {
 		return nil
 	}
@@ -140,7 +146,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebug(err.Error()))
 	}
 
-	if hintSub, _ := tokenHint.Claims["sub"].(string); hintSub == "" {
+	if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided id token from id_token_hint does not have a subject."))
 	} else if hintSub != claims.Subject {
 		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided id token from id_token_hint does not match the current session's subject."))

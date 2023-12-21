@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type IntrospectForm struct {
@@ -39,8 +41,8 @@ func (c *Introspect) IntrospectToken(
 	header map[string]string,
 ) (*IntrospectResponse, error) {
 	data := url.Values{}
-	data.Set("token", form.Token)
-	data.Set("scope", strings.Join(form.Scopes, " "))
+	data.Set(consts.FormParameterToken, form.Token)
+	data.Set(consts.FormParameterScope, strings.Join(form.Scopes, " "))
 
 	request, err := c.getRequest(ctx, data, header)
 	if err != nil {

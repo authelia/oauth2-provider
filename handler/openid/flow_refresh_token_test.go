@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,7 +34,7 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should not pass because grant_type is right but scope is missing",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
@@ -43,9 +44,9 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should not pass because client may not execute this grant type",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client:       &oauth2.DefaultClient{},
 				},
 			},
@@ -54,11 +55,11 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
-						GrantTypes: []string{"refresh_token"},
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
 						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{},
@@ -111,7 +112,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		{
 			description: "should not pass because grant_type is right but scope is missing",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
@@ -122,11 +123,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		//{
 		//	description: "should not pass because client may not ask for id_token",
 		//	areq: &oauth2.AccessRequest{
-		//		GrantTypes: []string{"refresh_token"},
+		//		GrantTypes: []string{consts.GrantTypeRefreshToken},
 		//		Request: oauth2.Request{
-		//			GrantedScope: []string{"openid"},
+		//			GrantedScope: []string{consts.ScopeOpenID},
 		//			Client: &oauth2.DefaultClient{
-		//				GrantTypes: []string{"refresh_token"},
+		//				GrantTypes: []string{consts.GrantTypeRefreshToken},
 		//			},
 		//		},
 		//	},
@@ -135,11 +136,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		{
 			description: "should pass",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
-						GrantTypes: []string{"refresh_token"},
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
 						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{
@@ -151,14 +152,14 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 				},
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.NotEmpty(t, aresp.GetExtra("id_token"))
-				idToken, _ := aresp.GetExtra("id_token").(string)
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseIDToken))
+				idToken, _ := aresp.GetExtra(consts.AccessResponseIDToken).(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
 				claims := decodedIdToken.Claims
-				assert.NotEmpty(t, claims["at_hash"])
+				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)
 				internal.RequireEqualTime(t, time.Now().Add(time.Hour).UTC(), *idTokenExp, time.Minute)
@@ -167,12 +168,12 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		{
 			description: "should pass",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClientWithCustomTokenLifespans{
 						DefaultClient: &oauth2.DefaultClient{
-							GrantTypes: []string{"refresh_token"},
+							GrantTypes: []string{consts.GrantTypeRefreshToken},
 							//ResponseTypes: []string{"id_token"},
 						},
 						TokenLifespans: &internal.TestLifespans,
@@ -186,14 +187,14 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 				},
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.NotEmpty(t, aresp.GetExtra("id_token"))
-				idToken, _ := aresp.GetExtra("id_token").(string)
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseIDToken))
+				idToken, _ := aresp.GetExtra(consts.AccessResponseIDToken).(string)
 				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
 				claims := decodedIdToken.Claims
-				assert.NotEmpty(t, claims["at_hash"])
+				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantIDTokenLifespan).UTC(), *idTokenExp, time.Minute)
@@ -202,11 +203,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		{
 			description: "should fail because missing subject claim",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
-						GrantTypes: []string{"refresh_token"},
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
 						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{
@@ -220,11 +221,11 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		{
 			description: "should fail because missing session",
 			areq: &oauth2.AccessRequest{
-				GrantTypes: []string{"refresh_token"},
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
-					GrantedScope: []string{"openid"},
+					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
-						GrantTypes: []string{"refresh_token"},
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
 					},
 				},
 			},

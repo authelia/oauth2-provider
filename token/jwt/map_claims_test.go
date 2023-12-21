@@ -5,12 +5,14 @@ package jwt
 
 import (
 	"testing"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Test taken from taken from [here](https://raw.githubusercontent.com/form3tech-oss/jwt-go/master/map_claims_test.go).
 func Test_mapClaims_list_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []string{"foo"},
+		consts.ClaimAudience: []string{"foo"},
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", true)
@@ -24,7 +26,7 @@ func Test_mapClaims_list_aud(t *testing.T) {
 // list with require == false returns valid
 func Test_mapClaims_empty_list_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []string{},
+		consts.ClaimAudience: []string{},
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", false)
@@ -36,7 +38,7 @@ func Test_mapClaims_empty_list_aud(t *testing.T) {
 
 func Test_mapClaims_list_interface_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []any{"foo"},
+		consts.ClaimAudience: []any{"foo"},
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", true)
@@ -48,7 +50,7 @@ func Test_mapClaims_list_interface_aud(t *testing.T) {
 
 func Test_mapClaims_string_aud(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": "foo",
+		consts.ClaimAudience: "foo",
 	}
 	want := true
 	got := mapClaims.VerifyAudience("foo", true)
@@ -60,7 +62,7 @@ func Test_mapClaims_string_aud(t *testing.T) {
 
 func Test_mapClaims_list_aud_no_match(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": []string{"bar"},
+		consts.ClaimAudience: []string{"bar"},
 	}
 	want := false
 	got := mapClaims.VerifyAudience("foo", true)
@@ -72,7 +74,7 @@ func Test_mapClaims_list_aud_no_match(t *testing.T) {
 
 func Test_mapClaims_string_aud_fail(t *testing.T) {
 	mapClaims := MapClaims{
-		"aud": "bar",
+		consts.ClaimAudience: "bar",
 	}
 	want := false
 	got := mapClaims.VerifyAudience("foo", true)

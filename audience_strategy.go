@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -82,7 +83,7 @@ func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
 // more than once (and thus why we use space-delimited value). This function tries to satisfy both.
 // If "audience" form parameter is repeated, we do not split the value by space.
 func GetAudiences(form url.Values) []string {
-	audiences := form["audience"]
+	audiences := form[consts.FormParameterAudience]
 	if len(audiences) > 1 {
 		return RemoveEmpty(audiences)
 	} else if len(audiences) == 1 {
@@ -100,5 +101,6 @@ func (f *Fosite) validateAuthorizeAudience(ctx context.Context, r *http.Request,
 	}
 
 	request.SetRequestedAudience(audience)
+
 	return nil
 }

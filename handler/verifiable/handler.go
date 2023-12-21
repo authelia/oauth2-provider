@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -24,7 +25,9 @@ type Handler struct {
 	NonceManager
 }
 
-var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)
 
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
@@ -61,5 +64,5 @@ func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) boo
 }
 
 func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantedScopes().Has("openid", draftScope)
+	return requester.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
 }

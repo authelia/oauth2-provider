@@ -39,6 +39,7 @@ following list of differences:
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2314625eb1f21987a9199fb1cdf6da6cee4df965)</sup>
   - [x] RFC9068 must condition ignored
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/f4652d60c850d167da00e2d2fe9096776eff9465)</sup>
+  - [ ] Arguments are treated as case-insensitive
   - Refresh Flow:
     - [x] Requested scope ignored
     - [x] Original request id not set early enough

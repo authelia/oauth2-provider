@@ -68,8 +68,8 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because invalid credentials",
 			setup: func(config *oauth2.Config) {
-				areq.Form.Set("username", "peter")
-				areq.Form.Set("password", "pan")
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(oauth2.ErrNotFound)
@@ -167,7 +167,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should pass - offline scope",
 			setup: func(config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
-				areq.GrantScope("offline")
+				areq.GrantScope(consts.ScopeOffline)
 				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
 				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
@@ -197,7 +197,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			aresp = oauth2.NewAccessResponse()
 			areq.Session = &oauth2.DefaultSession{}
 			config := &oauth2.Config{
-				RefreshTokenScopes:  []string{"offline"},
+				RefreshTokenScopes:  []string{consts.ScopeOffline},
 				AccessTokenLifespan: time.Hour,
 			}
 			h = ResourceOwnerPasswordCredentialsGrantHandler{

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestDefaultClient(t *testing.T) {
@@ -30,8 +32,8 @@ func TestDefaultClient(t *testing.T) {
 
 	sc.GrantTypes = []string{}
 	sc.ResponseTypes = []string{}
-	assert.Equal(t, "code", sc.GetResponseTypes()[0])
-	assert.Equal(t, "authorization_code", sc.GetGrantTypes()[0])
+	assert.Equal(t, consts.ResponseTypeAuthorizationCodeFlow, sc.GetResponseTypes()[0])
+	assert.Equal(t, consts.GrantTypeAuthorizationCode, sc.GetGrantTypes()[0])
 
 	var _ ClientWithSecretRotation = sc
 }

@@ -42,14 +42,14 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 
 	if req.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
-		// https://tools.ietf.org/html/rfc6819#section-4.2.3
+		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
 		//
 		//  Authorization servers should not automatically process repeat
 		//  authorizations to public clients unless the client is validated
 		//  using a pre-registered redirect URI
 
 		// Client Impersonation
-		// https://tools.ietf.org/html/rfc8252#section-8.6#
+		// https://datatracker.ietf.org/doc/html/rfc8252#section-8.6#
 		//
 		//  As stated in Section 10.2 of OAuth 2.0 [RFC6749], the authorization
 		//  server SHOULD NOT process authorization requests automatically

@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -18,19 +19,19 @@ type TokenIntrospector interface {
 }
 
 func AccessTokenFromRequest(req *http.Request) string {
-	// According to https://tools.ietf.org/html/rfc6750 you can pass tokens through:
+	// According to https://datatracker.ietf.org/doc/html/rfc6750 you can pass tokens through:
 	// - Form-Encoded Body Parameter. Recommended, more likely to appear. e.g.: Authorization: Bearer mytoken123
 	// - URI Query Parameter e.g. access_token=mytoken123
 
 	auth := req.Header.Get("Authorization")
 	split := strings.SplitN(auth, " ", 2)
-	if len(split) != 2 || !strings.EqualFold(split[0], "bearer") {
+	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token
 		// Empty string returned if there's no such parameter
 		if err := req.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 			return ""
 		}
-		return req.Form.Get("access_token")
+		return req.Form.Get(consts.FormParameterAccessToken)
 	}
 
 	return split[1]

@@ -21,6 +21,7 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -203,7 +204,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.setup()
-			authURL := strings.Replace(oauthClient.AuthCodeURL(state, xoauth2.SetAuthURLParam("response_mode", c.responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
+			authURL := strings.Replace(oauthClient.AuthCodeURL(state, xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, c.responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
 
 			var (
 				callbackURL *url.URL
@@ -251,21 +252,21 @@ func TestAuthorizeResponseModes(t *testing.T) {
 
 func getParameters(t *testing.T, param url.Values) (code, state, iDToken string, token xoauth2.Token, errResp map[string]string) {
 	errResp = make(map[string]string)
-	if param.Get("error") != "" {
-		errResp["ErrorField"] = param.Get("error")
-		errResp["DescriptionField"] = param.Get("error_description")
-		errResp["HintField"] = param.Get("error_hint")
+	if param.Get(consts.FormParameterError) != "" {
+		errResp["ErrorField"] = param.Get(consts.FormParameterError)
+		errResp["DescriptionField"] = param.Get(consts.FormParameterErrorDescription)
+		errResp["HintField"] = param.Get(consts.FormParameterErrorHint)
 	} else {
-		code = param.Get("code")
-		state = param.Get("state")
-		iDToken = param.Get("id_token")
+		code = param.Get(consts.FormParameterAuthorizationCode)
+		state = param.Get(consts.FormParameterState)
+		iDToken = param.Get(consts.AccessResponseIDToken)
 		token = xoauth2.Token{
-			AccessToken:  param.Get("access_token"),
-			TokenType:    param.Get("token_type"),
-			RefreshToken: param.Get("refresh_token"),
+			AccessToken:  param.Get(consts.AccessResponseAccessToken),
+			TokenType:    param.Get(consts.AccessResponseTokenType),
+			RefreshToken: param.Get(consts.AccessResponseRefreshToken),
 		}
-		if param.Get("expires_in") != "" {
-			expires, err := strconv.Atoi(param.Get("expires_in"))
+		if param.Get(consts.AccessResponseExpiresIn) != "" {
+			expires, err := strconv.Atoi(param.Get(consts.AccessResponseExpiresIn))
 			require.NoError(t, err)
 			token.Expiry = time.Now().UTC().Add(time.Duration(expires) * time.Second)
 		}

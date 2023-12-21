@@ -8,6 +8,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -27,16 +28,16 @@ type OpenIDConnectImplicitHandler struct {
 }
 
 func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
-	if !(ar.GetGrantedScopes().Has("openid") && (ar.GetResponseTypes().Has("token", "id_token") || ar.GetResponseTypes().ExactOne("id_token"))) {
+	if !(ar.GetGrantedScopes().Has("openid") && (ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || ar.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
 		return nil
-	} else if ar.GetResponseTypes().Has("code") {
+	} else if ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		// hybrid flow
 		return nil
 	}
 
 	ar.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
-	if !ar.GetClient().GetGrantTypes().Has("implicit") {
+	if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
@@ -47,7 +48,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token and id_token"))
 	//}
 
-	if nonce := ar.GetRequestForm().Get("nonce"); len(nonce) == 0 {
+	if nonce := ar.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))
 	} else if len(nonce) < c.Config.GetMinParameterEntropy(ctx) {
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
@@ -70,20 +71,20 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	claims := sess.IDTokenClaims()
-	if ar.GetResponseTypes().Has("token") {
+	if ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
 		if err := c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, ar, resp); err != nil {
 			return errorsx.WithStack(err)
 		}
 
-		ar.SetResponseTypeHandled("token")
-		hash, err := c.ComputeHash(ctx, sess, resp.GetParameters().Get("access_token"))
+		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
+		hash, err := c.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.AccessResponseAccessToken))
 		if err != nil {
 			return err
 		}
 
 		claims.AccessTokenHash = hash
 	} else {
-		resp.AddParameter("state", ar.GetState())
+		resp.AddParameter(consts.FormParameterState, ar.GetState())
 	}
 
 	idTokenLifespan := oauth2.GetEffectiveLifespan(ar.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
@@ -92,8 +93,8 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	// there is no need to check for https, because implicit flow does not require https
-	// https://tools.ietf.org/html/rfc6819#section-4.4.2
+	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 
-	ar.SetResponseTypeHandled("id_token")
+	ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 	return nil
 }

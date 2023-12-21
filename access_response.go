@@ -6,6 +6,8 @@ package oauth2
 import (
 	"strings"
 	"time"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func NewAccessResponse() *AccessResponse {
@@ -21,11 +23,11 @@ type AccessResponse struct {
 }
 
 func (a *AccessResponse) SetScopes(scopes Arguments) {
-	a.SetExtra("scope", strings.Join(scopes, " "))
+	a.SetExtra(consts.AccessResponseScope, strings.Join(scopes, " "))
 }
 
 func (a *AccessResponse) SetExpiresIn(expiresIn time.Duration) {
-	a.SetExtra("expires_in", int64(expiresIn/time.Second))
+	a.SetExtra(consts.AccessResponseExpiresIn, int64(expiresIn/time.Second))
 }
 
 func (a *AccessResponse) SetExtra(key string, value any) {
@@ -53,7 +55,7 @@ func (a *AccessResponse) GetTokenType() string {
 }
 
 func (a *AccessResponse) ToMap() map[string]any {
-	a.Extra["access_token"] = a.GetAccessToken()
-	a.Extra["token_type"] = a.GetTokenType()
+	a.Extra[consts.AccessResponseAccessToken] = a.GetAccessToken()
+	a.Extra[consts.AccessResponseTokenType] = a.GetTokenType()
 	return a.Extra
 }

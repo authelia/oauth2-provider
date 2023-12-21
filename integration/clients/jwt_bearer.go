@@ -14,10 +14,9 @@ import (
 
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
-)
 
-// #nosec:gosec G101 - False Positive
-const jwtBearerGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer"
+	"authelia.com/provider/oauth2/internal/consts"
+)
 
 type JWTBearer struct {
 	tokenURL string
@@ -117,11 +116,11 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 
 func (c *JWTBearer) getRequestBodyReader(assertion string, scope []string) (io.Reader, error) {
 	data := url.Values{}
-	data.Set("grant_type", jwtBearerGrantType)
-	data.Set("assertion", assertion)
+	data.Set(consts.FormParameterGrantType, consts.GrantTypeOAuthJWTBearer)
+	data.Set(consts.FormParameterAssertion, assertion)
 
 	if len(scope) != 0 {
-		data.Set("scope", strings.Join(scope, " "))
+		data.Set(consts.FormParameterScope, strings.Join(scope, " "))
 	}
 
 	return strings.NewReader(data.Encode()), nil

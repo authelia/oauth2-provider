@@ -16,7 +16,7 @@ import (
 
 // NewRevocationRequest handles incoming token revocation requests and
 // validates various parameters as specified in:
-// https://tools.ietf.org/html/rfc7009#section-2.1
+// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 //
 // The authorization server first validates the client credentials (in
 // case of a confidential client) and then verifies whether the token
@@ -28,7 +28,7 @@ import (
 // The invalidation takes place immediately, and the token cannot be
 // used again after the revocation.
 //
-// * https://tools.ietf.org/html/rfc7009#section-2.2
+// * https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 // An invalid token type hint value is ignored by the authorization
 // server and does not influence the revocation response.
 func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) error {
@@ -69,7 +69,7 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 }
 
 // WriteRevocationResponse writes a token revocation response as specified in:
-// https://tools.ietf.org/html/rfc7009#section-2.2
+// https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 //
 // The authorization server responds with HTTP status code 200 if the
 // token has been revoked successfully or if the client submitted an

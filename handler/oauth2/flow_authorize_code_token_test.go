@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -44,11 +45,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 							},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
@@ -64,11 +65,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{"code": []string{"foo.bar"}},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 							},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
@@ -82,11 +83,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
 							},
 							GrantedScope: oauth2.Arguments{"foo", "offline"},
 							Session:      &oauth2.DefaultSession{},
@@ -96,7 +97,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form.Add("code", code)
+						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
@@ -111,11 +112,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code", "refresh_token"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
 							},
 							GrantedScope: oauth2.Arguments{"foo"},
 							Session:      &oauth2.DefaultSession{},
@@ -141,11 +142,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 							},
 							GrantedScope: oauth2.Arguments{},
 							Session:      &oauth2.DefaultSession{},
@@ -156,26 +157,26 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						config.RefreshTokenScopes = []string{}
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form.Add("code", code)
+						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should pass with no refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Empty(t, aresp.GetExtra("scope"))
+						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 							},
 							GrantedScope: oauth2.Arguments{"foo"},
 							Session:      &oauth2.DefaultSession{},
@@ -185,17 +186,17 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form.Add("code", code)
+						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
 					},
 					description: "should not have refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo", aresp.GetExtra("scope"))
+						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 			} {
@@ -270,7 +271,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
 							Session:     &oauth2.DefaultSession{},
@@ -282,7 +283,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
 							Session:     &oauth2.DefaultSession{},
@@ -299,10 +300,10 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
-							Form:        url.Values{"code": {"foo.bar"}},
-							Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
+							Form:        url.Values{consts.FormParameterAuthorizationCode: {"foo.bar"}},
+							Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -312,9 +313,9 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -329,7 +330,7 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
 						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form = url.Values{"code": {token}}
+						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
 						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
 					},
@@ -337,17 +338,17 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					authreq: &oauth2.AuthorizeRequest{
 						Request: oauth2.Request{
-							Client:  &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Form:    url.Values{"redirect_uri": []string{"request-redir"}},
+							Client:  &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+							Form:    url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
 							Session: &oauth2.DefaultSession{},
 						},
 					},
@@ -363,10 +364,10 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Form:        url.Values{"redirect_uri": []string{"request-redir"}},
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+							Form:        url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},

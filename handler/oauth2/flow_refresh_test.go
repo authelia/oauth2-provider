@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -51,38 +52,38 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should fail because token invalid",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
-						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"refresh_token"}}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
 
-						areq.Form.Add("refresh_token", "some.refreshtokensig")
+						areq.Form.Add(consts.FormParameterRefreshToken, "some.refreshtokensig")
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because token is valid but does not exist",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
-						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"refresh_token"}}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+						areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
 
 						token, _, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					description: "should fail because client mismatches",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:       &oauth2.DefaultClient{ID: ""},
 							GrantedScope: []string{"offline"},
@@ -95,17 +96,17 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should fail because token is expired",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "offline"},
@@ -121,16 +122,16 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should fail because offline scope has been granted but client no longer allowed to request it",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "offline"},
@@ -146,17 +147,17 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should pass",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "offline"},
@@ -171,20 +172,111 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 				},
 				{
-					description: "should pass with custom client lifespans",
+					description: "should pass with scope in form",
 					setup: func(config *oauth2.Config) {
 						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
+							ID:         "foo",
+							GrantTypes: oauth2.Arguments{"refresh_token"},
+							Scopes:     []string{"foo", "bar", "baz", "offline"},
+						}
+
+						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						require.NoError(t, err)
+
+						areq.Form.Add("refresh_token", token)
+						areq.Form.Add("scope", "foo bar baz offline")
+						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+							Client:         areq.Client,
+							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							Session:        sess,
+							Form:           url.Values{"foo": []string{"bar"}},
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+						})
+						require.NoError(t, err)
+					},
+					expect: func(t *testing.T) {
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", "offline"}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "baz", "offline"}, areq.RequestedScope)
+					},
+				},
+				{
+					description: "should pass with scope in form and should narrow scopes",
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
+							ID:         "foo",
+							GrantTypes: oauth2.Arguments{"refresh_token"},
+							Scopes:     []string{"foo", "bar", "baz", "offline"},
+						}
+
+						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						require.NoError(t, err)
+
+						areq.Form.Add("refresh_token", token)
+						areq.Form.Add("scope", "foo bar offline")
+						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", "offline"})
+
+						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+							Client:         areq.Client,
+							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", "offline"},
+							Session:        sess,
+							Form:           url.Values{"foo": []string{"bar"}},
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+						})
+						require.NoError(t, err)
+					},
+					expect: func(t *testing.T) {
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.GrantedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+					},
+				},
+				{
+					description: "should fail with broadened scopes even if the client can request it",
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.Client = &oauth2.DefaultClient{
+							ID:         "foo",
+							GrantTypes: oauth2.Arguments{"refresh_token"},
+							Scopes:     []string{"foo", "bar", "baz", "offline"},
+						}
+
+						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						require.NoError(t, err)
+
+						areq.Form.Add("refresh_token", token)
+						areq.Form.Add("scope", "foo bar offline")
+						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", "offline"})
+
+						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+							Client:         areq.Client,
+							GrantedScope:   oauth2.Arguments{"foo", "baz", "offline"},
+							RequestedScope: oauth2.Arguments{"foo", "baz", "offline"},
+							Session:        sess,
+							Form:           url.Values{"foo": []string{"bar"}},
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+						})
+						require.NoError(t, err)
+					},
+					expectErr: oauth2.ErrInvalidScope,
+				},
+				{
+					description: "should pass with custom client lifespans",
+					setup: func(config *oauth2.Config) {
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 							DefaultClient: &oauth2.DefaultClient{
 								ID:         "foo",
-								GrantTypes: oauth2.Arguments{"refresh_token"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 								Scopes:     []string{"foo", "bar", "offline"},
 							},
 						}
@@ -194,7 +286,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "offline"},
@@ -209,7 +301,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "bar", "offline"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo", "offline"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
 						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantAccessTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.AccessToken), time.Minute)
 						internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantRefreshTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.RefreshToken), time.Minute)
@@ -218,17 +310,17 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should fail without offline scope",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 							Scopes:     []string{"foo", "bar"},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo"},
@@ -245,17 +337,17 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 					description: "should pass without offline scope when configured to allow refresh tokens",
 					setup: func(config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 							Scopes:     []string{"foo", "bar"},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo"},
@@ -270,7 +362,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
 						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo"}, areq.GrantedScope)
-						assert.Equal(t, oauth2.Arguments{"foo", "bar"}, areq.RequestedScope)
+						assert.Equal(t, oauth2.Arguments{"foo"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
 						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
@@ -279,17 +371,17 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 				{
 					description: "should deny access on token reuse",
 					setup: func(config *oauth2.Config) {
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.Client = &oauth2.DefaultClient{
 							ID:         "foo",
-							GrantTypes: oauth2.Arguments{"refresh_token"},
+							GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 							Scopes:     []string{"foo", "bar", "offline"},
 						}
 
 						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 						req := &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "offline"},
@@ -360,10 +452,10 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should revoke session on token reuse",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				request.Client = &oauth2.DefaultClient{
 					ID:         "foo",
-					GrantTypes: oauth2.Arguments{"refresh_token"},
+					GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 				}
 				mockRevocationStore.
 					EXPECT().
@@ -455,17 +547,17 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 					description: "should pass",
 					setup: func(config *oauth2.Config) {
 						areq.ID = "req-id"
-						areq.GrantTypes = oauth2.Arguments{"refresh_token"}
+						areq.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 						areq.RequestedScope = oauth2.Arguments{"foo", "bar"}
 						areq.GrantedScope = oauth2.Arguments{"foo", "bar"}
 
 						token, signature, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 						require.NoError(t, store.CreateRefreshTokenSession(context.TODO(), signature, areq))
-						areq.Form.Add("refresh_token", token)
+						areq.Form.Add(consts.FormParameterRefreshToken, token)
 					},
 					check: func(t *testing.T) {
-						signature := strategy.RefreshTokenSignature(context.Background(), areq.Form.Get("refresh_token"))
+						signature := strategy.RefreshTokenSignature(context.Background(), areq.Form.Get(consts.FormParameterRefreshToken))
 
 						// The old refresh token should be deleted
 						_, err := store.GetRefreshTokenSession(context.TODO(), signature, nil)
@@ -474,7 +566,7 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 						assert.Equal(t, "req-id", areq.ID)
 						require.NoError(t, strategy.ValidateAccessToken(context.TODO(), areq, aresp.GetAccessToken()))
 						require.NoError(t, strategy.ValidateRefreshToken(context.TODO(), areq, aresp.ToMap()["refresh_token"].(string)))
-						assert.Equal(t, "bearer", aresp.GetTokenType())
+						assert.Equal(t, oauth2.BearerAccessToken, aresp.GetTokenType())
 						assert.NotEmpty(t, aresp.ToMap()["expires_in"])
 						assert.Equal(t, "foo bar", aresp.ToMap()["scope"])
 					},
@@ -536,7 +628,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be committed successfully if no errors occur",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -577,7 +669,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be rolled back if call to `GetRefreshTokenSession` results in an error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -600,7 +692,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a oauth2.ErrInvalidRequest if `GetRefreshTokenSession` results in a " +
 				"oauth2.ErrNotFound error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -622,7 +714,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be rolled back if call to `RevokeAccessToken` results in an error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -650,7 +742,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a oauth2.ErrInvalidRequest if call to `RevokeAccessToken` results in a " +
 				"oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -678,7 +770,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a oauth2.ErrInactiveToken if call to `RevokeAccessToken` results in a " +
 				"oauth2.ErrInvalidRequest error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -700,7 +792,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be rolled back if call to `RevokeRefreshTokenMaybeGracePeriod` results in an error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -733,7 +825,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a oauth2.ErrInvalidRequest if call to `RevokeRefreshTokenMaybeGracePeriod` results in a " +
 				"oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -838,7 +930,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "transaction should be rolled back if call to `CreateRefreshTokenSession` results in an error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -881,7 +973,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a oauth2.ErrInvalidRequest if call to `CreateRefreshTokenSession` results in " +
 				"a oauth2.ErrSerializationFailure error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -923,7 +1015,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should result in a server error if transaction cannot be created",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -935,7 +1027,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should result in a server error if transaction cannot be rolled back",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -957,7 +1049,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should result in a server error if transaction cannot be committed",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1005,7 +1097,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			description: "should result in a `oauth2.ErrInvalidRequest` if transaction fails to commit due to a " +
 				"`oauth2.ErrSerializationFailure` error",
 			setup: func() {
-				request.GrantTypes = oauth2.Arguments{"refresh_token"}
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).

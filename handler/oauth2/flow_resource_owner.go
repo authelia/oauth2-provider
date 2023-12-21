@@ -10,10 +10,9 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
-
-var _ oauth2.TokenEndpointHandler = (*ResourceOwnerPasswordCredentialsGrantHandler)(nil)
 
 // Deprecated: This handler is deprecated as a means to communicate that the ROPC grant type is widely discouraged and
 // is at the time of this writing going to be omitted in the OAuth 2.1 spec. For more information on why this grant type
@@ -32,13 +31,17 @@ type ResourceOwnerPasswordCredentialsGrantHandler struct {
 	}
 }
 
-// HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
+var (
+	_ oauth2.TokenEndpointHandler = (*ResourceOwnerPasswordCredentialsGrantHandler)(nil)
+)
+
+// HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.2
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetClient().GetGrantTypes().Has("password") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeResourceOwnerPasswordCredentials) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The client is not allowed to use authorization grant 'password'."))
 	}
 
@@ -53,8 +56,8 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 		return err
 	}
 
-	username := request.GetRequestForm().Get("username")
-	password := request.GetRequestForm().Get("password")
+	username := request.GetRequestForm().Get(consts.FormParameterUsername)
+	password := request.GetRequestForm().Get(consts.FormParameterPassword)
 	if username == "" || password == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Username or password are missing from the POST body."))
 	} else if err := c.ResourceOwnerPasswordCredentialsGrantStorage.Authenticate(ctx, username, password); errors.Is(err, oauth2.ErrNotFound) {
@@ -64,7 +67,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	}
 
 	// Credentials must not be passed around, potentially leaking to the database!
-	delete(request.GetRequestForm(), "password")
+	delete(request.GetRequestForm(), consts.FormParameterPassword)
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Round(time.Second))
@@ -77,7 +80,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	return nil
 }
 
-// PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
+// PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.3
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -89,7 +92,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
-		} else if err := c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
+		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 	}
@@ -100,7 +103,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 	}
 
 	if refresh != "" {
-		responder.SetExtra("refresh_token", refresh)
+		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	return nil
@@ -113,5 +116,5 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanSkipClientAuth(ctx con
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "password".
-	return requester.GetGrantTypes().ExactOne("password")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeResourceOwnerPasswordCredentials)
 }

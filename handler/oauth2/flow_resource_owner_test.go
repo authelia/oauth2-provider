@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -42,8 +43,8 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because scope missing",
 			setup: func(config *oauth2.Config) {
-				areq.GrantTypes = oauth2.Arguments{"password"}
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{}}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{}}
 				areq.RequestedScope = []string{"foo-scope"}
 			},
 			expectErr: oauth2.ErrInvalidScope,
@@ -52,15 +53,15 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			description: "should fail because audience missing",
 			setup: func(config *oauth2.Config) {
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}}
 			},
 			expectErr: oauth2.ErrInvalidRequest,
 		},
 		{
 			description: "should fail because invalid grant_type specified",
 			setup: func(config *oauth2.Config) {
-				areq.GrantTypes = oauth2.Arguments{"password"}
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"authorization_code"}, Scopes: []string{"foo-scope"}}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}, Scopes: []string{"foo-scope"}}
 			},
 			expectErr: oauth2.ErrUnauthorizedClient,
 		},
@@ -69,7 +70,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			setup: func(config *oauth2.Config) {
 				areq.Form.Set("username", "peter")
 				areq.Form.Set("password", "pan")
-				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{"password"}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(oauth2.ErrNotFound)
 			},
@@ -154,18 +155,18 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		{
 			description: "should pass",
 			setup: func(config *oauth2.Config) {
-				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
-				assert.Nil(t, aresp.GetExtra("refresh_token"), "unexpected refresh token")
+				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "unexpected refresh token")
 			},
 		},
 		{
 			description: "should pass - offline scope",
 			setup: func(config *oauth2.Config) {
-				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.GrantScope("offline")
 				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
 				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
@@ -173,21 +174,21 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
-				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
+				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
 			},
 		},
 		{
 			description: "should pass - refresh token without offline scope",
 			setup: func(config *oauth2.Config) {
 				config.RefreshTokenScopes = []string{}
-				areq.GrantTypes = oauth2.Arguments{"password"}
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				rtstr.EXPECT().GenerateRefreshToken(context.TODO(), areq).Return(mockRT, "bar", nil)
 				store.EXPECT().CreateRefreshTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func() {
-				assert.NotNil(t, aresp.GetExtra("refresh_token"), "expected refresh token")
+				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
 			},
 		},
 	} {

@@ -9,6 +9,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -34,7 +35,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return nil
 	}
 
-	if !(ar.GetResponseTypes().Matches("token", "id_token", "code") || ar.GetResponseTypes().Matches("token", "code") || ar.GetResponseTypes().Matches("id_token", "code")) {
+	if !(ar.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) || ar.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) || ar.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
 	}
 
@@ -52,9 +53,9 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	// The nonce is actually not required for hybrid flows. It fails the OpenID Connect Conformity
 	// Test Module "oidcc-ensure-request-without-nonce-succeeds-for-code-flow" if enabled.
 	//
-	nonce := ar.GetRequestForm().Get("nonce")
+	nonce := ar.GetRequestForm().Get(consts.FormParameterNonce)
 
-	if len(nonce) == 0 && ar.GetResponseTypes().Has("id_token") {
+	if len(nonce) == 0 && ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when requesting an ID Token using the OpenID Connect Hybrid Flow."))
 	}
 
@@ -79,8 +80,8 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	claims := sess.IDTokenClaims()
-	if ar.GetResponseTypes().Has("code") {
-		if !ar.GetClient().GetGrantTypes().Has("authorization_code") {
+	if ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
+		if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
 		}
 
@@ -102,10 +103,10 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 
-		resp.AddParameter("code", code)
-		ar.SetResponseTypeHandled("code")
+		resp.AddParameter(consts.FormParameterAuthorizationCode, code)
+		ar.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
-		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get("code"))
+		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.FormParameterAuthorizationCode))
 		if err != nil {
 			return err
 		}
@@ -118,27 +119,27 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		}
 	}
 
-	if ar.GetResponseTypes().Has("token") {
-		if !ar.GetClient().GetGrantTypes().Has("implicit") {
+	if ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
+		if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 		} else if err := c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, ar, resp); err != nil {
 			return errorsx.WithStack(err)
 		}
-		ar.SetResponseTypeHandled("token")
+		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
 
-		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get("access_token"))
+		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.AccessResponseAccessToken))
 		if err != nil {
 			return err
 		}
 		claims.AccessTokenHash = hash
 	}
 
-	if _, ok := resp.GetParameters()["state"]; !ok {
-		resp.AddParameter("state", ar.GetState())
+	if _, ok = resp.GetParameters()[consts.FormParameterState]; !ok {
+		resp.AddParameter(consts.FormParameterState, ar.GetState())
 	}
 
-	if !ar.GetGrantedScopes().Has("openid") || !ar.GetResponseTypes().Has("id_token") {
-		ar.SetResponseTypeHandled("id_token")
+	if !ar.GetGrantedScopes().Has("openid") || !ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
+		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 		return nil
 	}
 
@@ -148,8 +149,8 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return errorsx.WithStack(err)
 	}
 
-	ar.SetResponseTypeHandled("id_token")
+	ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 	return nil
 	// there is no need to check for https, because implicit flow does not require https
-	// https://tools.ietf.org/html/rfc6819#section-4.4.2
+	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 }

@@ -4,7 +4,11 @@
 package oauth2
 
 import (
+	"context"
+
 	"github.com/go-jose/go-jose/v3"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Client represents a client or an app.
@@ -69,6 +73,13 @@ type OpenIDConnectClient interface {
 	// JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT] used to authenticate the
 	// Client at the Token Endpoint for the private_key_jwt and client_secret_jwt authentication methods.
 	GetTokenEndpointAuthSigningAlgorithm() string
+}
+
+// RefreshFlowScopeClient is a client which can be customized to ignore scopes that were not originally granted.
+type RefreshFlowScopeClient interface {
+	Client
+
+	GetRefreshFlowIgnoreOriginalGrantedScopes(ctx context.Context) (ignoreOriginalGrantedScopes bool)
 }
 
 // ResponseModeClient represents a client capable of handling response_mode
@@ -140,7 +151,7 @@ func (c *DefaultClient) GetGrantTypes() Arguments {
 	// that it will restrict itself to using.
 	// If omitted, the default is that the Client will use only the authorization_code Grant Type.
 	if len(c.GrantTypes) == 0 {
-		return Arguments{"authorization_code"}
+		return Arguments{consts.GrantTypeAuthorizationCode}
 	}
 
 	return c.GrantTypes

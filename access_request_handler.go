@@ -15,7 +15,7 @@ import (
 )
 
 // Implements
-//   - https://tools.ietf.org/html/rfc6749#section-2.3.1
+//   - https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1
 //     Clients in possession of a client password MAY use the HTTP Basic
 //     authentication scheme as defined in [RFC2617] to authenticate with
 //     the authorization server.  The client identifier is encoded using the
@@ -31,7 +31,7 @@ import (
 //     password-based HTTP authentication schemes).  The parameters can only
 //     be transmitted in the request-body and MUST NOT be included in the
 //     request URI.
-//   - https://tools.ietf.org/html/rfc6749#section-3.2.1
+//   - https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
 //   - Confidential clients or other clients issued client credentials MUST
 //     authenticate with the authorization server as described in
 //     Section 2.3 when making requests to the token endpoint.

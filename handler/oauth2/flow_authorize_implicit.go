@@ -10,13 +10,12 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-var _ oauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
-
 // AuthorizeImplicitGrantTypeHandler is a response handler for the Authorize Code grant using the implicit grant type
-// as defined in https://tools.ietf.org/html/rfc6749#section-4.2
+// as defined in https://datatracker.ietf.org/doc/html/rfc6749#section-4.2
 type AuthorizeImplicitGrantTypeHandler struct {
 	AccessTokenStrategy AccessTokenStrategy
 	// AccessTokenStorage is used to persist session data across requests.
@@ -29,9 +28,13 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	}
 }
 
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
+)
+
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
-	if !ar.GetResponseTypes().ExactOne("token") {
+	if !ar.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowToken) {
 		return nil
 	}
 
@@ -42,7 +45,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	// 	 return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token"))
 	// }
 
-	if !ar.GetClient().GetGrantTypes().Has("implicit") {
+	if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
@@ -58,7 +61,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	}
 
 	// there is no need to check for https, because implicit flow does not require https
-	// https://tools.ietf.org/html/rfc6819#section-4.4.2
+	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 
 	return c.IssueImplicitAccessToken(ctx, ar, resp)
 }
@@ -79,13 +82,13 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	if err := c.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, ar.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
-	resp.AddParameter("access_token", token)
-	resp.AddParameter("expires_in", strconv.FormatInt(int64(getExpiresIn(ar, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
-	resp.AddParameter("token_type", "bearer")
-	resp.AddParameter("state", ar.GetState())
-	resp.AddParameter("scope", strings.Join(ar.GetGrantedScopes(), " "))
+	resp.AddParameter(consts.AccessResponseAccessToken, token)
+	resp.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(ar, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
+	resp.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
+	resp.AddParameter(consts.FormParameterState, ar.GetState())
+	resp.AddParameter(consts.AccessResponseScope, strings.Join(ar.GetGrantedScopes(), " "))
 
-	ar.SetResponseTypeHandled("token")
+	ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
 
 	return nil
 }

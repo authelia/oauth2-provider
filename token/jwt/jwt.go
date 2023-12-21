@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package jwt is able to generate and validate json web tokens.
-// Follows https://tools.ietf.org/html/draft-ietf-oauth-json-web-token-32
+// Follows https://datatracker.ietf.org/doc/html/rfc7519
 
 package jwt
 

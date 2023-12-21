@@ -18,6 +18,7 @@ import (
 	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func ptr(d time.Duration) *time.Duration {
@@ -127,30 +128,30 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		}
 
 		switch k {
-		case "state":
+		case consts.FormParameterState:
 			stateFromServer = v
-		case "code":
+		case consts.FormParameterAuthorizationCode:
 			authorizationCode = v
-		case "expires_in":
+		case consts.AccessResponseExpiresIn:
 			expires, err := strconv.Atoi(v)
 			if err != nil {
 				return "", "", "", token, customParameters, rFC6749Error, err
 			}
 			token.Expiry = time.Now().UTC().Add(time.Duration(expires) * time.Second)
-		case "access_token":
-			token.AccessToken = v
-		case "token_type":
+		case consts.AccessResponseTokenType:
 			token.TokenType = v
-		case "refresh_token":
+		case consts.AccessResponseAccessToken:
+			token.AccessToken = v
+		case consts.AccessResponseRefreshToken:
 			token.RefreshToken = v
-		case "error":
-			rFC6749Error["ErrorField"] = v
-		case "error_hint":
-			rFC6749Error["HintField"] = v
-		case "error_description":
-			rFC6749Error["DescriptionField"] = v
-		case "id_token":
+		case consts.AccessResponseIDToken:
 			iDToken = v
+		case consts.FormParameterError:
+			rFC6749Error["ErrorField"] = v
+		case consts.FormParameterErrorHint:
+			rFC6749Error["HintField"] = v
+		case consts.FormParameterErrorDescription:
+			rFC6749Error["DescriptionField"] = v
 		default:
 			customParameters.Add(k, v)
 		}

@@ -9,20 +9,21 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAccessResponse(t *testing.T) {
 	ar := NewAccessResponse()
 	ar.SetAccessToken("access")
-	ar.SetTokenType("bearer")
-	ar.SetExtra("access_token", "invalid")
+	ar.SetTokenType(BearerAccessToken)
+	ar.SetExtra(consts.AccessResponseAccessToken, "invalid")
 	ar.SetExtra("foo", "bar")
 	assert.Equal(t, "access", ar.GetAccessToken())
-	assert.Equal(t, "bearer", ar.GetTokenType())
+	assert.Equal(t, BearerAccessToken, ar.GetTokenType())
 	assert.Equal(t, "bar", ar.GetExtra("foo"))
 	assert.Equal(t, map[string]any{
-		"access_token": "access",
-		"token_type":   "bearer",
-		"foo":          "bar",
+		consts.AccessResponseAccessToken: "access",
+		consts.AccessResponseTokenType:   BearerAccessToken,
+		"foo":                            "bar",
 	}, ar.ToMap())
 }

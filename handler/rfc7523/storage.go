@@ -28,6 +28,6 @@ type RFC7523KeyStorage interface {
 
 	// MarkJWTUsedForTime marks JWT as used for a time passed in exp parameter. This helps ensure that JWTs are not
 	// replayed by maintaining the set of used "jti" values for the length of time for which the JWT would be
-	// considered valid based on the applicable "exp" instant. (https://tools.ietf.org/html/rfc7523#section-3)
+	// considered valid based on the applicable "exp" instant. (https://datatracker.ietf.org/doc/html/rfc7523#section-3)
 	MarkJWTUsedForTime(ctx context.Context, jti string, exp time.Time) error
 }

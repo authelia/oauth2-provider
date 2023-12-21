@@ -34,7 +34,7 @@ func TestWriteAccessError(t *testing.T) {
 }
 
 func TestWriteAccessError_RFC6749(t *testing.T) {
-	// https://tools.ietf.org/html/rfc6749#section-5.2
+	// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
 
 	config := new(Config)
 	provider := &Fosite{Config: config}

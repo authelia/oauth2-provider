@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
@@ -40,10 +41,10 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 		{
 			description: "should fail because access token generation failed",
 			setup: func() {
-				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{"implicit"},
-					ResponseTypes: oauth2.Arguments{"token"},
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
 				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("", "", errors.New(""))
 			},
@@ -52,11 +53,11 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 		{
 			description: "should fail because scope invalid",
 			setup: func() {
-				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.RequestedScope = oauth2.Arguments{"scope"}
 				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{"implicit"},
-					ResponseTypes: oauth2.Arguments{"token"},
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
 			},
 			expectErr: oauth2.ErrInvalidScope,
@@ -64,12 +65,12 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 		{
 			description: "should fail because audience invalid",
 			setup: func() {
-				areq.ResponseTypes = oauth2.Arguments{"token"}
+				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.RequestedScope = oauth2.Arguments{"scope"}
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/not-api"}
 				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{"implicit"},
-					ResponseTypes: oauth2.Arguments{"token"},
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 					Scopes:        []string{"scope"},
 					Audience:      []string{"https://www.authelia.com/api"},
 				}
@@ -93,11 +94,11 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 
 				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 
-				aresp.EXPECT().AddParameter("access_token", "access.ats")
-				aresp.EXPECT().AddParameter("expires_in", gomock.Any())
-				aresp.EXPECT().AddParameter("token_type", "bearer")
-				aresp.EXPECT().AddParameter("state", "state")
-				aresp.EXPECT().AddParameter("scope", "scope")
+				aresp.EXPECT().AddParameter(consts.AccessResponseAccessToken, "access.ats")
+				aresp.EXPECT().AddParameter(consts.AccessResponseExpiresIn, gomock.Any())
+				aresp.EXPECT().AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
+				aresp.EXPECT().AddParameter(consts.FormParameterState, "state")
+				aresp.EXPECT().AddParameter(consts.FormParameterScope, "scope")
 			},
 			expectErr: nil,
 		},
@@ -143,22 +144,21 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 
 	areq.State = "state"
 	areq.GrantedScope = oauth2.Arguments{"scope"}
-	areq.ResponseTypes = oauth2.Arguments{"token"}
+	areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 	areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 		DefaultClient: &oauth2.DefaultClient{
-			GrantTypes:    oauth2.Arguments{"implicit"},
-			ResponseTypes: oauth2.Arguments{"token"},
+			GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+			ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 		},
 		TokenLifespans: &internal.TestLifespans,
 	}
 
 	store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
-
-	aresp.EXPECT().AddParameter("access_token", "access.ats")
-	aresp.EXPECT().AddParameter("expires_in", gomock.Any())
-	aresp.EXPECT().AddParameter("token_type", "bearer")
-	aresp.EXPECT().AddParameter("state", "state")
-	aresp.EXPECT().AddParameter("scope", "scope")
+	aresp.EXPECT().AddParameter(consts.AccessResponseAccessToken, "access.ats")
+	aresp.EXPECT().AddParameter(consts.AccessResponseExpiresIn, gomock.Any())
+	aresp.EXPECT().AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
+	aresp.EXPECT().AddParameter(consts.FormParameterState, "state")
+	aresp.EXPECT().AddParameter(consts.FormParameterScope, "scope")
 	chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).AnyTimes().Return("access.ats", "ats", nil)
 
 	err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)

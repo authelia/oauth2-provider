@@ -19,7 +19,7 @@ var (
 )
 
 // AuthorizeExplicitGrantHandler is a response handler for the Authorize Code grant using the explicit grant type
-// as defined in https://tools.ietf.org/html/rfc6749#section-4.1
+// as defined in https://datatracker.ietf.org/doc/html/rfc6749#section-4.1
 type AuthorizeExplicitGrantHandler struct {
 	AccessTokenStrategy    AccessTokenStrategy
 	RefreshTokenStrategy   RefreshTokenStrategy

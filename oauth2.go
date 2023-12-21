@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/text/language"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type TokenUse = TokenType
@@ -26,12 +28,12 @@ const (
 	// PushedAuthorizeRequestContext represents the PAR context object
 	PushedAuthorizeRequestContext TokenType = "par_context"
 
-	GrantTypeImplicit          GrantType = "implicit"
-	GrantTypeRefreshToken      GrantType = "refresh_token"
-	GrantTypeAuthorizationCode GrantType = "authorization_code"
-	GrantTypePassword          GrantType = "password"
-	GrantTypeClientCredentials GrantType = "client_credentials"
-	GrantTypeJWTBearer         GrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer" //nolint:gosec // this is not a hardcoded credential
+	GrantTypeImplicit          GrantType = consts.GrantTypeImplicit
+	GrantTypeRefreshToken      GrantType = consts.GrantTypeRefreshToken
+	GrantTypeAuthorizationCode GrantType = consts.GrantTypeAuthorizationCode
+	GrantTypePassword          GrantType = consts.GrantTypeResourceOwnerPasswordCredentials
+	GrantTypeClientCredentials GrantType = consts.GrantTypeClientCredentials
+	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer //nolint:gosec // this is not a hardcoded credential
 
 	BearerAccessToken string = "bearer"
 )
@@ -42,26 +44,26 @@ type Provider interface {
 	// NewAuthorizeRequest returns an AuthorizeRequest.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#section-3.1
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
 	//	 Extension response types MAY contain a space-delimited (%x20) list of
 	//	 values, where the order of values does not matter (e.g., response
 	//	 type "a b" is the same as "b a").  The meaning of such composite
 	//	 response types is defined by their respective specifications.
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.2
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 	//   The redirection endpoint URI MUST be an absolute URI as defined by
 	//   [RFC3986] Section 4.3.  The endpoint URI MAY include an
 	//   "application/x-www-form-urlencoded" formatted (per Appendix B) query
 	//   component ([RFC3986] Section 3.4), which MUST be retained when adding
 	//   additional query parameters.  The endpoint URI MUST NOT include a
 	//   fragment component.
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
 	NewAuthorizeRequest(ctx context.Context, req *http.Request) (AuthorizeRequester, error)
 
 	// NewAuthorizeResponse iterates through all response type handlers and returns their result or
 	// ErrUnsupportedResponseType if none of the handlers were able to handle it.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.1
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	//	 Extension response types MAY contain a space-delimited (%x20) list of
 	//	 values, where the order of values does not matter (e.g., response
 	//	 type "a b" is the same as "b a").  The meaning of such composite
@@ -75,37 +77,37 @@ type Provider interface {
 	// redirect uri was given. Implements rfc6749#section-4.1.2.1
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.2
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 	//   The redirection endpoint URI MUST be an absolute URI as defined by
 	//   [RFC3986] Section 4.3.  The endpoint URI MAY include an
 	//   "application/x-www-form-urlencoded" formatted (per Appendix B) query
 	//   component ([RFC3986] Section 3.4), which MUST be retained when adding
 	//   additional query parameters.  The endpoint URI MUST NOT include a
 	//   fragment component.
-	// * https://tools.ietf.org/html/rfc6749#section-4.1.2.1 (everything)
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1 (everything)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
 	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
 
 	// WriteAuthorizeResponse persists the AuthorizeSession in the store and redirects the user agent to the provided
 	// redirect url or returns an error if storage failed.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#rfc6749#section-4.1.2.1
+	// * https://datatracker.ietf.org/doc/html/rfc6749#rfc6749#section-4.1.2.1
 	//   After completing its interaction with the resource owner, the
 	//   authorization server directs the resource owner's user-agent back to
 	//   the client.  The authorization server redirects the user-agent to the
 	//   client's redirection endpoint previously established with the
 	//   authorization server during the client registration process or when
 	//   making the authorization request.
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
 	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder AuthorizeResponder)
 
 	// NewAccessRequest creates a new access request object and validates
 	// various parameters.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#section-3.2 (everything)
-	// * https://tools.ietf.org/html/rfc6749#section-3.2.1 (everything)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.2 (everything)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1 (everything)
 	//
 	// Furthermore the registered handlers should implement their specs accordingly.
 	NewAccessRequest(ctx context.Context, req *http.Request, session Session) (AccessRequester, error)
@@ -113,31 +115,31 @@ type Provider interface {
 	// NewAccessResponse creates a new access response and validates that access_token and token_type are set.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// https://tools.ietf.org/html/rfc6749#section-5.1
+	// https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
 	NewAccessResponse(ctx context.Context, requester AccessRequester) (AccessResponder, error)
 
 	// WriteAccessError writes an access request error response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://tools.ietf.org/html/rfc6749#section-5.2 (everything)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 (everything)
 	WriteAccessError(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, err error)
 
 	// WriteAccessResponse writes the access response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// https://tools.ietf.org/html/rfc6749#section-5.1
+	// https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
 	WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, responder AccessResponder)
 
 	// NewRevocationRequest handles incoming token revocation requests and validates various parameters.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// https://tools.ietf.org/html/rfc7009#section-2.1
+	// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 	NewRevocationRequest(ctx context.Context, r *http.Request) error
 
 	// WriteRevocationResponse writes the revoke response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// https://tools.ietf.org/html/rfc7009#section-2.2
+	// https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 	WriteRevocationResponse(ctx context.Context, rw http.ResponseWriter, err error)
 
 	// IntrospectToken returns token metadata, if the token is valid. Tokens generated by the authorization endpoint,
@@ -145,15 +147,15 @@ type Provider interface {
 	IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scope ...string) (TokenUse, AccessRequester, error)
 
 	// NewIntrospectionRequest initiates token introspection as defined in
-	// https://tools.ietf.org/search/rfc7662#section-2.1
+	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
 	NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (IntrospectionResponder, error)
 
 	// WriteIntrospectionError responds with an error if token introspection failed as defined in
-	// https://tools.ietf.org/search/rfc7662#section-2.3
+	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 	WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error)
 
 	// WriteIntrospectionResponse responds with token metadata discovered by token introspection as defined in
-	// https://tools.ietf.org/search/rfc7662#section-2.2
+	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder)
 
 	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
@@ -171,7 +173,7 @@ type Provider interface {
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,
 // for example when the client is allowed to perform token introspection. Refer to
-// https://tools.ietf.org/search/rfc7662#section-2.2 for more details.
+// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2 for more details.
 type IntrospectionResponder interface {
 	// IsActive returns true if the introspected token is active and false otherwise.
 	IsActive() bool
@@ -251,6 +253,16 @@ type AccessRequester interface {
 	GetGrantTypes() (grantTypes Arguments)
 
 	Requester
+}
+
+// RefreshTokenAccessRequester is an extended AccessRequester implementation that allows preserving
+// the original Requester.
+type RefreshTokenAccessRequester interface {
+	// SanitizeRestoreRefreshTokenOriginalRequester returns a sanitized copy of this Requester and mutates the relevant
+	// values from the provided Requester which is the original refresh token session Requester.
+	SanitizeRestoreRefreshTokenOriginalRequester(requester Requester) Requester
+
+	AccessRequester
 }
 
 // AuthorizeRequester is an authorize endpoint's request context.

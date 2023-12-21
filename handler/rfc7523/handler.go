@@ -12,11 +12,9 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
-
-// #nosec:gosec G101 - False Positive
-const grantTypeJWTBearer = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 
 type Handler struct {
 	Storage RFC7523KeyStorage
@@ -35,30 +33,32 @@ type Handler struct {
 	*hoauth2.HandleHelper
 }
 
-var _ oauth2.TokenEndpointHandler = (*Handler)(nil)
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)
 
-// HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.1.3 (everything) and
-// https://tools.ietf.org/html/rfc7523#section-2.1 (everything)
+// HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything) and
+// https://datatracker.ietf.org/doc/html/rfc7523#section-2.1 (everything)
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if err := c.CheckRequest(ctx, request); err != nil {
 		return err
 	}
 
-	assertion := request.GetRequestForm().Get("assertion")
+	assertion := request.GetRequestForm().Get(consts.FormParameterAssertion)
 	if assertion == "" {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", grantTypeJWTBearer))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
 	token, err := jwt.ParseSigned(assertion)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("Unable to parse JSON Web Token passed in \"assertion\" request parameter.").
+			WithHint(`Unable to parse JSON Web Token passed in "assertion" request parameter.`).
 			WithWrap(err).WithDebug(err.Error()),
 		)
 	}
 
 	// Check fo required claims in token, so we can later find public key based on them.
-	if err := c.validateTokenPreRequisites(token); err != nil {
+	if err = c.validateTokenPreRequisites(token); err != nil {
 		return err
 	}
 
@@ -68,14 +68,15 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	}
 
 	claims := jwt.Claims{}
-	if err := token.Claims(key, &claims); err != nil {
+
+	if err = token.Claims(key, &claims); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("Unable to verify the integrity of the 'assertion' value.").
 			WithWrap(err).WithDebug(err.Error()),
 		)
 	}
 
-	if err := c.validateTokenClaims(ctx, claims, key); err != nil {
+	if err = c.validateTokenClaims(ctx, claims, key); err != nil {
 		return err
 	}
 
@@ -132,7 +133,7 @@ func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.Access
 func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "urn:ietf:params:oauth:grant-type:jwt-bearer"
-	return requester.GetGrantTypes().ExactOne(grantTypeJWTBearer)
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTBearer)
 }
 
 func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequester) error {
@@ -148,8 +149,8 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 	//   relies on the parameter is used.
 
 	// if client is authenticated, check grant types
-	if !c.CanSkipClientAuth(ctx, request) && !request.GetClient().GetGrantTypes().Has(grantTypeJWTBearer) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant \"%s\".", grantTypeJWTBearer))
+	if !c.CanSkipClientAuth(ctx, request) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant \"%s\".", consts.GrantTypeOAuthJWTBearer))
 	}
 
 	return nil
@@ -210,9 +211,9 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	}
 
 	claims := jwt.Claims{}
+
 	for _, key := range keys.Keys {
-		err := token.Claims(key, &claims)
-		if err == nil {
+		if err = token.Claims(key, &claims); err == nil {
 			return &key, nil
 		}
 	}

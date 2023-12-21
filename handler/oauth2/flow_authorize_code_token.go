@@ -10,22 +10,23 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/storage"
 )
 
 // HandleTokenEndpointRequest implements
-// * https://tools.ietf.org/html/rfc6749#section-4.1.3 (everything)
+// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything)
 func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(errorsx.WithStack(oauth2.ErrUnknownRequest))
 	}
 
-	if !request.GetClient().GetGrantTypes().Has("authorization_code") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant \"authorization_code\"."))
 	}
 
-	code := request.GetRequestForm().Get("code")
+	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 	authorizeRequest, err := c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession())
 	if errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
@@ -195,5 +196,5 @@ func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, r
 func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "authorization_code"
-	return requester.GetGrantTypes().ExactOne("authorization_code")
+	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

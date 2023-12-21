@@ -56,7 +56,7 @@ func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWri
 	}
 }
 
-// https://tools.ietf.org/html/rfc6749#section-4.1.1
+// https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
 // When a decision is established, the authorization server directs the
 // user-agent to the provided client redirection URI using an HTTP
 // redirection response, or by other means available to it via the

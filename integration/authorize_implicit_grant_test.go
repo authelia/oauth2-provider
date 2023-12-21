@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeImplicitFlow(t *testing.T) {
@@ -50,7 +51,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 	}{
 		{
 			description: "should fail because of audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/not-api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/not-api")},
 			setup: func() {
 				state = "12345678901234567890"
 			},
@@ -67,7 +68,7 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 		},
 		{
 			description: "should pass with proper audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
+			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/api")},
 			setup: func() {
 				state = "12345678901234567890"
 				oauthClient.Scopes = []string{"oauth2"}
@@ -108,12 +109,12 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 			if resp.StatusCode == http.StatusOK {
 				fragment, err := url.ParseQuery(callbackURL.Fragment)
 				require.NoError(t, err)
-				expires, err := strconv.Atoi(fragment.Get("expires_in"))
+				expires, err := strconv.Atoi(fragment.Get(consts.AccessResponseExpiresIn))
 				require.NoError(t, err)
 				token := &xoauth2.Token{
-					AccessToken:  fragment.Get("access_token"),
-					TokenType:    fragment.Get("token_type"),
-					RefreshToken: fragment.Get("refresh_token"),
+					AccessToken:  fragment.Get(consts.AccessResponseAccessToken),
+					TokenType:    fragment.Get(consts.AccessResponseTokenType),
+					RefreshToken: fragment.Get(consts.AccessResponseRefreshToken),
 					Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 				}
 

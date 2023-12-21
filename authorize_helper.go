@@ -36,7 +36,7 @@ var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<ht
 //
 // Considered specifications
 //
-//   - https://tools.ietf.org/html/rfc6749#section-3.1.2.3
+//   - https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
 //     If multiple redirection URIs have been registered, if only part of
 //     the redirection URI has been registered, or if no redirection URI has
 //     been registered, the client MUST include a redirection URI with the
@@ -50,7 +50,7 @@ var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<ht
 //     redirection URI, the authorization server MUST compare the two URIs
 //     using simple string comparison as defined in [RFC3986] Section 6.2.1.
 //
-// * https://tools.ietf.org/html/rfc6819#section-4.4.1.7
+// * https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.7
 //   - The authorization server may also enforce the usage and validation
 //     of pre-registered redirect URIs (see Section 5.2.3.5).  This will
 //     allow for early recognition of authorization "code" disclosure to
@@ -87,7 +87,7 @@ func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.
 // an IPv6 URI http://[::1] a client is allowed to request a dynamic port and the server MUST accept
 // it as a valid redirection uri.
 //
-// https://tools.ietf.org/html/rfc8252#section-7.3
+// https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 // Native apps that are able to open a port on the loopback network
 // interface without needing special permissions (typically, those on
 // desktop operating systems) can use the loopback interface to receive
@@ -127,7 +127,7 @@ func isMatchingAsLoopback(requested *url.URL, registeredURI string) bool {
 	// Loopback redirect URIs use the "http" scheme and are constructed with
 	// the loopback IP literal and whatever port the client is listening on.
 	//
-	// Source: https://tools.ietf.org/html/rfc8252#section-7.3
+	// Source: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 	if requested.Scheme == "http" &&
 		isLoopbackAddress(requested.Host) &&
 		registered.Hostname() == requested.Hostname() &&
@@ -152,12 +152,12 @@ func isLoopbackAddress(address string) bool {
 
 // IsValidRedirectURI validates a redirect_uri as specified in:
 //
-// * https://tools.ietf.org/html/rfc6749#section-3.1.2
+// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 //   - The redirection endpoint URI MUST be an absolute URI as defined by [RFC3986] Section 4.3.
 //   - The endpoint URI MUST NOT include a fragment component.
-//   - https://tools.ietf.org/html/rfc3986#section-4.3
+//   - https://datatracker.ietf.org/doc/html/rfc3986#section-4.3
 //     absolute-URI  = scheme ":" hier-part [ "?" query ]
-//   - https://tools.ietf.org/html/rfc6819#section-5.1.1
+//   - https://datatracker.ietf.org/doc/html/rfc6819#section-5.1.1
 func IsValidRedirectURI(redirectURI *url.URL) bool {
 	// We need to explicitly check for a scheme
 	if !urls.IsRequestURL(redirectURI.String()) {

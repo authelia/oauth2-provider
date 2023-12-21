@@ -200,7 +200,7 @@ func (f *Fosite) validateAuthorizeScope(ctx context.Context, _ *http.Request, re
 }
 
 func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeRequest) error {
-	// https://tools.ietf.org/html/rfc6749#section-3.1.1
+	// https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	// Extension response types MAY contain a space-delimited (%x20) list of
 	// values, where the order of values does not matter (e.g., response
 	// type "a b" is the same as "b a").  The meaning of such composite
@@ -414,7 +414,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	// The "state" parameter should be used to link the authorization
 	// request with the redirect URI used to deliver the access token (Section 5.3.5).
 	//
-	// https://tools.ietf.org/html/rfc6819#section-4.4.1.8
+	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.8
 	// The "state" parameter should not	be guessable
 	if len(request.State) < f.GetMinParameterEntropy(ctx) {
 		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"

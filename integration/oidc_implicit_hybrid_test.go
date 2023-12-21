@@ -21,6 +21,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -123,34 +124,34 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			require.NoError(t, err)
 
 			if c.hasToken {
-				assert.NotEmpty(t, fragment.Get("access_token"))
+				assert.NotEmpty(t, fragment.Get(consts.AccessResponseAccessToken))
 			} else {
-				assert.Empty(t, fragment.Get("access_token"))
+				assert.Empty(t, fragment.Get(consts.AccessResponseAccessToken))
 			}
 
 			if c.hasCode {
-				assert.NotEmpty(t, fragment.Get("code"))
+				assert.NotEmpty(t, fragment.Get(consts.FormParameterAuthorizationCode))
 			} else {
-				assert.Empty(t, fragment.Get("code"))
+				assert.Empty(t, fragment.Get(consts.FormParameterAuthorizationCode))
 			}
 
 			if c.hasIdToken {
-				assert.NotEmpty(t, fragment.Get("id_token"))
+				assert.NotEmpty(t, fragment.Get(consts.AccessResponseIDToken))
 			} else {
-				assert.Empty(t, fragment.Get("id_token"))
+				assert.Empty(t, fragment.Get(consts.AccessResponseIDToken))
 			}
 
 			if !c.hasToken {
 				return
 			}
 
-			expires, err := strconv.Atoi(fragment.Get("expires_in"))
+			expires, err := strconv.Atoi(fragment.Get(consts.AccessResponseExpiresIn))
 			require.NoError(t, err)
 
 			token := &xoauth2.Token{
-				AccessToken:  fragment.Get("access_token"),
-				TokenType:    fragment.Get("token_type"),
-				RefreshToken: fragment.Get("refresh_token"),
+				AccessToken:  fragment.Get(consts.AccessResponseAccessToken),
+				TokenType:    fragment.Get(consts.AccessResponseTokenType),
+				RefreshToken: fragment.Get(consts.AccessResponseRefreshToken),
 				Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 			}
 

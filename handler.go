@@ -13,7 +13,7 @@ type AuthorizeEndpointHandler interface {
 	// the authorize request, he must return nil and NOT modify session nor responder neither requester.
 	//
 	// The following spec is a good example of what HandleAuthorizeRequest should do.
-	// * https://tools.ietf.org/html/rfc6749#section-3.1.1
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	//   response_type REQUIRED.
 	//   The value MUST be one of "code" for requesting an
 	//   authorization code as described by Section 4.1.1, "token" for
@@ -42,11 +42,11 @@ type TokenEndpointHandler interface {
 }
 
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.
-// https://tools.ietf.org/html/rfc7009
+// https://datatracker.ietf.org/doc/html/rfc7009
 //
 // RevokeToken is invoked after a new token revocation request is parsed.
 //
-// https://tools.ietf.org/html/rfc7009#section-2.1
+// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // If the particular
 // token is a refresh token and the authorization server supports the
 // revocation of access tokens, then the authorization server SHOULD

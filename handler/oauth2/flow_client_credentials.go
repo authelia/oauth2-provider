@@ -22,7 +22,7 @@ type ClientCredentialsGrantHandler struct {
 	}
 }
 
-// HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.4.2
+// HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.2
 func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -41,7 +41,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	// The client MUST authenticate with the authorization server as described in Section 3.2.1.
 	// This requirement is already fulfilled because oauth2 requires all token requests to be authenticated as described
-	// in https://tools.ietf.org/html/rfc6749#section-3.2.1
+	// in https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
 	if client.IsPublic() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))
 	}
@@ -52,7 +52,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	return nil
 }
 
-// PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.4.3
+// PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.3
 func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)

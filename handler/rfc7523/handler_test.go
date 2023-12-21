@@ -23,6 +23,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Define the suite, and absorb the built-in basic suite
@@ -66,7 +67,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
 	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
+	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
 	s.handler = &Handler{
 		Storage: s.mockStore,
 		Config: &oauth2.Config{
@@ -96,7 +97,7 @@ func TestAuthorizeJWTGrantRequestHandlerTestSuite(t *testing.T) {
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithInvalidGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{"authorization_code"}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
@@ -108,8 +109,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithInvalidGrantTy
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
@@ -126,7 +127,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForG
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithoutAssertion() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
@@ -142,7 +143,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithoutAssertion()
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAssertion() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	s.accessRequest.Form.Add("assertion", "fjigjgfkjgkf")
 
 	// act
@@ -159,7 +160,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAsser
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIssuer() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	cl := s.createStandardClaim()
 	cl.Issuer = ""
@@ -179,7 +180,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIs
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSubject() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	cl := s.createStandardClaim()
 	cl.Subject = ""
@@ -200,7 +201,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSu
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	cl := s.createStandardClaim()
 	keyID := "my_key"
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
@@ -224,7 +225,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToChec
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
@@ -248,7 +249,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToChe
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "wrong_key"
 	cl := s.createStandardClaim()
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
@@ -267,7 +268,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAsse
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
 	s.accessRequest.Form.Add("assertion", s.createTestAssertion(cl, keyID))
@@ -291,7 +292,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAss
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -314,7 +315,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -340,7 +341,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -363,7 +364,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion()
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -386,7 +387,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBeforeDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	nbf := time.Now().AddDate(0, 1, 0)
@@ -413,7 +414,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBefor
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredIssueDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -437,7 +438,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFarInPast() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	issuedAt := time.Now().AddDate(0, 0, -31)
@@ -467,7 +468,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDateFarInFuture() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -497,7 +498,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDateFarInFutureWithNoIssuerDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -519,7 +520,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredTokenID() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -542,7 +543,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredT
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -561,7 +562,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -580,7 +581,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUs
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -601,7 +602,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed()
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKeyScope() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -622,7 +623,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKey
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScopes() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -648,7 +649,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScope
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestValidAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -670,7 +671,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestValidAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenNoScopesPassed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -690,7 +691,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenNoSco
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIDIsOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -710,7 +711,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTID
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIssuedDateOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -732,7 +733,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIs
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestIsValidWhenClientAuthOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "my_key"
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
@@ -842,7 +843,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
 	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{grantTypeJWTBearer}}
+	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
 	s.accessResponse = oauth2.NewAccessResponse()
 	s.handler = &Handler{
 		Storage: s.mockStore,
@@ -873,7 +874,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointTestSuite(t *testing.T) {
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestRequestWithInvalidGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{"authorization_code"}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
 
 	// act
 	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
@@ -885,8 +886,8 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestRequestWithInvalid
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
@@ -904,7 +905,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegiste
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedSuccessfully() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	token := "token"
 	sig := "sig"
 	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.accessRequest).Return(token, sig, nil)
@@ -928,13 +929,13 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedS
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedSuccessfullyWithCustomLifespan() {
 	s.accessRequest.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 		DefaultClient: &oauth2.DefaultClient{
-			GrantTypes: []string{grantTypeJWTBearer},
+			GrantTypes: []string{consts.GrantTypeOAuthJWTBearer},
 		},
 		TokenLifespans: &internal.TestLifespans,
 	}
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{grantTypeJWTBearer}
+	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	token := "token"
 	sig := "sig"
 	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.accessRequest).Return(token, sig, nil)

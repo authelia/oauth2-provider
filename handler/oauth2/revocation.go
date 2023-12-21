@@ -18,7 +18,7 @@ type TokenRevocationHandler struct {
 	AccessTokenStrategy    AccessTokenStrategy
 }
 
-// RevokeToken implements https://tools.ietf.org/html/rfc7009#section-2.1
+// RevokeToken implements https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // The token type hint indicates which token type check should be performed first.
 func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) error {
 	discoveryFuncs := []func() (request oauth2.Requester, err error){

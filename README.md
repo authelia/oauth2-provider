@@ -28,7 +28,7 @@ following list of differences:
   - [x] Basic Scheme Rejects Special Characters
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2314625eb1f21987a9199fb1cdf6da6cee4df965)</sup>
   - [x] RFC9068 must condition ignored
-        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/f4652d60c850d167da00e2d2fe9096776eff9465)</sup>
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/c6e7a18ee9066b8c17c6f30a180d44507e2e2ff1)</sup>
   - [x] Arguments are treated as case-insensitive
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/8418ced18790dc885e5baa0733e93410f3a3a994)
   - Refresh Flow:

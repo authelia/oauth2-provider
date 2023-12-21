@@ -5,13 +5,13 @@ package oauth2_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -213,39 +213,75 @@ func TestWriteRevocationResponse(t *testing.T) {
 	config := &Config{ClientSecretsHasher: hasher}
 	provider := &Fosite{Store: store, Config: config}
 
-	type args struct {
-		rw  *httptest.ResponseRecorder
-		err error
-	}
-	cases := []struct {
-		input      args
-		expectCode int
+	testCases := []struct {
+		name     string
+		have     error
+		expected int
 	}{
 		{
-			input: args{
-				rw:  httptest.NewRecorder(),
-				err: ErrInvalidRequest,
-			},
-			expectCode: ErrInvalidRequest.CodeField,
+			"ShouldHandleNil",
+			nil,
+			http.StatusOK,
 		},
 		{
-			input: args{
-				rw:  httptest.NewRecorder(),
-				err: ErrInvalidClient,
-			},
-			expectCode: ErrInvalidClient.CodeField,
+			"ShouldHandleErrInvalidRequest",
+			ErrInvalidRequest,
+			-1,
 		},
 		{
-			input: args{
-				rw:  httptest.NewRecorder(),
-				err: nil,
-			},
-			expectCode: http.StatusOK,
+			"ShouldHandleErrInvalidClient",
+			ErrInvalidClient,
+			-1,
+		},
+		{
+			"ShouldHandleErrInvalidGrant",
+			ErrInvalidGrant,
+			-1,
+		},
+		{
+			"ShouldHandleErrUnauthorizedClient",
+			ErrUnauthorizedClient,
+			-1,
+		},
+		{
+			"ShouldHandleErrUnsupportedGrantType",
+			ErrUnsupportedGrantType,
+			-1,
+		},
+		{
+			"ShouldHandleErrInvalidScope",
+			ErrInvalidScope,
+			-1,
+		},
+		{
+			"ShouldHandleOtherErrors",
+			fmt.Errorf("example"),
+			500,
 		},
 	}
 
-	for _, tc := range cases {
-		provider.WriteRevocationResponse(context.Background(), tc.input.rw, tc.input.err)
-		assert.Equal(t, tc.expectCode, tc.input.rw.Code)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rw := httptest.NewRecorder()
+
+			provider.WriteRevocationResponse(context.Background(), rw, tc.have)
+
+			expected := tc.expected
+
+			var err *RFC6749Error
+
+			if errors.As(tc.have, &err) {
+				if expected == -1 {
+					expected = err.CodeField
+				}
+			}
+
+			assert.Equal(t, expected, rw.Code)
+
+			if err != nil {
+				assert.Contains(t, rw.Body.String(), err.ErrorField)
+				assert.Contains(t, rw.Body.String(), err.HintField)
+			}
+		})
 	}
 }

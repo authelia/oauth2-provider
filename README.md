@@ -45,7 +45,8 @@ following list of differences:
     - [x] Absence of Redirect URI does not result in an error
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/f4652d60c850d167da00e2d2fe9096776eff9465)</sup>
   - [ ] Decode id_token_hint with correct signer
-  - [ ] Write Revocation Response does not correctly error
+  - [x] Write Revocation Response does not correctly error
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6dffe2d9bdc3fc974f7c2c865aef2a8b2cb78402)</sup>
   - ~~Invalid Token base 64 error not mapped to RFC~~
   - [ ] Auth Request omitted Response Mode not validated
   - [x] Refresh Grant if Token Invalid/Expired status is not 400

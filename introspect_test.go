@@ -16,6 +16,7 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -29,7 +30,7 @@ func TestAccessTokenFromRequestHeader(t *testing.T) {
 	token := "TokenFromHeader"
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add(consts.HeaderAuthorization, "Bearer "+token)
 
 	assert.Equal(t, AccessTokenFromRequest(req), token, "Token should be obtainable from header")
 }
@@ -51,7 +52,7 @@ func TestIntrospect(t *testing.T) {
 	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	req.Header.Add("Authorization", "bearer some-token")
+	req.Header.Add(consts.HeaderAuthorization, "bearer some-token")
 
 	for k, c := range []struct {
 		description string

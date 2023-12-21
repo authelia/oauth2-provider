@@ -14,6 +14,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestWriteAuthorizeResponse(t *testing.T) {
@@ -42,9 +43,9 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"Location":      []string{"https://foobar.com/?foo=bar"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					consts.HeaderLocation:     []string{"https://foobar.com/?foo=bar"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -61,9 +62,9 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"Location":      []string{"https://foobar.com/?foo=bar#bar=baz"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					consts.HeaderLocation:     []string{"https://foobar.com/?foo=bar#bar=baz"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -80,11 +81,11 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				expectedUrl, _ := url.Parse("https://foobar.com/?foo=bar&bar=baz")
-				actualUrl, err := url.Parse(header.Get("Location"))
+				actualUrl, err := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Nil(t, err)
 				assert.Equal(t, expectedUrl.Query(), actualUrl.Query())
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
 			},
 		},
 		{
@@ -100,10 +101,10 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"X-Bar":         {"baz"},
-					"Location":      {"https://foobar.com/?foo=bar#bar=b%2Baz+ab"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					"X-Bar":                   {"baz"},
+					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#bar=b%2Baz+ab"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -112,7 +113,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				ar.EXPECT().GetRedirectURI().Return(redir)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeQuery)
-				resp.EXPECT().GetParameters().Return(url.Values{"bar": {"b+az"}, "scope": {"a b"}})
+				resp.EXPECT().GetParameters().Return(url.Values{"bar": {"b+az"}, consts.FormParameterScope: {"a b"}})
 				resp.EXPECT().GetHeader().Return(http.Header{"X-Bar": {"baz"}})
 
 				rw.EXPECT().Header().Return(header).Times(2)
@@ -121,11 +122,11 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			expect: func() {
 				expectedUrl, err := url.Parse("https://foobar.com/?foo=bar&bar=b%2Baz&scope=a+b")
 				assert.Nil(t, err)
-				actualUrl, err := url.Parse(header.Get("Location"))
+				actualUrl, err := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Nil(t, err)
 				assert.Equal(t, expectedUrl.Query(), actualUrl.Query())
-				assert.Equal(t, "no-cache", header.Get("Pragma"))
-				assert.Equal(t, "no-store", header.Get("Cache-Control"))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
 				assert.Equal(t, "baz", header.Get("X-Bar"))
 			},
 		},
@@ -134,7 +135,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				ar.EXPECT().GetRedirectURI().Return(redir)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeFragment)
-				resp.EXPECT().GetParameters().Return(url.Values{"scope": {"api:*"}})
+				resp.EXPECT().GetParameters().Return(url.Values{consts.FormParameterScope: {"api:*"}})
 				resp.EXPECT().GetHeader().Return(http.Header{"X-Bar": {"baz"}})
 
 				rw.EXPECT().Header().Return(header).Times(2)
@@ -142,10 +143,10 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"X-Bar":         {"baz"},
-					"Location":      {"https://foobar.com/?foo=bar#scope=api%3A%2A"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					"X-Bar":                   {"baz"},
+					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#scope=api%3A%2A"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -162,9 +163,9 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"Location":      {"https://foobar.com/?foo=bar#qux=quux"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#qux=quux"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -173,7 +174,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				ar.EXPECT().GetRedirectURI().Return(redir)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeFragment)
-				resp.EXPECT().GetParameters().Return(url.Values{"state": {"{\"a\":\"b=c&d=e\"}"}})
+				resp.EXPECT().GetParameters().Return(url.Values{consts.FormParameterState: {"{\"a\":\"b=c&d=e\"}"}})
 				resp.EXPECT().GetHeader().Return(http.Header{})
 
 				rw.EXPECT().Header().Return(header).Times(2)
@@ -181,9 +182,9 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			},
 			expect: func() {
 				assert.Equal(t, http.Header{
-					"Location":      {"https://foobar.com/?foo=bar#state=%7B%22a%22%3A%22b%3Dc%26d%3De%22%7D"},
-					"Cache-Control": []string{"no-store"},
-					"Pragma":        []string{"no-cache"},
+					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#state=%7B%22a%22%3A%22b%3Dc%26d%3De%22%7D"},
+					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+					consts.HeaderPragma:       []string{consts.PragmaNoCache},
 				}, header)
 			},
 		},
@@ -193,13 +194,13 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				ar.EXPECT().GetRedirectURI().Return(redir)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeFormPost)
 				resp.EXPECT().GetHeader().Return(http.Header{"X-Bar": {"baz"}})
-				resp.EXPECT().GetParameters().Return(url.Values{"code": {"poz65kqoneu"}, "state": {"qm6dnsrn"}})
+				resp.EXPECT().GetParameters().Return(url.Values{consts.FormParameterAuthorizationCode: {"poz65kqoneu"}, consts.FormParameterState: {"qm6dnsrn"}})
 
 				rw.EXPECT().Header().Return(header).AnyTimes()
 				rw.EXPECT().Write(gomock.Any()).AnyTimes()
 			},
 			expect: func() {
-				assert.Equal(t, "text/html;charset=UTF-8", header.Get("Content-Type"))
+				assert.Equal(t, consts.ContentTypeTextHTML, header.Get(consts.HeaderContentType))
 			},
 		},
 	} {

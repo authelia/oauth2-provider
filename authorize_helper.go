@@ -5,13 +5,13 @@ package oauth2
 
 import (
 	"context"
-	"fmt"
 	"html/template"
 	"io"
 	"net/url"
 	"regexp"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/urls"
 )
@@ -173,14 +173,14 @@ func IsValidRedirectURI(redirectURI *url.URL) bool {
 }
 
 func IsRedirectURISecure(ctx context.Context, redirectURI *url.URL) bool {
-	return !(redirectURI.Scheme == "http" && !IsLocalhost(redirectURI))
+	return !(redirectURI.Scheme == consts.SchemeHTTP && !IsLocalhost(redirectURI))
 }
 
 // IsRedirectURISecureStrict is stricter than IsRedirectURISecure and it does not allow custom-scheme
 // URLs because they can be hijacked for native apps. Use claimed HTTPS redirects instead.
 // See discussion in https://github.com/ory/fosite/pull/489.
 func IsRedirectURISecureStrict(redirectURI *url.URL) bool {
-	return redirectURI.Scheme == "https" || (redirectURI.Scheme == "http" && IsLocalhost(redirectURI))
+	return redirectURI.Scheme == consts.SchemeHTTPS || (redirectURI.Scheme == consts.SchemeHTTP && IsLocalhost(redirectURI))
 }
 
 func IsLocalhost(redirectURI *url.URL) bool {
@@ -196,21 +196,6 @@ func WriteAuthorizeFormPostResponse(redirectURL string, parameters url.Values, t
 		RedirURL:   redirectURL,
 		Parameters: parameters,
 	})
-}
-
-// Deprecated: Do not use.
-func URLSetFragment(source *url.URL, fragment url.Values) {
-	var f string
-	for k, v := range fragment {
-		for _, vv := range v {
-			if len(f) != 0 {
-				f += fmt.Sprintf("&%s=%s", k, vv)
-			} else {
-				f += fmt.Sprintf("%s=%s", k, vv)
-			}
-		}
-	}
-	source.Fragment = f
 }
 
 func GetPostFormHTMLTemplate(ctx context.Context, f *Fosite) *template.Template {

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -305,7 +305,7 @@ func clientCredentialsFromRequest(r *http.Request, form url.Values) (id, secret 
 }
 
 func clientCredentialsFromBasicAuth(r *http.Request) (id, secret string, ok bool, err error) {
-	auth := r.Header.Get("Authorization")
+	auth := r.Header.Get(consts.HeaderAuthorization)
 
 	if auth == "" {
 		return "", "", false, nil

@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"strings"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"golang.org/x/text/language"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 

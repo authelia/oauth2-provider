@@ -6,8 +6,9 @@ package jwt
 import (
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // IDTokenClaims represent the claims used in open id connect requests

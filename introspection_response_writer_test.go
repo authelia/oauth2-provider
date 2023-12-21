@@ -18,6 +18,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -116,7 +117,7 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 				sess := &DefaultSession{}
 				sess.GetExtraClaims()["extra"] = "foobar"
 				// We try to set these, but they should be ignored.
-				for _, field := range []string{"exp", "client_id", "scope", "iat", "sub", "aud", "username"} {
+				for _, field := range []string{consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername} {
 					sess.GetExtraClaims()[field] = "invalid"
 				}
 				sess.SetExpiresAt(ires.TokenUse, time.Time{})

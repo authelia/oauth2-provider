@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // WriteIntrospectionError responds with token metadata discovered by token introspection as defined in
@@ -45,9 +46,9 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	_ = json.NewEncoder(rw).Encode(struct {
 		Active bool `json:"active"`
 	}{Active: false})
@@ -227,8 +228,8 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		response[consts.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}
 
-	rw.Header().Set("Content-Type", "application/json;charset=UTF-8")
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	_ = json.NewEncoder(rw).Encode(response)
 }

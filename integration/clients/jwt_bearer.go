@@ -84,7 +84,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 		return nil, err
 	}
 
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 
 	response, err := c.client.Do(request)
 	if err != nil {

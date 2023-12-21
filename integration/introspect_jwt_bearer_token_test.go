@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/integration/clients"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type introspectJWTBearerTokenSuite struct {
@@ -69,7 +70,7 @@ func (s *introspectJWTBearerTokenSuite) TestSuccessResponseWithMultipleScopesTok
 			Token:  token.AccessToken,
 			Scopes: nil,
 		},
-		map[string]string{"Authorization": s.authorizationHeader},
+		map[string]string{consts.HeaderAuthorization: s.authorizationHeader},
 	)
 
 	s.assertSuccessResponse(s.T(), response, err, firstJWTBearerSubject)
@@ -88,7 +89,7 @@ func (s *introspectJWTBearerTokenSuite) TestUnActiveResponseWithInvalidScopes() 
 			Token:  token.AccessToken,
 			Scopes: []string{"invalid"},
 		},
-		map[string]string{"Authorization": s.authorizationHeader},
+		map[string]string{consts.HeaderAuthorization: s.authorizationHeader},
 	)
 
 	require.NoError(s.T(), err)
@@ -108,7 +109,7 @@ func (s *introspectJWTBearerTokenSuite) TestSuccessResponseWithoutScopesForIntro
 			Token:  token.AccessToken,
 			Scopes: nil,
 		},
-		map[string]string{"Authorization": s.authorizationHeader},
+		map[string]string{consts.HeaderAuthorization: s.authorizationHeader},
 	)
 
 	s.assertSuccessResponse(s.T(), response, err, firstJWTBearerSubject)
@@ -126,7 +127,7 @@ func (s *introspectJWTBearerTokenSuite) TestSuccessResponseWithoutScopes() {
 			Token:  token.AccessToken,
 			Scopes: nil,
 		},
-		map[string]string{"Authorization": s.authorizationHeader},
+		map[string]string{consts.HeaderAuthorization: s.authorizationHeader},
 	)
 
 	s.assertSuccessResponse(s.T(), response, err, firstJWTBearerSubject)
@@ -144,7 +145,7 @@ func (s *introspectJWTBearerTokenSuite) TestSubjectHasAccessToScopeButNotInited(
 			Token:  token.AccessToken,
 			Scopes: s.scopes,
 		},
-		map[string]string{"Authorization": s.authorizationHeader},
+		map[string]string{consts.HeaderAuthorization: s.authorizationHeader},
 	)
 
 	require.NoError(s.T(), err)
@@ -163,7 +164,7 @@ func (s *introspectJWTBearerTokenSuite) TestTheSameTokenInRequestAndHeader() {
 			Token:  token.AccessToken,
 			Scopes: nil,
 		},
-		map[string]string{"Authorization": "bearer " + token.AccessToken},
+		map[string]string{consts.HeaderAuthorization: "bearer " + token.AccessToken},
 	)
 
 	s.assertUnauthorizedResponse(s.T(), response, err)

@@ -140,9 +140,9 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{"openid"}
+				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expectErr: oauth2.ErrInsufficientEntropy,
@@ -155,9 +155,9 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{"openid"}
+				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(42)
 			},
 			expectErr: oauth2.ErrInsufficientEntropy,
@@ -170,9 +170,9 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{"openid"}
+				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expectErr: ErrInvalidSession,
@@ -184,7 +184,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{"implicit"},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
 				areq.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -204,7 +204,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
@@ -227,7 +227,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
@@ -238,7 +238,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
@@ -250,7 +250,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{"openid"},
+					Scopes:        []string{consts.ScopeOpenID},
 				}
 				return makeOpenIDConnectHybridHandler(4)
 			},
@@ -288,10 +288,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					DefaultClient: &oauth2.DefaultClient{
 						GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-						Scopes:        []string{"openid"},
+						Scopes:        []string{consts.ScopeOpenID},
 					},
 				}
-				areq.GrantedScope = oauth2.Arguments{"openid"}
+				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				areq.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",

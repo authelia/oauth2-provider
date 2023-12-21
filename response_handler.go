@@ -21,15 +21,15 @@ type ResponseModeHandler interface {
 	// WriteAuthorizeResponse writes successful responses
 	//
 	// Following headers are expected to be set by default:
-	// header.Set("Cache-Control", "no-store")
-	// header.Set("Pragma", "no-cache")
+	// header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	// header.Set(consts.HeaderPragma, consts.PragmaNoCache)
 	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, resp AuthorizeResponder)
 
 	// WriteAuthorizeError writes error responses
 	//
 	// Following headers are expected to be set by default:
-	// header.Set("Cache-Control", "no-store")
-	// header.Set("Pragma", "no-cache")
+	// header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	// header.Set(consts.HeaderPragma, consts.PragmaNoCache)
 	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error)
 }
 

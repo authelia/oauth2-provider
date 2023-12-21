@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestRevokeToken(t *testing.T) {
@@ -50,7 +51,7 @@ func runRevokeTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
 	assert.Equal(t, 200, resp.StatusCode)
 
 	hres, _, errs := gorequest.New().Get(ts.URL+"/info").
-		Set("Authorization", "bearer "+token.AccessToken).
+		Set(consts.HeaderAuthorization, "bearer "+token.AccessToken).
 		End()
 	require.Len(t, errs, 0)
 	assert.Equal(t, http.StatusUnauthorized, hres.StatusCode)

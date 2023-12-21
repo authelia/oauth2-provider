@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -130,7 +130,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				storedReq.Form.Set("nonce", "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
@@ -157,7 +157,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
-				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrServerError,
@@ -169,7 +169,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
-				storedReq.GrantScope("openid")
+				storedReq.GrantScope(consts.ScopeOpenID)
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrServerError,

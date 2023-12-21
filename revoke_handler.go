@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
-
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -81,8 +80,8 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 // purpose of the revocation request, invalidating the particular token,
 // is already achieved.
 func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWriter, err error) {
-	rw.Header().Set("Cache-Control", "no-store")
-	rw.Header().Set("Pragma", "no-cache")
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	switch {
 	case err == nil:
@@ -105,7 +104,7 @@ func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWr
 }
 
 func (f *Fosite) writeRevocationResponseError(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
-	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	js, err := json.Marshal(rfc)
 	if err != nil {

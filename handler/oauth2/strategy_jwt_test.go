@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -205,7 +205,7 @@ func TestAccessToken(t *testing.T) {
 				if scopeField == jwt.JWTScopeFieldList || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload[consts.ClaimScopeNonStandard]
 					require.True(t, ok)
-					assert.Equal(t, []any{"email", "offline"}, scope)
+					assert.Equal(t, []any{consts.ScopeEmail, consts.ScopeOffline}, scope)
 				}
 				if scopeField == jwt.JWTScopeFieldString || scopeField == jwt.JWTScopeFieldBoth {
 					scope, ok := payload[consts.ClaimScope]

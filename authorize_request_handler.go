@@ -10,11 +10,11 @@ import (
 	"net/http"
 	"strings"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/token/jwt"

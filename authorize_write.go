@@ -6,6 +6,8 @@ package oauth2
 import (
 	"context"
 	"net/http"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, resp AuthorizeResponder) {
@@ -16,14 +18,14 @@ func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWri
 		wh.Set(k, rh.Get(k))
 	}
 
-	wh.Set("Cache-Control", "no-store")
-	wh.Set("Pragma", "no-cache")
+	wh.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	wh.Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	redir := ar.GetRedirectURI()
 	switch rm := ar.GetResponseMode(); rm {
 	case ResponseModeFormPost:
 		//form_post
-		rw.Header().Add("Content-Type", "text/html;charset=UTF-8")
+		rw.Header().Add(consts.HeaderContentType, consts.ContentTypeTextHTML)
 		WriteAuthorizeFormPostResponse(redir.String(), resp.GetParameters(), GetPostFormHTMLTemplate(ctx, f), rw)
 		return
 	case ResponseModeQuery, ResponseModeDefault:
@@ -62,6 +64,6 @@ func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWri
 // redirection response, or by other means available to it via the
 // user-agent.
 func sendRedirect(url string, rw http.ResponseWriter) {
-	rw.Header().Set("Location", url)
+	rw.Header().Set(consts.HeaderLocation, url)
 	rw.WriteHeader(http.StatusSeeOther)
 }

@@ -7,11 +7,11 @@ import (
 	"context"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 

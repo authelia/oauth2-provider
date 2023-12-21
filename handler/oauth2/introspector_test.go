@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -44,7 +45,7 @@ func TestIntrospectToken(t *testing.T) {
 		{
 			description: "should fail because no bearer token set",
 			setup: func() {
-				httpreq.Header.Set("Authorization", "bearer")
+				httpreq.Header.Set(consts.HeaderAuthorization, "bearer")
 				chgen.EXPECT().AccessTokenSignature(gomock.Any(), "").Return("")
 				store.EXPECT().GetAccessTokenSession(context.TODO(), "", nil).Return(nil, errors.New(""))
 				chgen.EXPECT().RefreshTokenSignature(gomock.Any(), "").Return("")
@@ -55,7 +56,7 @@ func TestIntrospectToken(t *testing.T) {
 		{
 			description: "should fail because retrieval fails",
 			setup: func() {
-				httpreq.Header.Set("Authorization", "bearer 1234")
+				httpreq.Header.Set(consts.HeaderAuthorization, "bearer 1234")
 				chgen.EXPECT().AccessTokenSignature(gomock.Any(), "1234").AnyTimes().Return("asdf")
 				store.EXPECT().GetAccessTokenSession(context.TODO(), "asdf", nil).Return(nil, errors.New(""))
 				chgen.EXPECT().RefreshTokenSignature(gomock.Any(), "1234").Return("asdf")

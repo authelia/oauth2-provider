@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"github.com/stretchr/testify/assert"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 

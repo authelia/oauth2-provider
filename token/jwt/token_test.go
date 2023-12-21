@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 )
 
@@ -319,12 +320,12 @@ func TestParser_Parse(t *testing.T) {
 			given: given{
 				name: "used before issued",
 				generate: &generate{
-					claims: MapClaims{"foo": "bar", "iat": time.Now().Unix() + 500},
+					claims: MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
 				},
 			},
 			expected: expected{
 				keyFunc: defaultKeyFunc,
-				claims:  MapClaims{"foo": "bar", "iat": time.Now().Unix() + 500},
+				claims:  MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
 				valid:   false,
 				errors:  ValidationErrorIssuedAt,
 			},

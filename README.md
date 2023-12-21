@@ -1,7 +1,7 @@
 ## OAuth 2.0 Framework
 
-This library is the Authelia OAuth 2.0 Framework which is internally used to deliver OAuth 2.0 and OpenID Connect 1.0 
-Flows to its users.
+This library is the Authelia OAuth 2.0 Framework which is internally used to
+deliver OAuth 2.0 and OpenID Connect 1.0 Flows to its users.
 
 ## Notable Implemented or Intended Differences
 

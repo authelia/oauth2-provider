@@ -49,6 +49,7 @@ var (
 	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
 	_ IDTokenLifespanProvider                         = (*Config)(nil)
 	_ IDTokenIssuerProvider                           = (*Config)(nil)
+	_ AuthorizationServerIdentificationIssuerProvider = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
 	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)
@@ -86,6 +87,9 @@ type Config struct {
 
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
+
+	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses.
+	AuthorizationServerIdentificationIssuer string
 
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
@@ -319,6 +323,10 @@ func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx conte
 
 func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
 	return c.IDTokenIssuer
+}
+
+func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
+	return c.AuthorizationServerIdentificationIssuer
 }
 
 // GetGrantTypeJWTBearerIssuedDateOptional returns the GrantTypeJWTBearerIssuedDateOptional field.

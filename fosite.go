@@ -85,6 +85,7 @@ var _ Provider = (*Fosite)(nil)
 type Configurator interface {
 	IDTokenIssuerProvider
 	IDTokenLifespanProvider
+	AuthorizationServerIdentificationIssuerProvider
 	AllowedPromptsProvider
 	EnforcePKCEProvider
 	EnforcePKCEForPublicClientsProvider

@@ -100,6 +100,11 @@ type IDTokenIssuerProvider interface {
 	GetIDTokenIssuer(ctx context.Context) string
 }
 
+// AuthorizationServerIdentificationIssuerProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
+type AuthorizationServerIdentificationIssuerProvider interface {
+	GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string)
+}
+
 // JWTScopeFieldProvider returns the provider for configuring the JWT scope field.
 type JWTScopeFieldProvider interface {
 	// GetJWTScopeField returns the JWT scope field.

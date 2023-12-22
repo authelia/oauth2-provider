@@ -54,7 +54,8 @@ following list of differences:
   - [x] Access Token iat and nbf in JWT Profile always original claims
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
-  - [ ] Customizable Token Prefix
+  - [x] Customizable Token Prefix
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
   - [ ] UserInfo support
   - Response Mode Rework:
     - [ ] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)

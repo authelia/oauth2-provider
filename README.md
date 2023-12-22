@@ -51,7 +51,8 @@ following list of differences:
   - [ ] Auth Request omitted Response Mode not validated
   - [x] Refresh Grant if Token Invalid/Expired status is not 400
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/8e58bcae054dffbad1c920e0bbaa022dfac71f66)</sup>
-  - [ ] Access Token iat in JWT Profile always original iat
+  - [ ] Access Token iat and nbf in JWT Profile always original claims
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
   - [ ] Customizable Token Prefix
   - [ ] JWE support for Client Authentication and Issuance

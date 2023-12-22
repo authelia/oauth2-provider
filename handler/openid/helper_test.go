@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -105,7 +106,7 @@ func TestIssueImplicitToken(t *testing.T) {
 		Subject: "peter",
 	}, Headers: &jwt.Headers{}})
 
-	resp.EXPECT().AddParameter("id_token", gomock.Any())
+	resp.EXPECT().AddParameter(consts.AccessResponseIDToken, gomock.Any())
 	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
 	err := h.IssueImplicitIDToken(context.TODO(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)

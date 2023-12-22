@@ -37,24 +37,24 @@ var oidcParameters = []string{
 	consts.FormParameterNonce,
 }
 
-func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
-	if !(ar.GetGrantedScopes().Has(consts.ScopeOpenID) && ar.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
+func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
+	if !(requester.GetGrantedScopes().Has(consts.ScopeOpenID) && requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
 	}
 
-	//if !ar.GetClient().GetResponseTypes().Has("id_token", "code") {
+	//if !requester.GetClient().GetResponseTypes().Has("id_token", "code") {
 	//	return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client is not allowed to use response type id_token and code"))
 	//}
 
-	if len(resp.GetCode()) == 0 {
+	if len(responder.GetCode()) == 0 {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The authorization code has not been issued yet, indicating a broken code configuration."))
 	}
 
-	if err := c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, ar); err != nil {
+	if err := c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, requester); err != nil {
 		return err
 	}
 
-	if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, resp.GetCode(), ar.Sanitize(oidcParameters)); err != nil {
+	if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, responder.GetCode(), requester.Sanitize(oidcParameters)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 

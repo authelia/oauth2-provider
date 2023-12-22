@@ -78,8 +78,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// "redirect_uri" parameter was included in the initial authorization
 	// request as described in Section 4.1.1, and if included ensure that
 	// their values are identical.
-	forcedRedirectURI := authorizeRequest.GetRequestForm().Get("redirect_uri")
-	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get("redirect_uri") {
+	forcedRedirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
+	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The \"redirect_uri\" from this request does not match the one from the authorize request."))
 	}
 

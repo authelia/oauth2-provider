@@ -8,6 +8,8 @@ import (
 
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // DefaultMessage is a single message in the locale bundle
@@ -75,7 +77,7 @@ func (c *defaultMessageCatalog) GetMessage(ID string, tag language.Tag, v ...any
 
 func (c *defaultMessageCatalog) GetLangFromRequest(r *http.Request) language.Tag {
 	lang, _ := r.Cookie("lang")
-	accept := r.Header.Get("Accept-Language")
+	accept := r.Header.Get(consts.HeaderAcceptLanguage)
 	tag, _ := language.MatchStrings(c.matcher, lang.String(), accept)
 
 	return tag

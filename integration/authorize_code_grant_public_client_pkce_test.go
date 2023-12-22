@@ -87,7 +87,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 
 			if resp.StatusCode == http.StatusOK {
 				// This should fail because no verifier was given
-				// _, err := oauthClient.Exchange(xoauth2.NoContext, resp.Request.URL.Query().Get("code"))
+				// _, err := oauthClient.Exchange(xoauth2.NoContext, resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 				// require.Error(t, err)
 				// require.Empty(t, token.AccessToken)
 				t.Logf("Got redirect url: %s", resp.Request.URL)

@@ -56,6 +56,13 @@ func OAuth2AuthorizeImplicitFactory(config oauth2.Configurator, storage any, str
 	}
 }
 
+// OAuth2AuthorizeNoneFactory creates an OAuth2 handler which handles the "none" response type.
+func OAuth2AuthorizeNoneFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &hoauth2.NoneResponseTypeHandler{
+		Config: config,
+	}
+}
+
 // OAuth2ResourceOwnerPasswordCredentialsFactory creates an OAuth2 resource owner password credentials grant handler and registers
 // an access token, refresh token and authorize code validator.
 //

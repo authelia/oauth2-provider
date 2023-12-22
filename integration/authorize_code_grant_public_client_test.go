@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeCodeFlowWithPublicClient(t *testing.T) {
@@ -96,7 +97,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
+				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 

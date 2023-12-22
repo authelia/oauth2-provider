@@ -1,11 +1,12 @@
 package consts
 
 const (
-	HeaderContentType   = "Content-Type"
-	HeaderCacheControl  = "Cache-Control"
-	HeaderPragma        = "Pragma"
-	HeaderAuthorization = "Authorization"
-	HeaderLocation      = "Location"
+	HeaderContentType    = "Content-Type"
+	HeaderCacheControl   = "Cache-Control"
+	HeaderPragma         = "Pragma"
+	HeaderAuthorization  = "Authorization"
+	HeaderLocation       = "Location"
+	HeaderAcceptLanguage = "Accept-Language"
 )
 
 const (

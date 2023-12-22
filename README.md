@@ -57,8 +57,8 @@ following list of differences:
   - [ ] JWE support for Client Authentication and Issuance
   - [ ] UserInfo support
   - [ ] JARM support
-  - [ ] Revocation Flow per policy can decide to revoke Refresh Tokens on
-        request
+  - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
+        request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
   - [ ] Response Type None
   - [ ] Client Secret Validation Interface
 - Removal of the following dependencies:

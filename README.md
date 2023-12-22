@@ -55,17 +55,18 @@ following list of differences:
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
   - [ ] Customizable Token Prefix
-  - [ ] JWE support for Client Authentication and Issuance
   - [ ] UserInfo support
   - Response Mode Rework:
     - [ ] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
           support
-    - [ ] [RFC9207](https://datatracker.ietf.org/doc/html/rfc9207) OAuth 2.0
-          Authorization Server Issuer Identification support
+    - [ ] [RFC9207: OAuth 2.0 Authorization Server Issuer Identification](https://datatracker.ietf.org/doc/html/rfc9207)
+          support
+    - [ ] Response Type None
   - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
         request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
-  - [ ] Response Type None
-  - [ ] Client Secret Validation Interface
+  - Client Authentication Rework:
+    - [ ] Client Secret Validation Interface
+    - [ ] JWE support for Client Authentication and Issuance
   - [ ] Clock Drift Support
   - [ ] Injectable Clock Configurator
   - [x] Support `s_hash`

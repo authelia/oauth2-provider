@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/hmac"
@@ -21,6 +22,7 @@ var hmacshaStrategy = HMACSHAStrategy{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
+	prefix: "authelia_%s_",
 }
 
 var hmacExpiredCase = oauth2.Request{
@@ -60,6 +62,59 @@ var hmacValidZeroTimeRefreshCase = oauth2.Request{
 			oauth2.RefreshToken:  {},
 		},
 	},
+}
+
+func TestNewHMACSHAStrategy(t *testing.T) {
+	testCases := []struct {
+		name       string
+		have       string
+		expectedAT string
+		expectedRT string
+		expectedAC string
+		expected   string
+	}{
+		{
+			"ShouldHandleCustom",
+			"example_%s_",
+			"example_at_",
+			"example_rt_",
+			"example_ac_",
+			"",
+		},
+		{
+			"ShouldHandleDefault",
+			"",
+			"",
+			"",
+			"",
+			"",
+		},
+		{
+			"ShouldHandleInvalidPrefix",
+			"example_%s_%s_",
+			"",
+			"",
+			"",
+			"the prefix must contain a single '%s' but contains 2",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := NewHMACSHAStrategy(nil, tc.have)
+
+			if len(tc.expected) == 0 {
+				assert.NoError(t, err)
+				require.NotNil(t, actual)
+				assert.Equal(t, tc.expectedAT, actual.getPrefix(tokenPartAccessToken))
+				assert.Equal(t, tc.expectedRT, actual.getPrefix(tokenPartRefreshToken))
+				assert.Equal(t, tc.expectedAC, actual.getPrefix(tokenPartAuthorizeCode))
+			} else {
+				assert.Nil(t, actual)
+				assert.EqualError(t, err, tc.expected)
+			}
+		})
+	}
 }
 
 func TestHMACAccessToken(t *testing.T) {

@@ -14,6 +14,28 @@ import (
 	"authelia.com/provider/oauth2/token/hmac"
 )
 
+// NewHMACSHAStrategy creates a new HMACSHAStrategy with the potential to include the prefix format. The prefix must
+// include a single '%s' for the purpose of adding the token part (ac, at, and rt; for the Authorize Code, Access
+// Token, and Refresh Token; respectively.
+func NewHMACSHAStrategy(config HMACSHAStrategyConfigurator, prefix string) (strategy *HMACSHAStrategy, err error) {
+	if len(prefix) == 0 {
+		return &HMACSHAStrategy{
+			Enigma: &hmac.HMACStrategy{Config: config},
+			Config: config,
+		}, nil
+	}
+
+	if n := strings.Count(prefix, "%s"); n != 1 {
+		return nil, fmt.Errorf("the prefix must contain a single '%%s' but contains %d", n)
+	}
+
+	return &HMACSHAStrategy{
+		Enigma: &hmac.HMACStrategy{Config: config},
+		Config: config,
+		prefix: prefix,
+	}, nil
+}
+
 type HMACSHAStrategy struct {
 	Enigma *hmac.HMACStrategy
 	Config interface {
@@ -21,7 +43,8 @@ type HMACSHAStrategy struct {
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.AuthorizeCodeLifespanProvider
 	}
-	prefix *string
+
+	prefix string
 }
 
 func (h *HMACSHAStrategy) AccessTokenSignature(ctx context.Context, token string) string {
@@ -37,14 +60,11 @@ func (h *HMACSHAStrategy) AuthorizeCodeSignature(ctx context.Context, token stri
 }
 
 func (h *HMACSHAStrategy) getPrefix(part string) string {
-	if h.prefix == nil {
-		prefix := "authelia_%s_"
-		h.prefix = &prefix
-	} else if len(*h.prefix) == 0 {
+	if len(h.prefix) == 0 {
 		return ""
 	}
 
-	return fmt.Sprintf(*h.prefix, part)
+	return fmt.Sprintf(h.prefix, part)
 }
 
 func (h *HMACSHAStrategy) trimPrefix(token, part string) string {
@@ -61,7 +81,7 @@ func (h *HMACSHAStrategy) GenerateAccessToken(ctx context.Context, _ oauth2.Requ
 		return "", "", err
 	}
 
-	return h.setPrefix(token, "at"), sig, nil
+	return h.setPrefix(token, tokenPartAccessToken), sig, nil
 }
 
 func (h *HMACSHAStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Requester, token string) (err error) {
@@ -74,7 +94,7 @@ func (h *HMACSHAStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Requ
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(token, "at"))
+	return h.Enigma.Validate(ctx, h.trimPrefix(token, tokenPartAccessToken))
 }
 
 func (h *HMACSHAStrategy) GenerateRefreshToken(ctx context.Context, _ oauth2.Requester) (token string, signature string, err error) {
@@ -83,21 +103,21 @@ func (h *HMACSHAStrategy) GenerateRefreshToken(ctx context.Context, _ oauth2.Req
 		return "", "", err
 	}
 
-	return h.setPrefix(token, "rt"), sig, nil
+	return h.setPrefix(token, tokenPartRefreshToken), sig, nil
 }
 
 func (h *HMACSHAStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Requester, token string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.RefreshToken)
 	if exp.IsZero() {
 		// Unlimited lifetime
-		return h.Enigma.Validate(ctx, h.trimPrefix(token, "rt"))
+		return h.Enigma.Validate(ctx, h.trimPrefix(token, tokenPartRefreshToken))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Refresh token expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(token, "rt"))
+	return h.Enigma.Validate(ctx, h.trimPrefix(token, tokenPartRefreshToken))
 }
 
 func (h *HMACSHAStrategy) GenerateAuthorizeCode(ctx context.Context, _ oauth2.Requester) (token string, signature string, err error) {
@@ -106,7 +126,7 @@ func (h *HMACSHAStrategy) GenerateAuthorizeCode(ctx context.Context, _ oauth2.Re
 		return "", "", err
 	}
 
-	return h.setPrefix(token, "ac"), sig, nil
+	return h.setPrefix(token, tokenPartAuthorizeCode), sig, nil
 }
 
 func (h *HMACSHAStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.Requester, token string) (err error) {
@@ -119,5 +139,21 @@ func (h *HMACSHAStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.Re
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(token, "ac"))
+	return h.Enigma.Validate(ctx, h.trimPrefix(token, tokenPartAuthorizeCode))
+}
+
+const (
+	tokenPartAuthorizeCode = "ac"
+	tokenPartAccessToken   = "at"
+	tokenPartRefreshToken  = "rt"
+)
+
+type HMACSHAStrategyConfigurator interface {
+	oauth2.AccessTokenLifespanProvider
+	oauth2.RefreshTokenLifespanProvider
+	oauth2.AuthorizeCodeLifespanProvider
+	oauth2.TokenEntropyProvider
+	oauth2.GlobalSecretProvider
+	oauth2.RotatedGlobalSecretsProvider
+	oauth2.HMACHashingProvider
 }

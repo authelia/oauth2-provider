@@ -77,3 +77,28 @@ func Copy(elements map[string]any) (result map[string]any) {
 
 	return result
 }
+
+// StringSliceFromMap asserts a map any value to a []string provided it has a good type.
+func StringSliceFromMap(value any) (values []string, ok bool) {
+	switch v := value.(type) {
+	case nil:
+		return nil, true
+	case []string:
+		return v, true
+	case string:
+		return []string{v}, true
+	case []any:
+		for _, item := range v {
+			switch iv := item.(type) {
+			case string:
+				values = append(values, iv)
+			default:
+				return nil, false
+			}
+		}
+
+		return values, true
+	default:
+		return nil, false
+	}
+}

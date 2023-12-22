@@ -48,7 +48,7 @@ func TestClaimAddGetString(t *testing.T) {
 }
 
 func TestClaimsToMapSetsID(t *testing.T) {
-	assert.NotEmpty(t, (&JWTClaims{}).ToMap()["jti"])
+	assert.NotEmpty(t, (&JWTClaims{}).ToMap()[consts.ClaimJWTID])
 }
 
 func TestAssert(t *testing.T) {

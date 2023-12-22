@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	jose "github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v3"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"

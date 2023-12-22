@@ -6,7 +6,7 @@ import (
 	"reflect"
 )
 
-func GetField(obj interface{}, name string) (interface{}, error) {
+func GetField(obj any, name string) (any, error) {
 	if !hasValidType(obj, []reflect.Kind{reflect.Struct, reflect.Ptr}) {
 		return nil, errors.New("Cannot use GetField on a non-struct interface")
 	}
@@ -20,7 +20,7 @@ func GetField(obj interface{}, name string) (interface{}, error) {
 	return field.Interface(), nil
 }
 
-func hasValidType(obj interface{}, types []reflect.Kind) bool {
+func hasValidType(obj any, types []reflect.Kind) bool {
 	for _, t := range types {
 		if reflect.TypeOf(obj).Kind() == t {
 			return true
@@ -30,7 +30,7 @@ func hasValidType(obj interface{}, types []reflect.Kind) bool {
 	return false
 }
 
-func reflectValue(obj interface{}) reflect.Value {
+func reflectValue(obj any) reflect.Value {
 	var val reflect.Value
 
 	if reflect.TypeOf(obj).Kind() == reflect.Ptr {

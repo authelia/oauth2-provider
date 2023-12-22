@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/oauth2_auth_jwt_storage.go authelia.com/provider/oauth2/handler/rfc7523 RFC7523KeyStorage
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

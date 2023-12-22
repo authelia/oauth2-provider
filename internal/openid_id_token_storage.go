@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/openid_id_token_storage.go authelia.com/provider/oauth2/handler/openid OpenIDConnectRequestStorage
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/hash.go authelia.com/provider/oauth2 Hasher
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

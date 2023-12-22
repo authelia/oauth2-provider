@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/refresh_token_strategy.go authelia.com/provider/oauth2/handler/oauth2 RefreshTokenStrategy
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

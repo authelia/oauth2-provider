@@ -90,12 +90,20 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		err  error
 	)
 
-	if state := ar.GetState(); len(state) != 0 && claims != nil {
-		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, ar.GetState()); err != nil {
-			return err
-		}
+	// FAPI 1.0 Advanced. This fulfills the ID Token as a detached signature requirement. It should be noted that in
+	// the FAPI 2.0 profile this is replaced by PKCE and PAR.
+	//
+	// See Also:
+	//	- https://openid.net/specs/openid-financial-api-part-2-1_0.html#id-token-as-detached-signature-2
+	//  - https://openid.bitbucket.io/fapi/fapi-2_0-security-profile.html#section-5.6
+	if ar.GetResponseTypes().Matches(consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
+		if state := ar.GetState(); len(state) != 0 && claims != nil {
+			if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, ar.GetState()); err != nil {
+				return err
+			}
 
-		claims.StateHash = hash
+			claims.StateHash = hash
+		}
 	}
 
 	if ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {

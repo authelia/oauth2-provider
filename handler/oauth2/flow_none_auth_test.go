@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {

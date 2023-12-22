@@ -58,8 +58,9 @@ following list of differences:
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
   - [ ] UserInfo support
   - Response Mode Rework:
-    - [ ] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
+    - [x] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
           support
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2b6436032f041160311645d4e8a8b129f8986a89)</sup>
     - [ ] [RFC9207: OAuth 2.0 Authorization Server Issuer Identification](https://datatracker.ietf.org/doc/html/rfc9207)
           support
     - [ ] Response Type None

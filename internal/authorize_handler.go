@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/authorize_handler.go authelia.com/provider/oauth2 AuthorizeEndpointHandler
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

@@ -57,7 +57,7 @@ type Provider interface {
 	//   additional query parameters.  The endpoint URI MUST NOT include a
 	//   fragment component.
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
-	NewAuthorizeRequest(ctx context.Context, req *http.Request) (AuthorizeRequester, error)
+	NewAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error)
 
 	// NewAuthorizeResponse iterates through all response type handlers and returns their result or
 	// ErrUnsupportedResponseType if none of the handlers were able to handle it.
@@ -110,7 +110,7 @@ type Provider interface {
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1 (everything)
 	//
 	// Furthermore the registered handlers should implement their specs accordingly.
-	NewAccessRequest(ctx context.Context, req *http.Request, session Session) (AccessRequester, error)
+	NewAccessRequest(ctx context.Context, r *http.Request, session Session) (AccessRequester, error)
 
 	// NewAccessResponse creates a new access response and validates that access_token and token_type are set.
 	//
@@ -162,13 +162,13 @@ type Provider interface {
 	NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error)
 
 	// NewPushedAuthorizeResponse executes the handlers and builds the response
-	NewPushedAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (PushedAuthorizeResponder, error)
+	NewPushedAuthorizeResponse(ctx context.Context, requester AuthorizeRequester, session Session) (PushedAuthorizeResponder, error)
 
 	// WritePushedAuthorizeResponse writes the PAR response
-	WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, resp PushedAuthorizeResponder)
+	WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder PushedAuthorizeResponder)
 
 	// WritePushedAuthorizeError writes the PAR error
-	WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar AuthorizeRequester, err error)
+	WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

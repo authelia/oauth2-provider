@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/pkce_storage_strategy.go authelia.com/provider/oauth2/handler/pkce PKCERequestStorage
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

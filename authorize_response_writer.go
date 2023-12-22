@@ -11,29 +11,29 @@ import (
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-func (f *Fosite) NewAuthorizeResponse(ctx context.Context, ar AuthorizeRequester, session Session) (AuthorizeResponder, error) {
-	var resp = &AuthorizeResponse{
+func (f *Fosite) NewAuthorizeResponse(ctx context.Context, requester AuthorizeRequester, session Session) (responder AuthorizeResponder, err error) {
+	var response = &AuthorizeResponse{
 		Header:     http.Header{},
 		Parameters: url.Values{},
 	}
 
-	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, ar)
-	ctx = context.WithValue(ctx, AuthorizeResponseContextKey, resp)
+	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, requester)
+	ctx = context.WithValue(ctx, AuthorizeResponseContextKey, response)
 
-	ar.SetSession(session)
+	requester.SetSession(session)
 	for _, h := range f.Config.GetAuthorizeEndpointHandlers(ctx) {
-		if err := h.HandleAuthorizeEndpointRequest(ctx, ar, resp); err != nil {
+		if err = h.HandleAuthorizeEndpointRequest(ctx, requester, response); err != nil {
 			return nil, err
 		}
 	}
 
-	if !ar.DidHandleAllResponseTypes() {
+	if !requester.DidHandleAllResponseTypes() {
 		return nil, errorsx.WithStack(ErrUnsupportedResponseType)
 	}
 
-	if ar.GetDefaultResponseMode() == ResponseModeFragment && ar.GetResponseMode() == ResponseModeQuery {
-		return nil, ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ar.GetResponseMode(), ar.GetResponseTypes())
+	if requester.GetDefaultResponseMode() == ResponseModeFragment && requester.GetResponseMode() == ResponseModeQuery {
+		return nil, ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", requester.GetResponseMode(), requester.GetResponseTypes())
 	}
 
-	return resp, nil
+	return response, nil
 }

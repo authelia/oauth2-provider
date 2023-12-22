@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/revoke_handler.go authelia.com/provider/oauth2 RevocationHandler
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

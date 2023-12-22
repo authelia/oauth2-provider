@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/transactional.go authelia.com/provider/oauth2/storage Transactional
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

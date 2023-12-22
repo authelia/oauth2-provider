@@ -19,7 +19,7 @@ linters-settings:
   godot:
     check-all: true
   goimports:
-    local-prefixes: github.com/authelia/oauth2
+    local-prefixes: authelia.com/provider/oauth2
   revive:
     confidence: 0.8
 

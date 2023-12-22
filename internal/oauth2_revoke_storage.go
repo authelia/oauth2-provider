@@ -5,6 +5,7 @@
 //
 //	mockgen -package internal -destination internal/oauth2_revoke_storage.go authelia.com/provider/oauth2/handler/oauth2 TokenRevocationStorage
 //
+
 // Package internal is a generated GoMock package.
 package internal
 

@@ -30,12 +30,15 @@ type JWTClaimsDefaults struct {
 }
 
 type JWTClaimsContainer interface {
+	// Sanitize should clear the IssuedAt and NotBefore values.
+	Sanitize() JWTClaimsContainer
+
 	// With returns a copy of itself with expiresAt, scope, audience set to the given values.
 	With(expiry time.Time, scope, audience []string) JWTClaimsContainer
 
 	// WithDefaults returns a copy of itself with issuedAt and issuer set to the given default values. If those
 	// values are already set in the claims, they will not be updated.
-	WithDefaults(iat time.Time, issuer string) JWTClaimsContainer
+	WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsContainer
 
 	// WithScopeField configures how a scope field should be represented in JWT.
 	WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContainer
@@ -65,9 +68,20 @@ func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsCo
 	return c
 }
 
-func (c *JWTClaims) WithDefaults(iat time.Time, issuer string) JWTClaimsContainer {
+func (c *JWTClaims) Sanitize() JWTClaimsContainer {
+	c.IssuedAt = time.Time{}
+	c.NotBefore = time.Time{}
+
+	return c
+}
+
+func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsContainer {
 	if c.IssuedAt.IsZero() {
 		c.IssuedAt = iat
+	}
+
+	if c.NotBefore.IsZero() {
+		c.NotBefore = nbf
 	}
 
 	if c.Issuer == "" {

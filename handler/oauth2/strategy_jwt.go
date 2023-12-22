@@ -115,12 +115,14 @@ func (h *DefaultJWTStrategy) generate(ctx context.Context, tokenType oauth2.Toke
 		return "", "", errors.New("GetTokenClaims() must not be nil")
 	} else {
 		claims := jwtSession.GetJWTClaims().
+			Sanitize().
 			With(
 				jwtSession.GetExpiresAt(tokenType),
 				requester.GetGrantedScopes(),
 				requester.GetGrantedAudience(),
 			).
 			WithDefaults(
+				time.Now().UTC(),
 				time.Now().UTC(),
 				h.Config.GetAccessTokenIssuer(ctx),
 			).

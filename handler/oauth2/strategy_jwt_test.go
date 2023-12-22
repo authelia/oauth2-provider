@@ -136,8 +136,8 @@ var jwtExpiredCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 			JWTClaims: &jwt.JWTClaims{
 				Issuer:    "oauth2",
 				Subject:   "peter",
-				IssuedAt:  time.Now().UTC(),
-				NotBefore: time.Now().UTC(),
+				IssuedAt:  time.Now().UTC().Add(-time.Minute * 10),
+				NotBefore: time.Now().UTC().Add(-time.Minute * 10),
 				ExpiresAt: time.Now().UTC().Add(-time.Minute),
 				Extra:     map[string]any{"foo": "bar"},
 			},
@@ -188,7 +188,7 @@ func TestAccessToken(t *testing.T) {
 				j.Config = &oauth2.Config{
 					JWTScopeClaimKey: scopeField,
 				}
-				token, signature, err := j.GenerateAccessToken(context.Background(), c.r)
+				token, signature, err := j.GenerateAccessToken(context.TODO(), c.r)
 				assert.NoError(t, err)
 
 				parts := strings.Split(token, ".")
@@ -231,6 +231,9 @@ func TestAccessToken(t *testing.T) {
 				// Scope field is always a string.
 				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
+				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
+				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
+
 				validate := j.signature(token)
 				err = j.ValidateAccessToken(context.Background(), c.r, token)
 				if c.pass {
@@ -242,4 +245,8 @@ func TestAccessToken(t *testing.T) {
 			})
 		}
 	}
+}
+
+func anyInt64ToTime(in any) time.Time {
+	return time.Unix(in.(int64), 0)
 }

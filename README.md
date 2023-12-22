@@ -61,6 +61,9 @@ following list of differences:
         request
   - [ ] Response Type None
   - [ ] Client Secret Validation Interface
+  - [ ] Clock Drift Support
+  - [ ] Injectable Clock Configurator
+  - [ ] Support `s_hash`
 - Removal of the following dependencies:
   - [x] `go.opentelemetry.io/otel/trace`
   - [x] `github.com/ecordell/optgen`

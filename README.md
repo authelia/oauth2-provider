@@ -57,7 +57,11 @@ following list of differences:
   - [ ] Customizable Token Prefix
   - [ ] JWE support for Client Authentication and Issuance
   - [ ] UserInfo support
-  - [ ] JARM support
+  - Response Mode Rework:
+    - [ ] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
+          support
+    - [ ] [RFC9207](https://datatracker.ietf.org/doc/html/rfc9207) OAuth 2.0
+          Authorization Server Issuer Identification support
   - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
         request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
   - [ ] Response Type None

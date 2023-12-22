@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
@@ -16,57 +17,111 @@ type TokenRevocationHandler struct {
 	TokenRevocationStorage TokenRevocationStorage
 	RefreshTokenStrategy   RefreshTokenStrategy
 	AccessTokenStrategy    AccessTokenStrategy
+	Config                 interface {
+		oauth2.RevokeRefreshTokensExplicitlyProvider
+	}
 }
 
 // RevokeToken implements https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // The token type hint indicates which token type check should be performed first.
 func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) error {
-	discoveryFuncs := []func() (request oauth2.Requester, err error){
-		func() (request oauth2.Requester, err error) {
-			// Refresh token
-			signature := r.RefreshTokenStrategy.RefreshTokenSignature(ctx, token)
-			return r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil)
-		},
-		func() (request oauth2.Requester, err error) {
-			// Access token
-			signature := r.AccessTokenStrategy.AccessTokenSignature(ctx, token)
-			return r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil)
-		},
+	var handlers []RevocationTokenLookupFunc
+
+	switch tokenType {
+	case oauth2.AccessToken:
+		handlers = []RevocationTokenLookupFunc{r.handleGetAccessTokenRequester, r.handleGetRefreshTokenRequester}
+	case oauth2.RefreshToken:
+		handlers = []RevocationTokenLookupFunc{r.handleGetRefreshTokenRequester, r.handleGetAccessTokenRequester}
+	default:
+		handlers = []RevocationTokenLookupFunc{r.handleGetRefreshTokenRequester, r.handleGetAccessTokenRequester}
 	}
 
-	// Token type hinting
-	if tokenType == oauth2.AccessToken {
-		discoveryFuncs[0], discoveryFuncs[1] = discoveryFuncs[1], discoveryFuncs[0]
+	var (
+		requester oauth2.Requester
+		tt        oauth2.TokenType
+		err       error
+		errs      []error
+	)
+
+	for _, handler := range handlers {
+		if requester, tt, err = handler(ctx, token); err == nil {
+			break
+		}
+
+		errs = append(errs, err)
 	}
 
-	var ar oauth2.Requester
-	var err1, err2 error
-	if ar, err1 = discoveryFuncs[0](); err1 != nil {
-		ar, err2 = discoveryFuncs[1]()
-	}
-	// err2 can only be not nil if first err1 was not nil
-	if err2 != nil {
-		return storeErrorsToRevocationError(err1, err2)
+	if len(errs) == len(handlers) {
+		return r.handleErrors(errs)
 	}
 
-	if ar.GetClient().GetID() != client.GetID() {
+	if requester.GetClient().GetID() != client.GetID() {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient)
 	}
 
-	requestID := ar.GetID()
-	err1 = r.TokenRevocationStorage.RevokeRefreshToken(ctx, requestID)
-	err2 = r.TokenRevocationStorage.RevokeAccessToken(ctx, requestID)
+	id := requester.GetID()
 
-	return storeErrorsToRevocationError(err1, err2)
+	errs = []error{}
+
+	if !r.getRevokeRefreshTokensExplicitly(ctx, client) || tt == oauth2.RefreshToken {
+		if err = r.TokenRevocationStorage.RevokeRefreshToken(ctx, id); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if err = r.TokenRevocationStorage.RevokeAccessToken(ctx, id); err != nil {
+		errs = append(errs, err)
+	}
+
+	return r.handleErrors(errs)
 }
 
-func storeErrorsToRevocationError(err1, err2 error) error {
-	// both errors are oauth2.ErrNotFound and oauth2.ErrInactiveToken or nil <=> the token is revoked
-	if (errors.Is(err1, oauth2.ErrNotFound) || errors.Is(err1, oauth2.ErrInactiveToken) || err1 == nil) &&
-		(errors.Is(err2, oauth2.ErrNotFound) || errors.Is(err2, oauth2.ErrInactiveToken) || err2 == nil) {
+type RevocationTokenLookupFunc func(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error)
+
+func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Context, client oauth2.Client) bool {
+	var (
+		rfrrtec oauth2.RevokeFlowRevokeRefreshTokensExplicitClient
+		ok      bool
+	)
+
+	if rfrrtec, ok = client.(oauth2.RevokeFlowRevokeRefreshTokensExplicitClient); !ok {
+		return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
+
+	}
+
+	if ok = rfrrtec.GetRevokeRefreshTokensExplicitly(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {
+		return ok
+	}
+
+	return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
+}
+
+func (r *TokenRevocationHandler) handleGetRefreshTokenRequester(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error) {
+	signature := r.RefreshTokenStrategy.RefreshTokenSignature(ctx, token)
+
+	requester, err = r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil)
+
+	return requester, consts.TokenTypeRefreshToken, err
+}
+
+func (r *TokenRevocationHandler) handleGetAccessTokenRequester(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error) {
+	signature := r.AccessTokenStrategy.AccessTokenSignature(ctx, token)
+
+	requester, err = r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil)
+
+	return requester, consts.TokenTypeAccessToken, err
+}
+
+func (r *TokenRevocationHandler) handleErrors(errs []error) (err error) {
+	if len(errs) == 0 {
 		return nil
 	}
 
-	// there was an unexpected error => the token may still exist and the client should retry later
-	return errorsx.WithStack(oauth2.ErrTemporarilyUnavailable)
+	for _, e := range errs {
+		if !errors.Is(e, oauth2.ErrNotFound) && !errors.Is(e, oauth2.ErrInactiveToken) {
+			return errorsx.WithStack(oauth2.ErrTemporarilyUnavailable)
+		}
+	}
+
+	return nil
 }

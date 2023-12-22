@@ -120,6 +120,7 @@ type Configurator interface {
 	ClientAuthenticationStrategyProvider
 	ResponseModeHandlerExtensionProvider
 	SendDebugMessagesToClientsProvider
+	RevokeRefreshTokensExplicitlyProvider
 	JWKSFetcherStrategyProvider
 	ClientAuthenticationStrategyProvider
 	ResponseModeHandlerExtensionProvider

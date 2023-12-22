@@ -57,6 +57,18 @@ following list of differences:
   - [x] Customizable Token Prefix
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
   - [ ] UserInfo support
+  - [ ] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+        support
+  - [ ] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
+        support
+  - [ ] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
+        support
+  - [ ] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
+        support
+  - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396)
+        support
+  - [ ] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
+        support
   - Response Mode Rework:
     - [x] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
           support
@@ -71,6 +83,7 @@ following list of differences:
     - [ ] Client Secret Validation Interface
     - [ ] JWE support for Client Authentication and Issuance
   - [ ] Clock Drift Support
+  - [ ] Key Management
   - [ ] Injectable Clock Configurator
   - [x] Support `s_hash`
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/edbbbe9467c70a2578db4b9af4d6cd319f74886e)</sup>

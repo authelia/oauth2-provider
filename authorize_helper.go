@@ -198,9 +198,10 @@ func WriteAuthorizeFormPostResponse(redirectURL string, parameters url.Values, t
 	})
 }
 
-func GetPostFormHTMLTemplate(ctx context.Context, f *Fosite) *template.Template {
-	if t := f.Config.GetFormPostHTMLTemplate(ctx); t != nil {
+func GetPostFormHTMLTemplate(ctx context.Context, c FormPostHTMLTemplateProvider) *template.Template {
+	if t := c.GetFormPostHTMLTemplate(ctx); t != nil {
 		return t
 	}
+
 	return DefaultFormPostTemplate
 }

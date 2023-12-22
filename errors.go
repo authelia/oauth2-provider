@@ -534,6 +534,15 @@ func (e *RFC6749Error) computeHintField() {
 	e.HintField = i18n.GetMessageOrDefault(e.catalog, e.hintIDField, e.lang, e.HintField, e.hintArgs...)
 }
 
+func ErrorToRFC6749ErrorFallback(err error, fallback *RFC6749Error) *RFC6749Error {
+	var e *RFC6749Error
+	if errors.As(err, &e) {
+		return e
+	}
+
+	return fallback.WithWrap(err).WithDebug(err.Error())
+}
+
 // ErrorToDebugRFC6749Error converts the provided error to a *DebugRFC6749Error provided it is not nil and can be
 // cast as a *RFC6749Error.
 func ErrorToDebugRFC6749Error(err error) (rfc error) {

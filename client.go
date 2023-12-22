@@ -6,7 +6,7 @@ package oauth2
 import (
 	"context"
 
-	jose "github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v3"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -89,6 +89,16 @@ type RevokeFlowRevokeRefreshTokensExplicitClient interface {
 
 	// GetRevokeRefreshTokensExplicitly returns true if this client will only revoke refresh tokens explicitly.
 	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
+}
+
+// JARMClient is a client which supports JARM.
+type JARMClient interface {
+	Client
+
+	GetAuthorizationSignedResponseKeyID() (kid string)
+	GetAuthorizationSignedResponseAlg() (alg string)
+	GetAuthorizationEncryptedResponseAlg() (alg string)
+	GetAuthorizationEncryptedResponseEncryptionAlg() (alg string)
 }
 
 // ResponseModeClient represents a client capable of handling response_mode

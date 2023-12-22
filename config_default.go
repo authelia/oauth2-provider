@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"time"
 
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
+	"github.com/hashicorp/go-retryablehttp"
 
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -23,45 +23,48 @@ const (
 )
 
 var (
-	_ AuthorizeCodeLifespanProvider                = (*Config)(nil)
-	_ RefreshTokenLifespanProvider                 = (*Config)(nil)
-	_ AccessTokenLifespanProvider                  = (*Config)(nil)
-	_ ScopeStrategyProvider                        = (*Config)(nil)
-	_ AudienceStrategyProvider                     = (*Config)(nil)
-	_ RedirectSecureCheckerProvider                = (*Config)(nil)
-	_ RefreshTokenScopesProvider                   = (*Config)(nil)
-	_ DisableRefreshTokenValidationProvider        = (*Config)(nil)
-	_ AccessTokenIssuerProvider                    = (*Config)(nil)
-	_ JWTScopeFieldProvider                        = (*Config)(nil)
-	_ AllowedPromptsProvider                       = (*Config)(nil)
-	_ OmitRedirectScopeParamProvider               = (*Config)(nil)
-	_ MinParameterEntropyProvider                  = (*Config)(nil)
-	_ SanitationAllowedProvider                    = (*Config)(nil)
-	_ EnforcePKCEForPublicClientsProvider          = (*Config)(nil)
-	_ EnablePKCEPlainChallengeMethodProvider       = (*Config)(nil)
-	_ EnforcePKCEProvider                          = (*Config)(nil)
-	_ GrantTypeJWTBearerCanSkipClientAuthProvider  = (*Config)(nil)
-	_ GrantTypeJWTBearerIDOptionalProvider         = (*Config)(nil)
-	_ GrantTypeJWTBearerIssuedDateOptionalProvider = (*Config)(nil)
-	_ GetJWTMaxDurationProvider                    = (*Config)(nil)
-	_ IDTokenLifespanProvider                      = (*Config)(nil)
-	_ IDTokenIssuerProvider                        = (*Config)(nil)
-	_ JWKSFetcherStrategyProvider                  = (*Config)(nil)
-	_ ClientAuthenticationStrategyProvider         = (*Config)(nil)
-	_ SendDebugMessagesToClientsProvider           = (*Config)(nil)
-	_ ResponseModeHandlerExtensionProvider         = (*Config)(nil)
-	_ MessageCatalogProvider                       = (*Config)(nil)
-	_ FormPostHTMLTemplateProvider                 = (*Config)(nil)
-	_ TokenURLProvider                             = (*Config)(nil)
-	_ GetSecretsHashingProvider                    = (*Config)(nil)
-	_ HTTPClientProvider                           = (*Config)(nil)
-	_ HMACHashingProvider                          = (*Config)(nil)
-	_ AuthorizeEndpointHandlersProvider            = (*Config)(nil)
-	_ TokenEndpointHandlersProvider                = (*Config)(nil)
-	_ TokenIntrospectionHandlersProvider           = (*Config)(nil)
-	_ RevocationHandlersProvider                   = (*Config)(nil)
-	_ PushedAuthorizeRequestHandlersProvider       = (*Config)(nil)
-	_ PushedAuthorizeRequestConfigProvider         = (*Config)(nil)
+	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
+	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
+	_ AccessTokenLifespanProvider                     = (*Config)(nil)
+	_ ScopeStrategyProvider                           = (*Config)(nil)
+	_ AudienceStrategyProvider                        = (*Config)(nil)
+	_ RedirectSecureCheckerProvider                   = (*Config)(nil)
+	_ RefreshTokenScopesProvider                      = (*Config)(nil)
+	_ DisableRefreshTokenValidationProvider           = (*Config)(nil)
+	_ AccessTokenIssuerProvider                       = (*Config)(nil)
+	_ JWTScopeFieldProvider                           = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeIssuerProvider   = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeSignerProvider   = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeLifespanProvider = (*Config)(nil)
+	_ AllowedPromptsProvider                          = (*Config)(nil)
+	_ OmitRedirectScopeParamProvider                  = (*Config)(nil)
+	_ MinParameterEntropyProvider                     = (*Config)(nil)
+	_ SanitationAllowedProvider                       = (*Config)(nil)
+	_ EnforcePKCEForPublicClientsProvider             = (*Config)(nil)
+	_ EnablePKCEPlainChallengeMethodProvider          = (*Config)(nil)
+	_ EnforcePKCEProvider                             = (*Config)(nil)
+	_ GrantTypeJWTBearerCanSkipClientAuthProvider     = (*Config)(nil)
+	_ GrantTypeJWTBearerIDOptionalProvider            = (*Config)(nil)
+	_ GrantTypeJWTBearerIssuedDateOptionalProvider    = (*Config)(nil)
+	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
+	_ IDTokenLifespanProvider                         = (*Config)(nil)
+	_ IDTokenIssuerProvider                           = (*Config)(nil)
+	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
+	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
+	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)
+	_ ResponseModeHandlerProvider                     = (*Config)(nil)
+	_ MessageCatalogProvider                          = (*Config)(nil)
+	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
+	_ TokenURLProvider                                = (*Config)(nil)
+	_ GetSecretsHashingProvider                       = (*Config)(nil)
+	_ HTTPClientProvider                              = (*Config)(nil)
+	_ HMACHashingProvider                             = (*Config)(nil)
+	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)
+	_ TokenEndpointHandlersProvider                   = (*Config)(nil)
+	_ TokenIntrospectionHandlersProvider              = (*Config)(nil)
+	_ RevocationHandlersProvider                      = (*Config)(nil)
+	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
+	_ PushedAuthorizeRequestConfigProvider            = (*Config)(nil)
 )
 
 type Config struct {
@@ -161,8 +164,8 @@ type Config struct {
 	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests
 	ClientAuthenticationStrategy ClientAuthenticationStrategy
 
-	// ResponseModeHandlerExtension provides a handler for custom response modes
-	ResponseModeHandlerExtension ResponseModeHandler
+	// ResponseModeHandlers provides the handlers for performing response mode formatting.
+	ResponseModeHandlers []ResponseModeHandler
 
 	// MessageCatalog is the message bundle used for i18n
 	MessageCatalog i18n.MessageCatalog
@@ -179,6 +182,16 @@ type Config struct {
 
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
 	JWTScopeClaimKey jwt.JWTScopeFieldEnum
+
+	// JWTSecuredAuthorizeResponseModeIssuer sets the default issuer for the JWT Secured Authorization Response Mode.
+	JWTSecuredAuthorizeResponseModeIssuer string
+
+	// JWTSecuredAuthorizeResponseModeLifespan sets the default lifetime for the tokens issued in the
+	// JWT Secured Authorization Response Mode. Defaults to 10 minutes.
+	JWTSecuredAuthorizeResponseModeLifespan time.Duration
+
+	// JWTSecuredAuthorizeResponseModeSigner is the signer for JWT Secured Authorization Response Mode. Has no default.
+	JWTSecuredAuthorizeResponseModeSigner jwt.Signer
 
 	// AccessTokenIssuer is the issuer to be used when generating access tokens.
 	AccessTokenIssuer string
@@ -260,6 +273,7 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	if c.HTTPClient == nil {
 		return retryablehttp.NewClient()
 	}
+
 	return c.HTTPClient
 }
 
@@ -267,6 +281,7 @@ func (c *Config) GetSecretsHasher(ctx context.Context) Hasher {
 	if c.ClientSecretsHasher == nil {
 		c.ClientSecretsHasher = &BCrypt{Config: c}
 	}
+
 	return c.ClientSecretsHasher
 }
 
@@ -282,8 +297,12 @@ func (c *Config) GetMessageCatalog(ctx context.Context) i18n.MessageCatalog {
 	return c.MessageCatalog
 }
 
-func (c *Config) GetResponseModeHandlerExtension(ctx context.Context) ResponseModeHandler {
-	return c.ResponseModeHandlerExtension
+func (c *Config) GetResponseModeHandlers(ctx context.Context) []ResponseModeHandler {
+	if len(c.ResponseModeHandlers) == 0 {
+		c.ResponseModeHandlers = []ResponseModeHandler{&DefaultResponseModeHandler{Config: c}}
+	}
+
+	return c.ResponseModeHandlers
 }
 
 func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
@@ -350,6 +369,14 @@ func (c *Config) GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum {
 	return c.JWTScopeClaimKey
 }
 
+func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string {
+	return c.IDTokenIssuer
+}
+
+func (c *Config) GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer {
+	return c.JWTSecuredAuthorizeResponseModeSigner
+}
+
 func (c *Config) GetAllowedPrompts(_ context.Context) []string {
 	return c.AllowedPromptValues
 }
@@ -359,6 +386,7 @@ func (c *Config) GetScopeStrategy(_ context.Context) ScopeStrategy {
 	if c.ScopeStrategy == nil {
 		c.ScopeStrategy = WildcardScopeStrategy
 	}
+
 	return c.ScopeStrategy
 }
 
@@ -367,6 +395,7 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceMatchingStrategy
 	if c.AudienceMatchingStrategy == nil {
 		c.AudienceMatchingStrategy = DefaultAudienceMatchingStrategy
 	}
+
 	return c.AudienceMatchingStrategy
 }
 
@@ -375,6 +404,7 @@ func (c *Config) GetAuthorizeCodeLifespan(_ context.Context) time.Duration {
 	if c.AuthorizeCodeLifespan == 0 {
 		return time.Minute * 15
 	}
+
 	return c.AuthorizeCodeLifespan
 }
 
@@ -383,6 +413,7 @@ func (c *Config) GetIDTokenLifespan(_ context.Context) time.Duration {
 	if c.IDTokenLifespan == 0 {
 		return time.Hour
 	}
+
 	return c.IDTokenLifespan
 }
 
@@ -391,6 +422,7 @@ func (c *Config) GetAccessTokenLifespan(_ context.Context) time.Duration {
 	if c.AccessTokenLifespan == 0 {
 		return time.Hour
 	}
+
 	return c.AccessTokenLifespan
 }
 
@@ -399,6 +431,7 @@ func (c *Config) GetVerifiableCredentialsNonceLifespan(_ context.Context) time.D
 	if c.VerifiableCredentialsNonceLifespan == 0 {
 		return time.Hour
 	}
+
 	return c.VerifiableCredentialsNonceLifespan
 }
 
@@ -408,7 +441,17 @@ func (c *Config) GetRefreshTokenLifespan(_ context.Context) time.Duration {
 	if c.RefreshTokenLifespan == 0 {
 		return time.Hour * 24 * 30
 	}
+
 	return c.RefreshTokenLifespan
+}
+
+// GetJWTSecuredAuthorizeResponseModeLifespan returns how long a JWT issued by the JWT Secured Authorize Response Mode should be valid. Defaults to 10 minutes.
+func (c *Config) GetJWTSecuredAuthorizeResponseModeLifespan(_ context.Context) time.Duration {
+	if c.JWTSecuredAuthorizeResponseModeLifespan == 0 {
+		return time.Minute * 10
+	}
+
+	return c.JWTSecuredAuthorizeResponseModeLifespan
 }
 
 // GetBCryptCost returns the bcrypt cost factor. Defaults to 12.
@@ -416,6 +459,7 @@ func (c *Config) GetBCryptCost(_ context.Context) int {
 	if c.HashCost == 0 {
 		return DefaultBCryptWorkFactor
 	}
+
 	return c.HashCost
 }
 
@@ -424,6 +468,7 @@ func (c *Config) GetJWKSFetcherStrategy(_ context.Context) JWKSFetcherStrategy {
 	if c.JWKSFetcherStrategy == nil {
 		c.JWKSFetcherStrategy = NewDefaultJWKSFetcherStrategy()
 	}
+
 	return c.JWKSFetcherStrategy
 }
 
@@ -432,6 +477,7 @@ func (c *Config) GetTokenEntropy(_ context.Context) int {
 	if c.TokenEntropy == 0 {
 		return 32
 	}
+
 	return c.TokenEntropy
 }
 
@@ -440,6 +486,7 @@ func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Contex
 	if c.RedirectSecureChecker == nil {
 		return IsRedirectURISecure
 	}
+
 	return c.RedirectSecureChecker
 }
 
@@ -448,6 +495,7 @@ func (c *Config) GetRefreshTokenScopes(_ context.Context) []string {
 	if c.RefreshTokenScopes == nil {
 		return []string{consts.ScopeOffline, consts.ScopeOfflineAccess}
 	}
+
 	return c.RefreshTokenScopes
 }
 
@@ -455,9 +503,9 @@ func (c *Config) GetRefreshTokenScopes(_ context.Context) []string {
 func (c *Config) GetMinParameterEntropy(_ context.Context) int {
 	if c.MinParameterEntropy == 0 {
 		return MinParameterEntropy
-	} else {
-		return c.MinParameterEntropy
 	}
+
+	return c.MinParameterEntropy
 }
 
 // GetJWTMaxDuration specified the maximum amount of allowed `exp` time for a JWT. It compares
@@ -468,6 +516,7 @@ func (c *Config) GetJWTMaxDuration(_ context.Context) time.Duration {
 	if c.GrantTypeJWTBearerMaxDuration == 0 {
 		return time.Hour * 24
 	}
+
 	return c.GrantTypeJWTBearerMaxDuration
 }
 

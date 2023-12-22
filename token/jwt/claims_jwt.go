@@ -175,10 +175,8 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 				c.Issuer = s
 			}
 		case consts.ClaimAudience:
-			if s, ok := v.(string); ok {
-				c.Audience = []string{s}
-			} else if s, ok := v.([]string); ok {
-				c.Audience = s
+			if aud, ok := StringSliceFromMap(v); ok {
+				c.Audience = aud
 			}
 		case consts.ClaimIssuedAt:
 			c.IssuedAt = toTime(v, c.IssuedAt)

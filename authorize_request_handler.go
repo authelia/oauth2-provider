@@ -228,25 +228,19 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 }
 
 func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
-	switch responseMode := r.Form.Get(consts.FormParameterResponseMode); responseMode {
-	case string(ResponseModeDefault):
-		request.ResponseMode = ResponseModeDefault
-	case string(ResponseModeFragment):
-		request.ResponseMode = ResponseModeFragment
-	case string(ResponseModeQuery):
-		request.ResponseMode = ResponseModeQuery
-	case string(ResponseModeFormPost):
-		request.ResponseMode = ResponseModeFormPost
-	default:
-		rm := ResponseModeType(responseMode)
-		if f.ResponseModeHandler(ctx).ResponseModes().Has(rm) {
-			request.ResponseMode = rm
-			break
+	m := r.Form.Get(consts.FormParameterResponseMode)
+
+	for _, handler := range f.ResponseModeHandlers(ctx) {
+		mode := ResponseModeType(m)
+
+		if handler.ResponseModes().Has(mode) {
+			request.ResponseMode = mode
+
+			return nil
 		}
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode \"%s\".", responseMode))
 	}
 
-	return nil
+	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode \"%s\".", m))
 }
 
 func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest) error {
@@ -334,6 +328,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebug(err.Error()))
 	}
+
 	request.Form = r.Form
 
 	// Save state to the request to be returned in error conditions (https://github.com/ory/hydra/issues/1642)
@@ -355,6 +350,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	if err != nil {
 		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebug(err.Error()))
 	}
+
 	request.Client = client
 
 	// Now that the base fields (state and client) are populated, we extract all the information

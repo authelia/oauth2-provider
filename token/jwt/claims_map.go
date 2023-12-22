@@ -28,24 +28,16 @@ type MapClaims map[string]any
 // VerifyAudience compares the aud claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
-	var aud []string
-	switch v := m[consts.ClaimAudience].(type) {
-	case []string:
-		aud = v
-	case []any:
-		for _, a := range v {
-			vs, ok := a.(string)
-			if !ok {
-				return false
-			}
-			aud = append(aud, vs)
-		}
-	case string:
-		aud = append(aud, v)
-	default:
-		return false
+	var (
+		aud []string
+		ok  bool
+	)
+
+	if aud, ok = StringSliceFromMap(m[consts.ClaimAudience]); ok {
+		return verifyAud(aud, cmp, req)
 	}
-	return verifyAud(aud, cmp, req)
+
+	return false
 }
 
 // VerifyExpiresAt compares the exp claim against cmp.
@@ -94,6 +86,7 @@ func (m MapClaims) toInt64(claim string) (int64, bool) {
 		if err == nil {
 			return v, true
 		}
+
 		vf, err := t.Float64()
 		if err != nil {
 			return 0, false
@@ -101,6 +94,7 @@ func (m MapClaims) toInt64(claim string) (int64, bool) {
 
 		return int64(vf), true
 	}
+
 	return 0, false
 }
 
@@ -160,6 +154,7 @@ func verifyAud(aud []string, cmp string, required bool) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -167,6 +162,7 @@ func verifyExp(exp int64, now int64, required bool) bool {
 	if exp == 0 {
 		return !required
 	}
+
 	return now <= exp
 }
 
@@ -174,6 +170,7 @@ func verifyIat(iat int64, now int64, required bool) bool {
 	if iat == 0 {
 		return !required
 	}
+
 	return now >= iat
 }
 
@@ -181,6 +178,7 @@ func verifyIss(iss string, cmp string, required bool) bool {
 	if iss == "" {
 		return !required
 	}
+
 	if subtle.ConstantTimeCompare([]byte(iss), []byte(cmp)) != 0 {
 		return true
 	} else {
@@ -192,5 +190,6 @@ func verifyNbf(nbf int64, now int64, required bool) bool {
 	if nbf == 0 {
 		return !required
 	}
+
 	return now >= nbf
 }

@@ -10,8 +10,6 @@ import (
 
 const MinParameterEntropy = 8
 
-var defaultResponseModeHandler = &DefaultResponseModeHandler{}
-
 // AuthorizeEndpointHandlers is a list of AuthorizeEndpointHandler
 type AuthorizeEndpointHandlers []AuthorizeEndpointHandler
 
@@ -101,6 +99,9 @@ type Configurator interface {
 	OmitRedirectScopeParamProvider
 	SanitationAllowedProvider
 	JWTScopeFieldProvider
+	JWTSecuredAuthorizeResponseModeIssuerProvider
+	JWTSecuredAuthorizeResponseModeSignerProvider
+	JWTSecuredAuthorizeResponseModeLifespanProvider
 	AccessTokenIssuerProvider
 	DisableRefreshTokenValidationProvider
 	RefreshTokenScopesProvider
@@ -118,12 +119,11 @@ type Configurator interface {
 	MinParameterEntropyProvider
 	HMACHashingProvider
 	ClientAuthenticationStrategyProvider
-	ResponseModeHandlerExtensionProvider
+	ResponseModeHandlerProvider
 	SendDebugMessagesToClientsProvider
 	RevokeRefreshTokensExplicitlyProvider
 	JWKSFetcherStrategyProvider
 	ClientAuthenticationStrategyProvider
-	ResponseModeHandlerExtensionProvider
 	MessageCatalogProvider
 	FormPostHTMLTemplateProvider
 	TokenURLProvider
@@ -155,9 +155,7 @@ func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	return MinParameterEntropy
 }
 
-func (f *Fosite) ResponseModeHandler(ctx context.Context) ResponseModeHandler {
-	if ext := f.Config.GetResponseModeHandlerExtension(ctx); ext != nil {
-		return ext
-	}
-	return defaultResponseModeHandler
+// ResponseModeHandlers returns the configured ResponseModeHandler implementations for this instance.
+func (f *Fosite) ResponseModeHandlers(ctx context.Context) []ResponseModeHandler {
+	return f.Config.GetResponseModeHandlers(ctx)
 }

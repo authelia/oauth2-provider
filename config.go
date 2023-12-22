@@ -106,6 +106,23 @@ type JWTScopeFieldProvider interface {
 	GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum
 }
 
+// JWTSecuredAuthorizeResponseModeIssuerProvider returns the provider for configuring the JARM issuer.
+type JWTSecuredAuthorizeResponseModeIssuerProvider interface {
+	// GetJWTSecuredAuthorizeResponseModeIssuer returns the JARM issuer.
+	GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string
+}
+
+// JWTSecuredAuthorizeResponseModeSignerProvider returns the provider for configuring the JARM signer.
+type JWTSecuredAuthorizeResponseModeSignerProvider interface {
+	// GetJWTSecuredAuthorizeResponseModeSigner returns the JARM signer.
+	GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer
+}
+
+// JWTSecuredAuthorizeResponseModeLifespanProvider returns the provider for configuring the JWT Secured Authorize Response Mode token lifespan.
+type JWTSecuredAuthorizeResponseModeLifespanProvider interface {
+	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
+}
+
 // AllowedPromptsProvider returns the provider for configuring the allowed prompts.
 type AllowedPromptsProvider interface {
 	// GetAllowedPrompts returns the allowed prompts.
@@ -238,10 +255,10 @@ type ClientAuthenticationStrategyProvider interface {
 	GetClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationStrategy
 }
 
-// ResponseModeHandlerExtensionProvider returns the provider for configuring the response mode handler extension.
-type ResponseModeHandlerExtensionProvider interface {
-	// GetResponseModeHandlerExtension returns the response mode handler extension.
-	GetResponseModeHandlerExtension(ctx context.Context) ResponseModeHandler
+// ResponseModeHandlerProvider returns the provider for configuring the response mode handlers.
+type ResponseModeHandlerProvider interface {
+	// GetResponseModeHandlers returns the response mode handlers in order of execution.
+	GetResponseModeHandlers(ctx context.Context) []ResponseModeHandler
 }
 
 // MessageCatalogProvider returns the provider for configuring the message catalog.

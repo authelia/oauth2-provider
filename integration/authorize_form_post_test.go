@@ -5,13 +5,13 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	xoauth2 "golang.org/x/oauth2"
@@ -26,49 +26,29 @@ import (
 )
 
 type formPostTestCase struct {
-	description  string
-	setup        func()
+	name         string
+	setup        func(t *testing.T, server *httptest.Server) (state string, client *xoauth2.Config)
 	check        checkFunc
 	responseType string
 }
 
-type checkFunc func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string)
+type checkFunc func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string)
 
 func TestAuthorizeFormPostResponseMode(t *testing.T) {
-	session := &defaultSession{
-		DefaultSession: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
-				Subject: "peter",
-			},
-			Headers: &jwt.Headers{},
-		},
-	}
-	config := &oauth2.Config{ResponseModeHandlerExtension: &decoratedFormPostResponse{}, GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
-	f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
-	ts := mockServer(t, f, session)
-	defer ts.Close()
-
-	oauthClient := newOAuth2Client(ts)
-	defaultClient := store.Clients["my-client"].(*oauth2.DefaultClient)
-	defaultClient.RedirectURIs[0] = ts.URL + "/callback"
-	responseModeClient := &oauth2.DefaultResponseModeClient{
-		DefaultClient: defaultClient,
-		ResponseModes: []oauth2.ResponseModeType{oauth2.ResponseModeFormPost, oauth2.ResponseModeFormPost, "decorated_form_post"},
-	}
-	store.Clients["response-mode-client"] = responseModeClient
-	oauthClient.ClientID = "response-mode-client"
-
-	var state string
-	for k, c := range []formPostTestCase{
+	testCases := []struct {
+		name         string
+		setup        func(t *testing.T, client *xoauth2.Config, server *httptest.Server)
+		check        checkFunc
+		responseType string
+		state        string
+	}{
 		{
-			description:  "implicit grant #1 test with form_post",
+			name:         "ShouldHandleImplicitFlowBoth",
 			responseType: "id_token%20token",
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{consts.ScopeOpenID}
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, token.TokenType)
 				assert.NotEmpty(t, token.AccessToken)
 				assert.NotEmpty(t, token.Expiry)
@@ -76,37 +56,32 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			},
 		},
 		{
-			description:  "implicit grant #2 test with form_post",
+			name:         "ShouldHandleImplicitFlowIDToken",
 			responseType: consts.ResponseTypeImplicitFlowIDToken,
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{consts.ScopeOpenID}
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, iDToken)
 			},
 		},
 		{
-			description:  "Authorization code grant test with form_post",
+			name:         "ShouldHandleAuthorizationCodeFlow",
 			responseType: consts.ResponseTypeAuthorizationCodeFlow,
-			setup: func() {
-				state = "12345678901234567890"
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, code)
 			},
 		},
 		{
-			description:  "Hybrid #1 grant test with form_post",
+			name:         "ShouldHandleHybridFlowToken",
 			responseType: "token%20code",
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{consts.ScopeOpenID}
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, token.TokenType)
 				assert.NotEmpty(t, token.AccessToken)
@@ -114,14 +89,12 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			},
 		},
 		{
-			description:  "Hybrid #2 grant test with form_post",
+			name:         "ShouldHandleHybridFlowBoth",
 			responseType: "token%20id_token%20code",
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{consts.ScopeOpenID}
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, iDToken)
 				assert.NotEmpty(t, token.TokenType)
@@ -130,66 +103,141 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			},
 		},
 		{
-			description:  "Hybrid #3 grant test with form_post",
+			name:         "ShouldHandleHybridFlowIDToken",
 			responseType: "id_token%20code",
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{consts.ScopeOpenID}
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, code)
 				assert.NotEmpty(t, iDToken)
 			},
 		},
 		{
-			description:  "error message test for form_post response",
+			name:         "ShouldHandleFailure",
 			responseType: "foo",
-			setup: func() {
-				state = "12345678901234567890"
-			},
-			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-				assert.EqualValues(t, state, stateFromServer)
+			state:        "12345678901234567890",
+			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
+			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
+				assert.Equal(t, expectedState, actualState)
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 			},
 		},
-	} {
-		// Test canonical form_post
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), testFormPost(&state, false, c, oauthClient, consts.ResponseModeFormPost))
-
-		// Test decorated form_post response
-		c.check = decorateCheck(c.check)
-		t.Run(fmt.Sprintf("case=%d/description=decorated_%s", k, c.description), testFormPost(&state, true, c, oauthClient, "decorated_form_post"))
 	}
-}
 
-func testFormPost(state *string, customResponse bool, c formPostTestCase, oauthClient *xoauth2.Config, responseMode string) func(t *testing.T) {
-	return func(t *testing.T) {
-		c.setup()
-		authURL := strings.Replace(oauthClient.AuthCodeURL(*state, xoauth2.SetAuthURLParam("response_mode", responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
-		client := &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return errors.New("Dont follow redirects")
-			},
-		}
-		resp, err := client.Get(authURL)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		code, state, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
-		require.NoError(t, err)
-		c.check(t, state, code, iDToken, token, cparam, errResp)
-	}
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("Canonical", func(t *testing.T) {
+				session := &defaultSession{
+					DefaultSession: &openid.DefaultSession{
+						Claims: &jwt.IDTokenClaims{
+							Subject: "peter",
+						},
+						Headers: &jwt.Headers{},
+					},
+				}
 
-func decorateCheck(cf checkFunc) checkFunc {
-	return func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
-		cf(t, stateFromServer, code, token, iDToken, cparam, err)
-		if len(err) > 0 {
-			assert.Contains(t, cparam, "custom_err_param")
-			return
-		}
-		assert.Contains(t, cparam, "custom_param")
+				config := &oauth2.Config{GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
+
+				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+				server := mockServer(t, f, session)
+
+				defer server.Close()
+
+				store.Clients["response-mode-client"] = &oauth2.DefaultResponseModeClient{
+					DefaultClient: &oauth2.DefaultClient{
+						ID:            "response-mode-client",
+						Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
+						RedirectURIs:  []string{server.URL + "/callback"},
+						ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+						GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+						Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
+						Audience:      []string{tokenURL},
+					},
+					ResponseModes: []oauth2.ResponseModeType{oauth2.ResponseModeFormPost, oauth2.ResponseModeFormPost, "decorated_form_post"},
+				}
+
+				client := newOAuth2Client(server)
+				client.ClientID = "response-mode-client"
+				client.Scopes = []string{consts.ScopeOpenID}
+
+				authURL := strings.Replace(client.AuthCodeURL(tc.state, xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, consts.ResponseModeFormPost), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+tc.responseType, -1)
+
+				c := &http.Client{
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						return errors.New("Dont follow redirects")
+					},
+				}
+
+				resp, err := c.Get(authURL)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+				code, actualState, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
+				require.NoError(t, err)
+
+				tc.check(t, tc.state, actualState, code, iDToken, token, cparam, errResp)
+			})
+
+			t.Run("Decorated", func(t *testing.T) {
+				session := &defaultSession{
+					DefaultSession: &openid.DefaultSession{
+						Claims: &jwt.IDTokenClaims{
+							Subject: "peter",
+						},
+						Headers: &jwt.Headers{},
+					},
+				}
+
+				config := &oauth2.Config{GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
+
+				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+				server := mockServer(t, f, session)
+
+				defer server.Close()
+
+				store.Clients["response-mode-client"] = &oauth2.DefaultResponseModeClient{
+					DefaultClient: &oauth2.DefaultClient{
+						ID:            "response-mode-client",
+						Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
+						RedirectURIs:  []string{server.URL + "/callback"},
+						ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+						GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+						Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
+						Audience:      []string{tokenURL},
+					},
+					ResponseModes: []oauth2.ResponseModeType{oauth2.ResponseModeFormPost, oauth2.ResponseModeFormPost, "decorated_form_post"},
+				}
+
+				client := newOAuth2Client(server)
+				client.ClientID = "response-mode-client"
+				client.Scopes = []string{consts.ScopeOpenID}
+
+				authURL := strings.Replace(client.AuthCodeURL(tc.state, xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, "decorated_form_post"), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+tc.responseType, -1)
+
+				c := &http.Client{
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						return errors.New("Dont follow redirects")
+					},
+				}
+
+				resp, err := c.Get(authURL)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+				code, actualState, token, iDToken, cparam, errResp, err := internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
+				require.NoError(t, err)
+
+				tc.check(t, tc.state, actualState, code, iDToken, token, cparam, errResp)
+
+				if len(errResp) > 0 {
+					assert.Contains(t, cparam, "custom_err_param")
+					return
+				}
+				assert.Contains(t, cparam, "custom_param")
+			})
+		})
 	}
 }
 
@@ -197,25 +245,24 @@ func decorateCheck(cf checkFunc) checkFunc {
 // of a custom response mode handler.
 // In this case it decorates the `form_post` response mode
 // with some additional custom parameters
-type decoratedFormPostResponse struct {
-}
+type DecoratedFormPostResponse struct{}
 
-func (m *decoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
+func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 	return oauth2.ResponseModeTypes{"decorated_form_post"}
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) {
+func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) {
 	rw.Header().Add(consts.HeaderContentType, consts.ContentTypeTextHTML)
 	resp.AddParameter("custom_param", "foo")
 	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), oauth2.GetPostFormHTMLTemplate(ctx,
-		oauth2.New(nil, new(oauth2.Config))), rw)
+		new(oauth2.Config)), rw)
 }
 
-func (m *decoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, err error) {
+func (m *DecoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, err error) {
 	rfcerr := oauth2.ErrorToRFC6749Error(err)
 	errors := rfcerr.ToValues()
-	errors.Set("state", ar.GetState())
+	errors.Set(consts.FormParameterState, ar.GetState())
 	errors.Add("custom_err_param", "bar")
 	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, oauth2.GetPostFormHTMLTemplate(ctx,
-		oauth2.New(nil, new(oauth2.Config))), rw)
+		new(oauth2.Config)), rw)
 }

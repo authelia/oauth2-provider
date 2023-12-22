@@ -84,13 +84,30 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	claims := sess.IDTokenClaims()
+
+	var (
+		hash string
+		err  error
+	)
+
+	if state := ar.GetState(); len(state) != 0 && claims != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, ar.GetState()); err != nil {
+			return err
+		}
+
+		claims.StateHash = hash
+	}
+
 	if ar.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
 		}
 
-		code, signature, err := c.AuthorizeExplicitGrantHandler.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, ar)
-		if err != nil {
+		var (
+			code, signature string
+		)
+
+		if code, signature, err = c.AuthorizeExplicitGrantHandler.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, ar); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 
@@ -103,17 +120,18 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 		// This is required because we must limit the authorize code lifespan.
 		ar.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Round(time.Second))
-		if err := c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, ar.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
+
+		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, ar.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 		}
 
 		resp.AddParameter(consts.FormParameterAuthorizationCode, code)
 		ar.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
-		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.FormParameterAuthorizationCode))
-		if err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.FormParameterAuthorizationCode)); err != nil {
 			return err
 		}
+
 		claims.CodeHash = hash
 
 		if ar.GetGrantedScopes().Has(consts.ScopeOpenID) {
@@ -126,15 +144,16 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	if ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
 		if !ar.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
-		} else if err := c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, ar, resp); err != nil {
+		} else if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, ar, resp); err != nil {
 			return errorsx.WithStack(err)
 		}
+
 		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
 
-		hash, err := c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.AccessResponseAccessToken))
-		if err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, resp.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
 			return err
 		}
+
 		claims.AccessTokenHash = hash
 	}
 
@@ -144,17 +163,19 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	if !ar.GetGrantedScopes().Has(consts.ScopeOpenID) || !ar.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
 		ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
+
 		return nil
 	}
 
 	// Hybrid flow uses implicit flow config for the id token's lifespan
 	idTokenLifespan := oauth2.GetEffectiveLifespan(ar.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	if err := c.IDTokenHandleHelper.IssueImplicitIDToken(ctx, idTokenLifespan, ar, resp); err != nil {
+	if err = c.IDTokenHandleHelper.IssueImplicitIDToken(ctx, idTokenLifespan, ar, resp); err != nil {
 		return errorsx.WithStack(err)
 	}
 
 	ar.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
-	return nil
+
 	// there is no need to check for https, because implicit flow does not require https
 	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
+	return nil
 }

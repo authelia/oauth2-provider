@@ -34,6 +34,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		RequestedAt:                         time.Now().UTC(),
 		AccessTokenHash:                     "foobar",
 		CodeHash:                            "barfoo",
+		StateHash:                           "boofar",
 		AuthenticationContextClassReference: "acr",
 		AuthenticationMethodsReferences:     []string{"amr"},
 		Extra: map[string]any{
@@ -53,6 +54,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		"baz":                          idTokenClaims.Extra["baz"],
 		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
 		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
+		consts.ClaimStateHash:          idTokenClaims.StateHash,
 		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
 		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
 		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
@@ -71,6 +73,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		"baz":                          idTokenClaims.Extra["baz"],
 		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
 		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
+		consts.ClaimStateHash:          idTokenClaims.StateHash,
 		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
 		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
 		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,

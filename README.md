@@ -51,7 +51,7 @@ following list of differences:
   - [ ] Auth Request omitted Response Mode not validated
   - [x] Refresh Grant if Token Invalid/Expired status is not 400
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/8e58bcae054dffbad1c920e0bbaa022dfac71f66)</sup>
-  - [ ] Access Token iat and nbf in JWT Profile always original claims
+  - [x] Access Token iat and nbf in JWT Profile always original claims
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
   - [ ] Customizable Token Prefix
@@ -64,7 +64,8 @@ following list of differences:
   - [ ] Client Secret Validation Interface
   - [ ] Clock Drift Support
   - [ ] Injectable Clock Configurator
-  - [ ] Support `s_hash`
+  - [x] Support `s_hash`
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/edbbbe9467c70a2578db4b9af4d6cd319f74886e)</sup>
 - Removal of the following dependencies:
   - [x] `go.opentelemetry.io/otel/trace`
   - [x] `github.com/ecordell/optgen`

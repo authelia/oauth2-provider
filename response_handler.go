@@ -87,11 +87,18 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 	rm := requester.GetResponseMode()
 
-	if rm == ResponseModeJWT {
+	switch rm {
+	case ResponseModeJWT:
 		if requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 			rm = ResponseModeQueryJWT
 		} else {
 			rm = ResponseModeFragmentJWT
+		}
+	case ResponseModeFormPost, ResponseModeQuery, ResponseModeFragment, ResponseModeDefault:
+		// RFC9207 OAuth 2.0 Authorization Server Issuer Identification.
+		// See Also: https://datatracker.ietf.org/doc/html/rfc9207.
+		if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
+			parameters.Set(consts.FormParameterIssuer, issuer)
 		}
 	}
 
@@ -220,5 +227,6 @@ type ResponseModeHandlerConfigurator interface {
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider
+	AuthorizationServerIdentificationIssuerProvider
 	UseLegacyErrorFormatProvider
 }

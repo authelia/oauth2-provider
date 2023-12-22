@@ -61,8 +61,9 @@ following list of differences:
     - [x] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)
           support
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2b6436032f041160311645d4e8a8b129f8986a89)</sup>
-    - [ ] [RFC9207: OAuth 2.0 Authorization Server Issuer Identification](https://datatracker.ietf.org/doc/html/rfc9207)
+    - [x] [RFC9207: OAuth 2.0 Authorization Server Issuer Identification](https://datatracker.ietf.org/doc/html/rfc9207)
           support
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/28cb8cddc09d1dcd4b9ec42870499d8a37223366)</sup>
     - [ ] Response Type None
   - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
         request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>

@@ -73,6 +73,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		},
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,
+		OAuth2AuthorizeNoneFactory,
 		OAuth2ClientCredentialsGrantFactory,
 		OAuth2RefreshTokenGrantFactory,
 		OAuth2ResourceOwnerPasswordCredentialsFactory,

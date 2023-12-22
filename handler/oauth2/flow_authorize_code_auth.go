@@ -47,56 +47,56 @@ func (c *AuthorizeExplicitGrantHandler) secureChecker(ctx context.Context) func(
 	return c.Config.GetRedirectSecureChecker(ctx)
 }
 
-func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
+func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
-	if !ar.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+	if !requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
-	ar.SetDefaultResponseMode(oauth2.ResponseModeQuery)
+	requester.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
 	// Disabled because this is already handled at the authorize_request_handler
-	// if !ar.GetClient().GetResponseTypes().Has("code") {
+	// if !requester.GetClient().GetResponseTypes().Has("code") {
 	// 	 return errorsx.WithStack(oauth2.ErrInvalidGrant)
 	// }
 
-	if !c.secureChecker(ctx)(ctx, ar.GetRedirectURI()) {
+	if !c.secureChecker(ctx)(ctx, requester.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
-	client := ar.GetClient()
-	for _, scope := range ar.GetRequestedScopes() {
+	client := requester.GetClient()
+	for _, scope := range requester.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), ar.GetRequestedAudience()); err != nil {
+	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	return c.IssueAuthorizeCode(ctx, ar, resp)
+	return c.IssueAuthorizeCode(ctx, requester, responder)
 }
 
-func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) error {
-	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, ar)
+func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
+	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, requester)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	ar.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
+	requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
 
-	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, ar.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
+	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
 	}
 
-	resp.AddParameter(consts.FormParameterAuthorizationCode, code)
-	resp.AddParameter(consts.FormParameterState, ar.GetState())
+	responder.AddParameter(consts.FormParameterAuthorizationCode, code)
+	responder.AddParameter(consts.FormParameterState, requester.GetState())
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
-		resp.AddParameter(consts.FormParameterScope, strings.Join(ar.GetGrantedScopes(), " "))
+		responder.AddParameter(consts.FormParameterScope, strings.Join(requester.GetGrantedScopes(), " "))
 	}
 
-	ar.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
+	requester.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
 	return nil
 }

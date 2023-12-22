@@ -157,7 +157,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			}
 		}
 
-		prompt := requester.GetRequestForm().Get("prompt")
+		prompt := requester.GetRequestForm().Get(consts.FormParameterPrompt)
 		if prompt != "" {
 			if claims.AuthTime.IsZero() {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in id token claims."))

@@ -132,7 +132,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
+				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
@@ -164,7 +164,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
+	token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.NoError(t, err)
 	require.NotEmpty(t, token.AccessToken)
 
@@ -176,7 +176,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, err = oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
+	_, err = oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.Error(t, err)
 
 	resp, err = http.DefaultClient.Get(ts.URL + "/info")

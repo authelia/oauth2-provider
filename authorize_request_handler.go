@@ -29,7 +29,7 @@ func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
 }
 
 func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
-	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get("scope"), " "))
+	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	// Even if a scope parameter is present in the Request Object value, a scope parameter MUST always be passed using
 	// the OAuth 2.0 request syntax containing the openid scope value to indicate to the underlying OAuth 2.0 logic that this is an OpenID Connect request.
@@ -220,7 +220,7 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", r.Form.Get("response_type")))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", r.Form.Get(consts.FormParameterResponseType)))
 	}
 
 	request.ResponseTypes = responseTypes
@@ -250,7 +250,7 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 
 	responseModeClient, ok := request.GetClient().(ResponseModeClient)
 	if !ok {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The request has response_mode \"%s\". set but registered OAuth 2.0 client doesn't support response_mode", r.Form.Get("response_mode")))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The request has response_mode \"%s\". set but registered OAuth 2.0 client doesn't support response_mode", r.Form.Get(consts.FormParameterResponseMode)))
 	}
 
 	var found bool
@@ -262,7 +262,7 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The client is not allowed to request response_mode '%s'.", r.Form.Get("response_mode")))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The client is not allowed to request response_mode '%s'.", r.Form.Get(consts.FormParameterResponseMode)))
 	}
 
 	return nil
@@ -399,7 +399,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	// A fallback handler to set the default response mode in cases where we can not reach the Authorize Handlers
 	// but still need the e.g. correct error response mode.
 	if request.GetResponseMode() == ResponseModeDefault {
-		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) || request.ResponseTypes.ExactOne(consts.ResponseTypeNone) {
 			request.SetDefaultResponseMode(ResponseModeQuery)
 		} else {
 			// If the response type is not `code` it is an implicit/hybrid (fragment) response mode.

@@ -5,7 +5,6 @@ package openid
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"testing"
 	"time"
@@ -107,86 +106,85 @@ func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 }
 
 func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	aresp := oauth2.NewAuthorizeResponse()
-	areq := oauth2.NewAuthorizeRequest()
-
-	for k, c := range []struct {
-		description string
-		setup       func() OpenIDConnectHybridHandler
-		check       func()
-		expectErr   error
+	testCases := []struct {
+		name          string
+		setup         func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler
+		check         func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse)
+		expected      string
+		expectedField string
 	}{
 		{
-			description: "should not do anything because not a hybrid request",
-			setup: func() OpenIDConnectHybridHandler {
+			name: "should not do anything because not a hybrid request",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
-			description: "should not do anything because not a hybrid request",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+			name: "should not do anything because not a hybrid request",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
-			description: "should fail because nonce set but too short",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"short"}}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
-				areq.Client = &oauth2.DefaultClient{
+			name: "should fail because nonce set but too short",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form = url.Values{consts.FormParameterNonce: {"short"}}
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
+				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: oauth2.ErrInsufficientEntropy,
+			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
+			expectedField: "insufficient_entropy",
 		},
 		{
-			description: "should fail because nonce set but too short for non-default min entropy",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"some-foobar-nonce-win"}}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
-				areq.Client = &oauth2.DefaultClient{
+			name: "should fail because nonce set but too short for non-default min entropy",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form = url.Values{consts.FormParameterNonce: {"some-foobar-nonce-win"}}
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
+				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(42)
 			},
-			expectErr: oauth2.ErrInsufficientEntropy,
+			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 42 characters.",
+			expectedField: "insufficient_entropy",
 		},
 		{
-			description: "should fail because session not given",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"long-enough"}}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
-				areq.Client = &oauth2.DefaultClient{
+			name: "should fail because session not given",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Session = nil
+				request.Form = url.Values{consts.FormParameterNonce: {"long-enough"}}
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
+				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: ErrInvalidSession,
+			expected:      "Session type mismatch",
+			expectedField: "Session type mismatch",
 		},
 		{
-			description: "should fail because client missing response types",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
-				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{"implicit"},
+			name: "should fail because client missing response types",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
-				areq.Session = &DefaultSession{
+				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
 					},
@@ -195,21 +193,34 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			expectErr: oauth2.ErrInvalidGrant,
+			//expectErr: oauth2.ErrInvalidGrant,
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'nonce' must be set when requesting an ID Token using the OpenID Connect Hybrid Flow.",
+			expectedField: "invalid_request",
 		},
 		{
-			description: "should pass with exact one state parameter in response",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"long-enough"}, consts.FormParameterState: {""}}
-				areq.Client = &oauth2.DefaultClient{
+			name: "should pass with exact one state parameter in response",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}
+				request.State = "some-foobar-state-win"
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+					Subject: "peter",
+				}
+				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			check: func() {
-				params := aresp.GetParameters()
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				params := response.GetParameters()
 				var stateParam []string
 				for k, v := range params {
 					if k == "state" {
@@ -221,136 +232,258 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			description: "should pass because nonce was set with sufficient entropy",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
-				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
-					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{consts.ScopeOpenID},
-				}
-				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
-			},
-		},
-		{
-			description: "should pass even if nonce was not set",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
-					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{consts.ScopeOpenID},
-				}
-				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
-			},
-		},
-		{
-			description: "should pass because nonce was set with low entropy but also with low min entropy",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form.Set(consts.FormParameterNonce, "short")
-				areq.Client = &oauth2.DefaultClient{
-					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
-					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-					Scopes:        []string{consts.ScopeOpenID},
-				}
-				return makeOpenIDConnectHybridHandler(4)
-			},
-		},
-		{
-			description: "should pass because AuthorizeCode's ExpiresAt is set, even if AuthorizeCodeLifespan is zero",
-			setup: func() OpenIDConnectHybridHandler {
-				areq.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
-				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
-			},
-			check: func() {
-				assert.True(t, !areq.Session.GetExpiresAt(oauth2.AuthorizeCode).IsZero())
-			},
-		},
-		{
-			description: "should pass",
-			setup: func() OpenIDConnectHybridHandler {
-				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
-			},
-			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseIDToken))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAuthorizationCode))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
-				internal.RequireEqualTime(t, time.Now().Add(time.Hour).UTC(), areq.GetSession().GetExpiresAt(oauth2.AuthorizeCode), time.Second)
-			},
-		},
-		{
-			description: "should pass with custom client lifespans",
-			setup: func() OpenIDConnectHybridHandler {
-				aresp = oauth2.NewAuthorizeResponse()
-				areq = oauth2.NewAuthorizeRequest()
-				areq.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
-				areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
-					DefaultClient: &oauth2.DefaultClient{
-						GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
-						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
-						Scopes:        []string{consts.ScopeOpenID},
-					},
-				}
-				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
-				areq.Session = &DefaultSession{
+			name: "ShouldPassWithStateParameterAndGenerateStateHash",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+				request.State = "some-foobar-state-win"
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+
+				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
 					},
 					Headers: &jwt.Headers{},
 					Subject: "peter",
 				}
-				areq.GetClient().(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth, consts.ResponseTypeHybridFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAuthorizationCode))
-				internal.RequireEqualTime(t, time.Now().Add(1*time.Hour).UTC(), areq.GetSession().GetExpiresAt(oauth2.AuthorizeCode), time.Second)
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				params := response.GetParameters()
+				var stateParam []string
+				for k, v := range params {
+					if k == consts.FormParameterState {
+						stateParam = v
+						break
+					}
+				}
+				assert.Len(t, stateParam, 1)
 
-				idToken := aresp.GetParameters().Get(consts.AccessResponseIDToken)
+				idToken := response.GetParameters().Get(consts.AccessResponseIDToken)
 				assert.NotEmpty(t, idToken)
-				assert.True(t, areq.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
+				assert.True(t, request.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
 
 				parser := xjwt.NewParser()
 
-				claims := &xjwt.RegisteredClaims{}
+				claims := &IDTokenClaims{}
+
+				_, _, err := parser.ParseUnverified(idToken, claims)
+				require.NoError(t, err)
+
+				assert.Equal(t, "MvmJNOT-fq6rnnnrUTC_2A", claims.StateHash)
+			},
+		},
+		{
+			name: "ShouldPassWhenNonceHasMinimumEntropy",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+		},
+		{
+			name: "ShouldPassIfNonceNotSet",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+		},
+		{
+			name: "should pass because nonce was set with low entropy but also with low min entropy",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "short")
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+
+				return makeOpenIDConnectHybridHandler(4)
+			},
+		},
+		{
+			name: "ShouldPassWhenExpiresAtSetWithCodeLifespanZero",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+					Subject: "peter",
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.True(t, !request.Session.GetExpiresAt(oauth2.AuthorizeCode).IsZero())
+			},
+		},
+		{
+			name: "ShouldPass",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+						Scopes:        []string{consts.ScopeOpenID},
+					},
+				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+					Subject: "peter",
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseIDToken))
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAccessToken))
+				internal.RequireEqualTime(t, time.Now().Add(time.Hour).UTC(), request.GetSession().GetExpiresAt(oauth2.AuthorizeCode), time.Second)
+			},
+		},
+		{
+			name: "ShouldPassWithCustomLifespan",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+						Scopes:        []string{consts.ScopeOpenID},
+					},
+				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+					Subject: "peter",
+				}
+				request.GetClient().(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+				internal.RequireEqualTime(t, time.Now().Add(1*time.Hour).UTC(), request.GetSession().GetExpiresAt(oauth2.AuthorizeCode), time.Second)
+
+				idToken := response.GetParameters().Get(consts.AccessResponseIDToken)
+				assert.NotEmpty(t, idToken)
+				assert.True(t, request.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
+
+				parser := xjwt.NewParser()
+
+				claims := &IDTokenClaims{}
 
 				_, _, err := parser.ParseUnverified(idToken, claims)
 
 				require.NoError(t, err)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.ExpiresAt.Time, time.Minute)
+				assert.NotEmpty(t, claims.CodeHash)
+				assert.Empty(t, claims.StateHash)
 
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.GetSession().GetExpiresAt(oauth2.AccessToken), time.Second)
+				assert.NotEmpty(t, claims)
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAccessToken))
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), request.GetSession().GetExpiresAt(oauth2.AccessToken), time.Second)
 			},
 		},
 		{
-			description: "Default responseMode check",
-			setup: func() OpenIDConnectHybridHandler {
+			name: "ShouldHandleDefaultResponseMode",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+						Scopes:        []string{consts.ScopeOpenID},
+					},
+				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+					Subject: "peter",
+				}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAuthorizationCode))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseIDToken))
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseIDToken))
 
-				assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
-				assert.WithinDuration(t, time.Now().Add(time.Hour).UTC(), areq.GetSession().GetExpiresAt(oauth2.AuthorizeCode), 5*time.Second)
+				assert.Equal(t, oauth2.ResponseModeFragment, request.GetResponseMode())
+				assert.WithinDuration(t, time.Now().Add(time.Hour).UTC(), request.GetSession().GetExpiresAt(oauth2.AuthorizeCode), 5*time.Second)
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			h := c.setup()
-			err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
+	}
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			request := oauth2.NewAuthorizeRequest()
+			request.Session = NewDefaultSession()
+
+			response := oauth2.NewAuthorizeResponse()
+
+			h := tc.setup(t, request, response)
+			err := h.HandleAuthorizeEndpointRequest(context.TODO(), request, response)
+
+			if len(tc.expected) != 0 {
+				require.EqualError(t, err, tc.expectedField)
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 			} else {
 				require.NoError(t, err)
 			}
 
-			if c.check != nil {
-				c.check()
+			if tc.check != nil {
+				tc.check(t, request, response)
 			}
 		})
 	}
+}
+
+type IDTokenClaims struct {
+	StateHash string `json:"s_hash"`
+	CodeHash  string `json:"c_hash"`
+
+	xjwt.RegisteredClaims
 }

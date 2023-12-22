@@ -26,6 +26,7 @@ type IDTokenClaims struct {
 	AuthenticationContextClassReference string         `json:"acr"`
 	AuthenticationMethodsReferences     []string       `json:"amr"`
 	CodeHash                            string         `json:"c_hash"`
+	StateHash                           string         `json:"s_hash"`
 	Extra                               map[string]any `json:"ext"`
 }
 
@@ -91,6 +92,12 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		ret[consts.ClaimCodeHash] = c.CodeHash
 	} else {
 		delete(ret, consts.ClaimCodeHash)
+	}
+
+	if len(c.StateHash) > 0 {
+		ret[consts.ClaimStateHash] = c.StateHash
+	} else {
+		delete(ret, consts.ClaimStateHash)
 	}
 
 	if !c.AuthTime.IsZero() {

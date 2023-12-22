@@ -29,5 +29,6 @@ const (
 	ClaimTokenIntrospection                  = "token_introspection"
 	ClaimAccessTokenHash                     = "at_hash"
 	ClaimCodeHash                            = "c_hash"
+	ClaimStateHash                           = "s_hash"
 	ClaimNonce                               = valueNonce
 )

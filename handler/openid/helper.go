@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type IDTokenHandleHelper struct {
@@ -58,7 +59,8 @@ func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan
 	if err != nil {
 		return err
 	}
-	resp.AddParameter("id_token", token)
+	resp.AddParameter(consts.AccessResponseIDToken, token)
+
 	return nil
 }
 
@@ -68,7 +70,8 @@ func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan
 		return err
 	}
 
-	resp.SetExtra("id_token", token)
+	resp.SetExtra(consts.AccessResponseIDToken, token)
+
 	return nil
 }
 
@@ -76,7 +79,7 @@ func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan
 func (i *IDTokenHandleHelper) ComputeHash(ctx context.Context, sess Session, token string) (string, error) {
 	var err error
 	hash := sha256.New()
-	if alg, ok := sess.IDTokenHeaders().Get("alg").(string); ok && len(alg) > 2 {
+	if alg, ok := sess.IDTokenHeaders().Get(consts.JSONWebTokenHeaderAlgorithm).(string); ok && len(alg) > 2 {
 		if hashSize, err := strconv.Atoi(alg[2:]); err == nil {
 			if hashSize == 384 {
 				hash = sha512.New384()

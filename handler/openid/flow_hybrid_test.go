@@ -236,7 +236,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
 				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
-				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.State = "some-foobar-state-win"
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 

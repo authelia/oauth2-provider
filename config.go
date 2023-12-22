@@ -210,6 +210,16 @@ type SendDebugMessagesToClientsProvider interface {
 	GetSendDebugMessagesToClients(ctx context.Context) bool
 }
 
+// RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
+type RevokeRefreshTokensExplicitlyProvider interface {
+	// GetRevokeRefreshTokensExplicitly returns true if a refresh token should only be revoked explicitly.
+	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
+
+	// GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient returns true if a
+	// RevokeFlowRevokeRefreshTokensExplicitClient returning false should be enforced.
+	GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool
+}
+
 // JWKSFetcherStrategyProvider returns the provider for configuring the JWKS fetcher strategy.
 type JWKSFetcherStrategyProvider interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.

@@ -81,6 +81,7 @@ func OAuth2TokenRevocationFactory(config oauth2.Configurator, storage any, strat
 		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 		AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),
 		RefreshTokenStrategy:   strategy.(hoauth2.RefreshTokenStrategy),
+		Config:                 config,
 	}
 }
 

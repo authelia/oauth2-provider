@@ -95,6 +95,13 @@ type Config struct {
 	// codes or other information. Proceed with caution!
 	SendDebugMessagesToClients bool
 
+	// RevokeRefreshTokensExplicitly determines if Refresh Tokens should only be revoked explicitly.
+	RevokeRefreshTokensExplicitly bool
+
+	// EnforceRevokeFlowRevokeRefreshTokensExplicitClient determines if a RevokeFlowRevokeRefreshTokensExplicitClient
+	// should be prioritized even if it returns false.
+	EnforceRevokeFlowRevokeRefreshTokensExplicitClient bool
+
 	// ScopeStrategy sets the scope strategy that should be supported, for example oauth2.WildcardScopeStrategy.
 	ScopeStrategy ScopeStrategy
 
@@ -281,6 +288,14 @@ func (c *Config) GetResponseModeHandlerExtension(ctx context.Context) ResponseMo
 
 func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
 	return c.SendDebugMessagesToClients
+}
+
+func (c *Config) GetRevokeRefreshTokensExplicitly(ctx context.Context) bool {
+	return c.RevokeRefreshTokensExplicitly
+}
+
+func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool {
+	return c.EnforceRevokeFlowRevokeRefreshTokensExplicitClient
 }
 
 func (c *Config) GetIDTokenIssuer(ctx context.Context) string {

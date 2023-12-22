@@ -6,7 +6,7 @@ package oauth2
 import (
 	"context"
 
-	"github.com/go-jose/go-jose/v3"
+	jose "github.com/go-jose/go-jose/v3"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -80,6 +80,15 @@ type RefreshFlowScopeClient interface {
 	Client
 
 	GetRefreshFlowIgnoreOriginalGrantedScopes(ctx context.Context) (ignoreOriginalGrantedScopes bool)
+}
+
+// RevokeFlowRevokeRefreshTokensExplicitClient is a client which can be customized to only revoke Refresh Tokens
+// explicitly.
+type RevokeFlowRevokeRefreshTokensExplicitClient interface {
+	Client
+
+	// GetRevokeRefreshTokensExplicitly returns true if this client will only revoke refresh tokens explicitly.
+	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
 }
 
 // ResponseModeClient represents a client capable of handling response_mode

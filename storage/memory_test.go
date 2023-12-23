@@ -5,55 +5,56 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"authelia.com/provider/oauth2"
 )
 
 func TestMemoryStore_Authenticate(t *testing.T) {
-	type fields struct {
-		Users      map[string]MemoryUserRelation
-		usersMutex sync.RWMutex
-	}
 	type args struct {
 		in0    context.Context
 		name   string
 		secret string
 	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr error
+
+	testCases := []struct {
+		name  string
+		users map[string]MemoryUserRelation
+		args  args
+		err   string
 	}{
 		{
-			name: "invalid_password",
+			name: "ShouldHandleInvalidPassword",
 			args: args{
 				name:   "peter",
 				secret: "invalid",
 			},
-			fields: fields{
-				Users: map[string]MemoryUserRelation{
-					"peter": {
-						Username: "peter",
-						Password: "secret",
-					},
+			users: map[string]MemoryUserRelation{
+				"peter": {
+					Username: "peter",
+					Password: "secret",
 				},
 			},
-			// ResourceOwnerPasswordCredentialsGrantHandler expects ErrNotFound
-			wantErr: oauth2.ErrNotFound,
+			err: "Could not find the requested resource(s). Invalid credentials.",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			s := &MemoryStore{
-				Users:      tt.fields.Users,
-				usersMutex: tt.fields.usersMutex,
+				Users:      tc.users,
+				usersMutex: sync.RWMutex{},
 			}
-			if err := s.Authenticate(tt.args.in0, tt.args.name, tt.args.secret); err == nil || !errors.Is(err, tt.wantErr) {
-				t.Errorf("Authenticate() error = %v, wantErr %v", err, tt.wantErr)
+
+			err := s.Authenticate(tc.args.in0, tc.args.name, tc.args.secret)
+
+			if len(tc.err) == 0 {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			}
 		})
 	}

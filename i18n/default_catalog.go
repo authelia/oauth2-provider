@@ -63,13 +63,13 @@ func (l *DefaultLocaleBundle) Init() error {
 	return nil
 }
 
-func (c *defaultMessageCatalog) GetMessage(ID string, tag language.Tag, v ...any) string {
+func (c *defaultMessageCatalog) GetMessage(id string, tag language.Tag, v ...any) string {
 	matchedTag, _, _ := c.matcher.Match(tag)
 	p := message.NewPrinter(matchedTag)
 
-	result := p.Sprintf(ID, v...)
-	if result == ID && tag != language.English {
-		return c.GetMessage(ID, language.English, v...)
+	result := p.Sprintf(id, v...)
+	if result == id && tag != language.English {
+		return c.GetMessage(id, language.English, v...)
 	}
 
 	return result

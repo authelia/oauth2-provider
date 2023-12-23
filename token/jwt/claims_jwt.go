@@ -157,7 +157,11 @@ func (c *JWTClaims) ToMap() map[string]any {
 	return ret
 }
 
-// FromMap will set the claims based on a mapping
+// FromMap will set the claims based on a mapping.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *JWTClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
 	for k, v := range m {

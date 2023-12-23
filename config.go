@@ -315,11 +315,11 @@ type PushedAuthorizeRequestHandlersProvider interface {
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.
 //
-// DEPRECATED: Do not use this flag anymore.
+// Deprecated: Do not use this flag anymore.
 type UseLegacyErrorFormatProvider interface {
 	// GetUseLegacyErrorFormat returns whether to use the legacy error format.
 	//
-	// DEPRECATED: Do not use this flag anymore.
+	// Deprecated: Do not use this flag anymore.
 	GetUseLegacyErrorFormat(ctx context.Context) bool
 }
 

@@ -23,14 +23,14 @@ func DefaultAudienceMatchingStrategy(haystack []string, needle []string) error {
 	for _, n := range needle {
 		nu, err := url.Parse(n)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to parse requested audience '%s'.", n).WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to parse requested audience '%s'.", n).WithWrap(err).WithDebugError(err))
 		}
 
 		var found bool
 		for _, h := range haystack {
 			hu, err := url.Parse(h)
 			if err != nil {
-				return errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to parse whitelisted audience '%s'.", h).WithWrap(err).WithDebug(err.Error()))
+				return errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to parse whitelisted audience '%s'.", h).WithWrap(err).WithDebugError(err))
 			}
 
 			allowedPath := strings.TrimRight(hu.Path, "/")
@@ -84,15 +84,18 @@ func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
 // If "audience" form parameter is repeated, we do not split the value by space.
 func GetAudiences(form url.Values) []string {
 	audiences := form[consts.FormParameterAudience]
-	if len(audiences) > 1 {
-		return RemoveEmpty(audiences)
-	} else if len(audiences) == 1 {
+
+	switch len(audiences) {
+	case 1:
 		return RemoveEmpty(strings.Split(audiences[0], " "))
-	} else {
+	case 0:
 		return []string{}
+	default:
+		return RemoveEmpty(audiences)
 	}
 }
 
+//nolint:unparam
 func (f *Fosite) validateAuthorizeAudience(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
 	audience := GetAudiences(request.Form)
 

@@ -20,7 +20,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-var strat = &DefaultStrategy{
+var strategy = &DefaultStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(_ context.Context) (any, error) {
 			return gen.MustRSAKey(), nil
@@ -90,7 +90,7 @@ func TestIssueExplicitToken(t *testing.T) {
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().SetExtra("id_token", gomock.Any())
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 	err := h.IssueExplicitIDToken(context.TODO(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)
 }
@@ -107,7 +107,7 @@ func TestIssueImplicitToken(t *testing.T) {
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().AddParameter(consts.AccessResponseIDToken, gomock.Any())
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 	err := h.IssueImplicitIDToken(context.TODO(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)
 }
@@ -122,7 +122,7 @@ func TestGetAccessTokenHash(t *testing.T) {
 	req.EXPECT().GetSession().Return(nil)
 	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
 
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
 	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
@@ -143,7 +143,7 @@ func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
 	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
 	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
 
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
 	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
 	assert.Equal(t, "VNX38yiOyeqBPheW5jDsWQKa6IjJzK66", hash)
@@ -164,7 +164,7 @@ func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
 	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
 	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
 
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
 	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
@@ -185,7 +185,7 @@ func TestGetAccessTokenHashWithMissingKeyLength(t *testing.T) {
 	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
 	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
 
-	h := &IDTokenHandleHelper{IDTokenStrategy: strat}
+	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
 	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)

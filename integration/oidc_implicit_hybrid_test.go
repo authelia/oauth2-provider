@@ -5,11 +5,9 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -27,121 +25,134 @@ import (
 )
 
 func TestOIDCImplicitFlow(t *testing.T) {
-	session := &defaultSession{
-		DefaultSession: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
-				Subject: "peter",
-			},
-			Headers: &jwt.Headers{},
-		},
-	}
-	f := compose.ComposeAllEnabled(&oauth2.Config{
-		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
-	}, store, gen.MustRSAKey())
-	ts := mockServer(t, f, session)
-	defer ts.Close()
-
-	oauthClient := newOAuth2Client(ts)
-	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-
-	var state = "12345678901234567890"
-	for k, c := range []struct {
+	testCases := []struct {
+		name         string
+		setup        func(t *testing.T, client *xoauth2.Config)
 		responseType string
-		description  string
 		nonce        string
-		setup        func()
 		hasToken     bool
 		hasIdToken   bool
 		hasCode      bool
 	}{
 		{
-			description:  "should pass without id token",
-			responseType: "token",
-			setup: func() {
-				oauthClient.Scopes = []string{"oauth2"}
+			name:         "ShouldPassImplicitToken",
+			responseType: consts.ResponseTypeImplicitFlowToken,
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"oauth2"}
 			},
 			hasToken: true,
 		},
 		{
-
-			responseType: "id_token%20token",
+			name:         "ShouldPassImplicitBoth",
+			responseType: consts.ResponseTypeImplicitFlowBoth,
 			nonce:        "1111111111111111",
-			description:  "should pass id token (id_token token)",
-			setup: func() {
-				oauthClient.Scopes = []string{"oauth2", consts.ScopeOpenID}
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
 			},
 			hasToken:   true,
 			hasIdToken: true,
 		},
 		{
-
-			responseType: "token%20id_token%20code",
+			name:         "ShouldPassHybridBoth",
+			responseType: consts.ResponseTypeHybridFlowBoth,
 			nonce:        "1111111111111111",
-			description:  "should pass id token (code id_token token)",
-			setup:        func() {},
-			hasToken:     true,
-			hasCode:      true,
-			hasIdToken:   true,
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
+			},
+			hasToken:   true,
+			hasCode:    true,
+			hasIdToken: true,
 		},
 		{
-
-			responseType: "token%20code",
+			name:         "ShouldPassHybridToken",
+			responseType: consts.ResponseTypeHybridFlowToken,
 			nonce:        "1111111111111111",
-			description:  "should pass id token (code token)",
-			setup:        func() {},
+			setup:        nil,
 			hasToken:     true,
 			hasCode:      true,
 		},
 		{
-
-			responseType: "id_token%20code",
+			name:         "ShouldPassHybridIDToken",
+			responseType: consts.ResponseTypeHybridFlowIDToken,
 			nonce:        "1111111111111111",
-			description:  "should pass id token (id_token code)",
-			setup:        func() {},
-			hasCode:      true,
-			hasIdToken:   true,
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
+			},
+			hasCode:    true,
+			hasIdToken: true,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := &defaultSession{
+				DefaultSession: &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: "peter",
+					},
+					Headers: &jwt.Headers{},
+				},
+			}
+			f := compose.ComposeAllEnabled(&oauth2.Config{
+				GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
+			}, store, gen.MustRSAKey())
+			ts := mockServer(t, f, session)
+			defer ts.Close()
+
+			client := newOAuth2Client(ts)
+			store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+
+			var state = "12345678901234567890"
+
+			if tc.setup != nil {
+				tc.setup(t, client)
+			}
 
 			var callbackURL *url.URL
 
-			authURL := strings.Replace(oauthClient.AuthCodeURL(state), "response_type=code", "response_type="+c.responseType, -1) + "&nonce=" + c.nonce
+			authURL, err := url.Parse(client.AuthCodeURL(state))
+			require.NoError(t, err)
 
-			client := &http.Client{
+			query := authURL.Query()
+			query.Set(consts.FormParameterResponseType, tc.responseType)
+			query.Set(consts.FormParameterNonce, tc.nonce)
+
+			authURL.RawQuery = query.Encode()
+
+			c := &http.Client{
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
 					callbackURL = req.URL
 					return errors.New("Dont follow redirects")
 				},
 			}
 
-			resp, err := client.Get(authURL)
+			// TODO: investigate this.
+			//nolint:staticcheck
+			response, err := c.Get(authURL.String())
 			require.Error(t, err)
 
-			t.Logf("Response (%d): %s", k, callbackURL.String())
 			fragment, err := url.ParseQuery(callbackURL.Fragment)
 			require.NoError(t, err)
 
-			if c.hasToken {
+			if tc.hasToken {
 				assert.NotEmpty(t, fragment.Get(consts.AccessResponseAccessToken))
 			} else {
 				assert.Empty(t, fragment.Get(consts.AccessResponseAccessToken))
 			}
 
-			if c.hasCode {
+			if tc.hasCode {
 				assert.NotEmpty(t, fragment.Get(consts.FormParameterAuthorizationCode))
 			} else {
 				assert.Empty(t, fragment.Get(consts.FormParameterAuthorizationCode))
 			}
 
-			if c.hasIdToken {
+			if tc.hasIdToken {
 				assert.NotEmpty(t, fragment.Get(consts.AccessResponseIDToken))
 			} else {
 				assert.Empty(t, fragment.Get(consts.AccessResponseIDToken))
 			}
 
-			if !c.hasToken {
+			if !tc.hasToken {
 				return
 			}
 
@@ -155,11 +166,10 @@ func TestOIDCImplicitFlow(t *testing.T) {
 				Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 			}
 
-			httpClient := oauthClient.Client(context.TODO(), token)
-			resp, err = httpClient.Get(ts.URL + "/info")
+			httpClient := client.Client(context.TODO(), token)
+			response, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-			t.Logf("Passed test case (%d) %s", k, c.description)
+			assert.Equal(t, http.StatusOK, response.StatusCode)
 		})
 	}
 }

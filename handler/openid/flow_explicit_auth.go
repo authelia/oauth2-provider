@@ -42,10 +42,6 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return nil
 	}
 
-	//if !requester.GetClient().GetResponseTypes().Has("id_token", "code") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client is not allowed to use response type id_token and code"))
-	//}
-
 	if len(responder.GetCode()) == 0 {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The authorization code has not been issued yet, indicating a broken code configuration."))
 	}
@@ -55,10 +51,8 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, responder.GetCode(), requester.Sanitize(oidcParameters)); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
-
-	// there is no need to check for https, because it has already been checked by core.explicit
 
 	return nil
 }

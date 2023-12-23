@@ -121,6 +121,10 @@ type DefaultStrategy struct {
 // GenerateIDToken returns a JWT string.
 //
 // lifespan is ignored if requester.GetSession().IDTokenClaims().ExpiresAt is not zero.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error) {
 	if lifespan == 0 {
 		lifespan = defaultExpiryTime
@@ -148,11 +152,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		if maxAge > 0 {
-			if claims.AuthTime.IsZero() {
+			switch {
+			case claims.AuthTime.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
-			} else if claims.RequestedAt.IsZero() {
+			case claims.RequestedAt.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because requested at claim is required when max_age is set."))
-			} else if claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt) {
+			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt):
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
 			}
 		}

@@ -384,9 +384,9 @@ func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 }
 
 // WithHintIDOrDefaultf accepts the ID of the hint message
-func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...any) *RFC6749Error {
+func (e *RFC6749Error) WithHintIDOrDefaultf(id string, def string, args ...any) *RFC6749Error {
 	err := *e
-	err.hintIDField = ID
+	err.hintIDField = id
 	err.hintArgs = args
 	err.HintField = fmt.Sprintf(def, args...)
 	return &err
@@ -394,9 +394,9 @@ func (e *RFC6749Error) WithHintIDOrDefaultf(ID string, def string, args ...any) 
 
 // WithHintTranslationID accepts the ID of the hint message and should be paired with
 // WithHint and WithHintf to add a default message and vaargs.
-func (e *RFC6749Error) WithHintTranslationID(ID string) *RFC6749Error {
+func (e *RFC6749Error) WithHintTranslationID(id string) *RFC6749Error {
 	err := *e
-	err.hintIDField = ID
+	err.hintIDField = id
 	return &err
 }
 
@@ -407,7 +407,12 @@ func (e *RFC6749Error) Debug() string {
 func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 	err := *e
 	err.DebugField = debug
+
 	return &err
+}
+
+func (e *RFC6749Error) WithDebugError(debug error) *RFC6749Error {
+	return e.WithDebug(ErrorToDebugRFC6749Error(debug).Error())
 }
 
 func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
@@ -540,7 +545,7 @@ func ErrorToRFC6749ErrorFallback(err error, fallback *RFC6749Error) *RFC6749Erro
 		return e
 	}
 
-	return fallback.WithWrap(err).WithDebug(err.Error())
+	return fallback.WithWrap(err).WithDebugError(err)
 }
 
 // ErrorToDebugRFC6749Error converts the provided error to a *DebugRFC6749Error provided it is not nil and can be

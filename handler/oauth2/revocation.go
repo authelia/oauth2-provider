@@ -36,6 +36,7 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 		handlers = []RevocationTokenLookupFunc{r.handleGetRefreshTokenRequester, r.handleGetAccessTokenRequester}
 	}
 
+	//nolint:prealloc
 	var (
 		requester oauth2.Requester
 		tt        oauth2.TokenType
@@ -86,7 +87,6 @@ func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Co
 
 	if rfrrtec, ok = client.(oauth2.RevokeFlowRevokeRefreshTokensExplicitClient); !ok {
 		return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
-
 	}
 
 	if ok = rfrrtec.GetRevokeRefreshTokensExplicitly(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {

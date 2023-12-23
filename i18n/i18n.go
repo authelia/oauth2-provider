@@ -18,16 +18,16 @@ type MessageCatalog interface {
 // GetMessage is a helper func to get the translated message based on
 // the message ID and lang. If no matching message is found, it uses
 // ID as the message itself.
-func GetMessage(c MessageCatalog, ID string, tag language.Tag, v ...any) string {
-	return GetMessageOrDefault(c, ID, tag, ID, v...)
+func GetMessage(c MessageCatalog, id string, tag language.Tag, v ...any) string {
+	return GetMessageOrDefault(c, id, tag, id, v...)
 }
 
 // GetMessageOrDefault is a helper func to get the translated message based on
 // the message ID and lang. If no matching message is found, it returns the
 // 'def' message.
-func GetMessageOrDefault(c MessageCatalog, ID string, tag language.Tag, def string, v ...any) string {
+func GetMessageOrDefault(c MessageCatalog, id string, tag language.Tag, def string, v ...any) string {
 	if c != nil {
-		if s := c.GetMessage(ID, tag, v...); s != ID {
+		if s := c.GetMessage(id, tag, v...); s != id {
 			return s
 		}
 	}

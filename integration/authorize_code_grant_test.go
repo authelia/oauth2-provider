@@ -154,17 +154,15 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
-	oauthClient := newOAuth2Client(ts)
+	client := newOAuth2Client(ts)
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-
-	oauthClient = newOAuth2Client(ts)
 	state := "12345678901234567890"
 
-	resp, err := http.Get(oauthClient.AuthCodeURL(state))
+	resp, err := http.Get(client.AuthCodeURL(state))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	token, err := client.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.NoError(t, err)
 	require.NotEmpty(t, token.AccessToken)
 
@@ -176,7 +174,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, err = oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	_, err = client.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.Error(t, err)
 
 	resp, err = http.DefaultClient.Get(ts.URL + "/info")

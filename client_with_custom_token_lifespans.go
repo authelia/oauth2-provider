@@ -39,7 +39,7 @@ type ClientLifespanConfig struct {
 	RefreshTokenGrantIDTokenLifespan           *time.Duration `json:"refresh_token_grant_id_token_lifespan"`
 	RefreshTokenGrantAccessTokenLifespan       *time.Duration `json:"refresh_token_grant_access_token_lifespan"`
 	RefreshTokenGrantRefreshTokenLifespan      *time.Duration `json:"refresh_token_grant_refresh_token_lifespan"`
-	//Hybrid grant tokens are not independently configurable, see the comment above.
+	// Hybrid grant tokens are not independently configurable, see the comment above.
 }
 
 type DefaultClientWithCustomTokenLifespans struct {
@@ -56,45 +56,55 @@ func (c *DefaultClientWithCustomTokenLifespans) SetTokenLifespans(lifespans *Cli
 }
 
 // GetEffectiveLifespan either maps GrantType x TokenType to the client's configured lifespan, or returns the fallback value.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantType, tt TokenType, fallback time.Duration) time.Duration {
 	if c.TokenLifespans == nil {
 		return fallback
 	}
 	var cl *time.Duration
-	if gt == GrantTypeAuthorizationCode {
-		if tt == AccessToken {
+
+	switch gt {
+	case GrantTypeAuthorizationCode:
+		switch tt {
+		case AccessToken:
 			cl = c.TokenLifespans.AuthorizationCodeGrantAccessTokenLifespan
-		} else if tt == IDToken {
+		case IDToken:
 			cl = c.TokenLifespans.AuthorizationCodeGrantIDTokenLifespan
-		} else if tt == RefreshToken {
+		case RefreshToken:
 			cl = c.TokenLifespans.AuthorizationCodeGrantRefreshTokenLifespan
 		}
-	} else if gt == GrantTypeClientCredentials {
+	case GrantTypeClientCredentials:
 		if tt == AccessToken {
 			cl = c.TokenLifespans.ClientCredentialsGrantAccessTokenLifespan
 		}
-	} else if gt == GrantTypeImplicit {
-		if tt == AccessToken {
+	case GrantTypeImplicit:
+		switch tt {
+		case AccessToken:
 			cl = c.TokenLifespans.ImplicitGrantAccessTokenLifespan
-		} else if tt == IDToken {
+		case IDToken:
 			cl = c.TokenLifespans.ImplicitGrantIDTokenLifespan
 		}
-	} else if gt == GrantTypeJWTBearer {
+	case GrantTypeJWTBearer:
 		if tt == AccessToken {
 			cl = c.TokenLifespans.JwtBearerGrantAccessTokenLifespan
 		}
-	} else if gt == GrantTypePassword {
-		if tt == AccessToken {
+	case GrantTypePassword:
+		switch tt {
+		case AccessToken:
 			cl = c.TokenLifespans.PasswordGrantAccessTokenLifespan
-		} else if tt == RefreshToken {
+		case RefreshToken:
 			cl = c.TokenLifespans.PasswordGrantRefreshTokenLifespan
 		}
-	} else if gt == GrantTypeRefreshToken {
-		if tt == AccessToken {
+	case GrantTypeRefreshToken:
+		switch tt {
+		case AccessToken:
 			cl = c.TokenLifespans.RefreshTokenGrantAccessTokenLifespan
-		} else if tt == IDToken {
+		case IDToken:
 			cl = c.TokenLifespans.RefreshTokenGrantIDTokenLifespan
-		} else if tt == RefreshToken {
+		case RefreshToken:
 			cl = c.TokenLifespans.RefreshTokenGrantRefreshTokenLifespan
 		}
 	}
@@ -102,5 +112,6 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 	if cl == nil {
 		return fallback
 	}
+
 	return *cl
 }

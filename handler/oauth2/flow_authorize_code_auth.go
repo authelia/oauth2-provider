@@ -81,13 +81,13 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
 	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, requester)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
 
 	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	responder.AddParameter(consts.FormParameterAuthorizationCode, code)

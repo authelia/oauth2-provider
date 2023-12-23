@@ -22,6 +22,7 @@ import (
 // expose key to verify id_token
 var key = gen.MustRSAKey()
 
+//nolint:unparam
 func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *internal.MockOpenIDConnectRequestStorage) {
 	store := internal.NewMockOpenIDConnectRequestStorage(ctrl)
 	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}

@@ -42,8 +42,13 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Signer, config openIDConnectR
 	}
 }
 
+// ValidatePrompt ensures the prompt is valid for the OpenID Connect 1.0 Flows.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req oauth2.AuthorizeRequester) error {
-	// prompt is case sensitive!
+	// Specification Note: prompt is case sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(req.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
 	if req.GetClient().IsPublic() {
@@ -108,11 +113,12 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 	}
 
 	if maxAge > 0 {
-		if claims.AuthTime.IsZero() {
+		switch {
+		case claims.AuthTime.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
-		} else if claims.RequestedAt.IsZero() {
+		case claims.RequestedAt.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
-		} else if claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt) {
+		case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt):
 			return errorsx.WithStack(oauth2.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
 		}
 	}
@@ -143,7 +149,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok
 	} else if err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
 
 	if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {

@@ -35,6 +35,10 @@ var (
 )
 
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-6
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -54,10 +58,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			// The authorization server MUST ... validate the refresh token.
 			// This needs to happen after store retrieval for the session to be hydrated properly.
 			if errors.Is(err, oauth2.ErrTokenExpired) {
-				return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+				return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 			}
 
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
 		// Detected refresh token reuse.
@@ -65,11 +69,11 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(e)
 		}
 
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The refresh token has not been found: %s", oauth2.ErrorToDebugRFC6749Error(err).Error()))
 	default:
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	if !(len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || orequest.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...)) {
@@ -164,17 +168,17 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	)
 
 	if accessToken, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, requester.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	defer func() {
@@ -241,7 +245,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, req oauth2.Requester) (err error) {
 	ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)

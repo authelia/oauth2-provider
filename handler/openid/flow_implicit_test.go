@@ -118,21 +118,6 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			expectErr: oauth2.ErrInvalidGrant,
 		},
-		// Disabled because this is already handled at the authorize_request_handler
-		//{
-		//	description: "should not do anything because request requirements are not met",
-		//	setup: func() OpenIDConnectImplicitHandler {
-		//		areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
-		//		areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
-		//		areq.Client = &oauth2.DefaultClient{
-		//			GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
-		//			ResponseTypes: oauth2.Arguments{},
-		//			RequestedScope:        []string{consts.ScopeOpenID, "oauth2"},
-		//		}
-		//		return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
-		//	},
-		//	expectErr: oauth2.ErrInvalidGrant,
-		//},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {

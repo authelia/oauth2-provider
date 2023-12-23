@@ -43,7 +43,7 @@ type AuthorizeJWTGrantRequestHandlerTestSuite struct {
 
 // Setup before each test in the suite.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupSuite() {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 512) // fast RSA for testing
+	privateKey, err := rsa.GenerateKey(rand.Reader, 512) //nolint:gosec
 	if err != nil {
 		s.FailNowf("failed to setup test suite", "failed to generate RSA private key: %s", err.Error())
 	}
@@ -785,7 +785,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createRandomTestJWK() jose.JS
 		s.FailNowf("failed to create random test JWK", "failed to generate RSA private key: %s", err.Error())
 	}
 
-	return s.createJWK(privateKey.Public(), strconv.Itoa(mrand.Int()))
+	return s.createJWK(privateKey.Public(), strconv.Itoa(mrand.Int())) //nolint:gosec
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createJWK(key any, keyID string) jose.JSONWebKey {

@@ -44,7 +44,7 @@ var exactTests = []exactTestCase{
 }
 
 func TestArgumentsExactOne(t *testing.T) {
-	testCases := append(exactTests, []exactTestCase{
+	testCases := append(exactTests, []exactTestCase{ //nolint:gocritic
 		{
 			args:   Arguments{"foo", "bar"},
 			exact:  "foo bar",
@@ -170,7 +170,7 @@ var matchesTests = []matchesTestCase{
 }
 
 func TestArgumentsMatchesExact(t *testing.T) {
-	testCases := append(matchesTests, []matchesTestCase{
+	testCases := append(matchesTests, []matchesTestCase{ //nolint:gocritic
 		// should fail if items are out of order
 		{
 			args:   Arguments{"foo", "bar"},
@@ -197,7 +197,7 @@ func TestArgumentsMatchesExact(t *testing.T) {
 }
 
 func TestArgumentsMatches(t *testing.T) {
-	testCases := append(matchesTests, []matchesTestCase{
+	testCases := append(matchesTests, []matchesTestCase{ //nolint:gocritic
 		// should match if items are out of order.
 		{
 			args:   Arguments{"foo", "bar"},

@@ -63,6 +63,10 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 
 // DefaultClientAuthenticationStrategy provides the fosite's default client authentication strategy,
 // HTTP Basic Authentication and JWT Bearer
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *http.Request, form url.Values) (Client, error) {
 	if assertionType := form.Get(consts.FormParameterClientAssertionType); assertionType == consts.ClientAssertionTypeJWTBearer {
 		assertion := form.Get(consts.FormParameterClientAssertion)
@@ -91,7 +95,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 
 			client, err = f.Store.GetClient(ctx, clientID)
 			if err != nil {
-				return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebug(err.Error()))
+				return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 			}
 
 			oidcClient, ok := client.(OpenIDConnectClient)
@@ -137,11 +141,11 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 				if e.Inner != nil {
 					return nil, e.Inner
 				}
-				return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value.").WithWrap(err).WithDebug(err.Error()))
+				return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value.").WithWrap(err).WithDebugError(err))
 			}
 			return nil, err
 		} else if err = token.Claims.Valid(); err != nil {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebug(err.Error()))
+			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebugError(err))
 		}
 
 		claims := token.Claims
@@ -209,7 +213,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 
 	client, err := f.Store.GetClient(ctx, clientID)
 	if err != nil {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebug(err.Error()))
+		return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
 
 	if oidcClient, ok := client.(OpenIDConnectClient); !ok {
@@ -228,7 +232,7 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 
 	// Enforce client authentication
 	if err := f.checkClientSecret(ctx, client, []byte(clientSecret)); err != nil {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebug(err.Error()))
+		return nil, errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
 
 	return client, nil
@@ -296,7 +300,7 @@ func clientCredentialsFromRequest(r *http.Request, form url.Values) (id, secret 
 
 	switch id, secret, ok, err = clientCredentialsFromBasicAuth(r); {
 	case err != nil:
-		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data.").WithWrap(err).WithDebug(err.Error()))
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data.").WithWrap(err).WithDebugError(err))
 	case ok:
 		return id, secret, nil
 	default:

@@ -51,19 +51,6 @@ var hmacValidCase = oauth2.Request{
 	},
 }
 
-var hmacValidZeroTimeRefreshCase = oauth2.Request{
-	Client: &oauth2.DefaultClient{
-		Secret: []byte("foobarfoobarfoobarfoobar"),
-	},
-	Session: &oauth2.DefaultSession{
-		ExpiresAt: map[oauth2.TokenType]time.Time{
-			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
-			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			oauth2.RefreshToken:  {},
-		},
-	},
-}
-
 func TestNewHMACSHAStrategy(t *testing.T) {
 	testCases := []struct {
 		name       string

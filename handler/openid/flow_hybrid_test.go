@@ -24,87 +24,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-var hmacStrategy = &hoauth2.HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{
-		Config: &oauth2.Config{
-			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
-		},
-	},
-}
-
-type defaultSession struct {
-	Claims  *jwt.IDTokenClaims
-	Headers *jwt.Headers
-	*oauth2.DefaultSession
-}
-
-func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
-	var idStrategy = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return gen.MustRSAKey(), nil
-			},
-		},
-		Config: &oauth2.Config{
-			MinParameterEntropy: minParameterEntropy,
-		},
-	}
-
-	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			},
-		},
-		Config: &oauth2.Config{
-			MinParameterEntropy: minParameterEntropy,
-		},
-	}
-
-	config := &oauth2.Config{
-		ScopeStrategy:         oauth2.HierarchicScopeStrategy,
-		MinParameterEntropy:   minParameterEntropy,
-		AccessTokenLifespan:   time.Hour,
-		AuthorizeCodeLifespan: time.Hour,
-		RefreshTokenLifespan:  time.Hour,
-	}
-	return OpenIDConnectHybridHandler{
-		AuthorizeExplicitGrantHandler: &hoauth2.AuthorizeExplicitGrantHandler{
-			AuthorizeCodeStrategy: hmacStrategy,
-			AccessTokenStrategy:   hmacStrategy,
-			CoreStorage:           storage.NewMemoryStore(),
-			Config:                config,
-		},
-		AuthorizeImplicitGrantTypeHandler: &hoauth2.AuthorizeImplicitGrantTypeHandler{
-			Config: &oauth2.Config{
-				AccessTokenLifespan: time.Hour,
-			},
-			AccessTokenStrategy: hmacStrategy,
-			AccessTokenStorage:  storage.NewMemoryStore(),
-		},
-		IDTokenHandleHelper: &IDTokenHandleHelper{
-			IDTokenStrategy: idStrategy,
-		},
-		Config:                        config,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
-		OpenIDConnectRequestStorage:   storage.NewMemoryStore(),
-	}
-}
-
-func (s *defaultSession) IDTokenHeaders() *jwt.Headers {
-	if s.Headers == nil {
-		s.Headers = &jwt.Headers{}
-	}
-	return s.Headers
-}
-
-func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
-	if s.Claims == nil {
-		s.Claims = &jwt.IDTokenClaims{}
-	}
-	return s.Claims
-}
-
 func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -486,4 +405,88 @@ type IDTokenClaims struct {
 	CodeHash  string `json:"c_hash"`
 
 	xjwt.RegisteredClaims
+}
+
+var hmacStrategy = &hoauth2.HMACSHAStrategy{
+	Enigma: &hmac.HMACStrategy{
+		Config: &oauth2.Config{
+			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
+		},
+	},
+}
+
+func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
+	var idStrategy = &DefaultStrategy{
+		Signer: &jwt.DefaultSigner{
+			GetPrivateKey: func(_ context.Context) (any, error) {
+				return gen.MustRSAKey(), nil
+			},
+		},
+		Config: &oauth2.Config{
+			MinParameterEntropy: minParameterEntropy,
+		},
+	}
+
+	var j = &DefaultStrategy{
+		Signer: &jwt.DefaultSigner{
+			GetPrivateKey: func(_ context.Context) (any, error) {
+				return key, nil
+			},
+		},
+		Config: &oauth2.Config{
+			MinParameterEntropy: minParameterEntropy,
+		},
+	}
+
+	config := &oauth2.Config{
+		ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+		MinParameterEntropy:   minParameterEntropy,
+		AccessTokenLifespan:   time.Hour,
+		AuthorizeCodeLifespan: time.Hour,
+		RefreshTokenLifespan:  time.Hour,
+	}
+	return OpenIDConnectHybridHandler{
+		AuthorizeExplicitGrantHandler: &hoauth2.AuthorizeExplicitGrantHandler{
+			AuthorizeCodeStrategy: hmacStrategy,
+			AccessTokenStrategy:   hmacStrategy,
+			CoreStorage:           storage.NewMemoryStore(),
+			Config:                config,
+		},
+		AuthorizeImplicitGrantTypeHandler: &hoauth2.AuthorizeImplicitGrantTypeHandler{
+			Config: &oauth2.Config{
+				AccessTokenLifespan: time.Hour,
+			},
+			AccessTokenStrategy: hmacStrategy,
+			AccessTokenStorage:  storage.NewMemoryStore(),
+		},
+		IDTokenHandleHelper: &IDTokenHandleHelper{
+			IDTokenStrategy: idStrategy,
+		},
+		Config:                        config,
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestStorage:   storage.NewMemoryStore(),
+	}
+}
+
+//nolint:unused
+type defaultSession struct {
+	Claims  *jwt.IDTokenClaims
+	Headers *jwt.Headers
+	*oauth2.DefaultSession
+}
+
+//nolint:unused
+func (s *defaultSession) IDTokenHeaders() *jwt.Headers {
+	if s.Headers == nil {
+		s.Headers = &jwt.Headers{}
+	}
+	return s.Headers
+}
+
+//nolint:unused
+func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
+	if s.Claims == nil {
+		s.Claims = &jwt.IDTokenClaims{}
+	}
+	return s.Claims
 }

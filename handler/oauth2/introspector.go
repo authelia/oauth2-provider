@@ -32,13 +32,14 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 	}
 
 	var err error
-	switch tokenUse {
-	case oauth2.RefreshToken:
+
+	if tokenUse == oauth2.RefreshToken {
 		if err = c.introspectRefreshToken(ctx, token, accessRequest, scopes); err == nil {
 			return oauth2.RefreshToken, nil
 		} else if err = c.introspectAccessToken(ctx, token, accessRequest, scopes); err == nil {
 			return oauth2.AccessToken, nil
 		}
+
 		return "", err
 	}
 
@@ -69,7 +70,7 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 	sig := c.CoreStrategy.AccessTokenSignature(ctx, token)
 	or, err := c.CoreStorage.GetAccessTokenSession(ctx, sig, accessRequest.GetSession())
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
 	} else if err := c.CoreStrategy.ValidateAccessToken(ctx, or, token); err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 	or, err := c.CoreStorage.GetRefreshTokenSession(ctx, sig, accessRequest.GetSession())
 
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
 	} else if err := c.CoreStrategy.ValidateRefreshToken(ctx, or, token); err != nil {
 		return err
 	}

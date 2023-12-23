@@ -449,6 +449,11 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 	}
 }
 
+//nolint:unparam
 func basicAuth(username, password string) string {
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
+	return prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
 }
+
+const (
+	prefixSchemeBasic = "Basic "
+)

@@ -44,14 +44,15 @@ func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse Tok
 	ar := NewAccessRequest(session)
 	for _, validator := range f.Config.GetTokenIntrospectionHandlers(ctx) {
 		tu, err := validator.IntrospectToken(ctx, token, tokenUse, ar, scopes)
-		if err == nil {
+
+		switch {
+		case err == nil:
 			found = true
 			foundTokenUse = tu
-		} else if errors.Is(err, ErrUnknownRequest) {
-			// do nothing
-		} else {
-			rfcerr := ErrorToRFC6749Error(err)
-			return "", nil, errorsx.WithStack(rfcerr)
+		case errors.Is(err, ErrUnknownRequest):
+			break
+		default:
+			return "", nil, errorsx.WithStack(ErrorToRFC6749Error(err))
 		}
 	}
 

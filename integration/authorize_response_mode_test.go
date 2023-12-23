@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,7 +61,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	}{
 		{
 			description:  "Should give err because implicit grant with response mode query",
-			responseType: "id_token%20token",
+			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
@@ -77,7 +76,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should pass implicit grant with response mode form_post",
-			responseType: "id_token%20token",
+			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
@@ -94,7 +93,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should fail because response mode form_post is not allowed by the client",
-			responseType: "id_token%20token",
+			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
@@ -109,7 +108,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should fail because response mode form_post is not allowed by the client without legacy format",
-			responseType: "id_token%20token",
+			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
@@ -139,7 +138,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should pass Authorization code grant test with response mode form_post",
-			responseType: "code",
+			responseType: consts.ResponseTypeAuthorizationCodeFlow,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
@@ -152,7 +151,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 		{
 			description:  "Should fail Hybrid grant test with query",
-			responseType: "token%20code",
+			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
@@ -162,12 +161,12 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
-				assert.Equal(t, "Insecure response_mode 'query' for the response_type '[token code]'.", err["HintField"])
+				assert.Equal(t, "Insecure response_mode 'query' for the response_type '[code token]'.", err["HintField"])
 			},
 		},
 		{
 			description:  "Should fail Hybrid grant test with query without legacy fields",
-			responseType: "token%20code",
+			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
 				state = "12345678901234567890"
@@ -179,14 +178,14 @@ func TestAuthorizeResponseModes(t *testing.T) {
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
 
 				assert.NotEmpty(t, err["ErrorField"])
-				assert.Contains(t, err["DescriptionField"], "Insecure response_mode 'query' for the response_type '[token code]'.")
+				assert.Equal(t, "The authorization server does not support obtaining a response using this response mode. Insecure response_mode 'query' for the response_type '[code token]'.", err["DescriptionField"])
 				assert.Empty(t, err["HintField"])
 				assert.Empty(t, err["DebugField"])
 			},
 		},
 		{
 			description:  "Should pass Hybrid grant test with form_post",
-			responseType: "token%20code",
+			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
 				state = "12345678901234567890"
@@ -204,7 +203,12 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.setup()
-			authURL := strings.Replace(oauthClient.AuthCodeURL(state, xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, c.responseMode), xoauth2.SetAuthURLParam("nonce", "111111111")), "response_type=code", "response_type="+c.responseType, -1)
+
+			authURL := oauthClient.AuthCodeURL(
+				state,
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, c.responseType),
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, c.responseMode),
+				xoauth2.SetAuthURLParam(consts.FormParameterNonce, "111111111"))
 
 			var (
 				callbackURL *url.URL
@@ -225,23 +229,26 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			)
 
 			resp, err := client.Get(authURL)
-			if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeFragment {
+
+			switch oauth2.ResponseModeType(c.responseMode) {
+			case oauth2.ResponseModeFragment:
 				// fragment
 				require.EqualError(t, errors.Unwrap(err), redirErr.Error())
 				fragment, err := url.ParseQuery(callbackURL.Fragment)
 				require.NoError(t, err)
 				code, state, iDToken, token, errResp = getParameters(t, fragment)
-			} else if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeQuery {
+			case oauth2.ResponseModeQuery:
 				// query
 				require.EqualError(t, errors.Unwrap(err), redirErr.Error())
 				query, err := url.ParseQuery(callbackURL.RawQuery)
 				require.NoError(t, err)
 				code, state, iDToken, token, errResp = getParameters(t, query)
-			} else if oauth2.ResponseModeType(c.responseMode) == oauth2.ResponseModeFormPost {
+			case oauth2.ResponseModeFormPost:
 				// form_post
 				require.NoError(t, err)
 				code, state, iDToken, token, _, errResp, err = internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
-			} else {
+				assert.NoError(t, err)
+			default:
 				t.FailNow()
 			}
 

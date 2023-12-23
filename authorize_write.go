@@ -27,6 +27,10 @@ func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWri
 // user-agent to the provided client redirection URI using an HTTP
 // redirection response, or by other means available to it via the
 // user-agent.
+//
+// TODO: Investigate this unused.
+//
+//nolint:unused
 func sendRedirect(url string, rw http.ResponseWriter) {
 	rw.Header().Set(consts.HeaderLocation, url)
 	rw.WriteHeader(http.StatusSeeOther)

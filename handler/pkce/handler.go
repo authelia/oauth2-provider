@@ -65,7 +65,7 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, requester 
 		consts.FormParameterCodeChallenge,
 		consts.FormParameterCodeChallengeMethod,
 	})); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
@@ -107,6 +107,11 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 	return nil
 }
 
+// HandleTokenEndpointRequest implements oauth2.TokenEndpointHandler.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -131,13 +136,13 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oaut
 			return c.validateNoPKCE(ctx, requester.GetClient())
 		}
 
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request.").WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request.").WithWrap(err).WithDebugError(err))
 	} else if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(oauth2.ErrorToDebugRFC6749Error(err).Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	challenge := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallenge)

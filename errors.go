@@ -270,9 +270,11 @@ var (
 
 func ErrorToRFC6749Error(err error) *RFC6749Error {
 	var e *RFC6749Error
+
 	if errors.As(err, &e) {
 		return e
 	}
+
 	return &RFC6749Error{
 		ErrorField:       errUnknownErrorName,
 		DescriptionField: "The error is unrecognizable",
@@ -305,6 +307,7 @@ func (e *RFC6749Error) Wrap(err error) {
 
 func (e RFC6749Error) WithWrap(cause error) *RFC6749Error {
 	e.cause = cause
+
 	return &e
 }
 
@@ -441,23 +444,27 @@ func (e *RFC6749Error) Sanitize() *RFC6749Error {
 	return &err
 }
 
-// WithExposeDebug if set to true exposes debug messages
+// WithExposeDebug if set to true exposes debug messages.
 func (e *RFC6749Error) WithExposeDebug(exposeDebug bool) *RFC6749Error {
 	err := *e
 	err.exposeDebug = exposeDebug
+
 	return &err
 }
 
-// GetDescription returns a more description description, combined with hint and debug (when available).
+// GetDescription returns a more descriptive description, combined with hint and debug (when available).
 func (e *RFC6749Error) GetDescription() string {
 	description := i18n.GetMessageOrDefault(e.catalog, e.ErrorField, e.lang, e.DescriptionField)
 	e.computeHintField()
+
 	if e.HintField != "" {
 		description += " " + e.HintField
 	}
-	if e.DebugField != "" && e.exposeDebug {
+
+	if e.exposeDebug && e.DebugField != "" {
 		description += " " + e.DebugField
 	}
+
 	return strings.ReplaceAll(description, "\"", "'")
 }
 

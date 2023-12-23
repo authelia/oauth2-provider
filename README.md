@@ -24,6 +24,8 @@ following list of differences:
       <sup>[commit](https://github.com/authelia/oauth2-provider/commit/de536dc0c9cd5f080c387621799e644319587bd0)</sup>
 - [ ] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5`
 - [ ] Implement internal JWKS logic
+- [x] Higher Debug error information visibility (Debug Field includes the
+      complete RFC6749 error with debug information if available)
 - Fixes:
   - [x] Basic Scheme Rejects Special Characters
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2314625eb1f21987a9199fb1cdf6da6cee4df965)</sup>

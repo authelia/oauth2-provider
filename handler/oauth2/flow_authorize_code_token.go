@@ -42,6 +42,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		reqID := authorizeRequest.GetID()
 		hint := "The authorization code has already been used."
 		debug := ""
+
+		// TODO: Refactor this similar to the Revocation Handler. Maybe Factorize?
 		if revErr := c.TokenRevocationStorage.RevokeAccessToken(ctx, reqID); revErr != nil {
 			hint += " Additionally, an error occurred during processing the access token revocation."
 			debug += "Revocation of access_token lead to error " + revErr.Error() + "."

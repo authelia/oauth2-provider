@@ -21,7 +21,7 @@ import (
 )
 
 func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
-	outer = outer.WithWrap(inner).WithDebug(inner.Error())
+	outer = outer.WithWrap(inner).WithDebugError(inner)
 	if e := new(RFC6749Error); errors.As(inner, &e) {
 		return outer.WithHintf("%s %s", outer.Reason(), e.Reason())
 	}

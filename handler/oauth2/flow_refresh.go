@@ -293,7 +293,7 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx co
 			WithHint("Failed to refresh token because of multiple concurrent requests using the same token which is not allowed."))
 	}
 
-	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebug(storageErr.Error()))
+	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebugError(storageErr))
 }
 
 func (c *RefreshTokenGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {

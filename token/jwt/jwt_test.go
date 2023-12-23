@@ -129,40 +129,46 @@ func TestGenerateJWT(t *testing.T) {
 			token, sig, err := tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
+			assert.NotEmpty(t, sig)
 
 			sig, err = tc.strategy.Validate(context.TODO(), token)
 			require.NoError(t, err)
+			assert.NotEmpty(t, sig)
 
 			sig, err = tc.strategy.Validate(context.TODO(), token+"."+"0123456789")
 			require.Error(t, err)
+			assert.Empty(t, sig)
 
 			partToken := strings.Split(token, ".")[2]
 
 			sig, err = tc.strategy.Validate(context.TODO(), partToken)
 			require.Error(t, err)
+			assert.Empty(t, sig)
 
-			// Reset private key
 			tc.resetKey(tc.strategy)
 
-			// Lets validate the exp claim
 			claims = &JWTClaims{
 				ExpiresAt: time.Now().UTC().Add(-time.Hour),
 			}
+
 			token, sig, err = tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
+			assert.NotEmpty(t, sig)
 
 			sig, err = tc.strategy.Validate(context.TODO(), token)
 			require.Error(t, err)
+			require.Empty(t, sig)
 
-			// Lets validate the nbf claim
 			claims = &JWTClaims{
 				NotBefore: time.Now().UTC().Add(time.Hour),
 			}
+
 			token, sig, err = tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
-			//t.Logf("%s.%s", token, sig)
+			assert.NotEmpty(t, sig)
+
 			sig, err = tc.strategy.Validate(context.TODO(), token)
 			require.Error(t, err)
 			require.Empty(t, sig, "%s", err)

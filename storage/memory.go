@@ -366,7 +366,7 @@ func (s *MemoryStore) Authenticate(_ context.Context, name string, secret string
 		return oauth2.ErrNotFound
 	}
 	if rel.Password != secret {
-		return oauth2.ErrNotFound.WithDebug("Invalid credentials")
+		return oauth2.ErrNotFound.WithDebug("Invalid credentials.")
 	}
 	return nil
 }

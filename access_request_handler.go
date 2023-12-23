@@ -15,7 +15,7 @@ import (
 	"authelia.com/provider/oauth2/internal/errorsx"
 )
 
-// Implements
+// NewAccessRequest Implements
 //   - https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1
 //     Clients in possession of a client password MAY use the HTTP Basic
 //     authentication scheme as defined in [RFC2617] to authenticate with
@@ -40,6 +40,10 @@ import (
 //     credentials (or assigned other authentication requirements), the
 //     client MUST authenticate with the authorization server as described
 //     in Section 3.2.1.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session Session) (AccessRequester, error) {
 	accessRequest := NewAccessRequest(session)
 	accessRequest.Request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
@@ -50,7 +54,7 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	if r.Method != "POST" {
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'POST'.", r.Method))
 	} else if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
-		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebug(err.Error()))
+		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	} else if len(r.PostForm) == 0 {
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
 	}

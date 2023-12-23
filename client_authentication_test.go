@@ -29,6 +29,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+//nolint:unparam
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.RS256, claims)
 	token.Header["kid"] = kid
@@ -45,6 +46,7 @@ func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.P
 	return tokenString
 }
 
+//nolint:unparam
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.HS256, claims)
 	tokenString, err := token.SignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
@@ -52,6 +54,7 @@ func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Privat
 	return tokenString
 }
 
+//nolint:unparam
 func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
 	tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
@@ -64,7 +67,7 @@ func clientBasicAuthHeader(clientID, clientSecret string) http.Header {
 	creds := clientID + ":" + clientSecret
 	return http.Header{
 		consts.HeaderAuthorization: {
-			"Basic " + base64.StdEncoding.EncodeToString([]byte(creds)),
+			prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte(creds)),
 		},
 	}
 }
@@ -85,7 +88,7 @@ func TestAuthenticateClient(t *testing.T) {
 	require.NoError(t, err)
 
 	// a secret containing various special characters
-	complexSecretRaw := "foo %66%6F%6F@$<§!✓"
+	complexSecretRaw := "foo %66%6F%6F@$<§!✓" //nolint:gosec
 	complexSecret, err := hasher.Hash(context.TODO(), []byte(complexSecretRaw))
 	require.NoError(t, err)
 
@@ -261,21 +264,21 @@ func TestAuthenticateClient(t *testing.T) {
 			d:         "should fail because client id is not valid",
 			client:    &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: barSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:      url.Values{},
-			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic " + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
+			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
 			expectErr: ErrInvalidClient,
 		},
 		{
 			d:         "should fail because client secret is not valid",
 			client:    &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Secret: barSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:      url.Values{},
-			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic " + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
+			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
 			expectErr: ErrInvalidClient,
 		},
 		{
 			d:         "should fail because client is confidential and id does not exist in header",
 			client:    &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, TokenEndpointAuthMethod: "client_secret_basic"},
 			form:      url.Values{},
-			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic " + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
+			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
 			expectErr: ErrInvalidClient,
 		},
 		{

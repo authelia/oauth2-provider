@@ -28,6 +28,9 @@ func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
 	return outer
 }
 
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
 	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
@@ -65,7 +68,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		hc := f.Config.GetHTTPClient(ctx)
 		response, err := hc.Get(location)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebugError(err))
 		}
 		defer response.Body.Close()
 
@@ -75,7 +78,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebugError(err))
 		}
 
 		assertion = string(body)
@@ -128,11 +131,11 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 			if e.Inner != nil {
 				return e.Inner
 			}
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object's signature.").WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object's signature.").WithWrap(err).WithDebugError(err))
 		}
 		return err
 	} else if err := token.Claims.Valid(); err != nil {
-		return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebugError(err))
 	}
 
 	claims := token.Claims
@@ -184,6 +187,7 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 	return nil
 }
 
+//nolint:unparam
 func (f *Fosite) parseAuthorizeScope(_ *http.Request, request *AuthorizeRequest) error {
 	request.SetRequestedScopes(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " ")))
 
@@ -292,7 +296,7 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	var parRequest AuthorizeRequester
 	var err error
 	if parRequest, err = storage.GetPARSession(ctx, requestURI); err != nil {
-		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("Invalid PAR session").WithWrap(err).WithDebug(err.Error()))
+		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("Invalid PAR session").WithWrap(err).WithDebugError(err))
 	}
 
 	// hydrate the request object
@@ -303,7 +307,7 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	request.ResponseMode = parRequest.GetResponseMode()
 
 	if err = storage.DeletePARSession(ctx, requestURI); err != nil {
-		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	// validate the clients match
@@ -318,6 +322,9 @@ func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (Auth
 	return f.newAuthorizeRequest(ctx, r, false)
 }
 
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (AuthorizeRequester, error) {
 	request := NewAuthorizeRequest()
 	request.Request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
@@ -326,7 +333,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
 
 	if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
-		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebug(err.Error()))
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
 	request.Form = r.Form
@@ -348,7 +355,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID))
 	if err != nil {
-		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebug(err.Error()))
+		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
 	}
 
 	request.Client = client

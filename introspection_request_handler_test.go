@@ -160,7 +160,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						//Basic Authorization with username=encoded:client and password=encoded&password
+						// Basic Authorization with username=encoded:client and password=encoded&password
 						consts.HeaderAuthorization: []string{"Basic ZW5jb2RlZCUzQWNsaWVudDplbmNvZGVkJTI2cGFzc3dvcmQ="},
 					},
 					PostForm: url.Values{
@@ -178,7 +178,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						//Basic Authorization with username=my-client and password=foobar
+						// Basic Authorization with username=my-client and password=foobar
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
@@ -196,7 +196,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						//Basic Authorization with username=my-client and password=foobaz
+						// Basic Authorization with username=my-client and password=foobaz
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jheg=="},
 					},
 					PostForm: url.Values{

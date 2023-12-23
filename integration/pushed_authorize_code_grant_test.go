@@ -184,9 +184,7 @@ func checkStatusAndGetBody(t *testing.T, resp *http.Response, expectedStatusCode
 	require.Equal(t, expectedStatusCode, resp.StatusCode)
 
 	b, err := io.ReadAll(resp.Body)
-	if err == nil {
-		fmt.Printf("PAR response: body=%s\n", string(b))
-	}
+	assert.NoError(t, err)
 
 	if expectedStatusCode != resp.StatusCode {
 		return nil, fmt.Errorf("Invalid status code %d", resp.StatusCode)

@@ -34,6 +34,11 @@ var (
 	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectHybridHandler)(nil)
 )
 
+// HandleAuthorizeEndpointRequest implements oauth2.AuthorizeEndpointHandler.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
 	if len(requester.GetResponseTypes()) < 2 {
 		return nil
@@ -45,14 +50,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	requester.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
-	// Disabled because this is already handled at the authorize_request_handler
-	//if requester.GetResponseTypes().Matches("token") && !requester.GetClient().GetResponseTypes().Has("token") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use the token response type"))
-	//} else if requester.GetResponseTypes().Matches("code") && !requester.GetClient().GetResponseTypes().Has("code") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use the code response type"))
-	//} else if requester.GetResponseTypes().Matches("id_token") && !requester.GetClient().GetResponseTypes().Has("id_token") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use the id_token response type"))
-	//}
+	// There is no requirement to check response types here as they are validated in the AuthorizeRequestHandler.
 
 	// The nonce is actually not required for hybrid flows. It fails the OpenID Connect Conformity
 	// Test Module "oidcc-ensure-request-without-nonce-succeeds-for-code-flow" if enabled.
@@ -116,7 +114,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		)
 
 		if code, signature, err = c.AuthorizeExplicitGrantHandler.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, requester); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 
 		// This is not required because the auth code flow is being handled by oauth2/flow_authorize_code_token which in turn
@@ -130,7 +128,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Round(time.Second))
 
 		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 
 		responder.AddParameter(consts.FormParameterAuthorizationCode, code)
@@ -144,7 +142,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 		if requester.GetGrantedScopes().Has(consts.ScopeOpenID) {
 			if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, responder.GetCode(), requester.Sanitize(oidcParameters)); err != nil {
-				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 			}
 		}
 	}

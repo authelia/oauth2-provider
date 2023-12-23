@@ -39,6 +39,10 @@ var (
 
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything) and
 // https://datatracker.ietf.org/doc/html/rfc7523#section-2.1 (everything)
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if err := c.CheckRequest(ctx, request); err != nil {
 		return err
@@ -53,7 +57,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint(`Unable to parse JSON Web Token passed in "assertion" request parameter.`).
-			WithWrap(err).WithDebug(err.Error()),
+			WithWrap(err).WithDebugError(err),
 		)
 	}
 
@@ -72,7 +76,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	if err = token.Claims(key, &claims); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("Unable to verify the integrity of the 'assertion' value.").
-			WithWrap(err).WithDebug(err.Error()),
+			WithWrap(err).WithDebugError(err),
 		)
 	}
 
@@ -82,7 +86,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	scopes, err := c.Storage.GetPublicKeyScopes(ctx, claims.Issuer, claims.Subject, key.KeyID)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	for _, scope := range request.GetRequestedScopes() {
@@ -93,7 +97,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	if claims.ID != "" {
 		if err := c.Storage.MarkJWTUsedForTime(ctx, claims.ID, claims.Expiry.Time()); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
@@ -161,7 +165,7 @@ func (c *Handler) validateTokenPreRequisites(token *jwt.JSONWebToken) error {
 	if err := token.UnsafeClaimsWithoutVerification(&unverifiedClaims); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("Looks like there are no claims in JWT in \"assertion\" request parameter.").
-			WithWrap(err).WithDebug(err.Error()),
+			WithWrap(err).WithDebugError(err),
 		)
 	}
 	if unverifiedClaims.Issuer == "" {
@@ -181,7 +185,7 @@ func (c *Handler) validateTokenPreRequisites(token *jwt.JSONWebToken) error {
 func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebToken) (*jose.JSONWebKey, error) {
 	unverifiedClaims := jwt.Claims{}
 	if err := token.UnsafeClaimsWithoutVerification(&unverifiedClaims); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebug(err.Error()))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
 	var keyID string
@@ -200,14 +204,14 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	if keyID != "" {
 		key, err := c.Storage.GetPublicKey(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject, keyID)
 		if err != nil {
-			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebug(err.Error()))
+			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
 		}
 		return key, nil
 	}
 
 	keys, err := c.Storage.GetPublicKeys(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject)
 	if err != nil {
-		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebug(err.Error()))
+		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
 	}
 
 	claims := jwt.Claims{}
@@ -221,6 +225,9 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	return nil, errorsx.WithStack(keyNotFoundErr)
 }
 
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo,unparam
 func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, key *jose.JSONWebKey) error {
 	if len(claims.Audience) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
@@ -289,7 +296,7 @@ func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, ke
 	if claims.ID != "" {
 		used, err := c.Storage.IsJWTUsed(ctx, claims.ID)
 		if err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 		if used {
 			return errorsx.WithStack(oauth2.ErrJTIKnown)

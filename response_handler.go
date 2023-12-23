@@ -105,7 +105,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 	switch rm {
 	case ResponseModeFormPost, ResponseModeFormPostJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -122,7 +122,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		}
 
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -132,7 +132,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		location = redirectURI.String()
 	case ResponseModeFragment, ResponseModeFragmentJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebug(err.Error()))
+			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}

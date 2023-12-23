@@ -188,12 +188,12 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
 						areq.Form.Add("scope", "foo bar baz offline")
-						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
@@ -218,14 +218,14 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
 						areq.Form.Add("scope", "foo bar offline")
 						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
-						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
@@ -250,14 +250,14 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							Scopes:     []string{"foo", "bar", "baz", consts.ScopeOffline},
 						}
 
-						token, sig, err := strategy.GenerateRefreshToken(nil, nil)
+						token, sig, err := strategy.GenerateRefreshToken(context.TODO(), nil)
 						require.NoError(t, err)
 
 						areq.Form.Add("refresh_token", token)
 						areq.Form.Add("scope", "foo bar offline")
 						areq.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
-						err = store.CreateRefreshTokenSession(nil, sig, &oauth2.Request{
+						err = store.CreateRefreshTokenSession(context.TODO(), sig, &oauth2.Request{
 							Client:         areq.Client,
 							GrantedScope:   oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
 							RequestedScope: oauth2.Arguments{"foo", "baz", consts.ScopeOffline},

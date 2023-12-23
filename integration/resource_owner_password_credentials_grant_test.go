@@ -29,7 +29,13 @@ func TestResourceOwnerPasswordCredentialsFlow(t *testing.T) {
 }
 
 func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ResourceOwnerPasswordCredentialsFactory)
+	f := compose.Compose(
+		new(oauth2.Config),
+		store,
+		strategy,
+		compose.OAuth2ResourceOwnerPasswordCredentialsFactory, //nolint:staticcheck
+	)
+
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 
 	defer ts.Close()

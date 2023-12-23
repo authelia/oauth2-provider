@@ -100,4 +100,6 @@ func TestDefaultWorkFactor(t *testing.T) {
 	if cost != 12 {
 		t.Errorf("got cost factor %d", cost)
 	}
+
+	assert.NoError(t, err)
 }

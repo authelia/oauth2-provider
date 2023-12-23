@@ -4,16 +4,13 @@ import (
 	"net/url"
 )
 
-// IsRequestURL checks if the string rawurl, assuming
+// IsRequestURL checks if the string raw, assuming
 // it was received in an HTTP request, is a valid
-// URL confirm to RFC 3986
+// URL confirm to RFC 3986.
 func IsRequestURL(raw string) bool {
-	url, err := url.ParseRequestURI(raw)
-	if err != nil {
-		return false //Couldn't even parse the rawurl
+	if uri, err := url.ParseRequestURI(raw); err != nil {
+		return false
+	} else {
+		return uri.IsAbs()
 	}
-	if len(url.Scheme) == 0 {
-		return false //No Scheme found
-	}
-	return true
 }

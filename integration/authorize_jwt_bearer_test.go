@@ -264,7 +264,10 @@ func (s *authorizeJWTBearerSuite) TestBadResponseForSecondRequestWithSameJTI() {
 		},
 	}
 
-	client.GetToken(ctx, config, nil)
+	token1, err := client.GetToken(ctx, config, nil)
+	s.NoError(err)
+	s.NotNil(token1)
+
 	token2, err := client.GetToken(ctx, config, nil)
 
 	s.assertBadResponse(s.T(), token2, err)
@@ -284,7 +287,9 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseForSecondRequestWithSameJTI
 		},
 	}
 
-	client.GetToken(ctx, config, nil)
+	token, err := client.GetToken(ctx, config, nil)
+	s.NoError(err)
+	s.NotNil(token)
 
 	time.Sleep(time.Second)
 	config.Expiry = jwt.NewNumericDate(time.Now().Add(time.Hour))

@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+//nolint:unparam
 func tokenRevocationHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
@@ -115,24 +116,24 @@ func authCallbackHandler(t *testing.T) func(rw http.ResponseWriter, req *http.Re
 		}
 
 		if q.Get("code") != "" {
-			rw.Write([]byte("code: ok"))
+			_, _ = rw.Write([]byte("code: ok"))
 		}
 		if q.Get("error") != "" {
 			rw.WriteHeader(http.StatusNotAcceptable)
-			rw.Write([]byte("error: " + q.Get("error")))
+			_, _ = rw.Write([]byte("error: " + q.Get("error")))
 		}
 	}
 }
 
+//nolint:unparam
 func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		req.ParseMultipartForm(1 << 20)
+		_ = req.ParseMultipartForm(1 << 20)
+
 		ctx := oauth2.NewContext()
 
 		accessRequest, err := provider.NewAccessRequest(ctx, req, &hoauth2.JWTSession{})
 		if err != nil {
-			t.Logf("Access request failed because: %+v", err)
-			t.Logf("Request: %+v", accessRequest)
 			provider.WriteAccessError(req.Context(), rw, accessRequest, err)
 			return
 		}
@@ -143,8 +144,6 @@ func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.R
 
 		response, err := provider.NewAccessResponse(ctx, accessRequest)
 		if err != nil {
-			t.Logf("Access request failed because: %+v", err)
-			t.Logf("Request: %+v", accessRequest)
 			provider.WriteAccessError(req.Context(), rw, accessRequest, err)
 			return
 		}
@@ -153,22 +152,19 @@ func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.R
 	}
 }
 
+//nolint:unparam
 func pushedAuthorizeRequestHandler(t *testing.T, provider oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := oauth2.NewContext()
 
 		ar, err := provider.NewPushedAuthorizeRequest(ctx, req)
 		if err != nil {
-			t.Logf("PAR request failed because: %+v", err)
-			t.Logf("Request: %+v", ar)
 			provider.WritePushedAuthorizeError(ctx, rw, ar, err)
 			return
 		}
 
 		response, err := provider.NewPushedAuthorizeResponse(ctx, ar, session)
 		if err != nil {
-			t.Logf("PAR response failed because: %+v", err)
-			t.Logf("Request: %+v", ar)
 			provider.WritePushedAuthorizeError(ctx, rw, ar, err)
 			return
 		}

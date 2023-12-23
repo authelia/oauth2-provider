@@ -20,7 +20,7 @@ import (
 
 type JWTBearer struct {
 	tokenURL string
-	header   *Header
+	header   *Header //nolint:unused
 	client   *http.Client
 
 	Signer jose.Signer
@@ -114,6 +114,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 	return token, err
 }
 
+//nolint:unparam
 func (c *JWTBearer) getRequestBodyReader(assertion string, scope []string) (io.Reader, error) {
 	data := url.Values{}
 	data.Set(consts.FormParameterGrantType, consts.GrantTypeOAuthJWTBearer)

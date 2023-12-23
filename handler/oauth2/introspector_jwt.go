@@ -40,8 +40,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	clientId := ""
 	clientIdClaim, ok := mapClaims[consts.ClaimClientIdentifier]
 	if ok {
-		switch id := clientIdClaim.(type) {
-		case string:
+		if id, ok := clientIdClaim.(string); ok {
 			clientId = id
 		}
 	}

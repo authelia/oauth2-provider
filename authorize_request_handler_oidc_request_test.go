@@ -48,7 +48,7 @@ func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims) string {
 }
 
 func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 1024) //nolint:gosec
 	if err != nil {
 		panic(err)
 	}
@@ -67,7 +67,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 	validNoneRequestObject := mustGenerateNoneAssertion(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state"})
 
 	var reqH http.HandlerFunc = func(rw http.ResponseWriter, r *http.Request) {
-		rw.Write([]byte(validRequestObject))
+		_, _ = rw.Write([]byte(validRequestObject))
 	}
 	reqTS := httptest.NewServer(reqH)
 	defer reqTS.Close()

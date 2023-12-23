@@ -18,59 +18,62 @@ import (
 )
 
 func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
-	h := &OpenIDConnectRefreshHandler{Config: &oauth2.Config{}}
-	for _, c := range []struct {
-		areq        *oauth2.AccessRequest
-		expectedErr error
-		description string
+	testCases := []struct {
+		name      string
+		requester *oauth2.AccessRequest
+		error     error
 	}{
 		{
-			description: "should not pass because grant_type is wrong",
-			areq: &oauth2.AccessRequest{
+			name: "ShouldFailInvalidGrantType",
+			requester: &oauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: oauth2.ErrUnknownRequest,
+			error: oauth2.ErrUnknownRequest,
 		},
 		{
-			description: "should not pass because grant_type is right but scope is missing",
-			areq: &oauth2.AccessRequest{
+			name: "ShouldFailWithCorrectGrantTypeButMissingScope",
+			requester: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: oauth2.ErrUnknownRequest,
+			error: oauth2.ErrUnknownRequest,
 		},
 		{
-			description: "should not pass because client may not execute this grant type",
-			areq: &oauth2.AccessRequest{
+			name: "ShouldFailInvalidGrantTypeForClient",
+			requester: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{consts.ScopeOpenID},
 					Client:       &oauth2.DefaultClient{},
 				},
 			},
-			expectedErr: oauth2.ErrUnauthorizedClient,
+			error: oauth2.ErrUnauthorizedClient,
 		},
 		{
-			description: "should pass",
-			areq: &oauth2.AccessRequest{
+			name: "ShouldPass",
+			requester: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{consts.GrantTypeRefreshToken},
-						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{},
 				},
 			},
 		},
-	} {
-		t.Run("case="+c.description, func(t *testing.T) {
-			err := h.HandleTokenEndpointRequest(context.TODO(), c.areq)
-			if c.expectedErr != nil {
-				require.EqualError(t, err, c.expectedErr.Error(), "%v", err)
+	}
+
+	handler := &OpenIDConnectRefreshHandler{Config: &oauth2.Config{}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := handler.HandleTokenEndpointRequest(context.TODO(), tc.requester)
+
+			if tc.error != nil {
+				require.EqualError(t, err, tc.error.Error(), "%v", err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -119,20 +122,6 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 			},
 			expectedErr: oauth2.ErrUnknownRequest,
 		},
-		// Disabled because this is already handled at the authorize_request_handler
-		//{
-		//	description: "should not pass because client may not ask for id_token",
-		//	areq: &oauth2.AccessRequest{
-		//		GrantTypes: []string{consts.GrantTypeRefreshToken},
-		//		Request: oauth2.Request{
-		//			GrantedScope: []string{consts.ScopeOpenID},
-		//			Client: &oauth2.DefaultClient{
-		//				GrantTypes: []string{consts.GrantTypeRefreshToken},
-		//			},
-		//		},
-		//	},
-		//	expectedErr: oauth2.ErrUnknownRequest,
-		//},
 		{
 			description: "should pass",
 			areq: &oauth2.AccessRequest{
@@ -141,7 +130,6 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{consts.GrantTypeRefreshToken},
-						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{
 						Subject: "foo",

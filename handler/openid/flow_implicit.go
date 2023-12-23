@@ -31,6 +31,11 @@ var (
 	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
 )
 
+// HandleAuthorizeEndpointRequest implements oauth2.AuthorizeEndpointHandler.
+//
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
 func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
 	if !(requester.GetGrantedScopes().Has(consts.ScopeOpenID) && (requester.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || requester.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
 		return nil
@@ -45,12 +50,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
-	// Disabled because this is already handled at the authorize_request_handler
-	//if requester.GetResponseTypes().ExactOne("id_token") && !requester.GetClient().GetResponseTypes().Has("id_token") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
-	//} else if requester.GetResponseTypes().Matches("token", "id_token") && !requester.GetClient().GetResponseTypes().Has("token", "id_token") {
-	//	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token and id_token"))
-	//}
+	// There is no need to check response types here as this is validated in the oauth2.AuthorizeRequestHandler.
 
 	if nonce := requester.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))

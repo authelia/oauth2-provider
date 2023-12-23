@@ -36,6 +36,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	return nil
 }
 
+//nolint:unparam
 func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan

@@ -75,6 +75,7 @@ func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
 	return &claims.ExpiresAt.Time
 }
 
+//nolint:gocyclo
 func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token xoauth2.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
 	token = xoauth2.Token{}
 	rFC6749Error = map[string]string{}

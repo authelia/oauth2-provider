@@ -6,11 +6,9 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,57 +19,47 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
-	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestAuthorizeImplicitFlow(t *testing.T) {
-	for _, strategy := range []hoauth2.AccessTokenStrategy{
-		hmacStrategy,
-	} {
-		runTestAuthorizeImplicitGrant(t, strategy)
-	}
-}
-
-func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
-	ts := mockServer(t, f, &oauth2.DefaultSession{})
-	defer ts.Close()
-
-	oauthClient := newOAuth2Client(ts)
-	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-
-	var state string
-	for k, c := range []struct {
-		description    string
-		setup          func()
+	testCases := []struct {
+		name           string
+		setup          func(t *testing.T, client *xoauth2.Config)
 		check          func(t *testing.T, r *http.Response)
+		state          string
 		params         []xoauth2.AuthCodeOption
 		authStatusCode int
 	}{
 		{
-			description: "should fail because of audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/not-api")},
-			setup: func() {
-				state = "12345678901234567890"
+			name: "ShouldFailWithInvalidAudience",
+			params: []xoauth2.AuthCodeOption{
+				xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/not-api"),
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
+			},
+			state:          "12345678901234567890",
+			authStatusCode: http.StatusNotAcceptable,
+		},
+		{
+			name: "ShouldFailWithInvalidScope",
+			params: []xoauth2.AuthCodeOption{
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
+			},
+			state: "12345678901234567890",
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"not-exist"}
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
 		{
-			description: "should fail because of scope",
-			params:      []xoauth2.AuthCodeOption{},
-			setup: func() {
-				oauthClient.Scopes = []string{"not-exist"}
-				state = "12345678901234567890"
+			name: "ShouldPassWithValidAudience",
+			params: []xoauth2.AuthCodeOption{
+				xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/api"),
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
-			authStatusCode: http.StatusNotAcceptable,
-		},
-		{
-			description: "should pass with proper audience",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/api")},
-			setup: func() {
-				state = "12345678901234567890"
-				oauthClient.Scopes = []string{"oauth2"}
+			state: "12345678901234567890",
+			setup: func(t *testing.T, client *xoauth2.Config) {
+				client.Scopes = []string{"oauth2"}
 			},
 			check: func(t *testing.T, r *http.Response) {
 				var b oauth2.AccessRequest
@@ -85,18 +73,33 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 			authStatusCode: http.StatusOK,
 		},
 		{
-			description: "should pass",
-			setup: func() {
-				state = "12345678901234567890"
+			name:  "ShouldPassWithoutAudience",
+			state: "12345678901234567890",
+			params: []xoauth2.AuthCodeOption{
+				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
 			authStatusCode: http.StatusOK,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := compose.Compose(new(oauth2.Config), store, hmacStrategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+
+			server := mockServer(t, f, &oauth2.DefaultSession{})
+			defer server.Close()
+
+			oauthClient := newOAuth2Client(server)
+			store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = server.URL + "/callback"
+
+			if tc.setup != nil {
+				tc.setup(t, oauthClient)
+			}
 
 			var callbackURL *url.URL
-			authURL := strings.Replace(oauthClient.AuthCodeURL(state, c.params...), "response_type=code", "response_type=token", -1)
+
+			authURL := oauthClient.AuthCodeURL(tc.state, tc.params...)
+
 			client := &http.Client{
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
 					callbackURL = req.URL
@@ -119,12 +122,12 @@ func runTestAuthorizeImplicitGrant(t *testing.T, strategy any) {
 				}
 
 				httpClient := oauthClient.Client(context.TODO(), token)
-				resp, err := httpClient.Get(ts.URL + "/info")
+				resp, err := httpClient.Get(server.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-				if c.check != nil {
-					c.check(t, resp)
+				if tc.check != nil {
+					tc.check(t, resp)
 				}
 			}
 		})

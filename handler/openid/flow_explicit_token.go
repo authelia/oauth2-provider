@@ -24,9 +24,9 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 
 	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode), requester)
 	if errors.Is(err, ErrNoSessionFound) {
-		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
 	} else if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	if !authorize.GetGrantedScopes().Has(consts.ScopeOpenID) {

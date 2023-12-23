@@ -33,7 +33,7 @@ const (
 	GrantTypeAuthorizationCode GrantType = consts.GrantTypeAuthorizationCode
 	GrantTypePassword          GrantType = consts.GrantTypeResourceOwnerPasswordCredentials
 	GrantTypeClientCredentials GrantType = consts.GrantTypeClientCredentials
-	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer //nolint:gosec // this is not a hardcoded credential
+	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer
 
 	BearerAccessToken string = "bearer"
 )
@@ -185,7 +185,7 @@ type IntrospectionResponder interface {
 	// or if the type can not be determined an empty string.
 	GetTokenUse() TokenUse
 
-	//GetAccessTokenType optionally returns the type of the access token that was introspected. This could be "bearer", "mac",
+	// GetAccessTokenType optionally returns the type of the access token that was introspected. This could be "bearer", "mac",
 	// or empty string if the type of the token is refresh token.
 	GetAccessTokenType() string
 }

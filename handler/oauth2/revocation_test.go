@@ -489,7 +489,6 @@ func TestRevokeToken(t *testing.T) {
 			expected:  nil,
 			client:    &oauth2.DefaultClient{ID: "bar"},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
-
 				atStrat.EXPECT().AccessTokenSignature(gomock.Any(), tc.have)
 				store.EXPECT().GetAccessTokenSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, oauth2.ErrNotFound)
 

@@ -64,7 +64,7 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 // DefaultClientAuthenticationStrategy provides the fosite's default client authentication strategy,
 // HTTP Basic Authentication and JWT Bearer
 //
-// TODO: Refactor time permitting.
+// TODO: Refactor time permitting. Likely best to handle the enforcement of the MUST in https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.
 //
 //nolint:gocyclo
 func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *http.Request, form url.Values) (Client, error) {

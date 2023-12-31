@@ -257,7 +257,7 @@ type HTTPClientProvider interface {
 // ClientAuthenticationStrategyProvider returns the provider for configuring the client authentication strategy.
 type ClientAuthenticationStrategyProvider interface {
 	// GetClientAuthenticationStrategy returns the client authentication strategy.
-	GetClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationStrategy
+	GetClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationLegacyStrategy
 }
 
 // ResponseModeHandlerProvider returns the provider for configuring the response mode handlers.

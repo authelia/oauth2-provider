@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,10 +25,32 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+type wrapped interface {
+	Unwrap() error
+}
+
+func TestX(t *testing.T) {
+	x := strings.SplitN("abc.123.456.123.1123", ".", 6)
+
+	switch len(x) {
+	case 3:
+		panic("3")
+	case 5:
+		panic("5")
+	default:
+		panic("x")
+	}
+}
+
+func x() error {
+	return errorsx.WithStack(ErrInvalidClient)
+}
 
 //nolint:unparam
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {

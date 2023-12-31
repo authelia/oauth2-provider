@@ -147,6 +147,13 @@ type Fosite struct {
 	Config Configurator
 }
 
+/*
+func (f *Fosite) GetClientAuthenticationHandlers(ctx context.Context) []ClientAuthenticationHandler {
+	return nil
+}
+
+*/
+
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.
 func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	if mp := f.Config.GetMinParameterEntropy(ctx); mp > 0 {

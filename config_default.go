@@ -166,7 +166,7 @@ type Config struct {
 	GrantTypeJWTBearerMaxDuration time.Duration
 
 	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests
-	ClientAuthenticationStrategy ClientAuthenticationStrategy
+	ClientAuthenticationStrategy ClientAuthenticationLegacyStrategy
 
 	// ResponseModeHandlers provides the handlers for performing response mode formatting.
 	ResponseModeHandlers []ResponseModeHandler
@@ -532,7 +532,7 @@ func (c *Config) GetJWTMaxDuration(_ context.Context) time.Duration {
 // Defaults to nil.
 // Note that on a nil strategy `oauth2.Fosite` fallbacks to its default client authentication strategy
 // `oauth2.Fosite.DefaultClientAuthenticationStrategy`
-func (c *Config) GetClientAuthenticationStrategy(_ context.Context) ClientAuthenticationStrategy {
+func (c *Config) GetClientAuthenticationStrategy(_ context.Context) ClientAuthenticationLegacyStrategy {
 	return c.ClientAuthenticationStrategy
 }
 

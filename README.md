@@ -27,7 +27,7 @@ following list of differences:
 - [x] Higher Debug error information visibility (Debug Field includes the
       complete RFC6749 error with debug information if available)
 - Fixes:
-  - [x] Basic Scheme Rejects Special Characters
+  - [x] ~~Basic Scheme Rejects Special Characters~~
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2314625eb1f21987a9199fb1cdf6da6cee4df965)</sup>
   - [x] RFC9068 must condition ignored
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/c6e7a18ee9066b8c17c6f30a180d44507e2e2ff1)</sup>
@@ -85,6 +85,8 @@ following list of differences:
   - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
         request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
   - Client Authentication Rework:
+    - [x] General Refactor
+    - [x] Prevent Multiple Client Authentication Methods
     - [ ] Client Secret Validation Interface
     - [ ] JWE support for Client Authentication and Issuance
   - [ ] Clock Drift Support

@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
 
@@ -47,8 +48,21 @@ type ClientWithSecretRotation interface {
 	GetRotatedHashes() [][]byte
 }
 
+// ClientAuthenticationPolicyClient is a Client implementation which also provides client authentication policy values.
+type ClientAuthenticationPolicyClient interface {
+	Client
+
+	// GetAllowMultipleAuthenticationMethods should return true if the client policy allows multiple authentication
+	// methods due to the client implementation breaching RFC6749 Section 2.3.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.
+	GetAllowMultipleAuthenticationMethods(ctx context.Context) bool
+}
+
 // OpenIDConnectClient represents a client capable of performing OpenID Connect requests.
 type OpenIDConnectClient interface {
+	Client
+
 	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
 	// cache the contents of the files referenced by these URIs and not retrieve them at the time they are used in a request.
 	// OPs can require that request_uri values used be pre-registered with the require_request_uri_registration
@@ -73,6 +87,11 @@ type OpenIDConnectClient interface {
 	// JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT] used to authenticate the
 	// Client at the Token Endpoint for the private_key_jwt and client_secret_jwt authentication methods.
 	GetTokenEndpointAuthSigningAlgorithm() string
+
+	// GetSecretPlainText returns the client secret in plain text.
+	// This is used to validate the 'token_endpoint_client_auth_method' with a value of 'client_secret_jwt'. If this
+	// client does NOT have a plain text secret then it MUST return an error.
+	GetSecretPlainText() (secret []byte, err error)
 }
 
 // RefreshFlowScopeClient is a client which can be customized to ignore scopes that were not originally granted.
@@ -207,6 +226,10 @@ func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlgorithm() stri
 
 func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlgorithm() string {
 	return c.RequestObjectSigningAlgorithm
+}
+
+func (c *DefaultOpenIDConnectClient) GetSecretPlainText() (secret []byte, err error) {
+	return nil, fmt.Errorf("this registered client does not suport plain text")
 }
 
 func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthMethod() string {

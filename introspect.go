@@ -31,6 +31,7 @@ func AccessTokenFromRequest(req *http.Request) string {
 		if err := req.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 			return ""
 		}
+
 		return req.Form.Get(consts.FormParameterAccessToken)
 	}
 

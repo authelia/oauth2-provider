@@ -177,6 +177,8 @@ type Fosite struct {
 	Store Storage
 
 	Config Configurator
+
+	defaultClientAuthenticationStrategy ClientAuthenticationStrategy
 }
 
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.

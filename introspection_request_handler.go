@@ -123,6 +123,7 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHintf("HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", tu))
 		}
 	} else {
+		// TODO: handle basic auth internally for consistency.
 		id, secret, ok := r.BasicAuth()
 		if !ok {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing."))

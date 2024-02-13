@@ -22,7 +22,6 @@ type OpenIDConnectRequestStorage interface {
 	// - or an arbitrary error if an error occurred.
 	GetOpenIDConnectSession(ctx context.Context, authorizeCode string, requester oauth2.Requester) (oauth2.Requester, error)
 
-	// Deprecated: DeleteOpenIDConnectSession is not called from anywhere.
-	// Originally, it should remove an open id connect session from the store.
+	// DeleteOpenIDConnectSession deletes the OpenID Connect 1.0 session from storage.
 	DeleteOpenIDConnectSession(ctx context.Context, authorizeCode string) error
 }

@@ -103,6 +103,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				storedReq.Form.Set(consts.FormParameterNonce, "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseIDToken))
@@ -133,6 +134,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				storedReq.Form.Set("nonce", "1111111111111111")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.GetExtra("id_token"))
@@ -159,6 +161,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -171,6 +174,25 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.Session = nil
 				storedReq.GrantScope(consts.ScopeOpenID)
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+			},
+			expectErr: oauth2.ErrServerError,
+		},
+		{
+			description: "should fail because storage returns error when deleting openid session",
+			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{"authorization_code"},
+				}
+				req.GrantTypes = oauth2.Arguments{"authorization_code"}
+				req.Form.Set("code", "foobar")
+				storedSession := &DefaultSession{
+					Claims: &jwt.IDTokenClaims{Subject: "peter"},
+				}
+				storedReq := oauth2.NewAuthorizeRequest()
+				storedReq.Session = storedSession
+				storedReq.GrantedScope = oauth2.Arguments{"openid"}
+				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(errors.New("delete openid session err"))
 			},
 			expectErr: oauth2.ErrServerError,
 		},

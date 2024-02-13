@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/text/language"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // Request is an implementation of Requester
@@ -159,11 +161,24 @@ func (a *Request) Merge(request Requester) {
 	}
 }
 
+var alwaysAllowedParameters = []string{
+	consts.FormParameterGrantType,
+	consts.FormParameterResponseType,
+	consts.FormParameterScope,
+	consts.FormParameterClientID,
+}
+
 func (a *Request) Sanitize(allowedParameters []string) Requester {
 	b := new(Request)
 	allowed := map[string]bool{}
 	for _, v := range allowedParameters {
 		allowed[v] = true
+	}
+
+	for _, v := range alwaysAllowedParameters {
+		if _, ok := allowed[v]; !ok {
+			allowed[v] = true
+		}
 	}
 
 	*b = *a

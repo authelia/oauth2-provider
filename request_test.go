@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestRequest(t *testing.T) {
@@ -76,6 +77,11 @@ func TestSanitizeRequest(t *testing.T) {
 			"foo": []string{"fasdf"},
 			"bar": []string{"fasdf", "faaaa"},
 			"baz": []string{"fasdf"},
+
+			consts.FormParameterGrantType:    []string{consts.GrantTypeAuthorizationCode},
+			consts.FormParameterResponseType: []string{consts.ResponseTypeImplicitFlowIDToken},
+			consts.FormParameterClientID:     []string{"1234"},
+			consts.FormParameterScope:        []string{"read"},
 		},
 		Session: new(DefaultSession),
 	}
@@ -92,6 +98,10 @@ func TestSanitizeRequest(t *testing.T) {
 	assert.Equal(t, "fasdf", a.GetRequestForm().Get("bar"))
 	assert.Equal(t, []string{"fasdf", "faaaa"}, a.GetRequestForm()["bar"])
 	assert.Equal(t, "fasdf", a.GetRequestForm().Get("baz"))
+	assert.Equal(t, consts.GrantTypeAuthorizationCode, a.GetRequestForm().Get(consts.FormParameterGrantType))
+	assert.Equal(t, consts.ResponseTypeImplicitFlowIDToken, a.GetRequestForm().Get(consts.FormParameterResponseType))
+	assert.Equal(t, "1234", a.GetRequestForm().Get(consts.FormParameterClientID))
+	assert.Equal(t, "read", a.GetRequestForm().Get(consts.FormParameterScope))
 }
 
 func TestIdentifyRequest(t *testing.T) {

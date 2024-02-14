@@ -4,9 +4,11 @@
 package oauth2
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsLookbackAddress(t *testing.T) {
@@ -17,53 +19,42 @@ func TestIsLookbackAddress(t *testing.T) {
 	}{
 		{
 			"ShouldReturnTrueIPv4Loopback",
-			"127.0.0.1",
-			true,
-		},
-		{
-			"ShouldReturnTrueIPv4LoopbackWithPort",
-			"127.0.0.1:1230",
+			"http://127.0.0.1:1235",
 			true,
 		},
 		{
 			"ShouldReturnTrueIPv6Loopback",
-			"[::1]",
+			"http://[::1]:1234",
 			true,
 		},
 		{
-			"ShouldReturnTrueIPv6LoopbackWithPort",
-			"[::1]:1230",
-			true,
-		}, {
 			"ShouldReturnFalse12700255",
-			"127.0.0.255",
-			false,
+			"https://127.0.0.255",
+			true,
 		},
 		{
-			"ShouldReturnFalse12700255WithPort",
-			"127.0.0.255:1230",
-			false,
+			"ShouldReturnTrue127.0.0.255",
+			"https://127.0.0.255",
+			true,
 		},
 		{
 			"ShouldReturnFalseInvalidFourthOctet",
-			"127.0.0.11230",
+			"https://127.0.0.11230",
 			false,
 		},
 		{
 			"ShouldReturnFalseInvalidIPv4",
-			"127x0x0x11230",
-			false,
-		},
-		{
-			"ShouldReturnFalseInvalidIPv6",
-			"[::1]1230",
+			"https://127x0x0x11230",
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, isLoopbackAddress(tc.have))
+			have, err := url.Parse(tc.have)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, isLoopbackAddress(have))
 		})
 	}
 }

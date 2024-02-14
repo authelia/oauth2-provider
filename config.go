@@ -313,6 +313,28 @@ type PushedAuthorizeRequestHandlersProvider interface {
 	GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers
 }
 
+// DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response
+// (see https://www.rfc-editor.org/rfc/rfc8628#section-3.2)
+type DeviceAuthorizeConfigProvider interface {
+	// GetDeviceAndUserCodeLifespan returns the device and user code lifespan.
+	GetDeviceAndUserCodeLifespan(ctx context.Context) time.Duration
+	GetRFC8628UserVerificationURL(ctx context.Context) string
+	GetDeviceAuthTokenPollingInterval(ctx context.Context) time.Duration
+}
+
+// DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
+type DeviceAuthorizeEndpointHandlersProvider interface {
+	// GetDeviceAuthorizeEndpointHandlers returns the handlers.
+	GetDeviceAuthorizeEndpointHandlers(ctx context.Context) DeviceAuthorizeEndpointHandlers
+}
+
+// RFC8628UserAuthorizeEndpointHandlersProvider returns the provider for setting up the Device grant user interaction handlers.
+type RFC8628UserAuthorizeEndpointHandlersProvider interface {
+
+	// GetRFC8628UserAuthorizeEndpointHandlers returns the handlers.
+	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) RFC8628UserAuthorizeEndpointHandlers
+}
+
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.
 //
 // Deprecated: Do not use this flag anymore.

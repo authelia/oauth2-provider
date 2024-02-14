@@ -42,12 +42,16 @@ type MemoryStore struct {
 	IDSessions      map[string]oauth2.Requester
 	AccessTokens    map[string]oauth2.Requester
 	RefreshTokens   map[string]StoreRefreshToken
+	DeviceCodes     map[string]oauth2.Requester
+	UserCodes       map[string]oauth2.Requester
 	PKCES           map[string]oauth2.Requester
 	Users           map[string]MemoryUserRelation
 	BlacklistedJTIs map[string]time.Time
 	// In-memory request ID to token signatures
 	AccessTokenRequestIDs  map[string]string
 	RefreshTokenRequestIDs map[string]string
+	DeviceCodesRequestIDs  map[string]string
+	UserCodesRequestIDs    map[string]string
 	// Public keys to check signature in auth grant jwt assertion.
 	IssuerPublicKeys map[string]IssuerPublicKeys
 	PARSessions      map[string]oauth2.AuthorizeRequester
@@ -57,11 +61,15 @@ type MemoryStore struct {
 	idSessionsMutex             sync.RWMutex
 	accessTokensMutex           sync.RWMutex
 	refreshTokensMutex          sync.RWMutex
+	userCodesMutex              sync.RWMutex
+	deviceCodesMutex            sync.RWMutex
 	pkcesMutex                  sync.RWMutex
 	usersMutex                  sync.RWMutex
 	blacklistedJTIsMutex        sync.RWMutex
 	accessTokenRequestIDsMutex  sync.RWMutex
 	refreshTokenRequestIDsMutex sync.RWMutex
+	userCodesRequestIDsMutex    sync.RWMutex
+	deviceCodesRequestIDsMutex  sync.RWMutex
 	issuerPublicKeysMutex       sync.RWMutex
 	parSessionsMutex            sync.RWMutex
 }
@@ -73,10 +81,14 @@ func NewMemoryStore() *MemoryStore {
 		IDSessions:             make(map[string]oauth2.Requester),
 		AccessTokens:           make(map[string]oauth2.Requester),
 		RefreshTokens:          make(map[string]StoreRefreshToken),
+		DeviceCodes:            make(map[string]oauth2.Requester),
+		UserCodes:              make(map[string]oauth2.Requester),
 		PKCES:                  make(map[string]oauth2.Requester),
 		Users:                  make(map[string]MemoryUserRelation),
 		AccessTokenRequestIDs:  make(map[string]string),
 		RefreshTokenRequestIDs: make(map[string]string),
+		DeviceCodesRequestIDs:  make(map[string]string),
+		UserCodesRequestIDs:    make(map[string]string),
 		BlacklistedJTIs:        make(map[string]time.Time),
 		IssuerPublicKeys:       make(map[string]IssuerPublicKeys),
 		PARSessions:            make(map[string]oauth2.AuthorizeRequester),
@@ -474,6 +486,7 @@ func (s *MemoryStore) CreatePARSession(ctx context.Context, requestURI string, r
 	defer s.parSessionsMutex.Unlock()
 
 	s.PARSessions[requestURI] = request
+
 	return nil
 }
 
@@ -497,5 +510,103 @@ func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (
 	defer s.parSessionsMutex.Unlock()
 
 	delete(s.PARSessions, requestURI)
+
+	return nil
+}
+
+func (s *MemoryStore) CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	s.deviceCodesRequestIDsMutex.Lock()
+	defer s.deviceCodesRequestIDsMutex.Unlock()
+
+	s.DeviceCodes[signature] = request
+	s.DeviceCodesRequestIDs[request.GetID()] = signature
+
+	return nil
+}
+
+func (s *MemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.deviceCodesRequestIDsMutex.Lock()
+	defer s.deviceCodesRequestIDsMutex.Unlock()
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	// Only update if exist
+	if _, exists := s.DeviceCodes[signature]; exists {
+		s.DeviceCodes[signature] = request
+		s.DeviceCodesRequestIDs[request.GetID()] = signature
+	}
+	return nil
+}
+
+func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+	s.deviceCodesMutex.RLock()
+	defer s.deviceCodesMutex.RUnlock()
+
+	rel, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+	return rel, nil
+}
+
+func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, code string) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	delete(s.DeviceCodes, code)
+
+	return nil
+}
+
+func (s *MemoryStore) CreateUserCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.userCodesMutex.Lock()
+	defer s.userCodesMutex.Unlock()
+
+	s.userCodesRequestIDsMutex.Lock()
+	defer s.userCodesRequestIDsMutex.Unlock()
+
+	s.UserCodes[signature] = request
+	s.UserCodesRequestIDs[request.GetID()] = signature
+
+	return nil
+}
+
+func (s *MemoryStore) GetUserCodeSession(ctx context.Context, signature string, session oauth2.Session) (req oauth2.DeviceAuthorizeRequester, err error) {
+	s.userCodesMutex.RLock()
+	defer s.userCodesMutex.RUnlock()
+
+	req, ok := s.UserCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	return req, nil
+}
+
+func (s *MemoryStore) InvalidateUserCodeSession(_ context.Context, code string) error {
+	s.userCodesMutex.Lock()
+	defer s.userCodesMutex.Unlock()
+
+	delete(s.UserCodes, code)
+
+	return nil
+}
+
+func (s *MemoryStore) UpdateUserCodeSession(ctx context.Context, signature string, req oauth2.DeviceAuthorizeRequester) error {
+	s.userCodesMutex.Lock()
+	defer s.userCodesMutex.Unlock()
+
+	s.userCodesRequestIDsMutex.Lock()
+	defer s.userCodesRequestIDsMutex.Unlock()
+
+	// Only update if exist
+	if _, exists := s.UserCodes[signature]; exists {
+		s.UserCodes[signature] = req
+		s.UserCodesRequestIDs[req.GetID()] = signature
+	}
+
 	return nil
 }

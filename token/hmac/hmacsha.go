@@ -86,6 +86,26 @@ func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
 	return encodedToken, encodedSignature, nil
 }
 
+func (c *HMACStrategy) GenerateHMACForString(ctx context.Context, text string) (string, error) {
+	var signingKey [32]byte
+
+	secrets, err := c.Config.GetGlobalSecret(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(secrets) < minimumSecretLength {
+		return "", errors.Errorf("secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got %d byte", len(secrets))
+	}
+	copy(signingKey[:], secrets)
+
+	bytes := []byte(text)
+	hashBytes := c.generateHMAC(ctx, bytes, &signingKey)
+
+	b64 := base64.RawURLEncoding.EncodeToString(hashBytes)
+	return b64, nil
+}
+
 // Validate validates a token and returns its signature or an error if the token is not valid.
 func (c *HMACStrategy) Validate(ctx context.Context, token string) (err error) {
 	var keys [][]byte

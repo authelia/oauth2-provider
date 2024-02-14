@@ -51,7 +51,7 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 	ctx = context.WithValue(ctx, AccessRequestContextKey, accessRequest)
 
-	if r.Method != "POST" {
+	if r.Method != http.MethodPost {
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'POST'.", r.Method))
 	} else if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))

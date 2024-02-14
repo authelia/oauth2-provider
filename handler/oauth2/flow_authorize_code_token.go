@@ -48,6 +48,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 			hint += " Additionally, an error occurred during processing the access token revocation."
 			debug += "Revocation of access_token lead to error " + revErr.Error() + "."
 		}
+
 		if revErr := c.TokenRevocationStorage.RevokeRefreshToken(ctx, reqID); revErr != nil {
 			hint += " Additionally, an error occurred during processing the refresh token revocation."
 			debug += "Revocation of refresh_token lead to error " + revErr.Error() + "."

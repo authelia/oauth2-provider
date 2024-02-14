@@ -61,6 +61,7 @@ func (s *DefaultSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
+
 	s.ExpiresAt[key] = exp
 }
 

@@ -17,7 +17,7 @@ package oauth2
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/oauth2_revoke_storage.go authelia.com/provider/oauth2/handler/oauth2 TokenRevocationStorage
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/openid_id_token_storage.go authelia.com/provider/oauth2/handler/openid OpenIDConnectRequestStorage
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/access_token_strategy.go authelia.com/provider/oauth2/handler/oauth2 AccessTokenStrategy
-//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/refresh_token_strategy.go authelia.com/provider/oauth2/handler/oauth2 RefreshTokenStrategy
+//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/refresh_token_strategy.go authelia.com/provider/oauth2/handler/oauth2 ReyfreshTokenStrategy
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/authorize_code_strategy.go authelia.com/provider/oauth2/handler/oauth2 AuthorizeCodeStrategy
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/id_token_strategy.go authelia.com/provider/oauth2/handler/openid OpenIDConnectTokenStrategy
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/pkce_storage_strategy.go authelia.com/provider/oauth2/handler/pkce PKCERequestStorage
@@ -31,3 +31,7 @@ package oauth2
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/access_response.go authelia.com/provider/oauth2 AccessResponder
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/authorize_request.go authelia.com/provider/oauth2 AuthorizeRequester
 //go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/authorize_response.go authelia.com/provider/oauth2 AuthorizeResponder
+//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/device_oauth2_handler.go authelia.com/provider/oauth2/handler/oauth2 CodeTokenEndpointHandler
+//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/device_handler.go authelia.com/provider/oauth2 DeviceAuthorizeEndpointHandler,RFC8628UserAuthorizeEndpointHandler
+//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/oauth2_device_auth_storage.go authelia.com/provider/oauth2/handler/rfc8628 RFC8628CodeStorage
+//go:generate go run go.uber.org/mock/mockgen -package internal -destination internal/device_authorization_request.go authelia.com/provider/oauth2 DeviceAuthorizeRequester

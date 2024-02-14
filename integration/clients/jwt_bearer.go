@@ -79,7 +79,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 		return nil, err
 	}
 
-	request, err := http.NewRequestWithContext(ctx, "POST", c.tokenURL, requestBodyReader)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.tokenURL, requestBodyReader)
 	if err != nil {
 		return nil, err
 	}

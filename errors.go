@@ -22,10 +22,18 @@ var (
 	// ErrInvalidatedAuthorizeCode is an error indicating that an authorization code has been
 	// used previously.
 	ErrInvalidatedAuthorizeCode = errors.New("Authorization code has ben invalidated")
+
+	// ErrInvalidatedDeviceCode is an error indicating that a device code has been used previously.
+	ErrInvalidatedDeviceCode = errors.New("Device code has been invalidated")
+
+	// ErrInvalidatedUserCode is an error indicating that a user code has been used previously.
+	ErrInvalidatedUserCode = errors.New("user code has been invalidated")
+
 	// ErrSerializationFailure is an error indicating that the transactional capable storage could not guarantee
 	// consistency of Update & Delete operations on the same rows between multiple sessions.
 	ErrSerializationFailure = errors.New("The request could not be completed due to concurrent access")
-	ErrUnknownRequest       = &RFC6749Error{
+
+	ErrUnknownRequest = &RFC6749Error{
 		ErrorField:       errUnknownErrorName,
 		DescriptionField: "The handler is not responsible for this request.",
 		CodeField:        http.StatusBadRequest,
@@ -201,6 +209,21 @@ var (
 		ErrorField:       errJTIKnownName,
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrAuthorizationPending = &RFC6749Error{
+		DescriptionField: "The authorization request is still pending as the end user hasn't yet completed the user-interaction steps.",
+		ErrorField:       errAuthorizationPending,
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrDeviceExpiredToken = &RFC6749Error{
+		DescriptionField: "The device_code has expired, and the device authorization session has concluded.",
+		ErrorField:       errDeviceExpiredToken,
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrSlowDown = &RFC6749Error{
+		DescriptionField: "Too many requests within a short time period.",
+		ErrorField:       errSlowDown,
+		CodeField:        http.StatusBadRequest,
+	}
 )
 
 const (
@@ -238,6 +261,9 @@ const (
 	errRequestURINotSupportedName   = "request_uri_not_supported"
 	errRegistrationNotSupportedName = "registration_not_supported"
 	errJTIKnownName                 = "jti_known"
+	errAuthorizationPending         = "authorization_pending"
+	errDeviceExpiredToken           = "expired_token"
+	errSlowDown                     = "slow_down"
 )
 
 type (

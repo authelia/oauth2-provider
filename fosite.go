@@ -80,7 +80,33 @@ func (a *PushedAuthorizeEndpointHandlers) Append(h PushedAuthorizeEndpointHandle
 	*a = append(*a, h)
 }
 
-var _ Provider = (*Fosite)(nil)
+// DeviceAuthorizeEndpointHandlers is a list of RFC8628DeviceAuthorizeEndpointHandler
+type DeviceAuthorizeEndpointHandlers []RFC8628DeviceAuthorizeEndpointHandler
+
+// Append adds an RFC8628DeviceAuthorizeEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *DeviceAuthorizeEndpointHandlers) Append(h RFC8628DeviceAuthorizeEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// RFC8628UserAuthorizeEndpointHandlers is a list of RFC8628UserAuthorizeEndpointHandler
+type RFC8628UserAuthorizeEndpointHandlers []RFC8628UserAuthorizeEndpointHandler
+
+// Append adds an RFC8628UserAuthorizeEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
 
 type Configurator interface {
 	IDTokenIssuerProvider
@@ -133,6 +159,9 @@ type Configurator interface {
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider
 	RevocationHandlersProvider
+	DeviceAuthorizeEndpointHandlersProvider
+	RFC8628UserAuthorizeEndpointHandlersProvider
+	DeviceAuthorizeConfigProvider
 	UseLegacyErrorFormatProvider
 }
 
@@ -160,3 +189,7 @@ func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 func (f *Fosite) ResponseModeHandlers(ctx context.Context) []ResponseModeHandler {
 	return f.Config.GetResponseModeHandlers(ctx)
 }
+
+var (
+	_ Provider = (*Fosite)(nil)
+)

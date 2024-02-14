@@ -8,8 +8,7 @@ import (
 	"authelia.com/provider/oauth2/handler/verifiable"
 )
 
-// OIDCUserinfoVerifiableCredentialFactory creates a verifiable credentials
-// handler.
+// OIDCUserinfoVerifiableCredentialFactory creates a verifiable credentials' handler.
 func OIDCUserinfoVerifiableCredentialFactory(config oauth2.Configurator, storage, strategy any) any {
 	return &verifiable.Handler{
 		NonceManager: storage.(verifiable.NonceManager),

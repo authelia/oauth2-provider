@@ -9,3 +9,13 @@ const (
 	AccessResponseAuthorizationCode = valueCode
 	AccessResponseTokenType         = "token_type"
 )
+
+const (
+	DeviceCodeResponseExpiresIn               = valueExpiresIn
+	DeviceCodeResponseStatus                  = "status"
+	DeviceCodeResponseDeviceCode              = valueDeviceCode
+	DeviceCodeResponseUserCode                = valueUserCode
+	DeviceCodeResponseVerificationURI         = "verification_uri"
+	DeviceCodeResponseVerificationURIComplete = "verification_uri_complete"
+	DeviceCodeResponseInterval                = "interval"
+)

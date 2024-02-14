@@ -82,7 +82,7 @@ func (c *Introspect) getRequest(
 	data url.Values,
 	header map[string]string,
 ) (*http.Request, error) {
-	request, err := http.NewRequestWithContext(ctx, "POST", c.endpointURL, strings.NewReader(data.Encode()))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpointURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}

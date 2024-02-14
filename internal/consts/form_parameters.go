@@ -37,4 +37,6 @@ const (
 	FormParameterDisplay                                   = "display"
 	FormParameterAuthenticationContextClassReferenceValues = "acr_values"
 	FormParameterIDTokenHint                               = "id_token_hint"
+	FormParameterDeviceCode                                = valueDeviceCode
+	FormParameterUserCode                                  = valueUserCode
 )

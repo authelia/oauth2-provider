@@ -53,6 +53,12 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if ph, ok := res.(oauth2.PushedAuthorizeEndpointHandler); ok {
 			config.PushedAuthorizeEndpointHandlers.Append(ph)
 		}
+		if dh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointHandler); ok {
+			config.DeviceAuthorizeEndpointHandlers.Append(dh)
+		}
+		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
+			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)
+		}
 	}
 
 	return f
@@ -68,6 +74,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		storage,
 		&CommonStrategy{
 			CoreStrategy:               NewOAuth2HMACStrategy(config),
+			RFC8628CodeStrategy:        NewDeviceStrategy(config),
 			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, config),
 			Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		},
@@ -76,6 +83,10 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OAuth2AuthorizeNoneFactory,
 		OAuth2ClientCredentialsGrantFactory,
 		OAuth2RefreshTokenGrantFactory,
+		RFC8628DeviceAuthorizeFactory,
+		RFC8628UserAuthorizeFactory,
+		RFC8628DeviceAuthorizeTokenFactory,
+
 		OAuth2ResourceOwnerPasswordCredentialsFactory,
 		RFC7523AssertionGrantFactory,
 
@@ -83,6 +94,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OpenIDConnectImplicitFactory,
 		OpenIDConnectHybridFactory,
 		OpenIDConnectRefreshFactory,
+		OpenIDConnectDeviceAuthorizeFactory,
 
 		OAuth2TokenIntrospectionFactory,
 		OAuth2TokenRevocationFactory,

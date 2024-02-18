@@ -31,4 +31,6 @@ const (
 	ClaimCodeHash                            = "c_hash"
 	ClaimStateHash                           = "s_hash"
 	ClaimNonce                               = valueNonce
+	ClaimAuthorizedActor                     = "may_act"
+	ClaimActor                               = "act"
 )

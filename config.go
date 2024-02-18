@@ -335,6 +335,12 @@ type RFC8628UserAuthorizeEndpointHandlersProvider interface {
 	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) RFC8628UserAuthorizeEndpointHandlers
 }
 
+type RFC8693ConfigProvider interface {
+	GetTokenTypes(ctx context.Context) map[string]RFC8693TokenType
+
+	GetDefaultRequestedTokenType(ctx context.Context) string
+}
+
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.
 //
 // Deprecated: Do not use this flag anymore.

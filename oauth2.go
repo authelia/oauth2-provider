@@ -21,14 +21,16 @@ type TokenType string
 type GrantType string
 
 const (
-	AccessToken   TokenType = consts.TokenTypeAccessToken
-	RefreshToken  TokenType = consts.TokenTypeRefreshToken
-	AuthorizeCode TokenType = "authorize_code"
-	IDToken       TokenType = "id_token"
+	AccessToken  TokenType = consts.TokenTypeAccessToken
+	RefreshToken TokenType = consts.TokenTypeRefreshToken
+	DeviceCode   TokenType = consts.CodeDevice
+	UserCode     TokenType = consts.CodeUser
+
 	// PushedAuthorizeRequestContext represents the PAR context object
 	PushedAuthorizeRequestContext TokenType = "par_context"
-	DeviceCode                    TokenType = consts.CodeDevice
-	UserCode                      TokenType = consts.CodeUser
+
+	AuthorizeCode TokenType = "authorize_code"
+	IDToken       TokenType = "id_token"
 
 	GrantTypeImplicit          GrantType = consts.GrantTypeImplicit
 	GrantTypeRefreshToken      GrantType = consts.GrantTypeRefreshToken
@@ -37,7 +39,9 @@ const (
 	GrantTypeClientCredentials GrantType = consts.GrantTypeClientCredentials
 	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer
 	GrantTypeDeviceCode        GrantType = consts.GrantTypeOAuthDeviceCode
-	BearerAccessToken          string    = "bearer"
+	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
+
+	BearerAccessToken string = "bearer"
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
@@ -540,4 +544,10 @@ type RFC8628UserAuthorizeResponder interface {
 type G11NContext interface {
 	// GetLang returns the current language in the context
 	GetLang() language.Tag
+}
+
+type RFC8693TokenType interface {
+	GetName(ctx context.Context) string
+
+	GetType(ctx context.Context) string
 }

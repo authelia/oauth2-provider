@@ -59,10 +59,12 @@ following list of differences:
   - [x] Customizable Token Prefix
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
   - [ ] UserInfo support
-  - [ ] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+  - [x] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
         support
-  - [ ] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/be088375c5c0077f33976991cfbc056450fd6d58)</sup>
+  - [x] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
         support
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/add3cbecb9d35e2b7c29426cf5d898c9b1599e3b)</sup>
   - [ ] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
         support
   - [ ] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)

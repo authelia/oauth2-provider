@@ -5,6 +5,7 @@ const (
 	valueClientID     = "client_id"
 	valueImplicit     = "implicit"
 	valueExplicit     = "explicit"
+	valueExpiresIn    = "expires_in"
 	valueNone         = "none"
 	valueRefreshToken = "refresh_token"
 	valueIDToken      = "id_token"
@@ -13,4 +14,6 @@ const (
 	valueCode         = "code"
 	valuePassword     = "password"
 	valueNonce        = "nonce"
+	valueDeviceCode   = "device_code"
+	valueUserCode     = "user_code"
 )

@@ -66,3 +66,26 @@ type PushedAuthorizeEndpointHandler interface {
 	// the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
 	HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester AuthorizeRequester, responder PushedAuthorizeResponder) error
 }
+
+type RFC8628DeviceAuthorizeEndpointHandler interface {
+	// HandleRFC8628DeviceAuthorizeEndpointRequest handles a device authorize endpoint request. To extend the handler's capabilities, the http request
+	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
+	// the device authorize request, he must return nil and NOT modify session nor responder neither requester.
+	//
+	// The following spec is a good example of what HandleDeviceAuthorizeRequest should do.
+	// * https://tools.ietf.org/html/rfc8628#section-3.2
+	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, requester DeviceAuthorizeRequester, responder DeviceAuthorizeResponder) error
+}
+
+type RFC8628UserAuthorizeEndpointHandler interface {
+	// HandleRFC8628UserAuthorizeEndpointRequest validates the request with the given user code.
+	//
+	// The following spec is a good example of what PopulateRFC8628UserAuthorizeEndpointResponse should do.
+	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3
+	HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester) error
+
+	// PopulateRFC8628UserAuthorizeEndpointResponse populates the response object as an outcome of user authorization during
+	// the device authorization grant flow.
+	//
+	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, requester DeviceAuthorizeRequester, responder RFC8628UserAuthorizeResponder) error
+}

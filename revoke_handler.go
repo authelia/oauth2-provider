@@ -34,7 +34,7 @@ import (
 func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) error {
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
-	if r.Method != "POST" {
+	if r.Method != http.MethodPost {
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s' but expected 'POST'.", r.Method))
 	} else if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))

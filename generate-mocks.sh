@@ -28,3 +28,7 @@ ${MOCKGEN:-mockgen} -package internal -destination internal/access_request.go au
 ${MOCKGEN:-mockgen} -package internal -destination internal/access_response.go authelia.com/provider/oauth2 AccessResponder
 ${MOCKGEN:-mockgen} -package internal -destination internal/authorize_request.go authelia.com/provider/oauth2 AuthorizeRequester
 ${MOCKGEN:-mockgen} -package internal -destination internal/authorize_response.go authelia.com/provider/oauth2 AuthorizeResponder
+${MOCKGEN:-mockgen} -package internal -destination internal/device_oauth2_handler.go authelia.com/provider/oauth2/handler/oauth2 CodeTokenEndpointHandler
+${MOCKGEN:-mockgen} -package internal -destination internal/device_handler.go authelia.com/provider/oauth2 DeviceAuthorizeEndpointHandler,RFC8628UserAuthorizeEndpointHandler
+${MOCKGEN:-mockgen} -package internal -destination internal/oauth2_device_auth_storage.go authelia.com/provider/oauth2/handler/rfc8628 RFC8628CodeStorage
+${MOCKGEN:-mockgen} -package internal -destination internal/device_authorization_request.go authelia.com/provider/oauth2 DeviceAuthorizeRequester

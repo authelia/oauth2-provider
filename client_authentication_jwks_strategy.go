@@ -6,6 +6,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"time"
 
 	"github.com/dgraph-io/ristretto"
@@ -97,7 +98,7 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	cacheKey := defaultJWKSFetcherStrategyCachePrefix + location
 	key, ok := s.cache.Get(cacheKey)
 	if !ok || ignoreCache {
-		req, err := retryablehttp.NewRequest("GET", location, nil)
+		req, err := retryablehttp.NewRequest(http.MethodGet, location, nil)
 		if err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to create HTTP 'GET' request to fetch  JSON Web Keys from location '%s'.", location).WithWrap(err).WithDebugError(err))
 		}

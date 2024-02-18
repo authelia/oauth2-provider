@@ -7,6 +7,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -77,5 +78,21 @@ func OpenIDConnectHybridFactory(config oauth2.Configurator, storage any, strateg
 		},
 		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
 		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+	}
+}
+
+func OpenIDConnectDeviceAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
+	return &openid.OpenIDConnectDeviceAuthorizeHandler{
+		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
+		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+		CodeTokenEndpointHandler: &rfc8628.DeviceCodeTokenHandler{
+			Strategy: strategy.(rfc8628.RFC8628CodeStrategy),
+			Storage:  storage.(rfc8628.RFC8628Storage),
+			Config:   config,
+		},
+		Config: config,
+		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
+			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
+		},
 	}
 }

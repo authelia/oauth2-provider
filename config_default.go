@@ -22,52 +22,6 @@ const (
 	defaultPARContextLifetime = 5 * time.Minute
 )
 
-var (
-	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
-	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
-	_ AccessTokenLifespanProvider                     = (*Config)(nil)
-	_ ScopeStrategyProvider                           = (*Config)(nil)
-	_ AudienceStrategyProvider                        = (*Config)(nil)
-	_ RedirectSecureCheckerProvider                   = (*Config)(nil)
-	_ RefreshTokenScopesProvider                      = (*Config)(nil)
-	_ DisableRefreshTokenValidationProvider           = (*Config)(nil)
-	_ AccessTokenIssuerProvider                       = (*Config)(nil)
-	_ JWTScopeFieldProvider                           = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeIssuerProvider   = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeSignerProvider   = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeLifespanProvider = (*Config)(nil)
-	_ AllowedPromptsProvider                          = (*Config)(nil)
-	_ OmitRedirectScopeParamProvider                  = (*Config)(nil)
-	_ MinParameterEntropyProvider                     = (*Config)(nil)
-	_ SanitationAllowedProvider                       = (*Config)(nil)
-	_ EnforcePKCEForPublicClientsProvider             = (*Config)(nil)
-	_ EnablePKCEPlainChallengeMethodProvider          = (*Config)(nil)
-	_ EnforcePKCEProvider                             = (*Config)(nil)
-	_ GrantTypeJWTBearerCanSkipClientAuthProvider     = (*Config)(nil)
-	_ GrantTypeJWTBearerIDOptionalProvider            = (*Config)(nil)
-	_ GrantTypeJWTBearerIssuedDateOptionalProvider    = (*Config)(nil)
-	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
-	_ IDTokenLifespanProvider                         = (*Config)(nil)
-	_ IDTokenIssuerProvider                           = (*Config)(nil)
-	_ AuthorizationServerIdentificationIssuerProvider = (*Config)(nil)
-	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
-	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
-	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)
-	_ ResponseModeHandlerProvider                     = (*Config)(nil)
-	_ MessageCatalogProvider                          = (*Config)(nil)
-	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
-	_ TokenURLProvider                                = (*Config)(nil)
-	_ GetSecretsHashingProvider                       = (*Config)(nil)
-	_ HTTPClientProvider                              = (*Config)(nil)
-	_ HMACHashingProvider                             = (*Config)(nil)
-	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)
-	_ TokenEndpointHandlersProvider                   = (*Config)(nil)
-	_ TokenIntrospectionHandlersProvider              = (*Config)(nil)
-	_ RevocationHandlersProvider                      = (*Config)(nil)
-	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
-	_ PushedAuthorizeRequestConfigProvider            = (*Config)(nil)
-)
-
 type Config struct {
 	// AccessTokenLifespan sets how long an access token is going to be valid. Defaults to one hour.
 	AccessTokenLifespan time.Duration
@@ -84,6 +38,9 @@ type Config struct {
 
 	// IDTokenLifespan sets the default id token lifetime. Defaults to one hour.
 	IDTokenLifespan time.Duration
+
+	// Sets how long a device user/device code pair is valid for
+	DeviceAndUserCodeLifespan time.Duration
 
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
@@ -132,6 +89,9 @@ type Config struct {
 	// this value MUST be set.
 	TokenURL string
 
+	// RFC8628UserVerificationURL is the URL of the device verification endpoint, this is is included with the device code request responses
+	RFC8628UserVerificationURL string
+
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
 	JWKSFetcherStrategy JWKSFetcherStrategy
@@ -139,6 +99,9 @@ type Config struct {
 	// TokenEntropy indicates the entropy of the random string, used as the "message" part of the HMAC token.
 	// Defaults to 32.
 	TokenEntropy int
+
+	// DeviceAuthTokenPollingInterval sets the interval that clients should check for device code grants
+	DeviceAuthTokenPollingInterval time.Duration
 
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
@@ -221,6 +184,12 @@ type Config struct {
 	// PushedAuthorizeEndpointHandlers is a list of handlers that are called before the PAR endpoint is served.
 	PushedAuthorizeEndpointHandlers PushedAuthorizeEndpointHandlers
 
+	// DeviceAuthorizeEndpointHandlers is a list of handlers that are called before the device authorization endpoint is served.
+	DeviceAuthorizeEndpointHandlers DeviceAuthorizeEndpointHandlers
+
+	// RFC8628UserAuthorizeEndpointHandlers is a list of handlers that are called before the device grant user interaction endpoint is served.
+	RFC8628UserAuthorizeEndpointHandlers RFC8628UserAuthorizeEndpointHandlers
+
 	// GlobalSecret is the global secret used to sign and verify signatures.
 	GlobalSecret []byte
 
@@ -271,6 +240,14 @@ func (c *Config) GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrosp
 
 func (c *Config) GetRevocationHandlers(ctx context.Context) RevocationHandlers {
 	return c.RevocationHandlers
+}
+
+func (c *Config) GetDeviceAuthorizeEndpointHandlers(_ context.Context) DeviceAuthorizeEndpointHandlers {
+	return c.DeviceAuthorizeEndpointHandlers
+}
+
+func (c *Config) GetRFC8628UserAuthorizeEndpointHandlers(_ context.Context) RFC8628UserAuthorizeEndpointHandlers {
+	return c.RFC8628UserAuthorizeEndpointHandlers
 }
 
 func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
@@ -425,6 +402,14 @@ func (c *Config) GetIDTokenLifespan(_ context.Context) time.Duration {
 	return c.IDTokenLifespan
 }
 
+// GetDeviceAndUserCodeLifespan returns the device and user code lifespan.
+func (c *Config) GetDeviceAndUserCodeLifespan(_ context.Context) time.Duration {
+	if c.DeviceAndUserCodeLifespan == 0 {
+		return time.Minute * 10
+	}
+	return c.DeviceAndUserCodeLifespan
+}
+
 // GetAccessTokenLifespan returns how long an access token should be valid. Defaults to one hour.
 func (c *Config) GetAccessTokenLifespan(_ context.Context) time.Duration {
 	if c.AccessTokenLifespan == 0 {
@@ -571,3 +556,63 @@ func (c *Config) GetPushedAuthorizeContextLifespan(ctx context.Context) time.Dur
 func (c *Config) EnforcePushedAuthorize(ctx context.Context) bool {
 	return c.IsPushedAuthorizeEnforced
 }
+
+func (c *Config) GetRFC8628UserVerificationURL(_ context.Context) string {
+	return c.RFC8628UserVerificationURL
+}
+
+func (c *Config) GetDeviceAuthTokenPollingInterval(_ context.Context) time.Duration {
+	if c.DeviceAuthTokenPollingInterval == 0 {
+		return time.Second * 10
+	}
+	return c.DeviceAuthTokenPollingInterval
+}
+
+var (
+	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
+	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
+	_ AccessTokenLifespanProvider                     = (*Config)(nil)
+	_ ScopeStrategyProvider                           = (*Config)(nil)
+	_ AudienceStrategyProvider                        = (*Config)(nil)
+	_ RedirectSecureCheckerProvider                   = (*Config)(nil)
+	_ RefreshTokenScopesProvider                      = (*Config)(nil)
+	_ DisableRefreshTokenValidationProvider           = (*Config)(nil)
+	_ AccessTokenIssuerProvider                       = (*Config)(nil)
+	_ JWTScopeFieldProvider                           = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeIssuerProvider   = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeSignerProvider   = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeLifespanProvider = (*Config)(nil)
+	_ AllowedPromptsProvider                          = (*Config)(nil)
+	_ OmitRedirectScopeParamProvider                  = (*Config)(nil)
+	_ MinParameterEntropyProvider                     = (*Config)(nil)
+	_ SanitationAllowedProvider                       = (*Config)(nil)
+	_ EnforcePKCEForPublicClientsProvider             = (*Config)(nil)
+	_ EnablePKCEPlainChallengeMethodProvider          = (*Config)(nil)
+	_ EnforcePKCEProvider                             = (*Config)(nil)
+	_ GrantTypeJWTBearerCanSkipClientAuthProvider     = (*Config)(nil)
+	_ GrantTypeJWTBearerIDOptionalProvider            = (*Config)(nil)
+	_ GrantTypeJWTBearerIssuedDateOptionalProvider    = (*Config)(nil)
+	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
+	_ IDTokenLifespanProvider                         = (*Config)(nil)
+	_ IDTokenIssuerProvider                           = (*Config)(nil)
+	_ AuthorizationServerIdentificationIssuerProvider = (*Config)(nil)
+	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
+	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
+	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)
+	_ ResponseModeHandlerProvider                     = (*Config)(nil)
+	_ MessageCatalogProvider                          = (*Config)(nil)
+	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
+	_ TokenURLProvider                                = (*Config)(nil)
+	_ GetSecretsHashingProvider                       = (*Config)(nil)
+	_ HTTPClientProvider                              = (*Config)(nil)
+	_ HMACHashingProvider                             = (*Config)(nil)
+	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)
+	_ TokenEndpointHandlersProvider                   = (*Config)(nil)
+	_ TokenIntrospectionHandlersProvider              = (*Config)(nil)
+	_ RevocationHandlersProvider                      = (*Config)(nil)
+	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
+	_ PushedAuthorizeRequestConfigProvider            = (*Config)(nil)
+	_ DeviceAuthorizeConfigProvider                   = (*Config)(nil)
+	_ DeviceAuthorizeEndpointHandlersProvider         = (*Config)(nil)
+	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
+)

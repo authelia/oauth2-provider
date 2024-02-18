@@ -81,15 +81,15 @@ type RevocationTokenLookupFunc func(ctx context.Context, token string) (requeste
 
 func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Context, client oauth2.Client) bool {
 	var (
-		rfrrtec oauth2.RevokeFlowRevokeRefreshTokensExplicitClient
-		ok      bool
+		c  oauth2.RevokeFlowRevokeRefreshTokensExplicitClient
+		ok bool
 	)
 
-	if rfrrtec, ok = client.(oauth2.RevokeFlowRevokeRefreshTokensExplicitClient); !ok {
+	if c, ok = client.(oauth2.RevokeFlowRevokeRefreshTokensExplicitClient); !ok {
 		return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
 	}
 
-	if ok = rfrrtec.GetRevokeRefreshTokensExplicitly(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {
+	if ok = c.GetRevokeRefreshTokensExplicitly(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {
 		return ok
 	}
 

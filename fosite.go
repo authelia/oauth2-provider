@@ -159,6 +159,9 @@ type Configurator interface {
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider
 	RevocationHandlersProvider
+	PushedAuthorizeRequestHandlersProvider
+	PushedAuthorizeRequestConfigProvider
+	RFC8693ConfigProvider
 	DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	DeviceAuthorizeConfigProvider

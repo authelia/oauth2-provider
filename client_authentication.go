@@ -105,20 +105,31 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 		methods = append(methods, fmt.Sprintf("%s (i.e. %s or %s)", consts.ClientAssertionTypeJWTBearer, consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodClientSecretJWT))
 	}
 
+	return s.handleResolvedClientAuthenticationMethods(ctx, client, method, methods)
+}
+
+func (s *DefaultClientAuthenticationStrategy) handleResolvedClientAuthenticationMethods(ctx context.Context, c Client, m string, methods []string) (client Client, method string, err error) {
 	switch len(methods) {
 	case 0:
+		// The 0 case means no authentication information at all exists even if the client is a public client. This
+		// likely only occurs on requests where the client_id is not known.
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("Client Authentication failed with no known authentication method."))
 	case 1:
+		// Proper authentication has occurred.
 		break
 	default:
-		if c, ok := client.(ClientAuthenticationPolicyClient); ok && c.GetAllowMultipleAuthenticationMethods(ctx) {
+		// The default case handles the situation where a client has leveraged multiple client authentication methods
+		// within a request per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3 clients MUST NOT use more than
+		// one, however some bad clients use a shotgun approach to authentication. This allows developing a personal
+		// policy around these bad clients on a per-client basis.
+		if capc, ok := c.(ClientAuthenticationPolicyClient); ok && capc.GetAllowMultipleAuthenticationMethods(ctx) {
 			break
 		}
 
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHintf("Client Authentication failed with more than one known authentication method included in the request when the authorization server policy does not permit this. The client authentication methods detected were '%s'.", strings.Join(methods, "', '")))
 	}
 
-	return client, method, err
+	return c, m, nil
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, id string) (client Client, method string, err error) {
@@ -274,44 +285,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 		}
 
-		kid, alg = getJWTHeaderKIDAlg(token.Header)
-
-		if client.GetTokenEndpointAuthSigningAlgorithm() != alg {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
-		}
-
-		switch method = client.GetTokenEndpointAuthMethod(); method {
-		case consts.ClientAuthMethodClientSecretJWT:
-			switch alg {
-			case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
-				if key, err = client.GetSecretPlainText(); err != nil {
-					return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
-				}
-
-				return key, nil
-			default:
-				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
-			}
-		case consts.ClientAuthMethodPrivateKeyJWT:
-			switch alg {
-			case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
-				xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),
-				xjwt.SigningMethodES256.Alg(), xjwt.SigningMethodES384.Alg(), xjwt.SigningMethodES512.Alg():
-				if key, err = FindClientPublicJWK(ctx, s.Config, client, kid, alg, "sig"); err != nil {
-					return nil, err
-				}
-
-				return key, nil
-			default:
-				return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
-			}
-		case consts.ClientAuthMethodNone:
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request."))
-		case consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost:
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however 'client_assertion' was provided in the request.", method))
-		default:
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however that method is not supported by this server.", method))
-		}
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx, token.Header, client)
 	}); err != nil {
 		var e *RFC6749Error
 
@@ -330,6 +304,57 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 
 	return client, method, kid, alg, token, claims, nil
+}
+
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client OpenIDConnectClient) (key any, err error) {
+	var kid, alg, method string
+
+	kid, alg = getJWTHeaderKIDAlg(header)
+
+	if client.GetTokenEndpointAuthSigningAlgorithm() != alg {
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+	}
+
+	switch method = client.GetTokenEndpointAuthMethod(); method {
+	case consts.ClientAuthMethodClientSecretJWT:
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx, kid, alg, client)
+	case consts.ClientAuthMethodPrivateKeyJWT:
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx, kid, alg, client)
+	case consts.ClientAuthMethodNone:
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHint("This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request."))
+	case consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost:
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however 'client_assertion' was provided in the request.", method))
+	default:
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however that method is not supported by this server.", method))
+	}
+}
+
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx context.Context, kid, alg string, client OpenIDConnectClient) (key any, err error) {
+	switch alg {
+	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
+		if key, err = client.GetSecretPlainText(); err != nil {
+			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
+		}
+
+		return key, nil
+	default:
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+	}
+}
+
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client OpenIDConnectClient) (key any, err error) {
+	switch alg {
+	case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
+		xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),
+		xjwt.SigningMethodES256.Alg(), xjwt.SigningMethodES384.Alg(), xjwt.SigningMethodES512.Alg():
+		if key, err = FindClientPublicJWK(ctx, s.Config, client, kid, alg, "sig"); err != nil {
+			return nil, err
+		}
+
+		return key, nil
+	default:
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+	}
 }
 
 func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok bool, err error) {

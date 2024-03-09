@@ -15,115 +15,119 @@ import (
 // Client represents a client or an app.
 type Client interface {
 	// GetID returns the client ID.
-	GetID() string
+	GetID() (id string)
 
 	// GetHashedSecret returns the hashed secret as it is stored in the store.
-	GetHashedSecret() []byte
+	GetHashedSecret() (secret []byte)
 
 	// GetRedirectURIs returns the client's allowed redirect URIs.
 	GetRedirectURIs() []string
 
 	// GetGrantTypes returns the client's allowed grant types.
-	GetGrantTypes() Arguments
+	GetGrantTypes() (types Arguments)
 
 	// GetResponseTypes returns the client's allowed response types.
 	// All allowed combinations of response types have to be listed, each combination having
 	// response types of the combination separated by a space.
-	GetResponseTypes() Arguments
+	GetResponseTypes() (types Arguments)
 
 	// GetScopes returns the scopes this client is allowed to request.
-	GetScopes() Arguments
+	GetScopes() (scopes Arguments)
 
 	// IsPublic returns true, if this client is marked as public.
-	IsPublic() bool
+	IsPublic() (public bool)
 
 	// GetAudience returns the allowed audience(s) for this client.
-	GetAudience() Arguments
+	GetAudience() (audience Arguments)
 }
 
-// ClientWithSecretRotation extends Client interface by a method providing a slice of rotated secrets.
-type ClientWithSecretRotation interface {
+// RotatedSecretHashesClient extends Client interface by a method providing a slice of rotated secrets.
+type RotatedSecretHashesClient interface {
+	// GetRotatedHashedSecrets returns a slice of hashed secrets used for secrets rotation.
+	GetRotatedHashedSecrets() (secrets [][]byte)
+
 	Client
-	// GetRotatedHashes returns a slice of hashed secrets used for secrets rotation.
-	GetRotatedHashes() [][]byte
 }
 
 // ClientAuthenticationPolicyClient is a Client implementation which also provides client authentication policy values.
 type ClientAuthenticationPolicyClient interface {
-	Client
-
 	// GetAllowMultipleAuthenticationMethods should return true if the client policy allows multiple authentication
 	// methods due to the client implementation breaching RFC6749 Section 2.3.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.
-	GetAllowMultipleAuthenticationMethods(ctx context.Context) bool
+	GetAllowMultipleAuthenticationMethods(ctx context.Context) (allow bool)
+
+	Client
 }
 
 // OpenIDConnectClient represents a client capable of performing OpenID Connect requests.
 type OpenIDConnectClient interface {
-	Client
-
 	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
 	// cache the contents of the files referenced by these URIs and not retrieve them at the time they are used in a request.
 	// OPs can require that request_uri values used be pre-registered with the require_request_uri_registration
 	// discovery parameter.
-	GetRequestURIs() []string
+	GetRequestURIs() (requestURIs []string)
 
 	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
-	GetJSONWebKeys() *jose.JSONWebKeySet
+	GetJSONWebKeys() (jwks *jose.JSONWebKeySet)
 
 	// GetJSONWebKeysURI returns the URL for lookup of JSON Web Key Set containing the
 	// public key used by the client to authenticate.
-	GetJSONWebKeysURI() string
+	GetJSONWebKeysURI() (uri string)
 
-	// JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request Objects sent to the OP.
-	// All Request Objects from this Client MUST be rejected, if not signed with this algorithm.
-	GetRequestObjectSigningAlgorithm() string
+	// GetRequestObjectSigningAlgorithm returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request
+	// Objects sent to the OP. All Request Objects from this Client MUST be rejected, if not signed with this algorithm.
+	GetRequestObjectSigningAlgorithm() (alg string)
 
-	// Requested Client Authentication method for the Token Endpoint. The options are client_secret_post,
-	// client_secret_basic, client_secret_jwt, private_key_jwt, and none.
-	GetTokenEndpointAuthMethod() string
+	// GetTokenEndpointAuthMethod requested Client Authentication method for the Token Endpoint. The options are
+	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt, and none.
+	GetTokenEndpointAuthMethod() (method string)
 
-	// JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT] used to authenticate the
-	// Client at the Token Endpoint for the private_key_jwt and client_secret_jwt authentication methods.
-	GetTokenEndpointAuthSigningAlgorithm() string
+	// GetTokenEndpointAuthSigningAlgorithm returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the
+	// JWT [JWT] used to authenticate the Client at the Token Endpoint for the private_key_jwt and client_secret_jwt
+	// authentication methods.
+	GetTokenEndpointAuthSigningAlgorithm() (alg string)
 
 	// GetSecretPlainText returns the client secret in plain text.
 	// This is used to validate the 'token_endpoint_client_auth_method' with a value of 'client_secret_jwt'. If this
 	// client does NOT have a plain text secret then it MUST return an error.
 	GetSecretPlainText() (secret []byte, err error)
+
+	Client
 }
 
 // RefreshFlowScopeClient is a client which can be customized to ignore scopes that were not originally granted.
 type RefreshFlowScopeClient interface {
-	Client
-
 	GetRefreshFlowIgnoreOriginalGrantedScopes(ctx context.Context) (ignoreOriginalGrantedScopes bool)
+
+	Client
 }
 
 // RevokeFlowRevokeRefreshTokensExplicitClient is a client which can be customized to only revoke Refresh Tokens
 // explicitly.
 type RevokeFlowRevokeRefreshTokensExplicitClient interface {
-	Client
+	// GetRevokeRefreshTokensExplicit returns true if this client will only revoke refresh tokens explicitly.
+	GetRevokeRefreshTokensExplicit(ctx context.Context) (explicit bool)
 
-	// GetRevokeRefreshTokensExplicitly returns true if this client will only revoke refresh tokens explicitly.
-	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
+	Client
 }
 
 // JARMClient is a client which supports JARM.
 type JARMClient interface {
-	Client
-
 	GetAuthorizationSignedResponseKeyID() (kid string)
 	GetAuthorizationSignedResponseAlg() (alg string)
 	GetAuthorizationEncryptedResponseAlg() (alg string)
 	GetAuthorizationEncryptedResponseEncryptionAlg() (alg string)
+
+	Client
 }
 
 // ResponseModeClient represents a client capable of handling response_mode
 type ResponseModeClient interface {
 	// GetResponseModes returns the response modes that client is allowed to send
-	GetResponseModes() []ResponseModeType
+	GetResponseModes() (modes []ResponseModeType)
+
+	Client
 }
 
 // DefaultClient is a simple default implementation of the Client interface.
@@ -174,7 +178,7 @@ func (c *DefaultClient) GetHashedSecret() []byte {
 	return c.Secret
 }
 
-func (c *DefaultClient) GetRotatedHashes() [][]byte {
+func (c *DefaultClient) GetRotatedHashedSecrets() [][]byte {
 	return c.RotatedSecrets
 }
 
@@ -229,7 +233,7 @@ func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlgorithm() string {
 }
 
 func (c *DefaultOpenIDConnectClient) GetSecretPlainText() (secret []byte, err error) {
-	return nil, fmt.Errorf("this registered client does not suport plain text")
+	return nil, fmt.Errorf("this registered client does not support plain text")
 }
 
 func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthMethod() string {
@@ -243,3 +247,9 @@ func (c *DefaultOpenIDConnectClient) GetRequestURIs() []string {
 func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
+
+var (
+	_ Client              = (*DefaultClient)(nil)
+	_ ResponseModeClient  = (*DefaultResponseModeClient)(nil)
+	_ OpenIDConnectClient = (*DefaultOpenIDConnectClient)(nil)
+)

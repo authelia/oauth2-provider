@@ -86,14 +86,14 @@ func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Co
 	)
 
 	if c, ok = client.(oauth2.RevokeFlowRevokeRefreshTokensExplicitClient); !ok {
-		return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
+		return r.Config.GetRevokeRefreshTokensExplicit(ctx)
 	}
 
-	if ok = c.GetRevokeRefreshTokensExplicitly(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {
+	if ok = c.GetRevokeRefreshTokensExplicit(ctx); ok || r.Config.GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx) {
 		return ok
 	}
 
-	return r.Config.GetRevokeRefreshTokensExplicitly(ctx)
+	return r.Config.GetRevokeRefreshTokensExplicit(ctx)
 }
 
 func (r *TokenRevocationHandler) handleGetRefreshTokenRequester(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error) {

@@ -6,7 +6,6 @@ package oauth2
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -124,28 +123,22 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		}
 	} else {
 		// TODO: handle basic auth internally for consistency.
-		id, secret, ok := r.BasicAuth()
+		id, secret, ok, err := getClientCredentialsSecretBasic(r)
+		if err != nil {
+			return &IntrospectionResponse{Active: false}, err
+		}
+
 		if !ok {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing."))
 		}
 
-		clientID, err := url.QueryUnescape(id)
-		if err != nil {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to decode OAuth 2.0 Client ID from HTTP basic authorization header, make sure it is properly encoded.").WithWrap(err).WithDebugError(err))
-		}
-
-		clientSecret, err := url.QueryUnescape(secret)
-		if err != nil {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to decode OAuth 2.0 Client Secret from HTTP basic authorization header, make sure it is properly encoded.").WithWrap(err).WithDebugError(err))
-		}
-
-		client, err := f.Store.GetClient(ctx, clientID)
+		client, err := f.Store.GetClient(ctx, id)
 		if err != nil {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to find OAuth 2.0 Client from HTTP basic authorization header.").WithWrap(err).WithDebugError(err))
 		}
 
 		// Enforce client authentication
-		if err = f.checkClientSecret(ctx, client, []byte(clientSecret)); err != nil {
+		if err = f.checkClientSecret(ctx, client, []byte(secret)); err != nil {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
 		}
 	}

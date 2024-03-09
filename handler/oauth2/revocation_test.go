@@ -99,7 +99,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &oauth2.DefaultClient{ID: "bar"},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -118,7 +118,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.AccessToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &oauth2.DefaultClient{ID: "bar"},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -138,7 +138,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &oauth2.DefaultClient{ID: "bar"},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -156,7 +156,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -175,7 +175,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.AccessToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -195,7 +195,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -213,7 +213,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -233,7 +233,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.AccessToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -253,7 +253,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, false},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -271,7 +271,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, true},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -290,7 +290,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.AccessToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, true},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -310,7 +310,7 @@ func TestRevokeToken(t *testing.T) {
 			have:      "foo",
 			tokenType: oauth2.RefreshToken,
 			expected:  nil,
-			config:    &oauth2.Config{RevokeRefreshTokensExplicitly: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
+			config:    &oauth2.Config{RevokeRefreshTokensExplicit: true, EnforceRevokeFlowRevokeRefreshTokensExplicitClient: true},
 			client:    &ExplicitClient{&oauth2.DefaultClient{ID: "bar"}, true},
 			setup: func(t *testing.T, tc testCase, store *internal.MockTokenRevocationStorage, atStrat *internal.MockAccessTokenStrategy, rtStrat *internal.MockRefreshTokenStrategy, ar *internal.MockAccessRequester) {
 				gomock.InOrder(
@@ -511,7 +511,7 @@ func TestRevokeToken(t *testing.T) {
 
 			if tc.config == nil {
 				config = &oauth2.Config{
-					RevokeRefreshTokensExplicitly: false,
+					RevokeRefreshTokensExplicit: false,
 				}
 			} else {
 				config = tc.config
@@ -543,6 +543,6 @@ type ExplicitClient struct {
 	RevokeRefreshTokensExplicitly bool
 }
 
-func (c *ExplicitClient) GetRevokeRefreshTokensExplicitly(ctx context.Context) bool {
+func (c *ExplicitClient) GetRevokeRefreshTokensExplicit(ctx context.Context) bool {
 	return c.RevokeRefreshTokensExplicitly
 }

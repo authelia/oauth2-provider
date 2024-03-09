@@ -59,8 +59,8 @@ type Config struct {
 	// codes or other information. Proceed with caution!
 	SendDebugMessagesToClients bool
 
-	// RevokeRefreshTokensExplicitly determines if Refresh Tokens should only be revoked explicitly.
-	RevokeRefreshTokensExplicitly bool
+	// RevokeRefreshTokensExplicit determines if Refresh Tokens should only be revoked explicitly.
+	RevokeRefreshTokensExplicit bool
 
 	// EnforceRevokeFlowRevokeRefreshTokensExplicitClient determines if a RevokeFlowRevokeRefreshTokensExplicitClient
 	// should be prioritized even if it returns false.
@@ -294,8 +294,8 @@ func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
 	return c.SendDebugMessagesToClients
 }
 
-func (c *Config) GetRevokeRefreshTokensExplicitly(ctx context.Context) bool {
-	return c.RevokeRefreshTokensExplicitly
+func (c *Config) GetRevokeRefreshTokensExplicit(ctx context.Context) bool {
+	return c.RevokeRefreshTokensExplicit
 }
 
 func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool {

@@ -53,7 +53,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 		hasPost, hasBasic, hasAssertion bool
 	)
 
-	idBasic, secretBasic, hasBasic, err = s.getClientCredentialsSecretBasic(r)
+	idBasic, secretBasic, hasBasic, err = getClientCredentialsSecretBasic(r)
 	if err != nil {
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data.").WithWrap(err).WithDebugError(err))
 	}
@@ -169,15 +169,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	}
 
 	var (
-		clientwsr ClientWithSecretRotation
-		ok        bool
+		rclient RotatedSecretHashesClient
+		ok      bool
 	)
 
-	if clientwsr, ok = client.(ClientWithSecretRotation); !ok {
+	if rclient, ok = client.(RotatedSecretHashesClient); !ok {
 		return nil, "", err
 	}
 
-	for _, hash := range clientwsr.GetRotatedHashes() {
+	for _, hash := range rclient.GetRotatedHashedSecrets() {
 		if hasher.Compare(ctx, hash, value) == nil {
 			return client, method, nil
 		}
@@ -332,7 +332,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	return client, method, kid, alg, token, claims, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok bool, err error) {
+func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok bool, err error) {
 	auth := r.Header.Get(consts.HeaderAuthorization)
 
 	if auth == "" {
@@ -597,11 +597,11 @@ func (f *Fosite) checkClientSecret(ctx context.Context, client Client, clientSec
 		return nil
 	}
 
-	cc, ok := client.(ClientWithSecretRotation)
+	cc, ok := client.(RotatedSecretHashesClient)
 	if !ok {
 		return err
 	}
-	for _, hash := range cc.GetRotatedHashes() {
+	for _, hash := range cc.GetRotatedHashedSecrets() {
 		err = f.Config.GetSecretsHasher(ctx).Compare(ctx, hash, clientSecret)
 		if err == nil {
 			return nil

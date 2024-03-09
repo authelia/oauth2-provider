@@ -25,7 +25,7 @@ func TestDefaultClient(t *testing.T) {
 	assert.Equal(t, sc.ID, sc.GetID())
 	assert.Equal(t, sc.RedirectURIs, sc.GetRedirectURIs())
 	assert.Equal(t, sc.Secret, sc.GetHashedSecret())
-	assert.Equal(t, sc.RotatedSecrets, sc.GetRotatedHashes())
+	assert.Equal(t, sc.RotatedSecrets, sc.GetRotatedHashedSecrets())
 	assert.EqualValues(t, sc.ResponseTypes, sc.GetResponseTypes())
 	assert.EqualValues(t, sc.GrantTypes, sc.GetGrantTypes())
 	assert.EqualValues(t, sc.Scopes, sc.GetScopes())
@@ -35,7 +35,7 @@ func TestDefaultClient(t *testing.T) {
 	assert.Equal(t, consts.ResponseTypeAuthorizationCodeFlow, sc.GetResponseTypes()[0])
 	assert.Equal(t, consts.GrantTypeAuthorizationCode, sc.GetGrantTypes()[0])
 
-	var _ ClientWithSecretRotation = sc
+	var _ RotatedSecretHashesClient = sc
 }
 
 func TestDefaultResponseModeClient_GetResponseMode(t *testing.T) {

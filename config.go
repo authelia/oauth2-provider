@@ -234,8 +234,8 @@ type SendDebugMessagesToClientsProvider interface {
 
 // RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
 type RevokeRefreshTokensExplicitlyProvider interface {
-	// GetRevokeRefreshTokensExplicitly returns true if a refresh token should only be revoked explicitly.
-	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
+	// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.
+	GetRevokeRefreshTokensExplicit(ctx context.Context) bool
 
 	// GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient returns true if a
 	// RevokeFlowRevokeRefreshTokensExplicitClient returning false should be enforced.

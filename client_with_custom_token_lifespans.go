@@ -8,16 +8,19 @@ import (
 )
 
 // GetEffectiveLifespan either maps GrantType x TokenType to the client's configured lifespan, or returns the fallback value.
-func GetEffectiveLifespan(c Client, gt GrantType, tt TokenType, fallback time.Duration) time.Duration {
-	if clc, ok := c.(ClientWithCustomTokenLifespans); ok {
+func GetEffectiveLifespan(c Client, gt GrantType, tt TokenType, fallback time.Duration) (lifespan time.Duration) {
+	if clc, ok := c.(CustomTokenLifespansClient); ok {
 		return clc.GetEffectiveLifespan(gt, tt, fallback)
 	}
 	return fallback
 }
 
-type ClientWithCustomTokenLifespans interface {
+// CustomTokenLifespansClient is a Client with specific lifespans.
+type CustomTokenLifespansClient interface {
 	// GetEffectiveLifespan either maps GrantType x TokenType to the client's configured lifespan, or returns the fallback value.
-	GetEffectiveLifespan(gt GrantType, tt TokenType, fallback time.Duration) time.Duration
+	GetEffectiveLifespan(gt GrantType, tt TokenType, fallback time.Duration) (lifespan time.Duration)
+
+	Client
 }
 
 // ClientLifespanConfig holds default lifespan configuration for the different

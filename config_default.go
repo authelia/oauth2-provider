@@ -45,7 +45,10 @@ type Config struct {
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
 
-	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses.
+	// AccessTokenIssuer is the issuer to be used when generating access tokens.
+	AccessTokenIssuer string
+
+	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses (RFC9207).
 	AuthorizationServerIdentificationIssuer string
 
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
@@ -159,9 +162,6 @@ type Config struct {
 
 	// JWTSecuredAuthorizeResponseModeSigner is the signer for JWT Secured Authorization Response Mode. Has no default.
 	JWTSecuredAuthorizeResponseModeSigner jwt.Signer
-
-	// AccessTokenIssuer is the issuer to be used when generating access tokens.
-	AccessTokenIssuer string
 
 	// HTTPClient is the HTTP client to use for requests.
 	HTTPClient *retryablehttp.Client
@@ -597,7 +597,7 @@ var (
 	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
 	_ IDTokenLifespanProvider                         = (*Config)(nil)
 	_ IDTokenIssuerProvider                           = (*Config)(nil)
-	_ AuthorizationServerIdentificationIssuerProvider = (*Config)(nil)
+	_ AuthorizationServerIssuerIdentificationProvider = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
 	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)

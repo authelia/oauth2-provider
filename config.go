@@ -94,8 +94,8 @@ type IDTokenIssuerProvider interface {
 	GetIDTokenIssuer(ctx context.Context) string
 }
 
-// AuthorizationServerIdentificationIssuerProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
-type AuthorizationServerIdentificationIssuerProvider interface {
+// AuthorizationServerIssuerIdentificationProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
+type AuthorizationServerIssuerIdentificationProvider interface {
 	GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string)
 }
 

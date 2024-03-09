@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"

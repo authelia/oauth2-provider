@@ -6,11 +6,12 @@ package jwt
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
@@ -109,7 +110,7 @@ func (t *Token) SignedString(k any) (rawToken string, err error) {
 	// go-jose CompactSerialize() only support explicit maps
 	// as claims or structs but not type aliases from maps.
 	claims := map[string]any(t.Claims)
-	rawToken, err = jwt.Signed(signer).Claims(claims).CompactSerialize()
+	rawToken, err = jwt.Signed(signer).Claims(claims).Serialize()
 	if err != nil {
 		err = &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 		return
@@ -158,22 +159,32 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	return token, nil
 }
 
-// Parse methods use this callback function to supply
-// the key for verification.  The function receives the parsed,
-// but unverified Token.  This allows you to use properties in the
-// Header of the token (such as `kid`) to identify which key to use.
+// Keyfunc is used by parsing methods to supply the key for verification.  The function receives the parsed, but
+// unverified Token. This allows you to use properties in the Header of the token (such as `kid`) to identify which key
+// to use.
 type Keyfunc func(*Token) (any, error)
 
+// Parse is an overload for ParseCustom which accepts all normal algs including 'none'.
 func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
-	return ParseWithClaims(tokenString, MapClaims{}, keyFunc)
+	return ParseCustom(tokenString, keyFunc, "none", jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
 }
 
-// ParseWithClaims parses, validates, and returns a token.
-// keyFunc will receive the parsed token and should return the key for validating.
-// If everything is kosher, err will be nil
+// ParseCustom parses, validates, and returns a token. The keyFunc will receive the parsed token and should
+// return the key for validating. If everything is kosher, err will be nil.
+func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
+	return ParseCustomWithClaims(tokenString, MapClaims{}, keyFunc, algs...)
+}
+
+// ParseWithClaims is an overload for ParseCustomWithClaims which accepts all normal algs including 'none'.
 func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token, error) {
+	return ParseCustomWithClaims(rawToken, claims, keyFunc, "none", jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
+}
+
+// ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should
+// return the key for validating. If everything is kosher, err will be nil.
+func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
 	// Parse the token.
-	parsedToken, err := jwt.ParseSigned(rawToken)
+	parsedToken, err := jwt.ParseSigned(rawToken, algs)
 	if err != nil {
 		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, text: err.Error()}
 	}
@@ -196,7 +207,6 @@ func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token
 	}
 
 	if keyFunc == nil {
-		// keyFunc was not provided.  short circuiting validation
 		return token, &ValidationError{Errors: ValidationErrorUnverifiable, text: "no Keyfunc was provided."}
 	}
 
@@ -204,9 +214,12 @@ func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token
 	verificationKey, err := keyFunc(token)
 	if err != nil {
 		// keyFunc returned an error
-		if ve, ok := err.(*ValidationError); ok {
+		var ve *ValidationError
+
+		if errors.As(err, &ve) {
 			return token, ve
 		}
+
 		return token, &ValidationError{Errors: ValidationErrorUnverifiable, Inner: err}
 	}
 	if verificationKey == nil {

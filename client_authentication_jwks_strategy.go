@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/go-retryablehttp"
 
 	"authelia.com/provider/oauth2/internal/errorsx"

@@ -7,8 +7,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -53,7 +53,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
-	token, err := jwt.ParseSigned(assertion)
+	token, err := jwt.ParseSigned(assertion, []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint(`Unable to parse JSON Web Token passed in "assertion" request parameter.`).

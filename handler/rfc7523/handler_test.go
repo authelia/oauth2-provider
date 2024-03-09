@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 
@@ -759,7 +759,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createTestAssertion(cl jwt.Cl
 		s.FailNowf("failed to create test assertion", "failed to create signer: %s", err.Error())
 	}
 
-	raw, err := jwt.Signed(sig).Claims(cl).CompactSerialize()
+	raw, err := jwt.Signed(sig).Claims(cl).Serialize()
 	if err != nil {
 		s.FailNowf("failed to create test assertion", "failed to sign assertion: %s", err.Error())
 	}

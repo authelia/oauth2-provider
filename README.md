@@ -108,7 +108,7 @@ following list of differences:
   - [x] `github.com/form3tech-oss/jwt-go`
   - [x] `github.com/dgrijalva/jwt-go`
 - Migration of the following dependencies:
-  - [ ] `github.com/go-jose/go-jose/v3` => `github.com/golang-jwt/jwt/v5`
+  - [x] `github.com/go-jose/go-jose/v3` => `github.com/go-jose/go-jose/v4`
   - [x] `github.com/golang/mock` => `github.com/uber-go/mock`
   - [x] `github.com/cristalhq/jwt/v4` => `github.com/golang-jwt/jwt/v5`
 

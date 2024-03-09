@@ -93,11 +93,7 @@ import (
 //	Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
 //
 //	token=mF_9.B5f-4.1JqM&token_type_hint=access_token
-//
-// TODO: Refactor time permitting.
-//
-//nolint:gocyclo
-func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (IntrospectionResponder, error) {
+func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (responder IntrospectionResponder, err error) {
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
 	if r.Method != http.MethodPost {
@@ -110,58 +106,77 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 
 	token := r.PostForm.Get(consts.FormParameterToken)
 	tokenTypeHint := r.PostForm.Get(consts.FormParameterTokenTypeHint)
-	scope := r.PostForm.Get(consts.FormParameterScope)
-	if clientToken := AccessTokenFromRequest(r); clientToken != "" {
-		if token == clientToken {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Bearer and introspection token are identical."))
-		}
 
-		if tu, _, err := f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); err != nil {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid."))
-		} else if tu != "" && tu != AccessToken {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHintf("HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", tu))
-		}
-	} else {
-		// TODO: handle basic auth internally for consistency.
-		id, secret, ok, err := getClientCredentialsSecretBasic(r)
-		if err != nil {
-			return &IntrospectionResponse{Active: false}, err
-		}
+	var client Client
 
-		if !ok {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing."))
-		}
-
-		client, err := f.Store.GetClient(ctx, id)
-		if err != nil {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to find OAuth 2.0 Client from HTTP basic authorization header.").WithWrap(err).WithDebugError(err))
-		}
-
-		// Enforce client authentication
-		if err = CompareClientSecret(ctx, client, []byte(secret)); err != nil {
-			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
-		}
+	if client, err = f.handleNewIntrospectionRequestClientAuthentication(ctx, r, session, token); err != nil {
+		return &IntrospectionResponse{Active: false}, err
 	}
 
-	tu, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(scope, " "))...)
+	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err))
 	}
+
 	accessTokenType := ""
 
-	if tu == AccessToken {
+	if use == AccessToken {
 		accessTokenType = BearerAccessToken
 	}
 
 	return &IntrospectionResponse{
+		Client:          client,
 		Active:          true,
 		AccessRequester: ar,
-		TokenUse:        tu,
+		TokenUse:        use,
 		AccessTokenType: accessTokenType,
 	}, nil
 }
 
+func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, err error) {
+	if clientToken := AccessTokenFromRequest(r); clientToken != "" {
+		if token == clientToken {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Bearer and introspection token are identical."))
+		}
+
+		var (
+			ar  AccessRequester
+			use TokenUse
+		)
+
+		if use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); err != nil {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid."))
+		} else if use != "" && use != AccessToken {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHintf("HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
+		}
+
+		client = ar.GetClient()
+	} else {
+		var (
+			id, secret string
+			ok         bool
+		)
+
+		if id, secret, ok, err = getClientCredentialsSecretBasic(r); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing."))
+		}
+
+		if client, err = f.Store.GetClient(ctx, id); err != nil {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to find OAuth 2.0 Client from HTTP basic authorization header.").WithWrap(err).WithDebugError(err))
+		}
+
+		if err = CompareClientSecret(ctx, client, []byte(secret)); err != nil {
+			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
+		}
+	}
+
+	return client, nil
+}
+
 type IntrospectionResponse struct {
+	Client          Client          `json:"-"`
 	Active          bool            `json:"active"`
 	AccessRequester AccessRequester `json:"extra"`
 	TokenUse        TokenUse        `json:"token_use,omitempty"`
@@ -171,6 +186,11 @@ type IntrospectionResponse struct {
 
 func (r *IntrospectionResponse) IsActive() bool {
 	return r.Active
+}
+
+// GetClient returns the client related to the introspected token.
+func (r *IntrospectionResponse) GetClient() Client {
+	return r.Client
 }
 
 func (r *IntrospectionResponse) GetAccessRequester() AccessRequester {
@@ -183,4 +203,55 @@ func (r *IntrospectionResponse) GetTokenUse() TokenUse {
 
 func (r *IntrospectionResponse) GetAccessTokenType() string {
 	return r.AccessTokenType
+}
+
+func (r *IntrospectionResponse) ToMap() (audience []string, introspection map[string]any) {
+	introspection = map[string]any{
+		consts.ClaimActive: false,
+	}
+
+	if r == nil {
+		return nil, introspection
+	}
+
+	if r.IsActive() {
+		introspection[consts.ClaimActive] = true
+
+		ar := r.GetAccessRequester()
+
+		if ar == nil {
+			return
+		}
+
+		var (
+			ok  bool
+			aud Arguments
+		)
+
+		if client := ar.GetClient(); client != nil {
+			if id := client.GetID(); id != "" {
+				introspection[consts.ClaimClientIdentifier] = id
+			}
+		}
+
+		if scope := ar.GetGrantedScopes(); len(scope) > 0 {
+			introspection[consts.ClaimScope] = strings.Join(scope, " ")
+		}
+
+		if _, ok = introspection[consts.ClaimIssuedAt]; !ok {
+			if rat := ar.GetRequestedAt(); !rat.IsZero() {
+				introspection[consts.ClaimIssuedAt] = rat.Unix()
+			}
+		}
+
+		if aud = ar.GetGrantedAudience(); len(aud) > 0 {
+			introspection[consts.ClaimAudience] = []string(aud)
+		}
+	}
+
+	if r.GetClient() == nil {
+		return nil, introspection
+	}
+
+	return []string{r.GetClient().GetID()}, introspection
 }

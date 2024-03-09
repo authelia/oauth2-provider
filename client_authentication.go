@@ -360,7 +360,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx context.Context, kid, alg string, client OpenIDConnectClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client OpenIDConnectClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
 		secret := client.GetClientSecret()

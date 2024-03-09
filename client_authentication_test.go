@@ -55,7 +55,6 @@ func TestAuthenticateClient(t *testing.T) {
 	barSecret, err := hasher.Hash(context.TODO(), []byte("bar"))
 	require.NoError(t, err)
 
-	// a secret containing various special characters
 	complexSecretRaw := "foo %66%6F%6F@$<§!✓" //nolint:gosec
 	complexSecret, err := hasher.Hash(context.TODO(), []byte(complexSecretRaw))
 	require.NoError(t, err)
@@ -647,22 +646,6 @@ func TestAuthenticateClient(t *testing.T) {
 					assert.EqualError(t, err, tc.expectErr.Error())
 				}
 			}
-
-			/*
-				if err != nil {
-					var validationError *jwt.ValidationError
-					var rfcError *RFC6749Error
-					if errors.As(err, &validationError) {
-						t.Logf("Error is: %s", validationError.Inner)
-					} else if errors.As(err, &rfcError) {
-						t.Logf("DebugField is: %s", rfcError.DebugField)
-						t.Logf("HintField is: %s", rfcError.HintField)
-					}
-				}
-				require.NoError(t, err)
-				assert.EqualValues(t, client, c)
-
-			*/
 		})
 	}
 }

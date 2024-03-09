@@ -386,12 +386,6 @@ func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(for
 	return id, secret, len(id) != 0 && len(secret) != 0
 }
 
-func (s *DefaultClientAuthenticationStrategy) getClientCredentialsClientAssertion(form url.Values) (assertion, assertionType string, hasAssertion bool) {
-	assertionType, assertion = form.Get(consts.FormParameterClientAssertionType), form.Get(consts.FormParameterClientAssertion)
-
-	return assertion, assertionType, len(assertion) != 0 || len(assertionType) != 0
-}
-
 func getJWTHeaderKIDAlg(header map[string]any) (kid, alg string) {
 	kid, _ = header[consts.JSONWebTokenHeaderKeyIdentifier].(string)
 	alg, _ = header[consts.JSONWebTokenHeaderAlgorithm].(string)

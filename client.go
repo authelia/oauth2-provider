@@ -122,6 +122,13 @@ type ResponseModeClient interface {
 	Client
 }
 
+// ClientCredentialsFlowPolicyClient is a client which can allow implicit scopes in the client credentials flow.
+type ClientCredentialsFlowPolicyClient interface {
+	GetClientCredentialsFlowAllowImplicitScope() bool
+
+	Client
+}
+
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`

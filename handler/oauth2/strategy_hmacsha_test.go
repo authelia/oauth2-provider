@@ -27,7 +27,7 @@ var hmacshaStrategy = HMACSHAStrategy{
 
 var hmacExpiredCase = oauth2.Request{
 	Client: &oauth2.DefaultClient{
-		Secret: []byte("foobarfoobarfoobarfoobar"),
+		ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 	},
 	Session: &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{
@@ -40,7 +40,7 @@ var hmacExpiredCase = oauth2.Request{
 
 var hmacValidCase = oauth2.Request{
 	Client: &oauth2.DefaultClient{
-		Secret: []byte("foobarfoobarfoobarfoobar"),
+		ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 	},
 	Session: &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{
@@ -218,5 +218,13 @@ func TestHMACAuthorizeCode(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func mustNewBCryptClientSecretPlain(rawSecret string) *oauth2.BCryptClientSecret {
+	if secret, err := oauth2.NewBCryptClientSecretPlain(rawSecret, 10); err != nil {
+		panic(err)
+	} else {
+		return secret
 	}
 }

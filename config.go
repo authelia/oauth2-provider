@@ -76,12 +76,6 @@ type DisableRefreshTokenValidationProvider interface {
 	GetDisableRefreshTokenValidation(ctx context.Context) bool
 }
 
-// BCryptCostProvider returns the provider for configuring the BCrypt hash cost.
-type BCryptCostProvider interface {
-	// GetBCryptCost returns the BCrypt  hash cost.
-	GetBCryptCost(ctx context.Context) int
-}
-
 // AllowedPromptValuesProvider returns the provider for configuring the allowed prompt values.
 type AllowedPromptValuesProvider interface {
 	// GetAllowedPromptValues returns the allowed prompt values.
@@ -218,12 +212,6 @@ type RotatedGlobalSecretsProvider interface {
 type HMACHashingProvider interface {
 	// GetHMACHasher returns the hash function.
 	GetHMACHasher(ctx context.Context) func() hash.Hash
-}
-
-// GetSecretsHashingProvider provides the client secrets hashing function.
-type GetSecretsHashingProvider interface {
-	// GetSecretsHasher returns the client secrets hashing function.
-	GetSecretsHasher(ctx context.Context) Hasher
 }
 
 // SendDebugMessagesToClientsProvider returns the provider for configuring the send debug messages to clients.

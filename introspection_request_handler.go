@@ -138,7 +138,7 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		}
 
 		// Enforce client authentication
-		if err = f.checkClientSecret(ctx, client, []byte(secret)); err != nil {
+		if err = CompareClientSecret(ctx, client, []byte(secret)); err != nil {
 			return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
 		}
 	}

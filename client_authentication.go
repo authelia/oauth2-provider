@@ -38,7 +38,6 @@ type DefaultClientAuthenticationStrategy struct {
 	Config interface {
 		JWKSFetcherStrategyProvider
 		TokenURLProvider
-		GetSecretsHashingProvider
 	}
 }
 
@@ -149,7 +148,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Con
 	return client, consts.ClientAuthMethodNone, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, id, secret string, hasBasic, hasPost bool) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, id, rawSecret string, hasBasic, hasPost bool) (client Client, method string, err error) {
 	if client, err = s.Store.GetClient(ctx, id); err != nil {
 		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
@@ -171,30 +170,121 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 		}
 	}
 
-	hasher := s.Config.GetSecretsHasher(ctx)
-
-	value := []byte(secret)
-
-	if err = hasher.Compare(ctx, client.GetHashedSecret(), value); err == nil {
+	switch err = CompareClientSecret(ctx, client, []byte(rawSecret)); {
+	case err == nil:
 		return client, method, nil
+	case errors.Is(err, ErrClientSecretNotRegistered):
+		return nil, "", errorsx.WithStack(
+			ErrInvalidClient.
+				WithHint("The request was determined to be using 'token_endpoint_client_auth_method' method '%s', however the OAuth 2.0 client does not support this method.").
+				WithDebug("The client was not registered with a client secret however this is required to process the particular request."),
+		)
+	default:
+		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
+	/*
+		if err = CompareClientSecret(ctx, client, []byte(rawSecret)); err != nil {
 
-	var (
-		rclient RotatedSecretHashesClient
-		ok      bool
-	)
+		}
 
-	if rclient, ok = client.(RotatedSecretHashesClient); !ok {
-		return nil, "", err
-	}
+		secret := client.GetClientSecret()
 
-	for _, hash := range rclient.GetRotatedHashedSecrets() {
+		if secret == nil {
+			return nil, "", errorsx.WithStack(
+				ErrInvalidClient.
+					WithHint("The request was determined to be using 'token_endpoint_client_auth_method' method '%s', however the OAuth 2.0 client does not support this method.").
+					WithDebug("The client was not registered with a client secret however this is required to process the particular request."),
+			)
+		}
+
+		rawSecretBytes := []byte(rawSecret)
+
+		if err = secret.Compare(ctx, rawSecretBytes); err == nil {
+			return client, method, nil
+		}
+
+	*/
+
+	/*
+		hasher := s.Config.GetSecretsHasher(ctx)
+
+		value := []byte(rawSecret)
+
+		if err = hasher.Compare(ctx, client.GetHashedSecret(), value); err == nil {
+			return client, method, nil
+		}
+	*/
+
+	/*
+		var (
+			rclient RotatedClientSecretsClient
+			ok      bool
+		)
+
+		if rclient, ok = client.(RotatedClientSecretsClient); !ok {
+			return nil, "", err
+		}
+
+		for _, iClientSecret := range rclient.GetRotatedClientSecrets() {
+			if iClientSecret == nil {
+				continue
+			}
+
+			if iClientSecret.Compare(ctx, rawSecretBytes) == nil {
+				return client, method, nil
+			}
+	*/
+	/*
 		if hasher.Compare(ctx, hash, value) == nil {
 			return client, method, nil
 		}
+	*/
+	/*
+		}
+
+		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
+
+	*/
+}
+
+var (
+	ErrClientSecretNotRegistered = errors.New("error occurred checking the client secret: the client is not registered with a secret")
+)
+
+// CompareClientSecret compares a raw secret input from a client to the registered client secret. If the secret is valid
+// it returns nil, otherwise it returns an error. The ErrClientSecretNotRegistered error indicates the ClientSecret
+// is nil, all other errors are returned directly from the ClientSecret.Compare function.
+func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (err error) {
+	secret := client.GetClientSecret()
+
+	if secret == nil {
+		return ErrClientSecretNotRegistered
 	}
 
-	return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
+	if err = secret.Compare(ctx, rawSecret); err == nil {
+		return nil
+	}
+
+	var (
+		rotated RotatedClientSecretsClient
+		ok      bool
+	)
+
+	if rotated, ok = client.(RotatedClientSecretsClient); !ok {
+		return err
+	}
+
+	for _, secret = range rotated.GetRotatedClientSecrets() {
+		if secret == nil {
+			continue
+		}
+
+		if secret.Compare(ctx, rawSecret) == nil {
+			return nil
+		}
+	}
+
+	return err
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertion(ctx context.Context, id, assertion, assertionType string) (client Client, method string, err error) {
@@ -336,7 +426,13 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx context.Context, kid, alg string, client OpenIDConnectClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
-		if key, err = client.GetSecretPlainText(); err != nil {
+		secret := client.GetClientSecret()
+
+		if secret == nil || !secret.IsPlainText() {
+			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
+		}
+
+		if key, err = secret.GetPlainTextValue(); err != nil {
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
 		}
 
@@ -611,27 +707,6 @@ func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *htt
 	client, _, err = f.GetDefaultClientAuthenticationStrategy(ctx).AuthenticateClient(ctx, r, form)
 
 	return
-}
-
-func (f *Fosite) checkClientSecret(ctx context.Context, client Client, clientSecret []byte) error {
-	var err error
-	err = f.Config.GetSecretsHasher(ctx).Compare(ctx, client.GetHashedSecret(), clientSecret)
-	if err == nil {
-		return nil
-	}
-
-	cc, ok := client.(RotatedSecretHashesClient)
-	if !ok {
-		return err
-	}
-	for _, hash := range cc.GetRotatedHashedSecrets() {
-		err = f.Config.GetSecretsHasher(ctx).Compare(ctx, hash, clientSecret)
-		if err == nil {
-			return nil
-		}
-	}
-
-	return err
 }
 
 func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (any, error) {

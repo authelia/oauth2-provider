@@ -23,21 +23,23 @@ import (
 
 func TestNewAccessRequest(t *testing.T) {
 	testCases := []struct {
-		name      string
-		header    http.Header
-		form      url.Values
-		mock      func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient)
-		method    string
-		expectErr error
-		expect    func(client *DefaultClient) *AccessRequest
-		handlers  func(handler *internal.MockTokenEndpointHandler) TokenEndpointHandlers
+		name         string
+		header       http.Header
+		form         url.Values
+		mock         func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient)
+		method       string
+		expectErr    error
+		expectStrErr string
+		expect       func(client *DefaultClient) *AccessRequest
+		handlers     func(handler *internal.MockTokenEndpointHandler) TokenEndpointHandlers
 	}{
 		{
-			name:      "ShouldReturnInvalidRequestWhenNoValues",
-			header:    http.Header{},
-			expectErr: ErrInvalidRequest,
-			form:      url.Values{},
-			method:    "POST",
+			name:         "ShouldReturnInvalidRequestWhenNoValues",
+			header:       http.Header{},
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
+			form:         url.Values{},
+			method:       "POST",
 		},
 		{
 			name:   "ShouldReturnInvalidRequestWhenOnlyGrantType",
@@ -46,7 +48,8 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			expectErr: ErrInvalidRequest,
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
 		},
 		{
 			name:   "ShouldReturnInvalidRequestWhenEmptyClientID",
@@ -56,7 +59,8 @@ func TestNewAccessRequest(t *testing.T) {
 				consts.FormParameterGrantType: {"foo"},
 				consts.FormParameterClientID:  {""},
 			},
-			expectErr: ErrInvalidRequest,
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
 		},
 		{
 			name: "ShouldReturnInvalidClientWhenGetClientError",
@@ -67,7 +71,8 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			expectErr: ErrInvalidClient,
+			expectErr:    ErrInvalidClient,
+			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 			mock: func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(nil, errors.New(""))
 			},
@@ -84,7 +89,8 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			expectErr: ErrInvalidRequest,
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'GET', expected 'POST'.",
 		},
 		{
 			name: "ShouldReturnInvalidClientWhenBadClientSecret",
@@ -95,12 +101,12 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			expectErr: ErrInvalidClient,
+			expectErr:    ErrInvalidClient,
+			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 			mock: func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
-				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
+				client.ClientSecret = testClientSecretFoo
 			},
 			handlers: func(handler *internal.MockTokenEndpointHandler) TokenEndpointHandlers {
 				return TokenEndpointHandlers{handler}
@@ -109,18 +115,18 @@ func TestNewAccessRequest(t *testing.T) {
 		{
 			name: "ShouldReturnErrorWhenHandleTokenEndpointError",
 			header: http.Header{
-				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "foo")},
 			},
 			method: "POST",
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			expectErr: ErrServerError,
+			expectErr:    ErrServerError,
+			expectStrErr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 			mock: func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
-				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				client.ClientSecret = testClientSecretFoo
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(ErrServerError)
 			},
 			handlers: func(handler *internal.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -130,7 +136,7 @@ func TestNewAccessRequest(t *testing.T) {
 		{
 			name: "ShouldHandleConfidentialClientSuccessfully",
 			header: http.Header{
-				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
+				consts.HeaderAuthorization: {basicAuth("foo", "foo")},
 			},
 			method: "POST",
 			form: url.Values{
@@ -139,8 +145,7 @@ func TestNewAccessRequest(t *testing.T) {
 			mock: func(ctx gomock.Matcher, handler *internal.MockTokenEndpointHandler, store *internal.MockStorage, hasher *internal.MockHasher, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
-				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				client.ClientSecret = testClientSecretFoo
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: func(handler *internal.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -196,7 +201,7 @@ func TestNewAccessRequest(t *testing.T) {
 			ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
 
 			client := &DefaultClient{}
-			config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+			config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
 			provider := &Fosite{Store: store, Config: config}
 
 			r := &http.Request{
@@ -218,6 +223,7 @@ func TestNewAccessRequest(t *testing.T) {
 
 			if tc.expectErr != nil {
 				assert.EqualError(t, err, tc.expectErr.Error())
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expectStrErr)
 			} else {
 				require.NoError(t, err)
 				AssertObjectKeysEqual(t, tc.expect(client), ar, "GrantTypes", "Client")
@@ -233,12 +239,11 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 	handler := internal.NewMockTokenEndpointHandler(ctrl)
 	handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
 	client := &DefaultClient{}
-	anotherClient := &DefaultClient{ID: "another"}
-	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+	anotherClient := &DefaultClient{ID: "another", ClientSecret: testClientSecretBar}
+	config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
 	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
@@ -319,7 +324,6 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			},
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(anotherClient, nil).Times(1)
-				hasher.EXPECT().Compare(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method: "POST",
@@ -368,13 +372,10 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 	handlerWithoutClientAuth.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	handlerWithoutClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
-	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
-
 	client := &DefaultClient{}
-	config := &Config{ClientSecretsHasher: hasher, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+	config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
 	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
 		header    http.Header
@@ -395,8 +396,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
-				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New("hash err"))
+				client.ClientSecret = testClientSecretFoo
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method:    "POST",
@@ -413,8 +413,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
-				client.Secret = []byte("foo")
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
+				client.ClientSecret = testClientSecretBar
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 				handlerWithClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},

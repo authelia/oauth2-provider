@@ -196,8 +196,8 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						// Basic Authorization with username=my-client and password=foobaz
-						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jheg=="},
+						// Basic Authorization with username=my-client and password=foobar
+						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},

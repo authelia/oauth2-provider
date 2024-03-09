@@ -24,34 +24,34 @@ func TestNewRevocationRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := internal.NewMockStorage(ctrl)
 	handler := internal.NewMockRevocationHandler(ctrl)
-	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
-	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
-
 	client := &DefaultClient{}
-	config := &Config{ClientSecretsHasher: hasher}
+	config := &Config{}
 	provider := &Fosite{Store: store, Config: config}
 	for k, c := range []struct {
-		header    http.Header
-		form      url.Values
-		mock      func()
-		method    string
-		expectErr error
-		expect    *AccessRequest
-		handlers  RevocationHandlers
+		header       http.Header
+		form         url.Values
+		mock         func()
+		method       string
+		expectErr    error
+		expectStrErr string
+		expect       *AccessRequest
+		handlers     RevocationHandlers
 	}{
 		{
-			header:    http.Header{},
-			expectErr: ErrInvalidRequest,
-			method:    "GET",
-			mock:      func() {},
+			header:       http.Header{},
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'GET' but expected 'POST'.",
+			method:       "GET",
+			mock:         func() {},
 		},
 		{
-			header:    http.Header{},
-			expectErr: ErrInvalidRequest,
-			method:    "POST",
-			mock:      func() {},
+			header:       http.Header{},
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
+			method:       "POST",
+			mock:         func() {},
 		},
 		{
 			header: http.Header{},
@@ -59,8 +59,9 @@ func TestNewRevocationRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterToken: {"foo"},
 			},
-			mock:      func() {},
-			expectErr: ErrInvalidRequest,
+			mock:         func() {},
+			expectErr:    ErrInvalidRequest,
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
 		},
 		{
 			header: http.Header{
@@ -70,7 +71,8 @@ func TestNewRevocationRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterToken: {"foo"},
 			},
-			expectErr: ErrInvalidClient,
+			expectErr:    ErrInvalidClient,
+			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(nil, errors.New(""))
 			},
@@ -83,12 +85,12 @@ func TestNewRevocationRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterToken: {"foo"},
 			},
-			expectErr: ErrInvalidClient,
+			expectErr:    ErrInvalidClient,
+			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
-				client.Secret = []byte("foo")
+				client.ClientSecret = testClientSecretFoo
 				client.Public = false
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(errors.New(""))
 			},
 		},
 		{
@@ -102,9 +104,8 @@ func TestNewRevocationRequest(t *testing.T) {
 			expectErr: nil,
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
-				client.Secret = []byte("foo")
+				client.ClientSecret = testClientSecretBar
 				client.Public = false
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -121,9 +122,8 @@ func TestNewRevocationRequest(t *testing.T) {
 			expectErr: nil,
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
-				client.Secret = []byte("foo")
+				client.ClientSecret = testClientSecretBar
 				client.Public = false
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -157,9 +157,8 @@ func TestNewRevocationRequest(t *testing.T) {
 			expectErr: nil,
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
-				client.Secret = []byte("foo")
+				client.ClientSecret = testClientSecretBar
 				client.Public = false
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -176,9 +175,8 @@ func TestNewRevocationRequest(t *testing.T) {
 			expectErr: nil,
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
-				client.Secret = []byte("foo")
+				client.ClientSecret = testClientSecretBar
 				client.Public = false
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("foo")), gomock.Eq([]byte("bar"))).Return(nil)
 				handler.EXPECT().RevokeToken(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: RevocationHandlers{handler},
@@ -198,6 +196,7 @@ func TestNewRevocationRequest(t *testing.T) {
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), c.expectStrErr)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -208,10 +207,9 @@ func TestNewRevocationRequest(t *testing.T) {
 func TestWriteRevocationResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := internal.NewMockStorage(ctrl)
-	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
-	config := &Config{ClientSecretsHasher: hasher}
+	config := &Config{}
 	provider := &Fosite{Store: store, Config: config}
 
 	testCases := []struct {

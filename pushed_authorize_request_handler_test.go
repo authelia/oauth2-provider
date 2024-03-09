@@ -28,21 +28,17 @@ import (
 func TestNewPushedAuthorizeRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := internal.NewMockStorage(ctrl)
-	hasher := internal.NewMockHasher(ctrl)
 	defer ctrl.Finish()
 
 	config := &Config{
 		ScopeStrategy:            ExactScopeStrategy,
 		AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
-		ClientSecretsHasher:      hasher,
 	}
 
 	provider := &Fosite{
 		Store:  store,
 		Config: config,
 	}
-
-	ctx := NewContext()
 
 	redir, _ := url.Parse("https://foo.bar/cb")
 	specialCharRedir, _ := url.Parse("web+application://callback")
@@ -91,8 +87,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		/* redirect client mismatch */
@@ -106,8 +101,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		/* redirect client mismatch */
@@ -121,8 +115,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expectedError: ErrInvalidRequest,
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		/* no state */
@@ -137,8 +130,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expectedError: ErrInvalidState,
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		/* short state */
@@ -154,8 +146,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			expectedError: ErrInvalidState,
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		/* fails because scope not given */
@@ -171,8 +162,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar baz"},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expectedError: ErrInvalidScope,
 		},
@@ -192,10 +182,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func() {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"},
-					Audience: []string{"https://cloud.authelia.com/api"},
-					Secret:   []byte("1234"),
+					Audience:     []string{"https://cloud.authelia.com/api"},
+					ClientSecret: testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expectedError: ErrInvalidRequest,
 		},
@@ -218,9 +207,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-					Secret:        []byte("1234"),
+					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -229,9 +217,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				Request: Request{
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
-						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:   []byte("1234"),
+						Scopes:       []string{"foo", "bar"},
+						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -257,9 +245,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-					Secret:        []byte("1234"),
+					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -268,9 +255,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				Request: Request{
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
-						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:   []byte("1234"),
+						Scopes:       []string{"foo", "bar"},
+						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -296,9 +283,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"test value"},
-					Secret:        []byte("1234"),
+					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -307,9 +293,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				Request: Request{
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
-						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"test value"},
-						Secret:   []byte("1234"),
+						Scopes:       []string{"foo", "bar"},
+						Audience:     []string{"test value"},
+						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"test value"},
@@ -335,9 +321,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					RedirectURIs:  []string{"web+application://callback"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-					Secret:        []byte("1234"),
+					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   specialCharRedir,
@@ -346,9 +331,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				Request: Request{
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"web+application://callback"},
-						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:   []byte("1234"),
+						Scopes:       []string{"foo", "bar"},
+						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -374,9 +359,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
 					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-					Secret:        []byte("1234"),
+					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -385,9 +369,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				Request: Request{
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
-						Scopes:   []string{"foo", "bar"},
-						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:   []byte("1234"),
+						Scopes:       []string{"foo", "bar"},
+						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -408,8 +392,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {"unknown"},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expectedError: ErrUnsupportedResponseMode,
 		},
@@ -427,8 +410,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expectedError: ErrUnsupportedResponseMode,
 		},
@@ -451,11 +433,10 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
-						Secret:        []byte("1234"),
+						ClientSecret:  testClientSecret1234,
 					},
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expectedError: ErrUnsupportedResponseMode,
 		},
@@ -480,11 +461,10 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:        []byte("1234"),
+						ClientSecret:  testClientSecret1234,
 					},
 					ResponseModes: []ResponseModeType{ResponseModeFormPost},
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -497,7 +477,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-							Secret:        []byte("1234"),
+							ClientSecret:  testClientSecret1234,
 						},
 						ResponseModes: []ResponseModeType{ResponseModeFormPost},
 					},
@@ -526,11 +506,10 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
 						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:        []byte("1234"),
+						ClientSecret:  testClientSecret1234,
 					},
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -543,7 +522,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
 							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-							Secret:        []byte("1234"),
+							ClientSecret:  testClientSecret1234,
 						},
 						ResponseModes: []ResponseModeType{ResponseModeQuery},
 					},
@@ -572,11 +551,10 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 						Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-						Secret:        []byte("1234"),
+						ClientSecret:  testClientSecret1234,
 					},
 					ResponseModes: []ResponseModeType{ResponseModeFragment},
 				}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
@@ -589,7 +567,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 							Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
-							Secret:        []byte("1234"),
+							ClientSecret:  testClientSecret1234,
 						},
 						ResponseModes: []ResponseModeType{ResponseModeFragment},
 					},
@@ -613,8 +591,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("1234"))).Return(nil)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expectedError: ErrInvalidRequest.WithHint("The request must not contain 'request_uri'."),
 		},
@@ -633,8 +610,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func() {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, Secret: []byte("1234")}, nil).MaxTimes(2)
-				hasher.EXPECT().Compare(ctx, gomock.Eq([]byte("1234")), gomock.Eq([]byte("4321"))).Return(fmt.Errorf("invalid hash"))
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expectedError: ErrInvalidClient,
 		},

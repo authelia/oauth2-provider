@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
 
@@ -17,8 +16,7 @@ type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
 
-	// GetHashedSecret returns the hashed secret as it is stored in the store.
-	GetHashedSecret() (secret []byte)
+	GetClientSecret() (secret ClientSecret)
 
 	// GetRedirectURIs returns the client's allowed redirect URIs.
 	GetRedirectURIs() []string
@@ -41,10 +39,9 @@ type Client interface {
 	GetAudience() (audience Arguments)
 }
 
-// RotatedSecretHashesClient extends Client interface by a method providing a slice of rotated secrets.
-type RotatedSecretHashesClient interface {
-	// GetRotatedHashedSecrets returns a slice of hashed secrets used for secrets rotation.
-	GetRotatedHashedSecrets() (secrets [][]byte)
+// RotatedClientSecretsClient extends Client interface by a method providing a slice of rotated secrets.
+type RotatedClientSecretsClient interface {
+	GetRotatedClientSecrets() (secrets []ClientSecret)
 
 	Client
 }
@@ -88,11 +85,6 @@ type OpenIDConnectClient interface {
 	// authentication methods.
 	GetTokenEndpointAuthSigningAlgorithm() (alg string)
 
-	// GetSecretPlainText returns the client secret in plain text.
-	// This is used to validate the 'token_endpoint_client_auth_method' with a value of 'client_secret_jwt'. If this
-	// client does NOT have a plain text secret then it MUST return an error.
-	GetSecretPlainText() (secret []byte, err error)
-
 	Client
 }
 
@@ -132,15 +124,15 @@ type ResponseModeClient interface {
 
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
-	ID             string   `json:"id"`
-	Secret         []byte   `json:"client_secret,omitempty"`
-	RotatedSecrets [][]byte `json:"rotated_secrets,omitempty"`
-	RedirectURIs   []string `json:"redirect_uris"`
-	GrantTypes     []string `json:"grant_types"`
-	ResponseTypes  []string `json:"response_types"`
-	Scopes         []string `json:"scopes"`
-	Audience       []string `json:"audience"`
-	Public         bool     `json:"public"`
+	ID                   string         `json:"id"`
+	ClientSecret         ClientSecret   `json:"client_secret,omitempty"`
+	RotatedClientSecrets []ClientSecret `json:"rotated_client_secrets,omitempty"`
+	RedirectURIs         []string       `json:"redirect_uris"`
+	GrantTypes           []string       `json:"grant_types"`
+	ResponseTypes        []string       `json:"response_types"`
+	Scopes               []string       `json:"scopes"`
+	Audience             []string       `json:"audience"`
+	Public               bool           `json:"public"`
 }
 
 type DefaultOpenIDConnectClient struct {
@@ -174,12 +166,12 @@ func (c *DefaultClient) GetRedirectURIs() []string {
 	return c.RedirectURIs
 }
 
-func (c *DefaultClient) GetHashedSecret() []byte {
-	return c.Secret
+func (c *DefaultClient) GetClientSecret() (secret ClientSecret) {
+	return c.ClientSecret
 }
 
-func (c *DefaultClient) GetRotatedHashedSecrets() [][]byte {
-	return c.RotatedSecrets
+func (c *DefaultClient) GetRotatedClientSecrets() (secrets []ClientSecret) {
+	return c.RotatedClientSecrets
 }
 
 func (c *DefaultClient) GetScopes() Arguments {
@@ -230,10 +222,6 @@ func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlgorithm() stri
 
 func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlgorithm() string {
 	return c.RequestObjectSigningAlgorithm
-}
-
-func (c *DefaultOpenIDConnectClient) GetSecretPlainText() (secret []byte, err error) {
-	return nil, fmt.Errorf("this registered client does not support plain text")
 }
 
 func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthMethod() string {

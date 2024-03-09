@@ -38,7 +38,7 @@ var j = &DefaultJWTStrategy{
 var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
 		Client: &oauth2.DefaultClient{
-			Secret: []byte("foobarfoobarfoobarfoobar"),
+			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
@@ -67,7 +67,7 @@ var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
 		Client: &oauth2.DefaultClient{
-			Secret: []byte("foobarfoobarfoobarfoobar"),
+			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
@@ -97,7 +97,7 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2
 var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
 		Client: &oauth2.DefaultClient{
-			Secret: []byte("foobarfoobarfoobarfoobar"),
+			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
@@ -130,7 +130,7 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Req
 var jwtExpiredCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
 		Client: &oauth2.DefaultClient{
-			Secret: []byte("foobarfoobarfoobarfoobar"),
+			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{

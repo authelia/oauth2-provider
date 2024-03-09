@@ -163,9 +163,6 @@ type Config struct {
 	// AccessTokenIssuer is the issuer to be used when generating access tokens.
 	AccessTokenIssuer string
 
-	// ClientSecretsHasher is the hasher used to hash OAuth2 Client Secrets.
-	ClientSecretsHasher Hasher
-
 	// HTTPClient is the HTTP client to use for requests.
 	HTTPClient *retryablehttp.Client
 
@@ -260,14 +257,6 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	}
 
 	return c.HTTPClient
-}
-
-func (c *Config) GetSecretsHasher(ctx context.Context) Hasher {
-	if c.ClientSecretsHasher == nil {
-		c.ClientSecretsHasher = &BCrypt{Config: c}
-	}
-
-	return c.ClientSecretsHasher
 }
 
 func (c *Config) GetTokenURL(ctx context.Context) string {
@@ -616,7 +605,6 @@ var (
 	_ MessageCatalogProvider                          = (*Config)(nil)
 	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
 	_ TokenURLProvider                                = (*Config)(nil)
-	_ GetSecretsHashingProvider                       = (*Config)(nil)
 	_ HTTPClientProvider                              = (*Config)(nil)
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)

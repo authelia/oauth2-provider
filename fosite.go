@@ -154,7 +154,6 @@ type Configurator interface {
 	MessageCatalogProvider
 	FormPostHTMLTemplateProvider
 	TokenURLProvider
-	GetSecretsHashingProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider

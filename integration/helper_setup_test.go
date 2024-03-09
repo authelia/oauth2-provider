@@ -52,7 +52,7 @@ var store = &storage.MemoryStore{
 	Clients: map[string]oauth2.Client{
 		"my-client": &oauth2.DefaultClient{
 			ID:            "my-client",
-			Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
+			ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
 			GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
@@ -61,19 +61,18 @@ var store = &storage.MemoryStore{
 		},
 		"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
 			DefaultClient: &oauth2.DefaultClient{
-				ID:             "custom-lifespan-client",
-				Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
-				RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
-				RedirectURIs:   []string{"http://localhost:3846/callback"},
-				ResponseTypes:  []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
-				GrantTypes:     []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
-				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+				ID:                   "custom-lifespan-client",
+				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),                        // = "foobar"
+				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC`)}, // = "foobaz"
+				RedirectURIs:         []string{"http://localhost:3846/callback"},
+				ResponseTypes:        []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+				GrantTypes:           []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 			TokenLifespans: &internal.TestLifespans,
 		},
 		"public-client": &oauth2.DefaultClient{
 			ID:            "public-client",
-			Secret:        []byte{},
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},

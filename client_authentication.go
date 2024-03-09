@@ -182,69 +182,6 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	default:
 		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
-	/*
-		if err = CompareClientSecret(ctx, client, []byte(rawSecret)); err != nil {
-
-		}
-
-		secret := client.GetClientSecret()
-
-		if secret == nil {
-			return nil, "", errorsx.WithStack(
-				ErrInvalidClient.
-					WithHint("The request was determined to be using 'token_endpoint_client_auth_method' method '%s', however the OAuth 2.0 client does not support this method.").
-					WithDebug("The client was not registered with a client secret however this is required to process the particular request."),
-			)
-		}
-
-		rawSecretBytes := []byte(rawSecret)
-
-		if err = secret.Compare(ctx, rawSecretBytes); err == nil {
-			return client, method, nil
-		}
-
-	*/
-
-	/*
-		hasher := s.Config.GetSecretsHasher(ctx)
-
-		value := []byte(rawSecret)
-
-		if err = hasher.Compare(ctx, client.GetHashedSecret(), value); err == nil {
-			return client, method, nil
-		}
-	*/
-
-	/*
-		var (
-			rclient RotatedClientSecretsClient
-			ok      bool
-		)
-
-		if rclient, ok = client.(RotatedClientSecretsClient); !ok {
-			return nil, "", err
-		}
-
-		for _, iClientSecret := range rclient.GetRotatedClientSecrets() {
-			if iClientSecret == nil {
-				continue
-			}
-
-			if iClientSecret.Compare(ctx, rawSecretBytes) == nil {
-				return client, method, nil
-			}
-	*/
-	/*
-		if hasher.Compare(ctx, hash, value) == nil {
-			return client, method, nil
-		}
-	*/
-	/*
-		}
-
-		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
-
-	*/
 }
 
 var (

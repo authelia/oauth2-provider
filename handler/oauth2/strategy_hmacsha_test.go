@@ -222,7 +222,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 }
 
 func mustNewBCryptClientSecretPlain(rawSecret string) *oauth2.BCryptClientSecret {
-	if secret, err := oauth2.NewBCryptClientSecretPlain(rawSecret, 10); err != nil {
+	if secret, err := oauth2.NewBCryptClientSecretPlain(rawSecret, 4); err != nil {
 		panic(err)
 	} else {
 		return secret

@@ -824,7 +824,7 @@ func (c *TestClientAuthenticationPolicyClient) GetAllowMultipleAuthenticationMet
 }
 
 func mustNewBCryptClientSecretPlain(rawSecret string) *BCryptClientSecret {
-	if secret, err := NewBCryptClientSecretPlain(rawSecret, 10); err != nil {
+	if secret, err := NewBCryptClientSecretPlain(rawSecret, 4); err != nil {
 		panic(err)
 	} else {
 		return secret
@@ -832,8 +832,8 @@ func mustNewBCryptClientSecretPlain(rawSecret string) *BCryptClientSecret {
 }
 
 var (
-	testClientSecretFoo     = NewBCryptClientSecret("$2b$10$R78bt2we/S1wNJLjruuYGePtTa7irr.C.m/glGSLSUAeIUhHY59D.") // foo
-	testClientSecretBar     = NewBCryptClientSecret("$2b$10$zDdo0YtaWUWHTIbhVvfzSO67H87zaPSuabqsi1QRLnFxnKIxjy6ei") // bar
-	testClientSecret1234    = NewBCryptClientSecret("$2b$10$Ll2LUE/YL8pmIQfyM0dauuLDr5qrVwUYIYC4byRItKOE0.3vED5IK") // bar
-	testClientSecretComplex = mustNewBCryptClientSecretPlain("foo %66%6F%6F@$<§!✓")                                 // "foo %66%6F%6F@$<§!✓"
+	testClientSecretFoo     = mustNewBCryptClientSecretPlain("foo")
+	testClientSecretBar     = mustNewBCryptClientSecretPlain("bar")
+	testClientSecret1234    = mustNewBCryptClientSecretPlain("1234")
+	testClientSecretComplex = mustNewBCryptClientSecretPlain("foo %66%6F%6F@$<§!✓") // "foo %66%6F%6F@$<§!✓"
 )

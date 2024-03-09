@@ -26,7 +26,7 @@ var hmacshaStrategy = RFC8628HMACSHAStrategy{
 
 var hmacExpiredCase = oauth2.Request{
 	Client: &oauth2.DefaultClient{
-		ClientSecret: oauth2.NewBCryptClientSecret(`$2b$10$0Agznst1QSHV9F6KV9lOn.5fC5Flv9DVxhNVT37p9s29QN0J4cUYS`), // = foobarfoobarfoobarfoobar
+		ClientSecret: oauth2.NewBCryptClientSecret(`$2a$04$/2M570jBCzCkPSgtcpDVyeXnX/fC1YCa7NlPWMitP57dYfa6tb20W`), // = foobarfoobarfoobarfoobar
 	},
 	Session: &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{
@@ -38,7 +38,7 @@ var hmacExpiredCase = oauth2.Request{
 
 var hmacValidCase = oauth2.Request{
 	Client: &oauth2.DefaultClient{
-		ClientSecret: oauth2.NewBCryptClientSecret(`$2b$10$0Agznst1QSHV9F6KV9lOn.5fC5Flv9DVxhNVT37p9s29QN0J4cUYS`), // = foobarfoobarfoobarfoobar
+		ClientSecret: oauth2.NewBCryptClientSecret(`$2a$04$/2M570jBCzCkPSgtcpDVyeXnX/fC1YCa7NlPWMitP57dYfa6tb20W`), // = foobarfoobarfoobarfoobar
 	},
 	Session: &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{
@@ -50,7 +50,7 @@ var hmacValidCase = oauth2.Request{
 
 var hmacValidZeroTimeRefreshCase = oauth2.Request{
 	Client: &oauth2.DefaultClient{
-		ClientSecret: oauth2.NewBCryptClientSecret(`$2b$10$0Agznst1QSHV9F6KV9lOn.5fC5Flv9DVxhNVT37p9s29QN0J4cUYS`), // = foobarfoobarfoobarfoobar
+		ClientSecret: oauth2.NewBCryptClientSecret(`$2a$04$/2M570jBCzCkPSgtcpDVyeXnX/fC1YCa7NlPWMitP57dYfa6tb20W`), // = foobarfoobarfoobarfoobar
 	},
 	RequestedAt: time.Now().UTC().Add(-time.Hour * 48),
 	Session: &oauth2.DefaultSession{

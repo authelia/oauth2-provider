@@ -105,19 +105,19 @@ func TestNewIntrospectionRequest(t *testing.T) {
 	newErr := errors.New("asdf")
 
 	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
-		isActive    bool
+		name      string
+		setup     func()
+		expectErr error
+		isActive  bool
 	}{
 		{
-			description: "should fail",
+			name: "should fail",
 			setup: func() {
 			},
 			expectErr: ErrInvalidRequest,
 		},
 		{
-			description: "should fail",
+			name: "should fail",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -136,7 +136,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			expectErr: ErrInactiveToken,
 		},
 		{
-			description: "should pass",
+			name: "should pass",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -154,7 +154,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password encoded",
+			name: "should pass with basic auth if username and password encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -172,7 +172,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password not encoded",
+			name: "should pass with basic auth if username and password not encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -190,7 +190,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password not encoded",
+			name: "should pass with basic auth if username and password not encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{

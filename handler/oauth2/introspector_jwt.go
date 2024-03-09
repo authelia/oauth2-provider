@@ -20,6 +20,46 @@ type StatelessJWTValidator struct {
 	}
 }
 
+func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (oauth2.TokenUse, error) {
+	t, err := validate(ctx, v.Signer, token)
+	if err != nil {
+		return "", err
+	}
+
+	if !IsJWTProfileAccessToken(t) {
+		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
+	}
+
+	requester := AccessTokenJWTToRequest(t)
+
+	if err := matchScopes(v.Config.GetScopeStrategy(ctx), requester.GetGrantedScopes(), scopes); err != nil {
+		return oauth2.AccessToken, err
+	}
+
+	accessRequest.Merge(requester)
+
+	return oauth2.AccessToken, nil
+}
+
+// IsJWTProfileAccessToken validates a *jwt.Token is actually a RFC9068 JWT Profile Access Token by checking the
+// relevant header as per https://datatracker.ietf.org/doc/html/rfc9068#section-2.1 which explicitly states that
+// the header MUST include a typ of 'at+jwt' or 'application/at+jwt' with a preference of 'at+jwt'.
+func IsJWTProfileAccessToken(token *jwt.Token) bool {
+	var (
+		raw any
+		typ string
+		ok  bool
+	)
+
+	if raw, ok = token.Header[jwt.JWTHeaderKeyValueType]; !ok {
+		return false
+	}
+
+	typ, ok = raw.(string)
+
+	return ok && (typ == jwt.JWTHeaderTypeValueAccessTokenJWT || typ == "application/at+jwt")
+}
+
 // AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT.
 func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	mapClaims := token.Claims
@@ -67,44 +107,4 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		RequestedAudience: claims.Audience,
 		GrantedAudience:   claims.Audience,
 	}
-}
-
-func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (oauth2.TokenUse, error) {
-	t, err := validate(ctx, v.Signer, token)
-	if err != nil {
-		return "", err
-	}
-
-	if !IsJWTProfileAccessToken(t) {
-		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
-	}
-
-	requester := AccessTokenJWTToRequest(t)
-
-	if err := matchScopes(v.Config.GetScopeStrategy(ctx), requester.GetGrantedScopes(), scopes); err != nil {
-		return oauth2.AccessToken, err
-	}
-
-	accessRequest.Merge(requester)
-
-	return oauth2.AccessToken, nil
-}
-
-// IsJWTProfileAccessToken validates a *jwt.Token is actually a RFC9068 JWT Profile Access Token by checking the
-// relevant header as per https://datatracker.ietf.org/doc/html/rfc9068#section-2.1 which explicitly states that
-// the header MUST include a typ of 'at+jwt' or 'application/at+jwt' with a preference of 'at+jwt'.
-func IsJWTProfileAccessToken(token *jwt.Token) bool {
-	var (
-		raw any
-		typ string
-		ok  bool
-	)
-
-	if raw, ok = token.Header[jwt.JWTHeaderKeyValueType]; !ok {
-		return false
-	}
-
-	typ, ok = raw.(string)
-
-	return ok && (typ == jwt.JWTHeaderTypeValueAccessTokenJWT || typ == "application/at+jwt")
 }

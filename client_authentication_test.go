@@ -381,6 +381,93 @@ func TestAuthenticateClient(t *testing.T) {
 			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the token endpoint signing algorithm 'RS256'.",
 		},
 		{
+			name: "ShouldFailBecauseMalformedAssertionUsed",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: ecdsaJwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": []string{"bad.assertion"}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to decode the 'client_assertion' value as it is malformed or incomplete. token is malformed: token contains an invalid number of segments",
+		},
+		{
+			name: "ShouldFailBecauseExpired",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: ecdsaJwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(-time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, ecdsaKey, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is expired",
+		},
+		{
+			name: "ShouldFailBecauseNotBefore",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: ecdsaJwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimNotBefore:      time.Now().Add(time.Minute).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, ecdsaKey, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is not valid yet",
+		},
+		{
+			name: "ShouldFailBecauseIssuedInFuture",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: ecdsaJwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuedAt:       time.Now().Add(time.Minute).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, ecdsaKey, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token used before issued",
+		},
+		{
+			name: "ShouldFailBecauseNoKeys",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: nil, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, ecdsaKey, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client has no JSON Web Keys set registered, but they are needed to complete the request.",
+		},
+		{
+			name: "ShouldFailBecauseNotBefore",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: ecdsaJwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlgorithm: "ES256"}
+			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimNotBefore:      time.Now().Add(time.Minute).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, ecdsaKey, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is not valid yet",
+		},
+		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretJwt",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", Secret: barSecret}, JSONWebKeys: rsaJwks, TokenEndpointAuthMethod: "client_secret_jwt"}

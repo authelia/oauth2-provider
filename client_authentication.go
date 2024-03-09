@@ -287,23 +287,27 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx, token.Header, client)
 	}); err != nil {
-		var e *RFC6749Error
-
-		switch {
-		case errors.As(err, &e):
-			return nil, "", "", "", nil, nil, errorsx.WithStack(e)
-		case errors.Is(err, xjwt.ErrTokenMalformed):
-			return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is malformed or incomplete.").WithWrap(err).WithDebugError(err))
-		case errors.Is(err, xjwt.ErrTokenUnverifiable):
-			return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is missing the information required to validate it.").WithWrap(err).WithDebugError(err))
-		case errors.Is(err, xjwt.ErrTokenExpired):
-
-		default:
-			return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode 'client_assertion' value for an unknown reason.").WithWrap(err).WithDebugError(err))
-		}
+		return s.doAuthenticateAssertionParseAssertionJWTBearerParseError(err)
 	}
 
 	return client, method, kid, alg, token, claims, nil
+}
+
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerParseError(uerr error) (client OpenIDConnectClient, method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
+	var e *RFC6749Error
+
+	switch {
+	case errors.As(uerr, &e):
+		return nil, "", "", "", nil, nil, errorsx.WithStack(e)
+	case errors.Is(uerr, xjwt.ErrTokenMalformed):
+		return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is malformed or incomplete.").WithWrap(uerr).WithDebugError(uerr))
+	case errors.Is(uerr, xjwt.ErrTokenUnverifiable):
+		return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is missing the information required to validate it.").WithWrap(uerr).WithDebugError(uerr))
+	case errors.Is(uerr, xjwt.ErrTokenNotValidYet), errors.Is(uerr, xjwt.ErrTokenExpired), errors.Is(uerr, xjwt.ErrTokenUsedBeforeIssued):
+		return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").WithWrap(uerr).WithDebugError(uerr))
+	default:
+		return nil, "", "", "", nil, nil, errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode 'client_assertion' value for an unknown reason.").WithWrap(uerr).WithDebugError(uerr))
+	}
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client OpenIDConnectClient) (key any, err error) {

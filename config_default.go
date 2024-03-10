@@ -163,6 +163,9 @@ type Config struct {
 	// JWTSecuredAuthorizeResponseModeSigner is the signer for JWT Secured Authorization Response Mode. Has no default.
 	JWTSecuredAuthorizeResponseModeSigner jwt.Signer
 
+	// EnforceJWTProfileAccessTokens forces the issuer to return JWT Profile Access Tokens to all clients.
+	EnforceJWTProfileAccessTokens bool
+
 	// HTTPClient is the HTTP client to use for requests.
 	HTTPClient *retryablehttp.Client
 
@@ -353,6 +356,10 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) s
 
 func (c *Config) GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer {
 	return c.JWTSecuredAuthorizeResponseModeSigner
+}
+
+func (c *Config) GetEnforceJWTProfileAccessTokens(ctx context.Context) (enable bool) {
+	return c.EnforceJWTProfileAccessTokens
 }
 
 func (c *Config) GetAllowedPrompts(_ context.Context) []string {
@@ -584,6 +591,7 @@ var (
 	_ JWTSecuredAuthorizeResponseModeIssuerProvider   = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeSignerProvider   = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeLifespanProvider = (*Config)(nil)
+	_ JWTProfileAccessTokensProvider                  = (*Config)(nil)
 	_ AllowedPromptsProvider                          = (*Config)(nil)
 	_ OmitRedirectScopeParamProvider                  = (*Config)(nil)
 	_ MinParameterEntropyProvider                     = (*Config)(nil)

@@ -17,9 +17,21 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIntrospectToken(t *testing.T) {
+	config := &oauth2.Config{
+		GlobalSecret:                  []byte("some-super-cool-secret-that-nobody-knows"),
+		EnforceJWTProfileAccessTokens: true,
+	}
+
+	signer := &jwt.DefaultSigner{
+		GetPrivateKey: func(ctx context.Context) (any, error) {
+			return defaultRSAKey, nil
+		},
+	}
+
 	for _, c := range []struct {
 		description string
 		strategy    hoauth2.AccessTokenStrategy
@@ -27,17 +39,17 @@ func TestIntrospectToken(t *testing.T) {
 	}{
 		{
 			description: "HMAC strategy with OAuth2TokenIntrospectionFactory",
-			strategy:    hmacStrategy,
+			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", nil),
 			factory:     compose.OAuth2TokenIntrospectionFactory,
 		},
 		{
 			description: "JWT strategy with OAuth2TokenIntrospectionFactory",
-			strategy:    jwtStrategy,
+			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", signer),
 			factory:     compose.OAuth2TokenIntrospectionFactory,
 		},
 		{
 			description: "JWT strategy with OAuth2StatelessJWTIntrospectionFactory",
-			strategy:    jwtStrategy,
+			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", signer),
 			factory:     compose.OAuth2StatelessJWTIntrospectionFactory,
 		},
 	} {

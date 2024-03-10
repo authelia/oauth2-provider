@@ -21,12 +21,12 @@ import (
 )
 
 type Signer interface {
-	Generate(ctx context.Context, claims MapClaims, header Mapper) (string, string, error)
-	Validate(ctx context.Context, token string) (string, error)
+	Generate(ctx context.Context, claims MapClaims, header Mapper) (tokenString string, signature string, err error)
+	Validate(ctx context.Context, tokenString string) (signature string, err error)
 	Hash(ctx context.Context, in []byte) ([]byte, error)
-	Decode(ctx context.Context, token string) (*Token, error)
-	GetSignature(ctx context.Context, token string) (string, error)
-	GetSigningMethodLength(ctx context.Context) int
+	Decode(ctx context.Context, tokenString string) (token *Token, err error)
+	GetSignature(ctx context.Context, token string) (signature string, err error)
+	GetSigningMethodLength(ctx context.Context) (length int)
 }
 
 var SHA256HashSize = crypto.SHA256.Size()

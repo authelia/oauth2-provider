@@ -129,6 +129,19 @@ type ClientCredentialsFlowPolicyClient interface {
 	Client
 }
 
+type JWTProfileClient interface {
+	// GetAccessTokenSignedResponseAlg returns the algorithm used for signing Access Tokens.
+	GetAccessTokenSignedResponseAlg() (alg string)
+
+	// GetAccessTokenSignedResponseKeyID returns the key id used for signing Access Tokens.
+	GetAccessTokenSignedResponseKeyID() (kid string)
+
+	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
+	GetEnableJWTProfileOAuthAccessTokens() (enable bool)
+
+	Client
+}
+
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`

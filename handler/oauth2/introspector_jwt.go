@@ -21,7 +21,7 @@ type StatelessJWTValidator struct {
 }
 
 func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, token string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (oauth2.TokenUse, error) {
-	t, err := validate(ctx, v.Signer, token)
+	t, err := validateJWT(ctx, v.Signer, token)
 	if err != nil {
 		return "", err
 	}

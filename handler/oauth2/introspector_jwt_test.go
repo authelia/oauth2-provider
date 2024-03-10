@@ -20,13 +20,20 @@ import (
 
 func TestIntrospectJWT(t *testing.T) {
 	rsaKey := gen.MustRSAKey()
+
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
 	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
 		Signer: &jwt.DefaultSigner{
 			GetPrivateKey: func(_ context.Context) (any, error) {
 				return rsaKey, nil
 			},
 		},
-		Config: &oauth2.Config{},
+		Config: config,
 	}
 
 	var v = &StatelessJWTValidator{

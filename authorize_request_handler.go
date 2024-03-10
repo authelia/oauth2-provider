@@ -90,8 +90,8 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
 		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
 		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if oidcClient.GetRequestObjectSigningAlgorithm() != "" && oidcClient.GetRequestObjectSigningAlgorithm() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], oidcClient.GetRequestObjectSigningAlgorithm()))
+		if oidcClient.GetRequestObjectSigningAlg() != "" && oidcClient.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], oidcClient.GetRequestObjectSigningAlg()))
 		}
 
 		if t.Method == jwt.SigningMethodNone {

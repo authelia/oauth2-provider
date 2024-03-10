@@ -47,8 +47,8 @@ var b64 = base64.URLEncoding.WithPadding(base64.NoPadding)
 // Generate generates a token and a matching signature or returns an error.
 // This method implements rfc6819 Section 5.1.4.2.2: Use High Entropy for Secrets.
 func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
-	//c.Lock()
-	//defer c.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	secret, err := c.Config.GetGlobalSecret(ctx)
 	if err != nil {

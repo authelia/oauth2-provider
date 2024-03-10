@@ -122,183 +122,190 @@ type JWTSecuredAuthorizeResponseModeLifespanProvider interface {
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 
+// JWTProfileAccessTokensProvider provides configuration options to the JWT Profile strategies.
+type JWTProfileAccessTokensProvider interface {
+	// GetEnforceJWTProfileAccessTokens when returning true will disregard the registered client capabilities for
+	// Access Token generation and produce only JWT Profile Access Tokens.
+	GetEnforceJWTProfileAccessTokens(ctx context.Context) (enable bool)
+}
+
 // AllowedPromptsProvider returns the provider for configuring the allowed prompts.
 type AllowedPromptsProvider interface {
 	// GetAllowedPrompts returns the allowed prompts.
-	GetAllowedPrompts(ctx context.Context) []string
+	GetAllowedPrompts(ctx context.Context) (prompts []string)
 }
 
 // MinParameterEntropyProvider returns the provider for configuring the minimum parameter entropy.
 type MinParameterEntropyProvider interface {
 	// GetMinParameterEntropy returns the minimum parameter entropy.
-	GetMinParameterEntropy(_ context.Context) int
+	GetMinParameterEntropy(_ context.Context) (min int)
 }
 
 // SanitationAllowedProvider returns the provider for configuring the sanitation white list.
 type SanitationAllowedProvider interface {
 	// GetSanitationWhiteList is a whitelist of form values that are required by the token endpoint. These values
 	// are safe for storage in a database (cleartext).
-	GetSanitationWhiteList(ctx context.Context) []string
+	GetSanitationWhiteList(ctx context.Context) (whitelist []string)
 }
 
 // OmitRedirectScopeParamProvider returns the provider for configuring the omit redirect scope param.
 type OmitRedirectScopeParamProvider interface {
 	// GetOmitRedirectScopeParam must be set to true if the scope query param is to be omitted
 	// in the authorization's redirect URI
-	GetOmitRedirectScopeParam(ctx context.Context) bool
+	GetOmitRedirectScopeParam(ctx context.Context) (omit bool)
 }
 
 // EnforcePKCEProvider returns the provider for configuring the enforcement of PKCE.
 type EnforcePKCEProvider interface {
 	// GetEnforcePKCE returns the enforcement of PKCE.
-	GetEnforcePKCE(ctx context.Context) bool
+	GetEnforcePKCE(ctx context.Context) (enforce bool)
 }
 
 // EnforcePKCEForPublicClientsProvider returns the provider for configuring the enforcement of PKCE for public clients.
 type EnforcePKCEForPublicClientsProvider interface {
 	// GetEnforcePKCEForPublicClients returns the enforcement of PKCE for public clients.
-	GetEnforcePKCEForPublicClients(ctx context.Context) bool
+	GetEnforcePKCEForPublicClients(ctx context.Context) (enforce bool)
 }
 
 // EnablePKCEPlainChallengeMethodProvider returns the provider for configuring the enable PKCE plain challenge method.
 type EnablePKCEPlainChallengeMethodProvider interface {
 	// GetEnablePKCEPlainChallengeMethod returns the enable PKCE plain challenge method.
-	GetEnablePKCEPlainChallengeMethod(ctx context.Context) bool
+	GetEnablePKCEPlainChallengeMethod(ctx context.Context) (enable bool)
 }
 
 // GrantTypeJWTBearerCanSkipClientAuthProvider returns the provider for configuring the grant type JWT bearer can skip client auth.
 type GrantTypeJWTBearerCanSkipClientAuthProvider interface {
 	// GetGrantTypeJWTBearerCanSkipClientAuth returns the grant type JWT bearer can skip client auth.
-	GetGrantTypeJWTBearerCanSkipClientAuth(ctx context.Context) bool
+	GetGrantTypeJWTBearerCanSkipClientAuth(ctx context.Context) (permitted bool)
 }
 
 // GrantTypeJWTBearerIDOptionalProvider returns the provider for configuring the grant type JWT bearer ID optional.
 type GrantTypeJWTBearerIDOptionalProvider interface {
 	// GetGrantTypeJWTBearerIDOptional returns the grant type JWT bearer ID optional.
-	GetGrantTypeJWTBearerIDOptional(ctx context.Context) bool
+	GetGrantTypeJWTBearerIDOptional(ctx context.Context) (optional bool)
 }
 
 // GrantTypeJWTBearerIssuedDateOptionalProvider returns the provider for configuring the grant type JWT bearer issued date optional.
 type GrantTypeJWTBearerIssuedDateOptionalProvider interface {
 	// GetGrantTypeJWTBearerIssuedDateOptional returns the grant type JWT bearer issued date optional.
-	GetGrantTypeJWTBearerIssuedDateOptional(ctx context.Context) bool
+	GetGrantTypeJWTBearerIssuedDateOptional(ctx context.Context) (optional bool)
 }
 
 // GetJWTMaxDurationProvider returns the provider for configuring the JWT max duration.
 type GetJWTMaxDurationProvider interface {
 	// GetJWTMaxDuration returns the JWT max duration.
-	GetJWTMaxDuration(ctx context.Context) time.Duration
+	GetJWTMaxDuration(ctx context.Context) (max time.Duration)
 }
 
 // TokenEntropyProvider returns the provider for configuring the token entropy.
 type TokenEntropyProvider interface {
 	// GetTokenEntropy returns the token entropy.
-	GetTokenEntropy(ctx context.Context) int
+	GetTokenEntropy(ctx context.Context) (entropy int)
 }
 
 // GlobalSecretProvider returns the provider for configuring the global secret.
 type GlobalSecretProvider interface {
 	// GetGlobalSecret returns the global secret.
-	GetGlobalSecret(ctx context.Context) ([]byte, error)
+	GetGlobalSecret(ctx context.Context) (secret []byte, err error)
 }
 
 // RotatedGlobalSecretsProvider returns the provider for configuring the rotated global secrets.
 type RotatedGlobalSecretsProvider interface {
 	// GetRotatedGlobalSecrets returns the rotated global secrets.
-	GetRotatedGlobalSecrets(ctx context.Context) ([][]byte, error)
+	GetRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
 }
 
 // HMACHashingProvider returns the provider for configuring the hash function.
 type HMACHashingProvider interface {
 	// GetHMACHasher returns the hash function.
-	GetHMACHasher(ctx context.Context) func() hash.Hash
+	GetHMACHasher(ctx context.Context) func() (hasher hash.Hash)
 }
 
 // SendDebugMessagesToClientsProvider returns the provider for configuring the send debug messages to clients.
 type SendDebugMessagesToClientsProvider interface {
 	// GetSendDebugMessagesToClients returns the send debug messages to clients.
-	GetSendDebugMessagesToClients(ctx context.Context) bool
+	GetSendDebugMessagesToClients(ctx context.Context) (send bool)
 }
 
 // RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
 type RevokeRefreshTokensExplicitlyProvider interface {
 	// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.
-	GetRevokeRefreshTokensExplicit(ctx context.Context) bool
+	GetRevokeRefreshTokensExplicit(ctx context.Context) (explicit bool)
 
 	// GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient returns true if a
 	// RevokeFlowRevokeRefreshTokensExplicitClient returning false should be enforced.
-	GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool
+	GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) (explicit bool)
 }
 
 // JWKSFetcherStrategyProvider returns the provider for configuring the JWKS fetcher strategy.
 type JWKSFetcherStrategyProvider interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
-	GetJWKSFetcherStrategy(ctx context.Context) JWKSFetcherStrategy
+	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
 }
 
 // HTTPClientProvider returns the provider for configuring the HTTP client.
 type HTTPClientProvider interface {
 	// GetHTTPClient returns the HTTP client provider.
-	GetHTTPClient(ctx context.Context) *retryablehttp.Client
+	GetHTTPClient(ctx context.Context) (client *retryablehttp.Client)
 }
 
 // ClientAuthenticationStrategyProvider returns the provider for configuring the client authentication strategy.
 type ClientAuthenticationStrategyProvider interface {
 	// GetClientAuthenticationStrategy returns the client authentication strategy.
-	GetClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationStrategy
+	GetClientAuthenticationStrategy(ctx context.Context) (strategy ClientAuthenticationStrategy)
 }
 
 // ResponseModeHandlerProvider returns the provider for configuring the response mode handlers.
 type ResponseModeHandlerProvider interface {
 	// GetResponseModeHandlers returns the response mode handlers in order of execution.
-	GetResponseModeHandlers(ctx context.Context) []ResponseModeHandler
+	GetResponseModeHandlers(ctx context.Context) (handlers []ResponseModeHandler)
 }
 
 // MessageCatalogProvider returns the provider for configuring the message catalog.
 type MessageCatalogProvider interface {
 	// GetMessageCatalog returns the message catalog.
-	GetMessageCatalog(ctx context.Context) i18n.MessageCatalog
+	GetMessageCatalog(ctx context.Context) (catalog i18n.MessageCatalog)
 }
 
 // FormPostHTMLTemplateProvider returns the provider for configuring the form post HTML template.
 type FormPostHTMLTemplateProvider interface {
 	// GetFormPostHTMLTemplate returns the form post HTML template.
-	GetFormPostHTMLTemplate(ctx context.Context) *template.Template
+	GetFormPostHTMLTemplate(ctx context.Context) (tmpl *template.Template)
 }
 
 type TokenURLProvider interface {
 	// GetTokenURL returns the token URL.
-	GetTokenURL(ctx context.Context) string
+	GetTokenURL(ctx context.Context) (url string)
 }
 
 // AuthorizeEndpointHandlersProvider returns the provider for configuring the authorize endpoint handlers.
 type AuthorizeEndpointHandlersProvider interface {
 	// GetAuthorizeEndpointHandlers returns the authorize endpoint handlers.
-	GetAuthorizeEndpointHandlers(ctx context.Context) AuthorizeEndpointHandlers
+	GetAuthorizeEndpointHandlers(ctx context.Context) (handlers AuthorizeEndpointHandlers)
 }
 
 // TokenEndpointHandlersProvider returns the provider for configuring the token endpoint handlers.
 type TokenEndpointHandlersProvider interface {
 	// GetTokenEndpointHandlers returns the token endpoint handlers.
-	GetTokenEndpointHandlers(ctx context.Context) TokenEndpointHandlers
+	GetTokenEndpointHandlers(ctx context.Context) (handlers TokenEndpointHandlers)
 }
 
 // TokenIntrospectionHandlersProvider returns the provider for configuring the token introspection handlers.
 type TokenIntrospectionHandlersProvider interface {
 	// GetTokenIntrospectionHandlers returns the token introspection handlers.
-	GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrospectionHandlers
+	GetTokenIntrospectionHandlers(ctx context.Context) (handlers TokenIntrospectionHandlers)
 }
 
 // RevocationHandlersProvider returns the provider for configuring the revocation handlers.
 type RevocationHandlersProvider interface {
 	// GetRevocationHandlers returns the revocation handlers.
-	GetRevocationHandlers(ctx context.Context) RevocationHandlers
+	GetRevocationHandlers(ctx context.Context) (handlers RevocationHandlers)
 }
 
 // PushedAuthorizeRequestHandlersProvider returns the provider for configuring the PAR handlers.
 type PushedAuthorizeRequestHandlersProvider interface {
 	// GetPushedAuthorizeEndpointHandlers returns the handlers.
-	GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers
+	GetPushedAuthorizeEndpointHandlers(ctx context.Context) (handlers PushedAuthorizeEndpointHandlers)
 }
 
 // RFC9628DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response.
@@ -316,20 +323,20 @@ type RFC9628DeviceAuthorizeConfigProvider interface {
 // RFC8628DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
 type RFC8628DeviceAuthorizeEndpointHandlersProvider interface {
 	// GetRFC8628DeviceAuthorizeEndpointHandlers returns the handlers.
-	GetRFC8628DeviceAuthorizeEndpointHandlers(ctx context.Context) RFC8628DeviceAuthorizeEndpointHandlers
+	GetRFC8628DeviceAuthorizeEndpointHandlers(ctx context.Context) (handlers RFC8628DeviceAuthorizeEndpointHandlers)
 }
 
 // RFC8628UserAuthorizeEndpointHandlersProvider returns the provider for setting up the Device grant user interaction handlers.
 type RFC8628UserAuthorizeEndpointHandlersProvider interface {
 	// GetRFC8628UserAuthorizeEndpointHandlers returns the handlers.
-	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) RFC8628UserAuthorizeEndpointHandlers
+	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) (handlers RFC8628UserAuthorizeEndpointHandlers)
 }
 
 // RFC8693ConfigProvider is the configuration provider for RFC8693 Token Exchange.
 type RFC8693ConfigProvider interface {
-	GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType
+	GetRFC8693TokenTypes(ctx context.Context) (types map[string]RFC8693TokenType)
 
-	GetDefaultRFC8693RequestedTokenType(ctx context.Context) string
+	GetDefaultRFC8693RequestedTokenType(ctx context.Context) (tokenType string)
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.
@@ -339,7 +346,7 @@ type UseLegacyErrorFormatProvider interface {
 	// GetUseLegacyErrorFormat returns whether to use the legacy error format.
 	//
 	// Deprecated: Do not use this flag anymore.
-	GetUseLegacyErrorFormat(ctx context.Context) bool
+	GetUseLegacyErrorFormat(ctx context.Context) (use bool)
 }
 
 // PushedAuthorizeRequestConfigProvider is the configuration provider for pushed
@@ -347,13 +354,13 @@ type UseLegacyErrorFormatProvider interface {
 type PushedAuthorizeRequestConfigProvider interface {
 	// GetPushedAuthorizeRequestURIPrefix is the request URI prefix. This is
 	// usually 'urn:ietf:params:oauth:request_uri:'.
-	GetPushedAuthorizeRequestURIPrefix(ctx context.Context) string
+	GetPushedAuthorizeRequestURIPrefix(ctx context.Context) (prefix string)
 
 	// GetPushedAuthorizeContextLifespan is the lifespan of the short-lived PAR context.
-	GetPushedAuthorizeContextLifespan(ctx context.Context) time.Duration
+	GetPushedAuthorizeContextLifespan(ctx context.Context) (lifespan time.Duration)
 
 	// EnforcePushedAuthorize indicates if PAR is enforced. In this mode, a client
 	// cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 	// must contain the PAR request_uri.
-	EnforcePushedAuthorize(ctx context.Context) bool
+	EnforcePushedAuthorize(ctx context.Context) (enforce bool)
 }

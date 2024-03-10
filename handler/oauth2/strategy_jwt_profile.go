@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -22,80 +23,157 @@ type JWTProfileCoreStrategy struct {
 	Config           interface {
 		oauth2.AccessTokenIssuerProvider
 		oauth2.JWTScopeFieldProvider
+		oauth2.JWTProfileAccessTokensProvider
 	}
 }
 
-func (h *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, token string) string {
-	return h.signature(token)
-}
+func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
+	var possible bool
 
-func (h *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error) {
-	return h.generate(ctx, oauth2.AccessToken, requester)
-}
-
-func (h *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, _ oauth2.Requester, token string) error {
-	_, err := validate(ctx, h.Signer, token)
-	return err
-}
-
-func (h *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, token string) string {
-	return h.HMACCoreStrategy.RefreshTokenSignature(ctx, token)
-}
-
-func (h *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
-	return h.HMACCoreStrategy.AuthorizeCodeSignature(ctx, token)
-}
-
-func (h *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, req oauth2.Requester) (token string, signature string, err error) {
-	return h.HMACCoreStrategy.GenerateRefreshToken(ctx, req)
-}
-
-func (h *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, req oauth2.Requester, token string) error {
-	return h.HMACCoreStrategy.ValidateRefreshToken(ctx, req, token)
-}
-
-func (h *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, req oauth2.Requester) (token string, signature string, err error) {
-	return h.HMACCoreStrategy.GenerateAuthorizeCode(ctx, req)
-}
-
-func (h *JWTProfileCoreStrategy) ValidateAuthorizeCode(ctx context.Context, req oauth2.Requester, token string) error {
-	return h.HMACCoreStrategy.ValidateAuthorizeCode(ctx, req, token)
-}
-
-func (h *JWTProfileCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, token string) (signature string, err error) {
-	return h.HMACCoreStrategy.RFC8628UserCodeSignature(ctx, token)
-}
-
-func (h *JWTProfileCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (token string, signature string, err error) {
-	return h.HMACCoreStrategy.GenerateRFC8628UserCode(ctx)
-}
-
-func (h *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
-	return h.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, r, code)
-}
-
-func (h *JWTProfileCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, token string) (signature string, err error) {
-	return h.HMACCoreStrategy.RFC8628DeviceCodeSignature(ctx, token)
-}
-
-func (h *JWTProfileCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (token string, signature string, err error) {
-	return h.HMACCoreStrategy.GenerateRFC8628DeviceCode(ctx)
-}
-
-func (h *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
-	return h.HMACCoreStrategy.ValidateRFC8628DeviceCode(ctx, r, code)
-}
-
-func (h *JWTProfileCoreStrategy) signature(token string) string {
-	split := strings.Split(token, ".")
-	if len(split) != 3 {
-		return ""
+	if possible, signature = s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
+		return
 	}
 
-	return split[2]
+	return s.HMACCoreStrategy.AccessTokenSignature(ctx, tokenString)
 }
 
-func validate(ctx context.Context, jwtStrategy jwt.Signer, token string) (t *jwt.Token, err error) {
+func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error) {
+	var (
+		client oauth2.JWTProfileClient
+		ok     bool
+	)
+
+	if s.Config.GetEnforceJWTProfileAccessTokens(ctx) {
+		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, nil)
+	}
+
+	if client, ok = requester.GetClient().(oauth2.JWTProfileClient); ok && client.GetEnableJWTProfileOAuthAccessTokens() {
+		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, client)
+	}
+
+	return s.HMACCoreStrategy.GenerateAccessToken(ctx, requester)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, requester oauth2.Requester, tokenString string) (err error) {
+	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
+		_, err = validateJWT(ctx, s.Signer, tokenString)
+
+		return
+	}
+
+	return s.HMACCoreStrategy.ValidateAccessToken(ctx, requester, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
+	return s.HMACCoreStrategy.RefreshTokenSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
+	return s.HMACCoreStrategy.AuthorizeCodeSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateRefreshToken(ctx, req)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, req oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRefreshToken(ctx, req, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateAuthorizeCode(ctx, req)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateAuthorizeCode(ctx context.Context, req oauth2.Requester, tokenString string) error {
+	return s.HMACCoreStrategy.ValidateAuthorizeCode(ctx, req, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
+	return s.HMACCoreStrategy.RFC8628UserCodeSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateRFC8628UserCode(ctx)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, r, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
+	return s.HMACCoreStrategy.RFC8628DeviceCodeSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateRFC8628DeviceCode(ctx)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRFC8628DeviceCode(ctx, r, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (jwt bool, signature string) {
+	if s.HMACCoreStrategy.hasPrefix(tokenString, tokenPrefixPartAccessToken) {
+		return false, ""
+	}
+
+	parts := strings.SplitN(tokenString, ".", 4)
+
+	if len(parts) != 3 {
+		return false, ""
+	}
+
+	return true, parts[2]
+}
+
+func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, requester oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
+	var (
+		session JWTSessionContainer
+		ok      bool
+		claims  jwt.JWTClaimsContainer
+		header  *jwt.Headers
+	)
+
+	if session, ok = requester.GetSession().(JWTSessionContainer); !ok {
+		return "", "", errors.Errorf("Session must be of type JWTSessionContainer but got type: %T", requester.GetSession())
+	}
+
+	if claims = session.GetJWTClaims(); claims == nil {
+		return "", "", errors.New("JWT Claims must not be nil")
+	}
+
+	header = session.GetJWTHeader()
+
+	if client != nil {
+		if kid := client.GetAccessTokenSignedResponseKeyID(); len(kid) != 0 {
+			header.SetDefaultString(consts.JSONWebTokenHeaderKeyIdentifier, kid)
+		}
+
+		if alg := client.GetAccessTokenSignedResponseAlg(); len(alg) != 0 {
+			header.SetDefaultString(consts.JSONWebTokenHeaderAlgorithm, alg)
+		}
+	}
+
+	claims = claims.
+		Sanitize().
+		With(
+			session.GetExpiresAt(tokenType),
+			requester.GetGrantedScopes(),
+			requester.GetGrantedAudience(),
+		).
+		WithDefaults(
+			time.Now().UTC(),
+			time.Now().UTC(),
+			s.Config.GetAccessTokenIssuer(ctx),
+		).
+		WithScopeField(
+			s.Config.GetJWTScopeField(ctx),
+		)
+
+	return s.Signer.Generate(ctx, claims.ToMapClaims(), header)
+}
+
+func validateJWT(ctx context.Context, jwtStrategy jwt.Signer, token string) (t *jwt.Token, err error) {
 	t, err = jwtStrategy.Decode(ctx, token)
 	if err == nil {
 		err = t.Claims.Valid()
@@ -129,31 +207,5 @@ func toRFCErr(v *jwt.ValidationError) *oauth2.RFC6749Error {
 		return oauth2.ErrTokenClaim
 	default:
 		return oauth2.ErrRequestUnauthorized
-	}
-}
-
-func (h *JWTProfileCoreStrategy) generate(ctx context.Context, tokenType oauth2.TokenType, requester oauth2.Requester) (string, string, error) {
-	if jwtSession, ok := requester.GetSession().(JWTSessionContainer); !ok {
-		return "", "", errors.Errorf("Session must be of type JWTSessionContainer but got type: %T", requester.GetSession())
-	} else if jwtSession.GetJWTClaims() == nil {
-		return "", "", errors.New("GetTokenClaims() must not be nil")
-	} else {
-		claims := jwtSession.GetJWTClaims().
-			Sanitize().
-			With(
-				jwtSession.GetExpiresAt(tokenType),
-				requester.GetGrantedScopes(),
-				requester.GetGrantedAudience(),
-			).
-			WithDefaults(
-				time.Now().UTC(),
-				time.Now().UTC(),
-				h.Config.GetAccessTokenIssuer(ctx),
-			).
-			WithScopeField(
-				h.Config.GetJWTScopeField(ctx),
-			)
-
-		return h.Signer.Generate(ctx, claims.ToMapClaims(), jwtSession.GetJWTHeader())
 	}
 }

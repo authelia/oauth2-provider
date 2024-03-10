@@ -46,97 +46,98 @@ type HMACCoreStrategy struct {
 }
 
 // AccessTokenSignature implements oauth2.AccessTokenStrategy.
-func (h *HMACCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
-	return h.Enigma.Signature(tokenString)
+func (s *HMACCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
+	return s.Enigma.Signature(tokenString)
 }
 
 // GenerateAccessToken implements oauth2.AccessTokenStrategy.
-func (h *HMACCoreStrategy) GenerateAccessToken(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
-	if tokenString, signature, err = h.Enigma.Generate(ctx); err != nil {
+func (s *HMACCoreStrategy) GenerateAccessToken(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
+	if tokenString, signature, err = s.Enigma.Generate(ctx); err != nil {
 		return "", "", err
 	}
 
-	return h.prependPrefix(tokenString, tokenPrefixPartAccessToken), signature, nil
+	return s.prependPrefix(tokenString, tokenPrefixPartAccessToken), signature, nil
 }
 
 // ValidateAccessToken implements oauth2.AccessTokenStrategy.
-func (h *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+func (s *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.AccessToken)
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetAccessTokenLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAccessTokenLifespan(ctx))))
+
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access token expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(tokenString, tokenPrefixPartAccessToken))
+	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAccessToken))
 }
 
 // RefreshTokenSignature implements oauth2.RefreshTokenStrategy.
-func (h *HMACCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
-	return h.Enigma.Signature(tokenString)
+func (s *HMACCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
+	return s.Enigma.Signature(tokenString)
 }
 
 // GenerateRefreshToken implements oauth2.RefreshTokenStrategy.
-func (h *HMACCoreStrategy) GenerateRefreshToken(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
-	if tokenString, signature, err = h.Enigma.Generate(ctx); err != nil {
+func (s *HMACCoreStrategy) GenerateRefreshToken(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
+	if tokenString, signature, err = s.Enigma.Generate(ctx); err != nil {
 		return "", "", err
 	}
 
-	return h.prependPrefix(tokenString, tokenPrefixPartRefreshToken), signature, nil
+	return s.prependPrefix(tokenString, tokenPrefixPartRefreshToken), signature, nil
 }
 
 // ValidateRefreshToken implements oauth2.RefreshTokenStrategy.
-func (h *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+func (s *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.RefreshToken)
 
 	if exp.IsZero() {
-		return h.Enigma.Validate(ctx, h.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
+		return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
 	}
 
 	if exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Refresh token expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
+	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
 }
 
 // AuthorizeCodeSignature implements oauth2.AuthorizeCodeStrategy.
-func (h *HMACCoreStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
-	return h.Enigma.Signature(token)
+func (s *HMACCoreStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
+	return s.Enigma.Signature(token)
 }
 
 // GenerateAuthorizeCode implements oauth2.AuthorizeCodeStrategy.
-func (h *HMACCoreStrategy) GenerateAuthorizeCode(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
-	if tokenString, signature, err = h.Enigma.Generate(ctx); err != nil {
+func (s *HMACCoreStrategy) GenerateAuthorizeCode(ctx context.Context, _ oauth2.Requester) (tokenString string, signature string, err error) {
+	if tokenString, signature, err = s.Enigma.Generate(ctx); err != nil {
 		return "", "", err
 	}
 
-	return h.prependPrefix(tokenString, tokenPrefixPartAuthorizeCode), signature, nil
+	return s.prependPrefix(tokenString, tokenPrefixPartAuthorizeCode), signature, nil
 }
 
 // ValidateAuthorizeCode implements oauth2.AuthorizeCodeStrategy.
-func (h *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.AuthorizeCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetAuthorizeCodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetAuthorizeCodeLifespan(ctx))))
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize code expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(tokenString, tokenPrefixPartAuthorizeCode))
+	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAuthorizeCode))
 }
 
-func (h *HMACCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
-	return h.Enigma.GenerateHMACForString(ctx, tokenString)
+func (s *HMACCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
+	return s.Enigma.GenerateHMACForString(ctx, tokenString)
 }
 
 // GenerateRFC8628UserCode implements rfc8628.UserCodeStrategy.
-func (h *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenString string, signature string, err error) {
+func (s *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenString string, signature string, err error) {
 	seq, err := randx.RuneSequence(8, []rune("BCDFGHJKLMNPQRSTVWXZ"))
 	if err != nil {
 		return "", "", err
@@ -144,7 +145,7 @@ func (h *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenSt
 
 	userCode := string(seq)
 
-	signUserCode, err := h.RFC8628UserCodeSignature(ctx, userCode)
+	signUserCode, err := s.RFC8628UserCodeSignature(ctx, userCode)
 	if err != nil {
 		return "", "", err
 	}
@@ -153,11 +154,11 @@ func (h *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenSt
 }
 
 // ValidateRFC8628UserCode implements rfc8628.UserCodeStrategy.
-func (h *HMACCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
+func (s *HMACCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.UserCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx))))
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
@@ -168,57 +169,65 @@ func (h *HMACCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2
 }
 
 // RFC8628DeviceCodeSignature implements rfc8628.DeviceCodeStrategy.
-func (h *HMACCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
-	return h.Enigma.Signature(tokenString), nil
+func (s *HMACCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
+	return s.Enigma.Signature(tokenString), nil
 }
 
 // GenerateRFC8628DeviceCode implements rfc8628.DeviceCodeStrategy.
-func (h *HMACCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (tokenString string, signature string, err error) {
-	tokenString, sig, err := h.Enigma.Generate(ctx)
+func (s *HMACCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (tokenString string, signature string, err error) {
+	tokenString, sig, err := s.Enigma.Generate(ctx)
 	if err != nil {
 		return "", "", err
 	}
 
-	return h.getPrefix(tokenPrefixPartDeviceCode) + tokenString, sig, nil
+	return s.getPrefix(tokenPrefixPartDeviceCode) + tokenString, sig, nil
 }
 
 // ValidateRFC8628DeviceCode implements rfc8628.DeviceCodeStrategy.
-func (h *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
+func (s *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.DeviceCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx))))
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device code expired at '%s'.", exp))
 	}
 
-	return h.Enigma.Validate(ctx, h.trimPrefix(code, tokenPrefixPartDeviceCode))
+	return s.Enigma.Validate(ctx, s.trimPrefix(code, tokenPrefixPartDeviceCode))
 }
 
-func (h *HMACCoreStrategy) trimPrefix(tokenString, part string) string {
-	if !h.usePrefix {
+func (s *HMACCoreStrategy) hasPrefix(tokenString, part string) (has bool) {
+	if !s.usePrefix {
+		return false
+	}
+
+	return strings.HasPrefix(tokenString, s.getPrefix(part))
+}
+
+func (s *HMACCoreStrategy) trimPrefix(tokenString, part string) string {
+	if !s.usePrefix {
 		return tokenString
 	}
 
-	return strings.TrimPrefix(tokenString, h.getPrefix(part))
+	return strings.TrimPrefix(tokenString, s.getPrefix(part))
 }
 
-func (h *HMACCoreStrategy) prependPrefix(tokenString, part string) string {
-	if !h.usePrefix {
+func (s *HMACCoreStrategy) prependPrefix(tokenString, part string) string {
+	if !s.usePrefix {
 		return tokenString
 	}
 
-	return h.getPrefix(part) + tokenString
+	return s.getPrefix(part) + tokenString
 }
 
-func (h *HMACCoreStrategy) getPrefix(part string) string {
-	if !h.usePrefix {
+func (s *HMACCoreStrategy) getPrefix(part string) string {
+	if !s.usePrefix {
 		return ""
 	}
 
-	return fmt.Sprintf(h.prefix, part)
+	return fmt.Sprintf(s.prefix, part)
 }
 
 const (
@@ -233,6 +242,7 @@ type CoreStrategyConfigurator interface {
 
 	oauth2.AccessTokenIssuerProvider
 	oauth2.JWTScopeFieldProvider
+	oauth2.JWTProfileAccessTokensProvider
 }
 
 type HMACCoreStrategyConfigurator interface {

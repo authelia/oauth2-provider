@@ -57,8 +57,13 @@ following list of differences:
   - [x] Access Token iat and nbf in JWT Profile always original claims
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
-  - [x] Customizable Token Prefix
-        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
+  - CoreStrategy:
+    - [x] Customizable Token Prefix
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>
+    - [x] Automatic NewCoreStrategy which provides either:
+      - JWT Profile Core Strategy (if a jwt.Signer is provided)
+      - HMAC-based Core Strategy
+    - [x] JWT Profile Per Client
   - [ ] UserInfo support
   - [x] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
         support

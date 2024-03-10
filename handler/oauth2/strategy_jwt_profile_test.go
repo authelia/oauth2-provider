@@ -23,15 +23,6 @@ import (
 
 var rsaKey = gen.MustRSAKey()
 
-var j = &JWTProfileCoreStrategy{
-	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (any, error) {
-			return rsaKey, nil
-		},
-	},
-	Config: &oauth2.Config{},
-}
-
 // returns a valid JWT type. The JWTClaims.ExpiresAt time is intentionally
 // left empty to ensure it is pulled from the session's ExpiresAt map for
 // the given oauth2.TokenType.
@@ -185,10 +176,21 @@ func TestAccessToken(t *testing.T) {
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/%d", s, k), func(t *testing.T) {
-				j.Config = &oauth2.Config{
-					JWTScopeClaimKey: scopeField,
+				signer := &jwt.DefaultSigner{
+					GetPrivateKey: func(_ context.Context) (any, error) {
+						return rsaKey, nil
+					},
 				}
-				token, signature, err := j.GenerateAccessToken(context.TODO(), c.r)
+
+				config := &oauth2.Config{
+					EnforceJWTProfileAccessTokens: true,
+					GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+					JWTScopeClaimKey:              scopeField,
+				}
+
+				strategy := NewCoreStrategy(config, "authelia_%s_", signer)
+
+				token, signature, err := strategy.GenerateAccessToken(context.TODO(), c.r)
 				assert.NoError(t, err)
 
 				parts := strings.Split(token, ".")
@@ -234,11 +236,9 @@ func TestAccessToken(t *testing.T) {
 				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
 				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
 
-				validate := j.signature(token)
-				err = j.ValidateAccessToken(context.Background(), c.r, token)
+				err = strategy.ValidateAccessToken(context.Background(), c.r, token)
 				if c.pass {
 					assert.NoError(t, err)
-					assert.Equal(t, signature, validate)
 				} else {
 					assert.Error(t, err)
 				}
@@ -249,4 +249,22 @@ func TestAccessToken(t *testing.T) {
 
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
+}
+
+func TestSplitN(t *testing.T) {
+	value1 := "a.b.c"
+
+	split1 := strings.SplitN(value1, ".", 3)
+
+	value2 := "a.b"
+
+	split2 := strings.SplitN(value2, ".", 3)
+
+	value3 := "a.b.c.d"
+
+	split3 := strings.SplitN(value3, ".", 3)
+
+	assert.Len(t, split1, 3)
+	assert.Len(t, split2, 2)
+	assert.Len(t, split3, 3)
 }

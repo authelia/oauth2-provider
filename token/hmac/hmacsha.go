@@ -150,7 +150,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 	var signingKey [32]byte
 	copy(signingKey[:], secret)
 
-	split := strings.Split(token, ".")
+	split := strings.SplitN(token, ".", 3)
 	if len(split) != 2 {
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat)
 	}
@@ -181,7 +181,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 }
 
 func (c *HMACStrategy) Signature(token string) string {
-	split := strings.Split(token, ".")
+	split := strings.SplitN(token, ".", 3)
 
 	if len(split) != 2 {
 		return ""

@@ -129,6 +129,7 @@ type Configurator interface {
 	JWTSecuredAuthorizeResponseModeIssuerProvider
 	JWTSecuredAuthorizeResponseModeSignerProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider
+	JWTProfileAccessTokensProvider
 	AccessTokenIssuerProvider
 	DisableRefreshTokenValidationProvider
 	RefreshTokenScopesProvider

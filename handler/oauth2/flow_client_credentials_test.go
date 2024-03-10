@@ -14,15 +14,15 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockClientCredentialsGrantStorage(ctrl)
-	chgen := internal.NewMockAccessTokenStrategy(ctrl)
-	areq := internal.NewMockAccessRequester(ctrl)
+	store := mock.NewMockClientCredentialsGrantStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+	areq := mock.NewMockAccessRequester(ctrl)
 	defer ctrl.Finish()
 
 	h := ClientCredentialsGrantHandler{
@@ -104,8 +104,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 
 func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockClientCredentialsGrantStorage(ctrl)
-	chgen := internal.NewMockAccessTokenStrategy(ctrl)
+	store := mock.NewMockClientCredentialsGrantStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
 	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	aresp := oauth2.NewAccessResponse()
 	defer ctrl.Finish()

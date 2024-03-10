@@ -15,15 +15,15 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestIntrospectToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockCoreStorage(ctrl)
-	chgen := internal.NewMockCoreStrategy(ctrl)
+	store := mock.NewMockCoreStorage(ctrl)
+	chgen := mock.NewMockCoreStrategy(ctrl)
 	areq := oauth2.NewAccessRequest(nil)
 
 	defer ctrl.Finish()

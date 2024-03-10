@@ -13,8 +13,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 // Test for
@@ -47,13 +47,13 @@ func TestWriteAuthorizeError(t *testing.T) {
 		err                  *RFC6749Error
 		debug                bool
 		doNotUseLegacyFormat bool
-		setup                func(t *testing.T, provider *Fosite, rw *MockResponseWriter, requester *MockAuthorizeRequester, header http.Header)
+		setup                func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, header http.Header)
 		checkHeader          func(*testing.T, http.Header)
 	}{
 		{
 			name: "ShouldHandleInvalidGrantResponseModeDefault",
 			err:  ErrInvalidGrant,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(false)
 				req.EXPECT().GetResponseMode().Return(ResponseModeDefault)
 				rw.EXPECT().Header().Times(3).Return(header)
@@ -70,7 +70,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeQueryWithDebug",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -92,7 +92,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			debug:                true,
 			doNotUseLegacyFormat: true,
 			err:                  ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -113,7 +113,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:                 "ShouldHandleInvalidRequestResponseModeQueryWithNonLegacy",
 			doNotUseLegacyFormat: true,
 			err:                  ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -133,7 +133,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeDefault",
 			err:  ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -153,7 +153,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeQuery",
 			err:  ErrInvalidRequest,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -173,7 +173,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleUnsupportedGrantTypeResponseModeFragment",
 			err:  ErrUnsupportedGrantType,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -193,7 +193,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeFragment",
 			err:  ErrInvalidRequest,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -213,7 +213,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeFragmentAltURL",
 			err:  ErrInvalidRequest,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -233,7 +233,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeFragmentWithDebugOmitted",
 			err:  ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -254,7 +254,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeFragmentWithDebug",
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
 			debug: true,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -276,7 +276,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			err:                  ErrInvalidRequest.WithDebug("with-debug"),
 			debug:                true,
 			doNotUseLegacyFormat: true,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -299,7 +299,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:                 "ShouldHandleInvalidRequestResponseModeFragmentWithoutLegacy",
 			err:                  ErrInvalidRequest.WithDebug("with-debug"),
 			doNotUseLegacyFormat: true,
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[0]))
 				req.EXPECT().GetState().Return("foostate")
@@ -322,7 +322,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 		{
 			name: "ShouldHandleInvalidRequestResponseModeFragmentWithDebugOmittedAltURL",
 			err:  ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -343,7 +343,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeFragmentWithDebugAltURL",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -364,7 +364,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeFragmentWithDebugAltURLImplicitIDToken",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -385,7 +385,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeFragmentWithDebugAltURLImplicitToken",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -406,7 +406,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModeFragmentWithDebugAltURLImplicitTokenWithIdentifier",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				provider.Config = &Config{
 					SendDebugMessagesToClients:              false,
 					UseLegacyErrorFormat:                    false,
@@ -433,7 +433,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			name:  "ShouldHandleInvalidRequestResponseModePostWithDebugAltURLImplicitToken",
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
-			setup: func(t *testing.T, provider *Fosite, rw *MockResponseWriter, req *MockAuthorizeRequester, header http.Header) {
+			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
 				req.EXPECT().GetState().Return("foostate")
@@ -461,8 +461,8 @@ func TestWriteAuthorizeError(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			rw := NewMockResponseWriter(ctrl)
-			req := NewMockAuthorizeRequester(ctrl)
+			rw := mock.NewMockResponseWriter(ctrl)
+			req := mock.NewMockAuthorizeRequester(ctrl)
 
 			header := http.Header{}
 

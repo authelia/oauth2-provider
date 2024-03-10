@@ -20,15 +20,15 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	validator := internal.NewMockTokenIntrospector(ctrl)
+	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
@@ -93,7 +93,7 @@ func TestIntrospectionResponse(t *testing.T) {
 
 func TestNewIntrospectionRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	validator := internal.NewMockTokenIntrospector(ctrl)
+	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))

@@ -171,7 +171,7 @@ func newJWTBearerAppClient(ts *httptest.Server) *clients.JWTBearer {
 	return clients.NewJWTBearer(ts.URL + tokenRelativePath)
 }
 
-var hmacStrategy = &hoauth2.HMACSHAStrategy{
+var hmacStrategy = &hoauth2.HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{
 		Config: &oauth2.Config{
 			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows"),

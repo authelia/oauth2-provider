@@ -16,12 +16,12 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/hmac"
 )
 
-var o2hmacshaStrategy = hoauth2.HMACSHAStrategy{
+var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
@@ -29,19 +29,11 @@ var o2hmacshaStrategy = hoauth2.HMACSHAStrategy{
 	},
 }
 
-var TestRFC8628HMACSHAStrategy = RFC8628HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &oauth2.Config{
-		RFC8628CodeLifespan: time.Hour * 24,
-	},
-}
-
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 	for k, strategy := range map[string]struct {
 		hoauth2.CoreStrategy
-		RFC8628CodeStrategy
 	}{
-		"hmac": {&o2hmacshaStrategy, &TestRFC8628HMACSHAStrategy},
+		"hmac": {&o2hmacshaStrategy},
 	} {
 		t.Run("strategy="+k, func(t *testing.T) {
 			store := storage.NewMemoryStore()
@@ -75,7 +67,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					description: "should fail because device code not found",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, _, err := strategy.GenerateDeviceCode(context.TODO())
+						code, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
 						areq.Form.Set("device_code", code)
 					},
@@ -97,9 +89,9 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						dar := oauth2.NewDeviceAuthorizeRequest()
 						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
@@ -137,9 +129,9 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						dar := oauth2.NewDeviceAuthorizeRequest()
 						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
@@ -177,9 +169,9 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						dar := oauth2.NewDeviceAuthorizeRequest()
 						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
@@ -215,9 +207,9 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						dar := oauth2.NewDeviceAuthorizeRequest()
 						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
@@ -283,9 +275,8 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 	for k, strategy := range map[string]struct {
 		hoauth2.CoreStrategy
-		RFC8628CodeStrategy
 	}{
-		"hmac": {&o2hmacshaStrategy, &TestRFC8628HMACSHAStrategy},
+		"hmac": {&o2hmacshaStrategy},
 	} {
 		t.Run("strategy="+k, func(t *testing.T) {
 			store := storage.NewMemoryStore()
@@ -344,7 +335,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because device code could not be retrieved",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						deviceCode, _, err := strategy.GenerateDeviceCode(context.TODO())
+						deviceCode, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
 						areq.Form = url.Values{"device_code": {deviceCode}}
 					},
@@ -381,9 +372,9 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because client mismatch",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						authreq.SetDeviceCodeSignature(dSig)
 						authreq.SetUserCodeSignature(uSig)
@@ -416,9 +407,9 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					},
 					description: "should pass",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						authreq.SetDeviceCodeSignature(dSig)
 						authreq.SetUserCodeSignature(uSig)
@@ -453,9 +444,9 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 							time.Now().Add(-time.Hour).UTC().Round(time.Second))
 						authreq.GetSession().SetExpiresAt(oauth2.DeviceCode,
 							time.Now().Add(-time.Hour).UTC().Round(time.Second))
-						dCode, dSig, err := strategy.GenerateDeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateUserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
 						require.NoError(t, err)
 						authreq.SetDeviceCodeSignature(dSig)
 						authreq.SetUserCodeSignature(uSig)
@@ -492,11 +483,11 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
-	var mockTransactional *internal.MockTransactional
-	var mockCoreStore *internal.MockCoreStorage
-	var mockDeviceStore *internal.MockRFC8628CodeStorage
+	var mockTransactional *mock.MockTransactional
+	var mockCoreStore *mock.MockCoreStorage
+	var mockDeviceStore *mock.MockRFC8628Storage
 	strategy := o2hmacshaStrategy
-	deviceStrategy := TestRFC8628HMACSHAStrategy
+	deviceStrategy := o2hmacshaStrategy
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
 		Request: oauth2.Request{
@@ -519,7 +510,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 		},
 		Status: oauth2.DeviceAuthorizeStatusApproved,
 	}
-	token, _, err := deviceStrategy.GenerateDeviceCode(context.TODO())
+	token, _, err := deviceStrategy.GenerateRFC8628DeviceCode(context.TODO())
 	require.NoError(t, err)
 	request.Form = url.Values{"device_code": {token}}
 	response := oauth2.NewAccessResponse()
@@ -533,7 +524,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 
 	type deviceTransactionalStore struct {
 		storage.Transactional
-		RFC8628Storage
+		Storage
 	}
 
 	for _, testCase := range []struct {
@@ -760,9 +751,9 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockTransactional = internal.NewMockTransactional(ctrl)
-			mockCoreStore = internal.NewMockCoreStorage(ctrl)
-			mockDeviceStore = internal.NewMockRFC8628CodeStorage(ctrl)
+			mockTransactional = mock.NewMockTransactional(ctrl)
+			mockCoreStore = mock.NewMockCoreStorage(ctrl)
+			mockDeviceStore = mock.NewMockRFC8628Storage(ctrl)
 			testCase.setup()
 			handler := hoauth2.GenericCodeTokenEndpointHandler{
 				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{

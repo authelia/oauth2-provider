@@ -40,7 +40,7 @@ func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
 	var config oauth2.Config
 	h := &Handler{
 		Storage:               storage.NewMemoryStore(),
-		AuthorizeCodeStrategy: new(hoauth2.HMACSHAStrategy),
+		AuthorizeCodeStrategy: new(hoauth2.HMACCoreStrategy),
 		Config:                &config,
 	}
 	w := oauth2.NewAuthorizeResponse()

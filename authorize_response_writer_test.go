@@ -13,13 +13,13 @@ import (
 
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestNewAuthorizeResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	handlers := []*MockAuthorizeEndpointHandler{NewMockAuthorizeEndpointHandler(ctrl)}
-	ar := NewMockAuthorizeRequester(ctrl)
+	handlers := []*mock.MockAuthorizeEndpointHandler{mock.NewMockAuthorizeEndpointHandler(ctrl)}
+	ar := mock.NewMockAuthorizeRequester(ctrl)
 	defer ctrl.Finish()
 
 	ctx := context.Background()

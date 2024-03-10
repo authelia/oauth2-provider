@@ -16,13 +16,13 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+	store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
 	defer ctrl.Finish()
 
 	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
@@ -126,9 +126,9 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 
 func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
-	chgen := internal.NewMockAccessTokenStrategy(ctrl)
-	rtstr := internal.NewMockRefreshTokenStrategy(ctrl)
+	store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+	rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
 	mockAT := "accesstoken.foo.bar"
 	mockRT := "refreshtoken.bar.foo"
 	defer ctrl.Finish()

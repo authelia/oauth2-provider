@@ -13,19 +13,19 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestWriteAuthorizeResponse(t *testing.T) {
 	testCases := []struct {
 		name   string
-		setup  func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header)
-		expect func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header)
+		setup  func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header)
+		expect func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header)
 	}{
 		{
 			name: "ShouldWriteResponseModeDefault",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeDefault).Times(2)
@@ -35,7 +35,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					consts.HeaderLocation:     []string{"https://foobar.com/?foo=bar"},
 					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
@@ -45,7 +45,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFragment",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFragment).Times(2)
@@ -55,7 +55,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					consts.HeaderLocation:     []string{"https://foobar.com/?foo=bar#bar=baz"},
 					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
@@ -65,7 +65,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeQuery",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeQuery).Times(2)
@@ -75,7 +75,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				expectedUrl, _ := url.Parse("https://foobar.com/?foo=bar&bar=baz")
 				actualUrl, err := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Nil(t, err)
@@ -86,7 +86,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFragmentWithCustomHeaders",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFragment).Times(2)
@@ -96,7 +96,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					"X-Bar":                   {"baz"},
 					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#bar=b%2Baz+ab"},
@@ -107,7 +107,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeQueryWithCustomHeaders",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeQuery).Times(2)
@@ -117,7 +117,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				expectedUrl, err := url.Parse("https://foobar.com/?foo=bar&bar=b%2Baz&scope=a+b")
 				assert.Nil(t, err)
 				actualUrl, err := url.Parse(header.Get(consts.HeaderLocation))
@@ -130,7 +130,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFragmentWithCustomHeadersAndSpecialChars",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFragment).Times(2)
@@ -140,7 +140,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					"X-Bar":                   {"baz"},
 					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#scope=api%3A%2A"},
@@ -151,7 +151,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFragmentWithCustomParameters",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar#bar=baz")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFragment).Times(2)
@@ -161,7 +161,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#qux=quux"},
 					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
@@ -171,7 +171,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFragmentWithEncodedState",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFragment).Times(2)
@@ -181,7 +181,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).Times(2)
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, http.Header{
 					consts.HeaderLocation:     {"https://foobar.com/?foo=bar#state=%7B%22a%22%3A%22b%3Dc%26d%3De%22%7D"},
 					consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
@@ -191,7 +191,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 		},
 		{
 			name: "ShouldWriteResponseModeFormPostWithValues",
-			setup: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				redir, _ := url.Parse("https://foobar.com/?foo=bar")
 				requester.EXPECT().GetRedirectURI().Return(redir)
 				requester.EXPECT().GetResponseMode().Return(ResponseModeFormPost).Times(2)
@@ -201,7 +201,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				rw.EXPECT().Header().Return(header).AnyTimes()
 				rw.EXPECT().Write(gomock.Any()).AnyTimes()
 			},
-			expect: func(t *testing.T, rw *MockResponseWriter, requester *MockAuthorizeRequester, responder *MockAuthorizeResponder, header http.Header) {
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
 				assert.Equal(t, consts.ContentTypeTextHTML, header.Get(consts.HeaderContentType))
 			},
 		},
@@ -212,9 +212,9 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			provider := &Fosite{Config: new(Config)}
 			ctrl := gomock.NewController(t)
 
-			rw := NewMockResponseWriter(ctrl)
-			requester := NewMockAuthorizeRequester(ctrl)
-			responder := NewMockAuthorizeResponder(ctrl)
+			rw := mock.NewMockResponseWriter(ctrl)
+			requester := mock.NewMockAuthorizeRequester(ctrl)
+			responder := mock.NewMockAuthorizeResponder(ctrl)
 
 			defer ctrl.Finish()
 

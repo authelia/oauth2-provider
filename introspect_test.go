@@ -15,9 +15,9 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestAccessTokenFromRequestNoToken(t *testing.T) {
@@ -45,7 +45,7 @@ func TestAccessTokenFromRequestQuery(t *testing.T) {
 
 func TestIntrospect(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	validator := internal.NewMockTokenIntrospector(ctrl)
+	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
 	config := new(Config)

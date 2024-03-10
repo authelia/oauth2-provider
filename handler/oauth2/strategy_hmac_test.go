@@ -16,13 +16,14 @@ import (
 	"authelia.com/provider/oauth2/token/hmac"
 )
 
-var hmacshaStrategy = HMACSHAStrategy{
+var hmacshaStrategy = HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
-	prefix: "authelia_%s_",
+	usePrefix: true,
+	prefix:    "authelia_%s_",
 }
 
 var hmacExpiredCase = oauth2.Request{
@@ -88,18 +89,12 @@ func TestNewHMACSHAStrategy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := NewHMACSHAStrategy(nil, tc.have)
+			actual := NewHMACCoreStrategy(nil, tc.have)
 
-			if len(tc.expected) == 0 {
-				assert.NoError(t, err)
-				require.NotNil(t, actual)
-				assert.Equal(t, tc.expectedAT, actual.getPrefix(tokenPartAccessToken))
-				assert.Equal(t, tc.expectedRT, actual.getPrefix(tokenPartRefreshToken))
-				assert.Equal(t, tc.expectedAC, actual.getPrefix(tokenPartAuthorizeCode))
-			} else {
-				assert.Nil(t, actual)
-				assert.EqualError(t, err, tc.expected)
-			}
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.expectedAT, actual.getPrefix(tokenPrefixPartAccessToken))
+			assert.Equal(t, tc.expectedRT, actual.getPrefix(tokenPrefixPartRefreshToken))
+			assert.Equal(t, tc.expectedAC, actual.getPrefix(tokenPrefixPartAuthorizeCode))
 		})
 	}
 }

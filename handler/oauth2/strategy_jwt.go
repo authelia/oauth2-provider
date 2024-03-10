@@ -18,23 +18,14 @@ import (
 // DefaultJWTStrategy is a JWT RS256 strategy.
 type DefaultJWTStrategy struct {
 	jwt.Signer
-	HMACSHAStrategy *HMACSHAStrategy
+	HMACSHAStrategy *HMACCoreStrategy
 	Config          interface {
 		oauth2.AccessTokenIssuerProvider
 		oauth2.JWTScopeFieldProvider
 	}
 }
 
-func (h DefaultJWTStrategy) signature(token string) string {
-	split := strings.Split(token, ".")
-	if len(split) != 3 {
-		return ""
-	}
-
-	return split[2]
-}
-
-func (h DefaultJWTStrategy) AccessTokenSignature(ctx context.Context, token string) string {
+func (h *DefaultJWTStrategy) AccessTokenSignature(ctx context.Context, token string) string {
 	return h.signature(token)
 }
 
@@ -47,11 +38,11 @@ func (h *DefaultJWTStrategy) ValidateAccessToken(ctx context.Context, _ oauth2.R
 	return err
 }
 
-func (h DefaultJWTStrategy) RefreshTokenSignature(ctx context.Context, token string) string {
+func (h *DefaultJWTStrategy) RefreshTokenSignature(ctx context.Context, token string) string {
 	return h.HMACSHAStrategy.RefreshTokenSignature(ctx, token)
 }
 
-func (h DefaultJWTStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
+func (h *DefaultJWTStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
 	return h.HMACSHAStrategy.AuthorizeCodeSignature(ctx, token)
 }
 
@@ -69,6 +60,39 @@ func (h *DefaultJWTStrategy) GenerateAuthorizeCode(ctx context.Context, req oaut
 
 func (h *DefaultJWTStrategy) ValidateAuthorizeCode(ctx context.Context, req oauth2.Requester, token string) error {
 	return h.HMACSHAStrategy.ValidateAuthorizeCode(ctx, req, token)
+}
+
+func (h *DefaultJWTStrategy) RFC8628UserCodeSignature(ctx context.Context, token string) (signature string, err error) {
+	return h.HMACSHAStrategy.RFC8628UserCodeSignature(ctx, token)
+}
+
+func (h *DefaultJWTStrategy) GenerateRFC8628UserCode(ctx context.Context) (token string, signature string, err error) {
+	return h.HMACSHAStrategy.GenerateRFC8628UserCode(ctx)
+}
+
+func (h *DefaultJWTStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
+	return h.HMACSHAStrategy.ValidateRFC8628UserCode(ctx, r, code)
+}
+
+func (h *DefaultJWTStrategy) RFC8628DeviceCodeSignature(ctx context.Context, token string) (signature string, err error) {
+	return h.HMACSHAStrategy.RFC8628DeviceCodeSignature(ctx, token)
+}
+
+func (h *DefaultJWTStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (token string, signature string, err error) {
+	return h.HMACSHAStrategy.GenerateRFC8628DeviceCode(ctx)
+}
+
+func (h *DefaultJWTStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
+	return h.HMACSHAStrategy.ValidateRFC8628DeviceCode(ctx, r, code)
+}
+
+func (h *DefaultJWTStrategy) signature(token string) string {
+	split := strings.Split(token, ".")
+	if len(split) != 3 {
+		return ""
+	}
+
+	return split[2]
 }
 
 func validate(ctx context.Context, jwtStrategy jwt.Signer, token string) (t *jwt.Token, err error) {

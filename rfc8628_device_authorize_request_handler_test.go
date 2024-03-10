@@ -13,11 +13,11 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestNewDeviceAuthorizeRequest(t *testing.T) {
-	var store *MockStorage
+	var store *mock.MockStorage
 	for k, c := range []struct {
 		desc          string
 		conf          *Fosite
@@ -114,7 +114,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store = NewMockStorage(ctrl)
+			store = mock.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 
 			c.mock()

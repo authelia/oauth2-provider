@@ -17,9 +17,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestWriteIntrospectionError(t *testing.T) {
@@ -27,7 +27,7 @@ func TestWriteIntrospectionError(t *testing.T) {
 	c := gomock.NewController(t)
 	defer c.Finish()
 
-	rw := internal.NewMockResponseWriter(c)
+	rw := mock.NewMockResponseWriter(c)
 	rw.EXPECT().WriteHeader(http.StatusUnauthorized)
 	rw.EXPECT().Header().AnyTimes().Return(http.Header{})
 	rw.EXPECT().Write(gomock.Any())
@@ -51,7 +51,7 @@ func TestWriteIntrospectionResponse(t *testing.T) {
 	c := gomock.NewController(t)
 	defer c.Finish()
 
-	rw := internal.NewMockResponseWriter(c)
+	rw := mock.NewMockResponseWriter(c)
 	rw.EXPECT().Write(gomock.Any()).AnyTimes()
 	provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
 		AccessRequester: NewAccessRequest(nil),

@@ -9,13 +9,13 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	handlers := []*internal.MockRFC8628UserAuthorizeEndpointHandler{internal.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)}
-	dar := internal.NewMockDeviceAuthorizeRequester(ctrl)
+	handlers := []*mock.MockRFC8628UserAuthorizeEndpointHandler{mock.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)}
+	dar := mock.NewMockDeviceAuthorizeRequester(ctrl)
 	defer ctrl.Finish()
 
 	ctx := context.Background()

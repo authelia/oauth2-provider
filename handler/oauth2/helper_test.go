@@ -14,7 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestGetExpiresIn(t *testing.T) {
@@ -31,8 +31,8 @@ func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	areq := &oauth2.AccessRequest{}
 	aresp := &oauth2.AccessResponse{Extra: map[string]any{}}
-	accessStrat := internal.NewMockAccessTokenStrategy(ctrl)
-	accessStore := internal.NewMockAccessTokenStorage(ctrl)
+	accessStrat := mock.NewMockAccessTokenStrategy(ctrl)
+	accessStore := mock.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()
 
 	helper := HandleHelper{

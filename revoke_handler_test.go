@@ -16,14 +16,14 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestNewRevocationRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockStorage(ctrl)
-	handler := internal.NewMockRevocationHandler(ctrl)
+	store := mock.NewMockStorage(ctrl)
+	handler := mock.NewMockRevocationHandler(ctrl)
 	defer ctrl.Finish()
 
 	client := &DefaultClient{}
@@ -206,7 +206,7 @@ func TestNewRevocationRequest(t *testing.T) {
 
 func TestWriteRevocationResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := internal.NewMockStorage(ctrl)
+	store := mock.NewMockStorage(ctrl)
 	defer ctrl.Finish()
 
 	config := &Config{}

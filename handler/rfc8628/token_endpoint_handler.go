@@ -13,8 +13,8 @@ import (
 // DeviceCodeTokenHandler is a response handler for the Device Code introduced in the Device Authorize Grant
 // as defined in https://www.rfc-editor.org/rfc/rfc8628
 type DeviceCodeTokenHandler struct {
-	Storage  RFC8628Storage
-	Strategy RFC8628CodeStrategy
+	Storage  Storage
+	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
@@ -33,12 +33,12 @@ func (c *DeviceCodeTokenHandler) ValidateGrantTypes(_ context.Context, requester
 }
 
 func (c *DeviceCodeTokenHandler) ValidateCodeAndSession(ctx context.Context, _ oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) error {
-	return c.Strategy.ValidateDeviceCode(ctx, authorizeRequest, code)
+	return c.Strategy.ValidateRFC8628DeviceCode(ctx, authorizeRequest, code)
 }
 
 func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requester oauth2.AccessRequester) (string, string, oauth2.Requester, error) {
 	code := requester.GetRequestForm().Get(consts.FormParameterDeviceCode)
-	signature, err := c.Strategy.DeviceCodeSignature(ctx, code)
+	signature, err := c.Strategy.RFC8628DeviceCodeSignature(ctx, code)
 	if err != nil {
 		return "", "", nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -132,7 +132,7 @@ func (c *DeviceCodeTokenHandler) CanHandleTokenEndpointRequest(_ context.Context
 }
 
 func (c *DeviceCodeTokenHandler) DeviceCodeSignature(ctx context.Context, code string) (string, error) {
-	return c.Strategy.DeviceCodeSignature(ctx, code)
+	return c.Strategy.RFC8628DeviceCodeSignature(ctx, code)
 }
 
 var (

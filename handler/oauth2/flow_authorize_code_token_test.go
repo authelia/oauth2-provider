@@ -16,9 +16,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
@@ -441,8 +441,11 @@ func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
-	var mockTransactional *internal.MockTransactional
-	var mockCoreStore *internal.MockCoreStorage
+	var (
+		mockTransactional *mock.MockTransactional
+		mockCoreStore     *mock.MockCoreStorage
+	)
+
 	strategy := hmacshaStrategy
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"authorization_code"},
@@ -646,8 +649,8 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockTransactional = internal.NewMockTransactional(ctrl)
-			mockCoreStore = internal.NewMockCoreStorage(ctrl)
+			mockTransactional = mock.NewMockTransactional(ctrl)
+			mockCoreStore = mock.NewMockCoreStorage(ctrl)
 			testCase.setup()
 
 			handler := AuthorizeExplicitGrantHandler{

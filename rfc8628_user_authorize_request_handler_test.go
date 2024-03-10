@@ -11,13 +11,13 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	handlers := []*internal.MockRFC8628UserAuthorizeEndpointHandler{internal.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)}
+	handlers := []*mock.MockRFC8628UserAuthorizeEndpointHandler{mock.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)}
 	req := &http.Request{
 		Form: url.Values{
 			consts.FormParameterUserCode: {"A1B2C3D4"},

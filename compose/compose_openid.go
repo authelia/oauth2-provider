@@ -86,8 +86,8 @@ func OpenIDConnectDeviceAuthorizeFactory(config oauth2.Configurator, storage any
 		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
 		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
 		CodeTokenEndpointHandler: &rfc8628.DeviceCodeTokenHandler{
-			Strategy: strategy.(rfc8628.RFC8628CodeStrategy),
-			Storage:  storage.(rfc8628.RFC8628Storage),
+			Strategy: strategy.(rfc8628.CodeStrategy),
+			Storage:  storage.(rfc8628.Storage),
 			Config:   config,
 		},
 		Config: config,

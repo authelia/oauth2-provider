@@ -6,19 +6,19 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-type RFC8628CodeStrategy interface {
+type CodeStrategy interface {
 	DeviceCodeStrategy
 	UserCodeStrategy
 }
 
 type DeviceCodeStrategy interface {
-	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
-	GenerateDeviceCode(ctx context.Context) (code string, signature string, err error)
-	ValidateDeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
+	RFC8628DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
+	GenerateRFC8628DeviceCode(ctx context.Context) (code string, signature string, err error)
+	ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }
 
 type UserCodeStrategy interface {
-	UserCodeSignature(ctx context.Context, code string) (signature string, err error)
-	GenerateUserCode(ctx context.Context) (code string, signature string, err error)
-	ValidateUserCode(ctx context.Context, r oauth2.Requester, code string) (err error)
+	RFC8628UserCodeSignature(ctx context.Context, code string) (signature string, err error)
+	GenerateRFC8628UserCode(ctx context.Context) (code string, signature string, err error)
+	ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }

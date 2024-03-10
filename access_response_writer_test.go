@@ -13,12 +13,12 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestNewAccessResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	handler := internal.NewMockTokenEndpointHandler(ctrl)
+	handler := mock.NewMockTokenEndpointHandler(ctrl)
 	defer ctrl.Finish()
 
 	config := &Config{}

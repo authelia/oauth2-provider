@@ -61,7 +61,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 	refreshCheckClient := &oauth2.DefaultClient{
 		ID:            "refresh-client",
-		Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
+		ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`), // foobar
 		RedirectURIs:  []string{ts.URL + "/callback"},
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},

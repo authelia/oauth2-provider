@@ -17,7 +17,7 @@ import (
 type Request struct {
 	ID                string       `json:"id" gorethink:"id"`
 	RequestedAt       time.Time    `json:"requestedAt" gorethink:"requestedAt"`
-	Client            Client       `json:"client" gorethink:"client"`
+	Client            Client       `json:"-" gorethink:"client"`
 	RequestedScope    Arguments    `json:"scopes" gorethink:"scopes"`
 	GrantedScope      Arguments    `json:"grantedScopes" gorethink:"grantedScopes"`
 	Form              url.Values   `json:"form" gorethink:"form"`

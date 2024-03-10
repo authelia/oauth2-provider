@@ -25,5 +25,5 @@ func TestDefaultClientWithCustomTokenLifespans(t *testing.T) {
 	assert.NotEqual(t, clc.GetTokenLifespans(), nil)
 
 	require.Equal(t, customLifespan, GetEffectiveLifespan(clc, GrantTypeImplicit, IDToken, time.Minute*42))
-	var _ ClientWithCustomTokenLifespans = clc
+	var _ CustomTokenLifespansClient = clc
 }

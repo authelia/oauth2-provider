@@ -24,6 +24,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 // Define the suite, and absorb the built-in basic suite
@@ -34,9 +35,9 @@ type AuthorizeJWTGrantRequestHandlerTestSuite struct {
 
 	privateKey              *rsa.PrivateKey
 	mockCtrl                *gomock.Controller
-	mockStore               *internal.MockRFC7523KeyStorage
-	mockAccessTokenStrategy *internal.MockAccessTokenStrategy
-	mockAccessTokenStore    *internal.MockAccessTokenStorage
+	mockStore               *mock.MockRFC7523KeyStorage
+	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
+	mockAccessTokenStore    *mock.MockAccessTokenStorage
 	accessRequest           *oauth2.AccessRequest
 	handler                 *Handler
 }
@@ -62,9 +63,9 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TearDownTest() {
 // Setup before each test.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 	s.mockCtrl = gomock.NewController(s.T())
-	s.mockStore = internal.NewMockRFC7523KeyStorage(s.mockCtrl)
-	s.mockAccessTokenStrategy = internal.NewMockAccessTokenStrategy(s.mockCtrl)
-	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
+	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
+	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
+	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
 	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
 	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
@@ -809,9 +810,9 @@ type AuthorizeJWTGrantPopulateTokenEndpointTestSuite struct {
 
 	privateKey              *rsa.PrivateKey
 	mockCtrl                *gomock.Controller
-	mockStore               *internal.MockRFC7523KeyStorage
-	mockAccessTokenStrategy *internal.MockAccessTokenStrategy
-	mockAccessTokenStore    *internal.MockAccessTokenStorage
+	mockStore               *mock.MockRFC7523KeyStorage
+	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
+	mockAccessTokenStore    *mock.MockAccessTokenStorage
 	accessRequest           *oauth2.AccessRequest
 	accessResponse          *oauth2.AccessResponse
 	handler                 *Handler
@@ -838,9 +839,9 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TearDownTest() {
 // Setup before each test.
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 	s.mockCtrl = gomock.NewController(s.T())
-	s.mockStore = internal.NewMockRFC7523KeyStorage(s.mockCtrl)
-	s.mockAccessTokenStrategy = internal.NewMockAccessTokenStrategy(s.mockCtrl)
-	s.mockAccessTokenStore = internal.NewMockAccessTokenStorage(s.mockCtrl)
+	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
+	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
+	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
 	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
 	s.accessRequest.Form = url.Values{}
 	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}

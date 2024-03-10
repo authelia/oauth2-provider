@@ -83,6 +83,7 @@ func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
 
 	encodedSignature := b64.EncodeToString(signature)
 	encodedToken := fmt.Sprintf("%s.%s", b64.EncodeToString(tokenKey), encodedSignature)
+
 	return encodedToken, encodedSignature, nil
 }
 

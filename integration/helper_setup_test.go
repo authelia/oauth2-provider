@@ -52,7 +52,7 @@ var store = &storage.MemoryStore{
 	Clients: map[string]oauth2.Client{
 		"my-client": &oauth2.DefaultClient{
 			ID:            "my-client",
-			Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
+			ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`), // = "foobar"
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
 			GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
@@ -61,19 +61,18 @@ var store = &storage.MemoryStore{
 		},
 		"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
 			DefaultClient: &oauth2.DefaultClient{
-				ID:             "custom-lifespan-client",
-				Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
-				RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
-				RedirectURIs:   []string{"http://localhost:3846/callback"},
-				ResponseTypes:  []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
-				GrantTypes:     []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
-				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+				ID:                   "custom-lifespan-client",
+				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
+				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
+				RedirectURIs:         []string{"http://localhost:3846/callback"},
+				ResponseTypes:        []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+				GrantTypes:           []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 			TokenLifespans: &internal.TestLifespans,
 		},
 		"public-client": &oauth2.DefaultClient{
 			ID:            "public-client",
-			Secret:        []byte{},
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},
@@ -172,7 +171,7 @@ func newJWTBearerAppClient(ts *httptest.Server) *clients.JWTBearer {
 	return clients.NewJWTBearer(ts.URL + tokenRelativePath)
 }
 
-var hmacStrategy = &hoauth2.HMACSHAStrategy{
+var hmacStrategy = &hoauth2.HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{
 		Config: &oauth2.Config{
 			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows"),
@@ -186,14 +185,14 @@ var hmacStrategy = &hoauth2.HMACSHAStrategy{
 
 var defaultRSAKey = gen.MustRSAKey()
 
-var jwtStrategy = &hoauth2.DefaultJWTStrategy{
+var jwtStrategy = &hoauth2.JWTProfileCoreStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(ctx context.Context) (any, error) {
 			return defaultRSAKey, nil
 		},
 	},
-	Config:          &oauth2.Config{},
-	HMACSHAStrategy: hmacStrategy,
+	Config:           &oauth2.Config{},
+	HMACCoreStrategy: hmacStrategy,
 }
 
 func mockServer(t *testing.T, f oauth2.Provider, session oauth2.Session) *httptest.Server {

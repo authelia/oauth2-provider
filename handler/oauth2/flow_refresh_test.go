@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -434,8 +435,8 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
-	var mockTransactional *internal.MockTransactional
-	var mockRevocationStore *internal.MockTokenRevocationStorage
+	var mockTransactional *mock.MockTransactional
+	var mockRevocationStore *mock.MockTokenRevocationStorage
 	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 	propagatedContext := context.Background()
 
@@ -495,8 +496,8 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockTransactional = internal.NewMockTransactional(ctrl)
-			mockRevocationStore = internal.NewMockTokenRevocationStorage(ctrl)
+			mockTransactional = mock.NewMockTransactional(ctrl)
+			mockRevocationStore = mock.NewMockTokenRevocationStorage(ctrl)
 			testCase.setup()
 
 			handler := RefreshTokenGrantHandler{
@@ -608,8 +609,11 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 }
 
 func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
-	var mockTransactional *internal.MockTransactional
-	var mockRevocationStore *internal.MockTokenRevocationStorage
+	var (
+		mockTransactional   *mock.MockTransactional
+		mockRevocationStore *mock.MockTokenRevocationStorage
+	)
+
 	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
@@ -1146,8 +1150,8 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockTransactional = internal.NewMockTransactional(ctrl)
-			mockRevocationStore = internal.NewMockTokenRevocationStorage(ctrl)
+			mockTransactional = mock.NewMockTransactional(ctrl)
+			mockRevocationStore = mock.NewMockTokenRevocationStorage(ctrl)
 			testCase.setup()
 
 			handler := RefreshTokenGrantHandler{

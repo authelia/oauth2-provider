@@ -14,9 +14,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -35,7 +35,7 @@ var fooErr = errors.New("foo")
 
 func TestGenerateIDToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	chgen := internal.NewMockOpenIDConnectTokenStrategy(ctrl)
+	chgen := mock.NewMockOpenIDConnectTokenStrategy(ctrl)
 	defer ctrl.Finish()
 
 	ar := oauth2.NewAccessRequest(nil)
@@ -80,7 +80,7 @@ func TestGenerateIDToken(t *testing.T) {
 
 func TestIssueExplicitToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	resp := internal.NewMockAccessResponder(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 	defer ctrl.Finish()
 
 	ar := oauth2.NewAuthorizeRequest()
@@ -97,7 +97,7 @@ func TestIssueExplicitToken(t *testing.T) {
 
 func TestIssueImplicitToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	resp := internal.NewMockAuthorizeResponder(ctrl)
+	resp := mock.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
 	ar := oauth2.NewAuthorizeRequest()
@@ -114,8 +114,8 @@ func TestIssueImplicitToken(t *testing.T) {
 
 func TestGetAccessTokenHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	req := internal.NewMockAccessRequester(ctrl)
-	resp := internal.NewMockAccessResponder(ctrl)
+	req := mock.NewMockAccessRequester(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 
 	defer ctrl.Finish()
 
@@ -130,8 +130,8 @@ func TestGetAccessTokenHash(t *testing.T) {
 
 func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	req := internal.NewMockAccessRequester(ctrl)
-	resp := internal.NewMockAccessResponder(ctrl)
+	req := mock.NewMockAccessRequester(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 
 	defer ctrl.Finish()
 
@@ -151,8 +151,8 @@ func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
 
 func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	req := internal.NewMockAccessRequester(ctrl)
-	resp := internal.NewMockAccessResponder(ctrl)
+	req := mock.NewMockAccessRequester(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 
 	defer ctrl.Finish()
 
@@ -172,8 +172,8 @@ func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
 
 func TestGetAccessTokenHashWithMissingKeyLength(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	req := internal.NewMockAccessRequester(ctrl)
-	resp := internal.NewMockAccessResponder(ctrl)
+	req := mock.NewMockAccessRequester(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 
 	defer ctrl.Finish()
 

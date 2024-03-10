@@ -227,6 +227,6 @@ type ResponseModeHandlerConfigurator interface {
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider
-	AuthorizationServerIdentificationIssuerProvider
+	AuthorizationServerIssuerIdentificationProvider
 	UseLegacyErrorFormatProvider
 }

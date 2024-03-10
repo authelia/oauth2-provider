@@ -10,20 +10,20 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/hmac"
 )
 
 func Test_HandleDeviceEndpointRequest(t *testing.T) {
-	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-		&oauth2.Config{
-			AccessTokenLifespan:   time.Minute * 24,
-			AuthorizeCodeLifespan: time.Minute * 24,
-			RFC8628CodeLifespan:   time.Minute * 24,
-		}, "authelia_%s_")
+	strategy := hoauth2.NewHMACCoreStrategy(&oauth2.Config{
+		GlobalSecret:          []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
+	}, "authelia_%s_")
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -48,9 +48,7 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 
 	resp := &oauth2.DeviceAuthorizeResponse{Extra: map[string]any{}}
 
-	err := handler.HandleRFC8628DeviceAuthorizeEndpointRequest(context.TODO(), req, resp)
-
-	assert.NoError(t, err)
+	assert.NoError(t, handler.HandleRFC8628DeviceAuthorizeEndpointRequest(context.TODO(), req, resp))
 	assert.NotEmpty(t, resp.GetDeviceCode())
 	assert.NotEmpty(t, resp.GetUserCode())
 	assert.Equal(t, 8, len(resp.GetUserCode()))

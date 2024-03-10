@@ -124,7 +124,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 
 	// Check if the client is allowed to exchange this token
 	if subjectTokenClient, ok := or.GetClient().(Client); ok {
-		allowed := subjectTokenClient.TokenExchangeAllowed(client)
+		allowed := subjectTokenClient.GetTokenExchangePermitted(client)
 		if !allowed {
 			return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHintf(
 				"The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", tokenClientID))

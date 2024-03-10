@@ -12,8 +12,8 @@ import (
 )
 
 type UserAuthorizeHandler struct {
-	Storage  RFC8628Storage
-	Strategy RFC8628CodeStrategy
+	Storage  Storage
+	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
@@ -45,7 +45,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user_code is missing."))
 	}
 
-	userCodeSig, err := d.Strategy.UserCodeSignature(ctx, userCode)
+	userCodeSig, err := d.Strategy.RFC8628UserCodeSignature(ctx, userCode)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}

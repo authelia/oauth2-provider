@@ -76,12 +76,6 @@ type DisableRefreshTokenValidationProvider interface {
 	GetDisableRefreshTokenValidation(ctx context.Context) bool
 }
 
-// BCryptCostProvider returns the provider for configuring the BCrypt hash cost.
-type BCryptCostProvider interface {
-	// GetBCryptCost returns the BCrypt  hash cost.
-	GetBCryptCost(ctx context.Context) int
-}
-
 // AllowedPromptValuesProvider returns the provider for configuring the allowed prompt values.
 type AllowedPromptValuesProvider interface {
 	// GetAllowedPromptValues returns the allowed prompt values.
@@ -100,8 +94,8 @@ type IDTokenIssuerProvider interface {
 	GetIDTokenIssuer(ctx context.Context) string
 }
 
-// AuthorizationServerIdentificationIssuerProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
-type AuthorizationServerIdentificationIssuerProvider interface {
+// AuthorizationServerIssuerIdentificationProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
+type AuthorizationServerIssuerIdentificationProvider interface {
 	GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string)
 }
 
@@ -220,12 +214,6 @@ type HMACHashingProvider interface {
 	GetHMACHasher(ctx context.Context) func() hash.Hash
 }
 
-// GetSecretsHashingProvider provides the client secrets hashing function.
-type GetSecretsHashingProvider interface {
-	// GetSecretsHasher returns the client secrets hashing function.
-	GetSecretsHasher(ctx context.Context) Hasher
-}
-
 // SendDebugMessagesToClientsProvider returns the provider for configuring the send debug messages to clients.
 type SendDebugMessagesToClientsProvider interface {
 	// GetSendDebugMessagesToClients returns the send debug messages to clients.
@@ -234,8 +222,8 @@ type SendDebugMessagesToClientsProvider interface {
 
 // RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
 type RevokeRefreshTokensExplicitlyProvider interface {
-	// GetRevokeRefreshTokensExplicitly returns true if a refresh token should only be revoked explicitly.
-	GetRevokeRefreshTokensExplicitly(ctx context.Context) bool
+	// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.
+	GetRevokeRefreshTokensExplicit(ctx context.Context) bool
 
 	// GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient returns true if a
 	// RevokeFlowRevokeRefreshTokensExplicitClient returning false should be enforced.

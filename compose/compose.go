@@ -74,7 +74,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		storage,
 		&CommonStrategy{
 			CoreStrategy:               NewOAuth2HMACStrategy(config),
-			RFC8628CodeStrategy:        NewDeviceStrategy(config),
 			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, config),
 			Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		},

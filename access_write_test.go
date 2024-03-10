@@ -12,17 +12,17 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestWriteAccessResponse(t *testing.T) {
 	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
 	ctrl := gomock.NewController(t)
-	rw := NewMockResponseWriter(ctrl)
-	ar := NewMockAccessRequester(ctrl)
-	resp := NewMockAccessResponder(ctrl)
+	rw := mock.NewMockResponseWriter(ctrl)
+	ar := mock.NewMockAccessRequester(ctrl)
+	resp := mock.NewMockAccessResponder(ctrl)
 	defer ctrl.Finish()
 
 	rw.EXPECT().Header().AnyTimes().Return(header)

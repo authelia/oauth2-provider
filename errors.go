@@ -297,7 +297,7 @@ var (
 func ErrorToRFC6749Error(err error) *RFC6749Error {
 	var e *RFC6749Error
 
-	if errors.As(err, &e) {
+	if stderr.As(err, &e) {
 		return e
 	}
 
@@ -354,13 +354,26 @@ func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
 func (e RFC6749Error) Is(err error) bool {
 	switch te := err.(type) {
 	case RFC6749Error:
+		if te.IsEmpty() {
+			return true
+		}
+
 		return e.ErrorField == te.ErrorField &&
 			e.CodeField == te.CodeField
 	case *RFC6749Error:
+		if te.IsEmpty() {
+			return true
+		}
+
 		return e.ErrorField == te.ErrorField &&
 			e.CodeField == te.CodeField
 	}
 	return false
+}
+
+// IsEmpty returns true if the error is an empty error.
+func (e RFC6749Error) IsEmpty() bool {
+	return e.ErrorField == "" && e.DescriptionField == "" && e.HintField == "" && e.DebugField == "" && e.CodeField == 0 && e.cause == nil
 }
 
 func (e *RFC6749Error) Status() string {
@@ -441,6 +454,10 @@ func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 }
 
 func (e *RFC6749Error) WithDebugError(debug error) *RFC6749Error {
+	if debug == nil {
+		return e
+	}
+
 	return e.WithDebug(ErrorToDebugRFC6749Error(debug).Error())
 }
 
@@ -574,7 +591,7 @@ func (e *RFC6749Error) computeHintField() {
 
 func ErrorToRFC6749ErrorFallback(err error, fallback *RFC6749Error) *RFC6749Error {
 	var e *RFC6749Error
-	if errors.As(err, &e) {
+	if stderr.As(err, &e) {
 		return e
 	}
 
@@ -590,7 +607,7 @@ func ErrorToDebugRFC6749Error(err error) (rfc error) {
 
 	var e *RFC6749Error
 
-	if errors.As(err, &e) {
+	if stderr.As(err, &e) {
 		return &DebugRFC6749Error{e}
 	}
 

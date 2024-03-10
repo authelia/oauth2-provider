@@ -16,8 +16,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	. "authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 // Should pass
@@ -27,7 +27,7 @@ import (
 //     If a Response Type contains one of more space characters (%20), it is compared as a space-delimited list of
 //     values in which the order of values does not matter.
 func TestNewAuthorizeRequest(t *testing.T) {
-	var store *MockStorage
+	var store *mock.MockStorage
 
 	redir, _ := url.Parse("https://foo.bar/cb")
 	specialCharRedir, _ := url.Parse("web+application://callback")
@@ -536,7 +536,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store = NewMockStorage(ctrl)
+			store = mock.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 
 			c.mock()

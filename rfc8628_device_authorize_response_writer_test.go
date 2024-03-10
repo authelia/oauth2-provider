@@ -9,13 +9,13 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestNewDeviceResponse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	handlers := []*internal.MockDeviceAuthorizeEndpointHandler{internal.NewMockDeviceAuthorizeEndpointHandler(ctrl)}
-	dar := internal.NewMockDeviceAuthorizeRequester(ctrl)
+	handlers := []*mock.MockRFC8628DeviceAuthorizeEndpointHandler{mock.NewMockRFC8628DeviceAuthorizeEndpointHandler(ctrl)}
+	dar := mock.NewMockDeviceAuthorizeRequester(ctrl)
 	defer ctrl.Finish()
 
 	ctx := context.Background()
@@ -30,30 +30,30 @@ func TestNewDeviceResponse(t *testing.T) {
 	}{
 		{
 			mock: func() {
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
 			},
 			isErr:     true,
 			expectErr: fooErr,
 		},
 		{
 			mock: func() {
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			isErr: false,
 		},
 		{
 			mock: func() {
 				oauth2 = duo
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
 			isErr: false,
 		},
 		{
 			mock: func() {
 				oauth2 = duo
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleDeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
 			},
 			isErr:     true,
 			expectErr: fooErr,

@@ -45,7 +45,10 @@ type Config struct {
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
 
-	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses.
+	// AccessTokenIssuer is the issuer to be used when generating access tokens.
+	AccessTokenIssuer string
+
+	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses (RFC9207).
 	AuthorizationServerIdentificationIssuer string
 
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
@@ -59,8 +62,8 @@ type Config struct {
 	// codes or other information. Proceed with caution!
 	SendDebugMessagesToClients bool
 
-	// RevokeRefreshTokensExplicitly determines if Refresh Tokens should only be revoked explicitly.
-	RevokeRefreshTokensExplicitly bool
+	// RevokeRefreshTokensExplicit determines if Refresh Tokens should only be revoked explicitly.
+	RevokeRefreshTokensExplicit bool
 
 	// EnforceRevokeFlowRevokeRefreshTokensExplicitClient determines if a RevokeFlowRevokeRefreshTokensExplicitClient
 	// should be prioritized even if it returns false.
@@ -160,12 +163,6 @@ type Config struct {
 	// JWTSecuredAuthorizeResponseModeSigner is the signer for JWT Secured Authorization Response Mode. Has no default.
 	JWTSecuredAuthorizeResponseModeSigner jwt.Signer
 
-	// AccessTokenIssuer is the issuer to be used when generating access tokens.
-	AccessTokenIssuer string
-
-	// ClientSecretsHasher is the hasher used to hash OAuth2 Client Secrets.
-	ClientSecretsHasher Hasher
-
 	// HTTPClient is the HTTP client to use for requests.
 	HTTPClient *retryablehttp.Client
 
@@ -262,14 +259,6 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	return c.HTTPClient
 }
 
-func (c *Config) GetSecretsHasher(ctx context.Context) Hasher {
-	if c.ClientSecretsHasher == nil {
-		c.ClientSecretsHasher = &BCrypt{Config: c}
-	}
-
-	return c.ClientSecretsHasher
-}
-
 func (c *Config) GetTokenURL(ctx context.Context) string {
 	return c.TokenURL
 }
@@ -294,8 +283,8 @@ func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
 	return c.SendDebugMessagesToClients
 }
 
-func (c *Config) GetRevokeRefreshTokensExplicitly(ctx context.Context) bool {
-	return c.RevokeRefreshTokensExplicitly
+func (c *Config) GetRevokeRefreshTokensExplicit(ctx context.Context) bool {
+	return c.RevokeRefreshTokensExplicit
 }
 
 func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool {
@@ -608,7 +597,7 @@ var (
 	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
 	_ IDTokenLifespanProvider                         = (*Config)(nil)
 	_ IDTokenIssuerProvider                           = (*Config)(nil)
-	_ AuthorizationServerIdentificationIssuerProvider = (*Config)(nil)
+	_ AuthorizationServerIssuerIdentificationProvider = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)
 	_ SendDebugMessagesToClientsProvider              = (*Config)(nil)
@@ -616,7 +605,6 @@ var (
 	_ MessageCatalogProvider                          = (*Config)(nil)
 	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
 	_ TokenURLProvider                                = (*Config)(nil)
-	_ GetSecretsHashingProvider                       = (*Config)(nil)
 	_ HTTPClientProvider                              = (*Config)(nil)
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)

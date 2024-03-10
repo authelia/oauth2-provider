@@ -9,8 +9,8 @@ import (
 // RFC8628DeviceAuthorizeFactory creates an OAuth2 device grant authorization handler.
 func RFC8628DeviceAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc8628.DeviceAuthorizeHandler{
-		Strategy: strategy.(rfc8628.RFC8628CodeStrategy),
-		Storage:  storage.(rfc8628.RFC8628Storage),
+		Strategy: strategy.(rfc8628.CodeStrategy),
+		Storage:  storage.(rfc8628.Storage),
 		Config:   config,
 	}
 }
@@ -18,8 +18,8 @@ func RFC8628DeviceAuthorizeFactory(config oauth2.Configurator, storage any, stra
 // RFC8628UserAuthorizeFactory creates an OAuth2 device grant user interaction handler.
 func RFC8628UserAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc8628.UserAuthorizeHandler{
-		Strategy: strategy.(rfc8628.RFC8628CodeStrategy),
-		Storage:  storage.(rfc8628.RFC8628Storage),
+		Strategy: strategy.(rfc8628.CodeStrategy),
+		Storage:  storage.(rfc8628.Storage),
 		Config:   config,
 	}
 }
@@ -30,8 +30,8 @@ func RFC8628DeviceAuthorizeTokenFactory(config oauth2.Configurator, storage any,
 	return &rfc8628.DeviceAuthorizeTokenEndpointHandler{
 		GenericCodeTokenEndpointHandler: hoauth2.GenericCodeTokenEndpointHandler{
 			CodeTokenEndpointHandler: &rfc8628.DeviceCodeTokenHandler{
-				Strategy: strategy.(rfc8628.RFC8628CodeStrategy),
-				Storage:  storage.(rfc8628.RFC8628Storage),
+				Strategy: strategy.(rfc8628.CodeStrategy),
+				Storage:  storage.(rfc8628.Storage),
 				Config:   config,
 			},
 			AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),

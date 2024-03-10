@@ -11,8 +11,8 @@ import (
 )
 
 type DeviceAuthorizeHandler struct {
-	Storage  RFC8628Storage
-	Strategy RFC8628CodeStrategy
+	Storage  Storage
+	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
@@ -23,12 +23,12 @@ type DeviceAuthorizeHandler struct {
 func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, dar oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceAuthorizeResponder) error {
 	session := dar.GetSession()
 
-	deviceCode, deviceCodeSignature, err := d.Strategy.GenerateDeviceCode(ctx)
+	deviceCode, deviceCodeSignature, err := d.Strategy.GenerateRFC8628DeviceCode(ctx)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	userCode, userCodeSignature, err := d.Strategy.GenerateUserCode(ctx)
+	userCode, userCodeSignature, err := d.Strategy.GenerateRFC8628UserCode(ctx)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}

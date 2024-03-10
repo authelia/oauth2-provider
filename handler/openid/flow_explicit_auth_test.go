@@ -13,9 +13,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -23,8 +23,8 @@ import (
 var key = gen.MustRSAKey()
 
 //nolint:unparam
-func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *internal.MockOpenIDConnectRequestStorage) {
-	store := internal.NewMockOpenIDConnectRequestStorage(ctrl)
+func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {
+	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}
 
 	var j = &DefaultStrategy{
@@ -48,7 +48,7 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 
 func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	aresp := internal.NewMockAuthorizeResponder(ctrl)
+	aresp := mock.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
 	areq := oauth2.NewAuthorizeRequest()

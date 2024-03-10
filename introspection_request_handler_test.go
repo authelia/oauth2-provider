@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -18,14 +19,16 @@ import (
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	validator := internal.NewMockTokenIntrospector(ctrl)
+	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
@@ -90,7 +93,7 @@ func TestIntrospectionResponse(t *testing.T) {
 
 func TestNewIntrospectionRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	validator := internal.NewMockTokenIntrospector(ctrl)
+	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
 	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
@@ -105,19 +108,19 @@ func TestNewIntrospectionRequest(t *testing.T) {
 	newErr := errors.New("asdf")
 
 	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
-		isActive    bool
+		name      string
+		setup     func()
+		expectErr error
+		isActive  bool
 	}{
 		{
-			description: "should fail",
+			name: "should fail",
 			setup: func() {
 			},
 			expectErr: ErrInvalidRequest,
 		},
 		{
-			description: "should fail",
+			name: "should fail",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -136,7 +139,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			expectErr: ErrInactiveToken,
 		},
 		{
-			description: "should pass",
+			name: "should pass",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -154,7 +157,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password encoded",
+			name: "should pass with basic auth if username and password encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -172,7 +175,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password not encoded",
+			name: "should pass with basic auth if username and password not encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
@@ -190,14 +193,14 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			isActive: true,
 		},
 		{
-			description: "should pass with basic auth if username and password not encoded",
+			name: "should pass with basic auth if username and password not encoded",
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				httpreq = &http.Request{
 					Method: "POST",
 					Header: http.Header{
-						// Basic Authorization with username=my-client and password=foobaz
-						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jheg=="},
+						// Basic Authorization with username=my-client and password=foobar
+						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
@@ -218,6 +221,141 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, c.isActive, res.IsActive())
 			}
+		})
+	}
+}
+
+func TestIntrospectionResponseToMap(t *testing.T) {
+	testCases := []struct {
+		name        string
+		have        IntrospectionResponder
+		expectedaud []string
+		expected    map[string]any
+	}{
+		{
+			"ShouldDecodeInactive",
+			&IntrospectionResponse{},
+			nil,
+			map[string]any{consts.ClaimActive: false},
+		},
+		{
+			"ShouldReturnActiveWithoutAccessRequester",
+			&IntrospectionResponse{
+				Active: true,
+			},
+			nil,
+			map[string]any{consts.ClaimActive: true},
+		},
+		{
+			"ShouldReturnActiveWithAccessRequester",
+			&IntrospectionResponse{
+				Active: true,
+				AccessRequester: &AccessRequest{
+					Request: Request{
+						RequestedAt:     time.Unix(100000, 0).UTC(),
+						GrantedScope:    Arguments{consts.ScopeOpenID, "profile"},
+						GrantedAudience: Arguments{"https://example.com", "aclient"},
+						Client:          &DefaultClient{ID: "aclient"},
+					},
+				},
+			},
+			nil,
+			map[string]any{
+				consts.ClaimActive:           true,
+				consts.ClaimScope:            "openid profile",
+				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
+				consts.ClaimIssuedAt:         int64(100000),
+				consts.ClaimClientIdentifier: "aclient",
+			},
+		},
+		{
+			"ShouldReturnActiveWithAccessRequesterAndSession",
+			&IntrospectionResponse{
+				Active: true,
+				AccessRequester: &AccessRequest{
+					Request: Request{
+						RequestedAt:     time.Unix(100000, 0).UTC(),
+						GrantedScope:    Arguments{consts.ScopeOpenID, "profile"},
+						GrantedAudience: Arguments{"https://example.com", "aclient"},
+						Client:          &DefaultClient{ID: "aclient"},
+						Session: &openid.DefaultSession{
+							ExpiresAt: map[TokenType]time.Time{
+								AccessToken: time.Unix(1000000, 0).UTC(),
+							},
+							Subject: "asubj",
+							Claims: &jwt.IDTokenClaims{
+								Extra: map[string]any{
+									"aclaim":                   1,
+									consts.ClaimExpirationTime: 0,
+								},
+							},
+						},
+					},
+				},
+			},
+			nil,
+			map[string]any{
+				consts.ClaimActive:           true,
+				consts.ClaimScope:            "openid profile",
+				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
+				consts.ClaimIssuedAt:         int64(100000),
+				consts.ClaimClientIdentifier: "aclient",
+				//"aclaim":                     1,
+				//consts.ClaimSubject:          "asubj",
+				//consts.ClaimExpirationTime:   int64(1000000),
+			},
+		},
+		{
+			"ShouldReturnActiveWithAccessRequesterAndSessionWithIDTokenClaimsAndUsername",
+			&IntrospectionResponse{
+				Client: &DefaultClient{
+					ID:       "rclient",
+					Audience: []string{"https://rs.example.com"},
+				},
+				Active: true,
+				AccessRequester: &AccessRequest{
+					Request: Request{
+						RequestedAt:     time.Unix(100000, 0).UTC(),
+						GrantedScope:    Arguments{consts.ScopeOpenID, "profile"},
+						GrantedAudience: Arguments{"https://example.com", "aclient"},
+						Client:          &DefaultClient{ID: "aclient"},
+						Session: &openid.DefaultSession{
+							ExpiresAt: map[TokenType]time.Time{
+								AccessToken: time.Unix(1000000, 0).UTC(),
+							},
+							Username: "auser",
+							Claims: &jwt.IDTokenClaims{
+								Subject: "asubj",
+								Extra: map[string]any{
+									"aclaim":                   1,
+									consts.ClaimExpirationTime: 0,
+								},
+							},
+						},
+					},
+				},
+			},
+			[]string{"rclient"},
+			map[string]any{
+				consts.ClaimActive:           true,
+				consts.ClaimScope:            "openid profile",
+				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
+				consts.ClaimIssuedAt:         int64(100000),
+				consts.ClaimClientIdentifier: "aclient",
+				//"aclaim":                     1,
+				//consts.ClaimSubject: "asubj",
+				//consts.ClaimExpirationTime:   int64(1000000),
+				//consts.ClaimUsername: "auser",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			aud, introspection := tc.have.ToMap()
+
+			assert.Equal(t, tc.expectedaud, aud)
+			assert.Equal(t, tc.expected, introspection)
 		})
 	}
 }

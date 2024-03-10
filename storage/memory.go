@@ -110,34 +110,34 @@ func NewExampleStore() *MemoryStore {
 		IDSessions: make(map[string]oauth2.Requester),
 		Clients: map[string]oauth2.Client{
 			"my-client": &oauth2.DefaultClient{
-				ID:             "my-client",
-				Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
-				RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
-				RedirectURIs:   []string{"http://localhost:3846/callback"},
-				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials", "urn:ietf:params:oauth:grant-type:token-exchange"},
-				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+				ID:                   "my-client",
+				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
+				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
+				RedirectURIs:         []string{"http://localhost:3846/callback"},
+				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
+				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials", "urn:ietf:params:oauth:grant-type:token-exchange"},
+				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 			"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
 				DefaultClient: &oauth2.DefaultClient{
-					ID:             "custom-lifespan-client",
-					Secret:         []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`),            // = "foobar"
-					RotatedSecrets: [][]byte{[]byte(`$2y$10$X51gLxUQJ.hGw1epgHTE5u0bt64xM0COU7K9iAp.OFg8p2pUd.1zC `)}, // = "foobaz",
-					RedirectURIs:   []string{"http://localhost:3846/callback"},
-					ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-					GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-					Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+					ID:                   "custom-lifespan-client",
+					ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
+					RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
+					RedirectURIs:         []string{"http://localhost:3846/callback"},
+					ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
+					GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
+					Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 				},
 				TokenLifespans: &internal.TestLifespans,
 			},
 			"encoded:client": &oauth2.DefaultClient{
-				ID:             "encoded:client",
-				Secret:         []byte(`$2a$10$A7M8b65dSSKGHF0H2sNkn.9Z0hT8U1Nv6OWPV3teUUaczXkVkxuDS`), // = "encoded&password"
-				RotatedSecrets: nil,
-				RedirectURIs:   []string{"http://localhost:3846/callback"},
-				ResponseTypes:  []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:     []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:         []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+				ID:                   "encoded:client",
+				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$8FzF6Ig9KHbTD8Q4VLOb5eIH8vbg.Lz3TXb2vAkDeP/XEDHmqCHGi`), // = "encoded&password"
+				RotatedClientSecrets: nil,
+				RedirectURIs:         []string{"http://localhost:3846/callback"},
+				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
+				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
+				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 			},
 		},
 		Users: map[string]MemoryUserRelation{

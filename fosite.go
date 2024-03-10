@@ -111,7 +111,7 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 type Configurator interface {
 	IDTokenIssuerProvider
 	IDTokenLifespanProvider
-	AuthorizationServerIdentificationIssuerProvider
+	AuthorizationServerIssuerIdentificationProvider
 	AllowedPromptsProvider
 	EnforcePKCEProvider
 	EnforcePKCEForPublicClientsProvider
@@ -154,7 +154,6 @@ type Configurator interface {
 	MessageCatalogProvider
 	FormPostHTMLTemplateProvider
 	TokenURLProvider
-	GetSecretsHashingProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider
@@ -177,6 +176,8 @@ type Fosite struct {
 	Store Storage
 
 	Config Configurator
+
+	defaultClientAuthenticationStrategy ClientAuthenticationStrategy
 }
 
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.

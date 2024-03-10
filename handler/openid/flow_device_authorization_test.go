@@ -14,7 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -36,8 +36,8 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		Config: config,
 	}
 
-	oidcStore := internal.NewMockOpenIDConnectRequestStorage(ctrl)
-	tokenHandler := internal.NewMockCodeTokenEndpointHandler(ctrl)
+	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
+	tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
 
 	handler := &OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   oidcStore,
@@ -137,8 +137,8 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 		Config: config,
 	}
 
-	oidcStore := internal.NewMockOpenIDConnectRequestStorage(ctrl)
-	tokenHandler := internal.NewMockCodeTokenEndpointHandler(ctrl)
+	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
+	tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
 
 	handler := &OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   oidcStore,

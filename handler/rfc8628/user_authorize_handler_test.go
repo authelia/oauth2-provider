@@ -12,16 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/hmac"
 )
 
 func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *testing.T) {
 	type fields struct {
-		Storage  RFC8628Storage
-		Strategy RFC8628CodeStrategy
+		Storage  Storage
+		Strategy CodeStrategy
 		Config   interface {
 			oauth2.RFC9628DeviceAuthorizeConfigProvider
 		}
@@ -38,7 +38,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
 				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
-		code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
+		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
 		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
@@ -53,12 +53,12 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		assert.Equal(t, oauth2.DeviceAuthorizeStatusToString(a.status), duvr.GetStatus())
 	}
 
-	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-		&oauth2.Config{
-			AccessTokenLifespan:   time.Minute * 24,
-			AuthorizeCodeLifespan: time.Minute * 24,
-			RFC8628CodeLifespan:   time.Minute * 24,
-		}, "authelia_%s_")
+	strategy := hoauth2.NewHMACCoreStrategy(&oauth2.Config{
+		GlobalSecret:          []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
+	}, "authelia_%s_")
 
 	tests := []struct {
 		name    string
@@ -209,8 +209,8 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 
 func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_HandleRFC8628UserAuthorizeEndpointRequest(t *testing.T) {
 	type fields struct {
-		Storage  RFC8628Storage
-		Strategy RFC8628CodeStrategy
+		Storage  Storage
+		Strategy CodeStrategy
 		Config   interface {
 			oauth2.RFC9628DeviceAuthorizeConfigProvider
 		}
@@ -244,7 +244,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
 				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
-		code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
+		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
 		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
@@ -254,12 +254,12 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		dar.SetStatus(a.status)
 	}
 
-	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-		&oauth2.Config{
-			AccessTokenLifespan:   time.Minute * 24,
-			AuthorizeCodeLifespan: time.Minute * 24,
-			RFC8628CodeLifespan:   time.Minute * 24,
-		}, "authelia_%s_")
+	strategy := hoauth2.NewHMACCoreStrategy(&oauth2.Config{
+		GlobalSecret:          []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
+	}, "authelia_%s_")
 
 	tests := []struct {
 		name    string
@@ -401,7 +401,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(
 						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
-				code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
+				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
 				dar.GetRequestForm().Set("user_code", code)
@@ -444,7 +444,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(time.Duration(-1)*
 						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
-				code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
+				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
 				err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)

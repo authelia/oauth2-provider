@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -32,20 +33,20 @@ func TestHandleTokenEndpointRequest(t *testing.T) {
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 	for k, c := range []struct {
 		description string
-		setup       func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
+		setup       func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
 		expectErr   error
 		check       func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
 			description: "should fail because current request has invalid grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{"some_other_grant_type"}
 			},
 			expectErr: oauth2.ErrUnknownRequest,
 		},
 		{
 			description: "should fail because storage lookup returns not found",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
@@ -54,7 +55,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because storage lookup fails",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
@@ -63,7 +64,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because stored request is missing openid scope",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
@@ -72,7 +73,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because current request's client does not have authorization_code grant type",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"some_other_grant_type"},
 				}
@@ -86,7 +87,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass with custom client lifespans",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -120,7 +121,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should pass",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 				}
@@ -151,7 +152,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because stored request's session is missing subject claim",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
@@ -167,7 +168,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because stored request is missing session",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedReq := oauth2.NewAuthorizeRequest()
@@ -179,7 +180,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 		},
 		{
 			description: "should fail because storage returns error when deleting openid session",
-			setup: func(store *internal.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
+			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"authorization_code"},
 				}
@@ -199,7 +200,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store := internal.NewMockOpenIDConnectRequestStorage(ctrl)
+			store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 			defer ctrl.Finish()
 
 			session := &DefaultSession{

@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
@@ -116,10 +117,10 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 }
 
 func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeImplicitGrantTypeHandler,
-	*internal.MockAccessTokenStorage, *internal.MockAccessTokenStrategy, *internal.MockAuthorizeResponder) {
-	store := internal.NewMockAccessTokenStorage(ctrl)
-	chgen := internal.NewMockAccessTokenStrategy(ctrl)
-	aresp := internal.NewMockAuthorizeResponder(ctrl)
+	*mock.MockAccessTokenStorage, *mock.MockAccessTokenStrategy, *mock.MockAuthorizeResponder) {
+	store := mock.NewMockAccessTokenStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+	aresp := mock.NewMockAuthorizeResponder(ctrl)
 
 	h := AuthorizeImplicitGrantTypeHandler{
 		AccessTokenStorage:  store,

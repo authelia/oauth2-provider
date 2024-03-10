@@ -257,6 +257,10 @@ type IntrospectionResponder interface {
 	// GetAccessTokenType optionally returns the type of the access token that was introspected. This could be "bearer", "mac",
 	// or empty string if the type of the token is refresh token.
 	GetAccessTokenType() string
+
+	// ToMap returns the audience values for this introspection for use with signed introspection responses, and map
+	// values for this introspection regardless of what kind of introspection response.
+	ToMap() (audience []string, introspection map[string]any)
 }
 
 // Requester is an abstract interface for handling requests in Fosite.

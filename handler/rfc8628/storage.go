@@ -6,7 +6,7 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-type RFC8628Storage interface {
+type Storage interface {
 	DeviceCodeStorage
 	UserCodeStorage
 }

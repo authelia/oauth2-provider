@@ -12,7 +12,7 @@ import (
 	enigma "authelia.com/provider/oauth2/token/hmac"
 )
 
-func NewRFC8628HMACSHAStrategy(enigma *enigma.HMACStrategy, config oauth2.DeviceAuthorizeConfigProvider, prefix string) *RFC8628HMACSHAStrategy {
+func NewRFC8628HMACSHAStrategy(enigma *enigma.HMACStrategy, config oauth2.RFC9628DeviceAuthorizeConfigProvider, prefix string) *RFC8628HMACSHAStrategy {
 	return &RFC8628HMACSHAStrategy{
 		Enigma: enigma,
 		Config: config,
@@ -23,7 +23,7 @@ func NewRFC8628HMACSHAStrategy(enigma *enigma.HMACStrategy, config oauth2.Device
 type RFC8628HMACSHAStrategy struct {
 	Enigma *enigma.HMACStrategy
 	Config interface {
-		oauth2.DeviceAuthorizeConfigProvider
+		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
 
 	prefix string
@@ -52,8 +52,8 @@ func (h *RFC8628HMACSHAStrategy) UserCodeSignature(ctx context.Context, token st
 func (h *RFC8628HMACSHAStrategy) ValidateUserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.UserCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetDeviceAndUserCodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetDeviceAndUserCodeLifespan(ctx))))
+	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
@@ -79,8 +79,8 @@ func (h *RFC8628HMACSHAStrategy) DeviceCodeSignature(ctx context.Context, token 
 func (h *RFC8628HMACSHAStrategy) ValidateDeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.DeviceCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetDeviceAndUserCodeLifespan(ctx)).Before(time.Now().UTC()) {
-		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetDeviceAndUserCodeLifespan(ctx))))
+	if exp.IsZero() && r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device code expired at '%s'.", r.GetRequestedAt().Add(h.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
 	if !exp.IsZero() && exp.Before(time.Now().UTC()) {

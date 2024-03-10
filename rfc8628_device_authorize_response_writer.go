@@ -8,7 +8,7 @@ func (f *Fosite) NewRFC862DeviceAuthorizeResponse(ctx context.Context, r DeviceA
 	r.SetSession(session)
 	var resp = NewDeviceAuthorizeResponse()
 
-	for _, h := range f.Config.GetDeviceAuthorizeEndpointHandlers(ctx) {
+	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointHandlers(ctx) {
 		if err := h.HandleRFC8628DeviceAuthorizeEndpointRequest(ctx, r, resp); err != nil {
 			return nil, err
 		}

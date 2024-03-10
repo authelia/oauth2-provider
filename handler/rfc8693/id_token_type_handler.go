@@ -72,7 +72,7 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		if config, ok := c.Config.(oauth2.RFC8693ConfigProvider); ok {
-			requestedTokenType = config.GetDefaultRequestedTokenType(ctx)
+			requestedTokenType = config.GetDefaultRFC8693RequestedTokenType(ctx)
 		}
 	}
 

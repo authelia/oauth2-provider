@@ -32,7 +32,7 @@ var o2hmacshaStrategy = hoauth2.HMACSHAStrategy{
 var TestRFC8628HMACSHAStrategy = RFC8628HMACSHAStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
-		DeviceAndUserCodeLifespan: time.Hour * 24,
+		RFC8628CodeLifespan: time.Hour * 24,
 	},
 }
 
@@ -785,9 +785,9 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				AccessTokenStrategy:  &strategy,
 				RefreshTokenStrategy: &strategy,
 				Config: &oauth2.Config{
-					ScopeStrategy:             oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:  oauth2.DefaultAudienceMatchingStrategy,
-					DeviceAndUserCodeLifespan: time.Minute,
+					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+					RFC8628CodeLifespan:      time.Minute,
 				},
 			}
 

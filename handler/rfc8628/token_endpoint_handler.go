@@ -16,7 +16,7 @@ type DeviceCodeTokenHandler struct {
 	Storage  RFC8628Storage
 	Strategy RFC8628CodeStrategy
 	Config   interface {
-		oauth2.DeviceAuthorizeConfigProvider
+		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
 }
 
@@ -60,7 +60,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 		requestedAt = time.Now()
 	}
 
-	pollInterval := c.Config.GetDeviceAuthTokenPollingInterval(ctx)
+	pollInterval := c.Config.GetRFC8628TokenPollingInterval(ctx)
 	if lastReqTime.Add(pollInterval).After(requestedAt) {
 		_ = c.UpdateLastChecked(ctx, requester, deviceAuthReq)
 		return code, signature, deviceAuthReq, errorsx.WithStack(

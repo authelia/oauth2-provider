@@ -14,9 +14,9 @@ import (
 
 func TestWriteDeviceAuthorizeResponse(t *testing.T) {
 	oauth2 := &Fosite{Config: &Config{
-		DeviceAndUserCodeLifespan:      time.Minute,
-		DeviceAuthTokenPollingInterval: time.Minute,
-		RFC8628UserVerificationURL:     "http://ory.sh",
+		RFC8628CodeLifespan:         time.Minute,
+		RFC8628TokenPollingInterval: time.Minute,
+		RFC8628UserVerificationURL:  "http://ory.sh",
 	}}
 
 	rw := httptest.NewRecorder()
@@ -25,10 +25,10 @@ func TestWriteDeviceAuthorizeResponse(t *testing.T) {
 	resp.SetUserCode("AAAA")
 	resp.SetDeviceCode("BBBB")
 	resp.SetInterval(int(
-		oauth2.Config.GetDeviceAuthTokenPollingInterval(context.TODO()).Round(time.Second).Seconds(),
+		oauth2.Config.GetRFC8628TokenPollingInterval(context.TODO()).Round(time.Second).Seconds(),
 	))
 	resp.SetExpiresIn(int64(
-		time.Now().Round(time.Second).Add(oauth2.Config.GetDeviceAndUserCodeLifespan(context.TODO())).Second(),
+		time.Now().Round(time.Second).Add(oauth2.Config.GetRFC8628CodeLifespan(context.TODO())).Second(),
 	))
 	resp.SetVerificationURI(oauth2.Config.GetRFC8628UserVerificationURL(context.TODO()))
 	resp.SetVerificationURIComplete(

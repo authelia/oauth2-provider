@@ -23,7 +23,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		Storage  RFC8628Storage
 		Strategy RFC8628CodeStrategy
 		Config   interface {
-			oauth2.DeviceAuthorizeConfigProvider
+			oauth2.RFC9628DeviceAuthorizeConfigProvider
 		}
 	}
 	type args struct {
@@ -37,7 +37,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		dar.SetSession(openid.NewDefaultSession())
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
-				f.Config.GetDeviceAndUserCodeLifespan(a.ctx)).Round(time.Second))
+				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
 		code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
@@ -55,9 +55,9 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 
 	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 		&oauth2.Config{
-			AccessTokenLifespan:       time.Minute * 24,
-			AuthorizeCodeLifespan:     time.Minute * 24,
-			DeviceAndUserCodeLifespan: time.Minute * 24,
+			AccessTokenLifespan:   time.Minute * 24,
+			AuthorizeCodeLifespan: time.Minute * 24,
+			RFC8628CodeLifespan:   time.Minute * 24,
 		}, "authelia_%s_")
 
 	tests := []struct {
@@ -74,14 +74,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -103,14 +103,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -132,14 +132,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -161,14 +161,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -212,7 +212,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		Storage  RFC8628Storage
 		Strategy RFC8628CodeStrategy
 		Config   interface {
-			oauth2.DeviceAuthorizeConfigProvider
+			oauth2.RFC9628DeviceAuthorizeConfigProvider
 		}
 	}
 	type args struct {
@@ -243,7 +243,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		dar.SetSession(openid.NewDefaultSession())
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
-				f.Config.GetDeviceAndUserCodeLifespan(a.ctx)).Round(time.Second))
+				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
 		code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
@@ -256,9 +256,9 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 
 	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 		&oauth2.Config{
-			AccessTokenLifespan:       time.Minute * 24,
-			AuthorizeCodeLifespan:     time.Minute * 24,
-			DeviceAndUserCodeLifespan: time.Minute * 24,
+			AccessTokenLifespan:   time.Minute * 24,
+			AuthorizeCodeLifespan: time.Minute * 24,
+			RFC8628CodeLifespan:   time.Minute * 24,
 		}, "authelia_%s_")
 
 	tests := []struct {
@@ -274,14 +274,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -307,14 +307,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -339,14 +339,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -375,14 +375,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -400,7 +400,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.SetSession(openid.NewDefaultSession())
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(
-						f.Config.GetDeviceAndUserCodeLifespan(a.ctx)).Round(time.Second))
+						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
 				code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
@@ -418,14 +418,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				Storage:  storage.NewMemoryStore(),
 				Strategy: strategy,
 				Config: &oauth2.Config{
-					DeviceAndUserCodeLifespan:      time.Minute * 10,
-					DeviceAuthTokenPollingInterval: time.Second * 10,
-					RFC8628UserVerificationURL:     "https://www.test.com",
-					AccessTokenLifespan:            time.Hour,
-					RefreshTokenLifespan:           time.Hour,
-					ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-					RefreshTokenScopes:             []string{"offline"},
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+					RefreshTokenScopes:          []string{"offline"},
 				},
 			},
 			args: args{
@@ -443,7 +443,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.SetSession(openid.NewDefaultSession())
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(time.Duration(-1)*
-						f.Config.GetDeviceAndUserCodeLifespan(a.ctx)).Round(time.Second))
+						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
 				code, sig, err := f.Strategy.GenerateUserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)

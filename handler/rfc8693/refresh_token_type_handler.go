@@ -74,7 +74,7 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
-		requestedTokenType = c.Config.GetDefaultRequestedTokenType(ctx)
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
 	if requestedTokenType != consts.TokenTypeRFC8693RefreshToken {

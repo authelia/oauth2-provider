@@ -80,11 +80,11 @@ func (a *PushedAuthorizeEndpointHandlers) Append(h PushedAuthorizeEndpointHandle
 	*a = append(*a, h)
 }
 
-// DeviceAuthorizeEndpointHandlers is a list of RFC8628DeviceAuthorizeEndpointHandler
-type DeviceAuthorizeEndpointHandlers []RFC8628DeviceAuthorizeEndpointHandler
+// RFC8628DeviceAuthorizeEndpointHandlers is a list of RFC8628DeviceAuthorizeEndpointHandler
+type RFC8628DeviceAuthorizeEndpointHandlers []RFC8628DeviceAuthorizeEndpointHandler
 
 // Append adds an RFC8628DeviceAuthorizeEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
-func (a *DeviceAuthorizeEndpointHandlers) Append(h RFC8628DeviceAuthorizeEndpointHandler) {
+func (a *RFC8628DeviceAuthorizeEndpointHandlers) Append(h RFC8628DeviceAuthorizeEndpointHandler) {
 	for _, this := range *a {
 		if reflect.TypeOf(this) == reflect.TypeOf(h) {
 			return
@@ -162,9 +162,9 @@ type Configurator interface {
 	PushedAuthorizeRequestHandlersProvider
 	PushedAuthorizeRequestConfigProvider
 	RFC8693ConfigProvider
-	DeviceAuthorizeEndpointHandlersProvider
+	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
-	DeviceAuthorizeConfigProvider
+	RFC9628DeviceAuthorizeConfigProvider
 	UseLegacyErrorFormatProvider
 }
 

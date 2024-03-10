@@ -313,32 +313,35 @@ type PushedAuthorizeRequestHandlersProvider interface {
 	GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers
 }
 
-// DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response
-// (see https://www.rfc-editor.org/rfc/rfc8628#section-3.2)
-type DeviceAuthorizeConfigProvider interface {
-	// GetDeviceAndUserCodeLifespan returns the device and user code lifespan.
-	GetDeviceAndUserCodeLifespan(ctx context.Context) time.Duration
-	GetRFC8628UserVerificationURL(ctx context.Context) string
-	GetDeviceAuthTokenPollingInterval(ctx context.Context) time.Duration
+// RFC9628DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
+type RFC9628DeviceAuthorizeConfigProvider interface {
+	// GetRFC8628CodeLifespan returns the device and user code lifespan.
+	GetRFC8628CodeLifespan(ctx context.Context) (lifespan time.Duration)
+
+	GetRFC8628UserVerificationURL(ctx context.Context) (url string)
+
+	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
-// DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
-type DeviceAuthorizeEndpointHandlersProvider interface {
-	// GetDeviceAuthorizeEndpointHandlers returns the handlers.
-	GetDeviceAuthorizeEndpointHandlers(ctx context.Context) DeviceAuthorizeEndpointHandlers
+// RFC8628DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
+type RFC8628DeviceAuthorizeEndpointHandlersProvider interface {
+	// GetRFC8628DeviceAuthorizeEndpointHandlers returns the handlers.
+	GetRFC8628DeviceAuthorizeEndpointHandlers(ctx context.Context) RFC8628DeviceAuthorizeEndpointHandlers
 }
 
 // RFC8628UserAuthorizeEndpointHandlersProvider returns the provider for setting up the Device grant user interaction handlers.
 type RFC8628UserAuthorizeEndpointHandlersProvider interface {
-
 	// GetRFC8628UserAuthorizeEndpointHandlers returns the handlers.
 	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) RFC8628UserAuthorizeEndpointHandlers
 }
 
+// RFC8693ConfigProvider is the configuration provider for RFC8693 Token Exchange.
 type RFC8693ConfigProvider interface {
-	GetTokenTypes(ctx context.Context) map[string]RFC8693TokenType
+	GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType
 
-	GetDefaultRequestedTokenType(ctx context.Context) string
+	GetDefaultRFC8693RequestedTokenType(ctx context.Context) string
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.

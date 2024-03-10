@@ -37,11 +37,11 @@ func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCore
 	}
 }
 
-func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.DefaultJWTStrategy {
-	return &hoauth2.DefaultJWTStrategy{
-		Signer:          &jwt.DefaultSigner{GetPrivateKey: keyGetter},
-		HMACSHAStrategy: strategy,
-		Config:          config,
+func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
+	return &hoauth2.JWTProfileCoreStrategy{
+		Signer:           &jwt.DefaultSigner{GetPrivateKey: keyGetter},
+		HMACCoreStrategy: strategy,
+		Config:           config,
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 
 func TestIntrospectJWT(t *testing.T) {
 	rsaKey := gen.MustRSAKey()
-	strategy := &DefaultJWTStrategy{
+	strategy := &JWTProfileCoreStrategy{
 		Signer: &jwt.DefaultSigner{
 			GetPrivateKey: func(_ context.Context) (any, error) {
 				return rsaKey, nil
@@ -119,7 +119,7 @@ func TestIntrospectJWT(t *testing.T) {
 }
 
 func BenchmarkIntrospectJWT(b *testing.B) {
-	strategy := &DefaultJWTStrategy{
+	strategy := &JWTProfileCoreStrategy{
 		Signer: &jwt.DefaultSigner{GetPrivateKey: func(_ context.Context) (any, error) {
 			return gen.MustRSAKey(), nil
 		},

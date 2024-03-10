@@ -23,7 +23,7 @@ import (
 
 var rsaKey = gen.MustRSAKey()
 
-var j = &DefaultJWTStrategy{
+var j = &JWTProfileCoreStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(_ context.Context) (any, error) {
 			return rsaKey, nil

@@ -7,8 +7,24 @@ import (
 	"context"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// NewCoreStrategy is a special constructor that if provided a signer will automatically decorate the HMACCoreStrategy
+// with a JWTProfileCoreStrategy, otherwise it just returns the HMACCoreStrategy.
+func NewCoreStrategy(config CoreStrategyConfigurator, prefix string, signer jwt.Signer) (strategy CoreStrategy) {
+	if signer == nil {
+		return NewHMACCoreStrategy(config, prefix)
+	}
+
+	return &JWTProfileCoreStrategy{
+		Signer:           signer,
+		HMACCoreStrategy: NewHMACCoreStrategy(config, prefix),
+		Config:           config,
+	}
+}
+
+// CoreStrategy performs the major elements of token generation and validation.
 type CoreStrategy interface {
 	AccessTokenStrategy
 	RefreshTokenStrategy

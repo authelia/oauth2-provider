@@ -15,7 +15,7 @@ import (
 // NewHMACCoreStrategy creates a new HMACCoreStrategy with the potential to include the prefix format. The prefix must
 // include a single '%s' for the purpose of adding the token part (ac, at, and rt; for the Authorize Code, Access
 // Token, and Refresh Token; respectively.
-func NewHMACCoreStrategy(config HMACSHAStrategyConfigurator, prefix string) (strategy *HMACCoreStrategy) {
+func NewHMACCoreStrategy(config HMACCoreStrategyConfigurator, prefix string) (strategy *HMACCoreStrategy) {
 	if len(prefix) == 0 || strings.Count(prefix, "%s") != 1 {
 		return &HMACCoreStrategy{
 			Enigma:    &hmac.HMACStrategy{Config: config},
@@ -228,7 +228,14 @@ const (
 	tokenPrefixPartDeviceCode    = "dc"
 )
 
-type HMACSHAStrategyConfigurator interface {
+type CoreStrategyConfigurator interface {
+	HMACCoreStrategyConfigurator
+
+	oauth2.AccessTokenIssuerProvider
+	oauth2.JWTScopeFieldProvider
+}
+
+type HMACCoreStrategyConfigurator interface {
 	oauth2.AccessTokenLifespanProvider
 	oauth2.RefreshTokenLifespanProvider
 	oauth2.AuthorizeCodeLifespanProvider

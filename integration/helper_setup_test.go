@@ -185,14 +185,14 @@ var hmacStrategy = &hoauth2.HMACCoreStrategy{
 
 var defaultRSAKey = gen.MustRSAKey()
 
-var jwtStrategy = &hoauth2.DefaultJWTStrategy{
+var jwtStrategy = &hoauth2.JWTProfileCoreStrategy{
 	Signer: &jwt.DefaultSigner{
 		GetPrivateKey: func(ctx context.Context) (any, error) {
 			return defaultRSAKey, nil
 		},
 	},
-	Config:          &oauth2.Config{},
-	HMACSHAStrategy: hmacStrategy,
+	Config:           &oauth2.Config{},
+	HMACCoreStrategy: hmacStrategy,
 }
 
 func mockServer(t *testing.T, f oauth2.Provider, session oauth2.Session) *httptest.Server {

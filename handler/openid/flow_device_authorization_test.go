@@ -23,9 +23,9 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 	defer ctrl.Finish()
 
 	config := &oauth2.Config{
-		AccessTokenLifespan:       time.Minute * 24,
-		AuthorizeCodeLifespan:     time.Minute * 24,
-		DeviceAndUserCodeLifespan: time.Minute * 24,
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
 	}
 	j := &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{
@@ -124,9 +124,9 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 	defer ctrl.Finish()
 
 	config := &oauth2.Config{
-		AccessTokenLifespan:       time.Minute * 24,
-		AuthorizeCodeLifespan:     time.Minute * 24,
-		DeviceAndUserCodeLifespan: time.Minute * 24,
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
 	}
 	j := &DefaultStrategy{
 		Signer: &jwt.DefaultSigner{

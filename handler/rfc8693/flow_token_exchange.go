@@ -40,7 +40,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	form := request.GetRequestForm()
-	configTypesSupported := c.Config.GetTokenTypes(ctx)
+	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
 	var supportedSubjectTypes, supportedActorTypes, supportedRequestTypes oauth2.Arguments
 	if teClient, ok := client.(Client); ok {
 		supportedRequestTypes = teClient.GetSupportedRequestTokenTypes()
@@ -115,7 +115,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	// check if supported
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
-		requestedTokenType = c.Config.GetDefaultRequestedTokenType(ctx)
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
 	if tt := configTypesSupported[requestedTokenType]; tt == nil {
@@ -157,10 +157,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
-		requestedTokenType = c.Config.GetDefaultRequestedTokenType(ctx)
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	configTypesSupported := c.Config.GetTokenTypes(ctx)
+	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
 	if tt := configTypesSupported[requestedTokenType]; tt == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
 			"The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))

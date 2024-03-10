@@ -19,8 +19,8 @@ func TestNewDeviceResponse(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
-	oauth2 := &Fosite{Config: &Config{DeviceAuthorizeEndpointHandlers: DeviceAuthorizeEndpointHandlers{handlers[0]}}}
-	duo := &Fosite{Config: &Config{DeviceAuthorizeEndpointHandlers: DeviceAuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
+	oauth2 := &Fosite{Config: &Config{RFC8628DeviceAuthorizeEndpointHandlers: RFC8628DeviceAuthorizeEndpointHandlers{handlers[0]}}}
+	duo := &Fosite{Config: &Config{RFC8628DeviceAuthorizeEndpointHandlers: RFC8628DeviceAuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
 	dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession))).AnyTimes()
 	fooErr := errors.New("foo")
 	for k, c := range []struct {

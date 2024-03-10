@@ -14,7 +14,7 @@ type DeviceAuthorizeHandler struct {
 	Storage  RFC8628Storage
 	Strategy RFC8628CodeStrategy
 	Config   interface {
-		oauth2.DeviceAuthorizeConfigProvider
+		oauth2.RFC9628DeviceAuthorizeConfigProvider
 	}
 }
 
@@ -38,7 +38,7 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	dar.SetDeviceCodeSignature(deviceCodeSignature)
 	dar.SetUserCodeSignature(userCodeSignature)
 
-	expireAt := time.Now().UTC().Add(d.Config.GetDeviceAndUserCodeLifespan(ctx)).Round(time.Second)
+	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Round(time.Second)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 
@@ -67,7 +67,7 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	resp.SetVerificationURI(raw)
 	resp.SetVerificationURIComplete(uri.String())
 	resp.SetExpiresIn(int64(time.Until(expireAt).Seconds()))
-	resp.SetInterval(int(d.Config.GetDeviceAuthTokenPollingInterval(ctx).Seconds()))
+	resp.SetInterval(int(d.Config.GetRFC8628TokenPollingInterval(ctx).Seconds()))
 
 	return nil
 }

@@ -20,9 +20,9 @@ import (
 func Test_HandleDeviceEndpointRequest(t *testing.T) {
 	strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 		&oauth2.Config{
-			AccessTokenLifespan:       time.Minute * 24,
-			AuthorizeCodeLifespan:     time.Minute * 24,
-			DeviceAndUserCodeLifespan: time.Minute * 24,
+			AccessTokenLifespan:   time.Minute * 24,
+			AuthorizeCodeLifespan: time.Minute * 24,
+			RFC8628CodeLifespan:   time.Minute * 24,
 		}, "authelia_%s_")
 
 	ctrl := gomock.NewController(t)
@@ -32,14 +32,14 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 		Storage:  store,
 		Strategy: strategy,
 		Config: &oauth2.Config{
-			DeviceAndUserCodeLifespan:      time.Minute * 10,
-			DeviceAuthTokenPollingInterval: time.Second * 10,
-			RFC8628UserVerificationURL:     "https://www.test.com",
-			AccessTokenLifespan:            time.Hour,
-			RefreshTokenLifespan:           time.Hour,
-			ScopeStrategy:                  oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:       oauth2.DefaultAudienceMatchingStrategy,
-			RefreshTokenScopes:             []string{consts.ScopeOffline},
+			RFC8628CodeLifespan:         time.Minute * 10,
+			RFC8628TokenPollingInterval: time.Second * 10,
+			RFC8628UserVerificationURL:  "https://www.test.com",
+			AccessTokenLifespan:         time.Hour,
+			RefreshTokenLifespan:        time.Hour,
+			ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+			AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+			RefreshTokenScopes:          []string{consts.ScopeOffline},
 		},
 	}
 

@@ -54,7 +54,7 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 			config.PushedAuthorizeEndpointHandlers.Append(ph)
 		}
 		if dh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointHandler); ok {
-			config.DeviceAuthorizeEndpointHandlers.Append(dh)
+			config.RFC8628DeviceAuthorizeEndpointHandlers.Append(dh)
 		}
 		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
 			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)

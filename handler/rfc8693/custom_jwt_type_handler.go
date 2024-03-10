@@ -32,7 +32,7 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 	}
 
 	form := request.GetRequestForm()
-	tokenTypes := c.Config.GetTokenTypes(ctx)
+	tokenTypes := c.Config.GetRFC8693TokenTypes(ctx)
 	actorTokenType := tokenTypes[form.Get(consts.FormParameterActorTokenType)]
 	subjectTokenType := tokenTypes[form.Get(consts.FormParameterSubjectTokenType)]
 	if actorTokenType != nil && actorTokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT {
@@ -76,10 +76,10 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
-		requestedTokenType = c.Config.GetDefaultRequestedTokenType(ctx)
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	tokenTypes := c.Config.GetTokenTypes(ctx)
+	tokenTypes := c.Config.GetRFC8693TokenTypes(ctx)
 	tokenType := tokenTypes[requestedTokenType]
 	if tokenType == nil || tokenType.GetType(ctx) != consts.TokenTypeRFC8693JWT {
 		return nil

@@ -18,9 +18,9 @@ import (
 var hmacshaStrategy = RFC8628HMACSHAStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
-		AccessTokenLifespan:       time.Minute * 24,
-		AuthorizeCodeLifespan:     time.Minute * 24,
-		DeviceAndUserCodeLifespan: time.Minute * 24,
+		AccessTokenLifespan:   time.Minute * 24,
+		AuthorizeCodeLifespan: time.Minute * 24,
+		RFC8628CodeLifespan:   time.Minute * 24,
 	},
 }
 
@@ -121,9 +121,9 @@ func TestHMACDeviceCode(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			strategy := NewRFC8628HMACSHAStrategy(&hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 				&oauth2.Config{
-					AccessTokenLifespan:       time.Minute * 24,
-					AuthorizeCodeLifespan:     time.Minute * 24,
-					DeviceAndUserCodeLifespan: time.Minute * 24,
+					AccessTokenLifespan:   time.Minute * 24,
+					AuthorizeCodeLifespan: time.Minute * 24,
+					RFC8628CodeLifespan:   time.Minute * 24,
 				}, "authelia_%s_")
 
 			token, signature, err := strategy.GenerateDeviceCode(context.TODO())

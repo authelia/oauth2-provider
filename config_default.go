@@ -40,7 +40,7 @@ type Config struct {
 	IDTokenLifespan time.Duration
 
 	// Sets how long a device user/device code pair is valid for
-	DeviceAndUserCodeLifespan time.Duration
+	RFC8628CodeLifespan time.Duration
 
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
@@ -89,9 +89,6 @@ type Config struct {
 	// this value MUST be set.
 	TokenURL string
 
-	// RFC8628UserVerificationURL is the URL of the device verification endpoint, this is is included with the device code request responses
-	RFC8628UserVerificationURL string
-
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
 	JWKSFetcherStrategy JWKSFetcherStrategy
@@ -100,8 +97,11 @@ type Config struct {
 	// Defaults to 32.
 	TokenEntropy int
 
-	// DeviceAuthTokenPollingInterval sets the interval that clients should check for device code grants
-	DeviceAuthTokenPollingInterval time.Duration
+	// RFC8628UserVerificationURL is the URL of the device verification endpoint, this is is included with the device code request responses
+	RFC8628UserVerificationURL string
+
+	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants
+	RFC8628TokenPollingInterval time.Duration
 
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
@@ -184,8 +184,8 @@ type Config struct {
 	// PushedAuthorizeEndpointHandlers is a list of handlers that are called before the PAR endpoint is served.
 	PushedAuthorizeEndpointHandlers PushedAuthorizeEndpointHandlers
 
-	// DeviceAuthorizeEndpointHandlers is a list of handlers that are called before the device authorization endpoint is served.
-	DeviceAuthorizeEndpointHandlers DeviceAuthorizeEndpointHandlers
+	// RFC8628DeviceAuthorizeEndpointHandlers is a list of handlers that are called before the device authorization endpoint is served.
+	RFC8628DeviceAuthorizeEndpointHandlers RFC8628DeviceAuthorizeEndpointHandlers
 
 	// RFC8628UserAuthorizeEndpointHandlers is a list of handlers that are called before the device grant user interaction endpoint is served.
 	RFC8628UserAuthorizeEndpointHandlers RFC8628UserAuthorizeEndpointHandlers
@@ -246,8 +246,8 @@ func (c *Config) GetRevocationHandlers(ctx context.Context) RevocationHandlers {
 	return c.RevocationHandlers
 }
 
-func (c *Config) GetDeviceAuthorizeEndpointHandlers(_ context.Context) DeviceAuthorizeEndpointHandlers {
-	return c.DeviceAuthorizeEndpointHandlers
+func (c *Config) GetRFC8628DeviceAuthorizeEndpointHandlers(_ context.Context) RFC8628DeviceAuthorizeEndpointHandlers {
+	return c.RFC8628DeviceAuthorizeEndpointHandlers
 }
 
 func (c *Config) GetRFC8628UserAuthorizeEndpointHandlers(_ context.Context) RFC8628UserAuthorizeEndpointHandlers {
@@ -406,12 +406,13 @@ func (c *Config) GetIDTokenLifespan(_ context.Context) time.Duration {
 	return c.IDTokenLifespan
 }
 
-// GetDeviceAndUserCodeLifespan returns the device and user code lifespan.
-func (c *Config) GetDeviceAndUserCodeLifespan(_ context.Context) time.Duration {
-	if c.DeviceAndUserCodeLifespan == 0 {
+// GetRFC8628CodeLifespan returns the device and user code lifespan.
+func (c *Config) GetRFC8628CodeLifespan(_ context.Context) time.Duration {
+	if c.RFC8628CodeLifespan == 0 {
 		return time.Minute * 10
 	}
-	return c.DeviceAndUserCodeLifespan
+
+	return c.RFC8628CodeLifespan
 }
 
 // GetAccessTokenLifespan returns how long an access token should be valid. Defaults to one hour.
@@ -561,11 +562,11 @@ func (c *Config) EnforcePushedAuthorize(ctx context.Context) bool {
 	return c.IsPushedAuthorizeEnforced
 }
 
-func (c *Config) GetTokenTypes(ctx context.Context) map[string]RFC8693TokenType {
+func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {
 	return c.RFC8693TokenTypes
 }
 
-func (c *Config) GetDefaultRequestedTokenType(ctx context.Context) string {
+func (c *Config) GetDefaultRFC8693RequestedTokenType(ctx context.Context) string {
 	return c.DefaultRequestedTokenType
 }
 
@@ -573,11 +574,11 @@ func (c *Config) GetRFC8628UserVerificationURL(_ context.Context) string {
 	return c.RFC8628UserVerificationURL
 }
 
-func (c *Config) GetDeviceAuthTokenPollingInterval(_ context.Context) time.Duration {
-	if c.DeviceAuthTokenPollingInterval == 0 {
+func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration {
+	if c.RFC8628TokenPollingInterval == 0 {
 		return time.Second * 10
 	}
-	return c.DeviceAuthTokenPollingInterval
+	return c.RFC8628TokenPollingInterval
 }
 
 var (
@@ -625,7 +626,7 @@ var (
 	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
 	_ PushedAuthorizeRequestConfigProvider            = (*Config)(nil)
 	_ RFC8693ConfigProvider                           = (*Config)(nil)
-	_ DeviceAuthorizeConfigProvider                   = (*Config)(nil)
-	_ DeviceAuthorizeEndpointHandlersProvider         = (*Config)(nil)
+	_ RFC9628DeviceAuthorizeConfigProvider            = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeEndpointHandlersProvider  = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
 )

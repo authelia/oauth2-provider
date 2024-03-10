@@ -29,7 +29,7 @@ type HMACSHAStrategyConfigurator interface {
 	oauth2.GlobalSecretProvider
 	oauth2.RotatedGlobalSecretsProvider
 	oauth2.HMACHashingProvider
-	oauth2.DeviceAuthorizeConfigProvider
+	oauth2.RFC9628DeviceAuthorizeConfigProvider
 }
 
 func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACSHAStrategy {

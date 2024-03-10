@@ -22,7 +22,8 @@ following list of differences:
 - [x] Minimum dependency is go version 1.21
 - [x] Replace string values with constants where applicable
       <sup>[commit](https://github.com/authelia/oauth2-provider/commit/de536dc0c9cd5f080c387621799e644319587bd0)</sup>
-- [ ] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5` or other such libraries
+- [ ] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5`
+      or other such libraries
 - [ ] Implement internal JWKS logic
 - [x] Higher Debug error information visibility (Debug Field includes the
       complete RFC6749 error with debug information if available)

@@ -47,20 +47,20 @@ var b64 = base64.URLEncoding.WithPadding(base64.NoPadding)
 // Generate generates a token and a matching signature or returns an error.
 // This method implements rfc6819 Section 5.1.4.2.2: Use High Entropy for Secrets.
 func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
-	c.Lock()
-	defer c.Unlock()
+	//c.Lock()
+	//defer c.Unlock()
 
-	secrets, err := c.Config.GetGlobalSecret(ctx)
+	secret, err := c.Config.GetGlobalSecret(ctx)
 	if err != nil {
 		return "", "", err
 	}
 
-	if len(secrets) < minimumSecretLength {
-		return "", "", errors.Errorf("secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got %d byte", len(secrets))
+	if len(secret) < minimumSecretLength {
+		return "", "", errors.Errorf("secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got %d byte", len(secret))
 	}
 
 	var signingKey [32]byte
-	copy(signingKey[:], secrets)
+	copy(signingKey[:], secret)
 
 	entropy := c.Config.GetTokenEntropy(ctx)
 	if entropy < minimumEntropy {

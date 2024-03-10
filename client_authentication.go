@@ -342,7 +342,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 	kid, alg = getJWTHeaderKIDAlg(header)
 
-	if client.GetTokenEndpointAuthSigningAlgorithm() != alg {
+	if client.GetTokenEndpointAuthSigningAlg() != alg {
 		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
 	}
 

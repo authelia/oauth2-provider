@@ -72,18 +72,18 @@ type OpenIDConnectClient interface {
 	// public key used by the client to authenticate.
 	GetJSONWebKeysURI() (uri string)
 
-	// GetRequestObjectSigningAlgorithm returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request
+	// GetRequestObjectSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request
 	// Objects sent to the OP. All Request Objects from this Client MUST be rejected, if not signed with this algorithm.
-	GetRequestObjectSigningAlgorithm() (alg string)
+	GetRequestObjectSigningAlg() (alg string)
 
 	// GetTokenEndpointAuthMethod requested Client Authentication method for the Token Endpoint. The options are
 	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt, and none.
 	GetTokenEndpointAuthMethod() (method string)
 
-	// GetTokenEndpointAuthSigningAlgorithm returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the
+	// GetTokenEndpointAuthSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the
 	// JWT [JWT] used to authenticate the Client at the Token Endpoint for the private_key_jwt and client_secret_jwt
 	// authentication methods.
-	GetTokenEndpointAuthSigningAlgorithm() (alg string)
+	GetTokenEndpointAuthSigningAlg() (alg string)
 
 	Client
 }
@@ -124,7 +124,7 @@ type ResponseModeClient interface {
 
 // ClientCredentialsFlowPolicyClient is a client which can allow implicit scopes in the client credentials flow.
 type ClientCredentialsFlowPolicyClient interface {
-	GetClientCredentialsFlowAllowImplicitScope() bool
+	GetClientCredentialsFlowAllowImplicitScope() (allow bool)
 
 	Client
 }
@@ -137,7 +137,7 @@ type JWTProfileClient interface {
 	GetAccessTokenSignedResponseKeyID() (kid string)
 
 	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
-	GetEnableJWTProfileOAuthAccessTokens() (enable bool)
+	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
 
 	Client
 }
@@ -145,8 +145,8 @@ type JWTProfileClient interface {
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`
-	ClientSecret         ClientSecret   `json:"client_secret,omitempty"`
-	RotatedClientSecrets []ClientSecret `json:"rotated_client_secrets,omitempty"`
+	ClientSecret         ClientSecret   `json:"-"`
+	RotatedClientSecrets []ClientSecret `json:"-"`
 	RedirectURIs         []string       `json:"redirect_uris"`
 	GrantTypes           []string       `json:"grant_types"`
 	ResponseTypes        []string       `json:"response_types"`
@@ -157,12 +157,12 @@ type DefaultClient struct {
 
 type DefaultOpenIDConnectClient struct {
 	*DefaultClient
-	JSONWebKeysURI                    string              `json:"jwks_uri"`
-	JSONWebKeys                       *jose.JSONWebKeySet `json:"jwks"`
-	TokenEndpointAuthMethod           string              `json:"token_endpoint_auth_method"`
-	RequestURIs                       []string            `json:"request_uris"`
-	RequestObjectSigningAlgorithm     string              `json:"request_object_signing_alg"`
-	TokenEndpointAuthSigningAlgorithm string              `json:"token_endpoint_auth_signing_alg"`
+	JSONWebKeysURI              string              `json:"jwks_uri"`
+	JSONWebKeys                 *jose.JSONWebKeySet `json:"jwks"`
+	TokenEndpointAuthMethod     string              `json:"token_endpoint_auth_method"`
+	RequestURIs                 []string            `json:"request_uris"`
+	RequestObjectSigningAlg     string              `json:"request_object_signing_alg"`
+	TokenEndpointAuthSigningAlg string              `json:"token_endpoint_auth_signing_alg"`
 }
 
 type DefaultResponseModeClient struct {
@@ -232,16 +232,16 @@ func (c *DefaultOpenIDConnectClient) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
-func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlgorithm() string {
-	if c.TokenEndpointAuthSigningAlgorithm == "" {
+func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlg() string {
+	if c.TokenEndpointAuthSigningAlg == "" {
 		return "RS256"
 	} else {
-		return c.TokenEndpointAuthSigningAlgorithm
+		return c.TokenEndpointAuthSigningAlg
 	}
 }
 
-func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlgorithm() string {
-	return c.RequestObjectSigningAlgorithm
+func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlg() string {
+	return c.RequestObjectSigningAlg
 }
 
 func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthMethod() string {

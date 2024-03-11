@@ -131,13 +131,6 @@ type ResponseModeClient interface {
 	Client
 }
 
-// ClientCredentialsFlowPolicyClient is a client which can allow implicit scopes in the client credentials flow.
-type ClientCredentialsFlowPolicyClient interface {
-	GetClientCredentialsFlowAllowImplicitScope() (allow bool)
-
-	Client
-}
-
 type JWTProfileClient interface {
 	// GetAccessTokenSignedResponseAlg returns the algorithm used for signing Access Tokens.
 	GetAccessTokenSignedResponseAlg() (alg string)
@@ -147,6 +140,25 @@ type JWTProfileClient interface {
 
 	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
 	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
+
+	Client
+}
+
+// ClientCredentialsFlowRequestedScopeImplicitClient is a client which can allow implicit scopes in the client credentials flow.
+type ClientCredentialsFlowRequestedScopeImplicitClient interface {
+	// GetClientCredentialsFlowRequestedScopeImplicit is indicative of if a client will implicitly request all scopes it
+	// is allowed to request in the absence of requested scopes during the Client Credentials Flow.
+	GetClientCredentialsFlowRequestedScopeImplicit() (implicit bool)
+
+	Client
+}
+
+// RequestedAudienceImplicitClient is a client which can potentially implicitly grant permitted audiences given the
+// absence of a request parameter.
+type RequestedAudienceImplicitClient interface {
+	// GetRequestedAudienceImplicit is indicative of if a client will implicitly request all audiences it is allowed to
+	// request in the absence of requested audience during an Authorization Endpoint Flow or Client Credentials Flow.
+	GetRequestedAudienceImplicit() (implicit bool)
 
 	Client
 }

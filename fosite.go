@@ -120,8 +120,9 @@ type Configurator interface {
 	GrantTypeJWTBearerIDOptionalProvider
 	GrantTypeJWTBearerIssuedDateOptionalProvider
 	GetJWTMaxDurationProvider
-	AudienceStrategyProvider
 	ScopeStrategyProvider
+	AudienceStrategyProvider
+	ClientCredentialsImplicitProvider
 	RedirectSecureCheckerProvider
 	OmitRedirectScopeParamProvider
 	SanitationAllowedProvider

@@ -13,7 +13,7 @@ import (
 func OAuth2PKCEFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &pkce.Handler{
 		AuthorizeCodeStrategy: strategy.(hoauth2.AuthorizeCodeStrategy),
-		Storage:               storage.(pkce.PKCERequestStorage),
+		Storage:               storage.(pkce.Storage),
 		Config:                config,
 	}
 }

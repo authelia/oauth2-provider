@@ -44,5 +44,6 @@ func (a *AuthorizeResponse) AddParameter(key, value string) {
 	if key == consts.FormParameterAuthorizationCode {
 		a.code = value
 	}
+
 	a.Parameters.Add(key, value)
 }

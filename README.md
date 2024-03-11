@@ -39,7 +39,7 @@ following list of differences:
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6584d3495422a97ef9aba92e762ffaebce010dd0)</sup>
     - [x] Original request id not set early enough
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6584d3495422a97ef9aba92e762ffaebce010dd0)</sup>
-  - PKCE Flow
+  - PKCE Flow:
     - [x] Session generated needlessly
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/dbdadf5dee92d13683eeacaa198c28d6704ddb1c)</sup>
     - [x] Failure to fetch session causes an error even when not enforced
@@ -57,6 +57,8 @@ following list of differences:
   - [x] Access Token iat and nbf in JWT Profile always original claims
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
+  - PKCE Flow:
+    - [x] Per-Client Enforcement Policy
   - CoreStrategy:
     - [x] Customizable Token Prefix
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/4f55dabdf5d87c34053992c3de3fe7b1bf1046f3)</sup>

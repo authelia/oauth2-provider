@@ -57,6 +57,9 @@ following list of differences:
   - [x] Access Token iat and nbf in JWT Profile always original claims
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/a87d91df762a8fe26282145ba9dace0461f31b4d)</sup>
 - Features:
+  - [ ] Requested Audience Policy (many clients do not support the parameter)
+  - PAR Flow:
+    - [ ] Per-Client Enforcement Policy
   - PKCE Flow:
     - [x] Per-Client Enforcement Policy
   - CoreStrategy:

@@ -46,6 +46,15 @@ type RotatedClientSecretsClient interface {
 	Client
 }
 
+// ProofKeyCodeExchangeClient is a Client implementation which provides PKCE client policy values.
+type ProofKeyCodeExchangeClient interface {
+	GetEnforcePKCE() (enforce bool)
+	GetEnforcePKCEChallengeMethod() (enforce bool)
+	GetPKCEChallengeMethod() (method string)
+
+	Client
+}
+
 // ClientAuthenticationPolicyClient is a Client implementation which also provides client authentication policy values.
 type ClientAuthenticationPolicyClient interface {
 	// GetAllowMultipleAuthenticationMethods should return true if the client policy allows multiple authentication

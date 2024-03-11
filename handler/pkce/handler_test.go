@@ -5,416 +5,1361 @@ package pkce
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 )
 
-type mockCodeStrategy struct {
-	signature string
-}
-
-func (m *mockCodeStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
-	return m.signature
-}
-
-func (m *mockCodeStrategy) GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error) {
-	return "", "", nil
-}
-
-func (m *mockCodeStrategy) ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) (err error) {
-	return nil
-}
-
-func TestPKCEHandleAuthorizeEndpointRequest(t *testing.T) {
-	var config oauth2.Config
-	h := &Handler{
-		Storage:               storage.NewMemoryStore(),
-		AuthorizeCodeStrategy: new(hoauth2.HMACCoreStrategy),
-		Config:                &config,
-	}
-	w := oauth2.NewAuthorizeResponse()
-	r := oauth2.NewAuthorizeRequest()
-	c := &oauth2.DefaultClient{}
-	r.Client = c
-
-	w.AddParameter(consts.FormParameterAuthorizationCode, "foo")
-
-	r.Form.Set(consts.FormParameterCodeChallenge, "challenge")
-	r.Form.Set(consts.FormParameterCodeChallengeMethod, consts.PKCEChallengeMethodPlain)
-
-	r.ResponseTypes = oauth2.Arguments{}
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	r.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
-	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	r.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
-	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	c.Public = true
-	config.EnablePKCEPlainChallengeMethod = true
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	c.Public = false
-	config.EnablePKCEPlainChallengeMethod = true
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	config.EnablePKCEPlainChallengeMethod = false
-	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	r.Form.Set(consts.FormParameterCodeChallenge, "")
-	r.Form.Set(consts.FormParameterCodeChallengeMethod, consts.PKCEChallengeMethodSHA256)
-
-	config.EnforcePKCE = true
-	require.Error(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-
-	r.Form.Set(consts.FormParameterCodeChallenge, "challenge")
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), r, w))
-}
-
-func TestPKCEHandlerValidate(t *testing.T) {
-	s := storage.NewMemoryStore()
-	ms := &mockCodeStrategy{}
-	config := &oauth2.Config{}
-	h := &Handler{Storage: s, AuthorizeCodeStrategy: ms, Config: config}
-	pc := &oauth2.DefaultClient{Public: true}
-
-	s256verifier := "KGCt4m8AmjUvIR5ArTByrmehjtbxn1A49YpTZhsH8N7fhDr7LQayn9xx6mck"
-	hash := sha256.New()
-	hash.Write([]byte(s256verifier))
-	s256challenge := base64.RawURLEncoding.EncodeToString(hash.Sum([]byte{}))
-
-	for k, tc := range []struct {
-		d             string
-		grant         string
-		force         bool
-		enablePlain   bool
-		challenge     string
-		method        string
-		verifier      string
-		code          string
-		expectErr     error
-		expectErrDesc string
-		client        *oauth2.DefaultClient
+func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requester oauth2.AuthorizeRequester
+		strategy  hoauth2.AuthorizeCodeStrategy
+		setup     func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder)
+		err       error
+		expected  string
 	}{
 		{
-			d:             "fails because not auth code flow",
-			grant:         "not_authorization_code",
-			expectErr:     oauth2.ErrUnknownRequest,
-			expectErrDesc: "The handler is not responsible for this request.",
-		},
-		{
-			d:           "passes with private client",
-			grant:       consts.GrantTypeAuthorizationCode,
-			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      consts.PKCEChallengeMethodPlain,
-			client:      &oauth2.DefaultClient{Public: false},
-			enablePlain: true,
-			force:       true,
-			code:        "valid-code-1",
-		},
-		{
-			d:             "fails because invalid code",
-			grant:         consts.GrantTypeAuthorizationCode,
-			client:        pc,
-			code:          "invalid-code-2",
-			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to find initial PKCE data tied to this request. Could not find the requested resource(s).",
-		},
-		{
-			d:      "passes because auth code flow but pkce is not forced and no challenge given",
-			grant:  consts.GrantTypeAuthorizationCode,
-			client: pc,
-			code:   "valid-code-3",
-		},
-		{
-			d:             "fails because auth code flow and pkce challenge given but plain is disabled",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "foo",
-			client:        pc,
-			code:          "valid-code-4",
-			expectErr:     oauth2.ErrInvalidRequest,
-			expectErrDesc: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must use code_challenge_method=S256, plain is not allowed. The server is configured in a way that enforces PKCE S256 as challenge method for clients.",
-		},
-		{
-			d:           "passes",
-			grant:       consts.GrantTypeAuthorizationCode,
-			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			client:      pc,
-			enablePlain: true,
-			force:       true,
-			code:        "valid-code-5",
-		},
-		{
-			d:           "passes",
-			grant:       consts.GrantTypeAuthorizationCode,
-			challenge:   "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			verifier:    "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:      consts.PKCEChallengeMethodPlain,
-			client:      pc,
-			enablePlain: true,
-			force:       true,
-			code:        "valid-code-6",
-		},
-		{
-			d:             "fails because challenge and verifier do not match",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "not-foo",
-			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:        consts.PKCEChallengeMethodPlain,
-			client:        pc,
-			enablePlain:   true,
-			code:          "valid-code-7",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
-		},
-		{
-			d:             "fails because challenge and verifier do not match",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "not-foonot-foonot-foonot-foonot-foonot-foonot-foonot-foo",
-			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			client:        pc,
-			enablePlain:   true,
-			code:          "valid-code-8",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
-		},
-		{
-			d:             "fails because verifier is too short",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "foo",
-			verifier:      "foo",
-			method:        consts.PKCEChallengeMethodSHA256,
-			client:        pc,
-			force:         true,
-			code:          "valid-code-9",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must be at least 43 characters.",
-		},
-		{
-			d:             "fails because verifier is too long",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "foo",
-			verifier:      "foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo",
-			method:        consts.PKCEChallengeMethodSHA256,
-			client:        pc,
-			force:         true,
-			code:          "valid-code-10",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier can not be longer than 128 characters.",
-		},
-		{
-			d:             "fails because verifier is malformed",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "foo",
-			verifier:      `(!"/$%Z&$T()/)OUZI>$"&=/T(PUOI>"%/)TUOI&/(O/()RGTE>=/(%"/()="$/)(=()=/R/()=))`,
-			method:        consts.PKCEChallengeMethodSHA256,
-			client:        pc,
-			force:         true,
-			code:          "valid-code-11",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'.",
-		},
-		{
-			d:             "fails because challenge and verifier do not match",
-			grant:         consts.GrantTypeAuthorizationCode,
-			challenge:     "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			verifier:      "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			method:        consts.PKCEChallengeMethodSHA256,
-			client:        pc,
-			force:         true,
-			code:          "valid-code-12",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
-		},
-		{
-			d:         "passes because challenge and verifier match",
-			grant:     consts.GrantTypeAuthorizationCode,
-			challenge: s256challenge,
-			verifier:  s256verifier,
-			method:    consts.PKCEChallengeMethodSHA256,
-			client:    pc,
-			force:     true,
-			code:      "valid-code-13",
-		},
-		{
-			d:      "passes when not forced because no challenge or verifier",
-			grant:  consts.GrantTypeAuthorizationCode,
-			client: pc,
-			code:   "valid-code-14",
-		},
-		{
-			d:             "fails when not forced because verifier provided when no challenge",
-			grant:         consts.GrantTypeAuthorizationCode,
-			client:        pc,
-			code:          "valid-code-15",
-			verifier:      "Zm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9vZm9v",
-			expectErr:     oauth2.ErrInvalidGrant,
-			expectErrDesc: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier was provided but the code challenge was absent from the authorization request.",
-		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
-			config.EnablePKCEPlainChallengeMethod = tc.enablePlain
-			config.EnforcePKCE = tc.force
-			ms.signature = tc.code
-			ar := oauth2.NewAuthorizeRequest()
-
-			if len(tc.challenge) != 0 {
-				ar.Form.Set(consts.FormParameterCodeChallenge, tc.challenge)
-			}
-
-			if len(tc.method) != 0 {
-				ar.Form.Set(consts.FormParameterCodeChallengeMethod, tc.method)
-			}
-
-			ar.Client = tc.client
-
-			require.NoError(t, s.CreatePKCERequestSession(context.TODO(), fmt.Sprintf("valid-code-%d", k), ar))
-
-			r := oauth2.NewAccessRequest(nil)
-			r.Client = tc.client
-			r.GrantTypes = oauth2.Arguments{tc.grant}
-
-			if len(tc.verifier) != 0 {
-				r.Form.Set(consts.FormParameterCodeVerifier, tc.verifier)
-			}
-
-			err := h.HandleTokenEndpointRequest(context.Background(), r)
-
-			if tc.expectErr == nil {
-				assert.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
-
-				if len(tc.expectErrDesc) != 0 {
-					assert.EqualError(t, newtesterr(err), tc.expectErrDesc)
-				}
-			}
-		})
-	}
-}
-
-func TestPKCEHandleTokenEndpointRequest(t *testing.T) {
-	for k, tc := range []struct {
-		d           string
-		force       bool
-		forcePublic bool
-		enablePlain bool
-		challenge   string
-		method      string
-		expectErr   bool
-		client      oauth2.Client
-	}{
-		{
-			d: "should pass because pkce is not enforced",
-		},
-		{
-			d:           "ShouldHandleNilClient",
-			forcePublic: true,
-			expectErr:   true,
-		},
-		{
-			d:         "should fail because plain is not enabled and method is empty which defaults to plain",
-			expectErr: true,
-			force:     true,
-		},
-		{
-			d:           "should fail because force is enabled and no challenge was given",
-			force:       true,
-			enablePlain: true,
-			expectErr:   true,
-			method:      consts.PKCEChallengeMethodSHA256,
-		},
-		{
-			d:           "should fail because forcePublic is enabled, the client is public, and no challenge was given",
-			forcePublic: true,
-			client:      &oauth2.DefaultClient{Public: true},
-			expectErr:   true,
-			method:      consts.PKCEChallengeMethodSHA256,
-		},
-		{
-			d:         "should fail because although force is enabled and a challenge was given, plain is disabled",
-			force:     true,
-			expectErr: true,
-			method:    consts.PKCEChallengeMethodPlain,
-			challenge: "challenge",
-		},
-		{
-			d:         "should fail because although force is enabled and a challenge was given, plain is disabled and method is empty",
-			force:     true,
-			expectErr: true,
-			challenge: "challenge",
-		},
-		{
-			d:         "should fail because invalid challenge method",
-			force:     true,
-			expectErr: true,
-			method:    "invalid",
-			challenge: "challenge",
-		},
-		{
-			d:         "should pass because force is enabled with challenge given and method is S256",
-			force:     true,
-			method:    consts.PKCEChallengeMethodSHA256,
-			challenge: "challenge",
-		},
-		{
-			d:           "should pass because forcePublic is enabled with challenge given and method is S256",
-			forcePublic: true,
-			client:      &oauth2.DefaultClient{Public: true},
-			method:      consts.PKCEChallengeMethodSHA256,
-			challenge:   "challenge",
-		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
-			h := &Handler{
-				Config: &oauth2.Config{
-					EnforcePKCE:                    tc.force,
-					EnforcePKCEForPublicClients:    tc.forcePublic,
-					EnablePKCEPlainChallengeMethod: tc.enablePlain,
+			"ShouldPassNotAuthorizationCodeFlow",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Form:   nil,
 				},
+			},
+			nil,
+			nil,
+			nil,
+			"",
+		},
+		{
+			"ShouldPassNoPKCE",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Form:   nil,
+				},
+			},
+			nil,
+			nil,
+			nil,
+			"",
+		},
+		{
+			"ShouldFailNoPKCEWithoutClientWithEnforceForPublicClients",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: nil,
+					Form:   nil,
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnforcePKCEForPublicClients = true
+			},
+			oauth2.ErrServerError,
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The client for the request wasn't properly loaded.",
+		},
+		{
+			"ShouldFailNoPKCEButRequiredForClient",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Form:   nil,
+				},
+			},
+			nil,
+			nil,
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The client with id 'test' is registered in a way that enforces PKCE.",
+		},
+		{
+			"ShouldFailWithoutChallengeWithMethodButRequired",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Form:   url.Values{consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256}},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnforcePKCE = true
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all clients.",
+		},
+		{
+			"ShouldFailNoPKCEButRequiredForPublicClient",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Form:   nil,
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnforcePKCEForPublicClients = true
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all public client type clients and the 'test' client is using the public client type.",
+		},
+		{
+			"ShouldPassNoPKCEConfidentialClientWhenRequirePKCEForPublicClients",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form:   nil,
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnforcePKCEForPublicClients = true
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailPKCEPlainWhenNotPermitted",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			nil,
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'plain', but the authorization server policy does not allow method 'plain' and requires method 'S256'. The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients.",
+		},
+		{
+			"ShouldFailLoadedAfterAuthorizeCodeHandler",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+			},
+			oauth2.ErrServerError,
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The PKCE handler must be loaded after the authorize code handler.",
+		},
+		{
+			"ShouldPassMethodPlain",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldPassMethodS256",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: "S256", DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = false
+				config.EnforcePKCE = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldPassMethodPlainWithClientEnforce",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				config.EnforcePKCE = false
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailUnknownMethod",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{"S252"},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				config.EnforcePKCE = false
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S252', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+		},
+		{
+			"ShouldFailMethodS255WhenPlainEnforce",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				config.EnforcePKCE = false
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S256', but the authorization server policy does not allow method 'S256' and requires method 'plain'. The registered client with id 'test' is configured in a way that enforces the use of 'code_challenge_method' with a value of 'plain' but the authorization request included method 'S256'.",
+		},
+		{
+			"ShouldPassMethodEmptyWhenPlainEnforce",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallenge: []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				config.EnforcePKCE = false
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailStoreError",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123.sig")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						Return(fmt.Errorf("bad connection")),
+				)
+			},
+			oauth2.ErrServerError,
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting create PKCE request session: bad connection.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			defer ctrl.Finish()
+
+			store := mock.NewMockPKCERequestStorage(ctrl)
+
+			config := &oauth2.Config{
+				GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 			}
 
-			if tc.expectErr {
-				assert.Error(t, h.validate(context.Background(), tc.challenge, tc.method, tc.client))
+			responder := oauth2.NewAuthorizeResponse()
+
+			if tc.setup != nil {
+				tc.setup(t, config, store, responder)
+			}
+
+			// Configure the provided strategy or the fallback.
+			var strategy hoauth2.AuthorizeCodeStrategy
+
+			if tc.strategy == nil {
+				strategy = hoauth2.NewCoreStrategy(config, "authelia_%s_", nil)
 			} else {
-				assert.NoError(t, h.validate(context.Background(), tc.challenge, tc.method, tc.client))
+				strategy = tc.strategy
+			}
+
+			handler := &Handler{
+				AuthorizeCodeStrategy: strategy,
+				Storage:               store,
+				Config:                config,
+			}
+
+			err := handler.HandleAuthorizeEndpointRequest(context.TODO(), tc.requester, responder)
+
+			if len(tc.expected) == 0 && tc.err == nil {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			} else {
+				require.NotNil(t, err)
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 			}
 		})
 	}
 }
 
-func newtesterr(err error) error {
-	if err == nil {
-		return nil
+func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requester oauth2.AccessRequester
+		strategy  hoauth2.AuthorizeCodeStrategy
+		setup     func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage)
+		err       error
+		expected  string
+	}{
+		{
+			"ShouldFailNotResponsible",
+			&oauth2.AccessRequest{
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Form:   nil,
+				},
+			},
+			nil,
+			nil,
+			oauth2.ErrUnknownRequest,
+			"The handler is not responsible for this request.",
+		},
+		{
+			"ShouldPassNoPKCE",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(nil, oauth2.ErrNotFound),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailNoPKCESessionWithPKCEEnforced",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(nil, oauth2.ErrNotFound),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_verifier' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all clients.",
+		},
+		{
+			"ShouldFailNoPKCESessionWithPKCEVerifier",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abc123"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(nil, oauth2.ErrNotFound),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to find initial PKCE data tied to this request. Could not find the requested resource(s).",
+		},
+		{
+			"ShouldFailStorageGetError",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abc123"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(nil, errors.New("bad connection")),
+				)
+			},
+			oauth2.ErrServerError,
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting get PKCE request session: bad connection.",
+		},
+		{
+			"ShouldFailStorageDeleteError",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abc123"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(errors.New("bad connection")),
+				)
+			},
+			oauth2.ErrServerError,
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting delete PKCE request session: bad connection.",
+		},
+		{
+			"ShouldFailMissingOriginalCodeChallenge",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abc123"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all clients.",
+		},
+		{
+			"ShouldPassSessionExistsButNoValues",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = false
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailClientRequiresPKCE",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = false
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The client with id 'test' is registered in a way that enforces PKCE.",
+		},
+		{
+			"ShouldFailClientRequiresPKCEInPKCESession",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = false
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The client with id 'test' is registered in a way that enforces PKCE.",
+		},
+		{
+			"ShouldFailServerRequiresPKCEForPublicClient",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCEForPublicClients = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all public client type clients and the 'test' client is using the public client type.",
+		},
+		{
+			"ShouldFailServerRequiresPKCEForPublicClientInPKCESession",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCEForPublicClients = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all public client type clients and the 'test' client is using the public client type.",
+		},
+		{
+			"ShouldFailServerRequiresPKCE",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCE = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all clients.",
+		},
+		{
+			"ShouldFailServerRequiresPKCEPublicClient",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnforcePKCEForPublicClients = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all public client type clients and the 'test' client is using the public client type.",
+		},
+		{
+			"ShouldFailVerifierTooShort",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"short"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must be at least 43 characters.",
+		},
+		{
+			"ShouldFailVerifierTooLong",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must be no more than 128 characters.",
+		},
+		{
+			"ShouldFailVerifierBuNoCode",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier was provided but the code challenge was absent from the authorization request.",
+		},
+		{
+			"ShouldFailVerifierInvalidValues",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"example"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'.",
+		},
+		{
+			"ShouldFailMethodPlainImplicit",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge: []string{"example"},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'plain', but the authorization server policy does not allow method 'plain' and requires method 'S256'. The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients.",
+		},
+		{
+			"ShouldFailMethodPlainExplicit",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"example"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'plain', but the authorization server policy does not allow method 'plain' and requires method 'S256'. The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients.",
+		},
+		{
+			"ShouldFailMethodPlainExplicit",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"example"},
+								consts.FormParameterCodeChallengeMethod: []string{"nope"},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'nope', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+		},
+		{
+			"ShouldFailMethodS256ClientRequiresPlain",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"example"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S256', but the authorization server policy does not allow method 'S256' and requires method 'plain'. The registered client with id 'test' is configured in a way that enforces the use of 'code_challenge_method' with a value of 'plain' but the authorization request included method 'S256'.",
+		},
+		{
+			"ShouldFailMethodS256ClientRequiresPlain",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: false, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"example"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S256', but the authorization server policy does not allow method 'S256' and requires method 'plain'. The registered client with id 'test' is configured in a way that enforces the use of 'code_challenge_method' with a value of 'plain' but the authorization request included method 'S256'.",
+		},
+		{
+			"ShouldPassMethodPlainImplicit",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnablePKCEPlainChallengeMethod = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge: []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldPassMethodPlainExplicit",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnablePKCEPlainChallengeMethod = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldFailMethodPlainNoMatch",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnablePKCEPlainChallengeMethod = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge: []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
+		},
+		{
+			"ShouldFailMethodS256NoMatch",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnablePKCEPlainChallengeMethod = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			oauth2.ErrInvalidGrant,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier.",
+		},
+		{
+			"ShouldPassS256Match",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Session: &oauth2.DefaultSession{},
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.EnablePKCEPlainChallengeMethod = true
+				gomock.InOrder(
+					store.
+						EXPECT().
+						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"X_rhBVULlQ_7LU7Cv25I6ouGvJQLtum1M-Fjw0f24hI"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+							},
+						}, nil),
+					store.
+						EXPECT().
+						DeletePKCERequestSession(context.TODO(), "sig").
+						Return(nil),
+				)
+			},
+			nil,
+			"",
+		},
 	}
 
-	var e *oauth2.RFC6749Error
-	if errors.As(err, &e) {
-		return &testerr{e}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			defer ctrl.Finish()
+
+			store := mock.NewMockPKCERequestStorage(ctrl)
+
+			config := &oauth2.Config{
+				GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+			}
+
+			if tc.setup != nil {
+				tc.setup(t, config, store)
+			}
+
+			// Configure the provided strategy or the fallback.
+			var strategy hoauth2.AuthorizeCodeStrategy
+
+			if tc.strategy == nil {
+				strategy = hoauth2.NewCoreStrategy(config, "authelia_%s_", nil)
+			} else {
+				strategy = tc.strategy
+			}
+
+			handler := &Handler{
+				AuthorizeCodeStrategy: strategy,
+				Storage:               store,
+				Config:                config,
+			}
+
+			err := handler.HandleTokenEndpointRequest(context.TODO(), tc.requester)
+
+			if len(tc.expected) == 0 && tc.err == nil {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			} else {
+				require.NotNil(t, err)
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+			}
+		})
+	}
+}
+
+func TestMiscellaneous(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	store := mock.NewMockPKCERequestStorage(ctrl)
+
+	config := &oauth2.Config{
+		GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 	}
 
-	return err
+	strategy := hoauth2.NewCoreStrategy(config, "authelia_%s_", nil)
+
+	handler := &Handler{
+		AuthorizeCodeStrategy: strategy,
+		Storage:               store,
+		Config:                config,
+	}
+
+	assert.False(t, handler.CanSkipClientAuth(context.TODO(), oauth2.NewAccessRequest(&oauth2.DefaultSession{})))
+	assert.NoError(t, handler.PopulateTokenEndpointResponse(context.TODO(), oauth2.NewAccessRequest(&oauth2.DefaultSession{}), oauth2.NewAccessResponse()))
 }
 
-type testerr struct {
-	*oauth2.RFC6749Error
+type TestPKCEClient struct {
+	*oauth2.DefaultClient
+	EnforcePKCE                bool
+	EnforcePKCEChallengeMethod bool
+	PKCEChallengeMethod        string
 }
 
-func (e *testerr) Error() string {
-	return e.RFC6749Error.WithExposeDebug(true).GetDescription()
+func (c *TestPKCEClient) GetEnforcePKCE() (enforce bool) {
+	return c.EnforcePKCE
+}
+
+func (c *TestPKCEClient) GetEnforcePKCEChallengeMethod() (enforce bool) {
+	return c.EnforcePKCEChallengeMethod
+}
+
+func (c *TestPKCEClient) GetPKCEChallengeMethod() (method string) {
+	return c.PKCEChallengeMethod
 }

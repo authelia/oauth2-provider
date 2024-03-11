@@ -43,26 +43,28 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	scopes := request.GetRequestedScopes()
 
-	if len(scopes) == 0 {
+	if len(scopes) == 0 && !request.GetRequestForm().Has(consts.FormParameterScope) {
 		if pclient, ok := client.(oauth2.ClientCredentialsFlowRequestedScopeImplicitClient); ok && pclient.GetClientCredentialsFlowRequestedScopeImplicit() {
-			scopes = client.GetScopes()
+			request.SetRequestedScopes(client.GetScopes())
+		}
+	} else {
+		for _, scope := range scopes {
+			if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
+				return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			}
 		}
 	}
 
-	for _, scope := range scopes {
-		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
-		}
-	}
+	audience := request.GetRequestedAudience()
 
-	if audience := request.GetRequestedAudience(); len(audience) == 0 {
+	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) {
 		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
 			request.SetRequestedAudience(ac.GetAudience())
 		}
-	}
-
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
-		return err
+	} else {
+		if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+			return err
+		}
 	}
 
 	lifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))

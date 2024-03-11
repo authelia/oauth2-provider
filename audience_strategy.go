@@ -99,7 +99,7 @@ func GetAudiences(form url.Values) []string {
 func (f *Fosite) validateAuthorizeAudience(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
 	audience := GetAudiences(request.Form)
 
-	if len(audience) == 0 {
+	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) {
 		if client, ok := request.Client.(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
 			audience = client.GetAudience()
 		}

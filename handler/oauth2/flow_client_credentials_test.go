@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -63,6 +64,7 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Audience:   []string{"https://www.authelia.com/api"},
 				})
+				areq.EXPECT().GetRequestForm().Return(url.Values{})
 			},
 		},
 		{
@@ -83,11 +85,12 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetSession().Return(new(oauth2.DefaultSession))
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
-				areq.EXPECT().GetRequestedAudience().Return([]string{}).Times(2)
+				areq.EXPECT().GetRequestedAudience().Return([]string{})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},
 				})
+				areq.EXPECT().GetRequestForm().Return(url.Values{})
 			},
 		},
 	} {
@@ -185,6 +188,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
 							Audience:   []string{"https://example.com"},
+							Scopes:     []string{"openid"},
 						},
 					},
 				},
@@ -205,6 +209,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 						ID:         "test",
 						GrantTypes: []string{consts.GrantTypeClientCredentials},
 						Audience:   []string{"https://example.com"},
+						Scopes:     []string{"openid"},
 					},
 				},
 			},
@@ -225,8 +230,9 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
 							Audience:   []string{"https://example.com"},
+							Scopes:     []string{"openid"},
 						},
-						implicit: true,
+						audience: true,
 					},
 				},
 			},
@@ -235,6 +241,61 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				Request: oauth2.Request{
 					RequestedAudience: []string{"https://example.com"},
 					GrantedAudience:   []string{"https://example.com"},
+				},
+			},
+			"",
+		},
+		{
+			"ShouldSuccessfullyGrantAllScopes",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					Session: &oauth2.DefaultSession{},
+					Client: &TestRequestedAudienceClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ID:         "test",
+							GrantTypes: []string{consts.GrantTypeClientCredentials},
+							Audience:   []string{"https://exmaple.com"},
+							Scopes:     []string{"openid"},
+						},
+						scopes: true,
+					},
+				},
+			},
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					RequestedScope: []string{"openid"},
+					GrantedScope:   []string{"openid"},
+				},
+			},
+			"",
+		},
+		{
+			"ShouldSuccessfullyGrantAllScopesAndAudiences",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					Session: &oauth2.DefaultSession{},
+					Client: &TestRequestedAudienceClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ID:         "test",
+							GrantTypes: []string{consts.GrantTypeClientCredentials},
+							Audience:   []string{"https://exmaple.com"},
+							Scopes:     []string{"openid"},
+						},
+						scopes:   true,
+						audience: true,
+					},
+				},
+			},
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					RequestedScope:    []string{"openid"},
+					RequestedAudience: []string{"https://exmaple.com"},
+					GrantedScope:      []string{"openid"},
+					GrantedAudience:   []string{"https://exmaple.com"},
 				},
 			},
 			"",
@@ -296,9 +357,14 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 type TestRequestedAudienceClient struct {
 	*oauth2.DefaultClient
 
-	implicit bool
+	audience bool
+	scopes   bool
 }
 
 func (c *TestRequestedAudienceClient) GetRequestedAudienceImplicit() bool {
-	return c.implicit
+	return c.audience
+}
+
+func (c *TestRequestedAudienceClient) GetClientCredentialsFlowRequestedScopeImplicit() bool {
+	return c.scopes
 }

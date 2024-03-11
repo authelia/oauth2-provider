@@ -75,6 +75,8 @@ type Config struct {
 	// AudienceMatchingStrategy sets the audience matching strategy that should be supported, defaults to oauth2.DefaultsAudienceMatchingStrategy.
 	AudienceMatchingStrategy AudienceMatchingStrategy
 
+	ClientCredentialsFlowImplicitGrantRequested bool
+
 	// EnforcePKCE, if set to true, requires clients to perform authorize code flows with PKCE. Defaults to false.
 	EnforcePKCE bool
 
@@ -382,6 +384,10 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceMatchingStrategy
 	}
 
 	return c.AudienceMatchingStrategy
+}
+
+func (c *Config) GetClientCredentialsFlowImplicitGrantRequested(_ context.Context) bool {
+	return c.ClientCredentialsFlowImplicitGrantRequested
 }
 
 // GetAuthorizeCodeLifespan returns how long an authorize code should be valid. Defaults to one fifteen minutes.

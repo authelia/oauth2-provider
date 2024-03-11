@@ -18,6 +18,7 @@ type ClientCredentialsGrantHandler struct {
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.AccessTokenLifespanProvider
+		oauth2.ClientCredentialsImplicitProvider
 	}
 }
 
@@ -43,7 +44,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	scopes := request.GetRequestedScopes()
 
 	if len(scopes) == 0 {
-		if pclient, ok := client.(oauth2.ClientCredentialsFlowPolicyClient); ok && pclient.GetClientCredentialsFlowAllowImplicitScope() {
+		if pclient, ok := client.(oauth2.ClientCredentialsFlowRequestedScopeImplicitClient); ok && pclient.GetClientCredentialsFlowRequestedScopeImplicit() {
 			scopes = client.GetScopes()
 		}
 	}
@@ -51,6 +52,12 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	for _, scope := range scopes {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+		}
+	}
+
+	if audience := request.GetRequestedAudience(); len(audience) == 0 {
+		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
+			request.SetRequestedAudience(ac.GetAudience())
 		}
 	}
 
@@ -73,6 +80,20 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeClientCredentials) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
+	}
+
+	if c.Config.GetClientCredentialsFlowImplicitGrantRequested(ctx) {
+		if len(request.GetGrantedScopes()) == 0 {
+			for _, scope := range request.GetRequestedScopes() {
+				request.GrantScope(scope)
+			}
+		}
+
+		if len(request.GetGrantedAudience()) == 0 {
+			for _, audience := range request.GetRequestedAudience() {
+				request.GrantAudience(audience)
+			}
+		}
 	}
 
 	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))

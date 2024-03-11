@@ -21,11 +21,14 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
-	token, signature, err := h.AccessTokenStrategy.GenerateAccessToken(ctx, requester)
-	if err != nil {
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
+	var token, signature string
+
+	if token, signature, err = h.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
 		return err
-	} else if err := h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, requester.Sanitize([]string{})); err != nil {
+	}
+
+	if err = h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, requester.Sanitize([]string{})); err != nil {
 		return err
 	}
 
@@ -33,6 +36,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	responder.SetTokenType(oauth2.BearerAccessToken)
 	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
+
 	return nil
 }
 

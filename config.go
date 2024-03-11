@@ -58,6 +58,13 @@ type AudienceStrategyProvider interface {
 	GetAudienceStrategy(ctx context.Context) AudienceMatchingStrategy
 }
 
+// ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
+type ClientCredentialsImplicitProvider interface {
+	// GetClientCredentialsFlowImplicitGrantRequested returns true if the PopulateTokenEndpointResponse portion of the
+	// oauth2.ClientCredentialsGrantHandler should implicitly grant all requested and validated scopes and audiences.
+	GetClientCredentialsFlowImplicitGrantRequested(ctx context.Context) (implicit bool)
+}
+
 // RedirectSecureCheckerProvider returns the provider for configuring the redirect URL security validator.
 type RedirectSecureCheckerProvider interface {
 	// GetRedirectSecureChecker returns the redirect URL security validator.

@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-jose/go-jose/v4"
 
@@ -119,6 +120,18 @@ type JARMClient interface {
 	GetAuthorizationSignedResponseAlg() (alg string)
 	GetAuthorizationEncryptedResponseAlg() (alg string)
 	GetAuthorizationEncryptedResponseEncryptionAlg() (alg string)
+
+	Client
+}
+
+// PushedAuthorizationRequestClient is a client with custom requirements for Pushed Authorization requests.
+type PushedAuthorizationRequestClient interface {
+	// GetRequirePushedAuthorizationRequests should return true if this client MUST use a Pushed Authorization Request.
+	GetRequirePushedAuthorizationRequests() (require bool)
+
+	// GetPushedAuthorizeContextLifespan should return a custom lifespan or a duration of 0 seconds to utilize the
+	// global lifespan.
+	GetPushedAuthorizeContextLifespan() (lifespan time.Duration)
 
 	Client
 }

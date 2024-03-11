@@ -29,8 +29,8 @@ type PushedAuthorizeHandler struct {
 // HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
 // is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
 // the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
-func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.PushedAuthorizeResponder) error {
-	configProvider, ok := c.Config.(oauth2.PushedAuthorizeRequestConfigProvider)
+func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.PushedAuthorizeResponder) (err error) {
+	config, ok := c.Config.(oauth2.PushedAuthorizeRequestConfigProvider)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint(oauth2.ErrorPARNotSupported).WithDebug(oauth2.DebugPARConfigMissing))
 	}
@@ -55,11 +55,18 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		}
 	}
 
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+	if err = c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	expiresIn := configProvider.GetPushedAuthorizeContextLifespan(ctx)
+	var parc oauth2.PushedAuthorizationRequestClient
+
+	expiresIn := config.GetPushedAuthorizeContextLifespan(ctx)
+
+	if parc, ok = client.(oauth2.PushedAuthorizationRequestClient); ok && parc.GetPushedAuthorizeContextLifespan().Seconds() > 0 {
+		expiresIn = parc.GetPushedAuthorizeContextLifespan()
+	}
+
 	if requester.GetSession() != nil {
 		requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))
 	}
@@ -70,7 +77,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHint("Unable to generate the random part of the request_uri.").WithWrap(err).WithDebugError(err))
 	}
 
-	requestURI := fmt.Sprintf("%s%s", configProvider.GetPushedAuthorizeRequestURIPrefix(ctx), base64.RawURLEncoding.EncodeToString(stateKey))
+	requestURI := fmt.Sprintf("%s%s", config.GetPushedAuthorizeRequestURIPrefix(ctx), base64.RawURLEncoding.EncodeToString(stateKey))
 
 	// store
 	if err = storage.CreatePARSession(ctx, requestURI, requester); err != nil {

@@ -325,14 +325,14 @@ func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (Auth
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (AuthorizeRequester, error) {
+func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (requester AuthorizeRequester, err error) {
 	request := NewAuthorizeRequest()
 	request.Request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
 
-	if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -343,19 +343,31 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	// Check if this is a continuation from a pushed authorization request
 	if !isPARRequest {
-		if isPAR, err := f.authorizeRequestFromPAR(ctx, r, request); err != nil {
+		var isPAR bool
+
+		if isPAR, err = f.authorizeRequestFromPAR(ctx, r, request); err != nil {
 			return request, err
-		} else if isPAR {
-			// No need to continue
+		}
+
+		if isPAR {
+			// No need to continue.
 			return request, nil
-		} else if configProvider, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && configProvider.EnforcePushedAuthorize(ctx) {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are enforced but no such request was sent."))
+		}
+
+		if config, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && config.GetRequirePushedAuthorizationRequests(ctx) {
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebug("The Authorization Server policy requires Pushed Authorization Requests be used for all clients."))
 		}
 	}
 
 	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID))
 	if err != nil {
 		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
+	}
+
+	if !isPARRequest {
+		if parc, ok := client.(PushedAuthorizationRequestClient); ok && parc.GetRequirePushedAuthorizationRequests() {
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The Registered Client policy for client with id '%s' requires Pushed Authorization Requests for be used for this client.", parc.GetID()))
+		}
 	}
 
 	request.Client = client

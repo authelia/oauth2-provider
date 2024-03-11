@@ -117,6 +117,65 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
 			},
 		},
+		{
+			handler: handler,
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"code"},
+				Request: oauth2.Request{
+					Client: &PARCTestClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ResponseTypes: oauth2.Arguments{"code"},
+							RedirectURIs:  []string{"https://asdf.de/cb"},
+							Audience:      []string{"https://www.authelia.com/api"},
+						},
+						lifespan: time.Hour,
+					},
+					RequestedAudience: []string{"https://www.authelia.com/api"},
+					GrantedScope:      oauth2.Arguments{"a", "b"},
+					Session: &oauth2.DefaultSession{
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+					},
+					RequestedAt: time.Now().UTC(),
+				},
+				State:       "superstate",
+				RedirectURI: parseURL("https://asdf.de/cb"),
+			},
+			description: "ShouldPassPARCWithLifespan",
+			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
+				requestURI := aresp.RequestURI
+				assert.NotEmpty(t, requestURI)
+				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
+			},
+		},
+		{
+			handler: handler,
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{"code"},
+				Request: oauth2.Request{
+					Client: &PARCTestClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ResponseTypes: oauth2.Arguments{"code"},
+							RedirectURIs:  []string{"https://asdf.de/cb"},
+							Audience:      []string{"https://www.authelia.com/api"},
+						},
+					},
+					RequestedAudience: []string{"https://www.authelia.com/api"},
+					GrantedScope:      oauth2.Arguments{"a", "b"},
+					Session: &oauth2.DefaultSession{
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+					},
+					RequestedAt: time.Now().UTC(),
+				},
+				State:       "superstate",
+				RedirectURI: parseURL("https://asdf.de/cb"),
+			},
+			description: "ShouldPassPARCWithoutLifespan",
+			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
+				requestURI := aresp.RequestURI
+				assert.NotEmpty(t, requestURI)
+				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
+			},
+		},
 	} {
 		t.Run("case="+c.description, func(t *testing.T) {
 			aresp := &oauth2.PushedAuthorizeResponse{}
@@ -133,3 +192,20 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 		})
 	}
 }
+
+type PARCTestClient struct {
+	*oauth2.DefaultClient
+
+	require  bool
+	lifespan time.Duration
+}
+
+func (p *PARCTestClient) GetRequirePushedAuthorizationRequests() (require bool) {
+	return p.require
+}
+
+func (p *PARCTestClient) GetPushedAuthorizeContextLifespan() (lifespan time.Duration) {
+	return p.lifespan
+}
+
+var _ oauth2.PushedAuthorizationRequestClient = (*PARCTestClient)(nil)

@@ -184,7 +184,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 						DefaultClient: &oauth2.DefaultClient{
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
-							Audience:   []string{"https://exmaple.com"},
+							Audience:   []string{"https://example.com"},
 						},
 					},
 				},
@@ -204,7 +204,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 					Client: &oauth2.DefaultClient{
 						ID:         "test",
 						GrantTypes: []string{consts.GrantTypeClientCredentials},
-						Audience:   []string{"https://exmaple.com"},
+						Audience:   []string{"https://example.com"},
 					},
 				},
 			},
@@ -224,7 +224,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 						DefaultClient: &oauth2.DefaultClient{
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
-							Audience:   []string{"https://exmaple.com"},
+							Audience:   []string{"https://example.com"},
 						},
 						implicit: true,
 					},
@@ -233,8 +233,8 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 				Request: oauth2.Request{
-					RequestedAudience: []string{"https://exmaple.com"},
-					GrantedAudience:   []string{"https://exmaple.com"},
+					RequestedAudience: []string{"https://example.com"},
+					GrantedAudience:   []string{"https://example.com"},
 				},
 			},
 			"",

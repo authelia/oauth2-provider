@@ -366,8 +366,8 @@ type PushedAuthorizeRequestConfigProvider interface {
 	// GetPushedAuthorizeContextLifespan is the lifespan of the short-lived PAR context.
 	GetPushedAuthorizeContextLifespan(ctx context.Context) (lifespan time.Duration)
 
-	// EnforcePushedAuthorize indicates if PAR is enforced. In this mode, a client
-	// cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
+	// GetRequirePushedAuthorizationRequests indicates if the use of Pushed Authorization Requests is gobally required.
+	// In this mode, a client cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 	// must contain the PAR request_uri.
-	EnforcePushedAuthorize(ctx context.Context) (enforce bool)
+	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
 }

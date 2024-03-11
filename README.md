@@ -59,7 +59,7 @@ following list of differences:
 - Features:
   - [x] Requested Audience Policy (many clients do not support the parameter)
   - PAR Flow:
-    - [ ] Per-Client Enforcement Policy
+    - [x] Per-Client Enforcement Policy
   - PKCE Flow:
     - [x] Per-Client Enforcement Policy
   - CoreStrategy:

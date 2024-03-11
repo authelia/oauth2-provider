@@ -208,8 +208,8 @@ type Config struct {
 	// PushedAuthorizeContextLifespan is the lifespan of the PAR context
 	PushedAuthorizeContextLifespan time.Duration
 
-	// IsPushedAuthorizeEnforced enforces pushed authorization request for /authorize
-	IsPushedAuthorizeEnforced bool
+	// RequirePushedAuthorizationRequests requires pushed authorization request for /authorize
+	RequirePushedAuthorizationRequests bool
 
 	RFC8693TokenTypes map[string]RFC8693TokenType
 
@@ -560,8 +560,8 @@ func (c *Config) GetPushedAuthorizeContextLifespan(ctx context.Context) time.Dur
 // EnforcePushedAuthorize indicates if PAR is enforced. In this mode, a client
 // cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 // must contain the PAR request_uri.
-func (c *Config) EnforcePushedAuthorize(ctx context.Context) bool {
-	return c.IsPushedAuthorizeEnforced
+func (c *Config) GetRequirePushedAuthorizationRequests(ctx context.Context) bool {
+	return c.RequirePushedAuthorizationRequests
 }
 
 func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {

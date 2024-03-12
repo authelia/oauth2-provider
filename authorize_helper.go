@@ -189,7 +189,9 @@ func IsLocalhost(redirectURI *url.URL) bool {
 	return strings.HasSuffix(hn, ".localhost") || hn == "localhost" || isLoopbackAddress(redirectURI)
 }
 
-func WriteAuthorizeFormPostResponse(redirectURL string, parameters url.Values, template *template.Template, rw io.Writer) {
+type FormPostResponseWriter func(wr io.Writer, template *template.Template, redirectURL string, parameters url.Values)
+
+func DefaultFormPostResponseWriter(rw io.Writer, template *template.Template, redirectURL string, parameters url.Values) {
 	_ = template.Execute(rw, struct {
 		RedirURL   string
 		Parameters url.Values

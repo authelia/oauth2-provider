@@ -280,6 +280,13 @@ type FormPostHTMLTemplateProvider interface {
 	GetFormPostHTMLTemplate(ctx context.Context) (tmpl *template.Template)
 }
 
+// FormPostResponseProvider provides a writer interface for writing the form post responses.
+type FormPostResponseProvider interface {
+	// GetFormPostResponseWriter returns a FormPostResponseWriter which should be utilized for writing the
+	// form post response type.
+	GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter
+}
+
 type TokenURLProvider interface {
 	// GetTokenURL returns the token URL.
 	GetTokenURL(ctx context.Context) (url string)

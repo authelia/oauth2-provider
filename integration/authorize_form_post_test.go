@@ -254,8 +254,7 @@ func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, resp oauth2.AuthorizeResponder) {
 	rw.Header().Add(consts.HeaderContentType, consts.ContentTypeTextHTML)
 	resp.AddParameter("custom_param", "foo")
-	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), resp.GetParameters(), oauth2.GetPostFormHTMLTemplate(ctx,
-		new(oauth2.Config)), rw)
+	oauth2.DefaultFormPostResponseWriter(rw, oauth2.GetPostFormHTMLTemplate(ctx, new(oauth2.Config)), ar.GetRedirectURI().String(), resp.GetParameters())
 }
 
 func (m *DecoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, ar oauth2.AuthorizeRequester, err error) {
@@ -263,8 +262,7 @@ func (m *DecoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw 
 	errors := rfc.ToValues()
 	errors.Set(consts.FormParameterState, ar.GetState())
 	errors.Add("custom_err_param", "bar")
-	oauth2.WriteAuthorizeFormPostResponse(ar.GetRedirectURI().String(), errors, oauth2.GetPostFormHTMLTemplate(ctx,
-		new(oauth2.Config)), rw)
+	oauth2.DefaultFormPostResponseWriter(rw, oauth2.GetPostFormHTMLTemplate(ctx, new(oauth2.Config)), ar.GetRedirectURI().String(), errors)
 }
 
 type checkFunc func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string)

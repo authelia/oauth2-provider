@@ -69,6 +69,7 @@ following list of differences:
       - JWT Profile Core Strategy (if a jwt.Signer is provided)
       - HMAC-based Core Strategy
     - [x] JWT Profile Per Client
+  - [x] Custom Form Post Response Writer
   - [ ] UserInfo support
   - [x] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
         support

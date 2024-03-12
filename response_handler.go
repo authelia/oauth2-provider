@@ -111,7 +111,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		}
 
 		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeTextHTML)
-		WriteAuthorizeFormPostResponse(redirectURI.String(), form, GetPostFormHTMLTemplate(ctx, h.Config), rw)
+		h.Config.GetFormPostResponseWriter(ctx)(rw, GetPostFormHTMLTemplate(ctx, h.Config), redirectURI.String(), form)
 
 		return
 	case ResponseModeQuery, ResponseModeDefault, ResponseModeQueryJWT, ResponseModeJWT:
@@ -222,6 +222,7 @@ func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
 
 type ResponseModeHandlerConfigurator interface {
 	FormPostHTMLTemplateProvider
+	FormPostResponseProvider
 	JWTSecuredAuthorizeResponseModeIssuerProvider
 	JWTSecuredAuthorizeResponseModeSignerProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider

@@ -145,6 +145,9 @@ type Config struct {
 	// FormPostHTMLTemplate sets html template for rendering the authorization response when the request has response_mode=form_post.
 	FormPostHTMLTemplate *template.Template
 
+	//
+	FormPostResponseWriter FormPostResponseWriter
+
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.
 	OmitRedirectScopeParam bool
 
@@ -270,6 +273,14 @@ func (c *Config) GetTokenURL(ctx context.Context) string {
 
 func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template {
 	return c.FormPostHTMLTemplate
+}
+
+func (c *Config) GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter {
+	if c.FormPostResponseWriter == nil {
+		c.FormPostResponseWriter = DefaultFormPostResponseWriter
+	}
+
+	return c.FormPostResponseWriter
 }
 
 func (c *Config) GetMessageCatalog(ctx context.Context) i18n.MessageCatalog {
@@ -618,6 +629,7 @@ var (
 	_ ResponseModeHandlerProvider                     = (*Config)(nil)
 	_ MessageCatalogProvider                          = (*Config)(nil)
 	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
+	_ FormPostResponseProvider                        = (*Config)(nil)
 	_ TokenURLProvider                                = (*Config)(nil)
 	_ HTTPClientProvider                              = (*Config)(nil)
 	_ HMACHashingProvider                             = (*Config)(nil)

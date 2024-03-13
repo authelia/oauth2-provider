@@ -155,6 +155,7 @@ type Configurator interface {
 	ClientAuthenticationStrategyProvider
 	MessageCatalogProvider
 	FormPostHTMLTemplateProvider
+	FormPostResponseProvider
 	TokenURLProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider

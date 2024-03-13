@@ -284,7 +284,7 @@ func TestWriteAuthorizeFormPostResponse(t *testing.T) {
 		var responseBuffer bytes.Buffer
 
 		redirectURL := "https://localhost:8080/cb"
-		oauth2.WriteAuthorizeFormPostResponse(redirectURL, c.parameters, oauth2.DefaultFormPostTemplate, &responseBuffer)
+		oauth2.DefaultFormPostResponseWriter(&responseBuffer, oauth2.DefaultFormPostTemplate, redirectURL, c.parameters)
 		code, state, _, _, customParams, _, err := internal.ParseFormPostResponse(redirectURL, io.NopCloser(bytes.NewReader(responseBuffer.Bytes())))
 		assert.NoError(t, err, "case %d", d)
 		c.check(code, state, customParams, d)

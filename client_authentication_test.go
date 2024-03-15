@@ -111,7 +111,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{},
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_client_auth_method' method 'none', however the OAuth 2.0 client does not support this method. The registered client with id 'foo' only supports 'token_endpoint_client_auth_method' method 'client_secret_basic'.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'none', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 		},
 		{
 			name: "ShouldPassWithClientCredentialsContainingSpecialCharacters",
@@ -128,7 +128,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{"client_id": []string{"abc"}, "client_secret": []string{complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Authentication failed with more than one known authentication method included in the request when the authorization server policy does not permit this. The client authentication methods detected were 'client_secret_basic', 'client_secret_post'.",
+			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
 			name: "ShouldPassWithMultipleAuthenticationMethods",
@@ -147,7 +147,7 @@ func TestAuthenticateClient(t *testing.T) {
 				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{"client_id": []string{"foo"}},
 			r:         new(http.Request),
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_client_auth_method' method 'none', however the OAuth 2.0 client does not support this method. The registered client with id 'foo' only supports 'token_endpoint_client_auth_method' method 'client_secret_basic'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'none', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 			expectErr: ErrInvalidClient,
 		},
 		{

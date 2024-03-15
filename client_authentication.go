@@ -125,7 +125,9 @@ func (s *DefaultClientAuthenticationStrategy) handleResolvedClientAuthentication
 			break
 		}
 
-		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHintf("Client Authentication failed with more than one known authentication method included in the request when the authorization server policy does not permit this. The client authentication methods detected were '%s'.", strings.Join(methods, "', '")))
+		return nil, "", errorsx.WithStack(ErrInvalidRequest.
+			WithHintf("Client Authentication failed with more than one known authentication method included in the request which is not permitted.").
+			WithDebugf("The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were '%s'.", c.GetID(), strings.Join(methods, "', '")))
 	}
 
 	return c, m, nil
@@ -140,8 +142,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Con
 		if method = oclient.GetTokenEndpointAuthMethod(); method != consts.ClientAuthMethodNone {
 			return nil, "", errorsx.WithStack(
 				ErrInvalidClient.
-					WithHint("The request was determined to be using 'token_endpoint_client_auth_method' method 'none', however the OAuth 2.0 client does not support this method.").
-					WithDebugf("The registered client with id '%s' only supports 'token_endpoint_client_auth_method' method '%s'.", client.GetID(), method))
+					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", consts.ClientAuthMethodNone).
+					WithDebugf("The registered client with id '%s' is configured to only support 'token_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), method, consts.ClientAuthMethodNone, method))
 		}
 	}
 
@@ -165,8 +167,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 		if cmethod = oclient.GetTokenEndpointAuthMethod(); cmethod != method {
 			return nil, "", errorsx.WithStack(
 				ErrInvalidClient.
-					WithHintf("The request was determined to be using 'token_endpoint_client_auth_method' method '%s', however the OAuth 2.0 client does not support this method.", method).
-					WithDebugf("The registered client with id '%s' only supports 'token_endpoint_client_auth_method' method '%s'.", client.GetID(), cmethod))
+					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", method).
+					WithDebugf("The registered client with id '%s' is configured to only support 'token_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), cmethod, method, cmethod))
 		}
 	}
 
@@ -176,8 +178,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	case errors.Is(err, ErrClientSecretNotRegistered):
 		return nil, "", errorsx.WithStack(
 			ErrInvalidClient.
-				WithHint("The request was determined to be using 'token_endpoint_client_auth_method' method '%s', however the OAuth 2.0 client does not support this method.").
-				WithDebug("The client was not registered with a client secret however this is required to process the particular request."),
+				WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", method).
+				WithDebugf("The registered client with id '%s' has no 'client_secret' however this is required to process the particular request.", client.GetID()),
 		)
 	default:
 		return nil, "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))

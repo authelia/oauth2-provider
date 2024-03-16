@@ -819,7 +819,7 @@ type TestClientAuthenticationPolicyClient struct {
 	AllowMultipleAuthenticationMethods bool
 }
 
-func (c *TestClientAuthenticationPolicyClient) GetAllowMultipleAuthenticationMethods(ctx context.Context) bool {
+func (c *TestClientAuthenticationPolicyClient) GetAllowMultipleAuthenticationMethods() bool {
 	return c.AllowMultipleAuthenticationMethods
 }
 

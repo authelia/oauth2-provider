@@ -121,7 +121,7 @@ func (s *DefaultClientAuthenticationStrategy) handleResolvedClientAuthentication
 		// within a request per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3 clients MUST NOT use more than
 		// one, however some bad clients use a shotgun approach to authentication. This allows developing a personal
 		// policy around these bad clients on a per-client basis.
-		if capc, ok := c.(ClientAuthenticationPolicyClient); ok && capc.GetAllowMultipleAuthenticationMethods(ctx) {
+		if capc, ok := c.(ClientAuthenticationPolicyClient); ok && capc.GetAllowMultipleAuthenticationMethods() {
 			break
 		}
 

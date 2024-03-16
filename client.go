@@ -62,7 +62,7 @@ type ClientAuthenticationPolicyClient interface {
 	// methods due to the client implementation breaching RFC6749 Section 2.3.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.
-	GetAllowMultipleAuthenticationMethods(ctx context.Context) (allow bool)
+	GetAllowMultipleAuthenticationMethods() (allow bool)
 
 	Client
 }

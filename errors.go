@@ -131,7 +131,7 @@ var (
 	ErrTokenSignatureMismatch = &RFC6749Error{
 		ErrorField:       errTokenSignatureMismatchName,
 		DescriptionField: "Token signature mismatch.",
-		HintField:        "Check that you provided  a valid token in the right format.",
+		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrInvalidTokenFormat = &RFC6749Error{

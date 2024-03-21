@@ -71,7 +71,7 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return accessRequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Request parameter 'grant_type' is missing"))
 	}
 
-	client, clientErr := f.AuthenticateClient(ctx, r, r.PostForm)
+	client, _, clientErr := f.AuthenticateClient(ctx, r, r.PostForm)
 	if clientErr == nil {
 		accessRequest.Client = client
 	}

@@ -709,7 +709,7 @@ func TestAuthenticateClient(t *testing.T) {
 			store.Clients[client.GetID()] = client
 			provider.Store = store
 
-			c, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
+			c, _, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
 
 			if len(tc.err) != 0 {
 				require.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
@@ -768,12 +768,12 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		consts.ClaimAudience:       "token-url",
 	}, key, "kid-foo")}, consts.FormParameterClientAssertionType: []string{consts.ClientAssertionTypeJWTBearer}}
 
-	c, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, _, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.NoError(t, err, "%#v", err)
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
-	c, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, _, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
 	assert.Nil(t, c)

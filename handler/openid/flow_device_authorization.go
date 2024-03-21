@@ -76,7 +76,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 
 	sess, ok := authorize.GetSession().(Session)
 	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type fosite/handler/openid.Session."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type 'openid.Session'."))
 	}
 
 	claims := sess.IDTokenClaims()

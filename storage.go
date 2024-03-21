@@ -7,7 +7,7 @@ import (
 	"context"
 )
 
-// Storage defines fosite's minimal storage interface.
+// Storage defines the minimal storage interface.
 type Storage interface {
 	ClientManager
 }

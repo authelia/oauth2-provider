@@ -25,7 +25,7 @@ type CustomTokenLifespansClient interface {
 
 // ClientLifespanConfig holds default lifespan configuration for the different
 // token types that may be issued for the client. This configuration takes
-// precedence over fosite's instance-wide default lifespan, but it may be
+// precedence over instance-wide default lifespan, but it may be
 // overridden by a session's expires_at claim.
 //
 // The OIDC Hybrid grant type inherits token lifespan configuration from the implicit grant.

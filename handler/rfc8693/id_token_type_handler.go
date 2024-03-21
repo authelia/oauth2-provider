@@ -125,7 +125,7 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 	sess, ok := request.GetSession().(openid.Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug(
-			"Failed to generate id token because session must be of type fosite/handler/openid.Session."))
+			"Failed to generate id token because session must be of type 'openid.Session'."))
 	}
 
 	claims := sess.IDTokenClaims()

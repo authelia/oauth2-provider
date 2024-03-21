@@ -51,14 +51,14 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 
 // GetDefaultClientAuthenticationStrategy returns the default ClientAuthenticationStrategy, if nil it initializes one.
 func (f *Fosite) GetDefaultClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationStrategy {
-	if f.defaultClientAuthenticationStrategy == nil {
-		f.defaultClientAuthenticationStrategy = &DefaultClientAuthenticationStrategy{
+	if f.ClientAuthenticationStrategy == nil {
+		f.ClientAuthenticationStrategy = &DefaultClientAuthenticationStrategy{
 			f.Store,
 			f.Config,
 		}
 	}
 
-	return f.defaultClientAuthenticationStrategy
+	return f.ClientAuthenticationStrategy
 }
 
 // DefaultClientAuthenticationStrategy is a helper method to map the legacy method.

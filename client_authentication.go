@@ -38,34 +38,15 @@ var (
 )
 
 // AuthenticateClient authenticates client requests using the configured strategy returned by the oauth2.Configurator
-// function GetClientAuthenticationStrategy, if nil it uses `Fosite.DefaultClientAuthenticationStrategy`.
-func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, err error) {
-	if strategy := f.Config.GetClientAuthenticationStrategy(ctx); strategy != nil {
-		client, _, err = strategy.AuthenticateClient(ctx, r, form)
+// function GetClientAuthenticationStrategy, if nil it uses `oauth2.DefaultClientAuthenticationStrategy`.
+func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, method string, err error) {
+	var strategy ClientAuthenticationStrategy
 
-		return client, err
+	if strategy = f.Config.GetClientAuthenticationStrategy(ctx); strategy == nil {
+		strategy = &DefaultClientAuthenticationStrategy{Store: f.Store, Config: f.Config}
 	}
 
-	return f.DefaultClientAuthenticationStrategy(ctx, r, form)
-}
-
-// GetDefaultClientAuthenticationStrategy returns the default ClientAuthenticationStrategy, if nil it initializes one.
-func (f *Fosite) GetDefaultClientAuthenticationStrategy(ctx context.Context) ClientAuthenticationStrategy {
-	if f.ClientAuthenticationStrategy == nil {
-		f.ClientAuthenticationStrategy = &DefaultClientAuthenticationStrategy{
-			f.Store,
-			f.Config,
-		}
-	}
-
-	return f.ClientAuthenticationStrategy
-}
-
-// DefaultClientAuthenticationStrategy is a helper method to map the legacy method.
-func (f *Fosite) DefaultClientAuthenticationStrategy(ctx context.Context, r *http.Request, form url.Values) (client Client, err error) {
-	client, _, err = f.GetDefaultClientAuthenticationStrategy(ctx).AuthenticateClient(ctx, r, form)
-
-	return
+	return strategy.AuthenticateClient(ctx, r, form)
 }
 
 func (f *Fosite) findClientPublicJWK(ctx context.Context, client OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {

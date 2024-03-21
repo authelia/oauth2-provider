@@ -199,7 +199,14 @@ type Configurator interface {
 }
 
 func New(store Storage, config Configurator) *Fosite {
-	return &Fosite{Store: store, Config: config}
+	return &Fosite{
+		Store:  store,
+		Config: config,
+		ClientAuthenticationStrategy: &DefaultClientAuthenticationStrategy{
+			store,
+			config,
+		},
+	}
 }
 
 // Fosite implements Provider.
@@ -208,7 +215,7 @@ type Fosite struct {
 
 	Config Configurator
 
-	defaultClientAuthenticationStrategy ClientAuthenticationStrategy
+	ClientAuthenticationStrategy ClientAuthenticationStrategy
 }
 
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.

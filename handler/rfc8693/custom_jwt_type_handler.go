@@ -167,7 +167,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	sess, ok := request.GetSession().(openid.Session)
 	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate JWT because session must be of type fosite/handler/openid.Session."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate JWT because session must be of type 'openid.Session'."))
 	}
 
 	claims := sess.IDTokenClaims()

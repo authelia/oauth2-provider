@@ -31,7 +31,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	client := request.GetClient()
 
 	// The client MUST authenticate with the authorization server as described in Section 3.2.1.
-	// This requirement is already fulfilled because fosite requires all token requests to be authenticated as described
+	// This requirement is already fulfilled because we require all token requests to be authenticated as described
 	// in https://tools.ietf.org/html/rfc6749#section-3.2.1
 	if client.IsPublic() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))

@@ -407,11 +407,19 @@ func TestWriteAuthorizeError(t *testing.T) {
 			debug: true,
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
 			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
-				provider.Config = &Config{
-					SendDebugMessagesToClients:              false,
-					UseLegacyErrorFormat:                    false,
+				config := &Config{
+					SendDebugMessagesToClients:              provider.Config.GetSendDebugMessagesToClients(context.Background()),
+					UseLegacyErrorFormat:                    provider.Config.GetUseLegacyErrorFormat(context.Background()),
 					AuthorizationServerIdentificationIssuer: "https://example.com",
 				}
+
+				config.ResponseModeParameterHandlers = []ResponseModeParameterHandler{
+					&RFC9207ResponseModeParameterHandler{
+						Config: config,
+					},
+				}
+
+				provider.Config = config
 
 				req.EXPECT().IsRedirectURIValid().Return(true)
 				req.EXPECT().GetRedirectURI().Return(copyUrl(purls[1]))
@@ -422,7 +430,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 				rw.EXPECT().WriteHeader(http.StatusSeeOther)
 			},
 			checkHeader: func(t *testing.T, header http.Header) {
-				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.+Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&iss=https%3A%2F%2Fexample.com&state=foostate")
+				a, _ := url.Parse("https://foobar.com/?foo=bar#error=invalid_request&error_debug=with-debug&error_description=The+request+is+missing+a+required+parameter%2C+includes+an+invalid+parameter+value%2C+includes+a+parameter+more+than+once%2C+or+is+otherwise+malformed.&error_hint=Make+sure+that+the+various+parameters+are+correct%2C+be+aware+of+case+sensitivity+and+trim+your+parameters.+Make+sure+that+the+client+you+are+using+has+exactly+whitelisted+the+redirect_uri+you+specified.&iss=https%3A%2F%2Fexample.com&state=foostate")
 				b, _ := url.Parse(header.Get(consts.HeaderLocation))
 				assert.Equal(t, a, b, "\n\t%s\n\t%s", header.Get(consts.HeaderLocation), a.String())
 				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))

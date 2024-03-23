@@ -278,7 +278,7 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 
 	client, ok := request.GetClient().(ResponseModeClient)
 	if !ok {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s', as it's not registered to support any.", request.GetClient().GetID(), request.ResponseMode))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s', as it's not registered to support any.", request.GetClient().GetID(), request.ResponseMode))
 	}
 
 	var found bool
@@ -290,7 +290,7 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
 	}
 
 	return nil

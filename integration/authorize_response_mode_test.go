@@ -103,7 +103,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				assert.NotEmpty(t, err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
-				assert.Equal(t, "The client is not allowed to request response_mode 'form_post'.", err["HintField"])
+				assert.Equal(t, "The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", err["HintField"])
 			},
 		},
 		{
@@ -119,7 +119,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
 				assert.NotEmpty(t, err["ErrorField"])
-				assert.Contains(t, err["DescriptionField"], "The client is not allowed to request response_mode 'form_post'.")
+				assert.Equal(t, "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", err["DescriptionField"])
 				assert.Empty(t, err["HintField"])
 			},
 		},

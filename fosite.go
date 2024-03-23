@@ -202,20 +202,13 @@ func New(store Storage, config Configurator) *Fosite {
 	return &Fosite{
 		Store:  store,
 		Config: config,
-		ClientAuthenticationStrategy: &DefaultClientAuthenticationStrategy{
-			store,
-			config,
-		},
 	}
 }
 
 // Fosite implements Provider.
 type Fosite struct {
-	Store Storage
-
+	Store  Storage
 	Config Configurator
-
-	ClientAuthenticationStrategy ClientAuthenticationStrategy
 }
 
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.
@@ -225,11 +218,6 @@ func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	}
 
 	return MinParameterEntropy
-}
-
-// ResponseModeHandlers returns the configured ResponseModeHandler implementations for this instance.
-func (f *Fosite) ResponseModeHandlers(ctx context.Context) []ResponseModeHandler {
-	return f.Config.GetResponseModeHandlers(ctx)
 }
 
 var (

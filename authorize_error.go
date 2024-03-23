@@ -16,7 +16,7 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	for _, handler := range f.ResponseModeHandlers(ctx) {
+	for _, handler := range f.Config.GetResponseModeHandlers(ctx) {
 		if handler.ResponseModes().Has(requester.GetResponseMode()) {
 			handler.WriteAuthorizeError(ctx, rw, requester, err)
 

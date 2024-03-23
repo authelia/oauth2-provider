@@ -139,6 +139,9 @@ type Config struct {
 	// ResponseModeHandlers provides the handlers for performing response mode formatting.
 	ResponseModeHandlers []ResponseModeHandler
 
+	// ResponseModeParameterHandlers provides handlers for injecting additional parameters into the authorize responses.
+	ResponseModeParameterHandlers []ResponseModeParameterHandler
+
 	// MessageCatalog is the message bundle used for i18n
 	MessageCatalog i18n.MessageCatalog
 
@@ -293,6 +296,10 @@ func (c *Config) GetResponseModeHandlers(ctx context.Context) []ResponseModeHand
 	}
 
 	return c.ResponseModeHandlers
+}
+
+func (c *Config) GetResponseModeParameterHandlers(ctx context.Context) []ResponseModeParameterHandler {
+	return c.ResponseModeParameterHandlers
 }
 
 func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {

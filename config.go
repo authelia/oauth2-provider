@@ -268,6 +268,13 @@ type ResponseModeHandlerProvider interface {
 	GetResponseModeHandlers(ctx context.Context) (handlers []ResponseModeHandler)
 }
 
+// ResponseModeParameterHandlerProvider returns the providers for configuring additional parameters in the response
+// mode phase of an Authorization Request which may not be possible to determine until the final response mode is known.
+type ResponseModeParameterHandlerProvider interface {
+	// GetResponseModeParameterHandlers returns the ResponseModeParameterHandler's to process.
+	GetResponseModeParameterHandlers(ctx context.Context) (handlers []ResponseModeParameterHandler)
+}
+
 // MessageCatalogProvider returns the provider for configuring the message catalog.
 type MessageCatalogProvider interface {
 	// GetMessageCatalog returns the message catalog.

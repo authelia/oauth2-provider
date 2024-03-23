@@ -19,10 +19,6 @@ type DefaultResponseModeHandler struct {
 	Config ResponseModeHandlerConfigurator
 }
 
-var (
-	_ ResponseModeHandler = (*DefaultResponseModeHandler)(nil)
-)
-
 // ResponseModes returns the response modes this fosite.ResponseModeHandler is responsible for.
 func (h *DefaultResponseModeHandler) ResponseModes() ResponseModeTypes {
 	return ResponseModeTypes{
@@ -94,11 +90,11 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		} else {
 			rm = ResponseModeFragmentJWT
 		}
-	case ResponseModeFormPost, ResponseModeQuery, ResponseModeFragment, ResponseModeDefault:
-		// RFC9207 OAuth 2.0 Authorization Server Issuer Identification.
-		// See Also: https://datatracker.ietf.org/doc/html/rfc9207.
-		if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
-			parameters.Set(consts.FormParameterIssuer, issuer)
+	}
+
+	for _, handler := range h.Config.GetResponseModeParameterHandlers(ctx) {
+		if handler.ResponseModes().Has(rm) {
+			handler.WriteParameters(ctx, requester, parameters)
 		}
 	}
 
@@ -184,6 +180,28 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorJSON(ctx context.C
 	_, _ = rw.Write(data)
 }
 
+// RFC9207ResponseModeParameterHandler adds the RFC9207
+type RFC9207ResponseModeParameterHandler struct {
+	Config interface {
+		AuthorizationServerIssuerIdentificationProvider
+	}
+}
+
+func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes {
+	return ResponseModeTypes{
+		ResponseModeDefault,
+		ResponseModeQuery,
+		ResponseModeFragment,
+		ResponseModeFormPost,
+	}
+}
+
+func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, requester AuthorizeRequester, parameters url.Values) {
+	if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
+		parameters.Set(consts.FormParameterIssuer, issuer)
+	}
+}
+
 // ResponseModeHandler provides a contract for handling response modes.
 type ResponseModeHandler interface {
 	// ResponseModes returns a set of supported response modes handled
@@ -209,6 +227,19 @@ type ResponseModeHandler interface {
 	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
 }
 
+type ResponseModeParameterHandler interface {
+	// ResponseModes returns a set of supported response modes handled
+	// by the interface implementation.
+	//
+	// In an authorize request with any of the provide response modes
+	// methods `WriteAuthorizeResponse` and `WriteAuthorizeError` will be
+	// invoked to write the successful or error authorization responses respectively.
+	ResponseModes() ResponseModeTypes
+
+	// WriteParameters is handed the parameters just before handing of to the response writer.
+	WriteParameters(ctx context.Context, requester AuthorizeRequester, parameters url.Values)
+}
+
 type ResponseModeTypes []ResponseModeType
 
 func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
@@ -221,6 +252,7 @@ func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
 }
 
 type ResponseModeHandlerConfigurator interface {
+	ResponseModeParameterHandlerProvider
 	FormPostHTMLTemplateProvider
 	FormPostResponseProvider
 	JWTSecuredAuthorizeResponseModeIssuerProvider
@@ -228,6 +260,9 @@ type ResponseModeHandlerConfigurator interface {
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider
-	AuthorizationServerIssuerIdentificationProvider
 	UseLegacyErrorFormatProvider
 }
+
+var (
+	_ ResponseModeHandler = (*DefaultResponseModeHandler)(nil)
+)

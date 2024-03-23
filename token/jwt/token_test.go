@@ -104,7 +104,7 @@ var (
 
 // Many test cases where taken from https://github.com/dgrijalva/jwt-go/blob/master/parser_test.go
 // Test cases related to json.Number where excluded because that is not supported by go-jose,
-// it is not used in fosite and therefore not supported.
+// it is not used here and therefore not supported.
 //
 //nolint:gocyclo
 func TestParser_Parse(t *testing.T) {

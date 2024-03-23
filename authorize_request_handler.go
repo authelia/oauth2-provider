@@ -258,7 +258,7 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
 	m := r.Form.Get(consts.FormParameterResponseMode)
 
-	for _, handler := range f.ResponseModeHandlers(ctx) {
+	for _, handler := range f.Config.GetResponseModeHandlers(ctx) {
 		mode := ResponseModeType(m)
 
 		if handler.ResponseModes().Has(mode) {
@@ -276,13 +276,13 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 		return nil
 	}
 
-	responseModeClient, ok := request.GetClient().(ResponseModeClient)
+	client, ok := request.GetClient().(ResponseModeClient)
 	if !ok {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The request has response_mode \"%s\". set but registered OAuth 2.0 client doesn't support response_mode", r.Form.Get(consts.FormParameterResponseMode)))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s', as it's not registered to support any.", request.GetClient().GetID(), request.ResponseMode))
 	}
 
 	var found bool
-	for _, t := range responseModeClient.GetResponseModes() {
+	for _, t := range client.GetResponseModes() {
 		if request.ResponseMode == t {
 			found = true
 			break
@@ -290,7 +290,7 @@ func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The client is not allowed to request response_mode '%s'.", r.Form.Get(consts.FormParameterResponseMode)))
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
 	}
 
 	return nil
@@ -390,7 +390,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	if !isPARRequest {
 		if parc, ok := client.(PushedAuthorizationRequestClient); ok && parc.GetRequirePushedAuthorizationRequests() {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The Registered Client policy for client with id '%s' requires Pushed Authorization Requests for be used for this client.", parc.GetID()))
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The registered OAuth 2.0 client with id '%s' is registered with a policy which requires Pushed Authorization Requests be used.", parc.GetID()))
 		}
 	}
 

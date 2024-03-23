@@ -37,7 +37,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 	// Authenticate the client in the same way as at the token endpoint
 	// (Section 2.3 of [RFC6749]).
-	client, err := f.AuthenticateClient(ctx, r, r.Form)
+	client, _, err := f.AuthenticateClient(ctx, r, r.Form)
 	if err != nil {
 		var rfcerr *RFC6749Error
 		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {

@@ -41,47 +41,68 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		return nil
 	}
 
-	if len(request.Form.Get(consts.FormParameterRequest)+request.Form.Get(consts.FormParameterRequestURI)) == 0 {
+	var (
+		nrequest, nrequestURI int
+	)
+
+	switch nrequest, nrequestURI = len(request.Form.Get(consts.FormParameterRequest)), len(request.Form.Get(consts.FormParameterRequestURI)); {
+	case nrequest+nrequestURI == 0:
 		return nil
-	} else if len(request.Form.Get(consts.FormParameterRequest)) > 0 && len(request.Form.Get(consts.FormParameterRequestURI)) > 0 {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect parameters 'request' and 'request_uri' were both given, but you can use at most one."))
+	case nrequest > 0 && nrequestURI > 0:
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' were both given, but you can use at most one."))
 	}
 
-	oidcClient, ok := request.Client.(OpenIDConnectClient)
+	client, ok := request.Client.(OpenIDConnectClient)
 	if !ok {
-		if len(request.Form.Get(consts.FormParameterRequestURI)) > 0 {
-			return errorsx.WithStack(ErrRequestURINotSupported.WithHint("OpenID Connect 'request_uri' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect capabilities."))
+		if nrequestURI > 0 {
+			return errorsx.WithStack(ErrRequestURINotSupported.WithHint("OpenID Connect 1.0 'request_uri' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct methods for this request.", request.GetClient().GetID()))
 		}
-		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 'request' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect capabilities."))
+
+		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct methods for this request.", request.GetClient().GetID()))
 	}
 
-	if oidcClient.GetJSONWebKeys() == nil && len(oidcClient.GetJSONWebKeysURI()) == 0 {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 'request' or 'request_uri' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered."))
+	var none bool
+
+	if alg := client.GetRequestObjectSigningAlg(); alg != "none" {
+		if client.GetJSONWebKeys() == nil && len(client.GetJSONWebKeysURI()) == 0 {
+			if nrequestURI > 0 {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request_uri' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
+			}
+
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
+		}
+	} else {
+		none = true
 	}
 
-	assertion := request.Form.Get(consts.FormParameterRequest)
-	if location := request.Form.Get(consts.FormParameterRequestURI); len(location) > 0 {
-		if !stringslice.Has(oidcClient.GetRequestURIs(), location) {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Request URI '%s' is not whitelisted by the OAuth 2.0 Client.", location))
+	var assertion string
+
+	if nrequestURI > 0 {
+		requestURI := request.Form.Get(consts.FormParameterRequestURI)
+
+		if !stringslice.Has(client.GetRequestURIs(), requestURI) {
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Request URI '%s' is not whitelisted by the OAuth 2.0 Client.", requestURI).WithDebugf(""))
 		}
 
 		hc := f.Config.GetHTTPClient(ctx)
-		response, err := hc.Get(location)
+		response, err := hc.Get(requestURI)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebugError(err))
 		}
 		defer response.Body.Close()
 
 		if response.StatusCode != http.StatusOK {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because status code '%d' was expected, but got '%d'.", http.StatusOK, response.StatusCode))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because status code '%d' was expected, but got '%d'.", http.StatusOK, response.StatusCode))
 		}
 
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebugError(err))
 		}
 
 		assertion = string(body)
+	} else {
+		assertion = request.Form.Get(consts.FormParameterRequest)
 	}
 
 	token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (any, error) {
@@ -90,31 +111,33 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
 		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
 		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if oidcClient.GetRequestObjectSigningAlg() != "" && oidcClient.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], oidcClient.GetRequestObjectSigningAlg()))
+		if client.GetRequestObjectSigningAlg() != "" && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
 		}
 
 		if t.Method == jwt.SigningMethodNone {
 			return jwt.UnsafeAllowNoneSignatureType, nil
+		} else if none {
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
 		}
 
 		switch t.Method {
 		case jose.RS256, jose.RS384, jose.RS512:
-			key, err := f.findClientPublicJWK(ctx, oidcClient, t, true)
+			key, err := f.findClientPublicJWK(ctx, client, t, true)
 			if err != nil {
 				return nil, wrapSigningKeyFailure(
 					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
 			}
 			return key, nil
 		case jose.ES256, jose.ES384, jose.ES512:
-			key, err := f.findClientPublicJWK(ctx, oidcClient, t, false)
+			key, err := f.findClientPublicJWK(ctx, client, t, false)
 			if err != nil {
 				return nil, wrapSigningKeyFailure(
 					ErrInvalidRequestObject.WithHint("Unable to retrieve ECDSA signing key from OAuth 2.0 Client."), err)
 			}
 			return key, nil
 		case jose.PS256, jose.PS384, jose.PS512:
-			key, err := f.findClientPublicJWK(ctx, oidcClient, t, true)
+			key, err := f.findClientPublicJWK(ctx, client, t, true)
 			if err != nil {
 				return nil, wrapSigningKeyFailure(
 					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
@@ -158,6 +181,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 
 	request.State = request.Form.Get(consts.FormParameterState)
 	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
+
 	return nil
 }
 

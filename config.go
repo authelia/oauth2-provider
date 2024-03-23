@@ -265,14 +265,14 @@ type ClientAuthenticationStrategyProvider interface {
 // ResponseModeHandlerProvider returns the provider for configuring the response mode handlers.
 type ResponseModeHandlerProvider interface {
 	// GetResponseModeHandlers returns the response mode handlers in order of execution.
-	GetResponseModeHandlers(ctx context.Context) (handlers []ResponseModeHandler)
+	GetResponseModeHandlers(ctx context.Context) (handlers ResponseModeHandlers)
 }
 
 // ResponseModeParameterHandlerProvider returns the providers for configuring additional parameters in the response
 // mode phase of an Authorization Request which may not be possible to determine until the final response mode is known.
 type ResponseModeParameterHandlerProvider interface {
 	// GetResponseModeParameterHandlers returns the ResponseModeParameterHandler's to process.
-	GetResponseModeParameterHandlers(ctx context.Context) (handlers []ResponseModeParameterHandler)
+	GetResponseModeParameterHandlers(ctx context.Context) (handlers ResponseModeParameterHandlers)
 }
 
 // MessageCatalogProvider returns the provider for configuring the message catalog.

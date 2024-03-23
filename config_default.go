@@ -137,10 +137,10 @@ type Config struct {
 	ClientAuthenticationStrategy ClientAuthenticationStrategy
 
 	// ResponseModeHandlers provides the handlers for performing response mode formatting.
-	ResponseModeHandlers []ResponseModeHandler
+	ResponseModeHandlers ResponseModeHandlers
 
 	// ResponseModeParameterHandlers provides handlers for injecting additional parameters into the authorize responses.
-	ResponseModeParameterHandlers []ResponseModeParameterHandler
+	ResponseModeParameterHandlers ResponseModeParameterHandlers
 
 	// MessageCatalog is the message bundle used for i18n
 	MessageCatalog i18n.MessageCatalog
@@ -290,7 +290,7 @@ func (c *Config) GetMessageCatalog(ctx context.Context) i18n.MessageCatalog {
 	return c.MessageCatalog
 }
 
-func (c *Config) GetResponseModeHandlers(ctx context.Context) []ResponseModeHandler {
+func (c *Config) GetResponseModeHandlers(ctx context.Context) ResponseModeHandlers {
 	if len(c.ResponseModeHandlers) == 0 {
 		c.ResponseModeHandlers = []ResponseModeHandler{&DefaultResponseModeHandler{Config: c}}
 	}
@@ -298,7 +298,7 @@ func (c *Config) GetResponseModeHandlers(ctx context.Context) []ResponseModeHand
 	return c.ResponseModeHandlers
 }
 
-func (c *Config) GetResponseModeParameterHandlers(ctx context.Context) []ResponseModeParameterHandler {
+func (c *Config) GetResponseModeParameterHandlers(ctx context.Context) ResponseModeParameterHandlers {
 	return c.ResponseModeParameterHandlers
 }
 

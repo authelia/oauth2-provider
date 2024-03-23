@@ -10,6 +10,34 @@ import (
 
 const MinParameterEntropy = 8
 
+// ResponseModeHandlers is a list of ResponseModeHandler.
+type ResponseModeHandlers []ResponseModeHandler
+
+// Append adds an ResponseModeHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *ResponseModeHandlers) Append(h ResponseModeHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// ResponseModeParameterHandlers is a list of ResponseModeParameterHandler.
+type ResponseModeParameterHandlers []ResponseModeParameterHandler
+
+// Append adds an ResponseModeParameterHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *ResponseModeParameterHandlers) Append(h ResponseModeParameterHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
 // AuthorizeEndpointHandlers is a list of AuthorizeEndpointHandler
 type AuthorizeEndpointHandlers []AuthorizeEndpointHandler
 

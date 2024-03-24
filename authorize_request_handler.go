@@ -31,7 +31,7 @@ func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
+func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
 	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	// Even if a scope parameter is present in the Request Object value, a scope parameter MUST always be passed using
@@ -61,6 +61,12 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct methods for this request.", request.GetClient().GetID()))
 	}
 
+	if request.Form.Get(consts.FormParameterResponseType) == "" {
+		// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
+		// parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' must be accompanied by the `client_id' and 'response_type' in the request syntax."))
+	}
+
 	var none bool
 
 	if alg := client.GetRequestObjectSigningAlg(); alg != "none" {
@@ -78,6 +84,11 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 	var assertion string
 
 	if nrequestURI > 0 {
+		// Reject the request if the "request_uri" authorization request parameter is provided.
+		if isPARRequest {
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
+		}
+
 		requestURI := request.Form.Get(consts.FormParameterRequestURI)
 
 		if !stringslice.Has(client.GetRequestURIs(), requestURI) {
@@ -162,13 +173,46 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequest(ctx context.
 	}
 
 	claims := token.Claims
-	// Reject the request if the "request_uri" authorization request
-	// parameter is provided.
-	if requestURI, _ := claims[consts.FormParameterRequestURI].(string); isPARRequest && requestURI != "" {
-		return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
-	}
 
 	for k, v := range claims {
+		switch k {
+		case consts.FormParameterRequest, consts.FormParameterRequestURI:
+			// The request and request_uri parameters MUST NOT be included in Request Objects.
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object must not contain the 'request' or 'request_uri' claims."))
+		case consts.ClaimIssuer:
+			// TODO:
+			//       Implement a per-client interface to handle this particular case which allows optional enforcement
+			//       of the spec SHOULD requirement, a config provider may also need to be added to get the issuer URL:
+			//       If signed, the Request Object SHOULD contain the Claims iss (issuer) and aud (audience) as members.
+			//       The iss value SHOULD be the Client ID of the RP, unless it was signed by a different party than the
+			//       RP. The aud value SHOULD be or include the OP's Issuer Identifier URL.
+			continue
+		case consts.ClaimSubject:
+			// TODO: As above.
+			continue
+		case consts.FormParameterClientID:
+			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
+			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
+			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
+			if value, ok := v.(string); ok {
+				if request.Form.Get(consts.FormParameterClientID) != value {
+					return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+				}
+			}
+
+			continue
+		case consts.FormParameterResponseType:
+			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
+			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
+			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
+			if value, ok := v.(string); ok {
+				if request.Form.Get(consts.FormParameterResponseType) != value {
+					return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+				}
+			}
+
+			continue
+		}
 		request.Form.Set(k, fmt.Sprintf("%s", v))
 	}
 
@@ -401,7 +445,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	//
 	// All other parse methods should come afterwards so that we ensure that the data is taken
 	// from the request_object if set.
-	if err = f.authorizeRequestParametersFromOpenIDConnectRequest(ctx, request, isPARRequest); err != nil {
+	if err = f.authorizeRequestParametersFromOpenIDConnectRequestObject(ctx, request, isPARRequest); err != nil {
 		return request, err
 	}
 

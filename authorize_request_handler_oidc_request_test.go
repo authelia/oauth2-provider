@@ -62,8 +62,8 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 		},
 	}
 
-	validRequestObject := mustGenerateAssertion(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, key, "kid-foo")
-	validRequestObjectWithoutKid := mustGenerateAssertion(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz"}, key, "")
+	validRequestObject := mustGenerateAssertion(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, key, "kid-foo")
+	validRequestObjectWithoutKid := mustGenerateAssertion(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz"}, key, "")
 	validNoneRequestObject := mustGenerateNoneAssertion(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state"})
 
 	var reqH http.HandlerFunc = func(rw http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 	reqJWK := httptest.NewServer(hJWK)
 	defer reqJWK.Close()
 
-	provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy()}}
+	provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com"}}
 	for k, tc := range []struct {
 		client Client
 		form   url.Values
@@ -151,42 +151,44 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 			expectForm:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 		},
 		{
-			d:      "should pass and set request parameters properly",
+			d:      "should fail mismatched response type",
 			form:   url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {validRequestObject}},
 			client: &DefaultOpenIDConnectClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
 			// The values from form are overwritten by the request object.
-			expectForm: url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
+			expectErr:       ErrInvalidRequestObject,
+			expectErrReason: "OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided.",
+			expectForm:      url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			d:          "should pass even if kid is unset",
-			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {validRequestObjectWithoutKid}},
-			client:     &DefaultOpenIDConnectClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
-			expectForm: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validRequestObjectWithoutKid}, "foo": {"bar"}, "baz": {"baz"}},
+			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {validRequestObjectWithoutKid}},
+			client:     &DefaultOpenIDConnectClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			expectForm: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {validRequestObjectWithoutKid}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			d:          "should fail because request uri is not whitelisted",
-			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequestURI: {reqTS.URL}},
-			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
+			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequestURI: {reqTS.URL}},
+			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expectForm: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {reqTS.URL}, "foo": {"bar"}, "baz": {"baz"}},
 			expectErr:  ErrInvalidRequestURI,
 		},
 		{
 			d:          "should pass and set request_uri parameters properly and also fetch jwk from remote",
-			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequestURI: {reqTS.URL}},
-			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL, RequestObjectSigningAlg: "RS256", RequestURIs: []string{reqTS.URL}, DefaultClient: &DefaultClient{ID: "test"}},
-			expectForm: url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {reqTS.URL}, "foo": {"bar"}, "baz": {"baz"}},
+			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {reqTS.URL}},
+			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL, RequestObjectSigningAlg: "RS256", RequestURIs: []string{reqTS.URL}, DefaultClient: &DefaultClient{ID: "foo"}},
+			expectForm: url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {reqTS.URL}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			d:          "should pass when request object uses algorithm none",
-			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {validNoneRequestObject}},
+			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {validNoneRequestObject}},
 			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL, RequestObjectSigningAlg: "none"},
-			expectForm: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validNoneRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
+			expectForm: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validNoneRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			d:          "should pass when request object uses algorithm none and the client did not explicitly allow any algorithm",
-			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {validNoneRequestObject}},
+			form:       url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {validNoneRequestObject}},
 			client:     &DefaultOpenIDConnectClient{JSONWebKeysURI: reqJWK.URL},
-			expectForm: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validNoneRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
+			expectForm: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {validNoneRequestObject}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
@@ -199,7 +201,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 
 			err := provider.authorizeRequestParametersFromOpenIDConnectRequestObject(context.Background(), req, false)
 			if tc.expectErr != nil {
-				require.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
+				assert.EqualError(t, err, tc.expectErr.Error(), "%+v", err)
 				if tc.expectErrReason != "" {
 					actual := new(RFC6749Error)
 					require.True(t, errors.As(err, &actual))
@@ -211,7 +213,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequest(t *testing.T) {
 					errors.As(err, &actual)
 					require.NoErrorf(t, err, "Hint: %v\nDebug:%v", actual.HintField, actual.DebugField)
 				}
-				require.NoErrorf(t, err, "%+v", err)
+				assert.NoErrorf(t, err, "%+v", err)
 				require.Equal(t, len(tc.expectForm), len(req.Form))
 				for k, v := range tc.expectForm {
 					assert.EqualValues(t, v, req.Form[k])

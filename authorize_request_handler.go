@@ -67,9 +67,16 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' must be accompanied by the `client_id' and 'response_type' in the request syntax."))
 	}
 
-	var none bool
+	var (
+		algAny, algNone bool
+	)
 
-	if alg := client.GetRequestObjectSigningAlg(); alg != "none" {
+	switch alg := client.GetRequestObjectSigningAlg(); alg {
+	case "none":
+		algNone = true
+	case "":
+		algAny = true
+	default:
 		if client.GetJSONWebKeys() == nil && len(client.GetJSONWebKeysURI()) == 0 {
 			if nrequestURI > 0 {
 				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request_uri' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
@@ -77,8 +84,6 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 
 			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
 		}
-	} else {
-		none = true
 	}
 
 	var assertion string
@@ -122,13 +127,15 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
 		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
 		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if client.GetRequestObjectSigningAlg() != "" && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
+		if !algAny && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
 			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
 		}
 
 		if t.Method == jwt.SigningMethodNone {
+			algNone = true
+
 			return jwt.UnsafeAllowNoneSignatureType, nil
-		} else if none {
+		} else if algNone {
 			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
 		}
 
@@ -174,46 +181,75 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 
 	claims := token.Claims
 
-	for k, v := range claims {
+	var (
+		k, value string
+		v        any
+	)
+
+	for k, v = range claims {
 		switch k {
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
 			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object must not contain the 'request' or 'request_uri' claims."))
-		case consts.ClaimIssuer:
-			// TODO:
-			//       Implement a per-client interface to handle this particular case which allows optional enforcement
-			//       of the spec SHOULD requirement, a config provider may also need to be added to get the issuer URL:
-			//       If signed, the Request Object SHOULD contain the Claims iss (issuer) and aud (audience) as members.
-			//       The iss value SHOULD be the Client ID of the RP, unless it was signed by a different party than the
-			//       RP. The aud value SHOULD be or include the OP's Issuer Identifier URL.
-			continue
-		case consts.ClaimSubject:
-			// TODO: As above.
+		case consts.ClaimIssuer, consts.ClaimAudience, consts.ClaimSubject:
+			// The subject is not relevant, and the issuer and audience are validated below.
 			continue
 		case consts.FormParameterClientID:
 			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
 			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
 			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
-			if value, ok := v.(string); ok {
-				if request.Form.Get(consts.FormParameterClientID) != value {
-					return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
-				}
+			if value, ok = v.(string); !ok {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
 			}
 
-			continue
+			if request.Form.Get(consts.FormParameterClientID) != value {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+			}
 		case consts.FormParameterResponseType:
 			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
 			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
 			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
-			if value, ok := v.(string); ok {
-				if request.Form.Get(consts.FormParameterResponseType) != value {
-					return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
-				}
+			if value, ok = v.(string); !ok {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
 			}
 
-			continue
+			if request.Form.Get(consts.FormParameterResponseType) != value {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+			}
+		default:
+			request.Form.Set(k, fmt.Sprintf("%s", v))
 		}
-		request.Form.Set(k, fmt.Sprintf("%s", v))
+	}
+
+	if !algNone {
+		if v, ok = claims[consts.ClaimIssuer]; !ok {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `iss' claim must be present when using signed or encrypted request objects."))
+		}
+
+		if value, ok = v.(string); !ok {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
+		}
+
+		if value != client.GetID() {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
+		}
+
+		if v, ok = claims[consts.ClaimAudience]; !ok {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `aud' claim must be present when using signed or encrypted request objects."))
+		}
+
+		var valid bool
+
+		switch t := v.(type) {
+		case string:
+			valid = strings.EqualFold(t, f.Config.GetIDTokenIssuer(ctx))
+		case []string:
+			valid = stringslice.Has(t, f.Config.GetIDTokenIssuer(ctx))
+		}
+
+		if !valid {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 request object's `aud' claim must be the Authorization Server's issuer when using signed or encrypted request objects."))
+		}
 	}
 
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))

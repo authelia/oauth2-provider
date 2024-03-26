@@ -49,22 +49,26 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	case nrequest+nrequestURI == 0:
 		return nil
 	case nrequest > 0 && nrequestURI > 0:
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' were both given, but you can use at most one."))
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' were both used, but only one may be used in any given request."))
 	}
 
 	client, ok := request.Client.(OpenIDConnectClient)
 	if !ok {
 		if nrequestURI > 0 {
-			return errorsx.WithStack(ErrRequestURINotSupported.WithHint("OpenID Connect 1.0 'request_uri' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct methods for this request.", request.GetClient().GetID()))
+			return errorsx.WithStack(ErrRequestURINotSupported.WithHint("OpenID Connect 1.0 parameter 'request_uri' was used, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
 		}
 
-		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct methods for this request.", request.GetClient().GetID()))
+		return errorsx.WithStack(ErrRequestNotSupported.WithHint("OpenID Connect 1.0 parameter 'request' was used, but the OAuth 2.0 Client does not implement advanced OpenID Connect 1.0 capabilities.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
 	}
 
 	if request.Form.Get(consts.FormParameterResponseType) == "" || request.Form.Get(consts.FormParameterClientID) == "" {
+		if nrequestURI > 0 {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameter 'request_uri' must be accompanied by the `client_id' and 'response_type' in the request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' with value but either did not include the 'client_id' or 'response_type' parameter.", request.GetClient().GetID()))
+		}
+
 		// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
 		// parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameters 'request' and 'request_uri' must be accompanied by the `client_id' and 'response_type' in the request syntax."))
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameter 'request' must be accompanied by the `client_id' and 'response_type' in the request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request' with value but either did not include the 'client_id' or 'response_type' parameter.", request.GetClient().GetID()))
 	}
 
 	var (
@@ -79,10 +83,10 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	default:
 		if client.GetJSONWebKeys() == nil && len(client.GetJSONWebKeysURI()) == 0 {
 			if nrequestURI > 0 {
-				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request_uri' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameter 'request_uri' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
 			}
 
-			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 'request' context was given, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' but it's registered with '%s'.", request.GetClient().GetID(), alg))
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameter 'request' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered.").WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
 		}
 	}
 
@@ -91,29 +95,29 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	if nrequestURI > 0 {
 		// Reject the request if the "request_uri" authorization request parameter is provided.
 		if isPARRequest {
-			return errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("OpenID Connect 1.0 parameter 'request_uri' was used, but must not be used with a Pushed Authorization Request.").WithDebugf("The OAuth 2.0 client with id '%s' attempted to perform an invalid Authorization Request.", request.GetClient().GetID()))
 		}
 
 		requestURI := request.Form.Get(consts.FormParameterRequestURI)
 
 		if !stringslice.Has(client.GetRequestURIs(), requestURI) {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Request URI '%s' is not whitelisted by the OAuth 2.0 Client.", requestURI).WithDebugf(""))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHint("OpenID Connect 1.0 parameter 'request_uri' does not exist in the registered OAuth 2.0 registered 'request_uris' and is therefore not whitelisted.").WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
 		}
 
 		hc := f.Config.GetHTTPClient(ctx)
 		response, err := hc.Get(requestURI)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because: %s.", err.Error()).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 		defer response.Body.Close()
 
 		if response.StatusCode != http.StatusOK {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because status code '%d' was expected, but got '%d'.", http.StatusOK, response.StatusCode))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because status code '%d' was expected, but got '%d'.", http.StatusOK, response.StatusCode).WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf("Unable to fetch OpenID Connect 1.0 request parameters from 'request_uri' because body parsing failed with: %s.", err).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		assertion = string(body)
@@ -128,7 +132,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
 		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
 		if !algAny && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()).WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		if t.Method == jwt.SigningMethodNone {
@@ -136,7 +140,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 
 			return jwt.UnsafeAllowNoneSignatureType, nil
 		} else if algNone {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()))
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The request object uses signing algorithm '%s', but the requested OAuth 2.0 Client enforces signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm], client.GetRequestObjectSigningAlg()).WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		switch t.Method {
@@ -162,7 +166,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			}
 			return key, nil
 		default:
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("This request object uses unsupported signing algorithm '%s'.", t.Header["alg"]))
+			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("This request object uses unsupported signing algorithm '%s'.", t.Header[consts.JSONWebTokenHeaderAlgorithm]))
 		}
 	})
 
@@ -191,7 +195,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		switch k {
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object must not contain the 'request' or 'request_uri' claims."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object must not contain the 'request' or 'request_uri' claims.").WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		case consts.ClaimIssuer, consts.ClaimAudience, consts.ClaimSubject:
 			// The subject is not relevant, and the issuer and audience are validated below.
 			continue
@@ -200,22 +204,22 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
 			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
 			if value, ok = v.(string); !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `client_id' claim if provided must match the values provided in the standard OAuth 2.0 request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'client_id' claim with a value of '%v' which is meant to be a string, not a %T.", request.GetClient().GetID(), v, v))
 			}
 
-			if request.Form.Get(consts.FormParameterClientID) != value {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `client_id' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+			if rsyntax := request.Form.Get(consts.FormParameterClientID); rsyntax != value {
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `client_id' claim if provided must match the values provided in the standard OAuth 2.0 request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'client_id' claim with a value of '%s' in the request object which is required to match the value in the OAuth 2.0 request syntax but the value '%s' was included instead.", request.GetClient().GetID(), value, rsyntax))
 			}
 		case consts.FormParameterResponseType:
 			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
 			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
 			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
 			if value, ok = v.(string); !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `response_type' claim if provided must match the values provided in the standard OAuth 2.0 request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'response_type' claim with a value of '%v' which is meant to be a string, not a %T.", request.GetClient().GetID(), v, v))
 			}
 
-			if request.Form.Get(consts.FormParameterResponseType) != value {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `response_type' claim must match the values provided in the standard OAuth 2.0 request syntax if provided."))
+			if rsyntax := request.Form.Get(consts.FormParameterResponseType); rsyntax != value {
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `response_type' claim if provided must match the values provided in the standard OAuth 2.0 request syntax.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'response_type' claim with a value of '%s' in the request object which when provided is required to match the value in the OAuth 2.0 request syntax but the value '%s' was included instead.", request.GetClient().GetID(), value, rsyntax))
 			}
 		default:
 			request.Form.Set(k, fmt.Sprintf("%s", v))
@@ -224,29 +228,30 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 
 	if !algNone {
 		if v, ok = claims[consts.ClaimIssuer]; !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must be present when using signed or encrypted request objects."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must be present when using signed or encrypted request objects.").WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		if value, ok = v.(string); !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'iss' claim with a value of '%v' which is meant to be a string, not a %T.", request.GetClient().GetID(), v, v))
 		}
 
 		if value != request.Client.GetID() {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects.").WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		if v, ok = claims[consts.ClaimAudience]; !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `aud' claim must be present when using signed or encrypted request objects."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `aud' claim must be present when using signed or encrypted request objects.").WithDebugf("The OAuth 2.0 client with id '%s' made the Authorization Request.", request.GetClient().GetID()))
 		}
 
 		var valid bool
 
+		issuer := f.Config.GetIDTokenIssuer(ctx)
 		switch t := v.(type) {
 		case string:
-			valid = strings.EqualFold(t, f.Config.GetIDTokenIssuer(ctx))
+			valid = strings.EqualFold(t, issuer)
 		case []string:
 			for _, value = range t {
-				if strings.EqualFold(value, f.Config.GetIDTokenIssuer(ctx)) {
+				if strings.EqualFold(value, issuer) {
 					valid = true
 
 					break
@@ -254,7 +259,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			}
 		case []any:
 			for _, x := range t {
-				if value, ok = x.(string); ok && strings.EqualFold(value, f.Config.GetIDTokenIssuer(ctx)) {
+				if value, ok = x.(string); ok && strings.EqualFold(value, issuer) {
 					valid = true
 
 					break
@@ -263,7 +268,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		}
 
 		if !valid {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `aud' claim must be the Authorization Server's issuer when using signed or encrypted request objects."))
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `aud' claim must be the Authorization Server's issuer when using signed or encrypted request objects.").WithDebugf("The OAuth 2.0 client with id '%s' included a 'aud' claim with the values '%s' in the request object which must match the issuer '%s'.", request.GetClient().GetID(), value, issuer))
 		}
 	}
 

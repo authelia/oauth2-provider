@@ -91,7 +91,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	if nrequestURI > 0 {
 		// Reject the request if the "request_uri" authorization request parameter is provided.
 		if isPARRequest {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests can not contain the 'request_uri' parameter."))
 		}
 
 		requestURI := request.Form.Get(consts.FormParameterRequestURI)
@@ -165,6 +165,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf("This request object uses unsupported signing algorithm '%s'.", t.Header["alg"]))
 		}
 	})
+
 	if err != nil {
 		// Do not re-process already enhanced errors
 		var e *jwt.ValidationError
@@ -175,7 +176,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object's signature.").WithWrap(err).WithDebugError(err))
 		}
 		return err
-	} else if err := token.Claims.Valid(); err != nil {
+	} else if err = token.Claims.Valid(); err != nil {
 		return errorsx.WithStack(ErrInvalidRequestObject.WithHint("Unable to verify the request object because its claims could not be validated, check if the expiry time is set correctly.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -230,7 +231,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
 		}
 
-		if value != client.GetID() {
+		if value != request.Client.GetID() {
 			return errorsx.WithStack(ErrInvalidRequestObject.WithHint("OpenID Connect 1.0 request object's `iss' claim must contain the `client_id` when using signed or encrypted request objects."))
 		}
 

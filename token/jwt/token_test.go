@@ -55,10 +55,10 @@ func TestUnsignedToken(t *testing.T) {
 			parts := strings.Split(rawToken, ".")
 			require.Len(t, parts, 3)
 			require.Empty(t, parts[2])
-			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{"none", jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
+			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[("typ")])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
 		})
 	}
 }

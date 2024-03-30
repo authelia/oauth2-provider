@@ -10,9 +10,10 @@ const (
 )
 
 const (
-	ContentTypeApplicationURLEncodedForm = "application/x-www-form-urlencoded"
-	ContentTypeApplicationJSON           = "application/json; charset=utf-8"
-	ContentTypeTextHTML                  = "text/html; charset=utf-8"
+	ContentTypeApplicationURLEncodedForm        = "application/x-www-form-urlencoded"
+	ContentTypeApplicationJSON                  = "application/json; charset=utf-8"
+	ContentTypeApplicationTokenIntrospectionJWT = "application/token-introspection+jwt; charset=utf-8"
+	ContentTypeTextHTML                         = "text/html; charset=utf-8"
 )
 
 const (

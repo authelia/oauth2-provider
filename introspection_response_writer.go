@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // WriteIntrospectionError responds with token metadata discovered by token introspection as defined in
@@ -181,16 +184,25 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 //	  "active": false
 //	}
 func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder) {
+	var (
+		client   IntrospectionJWTResponseClient
+		ok       bool
+		alg, kid string
+	)
+
+	if client, ok = r.GetAccessRequester().GetClient().(IntrospectionJWTResponseClient); ok {
+		alg, kid = client.GetIntrospectionSignedResponseAlg(), client.GetIntrospectionSignedResponseKeyID()
+	}
+
+	response := map[string]any{consts.ClaimActive: false}
+
 	if !r.IsActive() {
-		_ = json.NewEncoder(rw).Encode(&struct {
-			Active bool `json:"active"`
-		}{Active: false})
+		f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
+
 		return
 	}
 
-	response := map[string]any{
-		consts.ClaimActive: true,
-	}
+	response[consts.ClaimActive] = true
 
 	extraClaimsSession, ok := r.GetAccessRequester().GetSession().(ExtraClaimsSession)
 	if ok {
@@ -228,8 +240,75 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		response[consts.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}
 
-	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
-	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
-	_ = json.NewEncoder(rw).Encode(response)
+	f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
+}
+
+func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder, response map[string]any, alg, kid string) {
+	switch {
+	case (alg != "" && alg != consts.JSONWebTokenAlgNone) || (kid != "" && alg != consts.JSONWebTokenAlgNone):
+		var (
+			token string
+			jti   uuid.UUID
+			err   error
+		)
+
+		header := &jwt.Headers{
+			Extra: map[string]any{
+				consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTokenIntrospection,
+			},
+		}
+
+		if alg != "" {
+			header.Add(consts.JSONWebTokenHeaderAlgorithm, alg)
+		}
+
+		if kid != "" {
+			header.Add(consts.JSONWebTokenHeaderKeyIdentifier, kid)
+		}
+
+		if jti, err = uuid.NewRandom(); err != nil {
+			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to lookup required information to perform this request.").WithDebugf("The JTI could not be generated for the Introspection JWT response type with error %+v.", err)))
+
+			return
+		}
+
+		claims := map[string]any{
+			consts.ClaimJWTID:              jti.String(),
+			consts.ClaimIssuer:             f.Config.GetIntrospectionIssuer(ctx),
+			consts.ClaimIssuedAt:           time.Now().UTC().Unix(),
+			consts.ClaimTokenIntrospection: response,
+		}
+
+		if aud, _ := r.ToMap(); len(aud) != 0 {
+			claims[consts.ClaimAudience] = aud
+		}
+
+		signer := f.Config.GetIntrospectionJWTResponseSigner(ctx)
+
+		if signer == nil {
+			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebug("The Introspection JWT could not be generated as the server is misconfigured. The Introspection Signer was not configured.")))
+
+			return
+		}
+
+		if token, _, err = signer.Generate(ctx, claims, header); err != nil {
+			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
+
+			return
+		}
+
+		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationTokenIntrospectionJWT)
+		rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+		rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+		rw.WriteHeader(http.StatusOK)
+
+		_, _ = rw.Write([]byte(token))
+	default:
+		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+		rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+		rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+		rw.WriteHeader(http.StatusOK)
+
+		_ = json.NewEncoder(rw).Encode(response)
+	}
 }

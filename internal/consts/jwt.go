@@ -13,6 +13,11 @@ const (
 )
 
 const (
-	JSONWebTokenTypeJWT         = "JWT"
-	JSONWebTokenTypeAccessToken = "at+jwt"
+	JSONWebTokenTypeJWT                = "JWT"
+	JSONWebTokenTypeAccessToken        = "at+jwt"
+	JSONWebTokenTypeTokenIntrospection = "token-introspection+jwt"
+)
+
+const (
+	JSONWebTokenAlgNone = valueNone
 )

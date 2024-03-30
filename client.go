@@ -176,6 +176,21 @@ type RequestedAudienceImplicitClient interface {
 	Client
 }
 
+// IntrospectionJWTResponseClient is a client which can potentially sign Introspection responses.
+//
+// See: https://www.ietf.org/id/draft-ietf-oauth-jwt-introspection-response-12.html
+type IntrospectionJWTResponseClient interface {
+	// GetIntrospectionSignedResponseAlg returns the alg header used to sign the introspection responses for the client.
+	// If empty or 'none' and the kid is empty the responses are not signed i.e. standard responses.
+	GetIntrospectionSignedResponseAlg() (alg string)
+
+	// GetIntrospectionSignedResponseKeyID returns the kid header used to sign the introspection responses for the
+	// client. If empty and the alg is empty or 'none' the responses are not signed i.e. standard responses.
+	GetIntrospectionSignedResponseKeyID() (kid string)
+
+	Client
+}
+
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`

@@ -53,6 +53,8 @@ func TestWriteIntrospectionResponse(t *testing.T) {
 
 	rw := mock.NewMockResponseWriter(c)
 	rw.EXPECT().Write(gomock.Any()).AnyTimes()
+	rw.EXPECT().Header().AnyTimes().Return(http.Header{})
+	rw.EXPECT().WriteHeader(200)
 	provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
 		AccessRequester: NewAccessRequest(nil),
 	})

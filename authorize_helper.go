@@ -68,7 +68,7 @@ func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.
 			// If no redirect_uri was given and the client has exactly one valid redirect_uri registered, use that instead
 			return redirectURIFromClient, nil
 		}
-	} else if redirectTo, ok := isMatchingRedirectURI(rawurl, client.GetRedirectURIs()); rawurl != "" && ok {
+	} else if redirectTo, ok := IsMatchingRedirectURI(rawurl, client.GetRedirectURIs()); rawurl != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -80,7 +80,7 @@ func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.
 	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' match 'redirect_uri' value '%s'.", client.GetID(), rawurl))
 }
 
-// Match a requested  redirect URI against a pool of registered client URIs
+// IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs.
 //
 // Test a given redirect URI against a pool of URIs provided by a registered client.
 // If the OAuth 2.0 Client has loopback URIs registered either an IPv4 URI http://127.0.0.1 or
@@ -95,11 +95,8 @@ func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.
 //
 // Loopback redirect URIs use the "http" scheme and are constructed with
 // the loopback IP literal and whatever port the client is listening on.
-func isMatchingRedirectURI(uri string, haystack []string) (string, bool) {
-	requested, err := url.Parse(uri)
-	if err != nil {
-		return "", false
-	}
+func IsMatchingRedirectURI(uri string, haystack []string) (string, bool) {
+	requested, _ := url.Parse(uri)
 
 	for _, b := range haystack {
 		if b == uri {
@@ -114,6 +111,10 @@ func isMatchingRedirectURI(uri string, haystack []string) (string, bool) {
 }
 
 func isMatchingAsLoopback(requested *url.URL, registeredURI string) bool {
+	if requested == nil {
+		return false
+	}
+
 	registered, err := url.Parse(registeredURI)
 	if err != nil {
 		return false

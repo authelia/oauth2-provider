@@ -195,6 +195,8 @@ type Configurator interface {
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	RFC9628DeviceAuthorizeConfigProvider
+	IntrospectionIssuerProvider
+	IntrospectionJWTResponseSignerProvider
 	UseLegacyErrorFormatProvider
 }
 

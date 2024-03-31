@@ -83,22 +83,28 @@ type DisableRefreshTokenValidationProvider interface {
 	GetDisableRefreshTokenValidation(ctx context.Context) bool
 }
 
-// AllowedPromptValuesProvider returns the provider for configuring the allowed prompt values.
-type AllowedPromptValuesProvider interface {
-	// GetAllowedPromptValues returns the allowed prompt values.
-	GetAllowedPromptValues(ctx context.Context) int
-}
-
 // AccessTokenIssuerProvider returns the provider for configuring the JWT issuer.
 type AccessTokenIssuerProvider interface {
 	// GetAccessTokenIssuer returns the access token issuer.
-	GetAccessTokenIssuer(ctx context.Context) string
+	GetAccessTokenIssuer(ctx context.Context) (issuer string)
 }
 
 // IDTokenIssuerProvider returns the provider for configuring the ID token issuer.
 type IDTokenIssuerProvider interface {
 	// GetIDTokenIssuer returns the ID token issuer.
-	GetIDTokenIssuer(ctx context.Context) string
+	GetIDTokenIssuer(ctx context.Context) (issuer string)
+}
+
+// IntrospectionIssuerProvider returns the provider for configuring the Introspection issuer.
+type IntrospectionIssuerProvider interface {
+	// GetIntrospectionIssuer returns the Introspection token issuer.
+	GetIntrospectionIssuer(ctx context.Context) (issuer string)
+}
+
+// IntrospectionJWTResponseSignerProvider returns the provider for configuring the Introspection signer.
+type IntrospectionJWTResponseSignerProvider interface {
+	// GetIntrospectionJWTResponseSigner returns the Introspection JWT signer.
+	GetIntrospectionJWTResponseSigner(ctx context.Context) jwt.Signer
 }
 
 // AuthorizationServerIssuerIdentificationProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.

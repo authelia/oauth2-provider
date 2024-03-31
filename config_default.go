@@ -51,6 +51,12 @@ type Config struct {
 	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses (RFC9207).
 	AuthorizationServerIdentificationIssuer string
 
+	// IntrospectionIssuer is the issuer to be used when generating signed introspection responses.
+	IntrospectionIssuer string
+
+	// IntrospectionJWTResponseSigner is the signer for Introspection Responses. Has no default.
+	IntrospectionJWTResponseSigner jwt.Signer
+
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
 
@@ -148,7 +154,8 @@ type Config struct {
 	// FormPostHTMLTemplate sets html template for rendering the authorization response when the request has response_mode=form_post.
 	FormPostHTMLTemplate *template.Template
 
-	//
+	// FormPostResponseWriter is the FormPostResponseWriter used for writing the form post response. Useful for
+	// overwriting the behaviour of this element.
 	FormPostResponseWriter FormPostResponseWriter
 
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.
@@ -320,6 +327,14 @@ func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
 
 func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
 	return c.AuthorizationServerIdentificationIssuer
+}
+
+func (c *Config) GetIntrospectionIssuer(ctx context.Context) string {
+	return c.IntrospectionIssuer
+}
+
+func (c *Config) GetIntrospectionJWTResponseSigner(ctx context.Context) jwt.Signer {
+	return c.IntrospectionJWTResponseSigner
 }
 
 // GetGrantTypeJWTBearerIssuedDateOptional returns the GrantTypeJWTBearerIssuedDateOptional field.
@@ -650,4 +665,6 @@ var (
 	_ RFC9628DeviceAuthorizeConfigProvider            = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider  = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
+	_ IntrospectionIssuerProvider                     = (*Config)(nil)
+	_ IntrospectionJWTResponseSignerProvider          = (*Config)(nil)
 )

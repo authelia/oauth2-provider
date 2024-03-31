@@ -76,7 +76,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	)
 
 	switch alg := client.GetRequestObjectSigningAlg(); alg {
-	case "none":
+	case consts.JSONWebTokenAlgNone:
 		algNone = true
 	case "":
 		algAny = true

@@ -31,7 +31,7 @@ type Token struct {
 }
 
 const (
-	SigningMethodNone = jose.SignatureAlgorithm("none")
+	SigningMethodNone = jose.SignatureAlgorithm(consts.JSONWebTokenAlgNone)
 	// This key should be use to correctly sign and verify alg:none JWT tokens
 	UnsafeAllowNoneSignatureType unsafeNoneMagicConstant = "none signing method allowed"
 
@@ -39,12 +39,12 @@ const (
 )
 
 const (
-	JWTHeaderKeyValueType = "typ"
+	JWTHeaderKeyValueType = consts.JSONWebTokenHeaderType
 )
 
 const (
-	JWTHeaderTypeValueJWT            = "JWT"
-	JWTHeaderTypeValueAccessTokenJWT = "at+jwt"
+	JWTHeaderTypeValueJWT            = consts.JSONWebTokenTypeJWT
+	JWTHeaderTypeValueAccessTokenJWT = consts.JSONWebTokenTypeAccessToken
 )
 
 type unsafeNoneMagicConstant string
@@ -119,7 +119,7 @@ func (t *Token) SignedString(k any) (rawToken string, err error) {
 }
 
 func unsignedToken(t *Token) (string, error) {
-	t.Header[consts.JSONWebTokenHeaderAlgorithm] = "none"
+	t.Header[consts.JSONWebTokenHeaderAlgorithm] = consts.JSONWebTokenAlgNone
 	if _, ok := t.Header[string(JWTHeaderType)]; !ok {
 		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValueJWT
 	}
@@ -166,7 +166,7 @@ type Keyfunc func(*Token) (any, error)
 
 // Parse is an overload for ParseCustom which accepts all normal algs including 'none'.
 func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustom(tokenString, keyFunc, "none", jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
+	return ParseCustom(tokenString, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
 }
 
 // ParseCustom parses, validates, and returns a token. The keyFunc will receive the parsed token and should
@@ -177,7 +177,7 @@ func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgo
 
 // ParseWithClaims is an overload for ParseCustomWithClaims which accepts all normal algs including 'none'.
 func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustomWithClaims(rawToken, claims, keyFunc, "none", jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
+	return ParseCustomWithClaims(rawToken, claims, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
 }
 
 // ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should

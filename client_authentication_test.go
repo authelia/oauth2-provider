@@ -65,7 +65,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseAuthenticationCanNotBeDetermined",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo"}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo"}, TokenEndpointAuthMethod: "client_secret_basic"}
 			},
 			form: url.Values{},
 			r:    new(http.Request),
@@ -74,7 +74,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientDoesNotExist",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
 			},
 			form: url.Values{"client_id": []string{"bar"}},
 			r:    new(http.Request),
@@ -83,7 +83,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassBecauseClientIsPublicAndAuthenticationRequirementsAreMet",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
 			},
 			form: url.Values{"client_id": []string{"foo"}},
 			r:    new(http.Request),
@@ -91,7 +91,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassBecauseClientIsPublicAndClientSecretIsEmptyInQueryParam",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
 			},
 			form: url.Values{"client_id": []string{"foo"}, "client_secret": []string{""}},
 			r:    new(http.Request),
@@ -99,7 +99,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassBecauseClientIsPublicAndClientSecretIsEmptyInBasicAuthHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "none"}
 			},
 			form: url.Values{},
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
@@ -107,7 +107,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientRequiresBasicAuthAndClientSecretIsEmptyInBasicAuthHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "client_secret_basic"}
 			},
 			form: url.Values{},
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
@@ -116,7 +116,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithClientCredentialsContainingSpecialCharacters",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "!foo%20bar", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "!foo%20bar", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_post"}
 			},
 			form: url.Values{"client_id": []string{"!foo%20bar"}, "client_secret": []string{complexSecretRaw}},
 			r:    new(http.Request),
@@ -124,7 +124,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailWithMultipleAuthenticationMethodsClientMethodBasic",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"}
 			},
 			form: url.Values{"client_id": []string{"abc"}, "client_secret": []string{complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
@@ -133,7 +133,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailWithMultipleAuthenticationMethodsClientMethodPost",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_post"}
 			},
 			form: url.Values{"client_id": []string{"abc"}, "client_secret": []string{complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
@@ -143,7 +143,7 @@ func TestAuthenticateClient(t *testing.T) {
 			name: "ShouldPassWithMultipleAuthenticationMethods",
 			client: func(ts *httptest.Server) Client {
 				return &TestClientAuthenticationPolicyClient{
-					&DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"},
+					&DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"},
 					true,
 				}
 			},
@@ -153,7 +153,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseAuthMethodIsNotNone",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", Public: true}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{"client_id": []string{"foo"}},
 			r:         new(http.Request),
 			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'none', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
@@ -162,21 +162,21 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassBecauseClientIsConfidentialAndIdAndSecretMatchInPostBody",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar, RotatedClientSecrets: []ClientSecret{testClientSecretBar}}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar, RotatedClientSecrets: []ClientSecret{testClientSecretBar}}, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_secret": []string{"bar"}},
 			r: new(http.Request),
 		},
 		{
 			name: "ShouldPassBecauseClientIsConfidentialAndIdAndRotatedSecretMatchInPostBody",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_secret": []string{"bar"}},
 			r: new(http.Request),
 		},
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndSecretDoesNotMatchInPostBody",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_secret": []string{"baz"}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
@@ -184,7 +184,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndIdDoesNotExistInPostBody",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_secret": []string{"bar"}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
@@ -192,28 +192,28 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassBecauseClientIsConfidentialAndIdAndSecretMatchInHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r: &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
 		},
 		{
 			name: "ShouldPassEscapedClientCredentials",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r: &http.Request{Header: clientBasicAuthHeader("foo", "foo %66%6F%6F@$<§!✓")},
 		},
 		{
 			name: "ShouldPassBecauseClientIsConfidentialAndIdAndRotatedSecretMatchInHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo, RotatedClientSecrets: []ClientSecret{testClientSecretBar}}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo, RotatedClientSecrets: []ClientSecret{testClientSecretBar}}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r: &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
 		},
 		{
 			name: "ShouldFailBecauseAuthMethodIsNotClientSecretBasic",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
 			expectErr: ErrInvalidClient,
@@ -221,7 +221,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndSecretDoesNotMatchInHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "baz")},
 			expectErr: ErrInvalidClient,
@@ -229,7 +229,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndNeitherSecretNorRotatedDoesMatchInHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo, RotatedClientSecrets: []ClientSecret{testClientSecretFoo}}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretFoo, RotatedClientSecrets: []ClientSecret{testClientSecretFoo}}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "baz")},
 			expectErr: ErrInvalidClient,
@@ -238,7 +238,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientIdIsNotValid",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
@@ -247,7 +247,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientSecretIsNotValid",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
@@ -256,7 +256,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseBasicValueIsNotValid",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo"))}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The basic scheme value was not separated by a colon.",
@@ -265,7 +265,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseSchemeIsNotValid",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"NotBasic " + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header had an unknown scheme. The scheme 'NotBasic' is not known for client authentication.",
@@ -274,7 +274,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseHeaderIsNotEncoded",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + "foo:bar"}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. Error occurred performing a base64 decode: illegal base64 data at input byte 3.",
@@ -283,7 +283,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseAuthorizationHeaderIsNotValid",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic" + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The header value is either missing a scheme, value, or the separator between them.",
@@ -292,7 +292,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseNonVSCHARClientID",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("\x19foo", "bar")},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP request had an invalid character.",
@@ -301,7 +301,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseNonVSCHARClientSecret",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "\x19bar")},
 			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP request had an invalid character.",
@@ -310,7 +310,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndIdDoesNotExistInHeader",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
 			expectErr: ErrInvalidClient,
@@ -319,7 +319,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionButClientAssertionIsMissing",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidRequest,
@@ -328,7 +328,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionTypeIsUnknown",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"foo"}, "client_assertion_type": []string{"foobar"}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidRequest,
@@ -337,7 +337,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithProperRSAAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -350,7 +350,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithProperECDSAAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -363,7 +363,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseRSAAssertionIsUsedButECDSAAssertionIsRequired",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -378,7 +378,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseMalformedAssertionUsed",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": []string{"bad.assertion"}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
@@ -387,7 +387,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseExpired",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(-time.Hour).Unix(),
@@ -402,7 +402,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseNotBefore",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -418,7 +418,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseIssuedInFuture",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -434,7 +434,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseNoKeys",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: nil, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: nil, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -449,7 +449,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseNotBefore",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -465,7 +465,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretJwt",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_jwt"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -480,7 +480,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButNone",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "none"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "none"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -495,7 +495,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretPost",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_post"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_post"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -510,7 +510,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretBasic",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_basic"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "client_secret_basic"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -525,7 +525,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButFoobar",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "foobar"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "foobar"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -539,7 +539,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest (aud is array)",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -552,7 +552,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseAudienceDoesNotMatchTokenURL",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -567,7 +567,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsAreSetWithinTheClient",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -580,7 +580,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseJWTAlgorithmIsHS256",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateHSAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -594,7 +594,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseJWTAlgorithmIsNone",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateNoneAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -609,7 +609,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsURIIsSet",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeysURI: ts.URL, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeysURI: ts.URL, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -622,7 +622,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionSubDoesNotMatchClient",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "not-bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -637,7 +637,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionIssDoesNotMatchClient",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -652,7 +652,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionJtiIsNotSet",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -666,7 +666,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseClientAssertionAudIsNotSet",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultOpenIDConnectClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			},
 			form: url.Values{
 				"client_id": []string{"bar"},
@@ -733,7 +733,7 @@ func TestAuthenticateClient(t *testing.T) {
 
 func TestAuthenticateClientTwice(t *testing.T) {
 	key := gen.MustRSAKey()
-	client := &DefaultOpenIDConnectClient{
+	client := &DefaultJWTSecuredAuthorizationRequest{
 		DefaultClient: &DefaultClient{
 			ID:           "bar",
 			ClientSecret: testClientSecretFoo,
@@ -823,7 +823,7 @@ func clientBasicAuthHeader(clientID, clientSecret string) http.Header {
 }
 
 type TestClientAuthenticationPolicyClient struct {
-	*DefaultOpenIDConnectClient
+	*DefaultJWTSecuredAuthorizationRequest
 
 	AllowMultipleAuthenticationMethods bool
 }

@@ -84,6 +84,7 @@ following list of differences:
         support
   - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396)
         support
+  - [x] [RFC9101: OAuth 2.0 JWT-Secured Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9101)
   - [ ] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
         support
   - Response Mode Rework:

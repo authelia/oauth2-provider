@@ -165,7 +165,7 @@ func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertion
 		return &ClientAssertion{Raw: raw, Type: assertionType, ID: id}, nil
 	}
 
-	if c, ok := client.(OpenIDConnectClient); ok {
+	if c, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
 		alg, method = c.GetTokenEndpointAuthSigningAlg(), c.GetTokenEndpointAuthSigningAlg()
 	}
 
@@ -188,7 +188,7 @@ type ClientAssertion struct {
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client) (method string, err error) {
-	if c, ok := client.(OpenIDConnectClient); ok {
+	if c, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
 		if method = c.GetTokenEndpointAuthMethod(); method != consts.ClientAuthMethodNone {
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
@@ -214,7 +214,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 		method = consts.ClientAuthMethodClientSecretPost
 	}
 
-	if oclient, ok := client.(OpenIDConnectClient); ok {
+	if oclient, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
 		var cmethod string
 
 		if cmethod = oclient.GetTokenEndpointAuthMethod(); cmethod != method {
@@ -306,11 +306,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		}
 
 		var (
-			c  OpenIDConnectClient
+			c  JWTSecuredAuthorizationRequestClient
 			ok bool
 		)
 
-		if c, ok = client.(OpenIDConnectClient); !ok {
+		if c, ok = client.(JWTSecuredAuthorizationRequestClient); !ok {
 			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 		}
 
@@ -322,7 +322,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	return method, kid, alg, token, claims, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client OpenIDConnectClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
 	var kid, alg, method string
 
 	kid, alg = getJWTHeaderKIDAlg(header)
@@ -345,7 +345,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client OpenIDConnectClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
 		secret := client.GetClientSecret()
@@ -364,7 +364,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client OpenIDConnectClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
 		xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),

@@ -67,8 +67,8 @@ type ClientAuthenticationPolicyClient interface {
 	Client
 }
 
-// OpenIDConnectClient represents a client capable of performing OpenID Connect requests.
-type OpenIDConnectClient interface {
+// JWTSecuredAuthorizationRequestClient represents a client capable of performing OpenID Connect requests.
+type JWTSecuredAuthorizationRequestClient interface {
 	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
 	// cache the contents of the files referenced by these URIs and not retrieve them at the time they are used in a request.
 	// OPs can require that request_uri values used be pre-registered with the require_request_uri_registration
@@ -204,7 +204,7 @@ type DefaultClient struct {
 	Public               bool           `json:"public"`
 }
 
-type DefaultOpenIDConnectClient struct {
+type DefaultJWTSecuredAuthorizationRequest struct {
 	*DefaultClient
 	JSONWebKeysURI              string              `json:"jwks_uri"`
 	JSONWebKeys                 *jose.JSONWebKeySet `json:"jwks"`
@@ -273,15 +273,15 @@ func (c *DefaultClient) GetResponseTypes() Arguments {
 	return c.ResponseTypes
 }
 
-func (c *DefaultOpenIDConnectClient) GetJSONWebKeysURI() string {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetJSONWebKeysURI() string {
 	return c.JSONWebKeysURI
 }
 
-func (c *DefaultOpenIDConnectClient) GetJSONWebKeys() *jose.JSONWebKeySet {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
-func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlg() string {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthSigningAlg() string {
 	if c.TokenEndpointAuthSigningAlg == "" {
 		return "RS256"
 	} else {
@@ -289,15 +289,15 @@ func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthSigningAlg() string {
 	}
 }
 
-func (c *DefaultOpenIDConnectClient) GetRequestObjectSigningAlg() string {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
 }
 
-func (c *DefaultOpenIDConnectClient) GetTokenEndpointAuthMethod() string {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthMethod() string {
 	return c.TokenEndpointAuthMethod
 }
 
-func (c *DefaultOpenIDConnectClient) GetRequestURIs() []string {
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
@@ -306,7 +306,7 @@ func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 }
 
 var (
-	_ Client              = (*DefaultClient)(nil)
-	_ ResponseModeClient  = (*DefaultResponseModeClient)(nil)
-	_ OpenIDConnectClient = (*DefaultOpenIDConnectClient)(nil)
+	_ Client                               = (*DefaultClient)(nil)
+	_ ResponseModeClient                   = (*DefaultResponseModeClient)(nil)
+	_ JWTSecuredAuthorizationRequestClient = (*DefaultJWTSecuredAuthorizationRequest)(nil)
 )

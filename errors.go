@@ -180,12 +180,12 @@ var (
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRequestNotSupported = &RFC6749Error{
-		DescriptionField: "The OP does not support use of the request parameter.",
+		DescriptionField: "The authorization server does not support the use of the request parameter.",
 		ErrorField:       errRequestNotSupportedName,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRequestURINotSupported = &RFC6749Error{
-		DescriptionField: "The OP does not support use of the request_uri parameter.",
+		DescriptionField: "The authorization server does not support the use of the request_uri parameter.",
 		ErrorField:       errRequestURINotSupportedName,
 		CodeField:        http.StatusBadRequest,
 	}
@@ -195,7 +195,7 @@ var (
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrInvalidRequestURI = &RFC6749Error{
-		DescriptionField: "The request_uri in the Authorization Request returns an error or contains invalid data.",
+		DescriptionField: "The request_uri in the authorization request returns an error or contains invalid data.",
 		ErrorField:       errInvalidRequestURI,
 		CodeField:        http.StatusBadRequest,
 	}

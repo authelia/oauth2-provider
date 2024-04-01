@@ -49,7 +49,7 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 	return strategy.AuthenticateClient(ctx, r, form)
 }
 
-func (f *Fosite) findClientPublicJWK(ctx context.Context, client OpenIDConnectClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
+func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAuthorizationRequestClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
 	var (
 		keys *jose.JSONWebKeySet
 	)
@@ -113,8 +113,8 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 	return err
 }
 
-// FindClientPublicJWK takes a OpenIDConnectClient and a kid, alg, and use to resolve a Public JWK for the client.
-func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client OpenIDConnectClient, kid, alg, use string) (key any, err error) {
+// FindClientPublicJWK takes a JWTSecuredAuthorizationRequestClient and a kid, alg, and use to resolve a Public JWK for the client.
+func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JWTSecuredAuthorizationRequestClient, kid, alg, use string) (key any, err error) {
 	if set := client.GetJSONWebKeys(); set != nil {
 		return findPublicKeyByKID(kid, alg, use, set)
 	}

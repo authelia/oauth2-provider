@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 const DefaultBCryptWorkFactor = 12

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // NewIntrospectionRequest initiates token introspection as defined in

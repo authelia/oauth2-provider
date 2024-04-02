@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type AudienceMatchingStrategy func(haystack []string, needle []string) error

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func (f *Fosite) NewAuthorizeResponse(ctx context.Context, requester AuthorizeRequester, session Session) (responder AuthorizeResponder, err error) {

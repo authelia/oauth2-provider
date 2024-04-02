@@ -14,7 +14,7 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // Token represets a JWT Token

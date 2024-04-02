@@ -7,7 +7,7 @@ import (
 	"crypto/rand"
 	"io"
 
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // RandomBytes returns n random bytes by reading from crypto/rand.Reader

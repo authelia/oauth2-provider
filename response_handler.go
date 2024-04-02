@@ -11,8 +11,8 @@ import (
 	"net/url"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jarm"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type DefaultResponseModeHandler struct {

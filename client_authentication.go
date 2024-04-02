@@ -18,8 +18,8 @@ import (
 	"github.com/go-jose/go-jose/v4"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // ClientAuthenticationStrategy describes a client authentication strategy implementation.

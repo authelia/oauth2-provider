@@ -11,7 +11,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // Deprecated: This handler is deprecated as a means to communicate that the ROPC grant type is widely discouraged and

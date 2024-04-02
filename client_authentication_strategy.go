@@ -13,7 +13,7 @@ import (
 	xjwt "github.com/golang-jwt/jwt/v5"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type DefaultClientAuthenticationStrategy struct {

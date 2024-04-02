@@ -8,7 +8,7 @@ import (
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/i18n"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // AddLocalizerToErr augments the error object with the localizer

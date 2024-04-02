@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/randx"
 	"authelia.com/provider/oauth2/token/hmac"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // NewHMACCoreStrategy creates a new HMACCoreStrategy with the potential to include the prefix format. The prefix must

@@ -13,7 +13,7 @@ import (
 	jjson "github.com/go-jose/go-jose/v4/json"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 var TimeFunc = time.Now

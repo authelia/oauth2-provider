@@ -13,7 +13,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/go-retryablehttp"
 
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"

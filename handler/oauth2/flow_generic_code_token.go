@@ -7,8 +7,8 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type CodeTokenEndpointHandler interface {

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/i18n"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestRFC6749Error(t *testing.T) {

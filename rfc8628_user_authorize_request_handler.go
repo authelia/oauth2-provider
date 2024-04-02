@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/i18n"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, req *http.Request) (DeviceAuthorizeRequester, error) {

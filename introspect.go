@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type TokenIntrospector interface {

@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
 	"authelia.com/provider/oauth2/internal/urls"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<html>

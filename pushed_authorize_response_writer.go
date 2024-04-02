@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/errorsx"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // NewPushedAuthorizeResponse executes the handlers and builds the response

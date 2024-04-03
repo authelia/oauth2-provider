@@ -22,9 +22,9 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	authorizeCode := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
+	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 
-	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, authorizeCode, requester)
+	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, code, requester)
 	if errors.Is(err, ErrNoSessionFound) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
 	} else if err != nil {
@@ -44,13 +44,13 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
 	}
 
-	if err = c.OpenIDConnectRequestStorage.DeleteOpenIDConnectSession(ctx, authorizeCode); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
 	claims := sess.IDTokenClaims()
 	if claims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
+	}
+
+	if err = c.OpenIDConnectRequestStorage.DeleteOpenIDConnectSession(ctx, code); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)

@@ -70,12 +70,6 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, consts.ClaimExpirationTime)
 	}
 
-	if !c.RequestedAt.IsZero() {
-		ret[consts.ClaimRequestedAt] = c.RequestedAt.Unix()
-	} else {
-		delete(ret, consts.ClaimRequestedAt)
-	}
-
 	if len(c.Nonce) > 0 {
 		ret[consts.ClaimNonce] = c.Nonce
 	} else {

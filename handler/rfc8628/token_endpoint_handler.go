@@ -72,7 +72,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 	}
 
 	// get the user code session
-	userAuthReq, err := c.Storage.GetUserCodeSession(ctx, deviceAuthReq.GetUserCodeSignature(), requester.GetSession())
+	userAuthReq, err := c.Storage.GetDeviceUserCodeSession(ctx, deviceAuthReq.GetUserCodeSignature(), requester.GetSession())
 	if err != nil {
 		_ = c.UpdateLastChecked(ctx, requester, deviceAuthReq)
 		return code, signature, deviceAuthReq, err
@@ -117,7 +117,7 @@ func (c *DeviceCodeTokenHandler) InvalidateSession(ctx context.Context, signatur
 	}
 
 	if authReq, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester); ok {
-		return c.Storage.InvalidateUserCodeSession(ctx, authReq.GetUserCodeSignature())
+		return c.Storage.InvalidateDeviceUserCodeSession(ctx, authReq.GetUserCodeSignature())
 	}
 
 	return nil

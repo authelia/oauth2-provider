@@ -16,6 +16,7 @@ func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, req *http.R
 	if err := req.ParseForm(); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
+
 	request.Form = req.Form
 
 	for _, h := range f.Config.GetRFC8628UserAuthorizeEndpointHandlers(ctx) {

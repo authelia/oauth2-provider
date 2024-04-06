@@ -41,7 +41,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
-		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+		err = f.Storage.CreateDeviceUserCodeSession(a.ctx, sig, dar)
 		require.NoError(t, err)
 
 		dar.GetRequestForm().Set("user_code", code)
@@ -247,7 +247,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
-		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+		err = f.Storage.CreateDeviceUserCodeSession(a.ctx, sig, dar)
 		require.NoError(t, err)
 
 		dar.GetRequestForm().Set("user_code", code)
@@ -447,7 +447,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
-				err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+				err = f.Storage.CreateDeviceUserCodeSession(a.ctx, sig, dar)
 				require.NoError(t, err)
 
 				dar.GetRequestForm().Set("user_code", code)

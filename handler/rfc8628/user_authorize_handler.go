@@ -32,7 +32,7 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 
 	// Stores the auth session and approval status into user code session instead of device code session.
 	userCodeSignature := req.GetUserCodeSignature()
-	if err := d.Storage.UpdateUserCodeSession(ctx, userCodeSignature, req); err != nil {
+	if err := d.Storage.UpdateDeviceUserCodeSession(ctx, userCodeSignature, req); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -50,7 +50,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	storedReq, err := d.Storage.GetUserCodeSession(ctx, userCodeSig, dur.GetSession())
+	storedReq, err := d.Storage.GetDeviceUserCodeSession(ctx, userCodeSig, dur.GetSession())
 	if errors.Is(err, oauth2.ErrNotFound) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	} else if err != nil {

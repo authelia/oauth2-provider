@@ -579,7 +579,7 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, code string
 	return nil
 }
 
-func (s *MemoryStore) CreateUserCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+func (s *MemoryStore) CreateDeviceUserCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
 	s.userCodesMutex.Lock()
 	defer s.userCodesMutex.Unlock()
 
@@ -592,7 +592,7 @@ func (s *MemoryStore) CreateUserCodeSession(ctx context.Context, signature strin
 	return nil
 }
 
-func (s *MemoryStore) GetUserCodeSession(ctx context.Context, signature string, session oauth2.Session) (req oauth2.DeviceAuthorizeRequester, err error) {
+func (s *MemoryStore) GetDeviceUserCodeSession(ctx context.Context, signature string, session oauth2.Session) (req oauth2.DeviceAuthorizeRequester, err error) {
 	s.userCodesMutex.RLock()
 	defer s.userCodesMutex.RUnlock()
 
@@ -604,7 +604,7 @@ func (s *MemoryStore) GetUserCodeSession(ctx context.Context, signature string, 
 	return req, nil
 }
 
-func (s *MemoryStore) InvalidateUserCodeSession(_ context.Context, code string) error {
+func (s *MemoryStore) InvalidateDeviceUserCodeSession(_ context.Context, code string) error {
 	s.userCodesMutex.Lock()
 	defer s.userCodesMutex.Unlock()
 
@@ -613,7 +613,7 @@ func (s *MemoryStore) InvalidateUserCodeSession(_ context.Context, code string) 
 	return nil
 }
 
-func (s *MemoryStore) UpdateUserCodeSession(ctx context.Context, signature string, req oauth2.DeviceAuthorizeRequester) error {
+func (s *MemoryStore) UpdateDeviceUserCodeSession(ctx context.Context, signature string, req oauth2.DeviceAuthorizeRequester) error {
 	s.userCodesMutex.Lock()
 	defer s.userCodesMutex.Unlock()
 

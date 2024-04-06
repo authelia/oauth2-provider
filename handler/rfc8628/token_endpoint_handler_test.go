@@ -98,7 +98,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, dar))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, dar))
 
 						areq.Form.Add("device_code", dCode)
 					},
@@ -138,7 +138,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, dar))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, dar))
 
 						areq.Form.Add("device_code", dCode)
 					},
@@ -178,7 +178,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, dar))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, dar))
 
 						areq.Form.Add("device_code", dCode)
 					},
@@ -216,7 +216,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, dar))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, dar))
 
 						areq.Form.Add("device_code", dCode)
 					},
@@ -382,7 +382,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().UTC().Add(time.Hour))
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, authreq))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, authreq))
 
 						areq.Form = url.Values{"device_code": {dCode}}
 					},
@@ -415,7 +415,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.SetUserCodeSignature(uSig)
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, authreq))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, authreq))
 
 						areq.Form = url.Values{"device_code": {dCode}}
 					},
@@ -452,7 +452,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.SetUserCodeSignature(uSig)
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateUserCodeSession(context.TODO(), uSig, authreq))
+						require.NoError(t, store.CreateDeviceUserCodeSession(context.TODO(), uSig, authreq))
 
 						areq.Form.Add("device_code", dCode)
 					},
@@ -542,7 +542,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -556,7 +556,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					InvalidateUserCodeSession(gomock.Any(), gomock.Any()).
+					InvalidateDeviceUserCodeSession(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockCoreStore.
@@ -586,7 +586,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -616,7 +616,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -630,7 +630,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					InvalidateUserCodeSession(gomock.Any(), gomock.Any()).
+					InvalidateDeviceUserCodeSession(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockCoreStore.
@@ -656,7 +656,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -676,7 +676,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -706,7 +706,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					GetUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetDeviceUserCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(deviceAuthReq, nil).
 					Times(1)
 				mockTransactional.
@@ -720,7 +720,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockDeviceStore.
 					EXPECT().
-					InvalidateUserCodeSession(gomock.Any(), gomock.Any()).
+					InvalidateDeviceUserCodeSession(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockCoreStore.

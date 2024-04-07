@@ -72,7 +72,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 	}
 
 	// get the user code session
-	userAuthReq, err := c.Storage.GetDeviceUserCodeSession(ctx, deviceAuthReq.GetUserCodeSignature(), requester.GetSession())
+	userAuthReq, err := c.Storage.GetDeviceCodeSessionByUserCode(ctx, deviceAuthReq.GetUserCodeSignature(), requester.GetSession())
 	if err != nil {
 		_ = c.UpdateLastChecked(ctx, requester, deviceAuthReq)
 		return code, signature, deviceAuthReq, err
@@ -95,32 +95,24 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 	return code, signature, deviceAuthReq, err
 }
 
-func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) error {
-	authReq, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester)
+func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, requester oauth2.AccessRequester, authorizeRequest oauth2.Requester) error {
+	r, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform device authorization because the authorizeRequest is not of the right type."))
 	}
 
-	lastChecked := request.GetRequestedAt()
+	lastChecked := requester.GetRequestedAt()
 	if lastChecked.IsZero() {
 		lastChecked = time.Now()
 	}
 
-	authReq.SetLastChecked(request.GetRequestedAt())
+	r.SetLastChecked(requester.GetRequestedAt())
 
-	return c.Storage.UpdateDeviceCodeSession(ctx, authReq.GetDeviceCodeSignature(), authReq)
+	return c.Storage.UpdateDeviceCodeSession(ctx, r.GetDeviceCodeSignature(), r)
 }
 
-func (c *DeviceCodeTokenHandler) InvalidateSession(ctx context.Context, signature string, authorizeRequest oauth2.Requester) error {
-	if err := c.Storage.InvalidateDeviceCodeSession(ctx, signature); err != nil {
-		return err
-	}
-
-	if authReq, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester); ok {
-		return c.Storage.InvalidateDeviceUserCodeSession(ctx, authReq.GetUserCodeSignature())
-	}
-
-	return nil
+func (c *DeviceCodeTokenHandler) InvalidateSession(ctx context.Context, signature string, requester oauth2.Requester) error {
+	return c.Storage.InvalidateDeviceCodeSession(ctx, signature)
 }
 
 func (c *DeviceCodeTokenHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {

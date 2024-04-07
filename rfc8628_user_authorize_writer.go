@@ -9,7 +9,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func (f *Fosite) WriteRFC8628UserAuthorizeResponse(_ context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder RFC8628UserAuthorizeResponder) {
+func (f *Fosite) WriteRFC8628UserAuthorizeResponse(_ context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder) {
 	wh := rw.Header()
 	rh := responder.GetHeader()
 	for k := range rh {

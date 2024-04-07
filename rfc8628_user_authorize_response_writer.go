@@ -2,7 +2,7 @@ package oauth2
 
 import "context"
 
-func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (RFC8628UserAuthorizeResponder, error) {
+func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (DeviceUserAuthorizeResponder, error) {
 	requester.SetSession(session)
 	var resp = NewRFC8628UserAuthorizeResponse()
 

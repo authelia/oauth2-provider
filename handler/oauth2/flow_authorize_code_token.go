@@ -23,7 +23,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant \"authorization_code\"."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
 	}
 
 	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
@@ -35,7 +35,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		if authorizeRequest == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
-				WithDebug("GetAuthorizeCodeSession must return a value for \"oauth2.Requester\" when returning \"ErrInvalidatedAuthorizeCode\".")
+				WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'.")
 		}
 
 		// If an authorize code is used twice, we revoke all refresh and access tokens associated with this request.
@@ -86,7 +86,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// their values are identical.
 	forcedRedirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
 	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The \"redirect_uri\" from this request does not match the one from the authorize request."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
 	}
 
 	// Checking of POST client_id skipped, because:

@@ -71,7 +71,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 	}
 
 	if !requester.GetClient().GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"urn:ietf:params:oauth:grant-type:device_code\"."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'urn:ietf:params:oauth:grant-type:device_code'."))
 	}
 
 	sess, ok := authorize.GetSession().(Session)

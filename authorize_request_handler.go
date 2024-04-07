@@ -400,7 +400,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request
 		}
 	}
 
-	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode \"%s\".", m))
+	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode '%s'.", m))
 }
 
 func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest) error {

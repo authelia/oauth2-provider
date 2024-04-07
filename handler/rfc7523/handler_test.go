@@ -121,7 +121,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForG
 	s.True(errors.Is(err, oauth2.ErrUnauthorizedClient))
 	s.EqualError(err, oauth2.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
 	s.Equal(
-		"The OAuth 2.0 Client is not allowed to use authorization grant \"urn:ietf:params:oauth:grant-type:jwt-bearer\".",
+		"The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:jwt-bearer'.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -154,7 +154,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAsser
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of malformed assertion")
 	s.Equal(
-		"Unable to parse JSON Web Token passed in \"assertion\" request parameter.",
+		"Unable to parse JSON Web Token passed in 'assertion' request parameter.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -174,7 +174,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIs
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing issuer claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain an \"iss\" (issuer) claim.",
+		"The JWT in 'assertion' request parameter MUST contain an 'iss' (issuer) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -194,7 +194,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSu
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing subject claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain a \"sub\" (subject) claim.",
+		"The JWT in 'assertion' request parameter MUST contain a 'sub' (subject) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -216,7 +216,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToChec
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing public key to check assertion")
 	s.Equal(
 		fmt.Sprintf(
-			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
+			"No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.",
 			cl.Issuer, cl.Subject,
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
@@ -240,7 +240,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToChe
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing public keys to check assertion")
 	s.Equal(
 		fmt.Sprintf(
-			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
+			"No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.",
 			cl.Issuer, cl.Subject,
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
@@ -283,7 +283,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAss
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because wrong public keys was registered for assertion")
 	s.Equal(
 		fmt.Sprintf(
-			"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
+			"No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.",
 			cl.Issuer, cl.Subject,
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
@@ -308,7 +308,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing audience claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim.",
+		"The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -332,7 +332,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of invalid audience claim in assertion")
 	s.Equal(
 		fmt.Sprintf(
-			"The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim containing a value \"%s\" that identifies the authorization server as an intended audience.",
+			"The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim containing a value '%s' that identifies the authorization server as an intended audience.",
 			s.handler.Config.GetTokenURL(ctx),
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
@@ -357,7 +357,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion()
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing expiration claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain an \"exp\" (expiration time) claim.",
+		"The JWT in 'assertion' request parameter MUST contain an 'exp' (expiration time) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -380,7 +380,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because assertion expired")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter expired.",
+		"The JWT in 'assertion' request parameter expired.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -405,7 +405,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBefor
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, nbf claim in assertion indicates, that assertion can not be accepted now")
 	s.Equal(
 		fmt.Sprintf(
-			"The JWT in \"assertion\" request parameter contains an \"nbf\" (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
+			"The JWT in 'assertion' request parameter contains an 'nbf' (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
 			nbf.Format(time.RFC3339),
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
@@ -431,7 +431,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing iat claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain an \"iat\" (issued at) claim.",
+		"The JWT in 'assertion' request parameter MUST contain an 'iat' (issued at) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -458,7 +458,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because assertion was issued far in the past")
 	s.Equal(
 		fmt.Sprintf(
-			"The JWT in \"assertion\" request parameter contains an \"exp\" (expiration time) claim with value \"%s\" that is unreasonably far in the future, considering token issued at \"%s\".",
+			"The JWT in 'assertion' request parameter contains an 'exp' (expiration time) claim with value '%s' that is unreasonably far in the future, considering token issued at '%s'.",
 			cl.Expiry.Time().Format(time.RFC3339),
 			cl.IssuedAt.Time().Format(time.RFC3339),
 		),
@@ -488,7 +488,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because assertion will expire unreasonably far in the future.")
 	s.Equal(
 		fmt.Sprintf(
-			"The JWT in \"assertion\" request parameter contains an \"exp\" (expiration time) claim with value \"%s\" that is unreasonably far in the future, considering token issued at \"%s\".",
+			"The JWT in 'assertion' request parameter contains an 'exp' (expiration time) claim with value '%s' that is unreasonably far in the future, considering token issued at '%s'.",
 			cl.Expiry.Time().Format(time.RFC3339),
 			cl.IssuedAt.Time().Format(time.RFC3339),
 		),
@@ -536,7 +536,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredT
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because of missing jti claim in assertion")
 	s.Equal(
-		"The JWT in \"assertion\" request parameter MUST contain an \"jti\" (JWT ID) claim.",
+		"The JWT in 'assertion' request parameter MUST contain an 'jti' (JWT ID) claim.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -642,7 +642,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScope
 	s.True(errors.Is(err, oauth2.ErrInvalidScope))
 	s.EqualError(err, oauth2.ErrInvalidScope.Error(), "expected error, because requested scopes don't match allowed scope for this assertion")
 	s.Equal(
-		"The public key registered for issuer \"trusted_issuer\" and subject \"some_ro\" is not allowed to request scope \"some_scope\".",
+		"The public key registered for issuer 'trusted_issuer' and subject 'some_ro' is not allowed to request scope 'some_scope'.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -898,7 +898,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegiste
 	s.True(errors.Is(err, oauth2.ErrUnauthorizedClient))
 	s.EqualError(err, oauth2.ErrUnauthorizedClient.Error(), "expected error, because client is not registered to use this grant type")
 	s.Equal(
-		"The OAuth 2.0 Client is not allowed to use authorization grant \"urn:ietf:params:oauth:grant-type:jwt-bearer\".",
+		"The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:jwt-bearer'.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }
@@ -918,7 +918,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedS
 	// assert
 	s.NoError(err, "no error expected")
 	s.Equal(s.accessResponse.AccessToken, token, "access token expected in response")
-	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be \"bearer\"")
+	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
 	s.Equal(
 		s.accessResponse.GetExtra(consts.AccessResponseExpiresIn), int64(s.handler.HandleHelper.Config.GetAccessTokenLifespan(context.TODO()).Seconds()),
 		"token expiration time expected in response to be equal to AccessTokenLifespan setting in handler",
@@ -948,7 +948,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedS
 	// assert
 	s.NoError(err, "no error expected")
 	s.Equal(s.accessResponse.AccessToken, token, "access token expected in response")
-	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be \"bearer\"")
+	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
 	s.Equal(
 		s.accessResponse.GetExtra(consts.AccessResponseExpiresIn), int64(internal.TestLifespans.JwtBearerGrantAccessTokenLifespan.Seconds()),
 		"token expiration time expected in response to be equal to the pertinent AccessTokenLifespan setting in client",

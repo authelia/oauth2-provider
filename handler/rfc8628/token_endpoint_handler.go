@@ -26,7 +26,7 @@ type DeviceAuthorizeTokenEndpointHandler struct {
 
 func (c *DeviceCodeTokenHandler) ValidateGrantTypes(_ context.Context, requester oauth2.AccessRequester) error {
 	if !requester.GetClient().GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant \"urn:ietf:params:oauth:grant-type:device_code\"."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:device_code'."))
 	}
 
 	return nil

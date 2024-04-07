@@ -33,7 +33,7 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 	}
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"refresh_token\"."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'refresh_token'."))
 	}
 
 	// Refresh tokens can only be issued by an authorize_code which in turn disables the need to check if the id_token
@@ -71,7 +71,7 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	}
 
 	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"refresh_token\"."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'refresh_token'."))
 	}
 
 	// Disabled because this is already handled at the authorize_request_handler

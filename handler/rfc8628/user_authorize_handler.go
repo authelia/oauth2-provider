@@ -21,7 +21,7 @@ type UserAuthorizeHandler struct {
 
 // PopulateRFC8628UserAuthorizeEndpointResponse is a response handler for the Device Authorisation Grant as
 // defined in https://tools.ietf.org/html/rfc8628#section-3.1
-func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, resp oauth2.RFC8628UserAuthorizeResponder) error {
+func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceUserAuthorizeResponder) error {
 	status := req.GetStatus()
 	// the request shall be either approved or denied
 	if status != oauth2.DeviceAuthorizeStatusApproved && status != oauth2.DeviceAuthorizeStatusDenied {
@@ -66,7 +66,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 
 	session := dur.GetSession()
 	if dur.GetUserCodeSignature() != userCodeSig { // shall not happen?
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatching."))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))
 	}
 
 	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || dur.GetStatus() != oauth2.DeviceAuthorizeStatusNew {

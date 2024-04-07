@@ -210,7 +210,7 @@ type Provider interface {
 	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
 	// Response is a HTTP response body using the
 	// "application/json" format [RFC8259] with a 200 (OK) status code.
-	WriteRFC8628UserAuthorizeResponse(cxt context.Context, rw http.ResponseWriter, requester DeviceAuthorizeRequester, responder RFC8628UserAuthorizeResponder)
+	WriteRFC8628UserAuthorizeResponse(cxt context.Context, rw http.ResponseWriter, requester DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder)
 
 	// WriteRFC8628UserAuthorizeError returns the device grant user verification error in a JSON formatted manner.
 	//
@@ -237,7 +237,7 @@ type Provider interface {
 	// In response, the authorization server generates a unique device
 	// verification code and an end-user code that are valid for a limited
 	// time
-	NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder RFC8628UserAuthorizeResponder, err error)
+	NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,
@@ -403,7 +403,7 @@ type AccessResponder interface {
 	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) any
+	GetExtra(key string) (extra any)
 
 	SetExpiresIn(time.Duration)
 
@@ -422,13 +422,13 @@ type AccessResponder interface {
 	GetTokenType() (token string)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]any
+	ToMap() (values map[string]any)
 }
 
 // AuthorizeResponder is an authorization endpoint's response.
 type AuthorizeResponder interface {
 	// GetCode returns the response's authorize code if set.
-	GetCode() string
+	GetCode() (code string)
 
 	// GetHeader returns the response's header
 	GetHeader() (header http.Header)
@@ -446,13 +446,13 @@ type AuthorizeResponder interface {
 // PushedAuthorizeResponder is the response object for PAR
 type PushedAuthorizeResponder interface {
 	// GetRequestURI returns the request_uri
-	GetRequestURI() string
+	GetRequestURI() (uri string)
 
 	// SetRequestURI sets the request_uri
 	SetRequestURI(requestURI string)
 
 	// GetExpiresIn gets the expires_in
-	GetExpiresIn() int
+	GetExpiresIn() (expires int)
 
 	// SetExpiresIn sets the expires_in
 	SetExpiresIn(seconds int)
@@ -467,10 +467,10 @@ type PushedAuthorizeResponder interface {
 	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) any
+	GetExtra(key string) (extra any)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]any
+	ToMap() (values map[string]any)
 }
 
 type DeviceAuthorizeResponder interface {
@@ -484,23 +484,23 @@ type DeviceAuthorizeResponder interface {
 	// AddHeader adds an header key value pair to the response
 	AddHeader(key, value string)
 
-	GetUserCode() string
+	GetUserCode() (code string)
 
 	SetUserCode(code string)
 
-	GetVerificationURI() string
+	GetVerificationURI() (uri string)
 
 	SetVerificationURI(uri string)
 
-	GetVerificationURIComplete() string
+	GetVerificationURIComplete() (completeURI string)
 
 	SetVerificationURIComplete(uri string)
 
-	GetExpiresIn() int64
+	GetExpiresIn() (expires int64)
 
 	SetExpiresIn(seconds int64)
 
-	GetInterval() int
+	GetInterval() (interval int)
 
 	SetInterval(seconds int)
 
@@ -508,14 +508,14 @@ type DeviceAuthorizeResponder interface {
 	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) any
+	GetExtra(key string) (extra any)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]any
+	ToMap() (values map[string]any)
 }
 
-// RFC8628UserAuthorizeResponder is device grant user verification endpoint response.
-type RFC8628UserAuthorizeResponder interface {
+// DeviceUserAuthorizeResponder is device grant user verification endpoint response.
+type DeviceUserAuthorizeResponder interface {
 	// GetHeader returns the response's header
 	GetHeader() (header http.Header)
 
@@ -529,7 +529,7 @@ type RFC8628UserAuthorizeResponder interface {
 	AddParameter(key, value string)
 
 	// GetStatus returns the device grant user verification status
-	GetStatus() string
+	GetStatus() (status string)
 
 	// SetStatus sets the device grant user verification status
 	SetStatus(status string)
@@ -538,20 +538,20 @@ type RFC8628UserAuthorizeResponder interface {
 	SetExtra(key string, value any)
 
 	// GetExtra returns a key's value.
-	GetExtra(key string) any
+	GetExtra(key string) (extra any)
 
 	// ToMap converts the response to a map.
-	ToMap() map[string]any
+	ToMap() (values map[string]any)
 }
 
 // G11NContext is the globalization context
 type G11NContext interface {
 	// GetLang returns the current language in the context
-	GetLang() language.Tag
+	GetLang() (lang language.Tag)
 }
 
 type RFC8693TokenType interface {
-	GetName(ctx context.Context) string
+	GetName(ctx context.Context) (name string)
 
-	GetType(ctx context.Context) string
+	GetType(ctx context.Context) (tokenType string)
 }

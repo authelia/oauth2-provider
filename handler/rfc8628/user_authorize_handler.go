@@ -21,55 +21,54 @@ type UserAuthorizeHandler struct {
 
 // PopulateRFC8628UserAuthorizeEndpointResponse is a response handler for the Device Authorisation Grant as
 // defined in https://tools.ietf.org/html/rfc8628#section-3.1
-func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceUserAuthorizeResponder) error {
-	status := req.GetStatus()
+func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request oauth2.DeviceAuthorizeRequester, response oauth2.DeviceUserAuthorizeResponder) error {
+	status := request.GetStatus()
 	// the request shall be either approved or denied
 	if status != oauth2.DeviceAuthorizeStatusApproved && status != oauth2.DeviceAuthorizeStatusDenied {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("Failed to perform device authorization because the request status is invalid."))
 	}
 
-	resp.SetStatus(oauth2.DeviceAuthorizeStatusToString(status))
+	response.SetStatus(oauth2.DeviceAuthorizeStatusToString(status))
 
 	// Stores the auth session and approval status into user code session instead of device code session.
-	userCodeSignature := req.GetUserCodeSignature()
-	if err := d.Storage.UpdateDeviceUserCodeSession(ctx, userCodeSignature, req); err != nil {
+	if err := d.Storage.UpdateDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
 }
 
-func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, dur oauth2.DeviceAuthorizeRequester) error {
-	userCode := dur.GetRequestForm().Get(consts.FormParameterUserCode)
+func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester) error {
+	userCode := request.GetRequestForm().Get(consts.FormParameterUserCode)
 	if len(userCode) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user_code is missing."))
 	}
 
-	userCodeSig, err := d.Strategy.RFC8628UserCodeSignature(ctx, userCode)
+	signature, err := d.Strategy.RFC8628UserCodeSignature(ctx, userCode)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	storedReq, err := d.Storage.GetDeviceUserCodeSession(ctx, userCodeSig, dur.GetSession())
+	storedReq, err := d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession())
 	if errors.Is(err, oauth2.ErrNotFound) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	dur.Merge(storedReq)
+	request.Merge(storedReq)
 
-	client := dur.GetClient()
+	client := request.GetClient()
 	if !client.GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) { // shall not happen?
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The requested OAuth 2.0 Client does not have the 'urn:ietf:params:oauth:grant-type:device_code' grant."))
 	}
 
-	session := dur.GetSession()
-	if dur.GetUserCodeSignature() != userCodeSig { // shall not happen?
+	session := request.GetSession()
+	if request.GetUserCodeSignature() != signature { // shall not happen?
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))
 	}
 
-	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || dur.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || request.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	}
 

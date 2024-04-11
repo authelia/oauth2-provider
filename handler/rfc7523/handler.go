@@ -56,7 +56,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	token, err := jwt.ParseSigned(assertion, []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint(`Unable to parse JSON Web Token passed in "assertion" request parameter.`).
+			WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").
 			WithWrap(err).WithDebugError(err),
 		)
 	}
@@ -91,7 +91,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(scopes, scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The public key registered for issuer \"%s\" and subject \"%s\" is not allowed to request scope \"%s\".", claims.Issuer, claims.Subject, scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The public key registered for issuer '%s' and subject '%s' is not allowed to request scope '%s'.", claims.Issuer, claims.Subject, scope))
 		}
 	}
 
@@ -154,7 +154,7 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 
 	// if client is authenticated, check grant types
 	if !c.CanSkipClientAuth(ctx, request) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant \"%s\".", consts.GrantTypeOAuthJWTBearer))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
 	return nil
@@ -164,18 +164,18 @@ func (c *Handler) validateTokenPreRequisites(token *jwt.JSONWebToken) error {
 	unverifiedClaims := jwt.Claims{}
 	if err := token.UnsafeClaimsWithoutVerification(&unverifiedClaims); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("Looks like there are no claims in JWT in \"assertion\" request parameter.").
+			WithHint("Looks like there are no claims in JWT in 'assertion' request parameter.").
 			WithWrap(err).WithDebugError(err),
 		)
 	}
 	if unverifiedClaims.Issuer == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain an \"iss\" (issuer) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain an 'iss' (issuer) claim."),
 		)
 	}
 	if unverifiedClaims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain a \"sub\" (subject) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain a 'sub' (subject) claim."),
 		)
 	}
 
@@ -197,7 +197,7 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	}
 
 	keyNotFoundErr := oauth2.ErrInvalidGrant.WithHintf(
-		"No public JWK was registered for issuer \"%s\" and subject \"%s\", and public key is required to check signature of JWT in \"assertion\" request parameter.",
+		"No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.",
 		unverifiedClaims.Issuer,
 		unverifiedClaims.Subject,
 	)
@@ -231,14 +231,14 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, key *jose.JSONWebKey) error {
 	if len(claims.Audience) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim."),
 		)
 	}
 
 	if !claims.Audience.Contains(c.Config.GetTokenURL(ctx)) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHintf(
-				"The JWT in \"assertion\" request parameter MUST contain an \"aud\" (audience) claim containing a value \"%s\" that identifies the authorization server as an intended audience.",
+				"The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim containing a value '%s' that identifies the authorization server as an intended audience.",
 				c.Config.GetTokenURL(ctx),
 			),
 		)
@@ -246,20 +246,20 @@ func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, ke
 
 	if claims.Expiry == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain an \"exp\" (expiration time) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain an 'exp' (expiration time) claim."),
 		)
 	}
 
 	if claims.Expiry.Time().Before(time.Now()) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter expired."),
+			WithHint("The JWT in 'assertion' request parameter expired."),
 		)
 	}
 
 	if claims.NotBefore != nil && !claims.NotBefore.Time().Before(time.Now()) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHintf(
-				"The JWT in \"assertion\" request parameter contains an \"nbf\" (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
+				"The JWT in 'assertion' request parameter contains an 'nbf' (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
 				claims.NotBefore.Time().Format(time.RFC3339),
 			),
 		)
@@ -267,7 +267,7 @@ func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, ke
 
 	if !c.Config.GetGrantTypeJWTBearerIssuedDateOptional(ctx) && claims.IssuedAt == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain an \"iat\" (issued at) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain an 'iat' (issued at) claim."),
 		)
 	}
 
@@ -280,7 +280,7 @@ func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, ke
 	if claims.Expiry.Time().Sub(issuedDate) > c.Config.GetJWTMaxDuration(ctx) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHintf(
-				"The JWT in \"assertion\" request parameter contains an \"exp\" (expiration time) claim with value \"%s\" that is unreasonably far in the future, considering token issued at \"%s\".",
+				"The JWT in 'assertion' request parameter contains an 'exp' (expiration time) claim with value '%s' that is unreasonably far in the future, considering token issued at '%s'.",
 				claims.Expiry.Time().Format(time.RFC3339),
 				issuedDate.Format(time.RFC3339),
 			),
@@ -289,7 +289,7 @@ func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, ke
 
 	if !c.Config.GetGrantTypeJWTBearerIDOptional(ctx) && claims.ID == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in \"assertion\" request parameter MUST contain an \"jti\" (JWT ID) claim."),
+			WithHint("The JWT in 'assertion' request parameter MUST contain an 'jti' (JWT ID) claim."),
 		)
 	}
 

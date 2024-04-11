@@ -54,20 +54,6 @@ func (mr *MockRFC8628StorageMockRecorder) CreateDeviceCodeSession(arg0, arg1, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).CreateDeviceCodeSession), arg0, arg1, arg2)
 }
 
-// CreateDeviceUserCodeSession mocks base method.
-func (m *MockRFC8628Storage) CreateDeviceUserCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.DeviceAuthorizeRequester) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateDeviceUserCodeSession", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateDeviceUserCodeSession indicates an expected call of CreateDeviceUserCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) CreateDeviceUserCodeSession(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDeviceUserCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).CreateDeviceUserCodeSession), arg0, arg1, arg2)
-}
-
 // GetDeviceCodeSession mocks base method.
 func (m *MockRFC8628Storage) GetDeviceCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	m.ctrl.T.Helper()
@@ -83,19 +69,19 @@ func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSession(arg0, arg1, arg2 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSession), arg0, arg1, arg2)
 }
 
-// GetDeviceUserCodeSession mocks base method.
-func (m *MockRFC8628Storage) GetDeviceUserCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+// GetDeviceCodeSessionByUserCode mocks base method.
+func (m *MockRFC8628Storage) GetDeviceCodeSessionByUserCode(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeviceUserCodeSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetDeviceCodeSessionByUserCode", arg0, arg1, arg2)
 	ret0, _ := ret[0].(oauth2.DeviceAuthorizeRequester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetDeviceUserCodeSession indicates an expected call of GetDeviceUserCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) GetDeviceUserCodeSession(arg0, arg1, arg2 any) *gomock.Call {
+// GetDeviceCodeSessionByUserCode indicates an expected call of GetDeviceCodeSessionByUserCode.
+func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSessionByUserCode(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceUserCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceUserCodeSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSessionByUserCode", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSessionByUserCode), arg0, arg1, arg2)
 }
 
 // InvalidateDeviceCodeSession mocks base method.
@@ -112,20 +98,6 @@ func (mr *MockRFC8628StorageMockRecorder) InvalidateDeviceCodeSession(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).InvalidateDeviceCodeSession), arg0, arg1)
 }
 
-// InvalidateDeviceUserCodeSession mocks base method.
-func (m *MockRFC8628Storage) InvalidateDeviceUserCodeSession(arg0 context.Context, arg1 string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InvalidateDeviceUserCodeSession", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// InvalidateDeviceUserCodeSession indicates an expected call of InvalidateDeviceUserCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) InvalidateDeviceUserCodeSession(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateDeviceUserCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).InvalidateDeviceUserCodeSession), arg0, arg1)
-}
-
 // UpdateDeviceCodeSession mocks base method.
 func (m *MockRFC8628Storage) UpdateDeviceCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.DeviceAuthorizeRequester) error {
 	m.ctrl.T.Helper()
@@ -138,18 +110,4 @@ func (m *MockRFC8628Storage) UpdateDeviceCodeSession(arg0 context.Context, arg1 
 func (mr *MockRFC8628StorageMockRecorder) UpdateDeviceCodeSession(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).UpdateDeviceCodeSession), arg0, arg1, arg2)
-}
-
-// UpdateDeviceUserCodeSession mocks base method.
-func (m *MockRFC8628Storage) UpdateDeviceUserCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.DeviceAuthorizeRequester) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDeviceUserCodeSession", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateDeviceUserCodeSession indicates an expected call of UpdateDeviceUserCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) UpdateDeviceUserCodeSession(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDeviceUserCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).UpdateDeviceUserCodeSession), arg0, arg1, arg2)
 }

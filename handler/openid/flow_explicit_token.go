@@ -36,7 +36,7 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	}
 
 	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant \"authorization_code\"."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'authorization_code'."))
 	}
 
 	sess, ok := authorize.GetSession().(Session)

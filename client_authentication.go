@@ -83,7 +83,7 @@ func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAutho
 func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (err error) {
 	secret := client.GetClientSecret()
 
-	if secret == nil {
+	if secret == nil || !secret.Valid() {
 		return ErrClientSecretNotRegistered
 	}
 

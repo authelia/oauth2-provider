@@ -81,3 +81,17 @@ func (mr *MockClientSecretMockRecorder) IsPlainText() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPlainText", reflect.TypeOf((*MockClientSecret)(nil).IsPlainText))
 }
+
+// Valid mocks base method.
+func (m *MockClientSecret) Valid() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Valid")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Valid indicates an expected call of Valid.
+func (mr *MockClientSecretMockRecorder) Valid() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Valid", reflect.TypeOf((*MockClientSecret)(nil).Valid))
+}

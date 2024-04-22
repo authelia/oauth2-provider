@@ -26,7 +26,7 @@ type DefaultClientAuthenticationStrategy struct {
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
 	var (
 		id, secret string
 
@@ -48,7 +48,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	var assertion *ClientAssertion
 
 	if hasAssertion {
-		if assertion, err = NewClientAssertion(ctx, s.Store, assertionValue, assertionType); err != nil {
+		if assertion, err = NewClientAssertion(ctx, s.Store, assertionValue, assertionType, resolver); err != nil {
 			return nil, "", err
 		}
 	}
@@ -64,10 +64,10 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 
 	hasNone := !hasPost && !hasBasic && assertion == nil && len(id) != 0
 
-	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone)
+	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone, resolver)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
 	var methods []string
 
 	if hasBasic {
@@ -120,11 +120,11 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 
 	switch {
 	case assertion != nil:
-		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion)
+		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, resolver)
 	case hasBasic, hasPost:
-		method, err = s.doAuthenticateClientSecret(ctx, client, secret, hasBasic, hasPost)
+		method, err = s.doAuthenticateClientSecret(ctx, client, secret, hasBasic, hasPost, resolver)
 	default:
-		method, err = s.doAuthenticateNone(ctx, client)
+		method, err = s.doAuthenticateNone(ctx, client, resolver)
 	}
 
 	if err != nil {
@@ -134,7 +134,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	return client, method, nil
 }
 
-func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string) (assertion *ClientAssertion, err error) {
+func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string, resolver AllowedClientAuthenticationMethodHandler) (assertion *ClientAssertion, err error) {
 	var (
 		token *xjwt.Token
 
@@ -165,8 +165,8 @@ func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertion
 		return &ClientAssertion{Raw: raw, Type: assertionType, ID: id}, nil
 	}
 
-	if c, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
-		alg, method = c.GetTokenEndpointAuthSigningAlg(), c.GetTokenEndpointAuthSigningAlg()
+	if c, ok := client.(AuthenticationMethodClient); ok {
+		alg, method = resolver.GetAuthSigningAlg(c), resolver.GetAuthMethod(c)
 	}
 
 	return &ClientAssertion{
@@ -187,9 +187,9 @@ type ClientAssertion struct {
 	Client                Client
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client) (method string, err error) {
-	if c, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
-		if method = c.GetTokenEndpointAuthMethod(); method != consts.ClientAuthMethodNone {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
+	if c, ok := client.(AuthenticationMethodClient); ok {
+		if method = resolver.GetAuthMethod(c); method != consts.ClientAuthMethodNone {
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
 					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", consts.ClientAuthMethodNone).
@@ -207,17 +207,18 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Con
 	return consts.ClientAuthMethodNone, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret string, hasBasic, hasPost bool) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret string, hasBasic, hasPost bool, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
 	method = consts.ClientAuthMethodClientSecretBasic
 
 	if !hasBasic && hasPost {
 		method = consts.ClientAuthMethodClientSecretPost
 	}
 
-	if oclient, ok := client.(JWTSecuredAuthorizationRequestClient); ok {
-		var cmethod string
-
-		if cmethod = oclient.GetTokenEndpointAuthMethod(); cmethod != method {
+	if c, ok := client.(AuthenticationMethodClient); ok {
+		switch cmethod := resolver.GetAuthMethod(c); {
+		case cmethod == "":
+			break
+		case cmethod != method:
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
 					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", method).
@@ -239,13 +240,13 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
 	var (
 		token  *xjwt.Token
 		claims *xjwt.RegisteredClaims
 	)
 
-	if method, _, _, token, claims, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, client, assertion); err != nil {
+	if method, _, _, token, claims, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, client, assertion, resolver); err != nil {
 		return "", err
 	}
 
@@ -275,7 +276,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver AllowedClientAuthenticationMethodHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
 	var tokenURI string
 
 	if tokenURI = s.Config.GetTokenURL(ctx); tokenURI == "" {
@@ -306,15 +307,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		}
 
 		var (
-			c  JWTSecuredAuthorizationRequestClient
+			c  AuthenticationMethodClient
 			ok bool
 		)
 
-		if c, ok = client.(JWTSecuredAuthorizationRequestClient); !ok {
+		if c, ok = client.(AuthenticationMethodClient); !ok {
 			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 		}
 
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx, token.Header, c)
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx, token.Header, c, resolver)
 	}); err != nil {
 		return "", "", "", nil, nil, resolveJWTErrorToRFCError(err)
 	}
@@ -322,16 +323,16 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	return method, kid, alg, token, claims, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client AuthenticationMethodClient, resolver AllowedClientAuthenticationMethodHandler) (key any, err error) {
 	var kid, alg, method string
 
 	kid, alg = getJWTHeaderKIDAlg(header)
 
-	if client.GetTokenEndpointAuthSigningAlg() != alg {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+	if calg := resolver.GetAuthSigningAlg(client); calg != alg && calg != "" {
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg).WithDebugf("The registered OAuth 2.0 client with id '%s' only supports the '%s' algorithm.", client.GetID(), calg))
 	}
 
-	switch method = client.GetTokenEndpointAuthMethod(); method {
+	switch method = resolver.GetAuthMethod(client); method {
 	case consts.ClientAuthMethodClientSecretJWT:
 		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx, kid, alg, client)
 	case consts.ClientAuthMethodPrivateKeyJWT:
@@ -345,7 +346,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client AuthenticationMethodClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
 		secret := client.GetClientSecret()
@@ -364,7 +365,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client JWTSecuredAuthorizationRequestClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client AuthenticationMethodClient) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
 		xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),

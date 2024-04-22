@@ -223,7 +223,7 @@ func (s *introspectJWTBearerTokenSuite) assertUnauthorizedResponse(
 
 	retrieveError, ok := err.(*clients.RequestError)
 	assert.True(t, ok)
-	assert.Equal(t, retrieveError.Response.StatusCode, http.StatusUnauthorized)
+	assert.Equal(t, http.StatusUnauthorized, retrieveError.Response.StatusCode)
 }
 
 func TestIntrospectJWTBearerTokenSuite(t *testing.T) {

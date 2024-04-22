@@ -67,6 +67,18 @@ type ClientAuthenticationPolicyClient interface {
 	Client
 }
 
+// JSONWebKeysClient is a client base which includes a JSON Web Key Set registration.
+type JSONWebKeysClient interface {
+	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
+	GetJSONWebKeys() (jwks *jose.JSONWebKeySet)
+
+	// GetJSONWebKeysURI returns the URL for lookup of JSON Web Key Set containing the
+	// public key used by the client to authenticate.
+	GetJSONWebKeysURI() (uri string)
+
+	Client
+}
+
 // JWTSecuredAuthorizationRequestClient represents a client capable of performing OpenID Connect requests.
 type JWTSecuredAuthorizationRequestClient interface {
 	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
@@ -75,17 +87,15 @@ type JWTSecuredAuthorizationRequestClient interface {
 	// discovery parameter.
 	GetRequestURIs() (requestURIs []string)
 
-	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
-	GetJSONWebKeys() (jwks *jose.JSONWebKeySet)
-
-	// GetJSONWebKeysURI returns the URL for lookup of JSON Web Key Set containing the
-	// public key used by the client to authenticate.
-	GetJSONWebKeysURI() (uri string)
-
 	// GetRequestObjectSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request
 	// Objects sent to the OP. All Request Objects from this Client MUST be rejected, if not signed with this algorithm.
 	GetRequestObjectSigningAlg() (alg string)
 
+	JSONWebKeysClient
+}
+
+// AuthenticationMethodClient represents a client which has specific authentication methods.
+type AuthenticationMethodClient interface {
 	// GetTokenEndpointAuthMethod requested Client Authentication method for the Token Endpoint. The options are
 	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt, and none.
 	GetTokenEndpointAuthMethod() (method string)
@@ -95,7 +105,16 @@ type JWTSecuredAuthorizationRequestClient interface {
 	// authentication methods.
 	GetTokenEndpointAuthSigningAlg() (alg string)
 
-	Client
+	// GetIntrospectionEndpointAuthMethod requested Client Authentication method for the Introspection Endpoint. The
+	// options are client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt.
+	GetIntrospectionEndpointAuthMethod() (method string)
+
+	// GetIntrospectionEndpointAuthSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing
+	// the JWT [JWT] used to authenticate the Client at the Introspection Endpoint for the private_key_jwt and
+	// client_secret_jwt authentication methods.
+	GetIntrospectionEndpointAuthSigningAlg() (alg string)
+
+	JSONWebKeysClient
 }
 
 // RefreshFlowScopeClient is a client which can be customized to ignore scopes that were not originally granted.
@@ -206,12 +225,14 @@ type DefaultClient struct {
 
 type DefaultJWTSecuredAuthorizationRequest struct {
 	*DefaultClient
-	JSONWebKeysURI              string              `json:"jwks_uri"`
-	JSONWebKeys                 *jose.JSONWebKeySet `json:"jwks"`
-	TokenEndpointAuthMethod     string              `json:"token_endpoint_auth_method"`
-	RequestURIs                 []string            `json:"request_uris"`
-	RequestObjectSigningAlg     string              `json:"request_object_signing_alg"`
-	TokenEndpointAuthSigningAlg string              `json:"token_endpoint_auth_signing_alg"`
+	JSONWebKeysURI                      string              `json:"jwks_uri"`
+	JSONWebKeys                         *jose.JSONWebKeySet `json:"jwks"`
+	TokenEndpointAuthMethod             string              `json:"token_endpoint_auth_method"`
+	IntrospectionEndpointAuthMethod     string              `json:"introspection_endpoint_auth_method"`
+	RequestURIs                         []string            `json:"request_uris"`
+	RequestObjectSigningAlg             string              `json:"request_object_signing_alg"`
+	TokenEndpointAuthSigningAlg         string              `json:"token_endpoint_auth_signing_alg"`
+	IntrospectionEndpointAuthSigningAlg string              `json:"introspection_endpoint_auth_signing_alg"`
 }
 
 type DefaultResponseModeClient struct {
@@ -289,12 +310,20 @@ func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthSigningAlg()
 	}
 }
 
+func (c *DefaultJWTSecuredAuthorizationRequest) GetIntrospectionEndpointAuthSigningAlg() string {
+	return c.IntrospectionEndpointAuthSigningAlg
+}
+
 func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
 }
 
 func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthMethod() string {
 	return c.TokenEndpointAuthMethod
+}
+
+func (c *DefaultJWTSecuredAuthorizationRequest) GetIntrospectionEndpointAuthMethod() string {
+	return c.IntrospectionEndpointAuthMethod
 }
 
 func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestURIs() []string {

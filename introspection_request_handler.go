@@ -151,7 +151,7 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		}
 
 		client = ar.GetClient()
-	} else if client, _, err = f.AuthenticateClientWithResolver(ctx, r, r.PostForm, &IntrospectionEndpointAllowedClientAuthenticationMethodHandler{}); err != nil {
+	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, &IntrospectionEndpointClientAuthHandler{}); err != nil {
 		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
 	}
 

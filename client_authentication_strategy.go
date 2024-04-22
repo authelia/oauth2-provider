@@ -26,7 +26,7 @@ type DefaultClientAuthenticationStrategy struct {
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver EndpointClientAuthHandler) (client Client, method string, err error) {
 	var (
 		id, secret string
 
@@ -67,7 +67,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone, resolver)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, resolver EndpointClientAuthHandler) (client Client, method string, err error) {
 	var methods []string
 
 	if hasBasic {
@@ -115,7 +115,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.
 			WithHintf("Client Authentication failed with more than one known authentication method included in the request which is not permitted.").
-			WithDebugf("The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), strings.Join(methods, "', '")))
+			WithDebugf("The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), resolver.Name(), strings.Join(methods, "', '")))
 	}
 
 	switch {
@@ -134,7 +134,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	return client, method, nil
 }
 
-func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string, resolver AllowedClientAuthenticationMethodHandler) (assertion *ClientAssertion, err error) {
+func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string, resolver EndpointClientAuthHandler) (assertion *ClientAssertion, err error) {
 	var (
 		token *xjwt.Token
 
@@ -187,27 +187,27 @@ type ClientAssertion struct {
 	Client                Client
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client, handler EndpointClientAuthHandler) (method string, err error) {
 	if c, ok := client.(AuthenticationMethodClient); ok {
-		if method = resolver.GetAuthMethod(c); method != consts.ClientAuthMethodNone {
+		if method = handler.GetAuthMethod(c); method != consts.ClientAuthMethodNone {
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
-					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", consts.ClientAuthMethodNone).
-					WithDebugf("The registered client with id '%s' is configured to only support 'token_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), method, consts.ClientAuthMethodNone, method))
+					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), consts.ClientAuthMethodNone).
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), method, handler.Name(), consts.ClientAuthMethodNone, method))
 		}
 	}
 
 	if !client.IsPublic() {
 		return "", errorsx.WithStack(
 			ErrInvalidClient.
-				WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", consts.ClientAuthMethodNone).
-				WithDebugf("The registered client with id '%s' is configured with a confidential client type but only client registrations with a public client type can use this 'token_endpoint_auth_method'.", client.GetID()))
+				WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", consts.ClientAuthMethodNone, handler.Name()).
+				WithDebugf("The registered client with id '%s' is configured with a confidential client type but only client registrations with a public client type can use this '%s_endpoint_auth_method'.", client.GetID(), handler.Name()))
 	}
 
 	return consts.ClientAuthMethodNone, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret string, hasBasic, hasPost bool, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret string, hasBasic, hasPost bool, handler EndpointClientAuthHandler) (method string, err error) {
 	method = consts.ClientAuthMethodClientSecretBasic
 
 	if !hasBasic && hasPost {
@@ -215,14 +215,14 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	}
 
 	if c, ok := client.(AuthenticationMethodClient); ok {
-		switch cmethod := resolver.GetAuthMethod(c); {
-		case cmethod == "":
+		switch cmethod := handler.GetAuthMethod(c); {
+		case cmethod == "" && handler.AllowAuthMethodAny():
 			break
 		case cmethod != method:
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
-					WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", method).
-					WithDebugf("The registered client with id '%s' is configured to only support 'token_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), cmethod, method, cmethod))
+					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
 		}
 	}
 
@@ -232,7 +232,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	case errors.Is(err, ErrClientSecretNotRegistered):
 		return "", errorsx.WithStack(
 			ErrInvalidClient.
-				WithHintf("The request was determined to be using 'token_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", method).
+				WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
 				WithDebugf("The registered client with id '%s' has no 'client_secret' however this is required to process the particular request.", client.GetID()),
 		)
 	default:
@@ -240,7 +240,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver AllowedClientAuthenticationMethodHandler) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method string, err error) {
 	var (
 		token  *xjwt.Token
 		claims *xjwt.RegisteredClaims
@@ -276,7 +276,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver AllowedClientAuthenticationMethodHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
 	var tokenURI string
 
 	if tokenURI = s.Config.GetTokenURL(ctx); tokenURI == "" {
@@ -323,20 +323,20 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	return method, kid, alg, token, claims, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client AuthenticationMethodClient, resolver AllowedClientAuthenticationMethodHandler) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
 	var kid, alg, method string
 
 	kid, alg = getJWTHeaderKIDAlg(header)
 
-	if calg := resolver.GetAuthSigningAlg(client); calg != alg && calg != "" {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg).WithDebugf("The registered OAuth 2.0 client with id '%s' only supports the '%s' algorithm.", client.GetID(), calg))
+	if calg := handler.GetAuthSigningAlg(client); calg != alg && calg != "" {
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg).WithDebugf("The registered OAuth 2.0 client with id '%s' only supports the '%s' algorithm.", client.GetID(), calg))
 	}
 
-	switch method = resolver.GetAuthMethod(client); method {
+	switch method = handler.GetAuthMethod(client); method {
 	case consts.ClientAuthMethodClientSecretJWT:
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx, kid, alg, client)
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx, kid, alg, client, handler)
 	case consts.ClientAuthMethodPrivateKeyJWT:
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx, kid, alg, client)
+		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx, kid, alg, client, handler)
 	case consts.ClientAuthMethodNone:
 		return nil, errorsx.WithStack(ErrInvalidClient.WithHint("This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request."))
 	case consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost:
@@ -346,7 +346,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client AuthenticationMethodClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
 		secret := client.GetClientSecret()
@@ -361,11 +361,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 		return key, nil
 	default:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg))
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client AuthenticationMethodClient) (key any, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
 	switch alg {
 	case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
 		xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),
@@ -376,7 +376,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 		return key, nil
 	default:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the token endpoint signing algorithm '%s'.", alg))
+		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg))
 	}
 }
 

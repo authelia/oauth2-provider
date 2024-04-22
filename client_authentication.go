@@ -24,7 +24,7 @@ import (
 
 // ClientAuthenticationStrategy describes a client authentication strategy implementation.
 type ClientAuthenticationStrategy interface {
-	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error)
+	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, handler EndpointClientAuthHandler) (client Client, method string, err error)
 }
 
 var (
@@ -34,17 +34,17 @@ var (
 // AuthenticateClient authenticates client requests using the configured strategy returned by the oauth2.Configurator
 // function GetClientAuthenticationStrategy, if nil it uses `oauth2.DefaultClientAuthenticationStrategy`.
 func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, method string, err error) {
-	return f.AuthenticateClientWithResolver(ctx, r, form, &TokenEndpointAllowedClientAuthenticationMethodHandler{})
+	return f.AuthenticateClientWithAuthHandler(ctx, r, form, &TokenEndpointClientAuthHandler{})
 }
 
-func (f *Fosite) AuthenticateClientWithResolver(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
+func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.Request, form url.Values, handler EndpointClientAuthHandler) (client Client, method string, err error) {
 	var strategy ClientAuthenticationStrategy
 
 	if strategy = f.Config.GetClientAuthenticationStrategy(ctx); strategy == nil {
 		strategy = &DefaultClientAuthenticationStrategy{Store: f.Store, Config: f.Config}
 	}
 
-	return strategy.AuthenticateClient(ctx, r, form, resolver)
+	return strategy.AuthenticateClient(ctx, r, form, handler)
 }
 
 func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAuthorizationRequestClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
@@ -329,29 +329,74 @@ func getClientCredentialsClientIDValid(post, header string, assertion *ClientAss
 	return id, nil
 }
 
-type AllowedClientAuthenticationMethodHandler interface {
+// EndpointClientAuthHandler is a helper implementation to assist with producing the correct values while using multiple
+// endpoint implementations.
+type EndpointClientAuthHandler interface {
+	// GetAuthMethod returns the appropriate auth method for this client.
 	GetAuthMethod(client AuthenticationMethodClient) string
+
+	// GetAuthSigningAlg returns the appropriate auth signature algorithm for this client.
 	GetAuthSigningAlg(client AuthenticationMethodClient) string
+
+	// Name returns the appropriate name for this endpoint for logging purposes.
+	Name() string
+
+	// AllowAuthMethodAny returns true if this endpoint client auth handler is allowed to be used for any method if not configured.
+	AllowAuthMethodAny() bool
 }
 
-type TokenEndpointAllowedClientAuthenticationMethodHandler struct{}
+type TokenEndpointClientAuthHandler struct{}
 
-func (h *TokenEndpointAllowedClientAuthenticationMethodHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+func (h *TokenEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthMethod()
 }
 
-func (h *TokenEndpointAllowedClientAuthenticationMethodHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+func (h *TokenEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthSigningAlg()
 }
 
-type IntrospectionEndpointAllowedClientAuthenticationMethodHandler struct{}
+func (h *TokenEndpointClientAuthHandler) Name() string {
+	return "token"
+}
 
-func (h *IntrospectionEndpointAllowedClientAuthenticationMethodHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+func (h *TokenEndpointClientAuthHandler) AllowAuthMethodAny() bool {
+	return false
+}
+
+type IntrospectionEndpointClientAuthHandler struct{}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
 	return client.GetIntrospectionEndpointAuthMethod()
 }
 
-func (h *IntrospectionEndpointAllowedClientAuthenticationMethodHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetIntrospectionEndpointAuthSigningAlg()
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) Name() string {
+	return "introspection"
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) AllowAuthMethodAny() bool {
+	return true
+}
+
+type RevocationEndpointClientAuthHandler struct{}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+	return client.GetRevocationEndpointAuthMethod()
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+	return client.GetRevocationEndpointAuthSigningAlg()
+}
+
+func (h *RevocationEndpointClientAuthHandler) Name() string {
+	return "revocation"
+}
+
+func (h *RevocationEndpointClientAuthHandler) AllowAuthMethodAny() bool {
+	return true
 }
 
 // PrivateKey properly describes crypto.PrivateKey.

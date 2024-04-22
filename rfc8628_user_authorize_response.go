@@ -9,7 +9,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// RFC8628UserAuthorizeResponse is an implementation of RFC8628UserAuthorizeResponder
+// RFC8628UserAuthorizeResponse is an implementation of DeviceUserAuthorizeResponder
 type RFC8628UserAuthorizeResponse struct {
 	Header     http.Header    `json:"-"`
 	Parameters url.Values     `json:"-"`
@@ -73,5 +73,5 @@ func (d *RFC8628UserAuthorizeResponse) ToMap() map[string]any {
 }
 
 var (
-	_ RFC8628UserAuthorizeResponder = (*RFC8628UserAuthorizeResponse)(nil)
+	_ DeviceUserAuthorizeResponder = (*RFC8628UserAuthorizeResponse)(nil)
 )

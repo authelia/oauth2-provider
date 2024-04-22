@@ -24,13 +24,7 @@ import (
 
 // ClientAuthenticationStrategy describes a client authentication strategy implementation.
 type ClientAuthenticationStrategy interface {
-	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, method string, err error)
-}
-
-// PrivateKey properly describes crypto.PrivateKey.
-type PrivateKey interface {
-	Public() crypto.PublicKey
-	Equal(x crypto.PrivateKey) bool
+	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error)
 }
 
 var (
@@ -40,13 +34,17 @@ var (
 // AuthenticateClient authenticates client requests using the configured strategy returned by the oauth2.Configurator
 // function GetClientAuthenticationStrategy, if nil it uses `oauth2.DefaultClientAuthenticationStrategy`.
 func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values) (client Client, method string, err error) {
+	return f.AuthenticateClientWithResolver(ctx, r, form, &TokenEndpointAllowedClientAuthenticationMethodHandler{})
+}
+
+func (f *Fosite) AuthenticateClientWithResolver(ctx context.Context, r *http.Request, form url.Values, resolver AllowedClientAuthenticationMethodHandler) (client Client, method string, err error) {
 	var strategy ClientAuthenticationStrategy
 
 	if strategy = f.Config.GetClientAuthenticationStrategy(ctx); strategy == nil {
 		strategy = &DefaultClientAuthenticationStrategy{Store: f.Store, Config: f.Config}
 	}
 
-	return strategy.AuthenticateClient(ctx, r, form)
+	return strategy.AuthenticateClient(ctx, r, form, resolver)
 }
 
 func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAuthorizationRequestClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
@@ -83,7 +81,7 @@ func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAutho
 func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (err error) {
 	secret := client.GetClientSecret()
 
-	if secret == nil {
+	if secret == nil || !secret.Valid() {
 		return ErrClientSecretNotRegistered
 	}
 
@@ -114,7 +112,7 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 }
 
 // FindClientPublicJWK takes a JWTSecuredAuthorizationRequestClient and a kid, alg, and use to resolve a Public JWK for the client.
-func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JWTSecuredAuthorizationRequestClient, kid, alg, use string) (key any, err error) {
+func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JSONWebKeysClient, kid, alg, use string) (key any, err error) {
 	if set := client.GetJSONWebKeys(); set != nil {
 		return findPublicKeyByKID(kid, alg, use, set)
 	}
@@ -329,4 +327,35 @@ func getClientCredentialsClientIDValid(post, header string, assertion *ClientAss
 	}
 
 	return id, nil
+}
+
+type AllowedClientAuthenticationMethodHandler interface {
+	GetAuthMethod(client AuthenticationMethodClient) string
+	GetAuthSigningAlg(client AuthenticationMethodClient) string
+}
+
+type TokenEndpointAllowedClientAuthenticationMethodHandler struct{}
+
+func (h *TokenEndpointAllowedClientAuthenticationMethodHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+	return client.GetTokenEndpointAuthMethod()
+}
+
+func (h *TokenEndpointAllowedClientAuthenticationMethodHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+	return client.GetTokenEndpointAuthSigningAlg()
+}
+
+type IntrospectionEndpointAllowedClientAuthenticationMethodHandler struct{}
+
+func (h *IntrospectionEndpointAllowedClientAuthenticationMethodHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+	return client.GetIntrospectionEndpointAuthMethod()
+}
+
+func (h *IntrospectionEndpointAllowedClientAuthenticationMethodHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+	return client.GetIntrospectionEndpointAuthSigningAlg()
+}
+
+// PrivateKey properly describes crypto.PrivateKey.
+type PrivateKey interface {
+	Public() crypto.PublicKey
+	Equal(x crypto.PrivateKey) bool
 }

@@ -7,16 +7,6 @@ import (
 	"context"
 )
 
-// Hasher defines how a oauth2-compatible hasher should look like.
-type Hasher interface {
-	// Compare compares data with a hash and returns an error
-	// if the two do not match.
-	Compare(ctx context.Context, hash, data []byte) error
-
-	// Hash creates a hash from data or returns an error.
-	Hash(ctx context.Context, data []byte) ([]byte, error)
-}
-
 // ClientSecret is a service interface for client secret comparisons and functionality.
 type ClientSecret interface {
 	// Compare is the primary function of the interface which is used to compare this ClientSecret to the form input.
@@ -31,4 +21,7 @@ type ClientSecret interface {
 	// GetPlainTextValue is a utility function to return the secret in the plaintext format making it usable for the
 	// client_secret_jwt authentication method.
 	GetPlainTextValue() (secret []byte, err error)
+
+	// Valid should return false if the secret is nil or otherwise invalid.
+	Valid() (valid bool)
 }

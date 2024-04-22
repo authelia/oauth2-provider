@@ -29,7 +29,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 	type args struct {
 		ctx    context.Context
 		req    oauth2.DeviceAuthorizeRequester
-		resp   oauth2.RFC8628UserAuthorizeResponder
+		resp   oauth2.DeviceUserAuthorizeResponder
 		status oauth2.DeviceAuthorizeStatus
 	}
 
@@ -41,14 +41,14 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
-		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+		err = f.Storage.CreateDeviceCodeSession(a.ctx, sig, dar)
 		require.NoError(t, err)
 
 		dar.GetRequestForm().Set("user_code", code)
 		dar.SetStatus(a.status)
 	}
 
-	defaultCheckFunc := func(t *testing.T, duvr oauth2.RFC8628UserAuthorizeResponder, a *args) {
+	defaultCheckFunc := func(t *testing.T, duvr oauth2.DeviceUserAuthorizeResponder, a *args) {
 		assert.NotEmpty(t, duvr)
 		assert.Equal(t, oauth2.DeviceAuthorizeStatusToString(a.status), duvr.GetStatus())
 	}
@@ -65,7 +65,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		fields  fields
 		args    args
 		setup   func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args)
-		check   func(t *testing.T, duvr oauth2.RFC8628UserAuthorizeResponder, a *args)
+		check   func(t *testing.T, duvr oauth2.DeviceUserAuthorizeResponder, a *args)
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
@@ -247,7 +247,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
-		err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+		err = f.Storage.CreateDeviceCodeSession(a.ctx, sig, dar)
 		require.NoError(t, err)
 
 		dar.GetRequestForm().Set("user_code", code)
@@ -447,7 +447,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
-				err = f.Storage.CreateUserCodeSession(a.ctx, sig, dar)
+				err = f.Storage.CreateDeviceCodeSession(a.ctx, sig, dar)
 				require.NoError(t, err)
 
 				dar.GetRequestForm().Set("user_code", code)

@@ -151,25 +151,8 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		}
 
 		client = ar.GetClient()
-	} else {
-		var (
-			id, secret string
-			ok         bool
-		)
-
-		if id, secret, ok, err = getClientCredentialsSecretBasic(r); err != nil {
-			return nil, err
-		} else if !ok {
-			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("HTTP Authorization header missing."))
-		}
-
-		if client, err = f.Store.GetClient(ctx, id); err != nil {
-			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("Unable to find OAuth 2.0 Client from HTTP basic authorization header.").WithWrap(err).WithDebugError(err))
-		}
-
-		if err = CompareClientSecret(ctx, client, []byte(secret)); err != nil {
-			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("OAuth 2.0 Client credentials are invalid."))
-		}
+	} else if client, _, err = f.AuthenticateClientWithResolver(ctx, r, r.PostForm, &IntrospectionEndpointAllowedClientAuthenticationMethodHandler{}); err != nil {
+		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
 	}
 
 	return client, nil

@@ -46,10 +46,6 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if err = d.Storage.CreateUserCodeSession(ctx, userCodeSignature, dar); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
 	raw := d.Config.GetRFC8628UserVerificationURL(ctx)
 	uri, err := url.ParseRequestURI(raw)
 	if err != nil {

@@ -197,6 +197,15 @@ func TestAuthenticateClient(t *testing.T) {
 			r: &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
 		},
 		{
+			name: "ShouldFailBecauseClientIsConfidentialAndIdAndSecretInHeaderIsNotRegistered",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: &BCryptClientSecret{}}, TokenEndpointAuthMethod: "client_secret_basic"}
+			}, form: url.Values{},
+			r:         &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'client_secret_basic', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' has no 'client_secret' however this is required to process the particular request.",
+			expectErr: ErrInvalidClient,
+		},
+		{
 			name: "ShouldPassEscapedClientCredentials",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJWTSecuredAuthorizationRequest{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_basic"}
@@ -373,7 +382,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the token endpoint signing algorithm 'RS256'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the token endpoint signing algorithm 'RS256'. The registered OAuth 2.0 client with id 'bar' only supports the 'ES256' algorithm.",
 		},
 		{
 			name: "ShouldFailBecauseMalformedAssertionUsed",
@@ -604,7 +613,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the token endpoint signing algorithm 'none'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the token endpoint signing algorithm 'none'. The registered OAuth 2.0 client with id 'bar' only supports the 'RS256' algorithm.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsURIIsSet",

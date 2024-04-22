@@ -92,7 +92,7 @@ func (mr *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder) HandleRFC8628User
 }
 
 // PopulateRFC8628UserAuthorizeEndpointResponse mocks base method.
-func (m *MockRFC8628UserAuthorizeEndpointHandler) PopulateRFC8628UserAuthorizeEndpointResponse(arg0 context.Context, arg1 oauth2.DeviceAuthorizeRequester, arg2 oauth2.RFC8628UserAuthorizeResponder) error {
+func (m *MockRFC8628UserAuthorizeEndpointHandler) PopulateRFC8628UserAuthorizeEndpointResponse(arg0 context.Context, arg1 oauth2.DeviceAuthorizeRequester, arg2 oauth2.DeviceUserAuthorizeResponder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PopulateRFC8628UserAuthorizeEndpointResponse", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

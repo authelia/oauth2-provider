@@ -87,5 +87,5 @@ type RFC8628UserAuthorizeEndpointHandler interface {
 	// PopulateRFC8628UserAuthorizeEndpointResponse populates the response object as an outcome of user authorization during
 	// the device authorization grant flow.
 	//
-	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, requester DeviceAuthorizeRequester, responder RFC8628UserAuthorizeResponder) error
+	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, requester DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder) error
 }

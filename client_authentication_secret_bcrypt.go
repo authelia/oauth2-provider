@@ -48,3 +48,7 @@ func (s *BCryptClientSecret) Compare(ctx context.Context, secret []byte) (err er
 
 	return nil
 }
+
+func (s *BCryptClientSecret) Valid() (valid bool) {
+	return s != nil && len(s.value) != 0
+}

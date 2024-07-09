@@ -65,6 +65,17 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
 	}
 
+	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
+	//
+	// Authorization Code Flow - https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+	// Implicit Flow - https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthRequest
+	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
+	//
+	// Note: as per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
+	if len(requester.GetRequestForm().Get(consts.FormParameterRedirectURI)) == 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
+	}
+
 	sess, ok := requester.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(ErrInvalidSession)

@@ -64,7 +64,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "should fail because nonce set but too short for non-default min entropy",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form = url.Values{consts.FormParameterNonce: {"some-foobar-nonce-win"}}
+				request.Form = url.Values{consts.FormParameterNonce: {"some-foobar-nonce-win"}, consts.FormParameterRedirectURI: {"https://example.com"}}
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -81,7 +81,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "should fail because session not given",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Session = nil
-				request.Form = url.Values{consts.FormParameterNonce: {"long-enough"}}
+				request.Form = url.Values{consts.FormParameterNonce: {"long-enough"}, consts.FormParameterRedirectURI: {"https://example.com"}}
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -119,6 +119,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "should pass with exact one state parameter in response",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
 				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}
@@ -155,6 +156,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
 				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.State = "some-foobar-state-win"
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
@@ -238,9 +240,20 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "should fail if redirect_uri is missing",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Del(consts.FormParameterRedirectURI)
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0.",
+			expectedField: "invalid_request",
+		},
+		{
 			name: "ShouldPassWhenExpiresAtSetWithCodeLifespanZero",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -265,6 +278,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "ShouldPass",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
@@ -295,6 +309,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "ShouldPassWithCustomLifespan",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
@@ -343,6 +358,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "ShouldHandleDefaultResponseMode",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{

@@ -6,6 +6,7 @@ package openid
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -19,33 +20,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// expose key to verify id_token
-var key = gen.MustRSAKey()
-
-//nolint:unparam
-func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {
-	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
-	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}
-
-	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
-		},
-		Config: config,
-	}
-
-	return OpenIDConnectExplicitHandler{
-		OpenIDConnectRequestStorage: store,
-		IDTokenHandleHelper: &IDTokenHandleHelper{
-			IDTokenStrategy: j,
-		},
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
-		Config:                        config,
-	}, store
-}
-
 func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	aresp := mock.NewMockAuthorizeResponder(ctrl)
@@ -56,6 +30,9 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	session := NewDefaultSession()
 	session.Claims.Subject = "foo"
 	areq.Session = session
+	areq.Form = url.Values{
+		"redirect_uri": {"https://example.com"},
+	}
 
 	for k, c := range []struct {
 		description string
@@ -111,6 +88,16 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				return h
 			},
 		},
+		{
+			description: "should fail because redirect url is missing",
+			setup: func() OpenIDConnectExplicitHandler {
+				areq.Form.Del("redirect_uri")
+				h, store := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+				store.EXPECT().CreateOpenIDConnectSession(gomock.Any(), "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).AnyTimes().Return(nil)
+				return h
+			},
+			expectErr: oauth2.ErrInvalidRequest,
+		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			h := c.setup()
@@ -123,4 +110,31 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// expose key to verify id_token
+var key = gen.MustRSAKey()
+
+//nolint:unparam
+func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {
+	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
+	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}
+
+	var j = &DefaultStrategy{
+		Signer: &jwt.DefaultSigner{
+			GetPrivateKey: func(ctx context.Context) (any, error) {
+				return key, nil
+			},
+		},
+		Config: config,
+	}
+
+	return OpenIDConnectExplicitHandler{
+		OpenIDConnectRequestStorage: store,
+		IDTokenHandleHelper: &IDTokenHandleHelper{
+			IDTokenStrategy: j,
+		},
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		Config:                        config,
+	}, store
 }

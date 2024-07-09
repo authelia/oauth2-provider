@@ -135,7 +135,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"short"}}
+				areq.Form = url.Values{consts.FormParameterNonce: {"short"}, consts.FormParameterRedirectURI: {"https://example.com"}}
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
 				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
 				areq.Client = &oauth2.DefaultClient{
@@ -150,7 +150,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because session not set",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"long-enough"}}
+				areq.Form = url.Values{consts.FormParameterNonce: {"long-enough"}, consts.FormParameterRedirectURI: {"https://example.com"}}
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
 				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
 				areq.Client = &oauth2.DefaultClient{
@@ -173,6 +173,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Subject: "peter",
 				}
 				areq.Form.Add(consts.FormParameterNonce, "some-random-foo-nonce-wow")
+				areq.Form.Add(consts.FormParameterRedirectURI, "https://example.com")
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
@@ -266,6 +267,14 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
 				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
 			},
+		},
+		{
+			description: "should fail without redirect_uri",
+			setup: func() OpenIDConnectImplicitHandler {
+				areq.Form.Del("redirect_uri")
+				return makeOpenIDConnectImplicitHandler(4)
+			},
+			expectErr: oauth2.ErrInvalidRequest,
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {

@@ -60,6 +60,30 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
 			description: "should fail registered single redirect uri but no redirect uri in request",
 			setup: func(oauthClient *xoauth2.Config) string {
+				oauthClient.Scopes = []string{"openid"}
+				oauthClient.RedirectURL = ""
+
+				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=11234123"
+			},
+			authStatusCode: http.StatusBadRequest,
+			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
+		},
+		{
+			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
+			description: "should fail registered single redirect uri but no redirect uri in request",
+			setup: func(oauthClient *xoauth2.Config) string {
+				oauthClient.Scopes = []string{"openid"}
+				oauthClient.RedirectURL = ""
+
+				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=11234123"
+			},
+			authStatusCode: http.StatusBadRequest,
+			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
+		},
+		{
+			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
+			description: "should fail registered single redirect uri but no redirect uri in request",
+			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				oauthClient.RedirectURL = ""
 
@@ -77,6 +101,21 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			},
 			authStatusCode: http.StatusOK,
 			expectTokenErr: "insufficient_entropy",
+		},
+		{
+			session: newIDSession(&jwt.IDTokenClaims{
+				Subject:     "peter",
+				RequestedAt: time.Now().UTC(),
+				AuthTime:    time.Now().Add(time.Second).UTC(),
+			}),
+			description: "should not pass missing redirect uri",
+			setup: func(oauthClient *xoauth2.Config) string {
+				oauthClient.RedirectURL = ""
+				oauthClient.Scopes = []string{"openid"}
+				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
+			},
+			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
+			authStatusCode: http.StatusBadRequest,
 		},
 		{
 			session:     newIDSession(&jwt.IDTokenClaims{Subject: "peter"}),
@@ -111,6 +150,21 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
+				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
+			},
+			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
+			authStatusCode: http.StatusBadRequest,
+		},
+		{
+			session: newIDSession(&jwt.IDTokenClaims{
+				Subject:     "peter",
+				RequestedAt: time.Now().UTC(),
+				AuthTime:    time.Now().Add(time.Second).UTC(),
+			}),
+			description: "should not pass missing redirect uri",
+			setup: func(oauthClient *xoauth2.Config) string {
+				oauthClient.RedirectURL = ""
+				oauthClient.Scopes = []string{"openid"}
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,

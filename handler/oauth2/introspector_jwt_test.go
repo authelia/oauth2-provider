@@ -19,8 +19,6 @@ import (
 )
 
 func TestIntrospectJWT(t *testing.T) {
-	rsaKey := gen.MustRSAKey()
-
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
 		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
@@ -28,16 +26,15 @@ func TestIntrospectJWT(t *testing.T) {
 
 	strategy := &JWTProfileCoreStrategy{
 		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return rsaKey, nil
-			},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
 		},
 		Config: config,
 	}
 
 	var v = &StatelessJWTValidator{
-		Signer: strategy,
+		Strategy: strategy,
 		Config: &oauth2.Config{
 			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
@@ -126,16 +123,18 @@ func TestIntrospectJWT(t *testing.T) {
 }
 
 func BenchmarkIntrospectJWT(b *testing.B) {
+	config := &oauth2.Config{}
+
 	strategy := &JWTProfileCoreStrategy{
-		Signer: &jwt.DefaultSigner{GetPrivateKey: func(_ context.Context) (any, error) {
-			return gen.MustRSAKey(), nil
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
 		},
-		},
-		Config: &oauth2.Config{},
+		Config: config,
 	}
 
 	v := &StatelessJWTValidator{
-		Signer: strategy,
+		Strategy: strategy,
 	}
 
 	jwt := jwtValidCase(oauth2.AccessToken)

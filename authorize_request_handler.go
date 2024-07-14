@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-jose/go-jose/v4"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -74,10 +73,11 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	}
 
 	var (
+		alg             string
 		algAny, algNone bool
 	)
 
-	switch alg := client.GetRequestObjectSigningAlg(); alg {
+	switch alg = client.GetRequestObjectSigningAlg(); alg {
 	case consts.JSONWebTokenAlgNone:
 		algNone = true
 	case "":
@@ -123,65 +123,34 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		assertion = request.Form.Get(consts.FormParameterRequest)
 	}
 
-	token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (key any, err error) {
-		// request_object_signing_alg - OPTIONAL.
-		//  JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request Objects sent to the OP. All Request Objects from this Client MUST be rejected,
-		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
-		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
-		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if !algAny && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
+	strategy := f.Config.GetJWTStrategy(ctx)
 
-		if t.Method == jwt.SigningMethodNone {
-			algNone = true
-
-			return jwt.UnsafeAllowNoneSignatureType, nil
-		} else if algNone {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
-
-		switch t.Method {
-		case jose.RS256, jose.RS384, jose.RS512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, true); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		case jose.ES256, jose.ES384, jose.ES512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, false); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve ECDSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		case jose.PS256, jose.PS384, jose.PS512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, true); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		default:
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that uses the unsupported signing algorithm '%s'.", request.GetClient().GetID(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
-	})
-
+	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...), jwt.WithJARClient(client))
 	if err != nil {
-		// Do not re-process already enhanced errors
 		var e *jwt.ValidationError
 		if errors.As(err, &e) {
-			if e.Inner != nil {
-				return e.Inner
-			}
+			return wrapSigningKeyFailure(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()), err)
+		} else {
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()).WithDebugError(err))
+		}
+	}
 
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object which failed to validate with error: %+v.", request.GetClient().GetID(), err).WithWrap(err))
+	if algAny {
+		if token.SignatureAlgorithm == "none" {
+
 		}
 
-		return err
-	} else if err = token.Claims.Valid(); err != nil {
-		return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object which could not be validated because its claims could not be validated with error: %+v.", request.GetClient().GetID(), err).WithWrap(err))
+		if kid := client.GetRequestObjectSigningKeyID(); kid != "" && kid != token.KeyID {
+
+		}
+	} else if string(token.SignatureAlgorithm) != alg {
+
+	}
+
+	if token.SignatureAlgorithm == "none" && !algNone {
+		print("")
+	} else if !algAny && string(token.SignatureAlgorithm) != client.GetRequestObjectSigningAlg() {
+		print("")
 	}
 
 	claims := token.Claims

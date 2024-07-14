@@ -17,7 +17,6 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -30,19 +29,17 @@ func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImpl
 	}
 
 	var idStrategy = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return gen.MustRSAKey(), nil
-			},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
 		Config: config,
 	}
 
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
 		Config: config,
 	}
@@ -56,7 +53,7 @@ func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImpl
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: idStrategy,
 		},
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		Config:                        config,
 	}
 }

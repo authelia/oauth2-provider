@@ -156,7 +156,7 @@ type Configurator interface {
 	SanitationAllowedProvider
 	JWTScopeFieldProvider
 	JWTSecuredAuthorizeResponseModeIssuerProvider
-	JWTSecuredAuthorizeResponseModeSignerProvider
+	JWTSecuredAuthorizeResponseModeStrategyProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	JWTProfileAccessTokensProvider
 	AccessTokenIssuerProvider
@@ -196,7 +196,8 @@ type Configurator interface {
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	RFC9628DeviceAuthorizeConfigProvider
 	IntrospectionIssuerProvider
-	IntrospectionJWTResponseSignerProvider
+	IntrospectionJWTResponseStrategyProvider
+	JWTStrategyProvider
 	UseLegacyErrorFormatProvider
 }
 

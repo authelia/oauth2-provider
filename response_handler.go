@@ -256,7 +256,7 @@ type ResponseModeHandlerConfigurator interface {
 	FormPostHTMLTemplateProvider
 	FormPostResponseProvider
 	JWTSecuredAuthorizeResponseModeIssuerProvider
-	JWTSecuredAuthorizeResponseModeSignerProvider
+	JWTSecuredAuthorizeResponseModeStrategyProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider

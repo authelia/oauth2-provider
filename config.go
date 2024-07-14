@@ -101,10 +101,10 @@ type IntrospectionIssuerProvider interface {
 	GetIntrospectionIssuer(ctx context.Context) (issuer string)
 }
 
-// IntrospectionJWTResponseSignerProvider returns the provider for configuring the Introspection signer.
-type IntrospectionJWTResponseSignerProvider interface {
-	// GetIntrospectionJWTResponseSigner returns the Introspection JWT signer.
-	GetIntrospectionJWTResponseSigner(ctx context.Context) jwt.Signer
+// IntrospectionJWTResponseStrategyProvider returns the provider for configuring the Introspection jwt.Strategy.
+type IntrospectionJWTResponseStrategyProvider interface {
+	// GetIntrospectionJWTResponseStrategy returns the Introspection JWT Strategy.
+	GetIntrospectionJWTResponseStrategy(ctx context.Context) jwt.Strategy
 }
 
 // AuthorizationServerIssuerIdentificationProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
@@ -124,10 +124,15 @@ type JWTSecuredAuthorizeResponseModeIssuerProvider interface {
 	GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string
 }
 
-// JWTSecuredAuthorizeResponseModeSignerProvider returns the provider for configuring the JARM signer.
-type JWTSecuredAuthorizeResponseModeSignerProvider interface {
-	// GetJWTSecuredAuthorizeResponseModeSigner returns the JARM signer.
-	GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer
+// JWTSecuredAuthorizeResponseModeStrategyProvider returns the provider for configuring the JARM jwt.Strategy.
+type JWTSecuredAuthorizeResponseModeStrategyProvider interface {
+	// GetJWTSecuredAuthorizeResponseModeStrategy returns the JARM Strategy.
+	GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy
+}
+
+// JWTStrategyProvider returns the provider for configuring the jwt.Strategy.
+type JWTStrategyProvider interface {
+	GetJWTStrategy(ctx context.Context) jwt.Strategy
 }
 
 // JWTSecuredAuthorizeResponseModeLifespanProvider returns the provider for configuring the JWT Secured Authorize Response Mode token lifespan.
@@ -253,7 +258,7 @@ type RevokeRefreshTokensExplicitlyProvider interface {
 // JWKSFetcherStrategyProvider returns the provider for configuring the JWKS fetcher strategy.
 type JWKSFetcherStrategyProvider interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
-	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
+	GetJWKSFetcherStrategy(ctx context.Context) (strategy jwt.JWKSFetcherStrategy)
 }
 
 // HTTPClientProvider returns the provider for configuring the HTTP client.

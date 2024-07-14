@@ -176,19 +176,18 @@ func TestAccessToken(t *testing.T) {
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/%d", s, k), func(t *testing.T) {
-				signer := &jwt.DefaultSigner{
-					GetPrivateKey: func(_ context.Context) (any, error) {
-						return rsaKey, nil
-					},
-				}
-
 				config := &oauth2.Config{
 					EnforceJWTProfileAccessTokens: true,
 					GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 					JWTScopeClaimKey:              scopeField,
 				}
 
-				strategy := NewCoreStrategy(config, "authelia_%s_", signer)
+				jwtStrategy := &jwt.DefaultStrategy{
+					Config: config,
+					Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+				}
+
+				strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
 
 				token, signature, err := strategy.GenerateAccessToken(context.TODO(), c.r)
 				assert.NoError(t, err)
@@ -221,7 +220,7 @@ func TestAccessToken(t *testing.T) {
 
 				require.NoError(t, json.Unmarshal(rawHeader, &header))
 
-				assert.Equal(t, jwt.JWTHeaderTypeValueAccessTokenJWT, header[jwt.JWTHeaderKeyValueType])
+				assert.Equal(t, consts.JSONWebTokenTypeAccessToken, header[consts.JSONWebTokenHeaderType])
 
 				extraClaimsSession, ok := c.r.GetSession().(oauth2.ExtraClaimsSession)
 				require.True(t, ok)

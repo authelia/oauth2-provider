@@ -67,6 +67,21 @@ func (mr *MockClientMockRecorder) GetClientSecret() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientSecret", reflect.TypeOf((*MockClient)(nil).GetClientSecret))
 }
 
+// GetClientSecretPlainText mocks base method.
+func (m *MockClient) GetClientSecretPlainText() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClientSecretPlainText")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClientSecretPlainText indicates an expected call of GetClientSecretPlainText.
+func (mr *MockClientMockRecorder) GetClientSecretPlainText() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientSecretPlainText", reflect.TypeOf((*MockClient)(nil).GetClientSecretPlainText))
+}
+
 // GetGrantTypes mocks base method.
 func (m *MockClient) GetGrantTypes() oauth2.Arguments {
 	m.ctrl.T.Helper()

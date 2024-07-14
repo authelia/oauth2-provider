@@ -21,7 +21,7 @@ type OpenIDConnectHybridHandler struct {
 	OpenIDConnectRequestValidator     *OpenIDConnectRequestValidator
 	OpenIDConnectRequestStorage       OpenIDConnectRequestStorage
 
-	Enigma *jwt.DefaultSigner
+	Enigma *jwt.DefaultStrategy
 
 	Config interface {
 		oauth2.IDTokenLifespanProvider

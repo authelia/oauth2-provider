@@ -16,7 +16,7 @@ import (
 type CommonStrategy struct {
 	hoauth2.CoreStrategy
 	openid.OpenIDConnectTokenStrategy
-	jwt.Signer
+	jwt.Strategy
 }
 
 type HMACSHAStrategyConfigurator interface {
@@ -37,17 +37,17 @@ func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCore
 	}
 }
 
-func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
+func NewOAuth2JWTStrategy(strategy jwt.Strategy, strategyHMAC *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
 	return &hoauth2.JWTProfileCoreStrategy{
-		Signer:           &jwt.DefaultSigner{GetPrivateKey: keyGetter},
-		HMACCoreStrategy: strategy,
+		Strategy:         strategy,
+		HMACCoreStrategy: strategyHMAC,
 		Config:           config,
 	}
 }
 
-func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), config oauth2.Configurator) *openid.DefaultStrategy {
+func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), strategy jwt.Strategy, config oauth2.Configurator) *openid.DefaultStrategy {
 	return &openid.DefaultStrategy{
-		Signer: &jwt.DefaultSigner{GetPrivateKey: keyGetter},
-		Config: config,
+		Strategy: strategy,
+		Config:   config,
 	}
 }

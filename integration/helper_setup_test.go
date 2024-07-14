@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -186,10 +185,9 @@ var hmacStrategy = &hoauth2.HMACCoreStrategy{
 var defaultRSAKey = gen.MustRSAKey()
 
 var jwtStrategy = &hoauth2.JWTProfileCoreStrategy{
-	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(ctx context.Context) (any, error) {
-			return defaultRSAKey, nil
-		},
+	Strategy: &jwt.DefaultStrategy{
+		Config: &oauth2.Config{},
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(defaultRSAKey),
 	},
 	Config:           &oauth2.Config{},
 	HMACCoreStrategy: hmacStrategy,

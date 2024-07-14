@@ -13,21 +13,13 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/go-retryablehttp"
 
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
 
-// JWKSFetcherStrategy is a strategy which pulls (optionally caches) JSON Web Key Sets from a location,
-// typically a client's jwks_uri.
-type JWKSFetcherStrategy interface {
-	// Resolve returns the JSON Web Key Set, or an error if something went wrong. The forceRefresh, if true, forces
-	// the strategy to fetch the key from the remote. If forceRefresh is false, the strategy may use a caching strategy
-	// to fetch the key.
-	Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error)
-}
-
-// DefaultJWKSFetcherStrategy is a default implementation of the JWKSFetcherStrategy interface.
+// DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy interface.
 type DefaultJWKSFetcherStrategy struct {
 	client           *retryablehttp.Client
 	cache            *ristretto.Cache
@@ -36,7 +28,7 @@ type DefaultJWKSFetcherStrategy struct {
 }
 
 // NewDefaultJWKSFetcherStrategy returns a new instance of the DefaultJWKSFetcherStrategy.
-func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) JWKSFetcherStrategy {
+func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) jwt.JWKSFetcherStrategy {
 	dc, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 10000 * 10,
 		MaxCost:     10000,
@@ -100,7 +92,7 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	if !ok || ignoreCache {
 		req, err := retryablehttp.NewRequest(http.MethodGet, location, nil)
 		if err != nil {
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to create HTTP 'GET' request to fetch  JSON Web Keys from location '%s'.", location).WithWrap(err).WithDebugError(err))
+			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to create HTTP 'GET' request to fetch JSON Web Keys from location '%s'.", location).WithWrap(err).WithDebugError(err))
 		}
 
 		hc := s.client

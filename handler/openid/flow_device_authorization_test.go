@@ -27,13 +27,15 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		AuthorizeCodeLifespan: time.Minute * 24,
 		RFC8628CodeLifespan:   time.Minute * 24,
 	}
-	j := &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
-		},
+
+	jwtStrategy := &jwt.DefaultStrategy{
 		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	j := &DefaultStrategy{
+		Strategy: jwtStrategy,
+		Config:   config,
 	}
 
 	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
@@ -41,7 +43,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 
 	handler := &OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   oidcStore,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		CodeTokenEndpointHandler:      tokenHandler,
 		Config:                        config,
 		IDTokenHandleHelper: &IDTokenHandleHelper{
@@ -128,13 +130,15 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 		AuthorizeCodeLifespan: time.Minute * 24,
 		RFC8628CodeLifespan:   time.Minute * 24,
 	}
-	j := &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
-		},
+
+	jwtStrategy := &jwt.DefaultStrategy{
 		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	j := &DefaultStrategy{
+		Strategy: jwtStrategy,
+		Config:   config,
 	}
 
 	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
@@ -142,7 +146,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 	handler := &OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   oidcStore,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		CodeTokenEndpointHandler:      tokenHandler,
 		Config:                        config,
 		IDTokenHandleHelper: &IDTokenHandleHelper{

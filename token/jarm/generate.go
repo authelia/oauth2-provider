@@ -73,11 +73,11 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 		claims.Extra[param] = in.Get(param)
 	}
 
-	var signer jwt.Signer
+	var signer jwt.Strategy
 
-	if signer = config.GetJWTSecuredAuthorizeResponseModeSigner(ctx); signer == nil {
+	if signer = config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx); signer == nil {
 		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Signer but it didn't.")
 	}
 
-	return signer.Generate(ctx, claims.ToMapClaims(), &jwt.Headers{Extra: headers})
+	return signer.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(client))
 }

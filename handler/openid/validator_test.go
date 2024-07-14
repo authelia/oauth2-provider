@@ -21,11 +21,12 @@ func TestValidatePrompt(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,
 	}
+
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			}},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
 		Config: &oauth2.Config{
 			MinParameterEntropy: oauth2.MinParameterEntropy,
 		},
@@ -34,7 +35,7 @@ func TestValidatePrompt(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(j, config)
 
 	var genIDToken = func(c jwt.IDTokenClaims) string {
-		s, _, err := j.Generate(context.TODO(), c.ToMapClaims(), jwt.NewHeaders())
+		s, _, err := j.Encode(context.TODO(), jwt.WithClaims(c.ToMapClaims()))
 		require.NoError(t, err)
 		return s
 	}

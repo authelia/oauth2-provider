@@ -31,11 +31,11 @@ type openIDConnectRequestValidatorConfigProvider interface {
 }
 
 type OpenIDConnectRequestValidator struct {
-	Strategy jwt.Signer
+	Strategy jwt.Strategy
 	Config   openIDConnectRequestValidatorConfigProvider
 }
 
-func NewOpenIDConnectRequestValidator(strategy jwt.Signer, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
+func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
 	return &OpenIDConnectRequestValidator{
 		Strategy: strategy,
 		Config:   config,
@@ -144,7 +144,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return nil
 	}
 
-	tokenHint, err := v.Strategy.Decode(ctx, idTokenHint)
+	tokenHint, err := v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(req.GetClient()))
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok

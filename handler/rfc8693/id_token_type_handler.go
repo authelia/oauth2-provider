@@ -12,7 +12,7 @@ import (
 
 type IDTokenTypeHandler struct {
 	Config             oauth2.Configurator
-	JWTStrategy        jwt.Signer
+	Strategy           jwt.Strategy
 	IssueStrategy      openid.OpenIDConnectTokenStrategy
 	ValidationStrategy openid.TokenValidationStrategy
 	Storage
@@ -118,7 +118,7 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'sub' is missing."))
 	}
 
-	return map[string]any(claims), nil
+	return claims, nil
 }
 
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {

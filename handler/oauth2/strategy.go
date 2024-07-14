@@ -12,13 +12,13 @@ import (
 
 // NewCoreStrategy is a special constructor that if provided a signer will automatically decorate the HMACCoreStrategy
 // with a JWTProfileCoreStrategy, otherwise it just returns the HMACCoreStrategy.
-func NewCoreStrategy(config CoreStrategyConfigurator, prefix string, signer jwt.Signer) (strategy CoreStrategy) {
-	if signer == nil {
+func NewCoreStrategy(config CoreStrategyConfigurator, prefix string, strategy jwt.Strategy) (core CoreStrategy) {
+	if strategy == nil {
 		return NewHMACCoreStrategy(config, prefix)
 	}
 
 	return &JWTProfileCoreStrategy{
-		Signer:           signer,
+		Strategy:         strategy,
 		HMACCoreStrategy: NewHMACCoreStrategy(config, prefix),
 		Config:           config,
 	}

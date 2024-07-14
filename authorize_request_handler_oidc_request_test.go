@@ -30,9 +30,10 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	jwks := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &key.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: string(jose.RS256),
+				Key:       &key.PublicKey,
 			},
 		},
 	}
@@ -371,7 +372,14 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 				},
 			}
 
-			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com"}}
+			config := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com"}
+
+			strategy := &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.MustGenDefaultIssuer(),
+			}
+
+			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}
 
 			err = provider.authorizeRequestParametersFromOpenIDConnectRequestObject(context.Background(), r, tc.par)
 			if tc.err != nil {
@@ -400,21 +408,21 @@ func mustGenerateAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateK
 	if kid != "" {
 		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = kid
 	}
-	tokenString, err := token.SignedString(key)
+	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
 	return tokenString
 }
 
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims) string {
 	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.SignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
+	tokenString, err := token.CompactSignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
 	require.NoError(t, err)
 	return tokenString
 }
 
 func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
-	tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	tokenString, err := token.CompactSignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 	return tokenString
 }

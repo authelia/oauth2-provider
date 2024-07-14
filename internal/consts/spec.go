@@ -7,7 +7,7 @@ const (
 	PromptTypeSelectAccount = "select_account"
 )
 
-// Proof Key Code Exchange Challenge Method strings.
+// Proof Key Code Exchange Challenge SignatureAlgorithm strings.
 const (
 	PKCEChallengeMethodPlain  = "plain"
 	PKCEChallengeMethodSHA256 = "S256"

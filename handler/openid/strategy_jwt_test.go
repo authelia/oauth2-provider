@@ -17,14 +17,16 @@ import (
 )
 
 func TestJWTStrategy_GenerateIDToken(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			}},
-		Config: &oauth2.Config{
-			MinParameterEntropy: oauth2.MinParameterEntropy,
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
+		Config: config,
 	}
 
 	var req *oauth2.AccessRequest

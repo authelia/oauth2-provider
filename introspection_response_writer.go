@@ -283,7 +283,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			claims[consts.ClaimAudience] = aud
 		}
 
-		signer := f.Config.GetIntrospectionJWTResponseSigner(ctx)
+		signer := f.Config.GetIntrospectionJWTResponseStrategy(ctx)
 
 		if signer == nil {
 			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebug("The Introspection JWT could not be generated as the server is misconfigured. The Introspection Signer was not configured.")))
@@ -291,7 +291,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			return
 		}
 
-		if token, _, err = signer.Generate(ctx, claims, header); err != nil {
+		if token, _, err = signer.Encode(ctx, jwt.WithClaims(claims), jwt.WithHeaders(header), jwt.WithIntrospectionClient(r.GetAccessRequester().GetClient())); err != nil {
 			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return

@@ -18,7 +18,7 @@ type OpenIDConnectImplicitHandler struct {
 
 	AuthorizeImplicitGrantTypeHandler *hoauth2.AuthorizeImplicitGrantTypeHandler
 	OpenIDConnectRequestValidator     *OpenIDConnectRequestValidator
-	RS256JWTStrategy                  *jwt.DefaultSigner
+	RS256JWTStrategy                  *jwt.DefaultStrategy
 
 	Config interface {
 		oauth2.IDTokenLifespanProvider

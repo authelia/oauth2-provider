@@ -110,7 +110,7 @@ func (s *DefaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 }
 
 type DefaultStrategy struct {
-	jwt.Signer
+	jwt.Strategy
 
 	Config interface {
 		oauth2.IDTokenIssuerProvider
@@ -140,6 +140,8 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	if claims.Subject == "" {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}
+
+	jwtClient := jwt.NewIDTokenClient(requester.GetClient())
 
 	if requester.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
 		maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
@@ -190,7 +192,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		if tokenHintString := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
-			tokenHint, err := h.Signer.Decode(ctx, tokenHintString)
+			tokenHint, err := h.Strategy.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
 			var ve *jwt.ValidationError
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
@@ -234,6 +236,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
 	claims.IssuedAt = time.Now().UTC()
 
-	token, _, err = h.Signer.Generate(ctx, claims.ToMapClaims(), sess.IDTokenHeaders())
+	token, _, err = h.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithClient(jwtClient))
+
 	return token, err
 }

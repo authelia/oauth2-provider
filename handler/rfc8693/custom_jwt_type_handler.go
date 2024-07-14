@@ -15,8 +15,9 @@ import (
 )
 
 type CustomJWTTypeHandler struct {
-	Config      oauth2.RFC8693ConfigProvider
-	JWTStrategy jwt.Signer
+	Config oauth2.RFC8693ConfigProvider
+
+	jwt.Strategy
 	Storage
 }
 
@@ -154,7 +155,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 		}
 	}
 
-	return map[string]any(claims), nil
+	return claims, nil
 }
 
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) error {
@@ -202,7 +203,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	claims.IssuedAt = time.Now().UTC()
 
-	token, _, err := c.JWTStrategy.Generate(ctx, claims.ToMapClaims(), sess.IDTokenHeaders())
+	token, _, err := c.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient()))
 	if err != nil {
 		return err
 	}
@@ -210,6 +211,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetAccessToken(token)
 	response.SetTokenType("N_A")
 	response.SetExpiresIn(time.Duration(claims.ExpiresAt.UnixNano() - time.Now().UTC().UnixNano()))
+
 	return nil
 }
 

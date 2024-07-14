@@ -20,7 +20,7 @@ func OpenIDConnectExplicitFactory(config oauth2.Configurator, storage any, strat
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
 			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
 		},
-		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Strategy), config),
 		Config:                        config,
 	}
 }
@@ -51,7 +51,7 @@ func OpenIDConnectImplicitFactory(config oauth2.Configurator, storage any, strat
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
 			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
 		},
-		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Strategy), config),
 	}
 }
 
@@ -77,14 +77,14 @@ func OpenIDConnectHybridFactory(config oauth2.Configurator, storage any, strateg
 			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
 		},
 		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
-		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Strategy), config),
 	}
 }
 
 func OpenIDConnectDeviceAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &openid.OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
-		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Signer), config),
+		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Strategy), config),
 		CodeTokenEndpointHandler: &rfc8628.DeviceCodeTokenHandler{
 			Strategy: strategy.(rfc8628.CodeStrategy),
 			Storage:  storage.(rfc8628.Storage),

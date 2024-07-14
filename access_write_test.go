@@ -30,7 +30,7 @@ func TestWriteAccessResponse(t *testing.T) {
 	rw.EXPECT().Write(gomock.Any())
 	resp.EXPECT().ToMap().Return(map[string]any{})
 
-	provider.WriteAccessResponse(context.Background(), rw, ar, resp)
+	provider.WriteAccessResponse(context.TODO(), rw, ar, resp)
 	assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
 	assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
 	assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))

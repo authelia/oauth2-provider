@@ -12,11 +12,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/sha256"
+	"fmt"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -31,7 +34,7 @@ type Signer interface {
 
 var SHA256HashSize = crypto.SHA256.Size()
 
-type GetPrivateKeyFunc func(ctx context.Context) (any, error)
+type GetPrivateKeyFunc func(ctx context.Context) (key any, err error)
 
 // DefaultSigner is responsible for generating and validating JWT challenges
 type DefaultSigner struct {
@@ -39,7 +42,7 @@ type DefaultSigner struct {
 }
 
 // Generate generates a new authorize code or returns an error. set secret
-func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, header Mapper) (string, string, error) {
+func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, header Mapper) (tokenString string, signature string, err error) {
 	key, err := j.GetPrivateKey(ctx)
 	if err != nil {
 		return "", "", err
@@ -139,7 +142,7 @@ func (j *DefaultSigner) GetSigningMethodLength(ctx context.Context) int {
 	return SHA256HashSize
 }
 
-func generateToken(claims MapClaims, header Mapper, signingMethod jose.SignatureAlgorithm, privateKey any) (rawToken string, sig string, err error) {
+func generateToken(claims MapClaims, header Mapper, signingMethod jose.SignatureAlgorithm, privateKey any) (tokenString string, signature string, err error) {
 	if header == nil || claims == nil {
 		err = errors.New("either claims or header is nil")
 		return
@@ -148,13 +151,34 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	token := NewWithClaims(signingMethod, claims)
 	token.Header = assign(token.Header, header.ToMap())
 
-	rawToken, err = token.SignedString(privateKey)
-	if err != nil {
-		return
+	if tokenString, err = token.SignedString(privateKey); err != nil {
+		return tokenString, signature, err
 	}
 
-	sig, err = getTokenSignature(rawToken)
-	return
+	if signature, err = getTokenSignature(tokenString); err != nil {
+		return tokenString, signature, err
+	}
+
+	return tokenString, signature, nil
+}
+
+func peakSignedHeaderType(raw string) (typ string, err error) {
+	token, err := jwt.ParseSigned(raw, []jose.SignatureAlgorithm{consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
+	if err != nil {
+		return "", err
+	}
+
+	if len(token.Headers) == 0 {
+		return "", fmt.Errorf("no header")
+	}
+
+	if atyp, ok := token.Headers[0].ExtraHeaders[consts.JSONWebTokenHeaderType]; !ok {
+		return "", nil
+	} else if typ, ok = atyp.(string); ok {
+		return typ, nil
+	}
+
+	return "", fmt.Errorf("invalid typ")
 }
 
 func decodeToken(token string, verificationKey any) (*Token, error) {

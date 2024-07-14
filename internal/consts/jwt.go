@@ -1,15 +1,18 @@
 package consts
 
 const (
-	JSONWebTokenHeaderKeyIdentifier = "kid"
-	JSONWebTokenHeaderAlgorithm     = "alg"
-	JSONWebTokenHeaderUse           = "use"
-	JSONWebTokenHeaderType          = "typ"
+	JSONWebTokenHeaderKeyIdentifier       = "kid"
+	JSONWebTokenHeaderAlgorithm           = "alg"
+	JSONWebTokenHeaderEncryptionAlgorithm = "enc"
+
+	JSONWebTokenHeaderUse         = "use"
+	JSONWebTokenHeaderType        = "typ"
+	JSONWebTokenHeaderContentType = "cty"
 )
 
 const (
 	JSONWebTokenUseSignature  = "sig"
-	JSONWebTokenUseEncryption = "enc"
+	JSONWebTokenUseEncryption = valueEnc
 )
 
 const (

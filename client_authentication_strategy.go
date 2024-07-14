@@ -276,6 +276,10 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	}
 }
 
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerNew(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method string, err error) {
+
+}
+
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
 	var tokenURI string
 

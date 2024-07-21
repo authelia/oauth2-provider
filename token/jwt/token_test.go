@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"strings"
@@ -49,7 +50,7 @@ func TestUnsignedToken(t *testing.T) {
 				"sub": "nestor",
 			})
 			token.Header = tc.jwtHeaders
-			rawToken, err := token.SignedString(key)
+			rawToken, err := token.CompactSigned(key)
 			require.NoError(t, err)
 			require.NotEmpty(t, rawToken)
 			parts := strings.Split(rawToken, ".")
@@ -63,6 +64,34 @@ func TestUnsignedToken(t *testing.T) {
 	}
 }
 
+func TestEncrypted(t *testing.T) {
+	ekeyraw := make([]byte, 32)
+
+	_, _ = rand.Read(ekeyraw)
+
+	fmt.Println(base64.RawURLEncoding.EncodeToString(ekeyraw))
+
+	ekey := &jose.JSONWebKey{
+		Key:       ekeyraw,
+		KeyID:     "abc",
+		Algorithm: string(jose.A256GCM),
+		Use:       "enc",
+	}
+
+	skey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	token := NewWithClaims(jose.RS256, MapClaims{"a": 1})
+
+	token.KeyAlgorithm = jose.ED25519
+	token.ContentEncryption = jose.A256GCM
+
+	encrypted, err := token.CompactEncrypted(skey, ekey)
+	require.NoError(t, err)
+
+	fmt.Println(encrypted)
+}
+
 func TestJWTHeaders(t *testing.T) {
 	var testCases = []struct {
 		name         string
@@ -72,12 +101,12 @@ func TestJWTHeaders(t *testing.T) {
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
 			jwtHeaders:   map[string]any{},
-			expectedType: JWTHeaderTypeValueJWT,
+			expectedType: consts.JSONWebTokenTypeJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]any{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
-			expectedType: JWTHeaderTypeValueAccessTokenJWT,
+			jwtHeaders:   map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken},
+			expectedType: consts.JSONWebTokenTypeAccessToken,
 		},
 	}
 	for _, tc := range testCases {
@@ -87,7 +116,7 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JWTHeaderKeyValueType)])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
 		})
 	}
 }
@@ -453,7 +482,7 @@ func TestParser_Parse(t *testing.T) {
 
 func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
-	s, e := token.SignedString(key)
+	s, e := token.CompactSigned(key)
 
 	if e != nil {
 		panic(e.Error())
@@ -465,7 +494,7 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
-	s, e := token.SignedString(key)
+	s, e := token.CompactSigned(key)
 
 	if e != nil {
 		panic(e.Error())

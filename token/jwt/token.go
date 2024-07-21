@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
@@ -17,6 +18,106 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewWithClaims creates an unverified Token with the given claims and signing method
+func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
+	return &Token{
+		Claims:             claims,
+		SignatureAlgorithm: method,
+		Header:             map[string]any{},
+		EncryptionHeader:   map[string]any{},
+	}
+}
+
+// Parse is an overload for ParseCustom which accepts all normal algs including 'none'.
+func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
+	return ParseCustom(tokenString, keyFunc, SignatureAlgorithmsNone...)
+}
+
+// ParseCustom parses, validates, and returns a token. The keyFunc will receive the parsed token and should
+// return the key for validating. If everything is kosher, err will be nil.
+func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (token *Token, err error) {
+	return ParseCustomWithClaims(tokenString, MapClaims{}, keyFunc, algs...)
+}
+
+// ParseWithClaims is an overload for ParseCustomWithClaims which accepts all normal algs including 'none'.
+func ParseWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc) (token *Token, err error) {
+	return ParseCustomWithClaims(tokenString, claims, keyFunc, SignatureAlgorithmsNone...)
+}
+
+// ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should
+// return the key for validating. If everything is kosher, err will be nil.
+func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (token *Token, err error) {
+	var parsed *jwt.JSONWebToken
+
+	if parsed, err = jwt.ParseSigned(tokenString, algs); err != nil {
+		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, text: err.Error()}
+	}
+
+	// fill unverified claims
+	// This conversion is required because go-jose supports
+	// only marshalling structs or maps but not alias types from maps
+	//
+	// The KeyFunc(*Token) function requires the claims to be set into the
+	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
+	// then with the returned key, the claims gets verified.
+	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
+	}
+
+	// creates an unsafe token
+	if token, err = newToken(parsed, claims); err != nil {
+		return nil, err
+	}
+
+	if keyFunc == nil {
+		return token, &ValidationError{Errors: ValidationErrorUnverifiable, text: "no Keyfunc was provided."}
+	}
+
+	var key any
+
+	if key, err = keyFunc(token); err != nil {
+		// keyFunc returned an error
+		var ve *ValidationError
+
+		if errors.As(err, &ve) {
+			return token, ve
+		}
+
+		return token, &ValidationError{Errors: ValidationErrorUnverifiable, Inner: err}
+	}
+	if key == nil {
+		return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: "keyfunc returned a nil verification key"}
+	}
+	// To verify signature go-jose requires a pointer to
+	// public key instead of the public key value.
+	// The pointer values provides that pointer.
+	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
+	key = pointer(key)
+
+	// verify signature with returned key
+	_, validNoneKey := key.(*unsafeNoneMagicConstant)
+	isSignedToken := !(token.SignatureAlgorithm == SigningMethodNone && validNoneKey)
+	if isSignedToken {
+		if err = parsed.Claims(key, &claims); err != nil {
+			return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()}
+		}
+	}
+
+	// Validate claims
+	// This validation is performed to be backwards compatible
+	// with jwt-go library behavior
+	if err = claims.Valid(); err != nil {
+		if e, ok := err.(*ValidationError); !ok {
+			err = &ValidationError{Inner: e, Errors: ValidationErrorClaimsInvalid}
+		}
+		return token, err
+	}
+
+	token.valid = true
+
+	return token, nil
+}
+
 // Token represets a JWT Token
 // This token provide an adaptation to
 // transit from [jwt-go](https://github.com/dgrijalva/jwt-go)
@@ -24,30 +125,18 @@ import (
 // It provides method signatures compatible with jwt-go but implemented
 // using go-json
 type Token struct {
-	Header map[string]any // The first segment of the token
-	Claims MapClaims      // The second segment of the token
-	Method jose.SignatureAlgorithm
-	valid  bool
+	SignatureAlgorithm   jose.SignatureAlgorithm
+	ContentEncryption    jose.ContentEncryption
+	KeyAlgorithm         jose.KeyAlgorithm
+	CompressionAlgorithm jose.CompressionAlgorithm
+
+	Header           map[string]any
+	EncryptionHeader map[string]any
+
+	Claims MapClaims
+
+	valid bool
 }
-
-const (
-	SigningMethodNone = jose.SignatureAlgorithm(consts.JSONWebTokenAlgNone)
-	// This key should be use to correctly sign and verify alg:none JWT tokens
-	UnsafeAllowNoneSignatureType unsafeNoneMagicConstant = "none signing method allowed"
-
-	JWTHeaderType = jose.HeaderKey(consts.JSONWebTokenHeaderType)
-)
-
-const (
-	JWTHeaderKeyValueType = consts.JSONWebTokenHeaderType
-)
-
-const (
-	JWTHeaderTypeValueJWT            = consts.JSONWebTokenTypeJWT
-	JWTHeaderTypeValueAccessTokenJWT = consts.JSONWebTokenTypeAccessToken
-)
-
-type unsafeNoneMagicConstant string
 
 // Valid informs if the token was verified against a given verification key
 // and claims are valid
@@ -64,45 +153,97 @@ type Claims interface {
 	Valid() error
 }
 
-// NewWithClaims creates an unverified Token with the given claims and signing method
-func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
-	return &Token{
-		Claims: claims,
-		Method: method,
-		Header: map[string]any{},
+func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
+	header = map[jose.HeaderKey]any{
+		consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT,
 	}
-}
 
-func (t *Token) toJoseHeader() map[jose.HeaderKey]any {
-	h := map[jose.HeaderKey]any{
-		JWTHeaderType: JWTHeaderTypeValueJWT,
-	}
 	for k, v := range t.Header {
-		h[jose.HeaderKey(k)] = v
+		header[jose.HeaderKey(k)] = v
 	}
-	return h
+
+	return header
 }
 
-// SignedString provides a compatible `jwt-go` Token.SignedString method
+func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
+	header = map[jose.HeaderKey]any{
+		consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT,
+	}
+
+	if cty, ok := t.Header[consts.JSONWebTokenHeaderType]; ok {
+		header[consts.JSONWebTokenHeaderContentType] = cty
+	}
+
+	for k, v := range t.EncryptionHeader {
+		header[jose.HeaderKey(k)] = v
+	}
+
+	return header
+}
+
+func (t *Token) CompactEncrypted(skey, ekey any) (tokenString string, err error) {
+	var (
+		signed string
+	)
+
+	if signed, err = t.CompactSigned(skey); err != nil {
+		return "", err
+	}
+
+	rcpt := jose.Recipient{
+		Algorithm: t.KeyAlgorithm,
+		Key:       ekey,
+	}
+
+	opts := &jose.EncrypterOptions{
+		Compression:  t.CompressionAlgorithm,
+		ExtraHeaders: t.toEncryptedJoseHeader(),
+	}
+
+	if _, ok := opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; !ok {
+		var typ any
+
+		if typ, ok = t.Header[consts.JSONWebTokenHeaderType]; ok {
+			opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType] = typ
+		} else {
+			opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType] = consts.JSONWebTokenTypeJWT
+		}
+	}
+
+	var encrypter jose.Encrypter
+
+	if encrypter, err = jose.NewEncrypter(t.ContentEncryption, rcpt, opts); err != nil {
+		return "", errorsx.WithStack(err)
+	}
+
+	var token *jose.JSONWebEncryption
+
+	if token, err = encrypter.Encrypt([]byte(signed)); err != nil {
+		return "", errorsx.WithStack(err)
+	}
+
+	return token.CompactSerialize()
+}
+
+// CompactSigned provides a compatible `jwt-go` Token.CompactSigned method
 //
 // > Get the complete, signed token
-func (t *Token) SignedString(k any) (rawToken string, err error) {
+func (t *Token) CompactSigned(k any) (tokenString string, err error) {
 	if _, ok := k.(unsafeNoneMagicConstant); ok {
-		rawToken, err = unsignedToken(t)
-		return
+		return unsignedToken(t)
 	}
+
+	key := jose.SigningKey{
+		Algorithm: t.SignatureAlgorithm,
+		Key:       k,
+	}
+
+	opts := &jose.SignerOptions{ExtraHeaders: t.toSignedJoseHeader()}
 
 	var signer jose.Signer
 
-	key := jose.SigningKey{
-		Algorithm: t.Method,
-		Key:       k,
-	}
-	opts := &jose.SignerOptions{ExtraHeaders: t.toJoseHeader()}
-	signer, err = jose.NewSigner(key, opts)
-	if err != nil {
-		err = errorsx.WithStack(err)
-		return
+	if signer, err = jose.NewSigner(key, opts); err != nil {
+		return "", errorsx.WithStack(err)
 	}
 
 	// A explicit conversion from type alias MapClaims
@@ -110,30 +251,64 @@ func (t *Token) SignedString(k any) (rawToken string, err error) {
 	// go-jose CompactSerialize() only support explicit maps
 	// as claims or structs but not type aliases from maps.
 	claims := map[string]any(t.Claims)
-	rawToken, err = jwt.Signed(signer).Claims(claims).Serialize()
-	if err != nil {
-		err = &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
-		return
+
+	if tokenString, err = jwt.Signed(signer).Claims(claims).Serialize(); err != nil {
+		return "", &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
-	return
+
+	return tokenString, nil
 }
 
-func unsignedToken(t *Token) (string, error) {
-	t.Header[consts.JSONWebTokenHeaderAlgorithm] = consts.JSONWebTokenAlgNone
-	if _, ok := t.Header[string(JWTHeaderType)]; !ok {
-		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValueJWT
+func (t *Token) IsJWTProfileAccessToken() bool {
+	var (
+		raw      any
+		cty, typ string
+		ok       bool
+	)
+
+	if t.EncryptionHeader != nil && len(t.EncryptionHeader) > 0 {
+		if raw, ok = t.EncryptionHeader[consts.JSONWebTokenHeaderContentType]; ok {
+			cty, ok = raw.(string)
+
+			if !ok {
+				return false
+			}
+
+			if cty != consts.JSONWebTokenTypeAccessToken && cty != consts.JSONWebTokenTypeAccessTokenAlternative {
+				return false
+			}
+		}
 	}
-	hbytes, err := json.Marshal(&t.Header)
-	if err != nil {
+
+	if raw, ok = t.Header[consts.JSONWebTokenHeaderType]; !ok {
+		return false
+	}
+
+	typ, ok = raw.(string)
+
+	return ok && (typ == consts.JSONWebTokenTypeAccessToken || typ == consts.JSONWebTokenTypeAccessTokenAlternative)
+}
+
+func unsignedToken(token *Token) (tokenString string, err error) {
+	token.Header[consts.JSONWebTokenHeaderAlgorithm] = consts.JSONWebTokenAlgNone
+
+	if _, ok := token.Header[consts.JSONWebTokenHeaderType]; !ok {
+		token.Header[consts.JSONWebTokenHeaderType] = consts.JSONWebTokenTypeJWT
+	}
+
+	var (
+		hbytes, bbytes []byte
+	)
+
+	if hbytes, err = json.Marshal(&token.Header); err != nil {
 		return "", errorsx.WithStack(err)
 	}
-	bbytes, err := json.Marshal(&t.Claims)
-	if err != nil {
+
+	if bbytes, err = json.Marshal(&token.Claims); err != nil {
 		return "", errorsx.WithStack(err)
 	}
-	h := base64.RawURLEncoding.EncodeToString(hbytes)
-	b := base64.RawURLEncoding.EncodeToString(bbytes)
-	return fmt.Sprintf("%v.%v.", h, b), nil
+
+	return fmt.Sprintf("%s.%s.", base64.RawURLEncoding.EncodeToString(hbytes), base64.RawURLEncoding.EncodeToString(bbytes)), nil
 }
 
 func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
@@ -154,104 +329,8 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 		token.Header[string(k)] = v
 	}
 
-	token.Method = jose.SignatureAlgorithm(h.Algorithm)
+	token.SignatureAlgorithm = jose.SignatureAlgorithm(h.Algorithm)
 
-	return token, nil
-}
-
-// Keyfunc is used by parsing methods to supply the key for verification.  The function receives the parsed, but
-// unverified Token. This allows you to use properties in the Header of the token (such as `kid`) to identify which key
-// to use.
-type Keyfunc func(*Token) (any, error)
-
-// Parse is an overload for ParseCustom which accepts all normal algs including 'none'.
-func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustom(tokenString, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
-}
-
-// ParseCustom parses, validates, and returns a token. The keyFunc will receive the parsed token and should
-// return the key for validating. If everything is kosher, err will be nil.
-func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
-	return ParseCustomWithClaims(tokenString, MapClaims{}, keyFunc, algs...)
-}
-
-// ParseWithClaims is an overload for ParseCustomWithClaims which accepts all normal algs including 'none'.
-func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustomWithClaims(rawToken, claims, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
-}
-
-// ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should
-// return the key for validating. If everything is kosher, err will be nil.
-func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
-	// Parse the token.
-	parsedToken, err := jwt.ParseSigned(rawToken, algs)
-	if err != nil {
-		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, text: err.Error()}
-	}
-
-	// fill unverified claims
-	// This conversion is required because go-jose supports
-	// only marshalling structs or maps but not alias types from maps
-	//
-	// The KeyFunc(*Token) function requires the claims to be set into the
-	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
-	// then with the returned key, the claims gets verified.
-	if err := parsedToken.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
-	}
-
-	// creates an unsafe token
-	token, err := newToken(parsedToken, claims)
-	if err != nil {
-		return nil, err
-	}
-
-	if keyFunc == nil {
-		return token, &ValidationError{Errors: ValidationErrorUnverifiable, text: "no Keyfunc was provided."}
-	}
-
-	// Call keyFunc callback to get verification key
-	verificationKey, err := keyFunc(token)
-	if err != nil {
-		// keyFunc returned an error
-		var ve *ValidationError
-
-		if errors.As(err, &ve) {
-			return token, ve
-		}
-
-		return token, &ValidationError{Errors: ValidationErrorUnverifiable, Inner: err}
-	}
-	if verificationKey == nil {
-		return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: "keyfunc returned a nil verification key"}
-	}
-	// To verify signature go-jose requires a pointer to
-	// public key instead of the public key value.
-	// The pointer values provides that pointer.
-	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
-	verificationKey = pointer(verificationKey)
-
-	// verify signature with returned key
-	_, validNoneKey := verificationKey.(*unsafeNoneMagicConstant)
-	isSignedToken := !(token.Method == SigningMethodNone && validNoneKey)
-	if isSignedToken {
-		if err := parsedToken.Claims(verificationKey, &claims); err != nil {
-			return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()}
-		}
-	}
-
-	// Validate claims
-	// This validation is performed to be backwards compatible
-	// with jwt-go library behavior
-	if err := claims.Valid(); err != nil {
-		if e, ok := err.(*ValidationError); !ok {
-			err = &ValidationError{Inner: e, Errors: ValidationErrorClaimsInvalid}
-		}
-		return token, err
-	}
-
-	// set token as verified and validated
-	token.valid = true
 	return token, nil
 }
 
@@ -264,4 +343,26 @@ func pointer(v any) any {
 		return value.Interface()
 	}
 	return v
+}
+
+type PotentialTokenType int
+
+const (
+	Unknown PotentialTokenType = iota
+	Opaque
+	SignedJWT
+	EncryptedJWT
+)
+
+func GetPotentialTokenType(token string) PotentialTokenType {
+	switch strings.Count(token, ".") {
+	case 1:
+		return Opaque
+	case 2:
+		return SignedJWT
+	case 4:
+		return EncryptedJWT
+	default:
+		return Unknown
+	}
 }

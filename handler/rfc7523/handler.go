@@ -43,8 +43,8 @@ var (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
-	if err := c.CheckRequest(ctx, request); err != nil {
+func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if err = c.CheckRequest(ctx, request); err != nil {
 		return err
 	}
 

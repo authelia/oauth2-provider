@@ -37,7 +37,7 @@ func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCore
 	}
 }
 
-func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
+func NewOAuth2JWTStrategy(keyGetter func(context.Context, jwt.Mapper) (any, error), strategy *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
 	return &hoauth2.JWTProfileCoreStrategy{
 		Signer:           &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		HMACCoreStrategy: strategy,
@@ -45,7 +45,7 @@ func NewOAuth2JWTStrategy(keyGetter func(context.Context) (any, error), strategy
 	}
 }
 
-func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), config oauth2.Configurator) *openid.DefaultStrategy {
+func NewOpenIDConnectStrategy(keyGetter func(context.Context, jwt.Mapper) (any, error), config oauth2.Configurator) *openid.DefaultStrategy {
 	return &openid.DefaultStrategy{
 		Signer: &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		Config: config,

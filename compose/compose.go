@@ -66,7 +66,7 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 
 // ComposeAllEnabled returns a oauth2 instance with all OAuth2 and OpenID Connect handlers enabled.
 func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provider {
-	keyGetter := func(context.Context) (any, error) {
+	keyGetter := func(context.Context, jwt.Mapper) (any, error) {
 		return key, nil
 	}
 	return Compose(

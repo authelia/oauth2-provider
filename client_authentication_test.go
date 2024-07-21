@@ -792,7 +792,7 @@ func TestAuthenticateClientTwice(t *testing.T) {
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.RS256, claims)
 	token.Header["kid"] = kid
-	tokenString, err := token.SignedString(key)
+	tokenString, err := token.CompactSigned(key)
 	require.NoError(t, err)
 	return tokenString
 }
@@ -800,7 +800,7 @@ func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priva
 func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.ES256, claims)
 	token.Header["kid"] = kid
-	tokenString, err := token.SignedString(key)
+	tokenString, err := token.CompactSigned(key)
 	require.NoError(t, err)
 	return tokenString
 }
@@ -808,7 +808,7 @@ func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.P
 //nolint:unparam
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.SignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
+	tokenString, err := token.CompactSigned([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
 	require.NoError(t, err)
 	return tokenString
 }
@@ -816,7 +816,7 @@ func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Privat
 //nolint:unparam
 func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
-	tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	tokenString, err := token.CompactSigned(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 	return tokenString
 }

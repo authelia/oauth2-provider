@@ -34,7 +34,7 @@ type Signer interface {
 
 var SHA256HashSize = crypto.SHA256.Size()
 
-type GetPrivateKeyFunc func(ctx context.Context) (key any, err error)
+type GetPrivateKeyFunc func(ctx context.Context, headers Mapper) (key any, err error)
 
 // DefaultSigner is responsible for generating and validating JWT challenges
 type DefaultSigner struct {
@@ -42,21 +42,21 @@ type DefaultSigner struct {
 }
 
 // Generate generates a new authorize code or returns an error. set secret
-func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, header Mapper) (tokenString string, signature string, err error) {
-	key, err := j.GetPrivateKey(ctx)
+func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, headers Mapper) (tokenString string, signature string, err error) {
+	key, err := j.GetPrivateKey(ctx, headers)
 	if err != nil {
 		return "", "", err
 	}
 
 	switch t := key.(type) {
 	case *jose.JSONWebKey:
-		return generateToken(claims, header, jose.SignatureAlgorithm(t.Algorithm), t.Key)
+		return generateToken(claims, headers, jose.SignatureAlgorithm(t.Algorithm), t.Key)
 	case jose.JSONWebKey:
-		return generateToken(claims, header, jose.SignatureAlgorithm(t.Algorithm), t.Key)
+		return generateToken(claims, headers, jose.SignatureAlgorithm(t.Algorithm), t.Key)
 	case *rsa.PrivateKey:
-		return generateToken(claims, header, jose.RS256, t)
+		return generateToken(claims, headers, jose.RS256, t)
 	case *ecdsa.PrivateKey:
-		return generateToken(claims, header, jose.ES256, t)
+		return generateToken(claims, headers, jose.ES256, t)
 	case jose.OpaqueSigner:
 		switch tt := t.Public().Key.(type) {
 		case *rsa.PrivateKey:
@@ -65,20 +65,43 @@ func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, header M
 				alg = t.Algs()[0]
 			}
 
-			return generateToken(claims, header, alg, t)
+			return generateToken(claims, headers, alg, t)
 		case *ecdsa.PrivateKey:
 			alg := jose.ES256
 			if len(t.Algs()) > 0 {
 				alg = t.Algs()[0]
 			}
 
-			return generateToken(claims, header, alg, t)
+			return generateToken(claims, headers, alg, t)
 		default:
 			return "", "", errors.Errorf("unsupported private / public key pairs: %T, %T", t, tt)
 		}
 	default:
 		return "", "", errors.Errorf("unsupported private key type: %T", t)
 	}
+}
+
+func (j *DefaultSigner) generate(claims MapClaims, header Mapper, alg jose.SignatureAlgorithm, key any) (tokenString string, signature string, err error) {
+	if header == nil {
+		return "", "", fmt.Errorf("header is required")
+	}
+
+	if claims == nil {
+		return "", "", fmt.Errorf("claims is required")
+	}
+
+	token := NewWithClaims(alg, claims)
+	token.Header = assign(token.Header, header.ToMap())
+
+	if tokenString, err = token.CompactSigned(key); err != nil {
+		return tokenString, signature, err
+	}
+
+	if signature, err = getTokenSignature(tokenString); err != nil {
+		return tokenString, signature, err
+	}
+
+	return tokenString, signature, nil
 }
 
 // Validate validates a token and returns its signature or an error if the token is not valid.
@@ -151,7 +174,7 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	token := NewWithClaims(signingMethod, claims)
 	token.Header = assign(token.Header, header.ToMap())
 
-	if tokenString, err = token.SignedString(privateKey); err != nil {
+	if tokenString, err = token.CompactSigned(privateKey); err != nil {
 		return tokenString, signature, err
 	}
 
@@ -163,8 +186,9 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 }
 
 func peakSignedHeaderType(raw string) (typ string, err error) {
-	token, err := jwt.ParseSigned(raw, []jose.SignatureAlgorithm{consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
-	if err != nil {
+	var token *jwt.JSONWebToken
+
+	if token, err = jwt.ParseSigned(raw, SignatureAlgorithmsNone); err != nil {
 		return "", err
 	}
 

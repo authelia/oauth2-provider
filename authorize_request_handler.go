@@ -133,7 +133,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
 		}
 
-		if t.Method == jwt.SigningMethodNone {
+		if t.SignatureAlgorithm == jwt.SigningMethodNone {
 			algNone = true
 
 			return jwt.UnsafeAllowNoneSignatureType, nil
@@ -141,7 +141,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
 		}
 
-		switch t.Method {
+		switch t.SignatureAlgorithm {
 		case jose.RS256, jose.RS384, jose.RS512:
 			if key, err = f.findClientPublicJWK(ctx, client, t, true); err != nil {
 				return nil, wrapSigningKeyFailure(

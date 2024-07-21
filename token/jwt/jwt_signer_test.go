@@ -78,85 +78,80 @@ func TestAssign(t *testing.T) {
 }
 
 func TestGenerateJWT(t *testing.T) {
-	var key any = gen.MustRSAKey()
-	for k, tc := range []struct {
-		d        string
-		strategy Signer
-		resetKey func(strategy Signer)
+	testCases := []struct {
+		name string
+		key  func() any
 	}{
 		{
-			d: "DefaultSigner",
-			strategy: &DefaultSigner{
-				GetPrivateKey: func(_ context.Context) (any, error) {
-					return key, nil
-				},
-			},
-			resetKey: func(strategy Signer) {
-				key = gen.MustRSAKey()
+			name: "DefaultSigner",
+			key: func() any {
+				return gen.MustRSAKey()
 			},
 		},
 		{
-			d: "ES256JWTStrategy",
-			strategy: &DefaultSigner{
-				GetPrivateKey: func(_ context.Context) (any, error) {
-					return key, nil
-				},
+			name: "ES256JWTStrategy",
+			key: func() any {
+				return gen.MustES256Key()
 			},
-			resetKey: func(strategy Signer) {
-				key = &jose.JSONWebKey{
+		},
+		{
+			name: "ES256JWTStrategyWithJSONWebKey",
+			key: func() any {
+				return &jose.JSONWebKey{
 					Key:       gen.MustES521Key(),
 					Algorithm: "ES512",
 				}
 			},
 		},
-		{
-			d: "ES256JWTStrategy",
-			strategy: &DefaultSigner{
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			key := tc.key()
+
+			strategy := &DefaultSigner{
 				GetPrivateKey: func(_ context.Context) (any, error) {
 					return key, nil
 				},
-			},
-			resetKey: func(strategy Signer) {
-				key = gen.MustES256Key()
-			},
-		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/strategy=%s", k, tc.d), func(t *testing.T) {
+			}
+
 			claims := &JWTClaims{
 				ExpiresAt: time.Now().UTC().Add(time.Hour),
 			}
 
-			token, sig, err := tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
+			token, sig, err := strategy.Generate(ctx, claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
 			assert.NotEmpty(t, sig)
 
-			sig, err = tc.strategy.Validate(context.TODO(), token)
+			sig, err = strategy.Validate(ctx, token)
 			require.NoError(t, err)
 			assert.NotEmpty(t, sig)
 
-			sig, err = tc.strategy.Validate(context.TODO(), token+"."+"0123456789")
+			sig, err = strategy.Validate(ctx, token+"."+"0123456789")
 			require.Error(t, err)
 			assert.Empty(t, sig)
 
 			partToken := strings.Split(token, ".")[2]
 
-			sig, err = tc.strategy.Validate(context.TODO(), partToken)
+			sig, err = strategy.Validate(ctx, partToken)
 			require.Error(t, err)
 			assert.Empty(t, sig)
 
-			tc.resetKey(tc.strategy)
+			key = tc.key()
 
 			claims = &JWTClaims{
 				ExpiresAt: time.Now().UTC().Add(-time.Hour),
 			}
 
-			token, sig, err = tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
+			token, sig, err = strategy.Generate(ctx, claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
 			assert.NotEmpty(t, sig)
 
-			sig, err = tc.strategy.Validate(context.TODO(), token)
+			sig, err = strategy.Validate(ctx, token)
 			require.Error(t, err)
 			require.Empty(t, sig)
 
@@ -164,12 +159,12 @@ func TestGenerateJWT(t *testing.T) {
 				NotBefore: time.Now().UTC().Add(time.Hour),
 			}
 
-			token, sig, err = tc.strategy.Generate(context.TODO(), claims.ToMapClaims(), header)
+			token, sig, err = strategy.Generate(ctx, claims.ToMapClaims(), header)
 			require.NoError(t, err)
 			require.NotNil(t, token)
 			assert.NotEmpty(t, sig)
 
-			sig, err = tc.strategy.Validate(context.TODO(), token)
+			sig, err = strategy.Validate(ctx, token)
 			require.Error(t, err)
 			require.Empty(t, sig, "%s", err)
 		})

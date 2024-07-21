@@ -17,6 +17,8 @@ type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
 
+	IsPublic() (public bool)
+
 	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the
 	// JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters
 	// will be utilized to select an appropriate key.

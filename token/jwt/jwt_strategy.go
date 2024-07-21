@@ -41,21 +41,17 @@ type StrategySettings struct {
 
 type GetPrivateKeyWithSettingsFunc func(ctx context.Context, context *StrategySettings) (key any, err error)
 
+type GenerateContext interface {
+	GetSigningKey(ctx context.Context, headers Mapper) (key any, err error)
+	GetEncryptionKey(ctx context.Context, headers Mapper) (key any, err error)
+}
+
 type DefaultStrategy struct {
 	Signer
 
-	GetPrivateKey GetPrivateKeyWithSettingsFunc
-}
+	Provider KeyProvider
 
-func NewDefaultStrategy(GetPrivateKey GetPrivateKeyWithSettingsFunc) Strategy {
-	return &DefaultStrategy{
-		Signer: &DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (key any, err error) {
-				return GetPrivateKey(ctx, nil)
-			},
-		},
-		GetPrivateKey: GetPrivateKey,
-	}
+	GetPrivateKey GetPrivateKeyWithSettingsFunc
 }
 
 // GenerateWithSettings signs and optionally encrypts the token based on the context provided

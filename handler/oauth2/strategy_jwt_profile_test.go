@@ -221,7 +221,7 @@ func TestAccessToken(t *testing.T) {
 
 				require.NoError(t, json.Unmarshal(rawHeader, &header))
 
-				assert.Equal(t, jwt.JWTHeaderTypeValueAccessTokenJWT, header[jwt.JWTHeaderKeyValueType])
+				assert.Equal(t, consts.JSONWebTokenTypeAccessToken, header[consts.JSONWebTokenHeaderType])
 
 				extraClaimsSession, ok := c.r.GetSession().(oauth2.ExtraClaimsSession)
 				require.True(t, ok)

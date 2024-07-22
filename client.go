@@ -147,8 +147,10 @@ type UserInfoClient interface {
 	JSONWebKeysClient
 }
 
-// JWTSecuredAuthorizationRequestClient represents a client capable of performing OpenID Connect requests.
-type JWTSecuredAuthorizationRequestClient interface {
+// JARClient represents a client capable of performing OpenID Connect requests.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9101
+type JARClient interface {
 	// GetRequestObjectSigningKeyID returns the specific key identifier used to satisfy JWS requirements of the request
 	// object specifications. If unspecified the other available parameters will be utilized to select an appropriate
 	// key.
@@ -248,6 +250,8 @@ type RevokeFlowRevokeRefreshTokensExplicitClient interface {
 }
 
 // JARMClient is a client which supports JARM.
+//
+// See: https://openid.net/specs/oauth-v2-jarm.html
 type JARMClient interface {
 	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the
 	// JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters
@@ -408,7 +412,7 @@ type DefaultClient struct {
 	Public               bool           `json:"public"`
 }
 
-type DefaultJWTSecuredAuthorizationRequest struct {
+type DefaultJARClient struct {
 	*DefaultClient
 	JSONWebKeysURI                      string              `json:"jwks_uri"`
 	JSONWebKeys                         *jose.JSONWebKeySet `json:"jwks"`
@@ -485,15 +489,15 @@ func (c *DefaultClient) GetResponseTypes() Arguments {
 	return c.ResponseTypes
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetJSONWebKeysURI() string {
+func (c *DefaultJARClient) GetJSONWebKeysURI() string {
 	return c.JSONWebKeysURI
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetJSONWebKeys() *jose.JSONWebKeySet {
+func (c *DefaultJARClient) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthSigningAlg() string {
+func (c *DefaultJARClient) GetTokenEndpointAuthSigningAlg() string {
 	if c.TokenEndpointAuthSigningAlg == "" {
 		return "RS256"
 	} else {
@@ -501,47 +505,47 @@ func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthSigningAlg()
 	}
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetIntrospectionEndpointAuthSigningAlg() string {
+func (c *DefaultJARClient) GetIntrospectionEndpointAuthSigningAlg() string {
 	return c.IntrospectionEndpointAuthSigningAlg
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRevocationEndpointAuthSigningAlg() string {
+func (c *DefaultJARClient) GetRevocationEndpointAuthSigningAlg() string {
 	return c.RevocationEndpointAuthSigningAlg
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningKeyID() string {
+func (c *DefaultJARClient) GetRequestObjectSigningKeyID() string {
 	return c.RequestObjectSigningKeyID
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningAlg() string {
+func (c *DefaultJARClient) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionKeyID() string {
+func (c *DefaultJARClient) GetRequestObjectEncryptionKeyID() string {
 	return c.RequestObjectEncryptionKeyID
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionAlg() string {
+func (c *DefaultJARClient) GetRequestObjectEncryptionAlg() string {
 	return c.RequestObjectEncryptionAlg
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionEnc() string {
+func (c *DefaultJARClient) GetRequestObjectEncryptionEnc() string {
 	return c.RequestObjectEncryptionEnc
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthMethod() string {
+func (c *DefaultJARClient) GetTokenEndpointAuthMethod() string {
 	return c.TokenEndpointAuthMethod
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetIntrospectionEndpointAuthMethod() string {
+func (c *DefaultJARClient) GetIntrospectionEndpointAuthMethod() string {
 	return c.IntrospectionEndpointAuthMethod
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRevocationEndpointAuthMethod() string {
+func (c *DefaultJARClient) GetRevocationEndpointAuthMethod() string {
 	return c.RevocationEndpointAuthMethod
 }
 
-func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestURIs() []string {
+func (c *DefaultJARClient) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
@@ -550,7 +554,7 @@ func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 }
 
 var (
-	_ Client                               = (*DefaultClient)(nil)
-	_ ResponseModeClient                   = (*DefaultResponseModeClient)(nil)
-	_ JWTSecuredAuthorizationRequestClient = (*DefaultJWTSecuredAuthorizationRequest)(nil)
+	_ Client             = (*DefaultClient)(nil)
+	_ ResponseModeClient = (*DefaultResponseModeClient)(nil)
+	_ JARClient          = (*DefaultJARClient)(nil)
 )

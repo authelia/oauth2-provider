@@ -52,7 +52,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		parameter = consts.FormParameterRequestURI
 	}
 
-	client, ok := request.Client.(JWTSecuredAuthorizationRequestClient)
+	client, ok := request.Client.(JARClient)
 	if !ok {
 		if nrequestURI > 0 {
 			return errorsx.WithStack(ErrRequestURINotSupported.WithHintf(hintRequestObjectClientCapabilities, hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))

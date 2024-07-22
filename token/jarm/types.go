@@ -40,12 +40,12 @@ type Client interface {
 	// performed.
 	GetAuthorizationEncryptedResponseAlg() (alg string)
 
-	// GetAuthorizationEncryptedResponseEncryptionAlg is equivalent to the 'authorization_encrypted_response_enc' client
+	// GetAuthorizationEncryptedResponseEnc is equivalent to the 'authorization_encrypted_response_enc' client
 	// metadata value which determines the JWE [RFC7516] enc algorithm JWA [RFC7518] REQUIRED for encrypting
 	// authorization responses. If authorization_encrypted_response_alg is specified, the default for this value is
 	// A128CBC-HS256. When authorization_encrypted_response_enc is included, authorization_encrypted_response_alg MUST
 	// also be provided.
-	GetAuthorizationEncryptedResponseEncryptionAlg() (alg string)
+	GetAuthorizationEncryptedResponseEnc() (alg string)
 }
 
 type OpenIDSession interface {

@@ -79,6 +79,74 @@ type JSONWebKeysClient interface {
 	Client
 }
 
+// IDTokenClient is a client which can satisfy all JWS and JWE requirements of the ID Token responses.
+type IDTokenClient interface {
+	// GetIDTokenSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the ID
+	// Token specifications. If unspecified the other available parameters will be utilized to select an appropriate
+	// key.
+	GetIDTokenSignedResponseKeyID() (kid string)
+
+	// GetIDTokenSignedResponseAlg is equivalent to the 'id_token_signed_response_alg' client metadata value which
+	// determines the JWS alg algorithm [JWA] REQUIRED for signing the ID Token issued to this Client. The value none
+	// MUST NOT be used as the ID Token alg value unless the Client uses only Response Types that return no ID Token
+	// from the Authorization Endpoint (such as when only using the Authorization Code Flow). The default, if omitted,
+	// is RS256. The public key for validating the signature is provided by retrieving the JWK Set referenced by the
+	// jwks_uri element from OpenID Connect Discovery 1.0 [OpenID.Discovery].
+	GetIDTokenSignedResponseAlg() (alg string)
+
+	// GetIDTokenEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the ID
+	// Token specifications. If unspecified the other available parameters will be utilized to select an appropriate
+	// key.
+	GetIDTokenEncryptedResponseKeyID() (kid string)
+
+	// GetIDTokenEncryptedResponseAlg is equivalent to the 'id_token_encrypted_response_alg' client metadata value which
+	// determines the JWE alg algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If this is
+	// requested, the response will be signed then encrypted, with the result being a Nested JWT, as defined in [JWT].
+	// The default, if omitted, is that no encryption is performed.
+	GetIDTokenEncryptedResponseAlg() (alg string)
+
+	// GetIDTokenEncryptedResponseEnc is equivalent to the 'id_token_encrypted_response_enc' client metadata value which
+	// determines the JWE enc algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If
+	// id_token_encrypted_response_alg is specified, the default id_token_encrypted_response_enc value is A128CBC-HS256.
+	// When id_token_encrypted_response_enc is included, id_token_encrypted_response_alg MUST also be provided.
+	GetIDTokenEncryptedResponseEnc() (enc string)
+
+	JSONWebKeysClient
+}
+
+// UserInfoClient is a client which can satisfy all JWS and JWE requirements of the User Info responses.
+type UserInfoClient interface {
+	// GetUserinfoSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the User
+	// Info specifications. If unspecified the other available parameters will be utilized to select an appropriate
+	// key.
+	GetUserinfoSignedResponseKeyID() (kid string)
+
+	// GetUserinfoSignedResponseAlg is equivalent to the 'userinfo_signed_response_alg' client metadata value which
+	// determines the JWS alg algorithm [JWA] REQUIRED for signing UserInfo Responses. If this is specified, the
+	// response will be JWT [JWT] serialized, and signed using JWS. The default, if omitted, is for the UserInfo
+	// Response to return the Claims as a UTF-8 [RFC3629] encoded JSON object using the application/json content-type.
+	GetUserinfoSignedResponseAlg() (alg string)
+
+	// GetUserinfoEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the
+	// User Info specifications. If unspecified the other available parameters will be utilized to select an appropriate
+	// key.
+	GetUserinfoEncryptedResponseKeyID() (kid string)
+
+	// GetUserinfoEncryptedResponseAlg is equivalent to the 'userinfo_encrypted_response_alg' client metadata value
+	// which determines the JWE alg algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If
+	// this is requested, the response will be signed then encrypted, with the result being a Nested JWT, as defined in
+	// [JWT]. The default, if omitted, is that no encryption is performed.
+	GetUserinfoEncryptedResponseAlg() (alg string)
+
+	// GetUserinfoEncryptedResponseEnc is equivalent to the 'userinfo_encrypted_response_enc' client metadata value
+	// which determines the JWE enc algorithm [JWA] REQUIRED for encrypting UserInfo Responses. If
+	// userinfo_encrypted_response_alg is specified, the default userinfo_encrypted_response_enc value is A128CBC-HS256.
+	// When userinfo_encrypted_response_enc is included, userinfo_encrypted_response_alg MUST also be provided.
+	GetUserinfoEncryptedResponseEnc() (enc string)
+
+	JSONWebKeysClient
+}
+
 // JWTSecuredAuthorizationRequestClient represents a client capable of performing OpenID Connect requests.
 type JWTSecuredAuthorizationRequestClient interface {
 	// GetRequestObjectSigningKeyID returns the specific key identifier used to satisfy JWS requirements of the request

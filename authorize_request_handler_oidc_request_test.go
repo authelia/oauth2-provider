@@ -109,7 +109,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:     "ShouldPassRequest",
 			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
@@ -131,7 +131,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestAndRequestURI",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {"foo"}, consts.FormParameterRequestURI: {"foo"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
 			par:       true,
 			expected:  url.Values{consts.FormParameterRequest: {"foo"}},
 			err:       ErrInvalidRequest,
@@ -140,7 +140,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestMissingResponseType",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {"foo"}, consts.FormParameterClientID: {"foo"}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
 			par:       true,
 			expected:  url.Values{consts.FormParameterRequest: {"foo"}},
 			err:       ErrInvalidRequest,
@@ -149,7 +149,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestMissingClientID",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
 			par:       true,
 			expected:  url.Values{consts.FormParameterRequest: {"foo"}},
 			err:       ErrInvalidRequest,
@@ -158,7 +158,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIWithPAR",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequestURI: {"foo"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "", DefaultClient: &DefaultClient{ID: "foo"}},
 			par:       true,
 			expected:  url.Values{consts.FormParameterRequest: {"foo"}},
 			err:       ErrInvalidRequest,
@@ -167,7 +167,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestClientNoJWKS",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequest: {"foo"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequest,
 			errString: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. OpenID Connect 1.0 parameter 'request' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered. The OAuth 2.0 client with id 'foo' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with 'RS256'.",
@@ -175,7 +175,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIClientNoJWKS",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterRequestURI: {"foo"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequest,
 			errString: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. OpenID Connect 1.0 parameter 'request_uri' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered. The OAuth 2.0 client with id 'foo' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with 'RS256'.",
@@ -183,7 +183,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailInvalidTokenMalformed",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {"bad-token"}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' provided a request object which failed to validate with error: go-jose/go-jose: compact JWS format must have three parts.",
@@ -191,7 +191,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailUnknownKID",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {mustGenerateAssertion(t, jwt.MapClaims{}, key, "does-not-exists")}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. Unable to retrieve RSA signing key from OAuth 2.0 Client. The JSON Web Token uses signing key with kid 'does-not-exists', which could not be found. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The JSON Web Token uses signing key with kid 'does-not-exists', which could not be found.",
@@ -199,7 +199,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailBadAlgRS256",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {mustGenerateHSAssertion(t, jwt.MapClaims{})}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "test"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'test' expects request objects to be signed with the 'RS256' algorithm but the request object was signed with the 'HS256' algorithm.",
@@ -207,7 +207,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailMismatchedClientID",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"not-foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectValid}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'client_id' claim with a value of 'foo' which is required to match the value 'not-foo' in the parameter with the same name from the OAuth 2.0 request syntax.",
@@ -215,7 +215,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestClientIDAssert",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"not-foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectInvalidClientIDValue}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectInvalidClientIDValue}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'client_id' claim with a value of '100' which is required to match the value 'not-foo' in the parameter with the same name from the OAuth 2.0 request syntax but instead of a string it had the int64 type.",
@@ -223,7 +223,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestWithRequest",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectInvalidRequestInRequest}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectInvalidRequestInRequest}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object which contained the 'request' or 'request_uri' claims but this is not permitted.",
@@ -231,7 +231,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestWithRequestURI",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectInvalidRequestURIInRequest}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectInvalidRequestURIInRequest}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object which contained the 'request' or 'request_uri' claims but this is not permitted.",
@@ -239,7 +239,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailMismatchedResponseType",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectValid}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'response_type' claim with a value of 'token' which is required to match the value 'code' in the parameter with the same name from the OAuth 2.0 request syntax.",
@@ -247,7 +247,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailMismatchedResponseTypeAsserted",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterResponseMode: {consts.ResponseModeNone}, consts.FormParameterRequest: {assertionRequestObjectInvalidResponseTypeValue}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectInvalidResponseTypeValue}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'response_type' claim with a value of '100' which is required to match the value 'code' in the parameter with the same name from the OAuth 2.0 request syntax but instead of a string it had the int64 type.",
@@ -255,13 +255,13 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:     "ShouldPassWithoutKID",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidWithoutKID}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidWithoutKID}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:     "ShouldFailRequestURINotWhiteListed",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "standard.jwk").String()}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidWithoutKID}, "foo": {"bar"}, "baz": {"baz"}},
 			err:      ErrInvalidRequestURI,
 			errRegex: regexp.MustCompile(`^The request_uri in the authorization request returns an error or contains invalid data\. OpenID Connect 1\.0 request failed to fetch request parameters from the provided 'request_uri'\. The OAuth 2\.0 client with id 'foo' provided the 'request_uri' parameter with value 'http://127.0.0.1:\d+/request-object/valid/standard\.jwk' which is not whitelisted.$`),
@@ -269,13 +269,13 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:     "ShouldPassRequestURIFetch",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "standard.jwk").String()}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "valid", "standard.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "valid", "standard.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "standard.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:      "ShouldFailRequestAlgNone",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidNone}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' expects request objects to be signed with the 'RS256' algorithm but the request object was signed with the 'none' algorithm.",
@@ -283,7 +283,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIAlgNone",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' expects request objects to be signed with the 'RS256' algorithm but the request object was signed with the 'none' algorithm.",
@@ -291,7 +291,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestRS256",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValid}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' expects request objects to be signed with the 'none' algorithm but the request object was signed with the 'RS256' algorithm.",
@@ -299,7 +299,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIRS256",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "standard.jwk").String()}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, RequestURIs: []string{root.JoinPath("request-object", "valid", "standard.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, RequestURIs: []string{root.JoinPath("request-object", "valid", "standard.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "standard.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' expects request objects to be signed with the 'none' algorithm but the request object was signed with the 'RS256' algorithm.",
@@ -307,31 +307,31 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:     "ShouldPassRequestAlgNone",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidNone}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone},
 			expected: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:     "ShouldPassRequestURIAlgNone",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:     "ShouldPassRequestAlgNoneAllowAny",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidNone}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String()},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String()},
 			expected: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:     "ShouldPassRequestURIAlgNoneAllowAny",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}},
-			client:   &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "", RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "", RequestURIs: []string{root.JoinPath("request-object", "valid", "none.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "valid", "none.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
 			name:      "ShouldFailRequestBadAudience",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectInvalidAudience}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'aud' claim with the values 'https://auth.not-example.com' which is required match the issuer 'https://auth.example.com'.",
@@ -339,7 +339,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIBadAudience",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "invalid", "audience.jwk").String()}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "invalid", "audience.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "invalid", "audience.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "invalid", "audience.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'response_type' claim with a value of 'code' which is required to match the value 'token' in the parameter with the same name from the OAuth 2.0 request syntax.",
@@ -347,7 +347,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestBadIssuer",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectInvalidIssuer}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'iss' claim with a value of 'not-foo' which is required to match the value 'foo' in the parameter with the same name from the OAuth 2.0 request syntax.",
@@ -355,7 +355,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:      "ShouldFailRequestURIBadIssuer",
 			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "invalid", "issuer.jwk").String()}},
-			client:    &DefaultJWTSecuredAuthorizationRequest{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "invalid", "issuer.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
+			client:    &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: "RS256", RequestURIs: []string{root.JoinPath("request-object", "invalid", "issuer.jwk").String()}, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterResponseType: {"token"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterState: {"some-state"}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequestURI: {root.JoinPath("request-object", "invalid", "issuer.jwk").String()}, "foo": {"bar"}, "baz": {"baz"}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted. The OAuth 2.0 client with id 'foo' included a request object with a 'response_type' claim with a value of 'code' which is required to match the value 'token' in the parameter with the same name from the OAuth 2.0 request syntax.",

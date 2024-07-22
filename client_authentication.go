@@ -47,7 +47,7 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 	return strategy.AuthenticateClient(ctx, r, form, handler)
 }
 
-func (f *Fosite) findClientPublicJWK(ctx context.Context, client JWTSecuredAuthorizationRequestClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
+func (f *Fosite) findClientPublicJWK(ctx context.Context, client JARClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
 	var (
 		keys *jose.JSONWebKeySet
 	)
@@ -111,7 +111,7 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 	return err
 }
 
-// FindClientPublicJWK takes a JWTSecuredAuthorizationRequestClient and a kid, alg, and use to resolve a Public JWK for the client.
+// FindClientPublicJWK takes a JARClient and a kid, alg, and use to resolve a Public JWK for the client.
 func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JSONWebKeysClient, kid, alg, use string) (key any, err error) {
 	if set := client.GetJSONWebKeys(); set != nil {
 		return findPublicKeyByKID(kid, alg, use, set)

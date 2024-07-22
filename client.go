@@ -81,46 +81,83 @@ type JSONWebKeysClient interface {
 
 // JWTSecuredAuthorizationRequestClient represents a client capable of performing OpenID Connect requests.
 type JWTSecuredAuthorizationRequestClient interface {
+	// GetRequestObjectSigningKeyID returns the specific key identifier used to satisfy JWS requirements of the request
+	// object specifications. If unspecified the other available parameters will be utilized to select an appropriate
+	// key.
+	GetRequestObjectSigningKeyID() (kid string)
+
+	// GetRequestObjectSigningAlg is equivalent to the 'request_object_signing_alg' client metadata
+	// value which determines the JWS alg algorithm [JWA] that MUST be used for signing Request Objects sent to the OP.
+	// All Request Objects from this Client MUST be rejected, if not signed with this algorithm. Request Objects are
+	// described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST be used both when the
+	// Request Object is passed by value (using the request parameter) and when it is passed by reference (using the
+	// request_uri parameter). Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is
+	// that any algorithm supported by the OP and the RP MAY be used.
+	GetRequestObjectSigningAlg() (alg string)
+
+	// GetRequestObjectEncryptionKeyID returns the specific key identifier used to satisfy JWE requirements of the
+	// request object specifications. If unspecified the other available parameters will be utilized to select an
+	// appropriate key.
+	GetRequestObjectEncryptionKeyID() (kid string)
+
+	// GetRequestObjectEncryptionAlg is equivalent to the 'request_object_encryption_alg' client metadata value which
+	// determines the JWE alg algorithm [JWA] the RP is declaring that it may use for encrypting Request Objects sent to
+	// the OP. This parameter SHOULD be included when symmetric encryption will be used, since this signals to the OP
+	// that a client_secret value needs to be returned from which the symmetric key will be derived, that might not
+	// otherwise be returned. The RP MAY still use other supported encryption algorithms or send unencrypted Request
+	// Objects, even when this parameter is present. If both signing and encryption are requested, the Request Object
+	// will be signed then encrypted, with the result being a Nested JWT, as defined in [JWT]. The default, if omitted,
+	// is that the RP is not declaring whether it might encrypt any Request Objects.
+	GetRequestObjectEncryptionAlg() (alg string)
+
+	// GetRequestObjectEncryptionEnc is equivalent to the 'request_object_encryption_enc' client metadata value which
+	// determines the JWE enc algorithm [JWA] the RP is declaring that it may use for encrypting Request Objects sent to
+	// the OP. If request_object_encryption_alg is specified, the default request_object_encryption_enc value is
+	// A128CBC-HS256. When request_object_encryption_enc is included, request_object_encryption_alg MUST also be
+	// provided.
+	GetRequestObjectEncryptionEnc() (enc string)
+
 	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
 	// cache the contents of the files referenced by these URIs and not retrieve them at the time they are used in a request.
 	// OPs can require that request_uri values used be pre-registered with the require_request_uri_registration
 	// discovery parameter.
 	GetRequestURIs() (requestURIs []string)
 
-	// GetRequestObjectSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request
-	// Objects sent to the OP. All Request Objects from this Client MUST be rejected, if not signed with this algorithm.
-	GetRequestObjectSigningAlg() (alg string)
-
 	JSONWebKeysClient
 }
 
 // AuthenticationMethodClient represents a client which has specific authentication methods.
 type AuthenticationMethodClient interface {
-	// GetTokenEndpointAuthMethod requested Client Authentication method for the Token Endpoint. The options are
-	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt, and none.
+	// GetTokenEndpointAuthMethod is equivalent to the 'token_endpoint_auth_method' client metadata value which
+	// determines the requested Client Authentication method for the Token Endpoint. The options are client_secret_post,
+	// client_secret_basic, client_secret_jwt, private_key_jwt, and none.
 	GetTokenEndpointAuthMethod() (method string)
 
-	// GetTokenEndpointAuthSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the
-	// JWT [JWT] used to authenticate the Client at the Token Endpoint for the private_key_jwt and client_secret_jwt
-	// authentication methods.
+	// GetTokenEndpointAuthSigningAlg is equivalent to the 'token_endpoint_auth_signing_alg' client metadata value which
+	// determines the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT] used to authenticate the
+	// Client at the Token Endpoint for the private_key_jwt and client_secret_jwt authentication methods.
 	GetTokenEndpointAuthSigningAlg() (alg string)
 
-	// GetIntrospectionEndpointAuthMethod requested Client Authentication method for the Introspection Endpoint. The
-	// options are client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt.
+	// GetIntrospectionEndpointAuthMethod is equivalent to the 'introspection_endpoint_auth_method' client metadata
+	// value which determines the Client Authentication method for the Introspection Endpoint. The options are
+	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt.
 	GetIntrospectionEndpointAuthMethod() (method string)
 
-	// GetIntrospectionEndpointAuthSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing
-	// the JWT [JWT] used to authenticate the Client at the Introspection Endpoint for the private_key_jwt and
-	// client_secret_jwt authentication methods.
+	// GetIntrospectionEndpointAuthSigningAlg is equivalent to the 'introspection_endpoint_auth_signing_alg' client
+	// metadata value which determines the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT]
+	// used to authenticate the Client at the Introspection Endpoint for the private_key_jwt and client_secret_jwt
+	// authentication methods.
 	GetIntrospectionEndpointAuthSigningAlg() (alg string)
 
-	// GetRevocationEndpointAuthMethod requested Client Authentication method for the Revocation Endpoint. The
-	// options are client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt.
+	// GetRevocationEndpointAuthMethod is equivalent to the 'revocation_endpoint_auth_method' client metadata value
+	// which determines the Client Authentication method for the Revocation Endpoint. The options are
+	// client_secret_post, client_secret_basic, client_secret_jwt, private_key_jwt.
 	GetRevocationEndpointAuthMethod() (method string)
 
-	// GetRevocationEndpointAuthSigningAlg returns the JWS [JWS] alg algorithm [JWA] that MUST be used for signing
-	// the JWT [JWT] used to authenticate the Client at the Revocation Endpoint for the private_key_jwt and
-	// client_secret_jwt authentication methods.
+	// GetRevocationEndpointAuthSigningAlg is equivalent to the 'revocation_endpoint_auth_signing_alg' client metadata
+	// value which determines the JWS [JWS] alg algorithm [JWA] that MUST be used for signing the JWT [JWT] used to
+	// authenticate the Client at the Revocation Endpoint for the private_key_jwt and client_secret_jwt authentication
+	// methods.
 	GetRevocationEndpointAuthSigningAlg() (alg string)
 
 	JSONWebKeysClient
@@ -144,9 +181,34 @@ type RevokeFlowRevokeRefreshTokensExplicitClient interface {
 
 // JARMClient is a client which supports JARM.
 type JARMClient interface {
+	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the
+	// JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters
+	// will be utilized to select an appropriate key.
 	GetAuthorizationSignedResponseKeyID() (kid string)
+
+	// GetAuthorizationSignedResponseAlg is equivalent to the 'authorization_signed_response_alg' client metadata
+	// value which determines the JWS [RFC7515] alg algorithm JWA [RFC7518] REQUIRED for signing authorization
+	// responses. If this is specified, the response will be signed using JWS and the configured algorithm. The
+	// algorithm none is not allowed. The default, if omitted, is RS256.
 	GetAuthorizationSignedResponseAlg() (alg string)
+
+	// GetAuthorizationEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of
+	// the JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters will be
+	// utilized to select an appropriate key.
+	GetAuthorizationEncryptedResponseKeyID() (kid string)
+
+	// GetAuthorizationEncryptedResponseAlg is equivalent to the 'authorization_encrypted_response_alg' client metadata
+	// value which determines the JWE [RFC7516] alg algorithm JWA [RFC7518] REQUIRED for encrypting authorization
+	// responses. If both signing and encryption are requested, the response will be signed then encrypted, with the
+	// result being a Nested JWT, as defined in JWT [RFC7519]. The default, if omitted, is that no encryption is
+	// performed.
 	GetAuthorizationEncryptedResponseAlg() (alg string)
+
+	// GetAuthorizationEncryptedResponseEncryptionAlg is equivalent to the 'authorization_encrypted_response_enc' client
+	// metadata value which determines the JWE [RFC7516] enc algorithm JWA [RFC7518] REQUIRED for encrypting
+	// authorization responses. If authorization_encrypted_response_alg is specified, the default for this value is
+	// A128CBC-HS256. When authorization_encrypted_response_enc is included, authorization_encrypted_response_alg MUST
+	// also be provided.
 	GetAuthorizationEncryptedResponseEncryptionAlg() (alg string)
 
 	Client
@@ -172,12 +234,36 @@ type ResponseModeClient interface {
 	Client
 }
 
+// JWTProfileClient represents a client with can handle RFC9068 responses; i.e. the JWT Profile for OAuth 2.0 Access
+// Tokens.
 type JWTProfileClient interface {
-	// GetAccessTokenSignedResponseAlg returns the algorithm used for signing Access Tokens.
+	// GetAccessTokenSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
+	// JWT Profile for OAuth 2.0 Access Tokens specifications. If unspecified the other available parameters will be
+	// utilized to select an appropriate key.
+	GetAccessTokenSignedResponseKeyID() (kid string)
+
+	// GetAccessTokenSignedResponseAlg determines the JWS [RFC7515] algorithm (alg value) as defined in JWA [RFC7518]
+	// for signing JWT Profile Access Token responses. If this is specified, the response will be signed using JWS and
+	// the configured algorithm. The default, if omitted, is none; i.e. unsigned responses unless the
+	// GetEnableJWTProfileOAuthAccessTokens receiver returns true in which case the default is RS256.
 	GetAccessTokenSignedResponseAlg() (alg string)
 
-	// GetAccessTokenSignedResponseKeyID returns the key id used for signing Access Tokens.
-	GetAccessTokenSignedResponseKeyID() (kid string)
+	// GetAccessTokenEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
+	// JWT Profile for OAuth 2.0 Access Tokens specifications. If unspecified the other available parameters will be
+	// utilized to select an appropriate key.
+	GetAccessTokenEncryptedResponseKeyID() (kid string)
+
+	// GetAccessTokenEncryptedResponseAlg determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518]
+	// for content key encryption. If this is specified, the response will be encrypted using JWE and the configured
+	// content encryption algorithm (access_token_encrypted_response_enc). The default, if omitted, is that no
+	// encryption is performed. If both signing and encryption are requested, the response will be signed then
+	// encrypted, with the result being a Nested JWT, as defined in JWT [RFC7519].
+	GetAccessTokenEncryptedResponseAlg() (alg string)
+
+	// GetAccessTokenEncryptedResponseEnc determines the JWE [RFC7516] algorithm (enc value) as defined in JWA [RFC7518]
+	// for content encryption of access token responses. The default, if omitted, is A128CBC-HS256. Note: This parameter
+	// MUST NOT be specified without setting access_token_encrypted_response_alg.
+	GetAccessTokenEncryptedResponseEnc() (alg string)
 
 	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
 	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
@@ -208,13 +294,35 @@ type RequestedAudienceImplicitClient interface {
 //
 // See: https://www.ietf.org/id/draft-ietf-oauth-jwt-introspection-response-12.html
 type IntrospectionJWTResponseClient interface {
-	// GetIntrospectionSignedResponseAlg returns the alg header used to sign the introspection responses for the client.
-	// If empty or 'none' and the kid is empty the responses are not signed i.e. standard responses.
+	// GetIntrospectionSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
+	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
+	//	// utilized to select an appropriate key.
+	GetIntrospectionSignedResponseKeyID() (kid string)
+
+	// GetIntrospectionSignedResponseAlg is equivalent to the 'introspection_signed_response_alg' client metadata
+	// value which determines the JWS [RFC7515] algorithm (alg value) as defined in JWA [RFC7518] for signing
+	// introspection responses. If this is specified, the response will be signed using JWS and the configured
+	// algorithm. The default, if omitted, is RS256.
 	GetIntrospectionSignedResponseAlg() (alg string)
 
-	// GetIntrospectionSignedResponseKeyID returns the kid header used to sign the introspection responses for the
-	// client. If empty and the alg is empty or 'none' the responses are not signed i.e. standard responses.
-	GetIntrospectionSignedResponseKeyID() (kid string)
+	// GetIntrospectionEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
+	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
+	//	// utilized to select an appropriate key.
+	GetIntrospectionEncryptedResponseKeyID() (kid string)
+
+	// GetIntrospectionEncryptedResponseAlg is equivalent to the 'introspection_encrypted_response_alg' client metadata
+	// value which determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518] for content key
+	// encryption. If this is specified, the response will be encrypted using JWE and the configured content encryption
+	// algorithm (introspection_encrypted_response_enc). The default, if omitted, is that no encryption is performed.
+	// If both signing and encryption are requested, the response will be signed then encrypted, with the result being
+	// a Nested JWT, as defined in JWT [RFC7519].
+	GetIntrospectionEncryptedResponseAlg() (alg string)
+
+	// GetIntrospectionEncryptedResponseEnc is equivalent to the 'introspection_encrypted_response_enc' client metadata
+	// value which determines the  JWE [RFC7516] algorithm (enc value) as defined in JWA [RFC7518] for content
+	// encryption of introspection responses. The default, if omitted, is A128CBC-HS256. Note: This parameter MUST NOT
+	// be specified without setting introspection_encrypted_response_alg.
+	GetIntrospectionEncryptedResponseEnc() (enc string)
 
 	Client
 }
@@ -240,7 +348,11 @@ type DefaultJWTSecuredAuthorizationRequest struct {
 	IntrospectionEndpointAuthMethod     string              `json:"introspection_endpoint_auth_method"`
 	RevocationEndpointAuthMethod        string              `json:"revocation_endpoint_auth_method"`
 	RequestURIs                         []string            `json:"request_uris"`
+	RequestObjectSigningKeyID           string              `json:"request_object_signing_kid"`
 	RequestObjectSigningAlg             string              `json:"request_object_signing_alg"`
+	RequestObjectEncryptionKeyID        string              `json:"request_object_encryption_kid"`
+	RequestObjectEncryptionAlg          string              `json:"request_object_encryption_alg"`
+	RequestObjectEncryptionEnc          string              `json:"request_object_encryption_enc"`
 	TokenEndpointAuthSigningAlg         string              `json:"token_endpoint_auth_signing_alg"`
 	IntrospectionEndpointAuthSigningAlg string              `json:"introspection_endpoint_auth_signing_alg"`
 	RevocationEndpointAuthSigningAlg    string              `json:"revocation_endpoint_auth_signing_alg"`
@@ -329,8 +441,24 @@ func (c *DefaultJWTSecuredAuthorizationRequest) GetRevocationEndpointAuthSigning
 	return c.RevocationEndpointAuthSigningAlg
 }
 
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningKeyID() string {
+	return c.RequestObjectSigningKeyID
+}
+
 func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
+}
+
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionKeyID() string {
+	return c.RequestObjectEncryptionKeyID
+}
+
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionAlg() string {
+	return c.RequestObjectEncryptionAlg
+}
+
+func (c *DefaultJWTSecuredAuthorizationRequest) GetRequestObjectEncryptionEnc() string {
+	return c.RequestObjectEncryptionEnc
 }
 
 func (c *DefaultJWTSecuredAuthorizationRequest) GetTokenEndpointAuthMethod() string {

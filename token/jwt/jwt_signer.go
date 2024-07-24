@@ -26,9 +26,18 @@ import (
 type Signer interface {
 	Generate(ctx context.Context, claims MapClaims, header Mapper) (tokenString string, signature string, err error)
 	Validate(ctx context.Context, tokenString string) (signature string, err error)
-	Hash(ctx context.Context, in []byte) ([]byte, error)
 	Decode(ctx context.Context, tokenString string) (token *Token, err error)
-	GetSignature(ctx context.Context, token string) (signature string, err error)
+	Hash(ctx context.Context, in []byte) ([]byte, error)
+	GetSignature(ctx context.Context, tokenString string) (signature string, err error)
+	GetSigningMethodLength(ctx context.Context) (length int)
+}
+
+type SignerX interface {
+	Generate(ctx context.Context, recipient Recipient, claims MapClaims, header Mapper) (tokenString string, signature string, err error)
+	Validate(ctx context.Context, recipient Recipient, tokenString string) (signature string, err error)
+	Decode(ctx context.Context, recipient Recipient, tokenString string) (token *Token, err error)
+	Hash(ctx context.Context, in []byte) ([]byte, error)
+	GetSignature(ctx context.Context, tokenString string) (signature string, err error)
 	GetSigningMethodLength(ctx context.Context) (length int)
 }
 

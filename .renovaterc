@@ -17,19 +17,8 @@
     "gomod",
     "npm"
   ],
-  "kubernetes": {
-    "fileMatch": ["kube/.+\\.yml$"]
-  },
   "labels": [
     "dependencies"
-  ],
-  "packageRules": [
-    {
-      "matchUpdateTypes": ["digest", "minor", "patch"],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
-    }
   ],
   "postUpdateOptions": [
     "gomodTidy",

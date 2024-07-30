@@ -2,28 +2,77 @@ package jwt
 
 import "github.com/go-jose/go-jose/v4"
 
-func NewRecipientJARClient(client JARClient) *RecipientRequestObjectClient {
-	return &RecipientRequestObjectClient{client: client}
+func NewRecipient(client any) Recipient {
+	switch c := client.(type) {
+	case JARClient:
+		return &RecipientJARClient{client: c}
+	case IDTokenClient:
+		return &RecipientIDTokenClient{client: c}
+	case JARMClient:
+		return &RecipientJARMClient{client: c}
+	case UserInfoClient:
+		return &RecipientUserInfoClient{client: c}
+	case JWTProfileAccessTokenClient:
+		return &RecipientJWTProfileAccessTokenClient{client: c}
+	case IntrospectionClient:
+		return &RecipientIntrospectionClient{client: c}
+	default:
+		return nil
+	}
 }
 
-func NewRecipientIDTokenClient(client IDTokenClient) *RecipientIDTokenClient {
-	return &RecipientIDTokenClient{client: client}
+func NewRecipientJARClient(client any) Recipient {
+	switch c := client.(type) {
+	case JARClient:
+		return &RecipientJARClient{client: c}
+	default:
+		return nil
+	}
 }
 
-func NewRecipientJARMClient(client JARMClient) *RecipientJARMClient {
-	return &RecipientJARMClient{client: client}
+func NewRecipientIDTokenClient(client any) Recipient {
+	switch c := client.(type) {
+	case IDTokenClient:
+		return &RecipientIDTokenClient{client: c}
+	default:
+		return nil
+	}
 }
 
-func NewRecipientUserInfoClient(client UserInfoClient) *RecipientUserInfoClient {
-	return &RecipientUserInfoClient{client: client}
+func NewRecipientJARMClient(client JARMClient) Recipient {
+	switch c := client.(type) {
+	case JARMClient:
+		return &RecipientJARMClient{client: c}
+	default:
+		return nil
+	}
 }
 
-func NewRecipientJWTProfileAccessTokenClient(client JWTProfileAccessTokenClient) *RecipientJWTProfileAccessTokenClient {
-	return &RecipientJWTProfileAccessTokenClient{client: client}
+func NewRecipientUserInfoClient(client UserInfoClient) Recipient {
+	switch c := client.(type) {
+	case UserInfoClient:
+		return &RecipientUserInfoClient{client: c}
+	default:
+		return nil
+	}
 }
 
-func NewRecipientIntrospectionClient(client IntrospectionClient) *RecipientIntrospectionClient {
-	return &RecipientIntrospectionClient{client: client}
+func NewRecipientJWTProfileAccessTokenClient(client JWTProfileAccessTokenClient) Recipient {
+	switch c := client.(type) {
+	case JWTProfileAccessTokenClient:
+		return &RecipientJWTProfileAccessTokenClient{client: c}
+	default:
+		return nil
+	}
+}
+
+func NewRecipientIntrospectionClient(client IntrospectionClient) Recipient {
+	switch c := client.(type) {
+	case IntrospectionClient:
+		return &RecipientIntrospectionClient{client: c}
+	default:
+		return nil
+	}
 }
 
 type Recipient interface {
@@ -77,39 +126,39 @@ type JARClient interface {
 	KeyProvider
 }
 
-type RecipientRequestObjectClient struct {
+type RecipientJARClient struct {
 	client JARClient
 }
 
-func (r *RecipientRequestObjectClient) GetSignatureKeyID() (kid string) {
+func (r *RecipientJARClient) GetSignatureKeyID() (kid string) {
 	return r.client.GetRequestObjectSigningKeyID()
 }
 
-func (r *RecipientRequestObjectClient) GetSignatureAlg() (alg string) {
+func (r *RecipientJARClient) GetSignatureAlg() (alg string) {
 	return r.client.GetRequestObjectSigningAlg()
 }
 
-func (r *RecipientRequestObjectClient) GetEncryptionKeyID() (kid string) {
+func (r *RecipientJARClient) GetEncryptionKeyID() (kid string) {
 	return r.client.GetRequestObjectEncryptionKeyID()
 }
 
-func (r *RecipientRequestObjectClient) GetEncryptionAlg() (alg string) {
+func (r *RecipientJARClient) GetEncryptionAlg() (alg string) {
 	return r.client.GetRequestObjectEncryptionAlg()
 }
 
-func (r *RecipientRequestObjectClient) GetEncryptionEnc() (enc string) {
+func (r *RecipientJARClient) GetEncryptionEnc() (enc string) {
 	return r.client.GetRequestObjectEncryptionEnc()
 }
 
-func (r *RecipientRequestObjectClient) GetJSONWebKeySet() (jwks *jose.JSONWebKeySet) {
+func (r *RecipientJARClient) GetJSONWebKeySet() (jwks *jose.JSONWebKeySet) {
 	return r.client.GetJSONWebKeys()
 }
 
-func (r *RecipientRequestObjectClient) GetHaveSignaturePrivateKey() (have bool) {
+func (r *RecipientJARClient) GetHaveSignaturePrivateKey() (have bool) {
 	return true
 }
 
-func (r *RecipientRequestObjectClient) GetHaveEncryptionPrivateKey() (have bool) {
+func (r *RecipientJARClient) GetHaveEncryptionPrivateKey() (have bool) {
 	return false
 }
 

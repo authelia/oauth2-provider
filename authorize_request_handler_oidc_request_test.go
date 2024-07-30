@@ -400,21 +400,21 @@ func mustGenerateAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateK
 	if kid != "" {
 		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = kid
 	}
-	tokenString, err := token.CompactSigned(key)
+	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
 	return tokenString
 }
 
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims) string {
 	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.CompactSigned([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
+	tokenString, err := token.CompactSignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
 	require.NoError(t, err)
 	return tokenString
 }
 
 func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
-	tokenString, err := token.CompactSigned(jwt.UnsafeAllowNoneSignatureType)
+	tokenString, err := token.CompactSignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 	return tokenString
 }

@@ -32,18 +32,9 @@ type Signer interface {
 	GetSigningMethodLength(ctx context.Context) (length int)
 }
 
-type SignerX interface {
-	Generate(ctx context.Context, recipient Recipient, claims MapClaims, header Mapper) (tokenString string, signature string, err error)
-	Validate(ctx context.Context, recipient Recipient, tokenString string) (signature string, err error)
-	Decode(ctx context.Context, recipient Recipient, tokenString string) (token *Token, err error)
-	Hash(ctx context.Context, in []byte) ([]byte, error)
-	GetSignature(ctx context.Context, tokenString string) (signature string, err error)
-	GetSigningMethodLength(ctx context.Context) (length int)
-}
-
 var SHA256HashSize = crypto.SHA256.Size()
 
-type GetPrivateKeyFunc func(ctx context.Context, headers Mapper) (key any, err error)
+type GetPrivateKeyFunc func(ctx context.Context) (key any, err error)
 
 // DefaultSigner is responsible for generating and validating JWT challenges
 type DefaultSigner struct {
@@ -52,7 +43,7 @@ type DefaultSigner struct {
 
 // Generate generates a new authorize code or returns an error. set secret
 func (j *DefaultSigner) Generate(ctx context.Context, claims MapClaims, headers Mapper) (tokenString string, signature string, err error) {
-	key, err := j.GetPrivateKey(ctx, headers)
+	key, err := j.GetPrivateKey(ctx)
 	if err != nil {
 		return "", "", err
 	}
@@ -102,7 +93,7 @@ func (j *DefaultSigner) generate(claims MapClaims, header Mapper, alg jose.Signa
 	token := NewWithClaims(alg, claims)
 	token.Header = assign(token.Header, header.ToMap())
 
-	if tokenString, err = token.CompactSigned(key); err != nil {
+	if tokenString, err = token.CompactSignedString(key); err != nil {
 		return tokenString, signature, err
 	}
 
@@ -183,7 +174,7 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	token := NewWithClaims(signingMethod, claims)
 	token.Header = assign(token.Header, header.ToMap())
 
-	if tokenString, err = token.CompactSigned(privateKey); err != nil {
+	if tokenString, err = token.CompactSignedString(privateKey); err != nil {
 		return tokenString, signature, err
 	}
 
@@ -192,6 +183,23 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	}
 
 	return tokenString, signature, nil
+}
+
+func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key jose.JSONWebKey) (tokenString string, signature string, err error) {
+	token := New()
+
+	token.SetJWS(headers, claims, jose.SignatureAlgorithm(key.Algorithm))
+
+	return token.CompactSigned(key)
+}
+
+func encodeNestedCompactEncrypted(claims MapClaims, headers, headersJWE Mapper, sig, alg jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+	token := New()
+
+	token.SetJWS(headers, claims, jose.SignatureAlgorithm(sig.Algorithm))
+	token.SetJWE(headersJWE, jose.KeyAlgorithm(alg.Algorithm), enc, jose.NONE)
+
+	return token.CompactEncrypted(sig, alg)
 }
 
 func peakSignedHeaderType(raw string) (typ string, err error) {
@@ -225,6 +233,17 @@ func validateToken(tokenStr string, verificationKey any) (string, error) {
 		return "", err
 	}
 	return getTokenSignature(tokenStr)
+}
+
+func getJWTSignature(tokenString string) (signature string, err error) {
+	switch segments := strings.SplitN(tokenString, ".", 5); len(segments) {
+	case 5:
+		return "", errors.WithStack(errors.New("invalid token: the token is probably encrypted"))
+	case 3:
+		return segments[2], nil
+	default:
+		return "", errors.WithStack(fmt.Errorf("invalid token: the format is unknown"))
+	}
 }
 
 func getTokenSignature(token string) (string, error) {

@@ -50,7 +50,7 @@ func TestUnsignedToken(t *testing.T) {
 				"sub": "nestor",
 			})
 			token.Header = tc.jwtHeaders
-			rawToken, err := token.CompactSigned(key)
+			rawToken, err := token.CompactSignedString(key)
 			require.NoError(t, err)
 			require.NotEmpty(t, rawToken)
 			parts := strings.Split(rawToken, ".")
@@ -86,7 +86,7 @@ func TestEncrypted(t *testing.T) {
 	token.KeyAlgorithm = jose.ED25519
 	token.ContentEncryption = jose.A256GCM
 
-	encrypted, err := token.CompactEncrypted(skey, ekey)
+	encrypted, _, err := token.CompactEncrypted(skey, ekey)
 	require.NoError(t, err)
 
 	fmt.Println(encrypted)
@@ -482,7 +482,7 @@ func TestParser_Parse(t *testing.T) {
 
 func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
-	s, e := token.CompactSigned(key)
+	s, e := token.CompactSignedString(key)
 
 	if e != nil {
 		panic(e.Error())
@@ -494,7 +494,7 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
-	s, e := token.CompactSigned(key)
+	s, e := token.CompactSignedString(key)
 
 	if e != nil {
 		panic(e.Error())

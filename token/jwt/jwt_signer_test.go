@@ -5,6 +5,10 @@ package jwt
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -21,6 +25,105 @@ var header = &Headers{
 	Extra: map[string]any{
 		"foo": "bar",
 	},
+}
+
+func TestEncrypt(t *testing.T) {
+	i, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	require.NoError(t, err)
+
+	c, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	require.NoError(t, err)
+
+	issuer := jose.JSONWebKey{
+		Key:       i,
+		KeyID:     "iss-abc123-es512",
+		Algorithm: string(jose.ES512),
+		Use:       "sig",
+	}
+
+	clientP := jose.JSONWebKey{
+		Key:       c,
+		KeyID:     "client-abc123-es512",
+		Algorithm: string(jose.ECDH_ES_A256KW),
+		Use:       "enc",
+	}
+
+	client := jose.JSONWebKey{
+		Key:       &c.PublicKey,
+		KeyID:     "client-abc123-es512",
+		Algorithm: string(jose.ECDH_ES_A256KW),
+		Use:       "enc",
+	}
+
+	issuerPublic := jose.JSONWebKey{
+		Key:       &i.PublicKey,
+		KeyID:     "iss-abc123-es512",
+		Algorithm: string(jose.ES512),
+		Use:       "sig",
+	}
+
+	key := make([]byte, 64)
+
+	_, err = rand.Read(key)
+	require.NoError(t, err)
+
+	issuerDirect := jose.JSONWebKey{
+		Key:       key,
+		KeyID:     "iss-abc123-es512",
+		Algorithm: string(jose.DIRECT),
+		Use:       "enc",
+	}
+
+	data, err := json.Marshal(issuer)
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(issuer.Public())
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(issuerPublic)
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(issuerPublic.Public())
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(client)
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(clientP)
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(issuerDirect)
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	data, err = json.Marshal(issuerDirect.Public())
+	require.NoError(t, err)
+	fmt.Println(string(data))
+
+	jwk := New()
+
+	claims := MapClaims{
+		"name": "example",
+	}
+
+	jwsHeaders := &Headers{}
+	jweHeaders := &Headers{}
+
+	jwk.SetJWS(jwsHeaders, claims, jose.SignatureAlgorithm(issuer.Algorithm))
+	jwk.SetJWE(jweHeaders, jose.KeyAlgorithm(client.Algorithm), jose.A256GCM, jose.NONE)
+
+	token, signature, err := jwk.CompactEncrypted(&issuer, &client)
+	require.NoError(t, err)
+
+	fmt.Println(token)
+	fmt.Println(signature)
+
 }
 
 func TestHash(t *testing.T) {

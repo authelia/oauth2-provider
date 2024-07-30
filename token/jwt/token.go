@@ -18,13 +18,20 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+func New() *Token {
+	return &Token{
+		Header:    map[string]any{},
+		HeaderJWE: map[string]any{},
+	}
+}
+
 // NewWithClaims creates an unverified Token with the given claims and signing method
-func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
+func NewWithClaims(alg jose.SignatureAlgorithm, claims MapClaims) *Token {
 	return &Token{
 		Claims:             claims,
-		SignatureAlgorithm: method,
+		SignatureAlgorithm: alg,
 		Header:             map[string]any{},
-		EncryptionHeader:   map[string]any{},
+		HeaderJWE:          map[string]any{},
 	}
 }
 
@@ -125,13 +132,13 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 // It provides method signatures compatible with jwt-go but implemented
 // using go-json
 type Token struct {
-	SignatureAlgorithm   jose.SignatureAlgorithm
-	ContentEncryption    jose.ContentEncryption
-	KeyAlgorithm         jose.KeyAlgorithm
-	CompressionAlgorithm jose.CompressionAlgorithm
+	SignatureAlgorithm   jose.SignatureAlgorithm   // alg (JWS)
+	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE)
+	ContentEncryption    jose.ContentEncryption    // enc (JWE)
+	CompressionAlgorithm jose.CompressionAlgorithm // zip (JWE)
 
-	Header           map[string]any
-	EncryptionHeader map[string]any
+	Header    map[string]any
+	HeaderJWE map[string]any
 
 	Claims MapClaims
 
@@ -174,20 +181,36 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 		header[consts.JSONWebTokenHeaderContentType] = cty
 	}
 
-	for k, v := range t.EncryptionHeader {
+	for k, v := range t.HeaderJWE {
 		header[jose.HeaderKey(k)] = v
 	}
 
 	return header
 }
 
-func (t *Token) CompactEncrypted(skey, ekey any) (tokenString string, err error) {
+func (t *Token) SetJWS(header Mapper, claims MapClaims, alg jose.SignatureAlgorithm) {
+	assign(t.Header, header.ToMap())
+
+	t.SignatureAlgorithm = alg
+
+	t.Claims = claims
+}
+
+func (t *Token) SetJWE(header Mapper, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
+	assign(t.HeaderJWE, header.ToMap())
+
+	t.KeyAlgorithm = alg
+	t.ContentEncryption = enc
+	t.CompressionAlgorithm = zip
+}
+
+func (t *Token) CompactEncrypted(skey, ekey any) (tokenString, signature string, err error) {
 	var (
 		signed string
 	)
 
-	if signed, err = t.CompactSigned(skey); err != nil {
-		return "", err
+	if signed, signature, err = t.CompactSigned(skey); err != nil {
+		return "", "", err
 	}
 
 	rcpt := jose.Recipient{
@@ -213,22 +236,38 @@ func (t *Token) CompactEncrypted(skey, ekey any) (tokenString string, err error)
 	var encrypter jose.Encrypter
 
 	if encrypter, err = jose.NewEncrypter(t.ContentEncryption, rcpt, opts); err != nil {
-		return "", errorsx.WithStack(err)
+		return "", "", errorsx.WithStack(err)
 	}
 
 	var token *jose.JSONWebEncryption
 
 	if token, err = encrypter.Encrypt([]byte(signed)); err != nil {
-		return "", errorsx.WithStack(err)
+		return "", "", errorsx.WithStack(err)
 	}
 
-	return token.CompactSerialize()
+	if tokenString, err = token.CompactSerialize(); err != nil {
+		return "", "", errorsx.WithStack(err)
+	}
+
+	return tokenString, signature, nil
 }
 
-// CompactSigned provides a compatible `jwt-go` Token.CompactSigned method
+func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) {
+	if tokenString, err = t.CompactSignedString(k); err != nil {
+		return "", "", err
+	}
+
+	if signature, err = getJWTSignature(tokenString); err != nil {
+		return "", "", err
+	}
+
+	return tokenString, signature, nil
+}
+
+// CompactSignedString provides a compatible `jwt-go` Token.CompactSigned method
 //
 // > Get the complete, signed token
-func (t *Token) CompactSigned(k any) (tokenString string, err error) {
+func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	if _, ok := k.(unsafeNoneMagicConstant); ok {
 		return unsignedToken(t)
 	}
@@ -266,8 +305,8 @@ func (t *Token) IsJWTProfileAccessToken() bool {
 		ok       bool
 	)
 
-	if t.EncryptionHeader != nil && len(t.EncryptionHeader) > 0 {
-		if raw, ok = t.EncryptionHeader[consts.JSONWebTokenHeaderContentType]; ok {
+	if t.HeaderJWE != nil && len(t.HeaderJWE) > 0 {
+		if raw, ok = t.HeaderJWE[consts.JSONWebTokenHeaderContentType]; ok {
 			cty, ok = raw.(string)
 
 			if !ok {

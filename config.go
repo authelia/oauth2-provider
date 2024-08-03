@@ -253,7 +253,7 @@ type RevokeRefreshTokensExplicitlyProvider interface {
 // JWKSFetcherStrategyProvider returns the provider for configuring the JWKS fetcher strategy.
 type JWKSFetcherStrategyProvider interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
-	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
+	GetJWKSFetcherStrategy(ctx context.Context) (strategy jwt.JWKSFetcherStrategy)
 }
 
 // HTTPClientProvider returns the provider for configuring the HTTP client.

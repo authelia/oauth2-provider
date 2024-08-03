@@ -102,7 +102,7 @@ type Config struct {
 
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
-	JWKSFetcherStrategy JWKSFetcherStrategy
+	JWKSFetcherStrategy jwt.JWKSFetcherStrategy
 
 	// TokenEntropy indicates the entropy of the random string, used as the "message" part of the HMAC token.
 	// Defaults to 32.
@@ -496,8 +496,8 @@ func (c *Config) GetBCryptCost(_ context.Context) int {
 	return c.HashCost
 }
 
-// GetJWKSFetcherStrategy returns the JWKSFetcherStrategy.
-func (c *Config) GetJWKSFetcherStrategy(_ context.Context) JWKSFetcherStrategy {
+// GetJWKSFetcherStrategy returns the jwt.JWKSFetcherStrategy.
+func (c *Config) GetJWKSFetcherStrategy(_ context.Context) jwt.JWKSFetcherStrategy {
 	if c.JWKSFetcherStrategy == nil {
 		c.JWKSFetcherStrategy = NewDefaultJWKSFetcherStrategy()
 	}

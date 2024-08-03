@@ -102,10 +102,7 @@ func TestEncrypt(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println(string(data))
 
-	data, err = json.Marshal(issuerDirect.Public())
-	require.NoError(t, err)
-	fmt.Println(string(data))
-
+	jwk2 := New()
 	jwk := New()
 
 	claims := MapClaims{
@@ -116,6 +113,7 @@ func TestEncrypt(t *testing.T) {
 	jweHeaders := &Headers{}
 
 	jwk.SetJWS(jwsHeaders, claims, jose.SignatureAlgorithm(issuer.Algorithm))
+	jwk2.SetJWS(jwsHeaders, claims, jose.ES256)
 	jwk.SetJWE(jweHeaders, jose.KeyAlgorithm(client.Algorithm), jose.A256GCM, jose.NONE)
 
 	token, signature, err := jwk.CompactEncrypted(&issuer, &client)
@@ -124,6 +122,11 @@ func TestEncrypt(t *testing.T) {
 	fmt.Println(token)
 	fmt.Println(signature)
 
+	token, signature, err = jwk2.CompactSigned(&issuer)
+	require.NoError(t, err)
+
+	fmt.Println(token)
+	fmt.Println(signature)
 }
 
 func TestHash(t *testing.T) {

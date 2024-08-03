@@ -16,10 +16,8 @@ import (
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -185,7 +183,7 @@ func generateToken(claims MapClaims, header Mapper, signingMethod jose.Signature
 	return tokenString, signature, nil
 }
 
-func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key jose.JSONWebKey) (tokenString string, signature string, err error) {
+func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
 
 	token.SetJWS(headers, claims, jose.SignatureAlgorithm(key.Algorithm))
@@ -193,33 +191,13 @@ func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, 
 	return token.CompactSigned(key)
 }
 
-func encodeNestedCompactEncrypted(claims MapClaims, headers, headersJWE Mapper, sig, alg jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+func encodeNestedCompactEncrypted(claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
-	token.SetJWS(headers, claims, jose.SignatureAlgorithm(sig.Algorithm))
-	token.SetJWE(headersJWE, jose.KeyAlgorithm(alg.Algorithm), enc, jose.NONE)
+	token.SetJWS(headers, claims, jose.SignatureAlgorithm(keySig.Algorithm))
+	token.SetJWE(headersJWE, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
 
-	return token.CompactEncrypted(sig, alg)
-}
-
-func peakSignedHeaderType(raw string) (typ string, err error) {
-	var token *jwt.JSONWebToken
-
-	if token, err = jwt.ParseSigned(raw, SignatureAlgorithmsNone); err != nil {
-		return "", err
-	}
-
-	if len(token.Headers) == 0 {
-		return "", fmt.Errorf("no header")
-	}
-
-	if atyp, ok := token.Headers[0].ExtraHeaders[consts.JSONWebTokenHeaderType]; !ok {
-		return "", nil
-	} else if typ, ok = atyp.(string); ok {
-		return typ, nil
-	}
-
-	return "", fmt.Errorf("invalid typ")
+	return token.CompactEncrypted(keySig, keyEnc)
 }
 
 func decodeToken(token string, verificationKey any) (*Token, error) {

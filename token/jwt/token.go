@@ -92,6 +92,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 
 		return token, &ValidationError{Errors: ValidationErrorUnverifiable, Inner: err}
 	}
+
 	if key == nil {
 		return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: "keyfunc returned a nil verification key"}
 	}
@@ -117,6 +118,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 		if e, ok := err.(*ValidationError); !ok {
 			err = &ValidationError{Inner: e, Errors: ValidationErrorClaimsInvalid}
 		}
+
 		return token, err
 	}
 

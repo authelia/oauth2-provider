@@ -2,186 +2,165 @@ package jwt
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/rsa"
 	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// Strategy represents the strategy for encoding and decoding JWT's.
 type Strategy interface {
-	Signer
-
-	// GenerateWithSettings signs and optionally encrypts the token based on the context provided
-	GenerateWithSettings(ctx context.Context, settings *StrategySettings, claims MapClaims, header Mapper) (tokenString, signature string, err error)
-
-	// DecryptWithSettings decrypts the token provided. If the token is not encrypted, the function should return an error.
-	DecryptWithSettings(ctx context.Context, settings *StrategySettings, token string) (tokenString string, err error)
-
-	// ValidateWithSettings validates the signed token. If the token is not signed, the function should return an error.
-	ValidateWithSettings(ctx context.Context, settings *StrategySettings, token string) (signature string, err error)
+	Encode(ctx context.Context, client Client, claims MapClaims, headers, headersJWE Mapper) (tokenString string, signature string, err error)
+	Decode(ctx context.Context, tokenString string, client Client) (token *Token, err error)
+	DecodeCustom(ctx context.Context, tokenString string, client Client, encryptionKeyAlgorithms []jose.KeyAlgorithm, contentEncryption []jose.ContentEncryption, signatureAlgorithms []jose.SignatureAlgorithm) (token *Token, err error)
+	//	Validate(ctx context.Context, recipient Client, tokenString string) (signature string, err error)
 }
 
-// StrategySettings contains context that is used to sign, validation, encrypt and decrypt tokens.
-// It is populated in different ways depending on the operation. For example -
-//
-// 1. Validate	: the SigningKeyID and SigningAlgorithm is based on the JWT header of the incoming token
-// 2. Decrypt	: the EncryptionKeyID, EncryptionAlgorithm and EncryptionContentAlgorithm is based on the JWT header of the incoming token
-// 3. Generate  : all the properties may be populated. The JWT strategy implementation may sign the token, then optionally encrypt it
-type StrategySettings struct {
-	SigningKeyID               string
-	SigningAlgorithm           string
-	EncryptionKeyID            string
-	EncryptionAlgorithm        string
-	EncryptionContentAlgorithm string
-	Extra                      map[string]any
+type JWKSFetcherStrategy interface {
+	// Resolve returns the JSON Web Key Set, or an error if something went wrong. The forceRefresh, if true, forces
+	// the strategy to fetch the key from the remote. If forceRefresh is false, the strategy may use a caching strategy
+	// to fetch the key.
+	Resolve(ctx context.Context, location string, ignoreCache bool) (jwks *jose.JSONWebKeySet, err error)
 }
 
-type GetPrivateKeyWithSettingsFunc func(ctx context.Context, context *StrategySettings) (key any, err error)
-
-type GenerateContext interface {
-	GetSigningKey(ctx context.Context, headers Mapper) (key any, err error)
-	GetEncryptionKey(ctx context.Context, headers Mapper) (key any, err error)
+type StrategyConfig interface {
+	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
+	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
 }
 
+// DefaultStrategy is responsible for providing JWK encoding and cryptographic functionality.
 type DefaultStrategy struct {
-	Signer
-
-	Provider KeyProvider
-
-	GetPrivateKey GetPrivateKeyWithSettingsFunc
+	Config StrategyConfig
+	Issuer Issuer
 }
 
-// GenerateWithSettings signs and optionally encrypts the token based on the context provided
-func (s *DefaultStrategy) GenerateWithSettings(ctx context.Context, settings *StrategySettings, claims MapClaims, header Mapper) (tokenString, signature string, err error) {
-	// ignoring the signing alg and kid for this implementation and just using the DefaultSigner implementation
-	rawToken, sig, err := s.Signer.Generate(ctx, claims, header)
-	if err != nil {
-		return "", "", err
-	}
-
-	if settings.EncryptionAlgorithm == "" {
-		return rawToken, sig, err
-	}
-
-	key, err := s.GetPrivateKey(ctx, settings)
-	if err != nil {
-		return "", "", err
-	}
-
-	if t, ok := key.(*jose.JSONWebKey); ok {
-		key = t.Key
-	}
-
-	var pubKey any
-	switch t := key.(type) {
-	case *rsa.PrivateKey:
-		pubKey = &t.PublicKey
-	case *ecdsa.PrivateKey:
-		pubKey = &t.PublicKey
-	case jose.OpaqueSigner:
-		pubKey = t.Public()
-	default:
-		return "", "", fmt.Errorf("unable to decode token. Invalid PrivateKey type %T", key)
-	}
-
-	cty := consts.JSONWebTokenTypeJWT
-
-	if typ := header.Get(consts.JSONWebTokenHeaderType); typ != nil {
-		if value, ok := typ.(string); ok && value != "" {
-			cty = value
-		}
-	}
-
-	opts := &jose.EncrypterOptions{
-		ExtraHeaders: map[jose.HeaderKey]any{
-			consts.JSONWebTokenHeaderType:        jose.ContentType(consts.JSONWebTokenTypeJWT),
-			consts.JSONWebTokenHeaderContentType: jose.ContentType(cty),
-		},
-	}
-
+// Encode generates a new JWT and encodes it.
+func (j *DefaultStrategy) Encode(ctx context.Context, client Client, claims MapClaims, headers, headersJWE Mapper) (tokenString string, signature string, err error) {
 	var (
-		encrypter jose.Encrypter
-		jwe       *jose.JSONWebEncryption
+		jwks *jose.JSONWebKeySet
+		key  *jose.JSONWebKey
 	)
 
-	enc := jose.ContentEncryption(settings.EncryptionContentAlgorithm)
-
-	recipient := jose.Recipient{
-		Algorithm: jose.KeyAlgorithm(settings.EncryptionAlgorithm),
-		Key:       pubKey,
-		KeyID:     settings.EncryptionKeyID,
+	if jwks, err = j.Issuer.GetJSONWebKeys(ctx); err != nil {
+		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwks: %w", err))
 	}
 
-	if encrypter, err = jose.NewEncrypter(enc, recipient, opts); err != nil {
-		return "", "", fmt.Errorf("unable to build encrypter; err=%v", err)
+	if client == nil {
+		if key, err = findKey("", string(jose.RS256), consts.JSONWebTokenUseSignature, jwks, false); err != nil {
+			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
+		}
+	} else if key, err = findKey(client.GetSignatureKeyID(), client.GetSignatureAlg(), consts.JSONWebTokenUseSignature, jwks, true); err != nil {
+		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 	}
 
-	if jwe, err = encrypter.Encrypt([]byte(rawToken)); err != nil {
-		return "", "", fmt.Errorf("encrypting the token failed. err=%v", err)
+	if client == nil {
+		return encodeCompactSigned(ctx, claims, headers, key)
 	}
 
-	if rawToken, err = jwe.CompactSerialize(); err != nil {
-		return "", "", fmt.Errorf("serializing the encrypted token failed. err=%v", err)
+	kid, alg, enc := client.GetEncryptionKeyID(), client.GetEncryptionAlg(), client.GetEncryptionEnc()
+
+	if len(kid) == 0 && len(alg) == 0 {
+		return encodeCompactSigned(ctx, claims, headers, key)
 	}
 
-	return rawToken, sig, err
+	var ekey *jose.JSONWebKey
+
+	if ekey, err = findKey(kid, alg, consts.JSONWebTokenUseEncryption, client.GetJSONWebKeys(), true); err != nil {
+		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving client jwk: %w", err))
+	}
+
+	return encodeNestedCompactEncrypted(claims, headers, headersJWE, key, ekey, jose.ContentEncryption(enc))
 }
 
-// DecryptWithSettings decrypts the token provided. If the token is not encrypted, the function should return an error.
-func (s *DefaultStrategy) DecryptWithSettings(ctx context.Context, settings *StrategySettings, token string) (tokenString string, err error) {
-	parsedToken, err := jose.ParseEncrypted(token, []jose.KeyAlgorithm{jose.RSA1_5, jose.RSA_OAEP_256, jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW}, []jose.ContentEncryption{jose.A128CBC_HS256, jose.A192CBC_HS384, jose.A256CBC_HS512, jose.A128GCM, jose.A192GCM, jose.A256GCM})
-	if err != nil {
-		return "", fmt.Errorf("unable to parse the token")
-	}
-
-	if settings == nil {
-		h := parsedToken.Header
-		enc, _ := h.ExtraHeaders[consts.JSONWebTokenHeaderEncryptionAlgorithm].(string)
-		settings = &StrategySettings{
-			EncryptionKeyID:            h.KeyID,
-			EncryptionAlgorithm:        h.Algorithm,
-			EncryptionContentAlgorithm: enc,
-		}
-	}
-
-	var privateKey any
-
-	key, err := s.GetPrivateKey(ctx, settings)
-	switch t := key.(type) {
-	case *jose.JSONWebKey:
-		privateKey = t.Key
-	case jose.JSONWebKey:
-		privateKey = t.Key
-	case *rsa.PrivateKey:
-		privateKey = t
-	case *ecdsa.PrivateKey:
-		privateKey = t
-	case jose.OpaqueSigner:
-		switch tt := t.Public().Key.(type) {
-		case *rsa.PrivateKey:
-			privateKey = t
-		case *ecdsa.PrivateKey:
-			privateKey = t
-		default:
-			return "", fmt.Errorf("unsupported private / public key pairs: %T, %T", t, tt)
-		}
-	default:
-		return "", fmt.Errorf("unsupported private key type: %T", t)
-	}
-
-	decrypted, err := parsedToken.Decrypt(privateKey)
-	if err != nil {
-		return "", err
-	}
-
-	return string(decrypted), nil
+func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, client Client) (token *Token, err error) {
+	return j.DecodeCustom(ctx, tokenString, client, EncryptionKeyAlgorithms, ContentEncryptionAlgorithms, SignatureAlgorithms)
 }
 
-// ValidateWithSettings validates the signed token. If the token is not signed, the function should return an error.
-func (s *DefaultStrategy) ValidateWithSettings(ctx context.Context, settings *StrategySettings, token string) (string, error) {
-	// ignoring the signing alg and kid for this implementation and just using the DefaultSigner implementation
-	return s.Signer.Validate(ctx, token)
+func (j *DefaultStrategy) DecodeCustom(ctx context.Context, tokenString string, client Client, encryptionKeyAlgorithms []jose.KeyAlgorithm, contentEncryption []jose.ContentEncryption, signatureAlgorithms []jose.SignatureAlgorithm) (token *Token, err error) {
+	var (
+		issuerJWKs *jose.JSONWebKeySet
+		key        *jose.JSONWebKey
+		t          *jwt.JSONWebToken
+	)
+
+	if issuerJWKs, err = j.Issuer.GetJSONWebKeys(ctx); err != nil {
+		return nil, err
+	}
+
+	if IsEncryptedJWT(tokenString) {
+		var nested *jwt.NestedJSONWebToken
+		var jwe *jose.JSONWebEncryption
+
+		if jwe, err = jose.ParseEncryptedCompact(tokenString, encryptionKeyAlgorithms, contentEncryption); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+		if nested, err = jwt.ParseSignedAndEncrypted(tokenString, encryptionKeyAlgorithms, contentEncryption, signatureAlgorithms); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+
+		var (
+			kid, alg string
+		)
+
+		if kid, alg, _, err = headerValidateJWE(nested.Headers); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+
+		if key, err = findKey(kid, alg, consts.JSONWebTokenUseEncryption, issuerJWKs, true); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+
+		if t, err = nested.Decrypt(key); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+	} else if t, err = jwt.ParseSigned(tokenString, signatureAlgorithms); err != nil {
+		return nil, errorsx.WithStack(err)
+	}
+
+	var kid, alg string
+
+	if kid, alg, err = headerValidateJWS(t.Headers); err != nil {
+		return nil, errorsx.WithStack(err)
+	}
+
+	if client != nil && client.IsClientSigned() {
+		if ckid := client.GetSignatureKeyID(); ckid != "" && ckid != kid {
+			return nil, errorsx.WithStack(fmt.Errorf("error validating the jws header: kid '%s' does not match the registered kid '%s'", kid, ckid))
+		}
+
+		if calg := client.GetSignatureAlg(); calg != "" && calg != alg {
+			return nil, errorsx.WithStack(fmt.Errorf("error validating the jws header: alg '%s' does not match the registered alg '%s'", alg, calg))
+		}
+
+		if key, err = FindClientPublicJWK(ctx, client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature); err != nil {
+			return nil, errorsx.WithStack(err)
+		}
+	} else if key, err = findKey(kid, alg, consts.JSONWebTokenUseSignature, issuerJWKs, true); err != nil {
+		return nil, errorsx.WithStack(err)
+	}
+
+	claims := MapClaims{}
+
+	if err = t.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
+	}
+
+	if err = t.Claims(key, &claims); err != nil {
+		return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()})
+	}
+
+	if token, err = newToken(t, claims); err != nil {
+		return nil, errorsx.WithStack(err)
+	}
+
+	if err = claims.Valid(); err != nil {
+		return token, errorsx.WithStack(&ValidationError{Inner: err, Errors: ValidationErrorClaimsInvalid})
+	}
+
+	token.valid = true
+
+	return token, nil
 }

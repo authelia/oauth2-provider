@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"strings"
@@ -62,34 +61,6 @@ func TestUnsignedToken(t *testing.T) {
 			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
 		})
 	}
-}
-
-func TestEncrypted(t *testing.T) {
-	ekeyraw := make([]byte, 32)
-
-	_, _ = rand.Read(ekeyraw)
-
-	fmt.Println(base64.RawURLEncoding.EncodeToString(ekeyraw))
-
-	ekey := &jose.JSONWebKey{
-		Key:       ekeyraw,
-		KeyID:     "abc",
-		Algorithm: string(jose.A256GCM),
-		Use:       "enc",
-	}
-
-	skey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-
-	token := NewWithClaims(jose.RS256, MapClaims{"a": 1})
-
-	token.KeyAlgorithm = jose.ED25519
-	token.ContentEncryption = jose.A256GCM
-
-	encrypted, _, err := token.CompactEncrypted(skey, ekey)
-	require.NoError(t, err)
-
-	fmt.Println(encrypted)
 }
 
 func TestJWTHeaders(t *testing.T) {

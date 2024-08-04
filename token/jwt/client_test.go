@@ -1,13 +1,26 @@
 package jwt
 
-import "github.com/go-jose/go-jose/v4"
+import (
+	"fmt"
+
+	"github.com/go-jose/go-jose/v4"
+)
 
 type testClient struct {
+	secret              []byte
 	kid, alg            string
 	encKID, encAlg, enc string
 	csigned             bool
 	jwks                *jose.JSONWebKeySet
 	jwksURI             string
+}
+
+func (r *testClient) GetClientSecretPlainText() (secret []byte, err error) {
+	if r.secret != nil {
+		return r.secret, nil
+	}
+
+	return nil, fmt.Errorf("not supported")
 }
 
 func (r *testClient) GetSignatureKeyID() (kid string) {

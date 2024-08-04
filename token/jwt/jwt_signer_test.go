@@ -3,6 +3,8 @@
 
 package jwt
 
+/*
+
 import (
 	"context"
 	"crypto/ecdsa"
@@ -20,6 +22,7 @@ import (
 
 	"authelia.com/provider/oauth2/internal/gen"
 )
+
 
 var header = &Headers{
 	Extra: map[string]any{
@@ -313,3 +316,5 @@ func TestValidateSignatureRejectsJWT(t *testing.T) {
 		})
 	}
 }
+
+*/

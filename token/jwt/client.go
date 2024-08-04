@@ -7,7 +7,7 @@ import (
 func NewJARClient(client any) Client {
 	switch c := client.(type) {
 	case JARClient:
-		return &decoratorJARClient{JARClient: c}
+		return &decoratedJARClient{JARClient: c}
 	default:
 		return nil
 	}
@@ -16,7 +16,7 @@ func NewJARClient(client any) Client {
 func NewIDTokenClient(client any) Client {
 	switch c := client.(type) {
 	case IDTokenClient:
-		return &decoratorIDTokenClient{IDTokenClient: c}
+		return &decoratedIDTokenClient{IDTokenClient: c}
 	default:
 		return nil
 	}
@@ -25,7 +25,7 @@ func NewIDTokenClient(client any) Client {
 func NewJARMClient(client any) Client {
 	switch c := client.(type) {
 	case JARMClient:
-		return &decoratorJARMClient{JARMClient: c}
+		return &decoratedJARMClient{JARMClient: c}
 	default:
 		return nil
 	}
@@ -34,7 +34,7 @@ func NewJARMClient(client any) Client {
 func NewUserInfoClient(client any) Client {
 	switch c := client.(type) {
 	case UserInfoClient:
-		return &decoratorUserInfoClient{UserInfoClient: c}
+		return &decoratedUserInfoClient{UserInfoClient: c}
 	default:
 		return nil
 	}
@@ -43,7 +43,7 @@ func NewUserInfoClient(client any) Client {
 func NewJWTProfileAccessTokenClient(client any) Client {
 	switch c := client.(type) {
 	case JWTProfileAccessTokenClient:
-		return &decoratorJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
+		return &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
 	default:
 		return nil
 	}
@@ -52,7 +52,18 @@ func NewJWTProfileAccessTokenClient(client any) Client {
 func NewIntrospectionClient(client any) Client {
 	switch c := client.(type) {
 	case IntrospectionClient:
-		return &decoratorIntrospectionClient{IntrospectionClient: c}
+		return &decoratedIntrospectionClient{IntrospectionClient: c}
+	default:
+		return nil
+	}
+}
+
+func NewStatelessJWTProfileIntrospectionClient(client any) Client {
+	switch c := client.(type) {
+	case IntrospectionClient:
+		return &decoratedIntrospectionClient{IntrospectionClient: c}
+	case JWTProfileAccessTokenClient:
+		return &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
 	default:
 		return nil
 	}
@@ -64,12 +75,16 @@ type Client interface {
 	GetEncryptionKeyID() (kid string)
 	GetEncryptionAlg() (alg string)
 	GetEncryptionEnc() (enc string)
+
 	IsClientSigned() (is bool)
 
-	JWKClient
+	BaseClient
 }
 
-type JWKClient interface {
+type BaseClient interface {
+	// GetClientSecretPlainText returns the ClientSecret as plaintext if available.
+	GetClientSecretPlainText() (secret []byte, err error)
+
 	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
 	GetJSONWebKeys() (jwks *jose.JSONWebKeySet)
 
@@ -115,34 +130,34 @@ type JARClient interface {
 	// provided.
 	GetRequestObjectEncryptionEnc() (enc string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorJARClient struct {
+type decoratedJARClient struct {
 	JARClient
 }
 
-func (r *decoratorJARClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJARClient) GetSignatureKeyID() (kid string) {
 	return r.GetRequestObjectSigningKeyID()
 }
 
-func (r *decoratorJARClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJARClient) GetSignatureAlg() (alg string) {
 	return r.GetRequestObjectSigningAlg()
 }
 
-func (r *decoratorJARClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedJARClient) GetEncryptionKeyID() (kid string) {
 	return r.GetRequestObjectEncryptionKeyID()
 }
 
-func (r *decoratorJARClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedJARClient) GetEncryptionAlg() (alg string) {
 	return r.GetRequestObjectEncryptionAlg()
 }
 
-func (r *decoratorJARClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedJARClient) GetEncryptionEnc() (enc string) {
 	return r.GetRequestObjectEncryptionEnc()
 }
 
-func (r *decoratorJARClient) IsClientSigned() (is bool) {
+func (r *decoratedJARClient) IsClientSigned() (is bool) {
 	return true
 }
 
@@ -177,34 +192,34 @@ type IDTokenClient interface {
 	// When id_token_encrypted_response_enc is included, id_token_encrypted_response_alg MUST also be provided.
 	GetIDTokenEncryptedResponseEnc() (enc string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorIDTokenClient struct {
+type decoratedIDTokenClient struct {
 	IDTokenClient
 }
 
-func (r *decoratorIDTokenClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedIDTokenClient) GetSignatureKeyID() (kid string) {
 	return r.GetIDTokenSignedResponseKeyID()
 }
 
-func (r *decoratorIDTokenClient) GetSignatureAlg() (alg string) {
+func (r *decoratedIDTokenClient) GetSignatureAlg() (alg string) {
 	return r.GetIDTokenSignedResponseAlg()
 }
 
-func (r *decoratorIDTokenClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedIDTokenClient) GetEncryptionKeyID() (kid string) {
 	return r.GetIDTokenEncryptedResponseKeyID()
 }
 
-func (r *decoratorIDTokenClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedIDTokenClient) GetEncryptionAlg() (alg string) {
 	return r.GetIDTokenEncryptedResponseAlg()
 }
 
-func (r *decoratorIDTokenClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedIDTokenClient) GetEncryptionEnc() (enc string) {
 	return r.GetIDTokenEncryptedResponseEnc()
 }
 
-func (r *decoratorIDTokenClient) IsClientSigned() (is bool) {
+func (r *decoratedIDTokenClient) IsClientSigned() (is bool) {
 	return false
 }
 
@@ -239,34 +254,34 @@ type JARMClient interface {
 	// also be provided.
 	GetAuthorizationEncryptedResponseEnc() (alg string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorJARMClient struct {
+type decoratedJARMClient struct {
 	JARMClient
 }
 
-func (r *decoratorJARMClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJARMClient) GetSignatureKeyID() (kid string) {
 	return r.GetAuthorizationSignedResponseKeyID()
 }
 
-func (r *decoratorJARMClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJARMClient) GetSignatureAlg() (alg string) {
 	return r.GetAuthorizationSignedResponseAlg()
 }
 
-func (r *decoratorJARMClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedJARMClient) GetEncryptionKeyID() (kid string) {
 	return r.GetAuthorizationEncryptedResponseKeyID()
 }
 
-func (r *decoratorJARMClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedJARMClient) GetEncryptionAlg() (alg string) {
 	return r.GetAuthorizationEncryptedResponseAlg()
 }
 
-func (r *decoratorJARMClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedJARMClient) GetEncryptionEnc() (enc string) {
 	return r.GetAuthorizationEncryptedResponseEnc()
 }
 
-func (r *decoratorJARMClient) IsClientSigned() (is bool) {
+func (r *decoratedJARMClient) IsClientSigned() (is bool) {
 	return false
 }
 
@@ -299,34 +314,34 @@ type UserInfoClient interface {
 	// When userinfo_encrypted_response_enc is included, userinfo_encrypted_response_alg MUST also be provided.
 	GetUserinfoEncryptedResponseEnc() (enc string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorUserInfoClient struct {
+type decoratedUserInfoClient struct {
 	UserInfoClient
 }
 
-func (r *decoratorUserInfoClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedUserInfoClient) GetSignatureKeyID() (kid string) {
 	return r.GetUserinfoSignedResponseKeyID()
 }
 
-func (r *decoratorUserInfoClient) GetSignatureAlg() (alg string) {
+func (r *decoratedUserInfoClient) GetSignatureAlg() (alg string) {
 	return r.GetUserinfoSignedResponseAlg()
 }
 
-func (r *decoratorUserInfoClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedUserInfoClient) GetEncryptionKeyID() (kid string) {
 	return r.GetUserinfoEncryptedResponseKeyID()
 }
 
-func (r *decoratorUserInfoClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedUserInfoClient) GetEncryptionAlg() (alg string) {
 	return r.GetUserinfoEncryptedResponseAlg()
 }
 
-func (r *decoratorUserInfoClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedUserInfoClient) GetEncryptionEnc() (enc string) {
 	return r.GetUserinfoEncryptedResponseEnc()
 }
 
-func (r *decoratorUserInfoClient) IsClientSigned() (is bool) {
+func (r *decoratedUserInfoClient) IsClientSigned() (is bool) {
 	return false
 }
 
@@ -359,34 +374,34 @@ type JWTProfileAccessTokenClient interface {
 	// MUST NOT be specified without setting access_token_encrypted_response_alg.
 	GetAccessTokenEncryptedResponseEnc() (alg string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorJWTProfileAccessTokenClient struct {
+type decoratedJWTProfileAccessTokenClient struct {
 	JWTProfileAccessTokenClient
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetSignatureKeyID() (kid string) {
 	return r.GetAccessTokenSignedResponseKeyID()
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetSignatureAlg() (alg string) {
 	return r.GetAccessTokenSignedResponseAlg()
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetEncryptionKeyID() (kid string) {
 	return r.GetAccessTokenEncryptedResponseKeyID()
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetEncryptionAlg() (alg string) {
 	return r.GetAccessTokenEncryptedResponseAlg()
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetEncryptionEnc() (enc string) {
 	return r.GetAccessTokenEncryptedResponseEnc()
 }
 
-func (r *decoratorJWTProfileAccessTokenClient) IsClientSigned() (is bool) {
+func (r *decoratedJWTProfileAccessTokenClient) IsClientSigned() (is bool) {
 	return false
 }
 
@@ -421,33 +436,33 @@ type IntrospectionClient interface {
 	// be specified without setting introspection_encrypted_response_alg.
 	GetIntrospectionEncryptedResponseEnc() (enc string)
 
-	JWKClient
+	BaseClient
 }
 
-type decoratorIntrospectionClient struct {
+type decoratedIntrospectionClient struct {
 	IntrospectionClient
 }
 
-func (r *decoratorIntrospectionClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedIntrospectionClient) GetSignatureKeyID() (kid string) {
 	return r.GetIntrospectionSignedResponseKeyID()
 }
 
-func (r *decoratorIntrospectionClient) GetSignatureAlg() (alg string) {
+func (r *decoratedIntrospectionClient) GetSignatureAlg() (alg string) {
 	return r.GetIntrospectionSignedResponseAlg()
 }
 
-func (r *decoratorIntrospectionClient) GetEncryptionKeyID() (kid string) {
+func (r *decoratedIntrospectionClient) GetEncryptionKeyID() (kid string) {
 	return r.GetIntrospectionEncryptedResponseKeyID()
 }
 
-func (r *decoratorIntrospectionClient) GetEncryptionAlg() (alg string) {
+func (r *decoratedIntrospectionClient) GetEncryptionAlg() (alg string) {
 	return r.GetIntrospectionEncryptedResponseAlg()
 }
 
-func (r *decoratorIntrospectionClient) GetEncryptionEnc() (enc string) {
+func (r *decoratedIntrospectionClient) GetEncryptionEnc() (enc string) {
 	return r.GetIntrospectionEncryptedResponseEnc()
 }
 
-func (r *decoratorIntrospectionClient) IsClientSigned() (is bool) {
+func (r *decoratedIntrospectionClient) IsClientSigned() (is bool) {
 	return false
 }

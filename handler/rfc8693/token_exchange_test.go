@@ -30,12 +30,6 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 	store := storage.NewExampleStore()
 	jwtName := "urn:custom:jwt"
 
-	jwtSigner := &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (any, error) {
-			return key, nil
-		},
-	}
-
 	customJWTType := &JWTType{
 		Name: jwtName,
 		JWTValidationConfig: JWTValidationConfig{
@@ -70,6 +64,11 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
 	}
 
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
 	coreStrategy := &hoauth2.HMACCoreStrategy{
 		Enigma: &hmac.HMACStrategy{Config: config},
 		Config: config,
@@ -93,10 +92,9 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 
 	customJWTHandler := &CustomJWTTypeHandler{
 		Config: config,
-		JWTStrategy: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
 		Storage: store,
 	}
@@ -142,7 +140,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 					Client: store.Clients["my-client"],
 					Form: url.Values{
 						"subject_token_type": []string{jwtName},
-						"subject_token": []string{createJWT(context.Background(), jwtSigner, jwt.MapClaims{
+						"subject_token": []string{createJWT(context.Background(), store.Clients["my-client"], strategy, jwt.MapClaims{
 							"subject": "peter_for_jwt",
 							"jti":     uuid.New(),
 							"iss":     "https://customory.com",
@@ -267,8 +265,9 @@ func createAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, s
 	return token
 }
 
-func createJWT(ctx context.Context, signer jwt.Signer, claims jwt.MapClaims) string {
-	token, _, err := signer.Generate(ctx, claims, &jwt.Headers{})
+func createJWT(ctx context.Context, client any, strategy jwt.Strategy, claims jwt.MapClaims) string {
+	token, _, err := strategy.Encode(ctx, jwt.WithClaims(claims), jwt.WithIDTokenClient(client))
+
 	if err != nil {
 		panic(err.Error())
 	}

@@ -57,7 +57,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	var parsed *jwt.JSONWebToken
 
 	if parsed, err = jwt.ParseSigned(tokenString, algs); err != nil {
-		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, text: err.Error()}
+		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, Inner: err}
 	}
 
 	// fill unverified claims
@@ -68,7 +68,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
 	// then with the returned key, the claims gets verified.
 	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
+		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
 
 	// creates an unsafe token
@@ -190,6 +190,7 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 	return header
 }
 
+// SetJWS sets the JWS output values.
 func (t *Token) SetJWS(header Mapper, claims MapClaims, alg jose.SignatureAlgorithm) {
 	assign(t.Header, header.ToMap())
 
@@ -198,6 +199,7 @@ func (t *Token) SetJWS(header Mapper, claims MapClaims, alg jose.SignatureAlgori
 	t.Claims = claims
 }
 
+// SetJWE sets the JWE output values.
 func (t *Token) SetJWE(header Mapper, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
 	assign(t.HeaderJWE, header.ToMap())
 
@@ -206,18 +208,52 @@ func (t *Token) SetJWE(header Mapper, alg jose.KeyAlgorithm, enc jose.ContentEnc
 	t.CompressionAlgorithm = zip
 }
 
-func (t *Token) CompactEncrypted(skey, ekey any) (tokenString, signature string, err error) {
+// AssignJWE assigns values derived from the JWE decryption process to the Token.
+func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
+	if jwe == nil {
+		return
+	}
+
+	t.HeaderJWE = map[string]any{
+		consts.JSONWebTokenHeaderAlgorithm: jwe.Header.Algorithm,
+	}
+
+	if jwe.Header.KeyID != "" {
+		t.HeaderJWE[consts.JSONWebTokenHeaderKeyIdentifier] = jwe.Header.KeyID
+	}
+
+	for header, value := range jwe.Header.ExtraHeaders {
+		h := string(header)
+
+		t.HeaderJWE[h] = value
+
+		switch h {
+		case consts.JSONWebTokenHeaderEncryptionAlgorithm:
+			if v, ok := value.(string); ok {
+				t.ContentEncryption = jose.ContentEncryption(v)
+			}
+		case consts.JSONWebTokenHeaderCompressionAlgorithm:
+			if v, ok := value.(string); ok {
+				t.CompressionAlgorithm = jose.CompressionAlgorithm(v)
+			}
+		}
+	}
+
+	t.KeyAlgorithm = jose.KeyAlgorithm(jwe.Header.Algorithm)
+}
+
+func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature string, err error) {
 	var (
 		signed string
 	)
 
-	if signed, signature, err = t.CompactSigned(skey); err != nil {
+	if signed, signature, err = t.CompactSigned(keySig); err != nil {
 		return "", "", err
 	}
 
 	rcpt := jose.Recipient{
 		Algorithm: t.KeyAlgorithm,
-		Key:       ekey,
+		Key:       keyEnc,
 	}
 
 	opts := &jose.EncrypterOptions{

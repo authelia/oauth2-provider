@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -17,7 +18,11 @@ type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
 
+	// GetClientSecret returns the ClientSecret.
 	GetClientSecret() (secret ClientSecret)
+
+	// GetClientSecretPlainText returns the ClientSecret as plaintext if available.
+	GetClientSecretPlainText() (secret []byte, err error)
 
 	// GetRedirectURIs returns the client's allowed redirect URIs.
 	GetRedirectURIs() []string
@@ -453,6 +458,14 @@ func (c *DefaultClient) GetRedirectURIs() []string {
 
 func (c *DefaultClient) GetClientSecret() (secret ClientSecret) {
 	return c.ClientSecret
+}
+
+func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, err error) {
+	if c.ClientSecret == nil || !c.ClientSecret.Valid() {
+		return nil, fmt.Errorf("this secret doesn't support plaintext")
+	}
+
+	return c.ClientSecret.GetPlainTextValue()
 }
 
 func (c *DefaultClient) GetRotatedClientSecrets() (secrets []ClientSecret) {

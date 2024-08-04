@@ -54,8 +54,8 @@ type Config struct {
 	// IntrospectionIssuer is the issuer to be used when generating signed introspection responses.
 	IntrospectionIssuer string
 
-	// IntrospectionJWTResponseSigner is the signer for Introspection Responses. Has no default.
-	IntrospectionJWTResponseSigner jwt.Signer
+	// IntrospectionJWTResponseStrategy is the signer for Introspection Responses. Has no default.
+	IntrospectionJWTResponseStrategy jwt.Strategy
 
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
@@ -175,8 +175,11 @@ type Config struct {
 	// JWT Secured Authorization Response Mode. Defaults to 10 minutes.
 	JWTSecuredAuthorizeResponseModeLifespan time.Duration
 
-	// JWTSecuredAuthorizeResponseModeSigner is the signer for JWT Secured Authorization Response Mode. Has no default.
-	JWTSecuredAuthorizeResponseModeSigner jwt.Signer
+	// JWTSecuredAuthorizeResponseModeStrategy is the signer for JWT Secured Authorization Response Mode. Has no default.
+	JWTSecuredAuthorizeResponseModeStrategy jwt.Strategy
+
+	// JWTStrategy handles less specific jwt.Strategy cases.
+	JWTStrategy jwt.Strategy
 
 	// EnforceJWTProfileAccessTokens forces the issuer to return JWT Profile Access Tokens to all clients.
 	EnforceJWTProfileAccessTokens bool
@@ -333,8 +336,8 @@ func (c *Config) GetIntrospectionIssuer(ctx context.Context) string {
 	return c.IntrospectionIssuer
 }
 
-func (c *Config) GetIntrospectionJWTResponseSigner(ctx context.Context) jwt.Signer {
-	return c.IntrospectionJWTResponseSigner
+func (c *Config) GetIntrospectionJWTResponseStrategy(ctx context.Context) jwt.Strategy {
+	return c.IntrospectionJWTResponseStrategy
 }
 
 // GetGrantTypeJWTBearerIssuedDateOptional returns the GrantTypeJWTBearerIssuedDateOptional field.
@@ -389,8 +392,12 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) s
 	return c.IDTokenIssuer
 }
 
-func (c *Config) GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer {
-	return c.JWTSecuredAuthorizeResponseModeSigner
+func (c *Config) GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy {
+	return c.JWTSecuredAuthorizeResponseModeStrategy
+}
+
+func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
+	return c.JWTStrategy
 }
 
 func (c *Config) GetEnforceJWTProfileAccessTokens(ctx context.Context) (enable bool) {
@@ -628,7 +635,7 @@ var (
 	_ AccessTokenIssuerProvider                       = (*Config)(nil)
 	_ JWTScopeFieldProvider                           = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeIssuerProvider   = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeSignerProvider   = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeStrategyProvider = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeLifespanProvider = (*Config)(nil)
 	_ JWTProfileAccessTokensProvider                  = (*Config)(nil)
 	_ AllowedPromptsProvider                          = (*Config)(nil)
@@ -666,5 +673,5 @@ var (
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider  = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
 	_ IntrospectionIssuerProvider                     = (*Config)(nil)
-	_ IntrospectionJWTResponseSignerProvider          = (*Config)(nil)
+	_ IntrospectionJWTResponseStrategyProvider        = (*Config)(nil)
 )

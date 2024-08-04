@@ -4,10 +4,9 @@
 package compose
 
 import (
-	"context"
-
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/jwt"
+	"context"
 )
 
 type Factory func(config oauth2.Configurator, storage any, strategy any) any
@@ -66,16 +65,23 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 
 // ComposeAllEnabled returns a oauth2 instance with all OAuth2 and OpenID Connect handlers enabled.
 func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provider {
-	keyGetter := func(context.Context, jwt.Mapper) (any, error) {
+	keyGetter := func(context.Context) (any, error) {
 		return key, nil
 	}
+
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
 	return Compose(
 		config,
 		storage,
 		&CommonStrategy{
 			CoreStrategy:               NewOAuth2HMACStrategy(config),
-			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, config),
-			Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
+			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
+			Strategy:                   strategy,
+			//Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		},
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,

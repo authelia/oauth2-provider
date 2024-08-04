@@ -1,9 +1,11 @@
 package consts
 
 const (
-	JSONWebTokenHeaderKeyIdentifier       = "kid"
-	JSONWebTokenHeaderAlgorithm           = "alg"
-	JSONWebTokenHeaderEncryptionAlgorithm = "enc"
+	JSONWebTokenHeaderKeyIdentifier        = "kid"
+	JSONWebTokenHeaderAlgorithm            = "alg"
+	JSONWebTokenHeaderEncryptionAlgorithm  = valueEnc
+	JSONWebTokenHeaderCompressionAlgorithm = "zip"
+	JSONWebTokenHeaderPBES2Count           = "p2c"
 
 	JSONWebTokenHeaderUse         = "use"
 	JSONWebTokenHeaderType        = "typ"

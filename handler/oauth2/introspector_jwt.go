@@ -14,16 +14,16 @@ import (
 )
 
 type StatelessJWTValidator struct {
-	jwt.Signer
+	jwt.Strategy
 	Config interface {
 		oauth2.ScopeStrategyProvider
 	}
 }
 
-func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, accessRequest oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
+func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, requester oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	var token *jwt.Token
 
-	if token, err = validateJWT(ctx, v.Signer, tokenString); err != nil {
+	if token, err = validateJWT(ctx, v.Strategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
 		return "", err
 	}
 
@@ -31,13 +31,13 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
 	}
 
-	requester := AccessTokenJWTToRequest(token)
+	r := AccessTokenJWTToRequest(token)
 
-	if err = matchScopes(v.Config.GetScopeStrategy(ctx), requester.GetGrantedScopes(), scopes); err != nil {
+	if err = matchScopes(v.Config.GetScopeStrategy(ctx), r.GetGrantedScopes(), scopes); err != nil {
 		return oauth2.AccessToken, err
 	}
 
-	accessRequest.Merge(requester)
+	requester.Merge(r)
 
 	return oauth2.AccessToken, nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"github.com/pkg/errors"
+	"regexp"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
@@ -11,37 +13,94 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+var (
+	reSignedJWT    = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
+	reEncryptedJWT = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
+)
+
+func IsSignedJWT(tokenString string) (signed bool) {
+	return reSignedJWT.MatchString(tokenString)
+}
+
+func IsEncryptedJWT(tokenString string) (encrypted bool) {
+	return reEncryptedJWT.MatchString(tokenString)
+}
+
+func IsEncryptedJWTClientSecretAlg(alg string) (csa bool) {
+	switch a := jose.KeyAlgorithm(alg); a {
+	case jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW:
+		return true
+	default:
+		return IsEncryptedJWTPBA(a)
+	}
+}
+
+func IsEncryptedJWTPBA(alg jose.KeyAlgorithm) (pba bool) {
+	switch alg {
+	case jose.PBES2_HS256_A128KW, jose.PBES2_HS384_A192KW, jose.PBES2_HS512_A256KW:
+		return true
+	default:
+		return false
+	}
+}
+
 func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
-	if len(headers) == 0 {
+	switch len(headers) {
+	case 1:
+		break
+	case 0:
 		return "", "", fmt.Errorf("jws header is missing")
+	default:
+		return "", "", fmt.Errorf("jws header is malformed")
 	}
 
 	if headers[0].KeyID == "" {
-		return "", "", fmt.Errorf("jws header value 'kid' is missing")
+		return "", "", fmt.Errorf("jws header 'kid' value is missing or empty")
 	}
 
 	if headers[0].Algorithm == "" {
-		return "", "", fmt.Errorf("jws header value 'alg' is missing")
+		return "", "", fmt.Errorf("jws header 'alg' value is missing or empty")
 	}
 
 	if headers[0].JSONWebKey != nil {
-		return "", "", fmt.Errorf("jws header value 'jwk' is present but not supported")
+		return "", "", fmt.Errorf("jws header 'jwk' value is present but not supported")
 	}
 
 	return headers[0].KeyID, headers[0].Algorithm, nil
 }
 
-func headerValidateJWE(headers []jose.Header) (kid, alg, enc string, err error) {
-	if len(headers) == 0 {
-		return "", "", "", fmt.Errorf("jwe header is missing")
+func headerValidateJWSNested(headers []jose.Header, cty string) (err error) {
+	switch len(headers) {
+	case 1:
+		break
+	case 0:
+		return fmt.Errorf("jws header is missing")
+	default:
+		return fmt.Errorf("jws header is malformed")
 	}
 
-	if headers[0].KeyID == "" {
-		return "", "", "", fmt.Errorf("jwe header value 'kid' is missing or empty")
+	typ, ok := headers[0].ExtraHeaders[consts.JSONWebTokenHeaderType]
+	if !ok {
+		return fmt.Errorf("jws header 'typ' value is missing")
 	}
 
-	if headers[0].Algorithm == "" {
-		return "", "", "", fmt.Errorf("jwe header value 'alg' is missing or empty")
+	switch typ {
+	case "":
+		return fmt.Errorf("jws header 'typ' value is empty")
+	case cty:
+		return nil
+	default:
+		return fmt.Errorf("jws header 'typ' value '%s' is invalid: jwe header 'cty' value '%s' should match the jws header 'typ' value", typ, cty)
+	}
+}
+
+func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error) {
+	if header.KeyID == "" && !IsEncryptedJWTClientSecretAlg(header.Algorithm) {
+		return "", "", "", "", fmt.Errorf("jwe header 'kid' value is missing or empty")
+	}
+
+	if header.Algorithm == "" {
+		return "", "", "", "", fmt.Errorf("jwe header 'alg' value is missing or empty")
 	}
 
 	var (
@@ -49,48 +108,59 @@ func headerValidateJWE(headers []jose.Header) (kid, alg, enc string, err error) 
 		ok    bool
 	)
 
-	if value, ok = headers[0].ExtraHeaders[consts.JSONWebTokenHeaderEncryptionAlgorithm]; ok {
+	if IsEncryptedJWTPBA(jose.KeyAlgorithm(header.Algorithm)) {
+		if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderPBES2Count]; ok {
+			switch p2c := value.(type) {
+			case float64:
+				if p2c > 5000000 {
+					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': more than 5,000,000", int(p2c))
+				} else if p2c < 200000 {
+					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': less than 200,000", int(p2c))
+				}
+
+			default:
+				return "", "", "", "", fmt.Errorf("jwe header 'p2c' value has invalid type %T", p2c)
+			}
+		}
+	}
+
+	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderEncryptionAlgorithm]; ok {
 		switch encv := value.(type) {
 		case string:
-			if enc != "" {
+			if encv != "" {
+				enc = encv
+
 				break
 			}
 
-			return "", "", "", fmt.Errorf("jwe header value 'enc' has empty value")
+			return "", "", "", "", fmt.Errorf("jwe header 'enc' value is empty")
 		default:
-			return "", "", "", fmt.Errorf("jwe header value 'enc' has invalid type %T", encv)
+			return "", "", "", "", fmt.Errorf("jwe header 'enc' value has invalid type %T", encv)
 		}
 	}
 
-	if value, ok = headers[0].ExtraHeaders[consts.JSONWebTokenHeaderContentType]; !ok {
-		return "", "", "", fmt.Errorf("jwe header value 'cty' is missing")
+	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; !ok {
+		return "", "", "", "", fmt.Errorf("jwe header 'cty' value is missing")
 	} else {
-		switch cty := value.(type) {
+		switch ctyv := value.(type) {
 		case string:
-			switch cty {
+			switch ctyv {
 			case consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeAccessToken, consts.JSONWebTokenTypeAccessTokenAlternative, consts.JSONWebTokenTypeTokenIntrospection:
+				cty = ctyv
 				break
 			default:
-				return "", "", "", fmt.Errorf("jwe header value 'cty' has invalid value '%s'", cty)
+				return "", "", "", "", fmt.Errorf("jwe header 'cty' value '%s' is invalid", cty)
 			}
 		default:
-			return "", "", "", fmt.Errorf("jwe header value 'cty' has invalid type %T", cty)
+			return "", "", "", "", fmt.Errorf("jwe header 'cty' value has invalid type %T", cty)
 		}
 	}
 
-	if headers[0].JSONWebKey != nil {
-		return "", "", "", fmt.Errorf("jwe header value 'jwk' is present but not supported")
+	if header.JSONWebKey != nil {
+		return "", "", "", "", fmt.Errorf("jwe header 'jwk' value is present but not supported")
 	}
 
-	return headers[0].KeyID, headers[0].Algorithm, enc, nil
-}
-
-func IsSignedJWT(tokenString string) (signed bool) {
-	return strings.Count(tokenString, ".") == 2
-}
-
-func IsEncryptedJWT(tokenString string) (encrypted bool) {
-	return strings.Count(tokenString, ".") == 4
+	return header.KeyID, header.Algorithm, enc, cty, nil
 }
 
 // PrivateKey properly describes crypto.PrivateKey.
@@ -111,13 +181,13 @@ func (e *JWKLookupError) Error() string {
 	return fmt.Sprintf("error occurrered looking up JSON web key: %s", e.Description)
 }
 
-func FindClientPublicJWK(ctx context.Context, client JWKClient, fetcher JWKSFetcherStrategy, kid, alg, use string) (key *jose.JSONWebKey, err error) {
+func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string) (key *jose.JSONWebKey, err error) {
 	var (
 		keys *jose.JSONWebKeySet
 	)
 
 	if keys = client.GetJSONWebKeys(); keys != nil {
-		return findKey(kid, alg, use, keys, true)
+		return SearchJWKS(keys, kid, alg, use, true)
 	}
 
 	if location := client.GetJSONWebKeysURI(); len(location) > 0 {
@@ -125,7 +195,7 @@ func FindClientPublicJWK(ctx context.Context, client JWKClient, fetcher JWKSFetc
 			return nil, err
 		}
 
-		if key, err = findKey(kid, alg, use, keys, true); err == nil {
+		if key, err = SearchJWKS(keys, kid, alg, use, true); err == nil {
 			return key, nil
 		}
 
@@ -133,20 +203,20 @@ func FindClientPublicJWK(ctx context.Context, client JWKClient, fetcher JWKSFetc
 			return nil, err
 		}
 
-		return findKey(kid, alg, use, keys, true)
+		return SearchJWKS(keys, kid, alg, use, true)
 	}
 
 	return nil, ErrNotRegistered
 }
 
-func findKey(kid, alg, use string, jwks *jose.JSONWebKeySet, requireKID bool) (key *jose.JSONWebKey, err error) {
+func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
 	if len(jwks.Keys) == 0 {
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}
 	}
 
 	var keys []jose.JSONWebKey
 
-	if kid == "" && !requireKID {
+	if kid == "" && !strict {
 		keys = jwks.Keys
 	} else {
 		keys = jwks.Key(kid)
@@ -169,4 +239,57 @@ func findKey(kid, alg, use string, jwks *jose.JSONWebKeySet, requireKID bool) (k
 	}
 
 	return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+}
+
+func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
+	var secret []byte
+
+	if secret, err = client.GetClientSecretPlainText(); err != nil {
+		return nil, err
+	}
+
+	return &jose.JSONWebKey{
+		Key:       secret,
+		KeyID:     kid,
+		Algorithm: alg,
+		Use:       use,
+	}, nil
+}
+
+func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
+	token := New()
+
+	token.SetJWS(headers, claims, jose.SignatureAlgorithm(key.Algorithm))
+
+	return token.CompactSigned(key)
+}
+
+func encodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+	token := New()
+
+	token.SetJWS(headers, claims, jose.SignatureAlgorithm(keySig.Algorithm))
+	token.SetJWE(headersJWE, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
+
+	return token.CompactEncrypted(keySig, keyEnc)
+}
+
+func getJWTSignature(tokenString string) (signature string, err error) {
+	switch segments := strings.SplitN(tokenString, ".", 5); len(segments) {
+	case 5:
+		return "", errors.WithStack(errors.New("invalid token: the token is probably encrypted"))
+	case 3:
+		return segments[2], nil
+	default:
+		return "", errors.WithStack(fmt.Errorf("invalid token: the format is unknown"))
+	}
+}
+
+func assign(a, b map[string]any) map[string]any {
+	for k, w := range b {
+		if _, ok := a[k]; ok {
+			continue
+		}
+		a[k] = w
+	}
+	return a
 }

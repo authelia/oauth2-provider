@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto"
 	"fmt"
-	"github.com/pkg/errors"
 	"regexp"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -18,24 +18,28 @@ var (
 	reEncryptedJWT = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
 )
 
+// IsSignedJWT returns true if a given token string meets the basic criteria of a compact serialized signed JWT.
 func IsSignedJWT(tokenString string) (signed bool) {
 	return reSignedJWT.MatchString(tokenString)
 }
 
+// IsEncryptedJWT returns true if a given token string meets the basic criteria of a compact serialized encrypted JWT.
 func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }
 
+// IsEncryptedJWTClientSecretAlg returns true if a given alg string is a client secret based algorithm i.e. symmetric.
 func IsEncryptedJWTClientSecretAlg(alg string) (csa bool) {
 	switch a := jose.KeyAlgorithm(alg); a {
 	case jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW:
 		return true
 	default:
-		return IsEncryptedJWTPBA(a)
+		return IsEncryptedJWTPasswordBasedAlg(a)
 	}
 }
 
-func IsEncryptedJWTPBA(alg jose.KeyAlgorithm) (pba bool) {
+// IsEncryptedJWTPasswordBasedAlg returns true if a given jose.KeyAlgorithm is a Password Based Algorithm.
+func IsEncryptedJWTPasswordBasedAlg(alg jose.KeyAlgorithm) (pba bool) {
 	switch alg {
 	case jose.PBES2_HS256_A128KW, jose.PBES2_HS384_A192KW, jose.PBES2_HS512_A256KW:
 		return true
@@ -108,7 +112,7 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 		ok    bool
 	)
 
-	if IsEncryptedJWTPBA(jose.KeyAlgorithm(header.Algorithm)) {
+	if IsEncryptedJWTPasswordBasedAlg(jose.KeyAlgorithm(header.Algorithm)) {
 		if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderPBES2Count]; ok {
 			switch p2c := value.(type) {
 			case float64:
@@ -181,13 +185,20 @@ func (e *JWKLookupError) Error() string {
 	return fmt.Sprintf("error occurrered looking up JSON web key: %s", e.Description)
 }
 
-func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string) (key *jose.JSONWebKey, err error) {
+// FindClientPublicJWK given a BaseClient, JWKSFetcherStrategy, and search parameters will return a *jose.JSONWebKey on
+// a valid match. The *jose.JSONWebKey is guaranteed to match the alg and use values, and if strict is true it must
+// match the kid value as well.
+func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
+	if strict && kid == "" {
+		return nil, &JWKLookupError{Description: "The JSON Web Key strict search was attempted without a kid but the strict search doesn't permit this."}
+	}
+
 	var (
 		keys *jose.JSONWebKeySet
 	)
 
 	if keys = client.GetJSONWebKeys(); keys != nil {
-		return SearchJWKS(keys, kid, alg, use, true)
+		return SearchJWKS(keys, kid, alg, use, strict)
 	}
 
 	if location := client.GetJSONWebKeysURI(); len(location) > 0 {
@@ -195,7 +206,7 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 			return nil, err
 		}
 
-		if key, err = SearchJWKS(keys, kid, alg, use, true); err == nil {
+		if key, err = SearchJWKS(keys, kid, alg, use, strict); err == nil {
 			return key, nil
 		}
 
@@ -203,10 +214,10 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 			return nil, err
 		}
 
-		return SearchJWKS(keys, kid, alg, use, true)
+		return SearchJWKS(keys, kid, alg, use, strict)
 	}
 
-	return nil, ErrNotRegistered
+	return nil, &JWKLookupError{Description: "No JWKs have been registered for the client."}
 }
 
 func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
@@ -214,9 +225,13 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}
 	}
 
+	if strict && kid == "" {
+		return nil, &JWKLookupError{Description: "The JSON Web Key strict search was attempted without a kid but the strict search doesn't permit this."}
+	}
+
 	var keys []jose.JSONWebKey
 
-	if kid == "" && !strict {
+	if kid == "" {
 		keys = jwks.Keys
 	} else {
 		keys = jwks.Key(kid)

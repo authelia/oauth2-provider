@@ -134,6 +134,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 // It provides method signatures compatible with jwt-go but implemented
 // using go-json
 type Token struct {
+	KeyID                string
 	SignatureAlgorithm   jose.SignatureAlgorithm   // alg (JWS)
 	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE)
 	ContentEncryption    jose.ContentEncryption    // enc (JWE)
@@ -401,7 +402,9 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	}
 	if h.KeyID != "" {
 		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = h.KeyID
+		token.KeyID = h.KeyID
 	}
+
 	for k, v := range h.ExtraHeaders {
 		token.Header[string(k)] = v
 	}

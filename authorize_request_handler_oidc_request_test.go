@@ -30,9 +30,10 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	jwks := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &key.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: string(jose.RS256),
+				Key:       &key.PublicKey,
 			},
 		},
 	}
@@ -371,7 +372,14 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 				},
 			}
 
-			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com"}}
+			config := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com"}
+
+			strategy := &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.MustGenDefaultIssuer(),
+			}
+
+			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}
 
 			err = provider.authorizeRequestParametersFromOpenIDConnectRequestObject(context.Background(), r, tc.par)
 			if tc.err != nil {

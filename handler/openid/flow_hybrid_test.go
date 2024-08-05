@@ -18,7 +18,6 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -432,28 +431,6 @@ var hmacStrategy = &hoauth2.HMACCoreStrategy{
 }
 
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
-	var idStrategy = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return gen.MustRSAKey(), nil
-			},
-		},
-		Config: &oauth2.Config{
-			MinParameterEntropy: minParameterEntropy,
-		},
-	}
-
-	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			},
-		},
-		Config: &oauth2.Config{
-			MinParameterEntropy: minParameterEntropy,
-		},
-	}
-
 	config := &oauth2.Config{
 		ScopeStrategy:         oauth2.HierarchicScopeStrategy,
 		MinParameterEntropy:   minParameterEntropy,
@@ -461,6 +438,27 @@ func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybrid
 		AuthorizeCodeLifespan: time.Hour,
 		RefreshTokenLifespan:  time.Hour,
 	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	var idStrategy = &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.MustGenDefaultIssuer(),
+		},
+		Config: config,
+	}
+
+	var j = &DefaultStrategy{
+		Strategy: jwtStrategy,
+		Config: &oauth2.Config{
+			MinParameterEntropy: minParameterEntropy,
+		},
+	}
+
 	return OpenIDConnectHybridHandler{
 		AuthorizeExplicitGrantHandler: &hoauth2.AuthorizeExplicitGrantHandler{
 			AuthorizeCodeStrategy: hmacStrategy,
@@ -479,7 +477,7 @@ func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybrid
 			IDTokenStrategy: idStrategy,
 		},
 		Config:                        config,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		OpenIDConnectRequestStorage:   storage.NewMemoryStore(),
 	}
 }

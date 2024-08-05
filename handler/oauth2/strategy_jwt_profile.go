@@ -18,7 +18,8 @@ import (
 
 // JWTProfileCoreStrategy is a JWT RS256 strategy.
 type JWTProfileCoreStrategy struct {
-	jwt.Signer
+	jwt.Strategy
+
 	HMACCoreStrategy *HMACCoreStrategy
 	Config           interface {
 		oauth2.AccessTokenIssuerProvider
@@ -56,7 +57,7 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 
 func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, requester oauth2.Requester, tokenString string) (err error) {
 	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
-		_, err = validateJWT(ctx, s.Signer, tokenString)
+		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(requester.GetClient()), tokenString)
 
 		return
 	}
@@ -170,11 +171,11 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 			s.Config.GetJWTScopeField(ctx),
 		)
 
-	return s.Signer.Generate(ctx, claims.ToMapClaims(), header)
+	return s.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }
 
-func validateJWT(ctx context.Context, jwtStrategy jwt.Signer, token string) (t *jwt.Token, err error) {
-	t, err = jwtStrategy.Decode(ctx, token)
+func validateJWT(ctx context.Context, jwtStrategy jwt.Strategy, client jwt.Client, token string) (t *jwt.Token, err error) {
+	t, err = jwtStrategy.Decode(ctx, token, jwt.WithClient(client))
 	if err == nil {
 		err = t.Claims.Valid()
 		return

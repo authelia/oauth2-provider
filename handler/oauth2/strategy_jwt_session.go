@@ -9,6 +9,7 @@ import (
 	"github.com/mohae/deepcopy"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -42,11 +43,11 @@ func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	if j.JWTHeader == nil {
 		j.JWTHeader = &jwt.Headers{
 			Extra: map[string]any{
-				jwt.JWTHeaderKeyValueType: jwt.JWTHeaderTypeValueAccessTokenJWT,
+				consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken,
 			},
 		}
-	} else if j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] == nil {
-		j.JWTHeader.Extra[jwt.JWTHeaderKeyValueType] = jwt.JWTHeaderTypeValueAccessTokenJWT
+	} else if j.JWTHeader.Extra[consts.JSONWebTokenHeaderType] == nil {
+		j.JWTHeader.Extra[consts.JSONWebTokenHeaderType] = consts.JSONWebTokenTypeAccessToken
 	}
 
 	return j.JWTHeader

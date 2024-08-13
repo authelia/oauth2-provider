@@ -1,8 +1,8 @@
 module authelia.com/provider/oauth2
 
-go 1.22
+go 1.23
 
-toolchain go1.22.6
+toolchain go1.23.0
 
 require (
 	github.com/dgraph-io/ristretto v0.1.1
@@ -15,7 +15,7 @@ require (
 	github.com/parnurzeal/gorequest v0.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
-	github.com/tidwall/gjson v1.17.1
+	github.com/tidwall/gjson v1.17.3
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.26.0
 	golang.org/x/net v0.28.0

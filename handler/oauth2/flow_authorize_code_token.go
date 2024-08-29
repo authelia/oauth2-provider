@@ -56,7 +56,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))
 	case errors.Is(err, oauth2.ErrNotFound):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The authorization code session for the given authorization code was not found."))
 	case err != nil:
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -84,9 +84,17 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// "redirect_uri" parameter was included in the initial authorization
 	// request as described in Section 4.1.1, and if included ensure that
 	// their values are identical.
-	forcedRedirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
-	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
+	redirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
+
+	switch redirectURI {
+	case "":
+		if authorizeRequest.GetRequestedScopes().Has(consts.ScopeOpenID) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
+		}
+	case request.GetRequestForm().Get(consts.FormParameterRedirectURI):
+		break
+	default:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request.").WithDebugf("The 'redirect_uri' parameter value '%s' utilized in the Access Request does not match the original 'redirect_uri' parameter value '%s' requested in the Authorize Request which is not permitted.", request.GetRequestForm().Get(consts.FormParameterRedirectURI), redirectURI))
 	}
 
 	// Checking of POST client_id skipped, because:

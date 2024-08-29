@@ -237,204 +237,280 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 	}
 }
 
-func TestAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
-	for k, strategy := range map[string]CoreStrategy{
-		"hmac": &hmacshaStrategy,
-	} {
-		t.Run("strategy="+k, func(t *testing.T) {
-			store := storage.NewMemoryStore()
+func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) {
+	strategy := &hmacshaStrategy
 
-			h := AuthorizeExplicitGrantHandler{
-				CoreStorage:            store,
-				AuthorizeCodeStrategy:  &hmacshaStrategy,
-				TokenRevocationStorage: store,
+	testCases := []struct {
+		name     string
+		r        *oauth2.AccessRequest
+		ar       *oauth2.AuthorizeRequest
+		setup    func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest)
+		check    func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest)
+		expected string
+	}{
+		{
+			"ShouldPassOAuth20",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form:        url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+					Form:           url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session:        &oauth2.DefaultSession{},
+					RequestedScope: oauth2.Arguments{"a", "b"},
+					RequestedAt:    time.Now().UTC(),
+				},
+			},
+			nil,
+			nil,
+			"",
+		},
+		{
+			"ShouldPassOpenIDConnect",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form:        url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+					Form:           url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session:        &oauth2.DefaultSession{},
+					RequestedScope: oauth2.Arguments{consts.ScopeOpenID, "a", "b"},
+					RequestedAt:    time.Now().UTC(),
+				},
+			},
+			nil,
+			nil,
+			"",
+		},
+		{
+			"ShouldPass",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form:        url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
+					Session:        &oauth2.DefaultSession{},
+					RequestedScope: oauth2.Arguments{"openid"},
+					RequestedAt:    time.Now().UTC(),
+				},
+			},
+			func(t *testing.T, s CoreStorage, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
+				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
+
+				areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
+			},
+			nil,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The 'redirect_uri' parameter is required when using OpenID Connect 1.0.",
+		},
+		{
+			"ShouldFailNotResponsible",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{"12345678"},
+			},
+			nil,
+			nil,
+			nil,
+			"The handler is not responsible for this request.",
+		},
+		{
+			"ShouldFailNotGranted",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			nil,
+			nil,
+			nil,
+			"The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'.",
+		},
+		{
+			"ShouldFailAuthCodeRetrieval",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			nil,
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
+				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+			},
+			nil,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code session for the given authorization code was not found.",
+		},
+		{
+			"ShouldFailInvalidCode",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form:        url.Values{consts.FormParameterAuthorizationCode: {"foo.bar"}},
+					Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			nil,
+			nil,
+			nil,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code session for the given authorization code was not found.",
+		},
+		{
+			"ShouldFailClientIDMismatch",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         &oauth2.DefaultClient{ID: "bar"},
+					RequestedScope: oauth2.Arguments{"a", "b"},
+				},
+			},
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
+				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+
+				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, ar))
+			},
+			nil,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request.",
+		},
+		{
+			"ShouldFailRedirectURIPresentInAuthorizeRequestButMissingFromAccessRequest",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:  &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form:    url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
+					Session: &oauth2.DefaultSession{},
+				},
+			},
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
+				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+
+				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, ar))
+			},
+			nil,
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The 'redirect_uri' from this request does not match the one from the authorize request. The 'redirect_uri' parameter value '' utilized in the Access Request does not match the original 'redirect_uri' parameter value 'request-redir' requested in the Authorize Request which is not permitted.",
+		},
+		{
+			"ShouldFailCodeAlreadyUsed",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{"authorization_code"},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{"authorization_code"},
+					},
+					GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			nil,
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
+				r.Form.Add("code", code)
+
+				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), sig, r))
+				require.NoError(t, s.InvalidateAuthorizeCodeSession(context.TODO(), sig))
+			},
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), r.GetSession().GetExpiresAt(oauth2.AccessToken))
+				assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), r.GetSession().GetExpiresAt(oauth2.RefreshToken))
+			},
+			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code has already been used.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := storage.NewMemoryStore()
+
+			handle := AuthorizeExplicitGrantHandler{
+				CoreStorage:            s,
+				AuthorizeCodeStrategy:  strategy,
+				TokenRevocationStorage: s,
 				Config: &oauth2.Config{
 					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 					AuthorizeCodeLifespan:    time.Minute,
 				},
 			}
-			for i, c := range []struct {
-				areq        *oauth2.AccessRequest
-				authreq     *oauth2.AuthorizeRequest
-				description string
-				setup       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest)
-				check       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest)
-				expectErr   error
-			}{
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"12345678"},
-					},
-					description: "should fail because not responsible",
-					expectErr:   oauth2.ErrUnknownRequest,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					description: "should fail because client is not granted this grant type",
-					expectErr:   oauth2.ErrUnauthorizedClient,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{GrantTypes: []string{"authorization_code"}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					description: "should fail because authcode could not be retrieved (1)",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
-						require.NoError(t, err)
-						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
-					},
-					expectErr: oauth2.ErrInvalidGrant,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form:        url.Values{consts.FormParameterAuthorizationCode: {"foo.bar"}},
-							Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					description: "should fail because authcode validation failed",
-					expectErr:   oauth2.ErrInvalidGrant,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					authreq: &oauth2.AuthorizeRequest{
-						Request: oauth2.Request{
-							Client:         &oauth2.DefaultClient{ID: "bar"},
-							RequestedScope: oauth2.Arguments{"a", "b"},
-						},
-					},
-					description: "should fail because client mismatch",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
-						require.NoError(t, err)
-						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
-					},
-					expectErr: oauth2.ErrInvalidGrant,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					authreq: &oauth2.AuthorizeRequest{
-						Request: oauth2.Request{
-							Client:  &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
-							Form:    url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
-							Session: &oauth2.DefaultSession{},
-						},
-					},
-					description: "should fail because redirect uri was set during /authorize call, but not in /token call",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
-						require.NoError(t, err)
-						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+			if tc.ar != nil {
+				code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				require.NoError(t, err)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
-					},
-					expectErr: oauth2.ErrInvalidGrant,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
-							Form:        url.Values{consts.FormParameterRedirectURI: []string{"request-redir"}},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					authreq: &oauth2.AuthorizeRequest{
-						Request: oauth2.Request{
-							Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"authorization_code"}},
-							Session:        &oauth2.DefaultSession{},
-							RequestedScope: oauth2.Arguments{"a", "b"},
-							RequestedAt:    time.Now().UTC(),
-						},
-					},
-					description: "should pass",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
-						require.NoError(t, err)
-
-						areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
-					},
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"authorization_code"},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"authorization_code"},
-							},
-							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
-							Session:      &oauth2.DefaultSession{},
-							RequestedAt:  time.Now().UTC(),
-						},
-					},
-					check: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
-					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
-						require.NoError(t, err)
-						areq.Form.Add("code", code)
-
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
-						require.NoError(t, store.InvalidateAuthorizeCodeSession(context.TODO(), sig))
-					},
-					description: "should fail because code has been used already",
-					expectErr:   oauth2.ErrInvalidGrant,
-				},
-			} {
-				t.Run(fmt.Sprintf("case=%d/description=%s", i, c.description), func(t *testing.T) {
-					if c.setup != nil {
-						c.setup(t, c.areq, c.authreq)
+				if tc.r != nil {
+					if tc.r.Form == nil {
+						tc.r.Form = url.Values{}
 					}
 
-					t.Logf("Processing %+v", c.areq.Client)
+					tc.r.Form.Add("code", code)
+				}
 
-					err := h.HandleTokenEndpointRequest(context.Background(), c.areq)
-					if c.expectErr != nil {
-						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
-					} else {
-						require.NoError(t, err, "%+v", err)
-						if c.check != nil {
-							c.check(t, c.areq, c.authreq)
-						}
-					}
-				})
+				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), sig, tc.ar))
+			}
+
+			if tc.setup != nil {
+				tc.setup(t, s, tc.r, tc.ar)
+			}
+
+			err := handle.HandleTokenEndpointRequest(context.Background(), tc.r)
+			if tc.expected != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+			} else {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				if tc.check != nil {
+					tc.check(t, s, tc.r, tc.ar)
+				}
 			}
 		})
 	}

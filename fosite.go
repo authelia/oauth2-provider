@@ -184,7 +184,7 @@ type Configurator interface {
 	MessageCatalogProvider
 	FormPostHTMLTemplateProvider
 	FormPostResponseProvider
-	TokenURLProvider
+	AllowedJWTAssertionAudiencesProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider

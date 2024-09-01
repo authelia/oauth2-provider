@@ -571,7 +571,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to decode 'client_assertion' value for an unknown reason. token has invalid claims: token has invalid audience",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. Unable to validate the 'aud' claim of the 'client_assertion' value 'token-url-1', 'token-url-2' as it doesn't match any of the expected values 'token-url'.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsAreSetWithinTheClient",
@@ -697,9 +697,9 @@ func TestAuthenticateClient(t *testing.T) {
 			provider := &Fosite{
 				Store: storage.NewMemoryStore(),
 				Config: &Config{
-					JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
-					TokenURL:            "token-url",
-					HTTPClient:          retryablehttp.NewClient(),
+					JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+					AllowedJWTAssertionAudiences: []string{"token-url"},
+					HTTPClient:                   retryablehttp.NewClient(),
 				},
 			}
 
@@ -764,8 +764,8 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	provider := &Fosite{
 		Store: store,
 		Config: &Config{
-			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
-			TokenURL:            "token-url",
+			JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+			AllowedJWTAssertionAudiences: []string{"token-url"},
 		},
 	}
 

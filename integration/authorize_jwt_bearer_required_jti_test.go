@@ -89,7 +89,7 @@ func TestAuthorizeJWTBearerRequiredJtiSuite(t *testing.T) {
 			GrantTypeJWTBearerCanSkipClientAuth:  true,
 			GrantTypeJWTBearerIDOptional:         false,
 			GrantTypeJWTBearerIssuedDateOptional: true,
-			TokenURL:                             tokenURL,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
 		},
 		store,
 		jwtStrategy,

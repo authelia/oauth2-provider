@@ -5,6 +5,8 @@ package rfc7523
 
 import (
 	"context"
+	"crypto/subtle"
+	"strings"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -21,7 +23,7 @@ type Handler struct {
 
 	Config interface {
 		oauth2.AccessTokenLifespanProvider
-		oauth2.TokenURLProvider
+		oauth2.AllowedJWTAssertionAudiencesProvider
 		oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider
 		oauth2.GrantTypeJWTBearerIDOptionalProvider
 		oauth2.GrantTypeJWTBearerIssuedDateOptionalProvider
@@ -229,17 +231,37 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 //
 //nolint:gocyclo,unparam
 func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, key *jose.JSONWebKey) error {
+	audiences := c.Config.GetAllowedJWTAssertionAudiences(ctx)
+
+	if len(audiences) == 0 {
+		return errorsx.WithStack(oauth2.ErrServerError.
+			WithHint("The JWT in 'assertion' request parameter can't be validated as the authorization server isn't configured to accept JWT assertions."),
+		)
+	}
+
 	if len(claims.Audience) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim."),
 		)
 	}
 
-	if !claims.Audience.Contains(c.Config.GetTokenURL(ctx)) {
+	validAudience := false
+
+verify:
+	for _, unverified := range claims.Audience {
+		for _, aud := range audiences {
+			if subtle.ConstantTimeCompare([]byte(aud), []byte(unverified)) == 1 {
+				validAudience = true
+				break verify
+			}
+		}
+	}
+
+	if !validAudience {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHintf(
 				"The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim containing a value '%s' that identifies the authorization server as an intended audience.",
-				c.Config.GetTokenURL(ctx),
+				strings.Join(audiences, "', '"),
 			),
 		)
 	}

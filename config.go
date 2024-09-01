@@ -300,9 +300,11 @@ type FormPostResponseProvider interface {
 	GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter
 }
 
-type TokenURLProvider interface {
-	// GetTokenURL returns the token URL.
-	GetTokenURL(ctx context.Context) (url string)
+// AllowedJWTAssertionAudiencesProvider is a provider used in contexts where the permitted audiences for a JWT assertion
+// is required to validate a request.
+type AllowedJWTAssertionAudiencesProvider interface {
+	// GetAllowedJWTAssertionAudiences returns the permitted audience list for JWT Assertions.
+	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
 }
 
 // AuthorizeEndpointHandlersProvider returns the provider for configuring the authorize endpoint handlers.

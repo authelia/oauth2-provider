@@ -22,7 +22,7 @@ type DefaultClientAuthenticationStrategy struct {
 	}
 	Config interface {
 		JWKSFetcherStrategyProvider
-		TokenURLProvider
+		AllowedJWTAssertionAudiencesProvider
 	}
 }
 
@@ -277,15 +277,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
-	var tokenURI string
+	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
 
-	if tokenURI = s.Config.GetTokenURL(ctx); tokenURI == "" {
-		return "", "", "", nil, nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods.").WithDebug("The authorization server Token URL was empty but it's required to validate the RFC7523 audience claim."))
+	if len(audience) == 0 {
+		return "", "", "", nil, nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods.").WithDebug("The authorization server could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
 
 	opts := []xjwt.ParserOption{
 		xjwt.WithStrictDecoding(),
-		xjwt.WithAudience(tokenURI),   // Satisfies RFC7523 Section 3 Point 3.
+		//xjwt.WithAudience(tokenURI),   // Satisfies RFC7523 Section 3 Point 3.
 		xjwt.WithExpirationRequired(), // Satisfies RFC7523 Section 3 Point 4.
 		xjwt.WithIssuedAt(),           // Satisfies RFC7523 Section 3 Point 6.
 	}
@@ -320,7 +320,46 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, nil, resolveJWTErrorToRFCError(err)
 	}
 
+	// Satisfies RFC7523 Section 3 Point 3.
+	if err = s.doAuthenticateAssertionJWTBearerClaimAudience(ctx, audience, claims); err != nil {
+		return "", "", "", nil, nil, err
+	}
+
 	return method, kid, alg, token, claims, nil
+}
+
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearerClaimAudience(ctx context.Context, audience []string, claims *xjwt.RegisteredClaims) (err error) {
+	if len(claims.Audience) == 0 {
+		return errorsx.WithStack(
+			ErrInvalidClient.
+				WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").
+				WithDebug("Unable to validate the 'aud' claim of the 'client_assertion' as it was empty."),
+		)
+	}
+
+	validAudience := false
+
+	var aud, unverified string
+
+verification:
+	for _, unverified = range claims.Audience {
+		for _, aud = range audience {
+			if subtle.ConstantTimeCompare([]byte(aud), []byte(unverified)) == 1 {
+				validAudience = true
+				break verification
+			}
+		}
+	}
+
+	if !validAudience {
+		return errorsx.WithStack(
+			ErrInvalidClient.
+				WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").
+				WithDebugf("Unable to validate the 'aud' claim of the 'client_assertion' value '%s' as it doesn't match any of the expected values '%s'.", strings.Join(claims.Audience, "', '"), strings.Join(audience, "', '")),
+		)
+	}
+
+	return nil
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {

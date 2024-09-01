@@ -233,7 +233,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: true,
 			AccessTokenLifespan:                  time.Hour,
-			TokenURL:                             tokenURL,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
 		},
 		store,
 		jwtStrategy,

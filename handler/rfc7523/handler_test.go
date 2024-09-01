@@ -12,6 +12,7 @@ import (
 	mrand "math/rand"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,7 +75,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 		Config: &oauth2.Config{
 			ScopeStrategy:                        oauth2.HierarchicScopeStrategy,
 			AudienceMatchingStrategy:             oauth2.DefaultAudienceMatchingStrategy,
-			TokenURL:                             "https://www.example.com/token",
+			AllowedJWTAssertionAudiences:         []string{"https://www.example.com/token"},
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,
 			GrantTypeJWTBearerIssuedDateOptional: false,
@@ -333,7 +334,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 	s.Equal(
 		fmt.Sprintf(
 			"The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim containing a value '%s' that identifies the authorization server as an intended audience.",
-			s.handler.Config.GetTokenURL(ctx),
+			strings.Join(s.handler.Config.GetAllowedJWTAssertionAudiences(ctx), "', '"),
 		),
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
@@ -851,7 +852,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 		Config: &oauth2.Config{
 			ScopeStrategy:                        oauth2.HierarchicScopeStrategy,
 			AudienceMatchingStrategy:             oauth2.DefaultAudienceMatchingStrategy,
-			TokenURL:                             "https://www.example.com/token",
+			AllowedJWTAssertionAudiences:         []string{"https://www.example.com/token"},
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,
 			GrantTypeJWTBearerIssuedDateOptional: false,

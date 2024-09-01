@@ -95,10 +95,10 @@ type Config struct {
 	// AllowedPromptValues sets which OpenID Connect prompt values the server supports. Defaults to []string{"login", "none", "consent", "select_account"}.
 	AllowedPromptValues []string
 
-	// TokenURL is the the URL of the Authorization Server's Token Endpoint. If the authorization server is intended
-	// to be compatible with the private_key_jwt client authentication method (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth),
-	// this value MUST be set.
-	TokenURL string
+	// AllowedJWTAssertionAudiences is a list of permitted client assertion audiences. If the authorization server is
+	// intended to be compatible with the client_secret_jwt or private_key_jwt client authentication methods
+	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
+	AllowedJWTAssertionAudiences []string
 
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
@@ -277,8 +277,8 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	return c.HTTPClient
 }
 
-func (c *Config) GetTokenURL(ctx context.Context) string {
-	return c.TokenURL
+func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
+	return c.AllowedJWTAssertionAudiences
 }
 
 func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template {
@@ -652,7 +652,7 @@ var (
 	_ MessageCatalogProvider                          = (*Config)(nil)
 	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
 	_ FormPostResponseProvider                        = (*Config)(nil)
-	_ TokenURLProvider                                = (*Config)(nil)
+	_ AllowedJWTAssertionAudiencesProvider            = (*Config)(nil)
 	_ HTTPClientProvider                              = (*Config)(nil)
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)

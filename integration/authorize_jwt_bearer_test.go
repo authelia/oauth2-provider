@@ -412,7 +412,7 @@ func TestAuthorizeJWTBearerSuite(t *testing.T) {
 			GrantTypeJWTBearerIDOptional:         true,
 			GrantTypeJWTBearerIssuedDateOptional: true,
 			GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
-			TokenURL:                             tokenURL,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
 		},
 		store,
 		jwtStrategy,

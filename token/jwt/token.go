@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
@@ -18,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// New returns a new Token.
 func New() *Token {
 	return &Token{
 		Header:    map[string]any{},
@@ -243,6 +243,8 @@ func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
 	t.KeyAlgorithm = jose.KeyAlgorithm(jwe.Header.Algorithm)
 }
 
+// CompactEncrypted serializes this token as a Compact Encrypted string, and returns the token string, signature, and
+// an error if one occurred.
 func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature string, err error) {
 	var (
 		signed string
@@ -291,6 +293,8 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 	return tokenString, signature, nil
 }
 
+// CompactSigned serializes this token as a Compact Signed string, and returns the token string, signature, and
+// an error if one occurred.
 func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) {
 	if tokenString, err = t.CompactSignedString(k); err != nil {
 		return "", "", err
@@ -337,11 +341,11 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	return tokenString, nil
 }
 
-func (t *Token) IsJWTProfileAccessToken() bool {
+// IsJWTProfileAccessToken returns true if the token is a JWT Profile Access Token.
+func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	var (
 		raw      any
 		cty, typ string
-		ok       bool
 	)
 
 	if t.HeaderJWE != nil && len(t.HeaderJWE) > 0 {
@@ -423,26 +427,4 @@ func pointer(v any) any {
 		return value.Interface()
 	}
 	return v
-}
-
-type PotentialTokenType int
-
-const (
-	Unknown PotentialTokenType = iota
-	Opaque
-	SignedJWT
-	EncryptedJWT
-)
-
-func GetPotentialTokenType(token string) PotentialTokenType {
-	switch strings.Count(token, ".") {
-	case 1:
-		return Opaque
-	case 2:
-		return SignedJWT
-	case 4:
-		return EncryptedJWT
-	default:
-		return Unknown
-	}
 }

@@ -19,31 +19,6 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func wrapSigningKeyFailure(outer *RFC6749Error, inner *jwt.ValidationError) *RFC6749Error {
-	outer = outer.WithWrap(inner)
-	if e := new(RFC6749Error); errors.As(inner, &e) {
-		return outer.WithHintf("%s %s", outer.Reason(), e.Reason()).WithDebugError(inner)
-	}
-
-	switch {
-	case inner.Has(jwt.ValidationErrorMalformed):
-		return outer.WithDebugf("The object is malformed. The following error occurred trying to validate the object: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
-	case inner.Has(jwt.ValidationErrorUnverifiable | jwt.ValidationErrorSignatureInvalid):
-		return outer.WithDebugf("The object signature could not be verified. The following error occurred trying to verify the signature: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
-	case inner.Has(jwt.ValidationErrorExpired):
-		return outer.WithDebugf("The object could not be verified. The object is expired.")
-	case inner.Has(jwt.ValidationErrorAudience |
-		jwt.ValidationErrorIssuedAt |
-		jwt.ValidationErrorIssuer |
-		jwt.ValidationErrorNotValidYet |
-		jwt.ValidationErrorId |
-		jwt.ValidationErrorClaimsInvalid):
-		return outer.WithDebugf("The object could not be verified. One or more claims were not expected. The following error occurred trying to validate the claims: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
-	default:
-		return outer.WithDebugf("The object could not be verified. The following error occurred trying to validate the object: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
-	}
-}
-
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
@@ -144,30 +119,28 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 
 	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...), jwt.WithJARClient(client))
 	if err != nil {
-		var e *jwt.ValidationError
-		if errors.As(err, &e) {
-			return wrapSigningKeyFailure(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()), e)
-		} else {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()).WithDebugError(err))
-		}
+		return errorsx.WithStack(wrapRequestObjectDecodeError(token, client, openid, err))
 	}
 
 	if algAny {
 		if token.SignatureAlgorithm == "none" {
-
-		}
-
-		if kid := client.GetRequestObjectSigningKeyID(); kid != "" && kid != token.KeyID {
-
+			return errorsx.WithStack(
+				ErrInvalidRequestObject.
+					WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
+					WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
 		}
 	} else if string(token.SignatureAlgorithm) != alg {
-
+		return errorsx.WithStack(
+			ErrInvalidRequestObject.
+				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
+				WithDebugf("%s client with id '%s' was registered with a 'request_object_signing_alg' value of '%s' but the request object had the 'alg' value '%s' in the header.", hintRequestObjectPrefix(openid), client.GetID(), alg, token.SignatureAlgorithm))
 	}
 
-	if token.SignatureAlgorithm == "none" && !algNone {
-		print("")
-	} else if !algAny && string(token.SignatureAlgorithm) != client.GetRequestObjectSigningAlg() {
-		print("")
+	if kid := client.GetRequestObjectSigningKeyID(); kid != "" && kid != token.KeyID {
+		return errorsx.WithStack(
+			ErrInvalidRequestObject.
+				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
+				WithDebugf("%s client with id '%s' was registered with a 'request_object_signing_key_id' value of '%s' but the request object had the 'kid' value '%s' in the header.", hintRequestObjectPrefix(openid), client.GetID(), kid, token.KeyID))
 	}
 
 	claims := token.Claims
@@ -580,4 +553,52 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	}
 
 	return request, nil
+}
+
+func wrapRequestObjectDecodeError(token *jwt.Token, client JARClient, openid bool, inner error) (outer *RFC6749Error) {
+	outer = ErrInvalidRequestObject.WithWrap(inner).WithHintf("%s request object could not be decoded or validated.", hintRequestObjectPrefix(openid))
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorKeyIDInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'kid' value '%s' but the request object was signed with the 'kid' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningKeyID(), token.KeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorAlgorithmInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'alg' value '%s' but the request object was signed with the 'alg' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningAlg(), token.SignatureAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. The following error occurred trying to validate the request object: %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was not able to be verified. The following error occurred trying to validate the object: %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature. The following error occurred trying to validate the request object signature: %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorExpired):
+			exp, ok := token.Claims.GetExpiresAt()
+			if ok {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object expired at %d.", hintRequestObjectPrefix(openid), client.GetID(), exp)
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. Error occurred trying to validate the 'exp' claim': %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
+			iat, ok := token.Claims.GetIssuedAt()
+			if ok {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object was issued at %d.", hintRequestObjectPrefix(openid), client.GetID(), iat)
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. Error occurred trying to validate the 'iat' claim: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
+			nbf, ok := token.Claims.GetNotBefore()
+			if ok {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object is not valid before %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf)
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. Error occurred trying to validate the 'nbf' claim: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that had one or more invalid claims. Error occurred trying to validate the request objects claims: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. Error occurred trying to validate the request object: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		}
+	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated due to a key lookup error. %s", hintRequestObjectPrefix(openid), client.GetID(), errJWKLookup.Description)
+	} else {
+		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. %s", hintRequestObjectPrefix(openid), client.GetID(), ErrorToDebugRFC6749Error(inner).Error())
+	}
 }

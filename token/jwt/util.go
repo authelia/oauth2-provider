@@ -58,12 +58,12 @@ func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
 		return "", "", fmt.Errorf("jws header is malformed")
 	}
 
-	if headers[0].KeyID == "" {
-		return "", "", fmt.Errorf("jws header 'kid' value is missing or empty")
-	}
-
 	if headers[0].Algorithm == "" {
 		return "", "", fmt.Errorf("jws header 'alg' value is missing or empty")
+	}
+
+	if headers[0].KeyID == "" && headers[0].Algorithm != consts.JSONWebTokenAlgNone {
+		return "", "", fmt.Errorf("jws header 'kid' value is missing or empty")
 	}
 
 	if headers[0].JSONWebKey != nil {

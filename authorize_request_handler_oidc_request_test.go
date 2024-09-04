@@ -187,7 +187,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
-			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request failed with an error attempting to validate the request object. The OAuth 2.0 client with id 'foo' provided a request object which failed to validate with error: go-jose/go-jose: compact JWS format must have three parts.",
+			errString: "The request parameter contains an invalid Request Object. The OAuth 2.0 client with id 'foo' could not validate the request object. The object is malformed. The following error occurred trying to validate the object: compact JWS format must have three parts.",
 		},
 		{
 			name:      "ShouldFailUnknownKID",
@@ -308,7 +308,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		{
 			name:     "ShouldPassRequestAlgNone",
 			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidNone}},
-			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone},
+			client:   &DefaultJARClient{JSONWebKeysURI: root.JoinPath("jwks.json").String(), RequestObjectSigningAlg: consts.JSONWebTokenAlgNone, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterState: {"some-state"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterScope: {"foo openid"}, consts.FormParameterRequest: {assertionRequestObjectValidNone}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{

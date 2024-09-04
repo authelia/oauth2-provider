@@ -25,6 +25,14 @@ var TimeFunc = time.Now
 // This is the default claims type if you don't supply one
 type MapClaims map[string]any
 
+// VerifyIssuer compares the iss claim against cmp.
+// If required is false, this method will return true if the value matches or is unset
+func (m MapClaims) VerifyIssuer(cmp string, req bool) bool {
+	iss, _ := m[consts.ClaimIssuer].(string)
+
+	return verifyIss(iss, cmp, req)
+}
+
 // VerifyAudience compares the aud claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
@@ -40,35 +48,45 @@ func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
 	return false
 }
 
+// GetExpiresAt returns the exp claim.
+func (m MapClaims) GetExpiresAt() (exp int64, ok bool) {
+	return m.toInt64(consts.ClaimExpirationTime)
+}
+
 // VerifyExpiresAt compares the exp claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimExpirationTime); ok {
+	if v, ok := m.GetExpiresAt(); ok {
 		return verifyExp(v, cmp, req)
 	}
+
 	return !req
+}
+
+// GetIssuedAt returns the iat claim.
+func (m MapClaims) GetIssuedAt() (exp int64, ok bool) {
+	return m.toInt64(consts.ClaimIssuedAt)
 }
 
 // VerifyIssuedAt compares the iat claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimIssuedAt); ok {
+	if v, ok := m.GetIssuedAt(); ok {
 		return verifyIat(v, cmp, req)
 	}
+
 	return !req
 }
 
-// VerifyIssuer compares the iss claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyIssuer(cmp string, req bool) bool {
-	iss, _ := m[consts.ClaimIssuer].(string)
-	return verifyIss(iss, cmp, req)
+// GetNotBefore returns the nbf claim.
+func (m MapClaims) GetNotBefore() (exp int64, ok bool) {
+	return m.toInt64(consts.ClaimNotBefore)
 }
 
 // VerifyNotBefore compares the nbf claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyNotBefore(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimNotBefore); ok {
+	if v, ok := m.GetNotBefore(); ok {
 		return verifyNbf(v, cmp, req)
 	}
 

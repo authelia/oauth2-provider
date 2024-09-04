@@ -4,9 +4,10 @@
 package compose
 
 import (
+	"context"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/jwt"
-	"context"
 )
 
 type Factory func(config oauth2.Configurator, storage any, strategy any) any

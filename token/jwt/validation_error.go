@@ -14,13 +14,15 @@ const (
 	ValidationErrorSignatureInvalid                    // Signature validation failed
 
 	// Standard Claim validation errors
-	ValidationErrorAudience      // AUD validation failed
-	ValidationErrorExpired       // EXP validation failed
-	ValidationErrorIssuedAt      // IAT validation failed
-	ValidationErrorIssuer        // ISS validation failed
-	ValidationErrorNotValidYet   // NBF validation failed
-	ValidationErrorId            // JTI validation failed
-	ValidationErrorClaimsInvalid // Generic claims validation error
+	ValidationErrorAudience         // AUD validation failed
+	ValidationErrorExpired          // EXP validation failed
+	ValidationErrorIssuedAt         // IAT validation failed
+	ValidationErrorIssuer           // ISS validation failed
+	ValidationErrorNotValidYet      // NBF validation failed
+	ValidationErrorId               // JTI validation failed
+	ValidationErrorKeyIDInvalid     // KeyID invalid error
+	ValidationErrorAlgorithmInvalid // Algorithm invalid error
+	ValidationErrorClaimsInvalid    // Generic claims validation error
 )
 
 // The error from Parse if token is not valid

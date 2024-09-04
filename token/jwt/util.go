@@ -28,7 +28,18 @@ func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }
 
-// IsEncryptedJWTClientSecretAlg returns true if a given alg string is a client secret based algorithm i.e. symmetric.
+// IsSignedJWTClientSecretAlg returns true if the given alg string is a client secret based signature algorithm.
+func IsSignedJWTClientSecretAlg(alg string) (csa bool) {
+	switch a := jose.SignatureAlgorithm(alg); a {
+	case jose.HS256, jose.HS384, jose.HS512:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsEncryptedJWTClientSecretAlg returns true if a given alg string is a client secret based encryption algorithm
+// i.e. symmetric.
 func IsEncryptedJWTClientSecretAlg(alg string) (csa bool) {
 	switch a := jose.KeyAlgorithm(alg); a {
 	case jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW:
@@ -58,12 +69,8 @@ func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
 		return "", "", fmt.Errorf("jws header is malformed")
 	}
 
-	if headers[0].Algorithm == "" {
-		return "", "", fmt.Errorf("jws header 'alg' value is missing or empty")
-	}
-
-	if headers[0].KeyID == "" && headers[0].Algorithm != consts.JSONWebTokenAlgNone {
-		return "", "", fmt.Errorf("jws header 'kid' value is missing or empty")
+	if headers[0].Algorithm == "" && headers[0].KeyID == "" {
+		return "", "", fmt.Errorf("jws header 'alg' and 'kid' values are missing or empty")
 	}
 
 	if headers[0].JSONWebKey != nil {
@@ -182,17 +189,13 @@ func (e *JWKLookupError) GetDescription() string {
 }
 
 func (e *JWKLookupError) Error() string {
-	return fmt.Sprintf("Error occurrered looking up JSON Web Key: %s", e.Description)
+	return fmt.Sprintf("Error occurred looking up JSON Web Key: %s", e.Description)
 }
 
 // FindClientPublicJWK given a BaseClient, JWKSFetcherStrategy, and search parameters will return a *jose.JSONWebKey on
 // a valid match. The *jose.JSONWebKey is guaranteed to match the alg and use values, and if strict is true it must
 // match the kid value as well.
 func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
-	if strict && kid == "" {
-		return nil, &JWKLookupError{Description: "The JSON Web Key strict search was attempted without a kid but the strict search doesn't permit this."}
-	}
-
 	var (
 		keys *jose.JSONWebKeySet
 	)
@@ -225,10 +228,6 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}
 	}
 
-	if strict && kid == "" {
-		return nil, &JWKLookupError{Description: "The JSON Web Key strict search was attempted without a kid but the strict search doesn't permit this."}
-	}
-
 	var keys []jose.JSONWebKey
 
 	if kid == "" {
@@ -241,6 +240,8 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 		return nil, &JWKLookupError{Description: fmt.Sprintf("The JSON Web Token uses signing key with kid '%s' which was not found.", kid)}
 	}
 
+	var matched []jose.JSONWebKey
+
 	for _, k := range keys {
 		if k.Use != use {
 			continue
@@ -250,12 +251,24 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 			continue
 		}
 
-		return &k, nil
+		matched = append(matched, k)
 	}
 
-	return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+	switch len(matched) {
+	case 1:
+		return &matched[0], nil
+	case 0:
+		return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+	default:
+		if strict {
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+		}
+
+		return &matched[0], nil
+	}
 }
 
+// NewJWKFromClientSecret returns a JWK from a client secret.
 func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
 	var secret []byte
 

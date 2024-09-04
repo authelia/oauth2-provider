@@ -19,12 +19,29 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
-	outer = outer.WithWrap(inner).WithDebugError(inner)
+func wrapSigningKeyFailure(outer *RFC6749Error, inner *jwt.ValidationError) *RFC6749Error {
+	outer = outer.WithWrap(inner)
 	if e := new(RFC6749Error); errors.As(inner, &e) {
-		return outer.WithHintf("%s %s", outer.Reason(), e.Reason())
+		return outer.WithHintf("%s %s", outer.Reason(), e.Reason()).WithDebugError(inner)
 	}
-	return outer
+
+	switch {
+	case inner.Has(jwt.ValidationErrorMalformed):
+		return outer.WithDebugf("The object is malformed. The following error occurred trying to validate the object: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
+	case inner.Has(jwt.ValidationErrorUnverifiable | jwt.ValidationErrorSignatureInvalid):
+		return outer.WithDebugf("The object signature could not be verified. The following error occurred trying to verify the signature: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
+	case inner.Has(jwt.ValidationErrorExpired):
+		return outer.WithDebugf("The object could not be verified. The object is expired.")
+	case inner.Has(jwt.ValidationErrorAudience |
+		jwt.ValidationErrorIssuedAt |
+		jwt.ValidationErrorIssuer |
+		jwt.ValidationErrorNotValidYet |
+		jwt.ValidationErrorId |
+		jwt.ValidationErrorClaimsInvalid):
+		return outer.WithDebugf("The object could not be verified. One or more claims were not expected. The following error occurred trying to validate the claims: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
+	default:
+		return outer.WithDebugf("The object could not be verified. The following error occurred trying to validate the object: %s.", strings.TrimPrefix(inner.Error(), "go-jose/go-jose: "))
+	}
 }
 
 // TODO: Refactor time permitting.
@@ -129,7 +146,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	if err != nil {
 		var e *jwt.ValidationError
 		if errors.As(err, &e) {
-			return wrapSigningKeyFailure(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()), err)
+			return wrapSigningKeyFailure(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()), e)
 		} else {
 			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf("The OAuth 2.0 client with id '%s' could not validate the request object.", client.GetID()).WithDebugError(err))
 		}

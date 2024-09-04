@@ -157,7 +157,7 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	claims := MapClaims{}
 
 	if err = t.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
+		return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err})
 	}
 
 	var kid, alg string
@@ -166,28 +166,34 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 		return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
-	if o.jwsKeyFunc != nil {
-		if key, err = o.jwsKeyFunc(ctx, t, claims); err != nil {
+	if alg == consts.JSONWebTokenAlgNone {
+		if err = t.UnsafeClaimsWithoutVerification(&claims); err != nil {
+			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, Inner: err})
+		}
+	} else {
+		if o.jwsKeyFunc != nil {
+			if key, err = o.jwsKeyFunc(ctx, t, claims); err != nil {
+				return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+			}
+		} else if o.client != nil && o.client.IsClientSigned() {
+			if ckid := o.client.GetSignatureKeyID(); ckid != "" && ckid != kid {
+				return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: fmt.Errorf("error validating the jws header: kid '%s' does not match the registered kid '%s'", kid, ckid)})
+			}
+
+			if calg := o.client.GetSignatureAlg(); calg != "" && calg != alg {
+				return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not match the registered alg '%s'", alg, calg)})
+			}
+
+			if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature, true); err != nil {
+				return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+			}
+		} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseSignature); err != nil {
 			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if o.client != nil && o.client.IsClientSigned() {
-		if ckid := o.client.GetSignatureKeyID(); ckid != "" && ckid != kid {
-			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: fmt.Errorf("error validating the jws header: kid '%s' does not match the registered kid '%s'", kid, ckid)})
-		}
 
-		if calg := o.client.GetSignatureAlg(); calg != "" && calg != alg {
-			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not match the registered alg '%s'", alg, calg)})
+		if err = t.Claims(key.Public(), &claims); err != nil {
+			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, Inner: err})
 		}
-
-		if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature, true); err != nil {
-			return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-		}
-	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseSignature); err != nil {
-		return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-	}
-
-	if err = t.Claims(key.Public(), &claims); err != nil {
-		return nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, Inner: err})
 	}
 
 	if token, err = newToken(t, claims); err != nil {

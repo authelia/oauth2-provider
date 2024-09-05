@@ -18,7 +18,7 @@ require (
 	github.com/tidwall/gjson v1.17.3
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.27.0
-	golang.org/x/net v0.28.0
+	golang.org/x/net v0.29.0
 	golang.org/x/oauth2 v0.23.0
 	golang.org/x/text v0.18.0
 )

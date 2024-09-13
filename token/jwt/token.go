@@ -145,6 +145,8 @@ type Token struct {
 
 	Claims MapClaims
 
+	parsedToken *jwt.JSONWebToken
+
 	valid bool
 }
 
@@ -394,7 +396,7 @@ func unsignedToken(token *Token) (tokenString string, err error) {
 }
 
 func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
-	token := &Token{Claims: claims}
+	token := &Token{Claims: claims, parsedToken: parsedToken}
 	if len(parsedToken.Headers) != 1 {
 		return nil, &ValidationError{text: fmt.Sprintf("only one header supported, got %v", len(parsedToken.Headers)), Errors: ValidationErrorMalformed}
 	}

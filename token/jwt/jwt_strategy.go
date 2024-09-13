@@ -37,7 +37,7 @@ type DefaultStrategy struct {
 }
 
 func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (tokenString string, signature string, err error) {
-	o := &optsStrategy{
+	o := &StrategyOpts{
 		claims:  MapClaims{},
 		headers: NewHeaders(),
 	}
@@ -87,8 +87,85 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 	return encodeNestedCompactEncrypted(ctx, o.claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
 }
 
+func (j *DefaultStrategy) Validate(ctx context.Context, token *Token, opts ...StrategyOpt) (err error) {
+	if token == nil {
+		return errorsx.WithStack(fmt.Errorf("token is nil"))
+	}
+
+	if token.valid {
+		return nil
+	}
+
+	if token.parsedToken == nil {
+		return errorsx.WithStack(fmt.Errorf("token is in an inconsistent state"))
+	}
+
+	o := &StrategyOpts{
+		sigAlgorithm:      SignatureAlgorithms,
+		keyAlgorithm:      EncryptionKeyAlgorithms,
+		contentEncryption: ContentEncryptionAlgorithms,
+		jwsKeyFunc:        nil,
+		jweKeyFunc:        nil,
+	}
+
+	for _, opt := range opts {
+		if err = opt(o); err != nil {
+			return errorsx.WithStack(err)
+		}
+	}
+
+	if err = j.validate(ctx, token.parsedToken, &MapClaims{}, o); err != nil {
+		return err
+	}
+
+	token.valid = true
+
+	return nil
+}
+
+func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, dest any, o *StrategyOpts) (err error) {
+	var (
+		key      *jose.JSONWebKey
+		kid, alg string
+	)
+
+	if kid, alg, err = headerValidateJWS(t.Headers); err != nil {
+		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
+	}
+
+	claims := MapClaims{}
+
+	if o.jwsKeyFunc != nil {
+		if key, err = o.jwsKeyFunc(ctx, t, claims); err != nil {
+			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+		}
+	} else if o.client != nil && o.client.IsClientSigned() {
+		if IsSignedJWTClientSecretAlg(alg) {
+			if kid != "" {
+				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not support tokens with a kid but the token has kid '%s'", alg, kid)})
+			}
+
+			if key, err = NewJWKFromClientSecret(ctx, o.client, "", alg, consts.JSONWebTokenUseSignature); err != nil {
+				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+			}
+		} else {
+			if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature, true); err != nil {
+				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+			}
+		}
+	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseSignature); err != nil {
+		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+	}
+
+	if err = t.Claims(key.Public(), &dest); err != nil {
+		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, Inner: err})
+	}
+
+	return nil
+}
+
 func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts ...StrategyOpt) (token *Token, err error) {
-	o := &optsStrategy{
+	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,
 		keyAlgorithm:      EncryptionKeyAlgorithms,
 		contentEncryption: ContentEncryptionAlgorithms,
@@ -168,59 +245,25 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 
 	token.Claims = claims
 
-	var kid, alg string
+	var alg string
 
-	if kid, alg, err = headerValidateJWS(t.Headers); err != nil {
+	if _, alg, err = headerValidateJWS(t.Headers); err != nil {
 		return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
-	if alg != consts.JSONWebTokenAlgNone {
-		if o.jwsKeyFunc != nil {
-			if key, err = o.jwsKeyFunc(ctx, t, claims); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-			}
-		} else if o.client != nil && o.client.IsClientSigned() {
-			var (
-				ckid, calg string
-			)
+	validate := o.client != nil || !o.allowUnverified
 
-			ckid = o.client.GetSignatureKeyID()
-
-			if calg = o.client.GetSignatureAlg(); calg != "" && calg != alg {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorAlgorithmInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not match the registered alg '%s'", alg, calg)})
-			}
-
-			if IsSignedJWTClientSecretAlg(alg) {
-				if ckid != "" {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not support tokens with a kid but the token has kid '%s'", alg, kid)})
-				}
-
-				if key, err = NewJWKFromClientSecret(ctx, o.client, "", alg, consts.JSONWebTokenUseSignature); err != nil {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-				}
-			} else {
-				if ckid != "" && ckid != kid {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: kid '%s' does not match the registered kid '%s'", kid, ckid)})
-				}
-
-				if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature, true); err != nil {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-				}
-			}
-		} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseSignature); err != nil {
-			return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-		}
-
-		if err = t.Claims(key.Public(), &claims); err != nil {
-			return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorSignatureInvalid, Inner: err})
+	if alg != consts.JSONWebTokenAlgNone && validate {
+		if err = j.validate(ctx, t, &claims, o); err != nil {
+			return nil, errorsx.WithStack(err)
 		}
 	}
 
-	if err = claims.Valid(); err != nil {
-		return token, errorsx.WithStack(err)
-	}
+	//if err = claims.Valid(); err != nil {
+	//	return token, errorsx.WithStack(err)
+	//}
 
-	token.valid = true
+	token.valid = validate
 
 	return token, nil
 }
@@ -234,7 +277,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		}
 	}
 
-	o := &optsStrategy{
+	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithmsNone,
 		keyAlgorithm:      EncryptionKeyAlgorithms,
 		contentEncryption: ContentEncryptionAlgorithms,

@@ -7,7 +7,7 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-type optsStrategy struct {
+type StrategyOpts struct {
 	client Client
 	claims MapClaims
 
@@ -19,16 +19,26 @@ type optsStrategy struct {
 
 	jwsKeyFunc KeyFuncJWS
 	jweKeyFunc KeyFuncJWE
+
+	allowUnverified bool
 }
 
 type (
 	KeyFuncJWS  func(ctx context.Context, token *jwt.JSONWebToken, claims MapClaims) (jwk *jose.JSONWebKey, err error)
 	KeyFuncJWE  func(ctx context.Context, jwe *jose.JSONWebEncryption, kid, alg string) (jwk *jose.JSONWebKey, err error)
-	StrategyOpt func(opts *optsStrategy) (err error)
+	StrategyOpt func(opts *StrategyOpts) (err error)
 )
 
+func WithAllowUnverified() StrategyOpt {
+	return func(opts *StrategyOpts) (err error) {
+		opts.allowUnverified = true
+
+		return nil
+	}
+}
+
 func WithHeaders(headers Mapper) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.headers = headers
 
 		return nil
@@ -36,7 +46,7 @@ func WithHeaders(headers Mapper) StrategyOpt {
 }
 
 func WithHeadersJWE(headers Mapper) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.headersJWE = headers
 
 		return nil
@@ -44,7 +54,7 @@ func WithHeadersJWE(headers Mapper) StrategyOpt {
 }
 
 func WithClaims(claims MapClaims) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.claims = claims
 
 		return nil
@@ -52,7 +62,7 @@ func WithClaims(claims MapClaims) StrategyOpt {
 }
 
 func WithClient(client Client) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.client = client
 
 		return nil
@@ -60,7 +70,7 @@ func WithClient(client Client) StrategyOpt {
 }
 
 func WithIDTokenClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case IDTokenClient:
 			opts.client = &decoratedIDTokenClient{IDTokenClient: c}
@@ -71,7 +81,7 @@ func WithIDTokenClient(client any) StrategyOpt {
 }
 
 func WithUserInfoClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case UserInfoClient:
 			opts.client = &decoratedUserInfoClient{UserInfoClient: c}
@@ -82,7 +92,7 @@ func WithUserInfoClient(client any) StrategyOpt {
 }
 
 func WithIntrospectionClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case IntrospectionClient:
 			opts.client = &decoratedIntrospectionClient{IntrospectionClient: c}
@@ -93,7 +103,7 @@ func WithIntrospectionClient(client any) StrategyOpt {
 }
 
 func WithJARMClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case JARMClient:
 			opts.client = &decoratedJARMClient{JARMClient: c}
@@ -104,7 +114,7 @@ func WithJARMClient(client any) StrategyOpt {
 }
 
 func WithJARClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case JARClient:
 			opts.client = &decoratedJARClient{JARClient: c}
@@ -115,7 +125,7 @@ func WithJARClient(client any) StrategyOpt {
 }
 
 func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case JWTProfileAccessTokenClient:
 			opts.client = &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
@@ -126,7 +136,7 @@ func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 }
 
 func WithNewStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case IntrospectionClient:
 			opts.client = &decoratedIntrospectionClient{IntrospectionClient: c}
@@ -139,7 +149,7 @@ func WithNewStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 }
 
 func WithSigAlgorithm(algs ...jose.SignatureAlgorithm) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.sigAlgorithm = algs
 
 		return nil
@@ -147,7 +157,7 @@ func WithSigAlgorithm(algs ...jose.SignatureAlgorithm) StrategyOpt {
 }
 
 func WithKeyAlgorithm(algs ...jose.KeyAlgorithm) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.keyAlgorithm = algs
 
 		return nil
@@ -155,7 +165,7 @@ func WithKeyAlgorithm(algs ...jose.KeyAlgorithm) StrategyOpt {
 }
 
 func WithContentEncryption(enc ...jose.ContentEncryption) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.contentEncryption = enc
 
 		return nil
@@ -163,7 +173,7 @@ func WithContentEncryption(enc ...jose.ContentEncryption) StrategyOpt {
 }
 
 func WithKeyFunc(f KeyFuncJWS) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.jwsKeyFunc = f
 
 		return nil
@@ -171,7 +181,7 @@ func WithKeyFunc(f KeyFuncJWS) StrategyOpt {
 }
 
 func WithKeyFuncJWE(f KeyFuncJWE) StrategyOpt {
-	return func(opts *optsStrategy) (err error) {
+	return func(opts *StrategyOpts) (err error) {
 		opts.jweKeyFunc = f
 
 		return nil

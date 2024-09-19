@@ -14,15 +14,16 @@ const (
 	ValidationErrorSignatureInvalid                    // Signature validation failed
 
 	// Standard Claim validation errors
-	ValidationErrorId               // JTI validation failed
-	ValidationErrorAudience         // AUD validation failed
-	ValidationErrorExpired          // EXP validation failed
-	ValidationErrorIssuedAt         // IAT validation failed
-	ValidationErrorNotValidYet      // NBF validation failed
-	ValidationErrorIssuer           // ISS validation failed
-	ValidationErrorSubject          // ISS validation failed
-	ValidationErrorKeyIDInvalid     // KeyID invalid error
-	ValidationErrorAlgorithmInvalid // Algorithm invalid error
+	ValidationErrorId               // Claim JTI validation failed
+	ValidationErrorAudience         // Claim AUD validation failed
+	ValidationErrorExpired          // Claim EXP validation failed
+	ValidationErrorIssuedAt         // Claim IAT validation failed
+	ValidationErrorNotValidYet      // Claim NBF validation failed
+	ValidationErrorIssuer           // Claim ISS validation failed
+	ValidationErrorSubject          // Claim SUB validation failed
+	ValidationErrorTypInvalid       // Header TYP invalid error
+	ValidationErrorKeyIDInvalid     // Header KID invalid error
+	ValidationErrorAlgorithmInvalid // Header ALG invalid error
 	ValidationErrorClaimsInvalid    // Generic claims validation error
 )
 

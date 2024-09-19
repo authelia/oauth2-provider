@@ -134,7 +134,8 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	return client, method, nil
 }
 
-func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string, resolver EndpointClientAuthHandler) (assertion *ClientAssertion, err error) {
+// NewClientAssertion converts a raw assertion string into a *ClientAssertion.
+func NewClientAssertion(ctx context.Context, store ClientManager, assertion, assertionType string, resolver EndpointClientAuthHandler) (a *ClientAssertion, err error) {
 	var (
 		token *xjwt.Token
 
@@ -144,25 +145,25 @@ func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertion
 
 	switch assertionType {
 	case consts.ClientAssertionTypeJWTBearer:
-		if len(raw) == 0 {
-			return &ClientAssertion{Raw: raw, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("The request parameter 'client_assertion' must be set when using 'client_assertion_type' of '%s'.", consts.ClientAssertionTypeJWTBearer))
+		if len(assertion) == 0 {
+			return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("The request parameter 'client_assertion' must be set when using 'client_assertion_type' of '%s'.", consts.ClientAssertionTypeJWTBearer))
 		}
 	default:
-		return &ClientAssertion{Raw: raw, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
-	if token, _, err = xjwt.NewParser(xjwt.WithoutClaimsValidation()).ParseUnverified(raw, &xjwt.MapClaims{}); err != nil {
-		return &ClientAssertion{Raw: raw, Type: assertionType}, resolveJWTErrorToRFCError(err)
+	if token, _, err = xjwt.NewParser(xjwt.WithoutClaimsValidation()).ParseUnverified(assertion, &xjwt.MapClaims{}); err != nil {
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
 	if id, err = token.Claims.GetSubject(); err != nil {
 		if id, err = token.Claims.GetIssuer(); err != nil {
-			return &ClientAssertion{Raw: raw, Type: assertionType}, nil
+			return &ClientAssertion{Assertion: assertion, Type: assertionType}, nil
 		}
 	}
 
 	if client, err = store.GetClient(ctx, id); err != nil {
-		return &ClientAssertion{Raw: raw, Type: assertionType, ID: id}, nil
+		return &ClientAssertion{Assertion: assertion, Type: assertionType, ID: id}, nil
 	}
 
 	if c, ok := client.(AuthenticationMethodClient); ok {
@@ -170,7 +171,7 @@ func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertion
 	}
 
 	return &ClientAssertion{
-		Raw:       raw,
+		Assertion: assertion,
 		Type:      assertionType,
 		Parsed:    true,
 		ID:        id,
@@ -180,8 +181,9 @@ func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertion
 	}, nil
 }
 
+// ClientAssertion represents a client assertion.
 type ClientAssertion struct {
-	Raw, Type             string
+	Assertion, Type       string
 	Parsed                bool
 	ID, Method, Algorithm string
 	Client                Client
@@ -295,7 +297,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 	claims = &xjwt.RegisteredClaims{}
 
-	if token, err = parser.ParseWithClaims(assertion.Raw, claims, func(token *xjwt.Token) (key any, err error) {
+	if token, err = parser.ParseWithClaims(assertion.Assertion, claims, func(token *xjwt.Token) (key any, err error) {
 		if subtle.ConstantTimeCompare([]byte(client.GetID()), []byte(claims.Subject)) == 0 {
 			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The supplied 'client_id' did not match the 'sub' claim of the 'client_assertion'."))
 		}

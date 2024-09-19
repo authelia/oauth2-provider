@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -21,8 +20,17 @@ type Client interface {
 	// GetClientSecret returns the ClientSecret.
 	GetClientSecret() (secret ClientSecret)
 
-	// GetClientSecretPlainText returns the ClientSecret as plaintext if available.
-	GetClientSecretPlainText() (secret []byte, err error)
+	// GetClientSecretPlainText returns the ClientSecret as plaintext if available. The semantics of this function
+	// return values are important.
+	// If the client is not configured with a secret the return should be:
+	//   - secret with value nil, ok with value false, and err with value of nil
+	// If the client is configured with a secret but is hashed or otherwise not a plaintext value:
+	//   - secret with value nil, ok with value true, and err with value of nil
+	// If an error occurs retrieving the secret other than this:
+	//   - secret with value nil, ok with value true, and err with value of the error
+	// If the plaintext secret is successful:
+	//   - secret with value of the bytes of the plaintext secret, ok with value true, and err with value of nil
+	GetClientSecretPlainText() (secret []byte, ok bool, err error)
 
 	// GetRedirectURIs returns the client's allowed redirect URIs.
 	GetRedirectURIs() []string
@@ -475,12 +483,20 @@ func (c *DefaultClient) GetClientSecret() (secret ClientSecret) {
 	return c.ClientSecret
 }
 
-func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, err error) {
+func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
 	if c.ClientSecret == nil || !c.ClientSecret.Valid() {
-		return nil, fmt.Errorf("this secret doesn't support plaintext")
+		return nil, false, nil
 	}
 
-	return c.ClientSecret.GetPlainTextValue()
+	if !c.ClientSecret.IsPlainText() {
+		return nil, true, nil
+	}
+
+	if secret, err = c.ClientSecret.GetPlainTextValue(); err != nil {
+		return nil, true, err
+	}
+
+	return secret, true, nil
 }
 
 func (c *DefaultClient) GetRotatedClientSecrets() (secrets []ClientSecret) {

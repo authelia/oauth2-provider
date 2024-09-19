@@ -82,8 +82,17 @@ type Client interface {
 }
 
 type BaseClient interface {
-	// GetClientSecretPlainText returns the ClientSecret as plaintext if available.
-	GetClientSecretPlainText() (secret []byte, err error)
+	// GetClientSecretPlainText returns the ClientSecret as plaintext if available. The semantics of this function
+	// return values are important.
+	// If the client is not configured with a secret the return should be:
+	//   - secret with value nil, ok with value false, and err with value of nil
+	// If the client is configured with a secret but is hashed or otherwise not a plaintext value:
+	//   - secret with value nil, ok with value true, and err with value of nil
+	// If an error occurs retrieving the secret other than this:
+	//   - secret with value nil, ok with value true, and err with value of the error
+	// If the plaintext secret is successful:
+	//   - secret with value of the bytes of the plaintext secret, ok with value true, and err with value of nil
+	GetClientSecretPlainText() (secret []byte, ok bool, err error)
 
 	// GetJSONWebKeys returns the JSON Web Key Set containing the public key used by the client to authenticate.
 	GetJSONWebKeys() (jwks *jose.JSONWebKeySet)

@@ -189,7 +189,7 @@ func (e *JWKLookupError) GetDescription() string {
 }
 
 func (e *JWKLookupError) Error() string {
-	return fmt.Sprintf("Error occurred looking up JSON Web Key: %s", e.Description)
+	return fmt.Sprintf("Error occurred retriving the JSON Web Key. %s", e.Description)
 }
 
 // FindClientPublicJWK given a BaseClient, JWKSFetcherStrategy, and search parameters will return a *jose.JSONWebKey on
@@ -270,10 +270,21 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 
 // NewJWKFromClientSecret returns a JWK from a client secret.
 func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
-	var secret []byte
+	var (
+		secret []byte
+		ok     bool
+	)
 
-	if secret, err = client.GetClientSecretPlainText(); err != nil {
-		return nil, err
+	if secret, ok, err = client.GetClientSecretPlainText(); err != nil {
+		return nil, &JWKLookupError{Description: fmt.Sprintf("The client returned an error while trying to retrieve the plaintext client secret: %s.", err.Error())}
+	}
+
+	if !ok {
+		return nil, &JWKLookupError{Description: "The client is not configured with a client secret."}
+	}
+
+	if len(secret) == 0 {
+		return nil, &JWKLookupError{Description: "The client is not configured with a client secret that can be used for symmetric algorithms."}
 	}
 
 	return &jose.JSONWebKey{

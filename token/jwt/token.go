@@ -343,6 +343,10 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	return tokenString, nil
 }
 
+func (t *Token) Validate() {
+
+}
+
 // IsJWTProfileAccessToken returns true if the token is a JWT Profile Access Token.
 func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	var (
@@ -406,6 +410,9 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	token.Header = map[string]any{
 		consts.JSONWebTokenHeaderAlgorithm: h.Algorithm,
 	}
+
+	token.SignatureAlgorithm = jose.SignatureAlgorithm(h.Algorithm)
+
 	if h.KeyID != "" {
 		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = h.KeyID
 		token.KeyID = h.KeyID
@@ -414,8 +421,6 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	for k, v := range h.ExtraHeaders {
 		token.Header[string(k)] = v
 	}
-
-	token.SignatureAlgorithm = jose.SignatureAlgorithm(h.Algorithm)
 
 	return token, nil
 }

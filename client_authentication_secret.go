@@ -19,7 +19,8 @@ type ClientSecret interface {
 	IsPlainText() (is bool)
 
 	// GetPlainTextValue is a utility function to return the secret in the plaintext format making it usable for the
-	// client_secret_jwt authentication method.
+	// client_secret_jwt authentication method. If the client secret doesn't have a value that is plaintext it should
+	// return oauth2.ErrClientSecretNotPlainText for the sake of deterministic error values.
 	GetPlainTextValue() (secret []byte, err error)
 
 	// Valid should return false if the secret is nil or otherwise invalid.

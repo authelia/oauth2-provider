@@ -8,6 +8,8 @@ import (
 
 type testClient struct {
 	secret              []byte
+	secretNotPlainText  bool
+	secretNotDefined    bool
 	kid, alg            string
 	encKID, encAlg, enc string
 	csigned             bool
@@ -15,12 +17,20 @@ type testClient struct {
 	jwksURI             string
 }
 
-func (r *testClient) GetClientSecretPlainText() (secret []byte, err error) {
-	if r.secret != nil {
-		return r.secret, nil
+func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
+	if r.secretNotDefined {
+		return nil, false, nil
 	}
 
-	return nil, fmt.Errorf("not supported")
+	if r.secretNotPlainText {
+		return nil, true, nil
+	}
+
+	if r.secret != nil {
+		return r.secret, true, nil
+	}
+
+	return nil, true, fmt.Errorf("not supported")
 }
 
 func (r *testClient) GetSignatureKeyID() (kid string) {

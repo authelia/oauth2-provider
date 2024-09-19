@@ -14,12 +14,13 @@ const (
 	ValidationErrorSignatureInvalid                    // Signature validation failed
 
 	// Standard Claim validation errors
+	ValidationErrorId               // JTI validation failed
 	ValidationErrorAudience         // AUD validation failed
 	ValidationErrorExpired          // EXP validation failed
 	ValidationErrorIssuedAt         // IAT validation failed
-	ValidationErrorIssuer           // ISS validation failed
 	ValidationErrorNotValidYet      // NBF validation failed
-	ValidationErrorId               // JTI validation failed
+	ValidationErrorIssuer           // ISS validation failed
+	ValidationErrorSubject          // ISS validation failed
 	ValidationErrorKeyIDInvalid     // KeyID invalid error
 	ValidationErrorAlgorithmInvalid // Algorithm invalid error
 	ValidationErrorClaimsInvalid    // Generic claims validation error

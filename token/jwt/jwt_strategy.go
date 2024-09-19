@@ -78,10 +78,10 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 
 	if IsEncryptedJWTClientSecretAlg(alg) {
 		if keyEnc, err = NewJWKFromClientSecret(ctx, o.client, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
-			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: error occurred retrieving the client secret: %w", err))
+			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
 		}
 	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseEncryption, false); err != nil {
-		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving client jwk: %w", err))
+		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
 	}
 
 	return encodeNestedCompactEncrypted(ctx, o.claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
@@ -258,10 +258,6 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 			return nil, errorsx.WithStack(err)
 		}
 	}
-
-	//if err = claims.Valid(); err != nil {
-	//	return token, errorsx.WithStack(err)
-	//}
 
 	token.valid = validate
 

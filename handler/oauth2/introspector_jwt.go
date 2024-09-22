@@ -27,8 +27,8 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		return "", err
 	}
 
-	if !token.IsJWTProfileAccessToken() {
-		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt' "))
+	if err = token.Valid(jwt.ValidateTypes(consts.JSONWebTokenTypeAccessToken, consts.JSONWebTokenTypeAccessTokenAlternative)); err != nil {
+		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt'."))
 	}
 
 	r := AccessTokenJWTToRequest(token)

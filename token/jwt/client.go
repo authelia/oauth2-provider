@@ -70,8 +70,8 @@ func NewStatelessJWTProfileIntrospectionClient(client any) Client {
 }
 
 type Client interface {
-	GetSignatureKeyID() (kid string)
-	GetSignatureAlg() (alg string)
+	GetSigningKeyID() (kid string)
+	GetSigningAlg() (alg string)
 	GetEncryptionKeyID() (kid string)
 	GetEncryptionAlg() (alg string)
 	GetEncryptionEnc() (enc string)
@@ -82,6 +82,9 @@ type Client interface {
 }
 
 type BaseClient interface {
+	// GetID returns the client ID.
+	GetID() string
+
 	// GetClientSecretPlainText returns the ClientSecret as plaintext if available. The semantics of this function
 	// return values are important.
 	// If the client is not configured with a secret the return should be:
@@ -146,11 +149,11 @@ type decoratedJARClient struct {
 	JARClient
 }
 
-func (r *decoratedJARClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJARClient) GetSigningKeyID() (kid string) {
 	return r.GetRequestObjectSigningKeyID()
 }
 
-func (r *decoratedJARClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJARClient) GetSigningAlg() (alg string) {
 	return r.GetRequestObjectSigningAlg()
 }
 
@@ -208,11 +211,11 @@ type decoratedIDTokenClient struct {
 	IDTokenClient
 }
 
-func (r *decoratedIDTokenClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedIDTokenClient) GetSigningKeyID() (kid string) {
 	return r.GetIDTokenSignedResponseKeyID()
 }
 
-func (r *decoratedIDTokenClient) GetSignatureAlg() (alg string) {
+func (r *decoratedIDTokenClient) GetSigningAlg() (alg string) {
 	return r.GetIDTokenSignedResponseAlg()
 }
 
@@ -270,11 +273,11 @@ type decoratedJARMClient struct {
 	JARMClient
 }
 
-func (r *decoratedJARMClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJARMClient) GetSigningKeyID() (kid string) {
 	return r.GetAuthorizationSignedResponseKeyID()
 }
 
-func (r *decoratedJARMClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJARMClient) GetSigningAlg() (alg string) {
 	return r.GetAuthorizationSignedResponseAlg()
 }
 
@@ -330,11 +333,11 @@ type decoratedUserInfoClient struct {
 	UserInfoClient
 }
 
-func (r *decoratedUserInfoClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedUserInfoClient) GetSigningKeyID() (kid string) {
 	return r.GetUserinfoSignedResponseKeyID()
 }
 
-func (r *decoratedUserInfoClient) GetSignatureAlg() (alg string) {
+func (r *decoratedUserInfoClient) GetSigningAlg() (alg string) {
 	return r.GetUserinfoSignedResponseAlg()
 }
 
@@ -390,11 +393,11 @@ type decoratedJWTProfileAccessTokenClient struct {
 	JWTProfileAccessTokenClient
 }
 
-func (r *decoratedJWTProfileAccessTokenClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetSigningKeyID() (kid string) {
 	return r.GetAccessTokenSignedResponseKeyID()
 }
 
-func (r *decoratedJWTProfileAccessTokenClient) GetSignatureAlg() (alg string) {
+func (r *decoratedJWTProfileAccessTokenClient) GetSigningAlg() (alg string) {
 	return r.GetAccessTokenSignedResponseAlg()
 }
 
@@ -452,11 +455,11 @@ type decoratedIntrospectionClient struct {
 	IntrospectionClient
 }
 
-func (r *decoratedIntrospectionClient) GetSignatureKeyID() (kid string) {
+func (r *decoratedIntrospectionClient) GetSigningKeyID() (kid string) {
 	return r.GetIntrospectionSignedResponseKeyID()
 }
 
-func (r *decoratedIntrospectionClient) GetSignatureAlg() (alg string) {
+func (r *decoratedIntrospectionClient) GetSigningAlg() (alg string) {
 	return r.GetIntrospectionSignedResponseAlg()
 }
 

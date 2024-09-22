@@ -13,20 +13,28 @@ var rander = rand.Reader // random function
 var (
 	// AlphaNum contains runes [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789].
 	AlphaNum = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
 	// Alpha contains runes [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ].
 	Alpha = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
 	// AlphaLowerNum contains runes [abcdefghijklmnopqrstuvwxyz0123456789].
 	AlphaLowerNum = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
 	// AlphaUpperNum contains runes [ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789].
 	AlphaUpperNum = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
 	// AlphaLower contains runes [abcdefghijklmnopqrstuvwxyz].
 	AlphaLower = []rune("abcdefghijklmnopqrstuvwxyz")
+
 	// AlphaUpperVowels contains runes [AEIOUY].
 	AlphaUpperVowels = []rune("AEIOUY")
+
 	// AlphaUpperNoVowels contains runes [BCDFGHJKLMNPQRSTVWXZ].
 	AlphaUpperNoVowels = []rune("BCDFGHJKLMNPQRSTVWXZ")
+
 	// AlphaUpper contains runes [ABCDEFGHIJKLMNOPQRSTUVWXYZ].
 	AlphaUpper = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
 	// Numeric contains runes [0123456789].
 	Numeric = []rune("0123456789")
 )
@@ -36,11 +44,13 @@ func RuneSequence(l int, allowedRunes []rune) (seq []rune, err error) {
 	c := big.NewInt(int64(len(allowedRunes)))
 	seq = make([]rune, l)
 
+	var r *big.Int
+
 	for i := 0; i < l; i++ {
-		r, err := rand.Int(rander, c)
-		if err != nil {
+		if r, err = rand.Int(rander, c); err != nil {
 			return seq, err
 		}
+
 		rn := allowedRunes[r.Uint64()]
 		seq[i] = rn
 	}
@@ -50,9 +60,9 @@ func RuneSequence(l int, allowedRunes []rune) (seq []rune, err error) {
 
 // MustString returns a random string sequence using the defined runes. Panics on error.
 func MustString(l int, allowedRunes []rune) string {
-	seq, err := RuneSequence(l, allowedRunes)
-	if err != nil {
+	if seq, err := RuneSequence(l, allowedRunes); err != nil {
 		panic(err)
+	} else {
+		return string(seq)
 	}
-	return string(seq)
 }

@@ -1,11 +1,6 @@
 package jwt
 
-import (
-	"errors"
-
-	"authelia.com/provider/oauth2/internal/consts"
-)
-
+/*
 func NewValidator(opts ...ValidatorOpt) (validator *Validator) {
 	validator = &Validator{
 		types: []string{consts.JSONWebTokenTypeJWT},
@@ -22,24 +17,6 @@ func NewValidator(opts ...ValidatorOpt) (validator *Validator) {
 }
 
 type ValidatorOpt func(*Validator)
-
-func ValidateTypes(types ...string) ValidatorOpt {
-	return func(validator *Validator) {
-		validator.types = types
-	}
-}
-
-func ValidateAlgorithm(alg string) ValidatorOpt {
-	return func(validator *Validator) {
-		validator.alg = alg
-	}
-}
-
-func ValidateKeyID(kid string) ValidatorOpt {
-	return func(validator *Validator) {
-		validator.kid = kid
-	}
-}
 
 func ValidateIssuer(iss string) ValidatorOpt {
 	return func(validator *Validator) {
@@ -95,12 +72,15 @@ func ValidateIssuedAt(iat int64) ValidatorOpt {
 	}
 }
 
-func ValidateRequireIssuedAt() ValidatorOpt {
+func ValidateRequireIssuedAt() TokenValidationOption {
 	return func(validator *Validator) {
 		validator.requireIAT = true
 	}
 }
 
+*/
+
+/*
 type Validator struct {
 	types      []string
 	alg        string
@@ -124,21 +104,21 @@ func (v Validator) Validate(token *Token) (err error) {
 	if len(v.types) != 0 {
 		if !validateTokenType(v.types, token.Header) {
 			vErr.Inner = errors.New("token has an invalid typ")
-			vErr.Errors |= ValidationErrorTypInvalid
+			vErr.Errors |= ValidationErrorHeaderTypeInvalid
 		}
 	}
 
 	if len(v.alg) != 0 {
 		if v.alg != string(token.SignatureAlgorithm) {
 			vErr.Inner = errors.New("token has an invalid alg")
-			vErr.Errors |= ValidationErrorAlgorithmInvalid
+			vErr.Errors |= ValidationErrorHeaderAlgorithmInvalid
 		}
 	}
 
 	if len(v.kid) != 0 {
 		if v.kid != token.KeyID {
 			vErr.Inner = errors.New("token has an invalid kid")
-			vErr.Errors |= ValidationErrorKeyIDInvalid
+			vErr.Errors |= ValidationErrorHeaderKeyIDInvalid
 		}
 	}
 
@@ -216,26 +196,4 @@ func (v Validator) Validate(token *Token) (err error) {
 	return vErr
 }
 
-func validateTokenType(typValues []string, header map[string]any) bool {
-	var (
-		typ string
-		raw any
-		ok  bool
-	)
-
-	if raw, ok = header[consts.JSONWebTokenHeaderType]; !ok {
-		return false
-	}
-
-	if typ, ok = raw.(string); !ok {
-		return false
-	}
-
-	for _, t := range typValues {
-		if t == typ {
-			return true
-		}
-	}
-
-	return false
-}
+*/

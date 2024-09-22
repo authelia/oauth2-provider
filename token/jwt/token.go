@@ -150,9 +150,9 @@ type Token struct {
 	valid bool
 }
 
-// Valid informs if the token was verified against a given verification key
+// IsSignatureValid informs if the token was verified against a given verification key
 // and claims are valid
-func (t *Token) Valid() bool {
+func (t *Token) IsSignatureValid() bool {
 	return t.valid
 }
 
@@ -343,8 +343,44 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	return tokenString, nil
 }
 
-func (t *Token) Validate() {
+// Valid validates the token headers given various input options. This does not validate any claims.
+func (t *Token) Valid(opts ...TokenValidationOption) (err error) {
+	vopts := &TokenValidationOptions{
+		types: []string{consts.JSONWebTokenTypeJWT},
+	}
 
+	for _, opt := range opts {
+		opt(vopts)
+	}
+
+	vErr := new(ValidationError)
+
+	if len(vopts.types) != 0 {
+		if !validateTokenType(vopts.types, t.Header) {
+			vErr.Inner = errors.New("token has an invalid typ")
+			vErr.Errors |= ValidationErrorHeaderTypeInvalid
+		}
+	}
+
+	if len(vopts.alg) != 0 {
+		if vopts.alg != string(t.SignatureAlgorithm) {
+			vErr.Inner = errors.New("token has an invalid alg")
+			vErr.Errors |= ValidationErrorHeaderAlgorithmInvalid
+		}
+	}
+
+	if len(vopts.kid) != 0 {
+		if vopts.kid != t.KeyID {
+			vErr.Inner = errors.New("token has an invalid kid")
+			vErr.Errors |= ValidationErrorHeaderKeyIDInvalid
+		}
+	}
+
+	if vErr.valid() {
+		return nil
+	}
+
+	return vErr
 }
 
 // IsJWTProfileAccessToken returns true if the token is a JWT Profile Access Token.
@@ -375,6 +411,32 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	typ, ok = raw.(string)
 
 	return ok && (typ == consts.JSONWebTokenTypeAccessToken || typ == consts.JSONWebTokenTypeAccessTokenAlternative)
+}
+
+type TokenValidationOption func(opts *TokenValidationOptions)
+
+type TokenValidationOptions struct {
+	types []string
+	alg   string
+	kid   string
+}
+
+func ValidateTypes(types ...string) TokenValidationOption {
+	return func(validator *TokenValidationOptions) {
+		validator.types = types
+	}
+}
+
+func ValidateAlgorithm(alg string) TokenValidationOption {
+	return func(validator *TokenValidationOptions) {
+		validator.alg = alg
+	}
+}
+
+func ValidateKeyID(kid string) TokenValidationOption {
+	return func(validator *TokenValidationOptions) {
+		validator.kid = kid
+	}
 }
 
 func unsignedToken(token *Token) (tokenString string, err error) {
@@ -434,4 +496,28 @@ func pointer(v any) any {
 		return value.Interface()
 	}
 	return v
+}
+
+func validateTokenType(typValues []string, header map[string]any) bool {
+	var (
+		typ string
+		raw any
+		ok  bool
+	)
+
+	if raw, ok = header[consts.JSONWebTokenHeaderType]; !ok {
+		return false
+	}
+
+	if typ, ok = raw.(string); !ok {
+		return false
+	}
+
+	for _, t := range typValues {
+		if t == typ {
+			return true
+		}
+	}
+
+	return false
 }

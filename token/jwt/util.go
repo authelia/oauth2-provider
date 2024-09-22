@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	reSignedJWT    = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
+	reSignedJWT    = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.([-_A-Za-z0-9]+)?$`)
 	reEncryptedJWT = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
 )
 
@@ -180,8 +180,13 @@ type PrivateKey interface {
 	Equal(x crypto.PrivateKey) bool
 }
 
+const (
+	JWKLookupErrorClientNoJWKS uint32 = 1 << iota
+)
+
 type JWKLookupError struct {
 	Description string
+	Errors      uint32 // bitfield.  see JWKLookupError... constants
 }
 
 func (e *JWKLookupError) GetDescription() string {
@@ -189,7 +194,7 @@ func (e *JWKLookupError) GetDescription() string {
 }
 
 func (e *JWKLookupError) Error() string {
-	return fmt.Sprintf("Error occurred retriving the JSON Web Key. %s", e.Description)
+	return fmt.Sprintf("Error occurred retrieving the JSON Web Key. %s", e.Description)
 }
 
 // FindClientPublicJWK given a BaseClient, JWKSFetcherStrategy, and search parameters will return a *jose.JSONWebKey on
@@ -237,7 +242,7 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 	}
 
 	if len(keys) == 0 {
-		return nil, &JWKLookupError{Description: fmt.Sprintf("The JSON Web Token uses signing key with kid '%s' which was not found.", kid)}
+		return nil, &JWKLookupError{Description: fmt.Sprintf("The JSON Web Token uses signing key with kid '%s' which was not found", kid)}
 	}
 
 	var matched []jose.JSONWebKey
@@ -258,10 +263,10 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 	case 1:
 		return &matched[0], nil
 	case 0:
-		return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+		return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set", kid, use, alg)}
 	default:
 		if strict {
-			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set.", kid, use, alg)}
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to find JSON web key with kid '%s', use '%s', and alg '%s' in JSON Web Key Set", kid, use, alg)}
 		}
 
 		return &matched[0], nil
@@ -276,15 +281,15 @@ func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, us
 	)
 
 	if secret, ok, err = client.GetClientSecretPlainText(); err != nil {
-		return nil, &JWKLookupError{Description: fmt.Sprintf("The client returned an error while trying to retrieve the plaintext client secret: %s.", err.Error())}
+		return nil, &JWKLookupError{Description: fmt.Sprintf("The client returned an error while trying to retrieve the plaintext client secret. %s", err.Error())}
 	}
 
 	if !ok {
-		return nil, &JWKLookupError{Description: "The client is not configured with a client secret."}
+		return nil, &JWKLookupError{Description: "The client is not configured with a client secret"}
 	}
 
 	if len(secret) == 0 {
-		return nil, &JWKLookupError{Description: "The client is not configured with a client secret that can be used for symmetric algorithms."}
+		return nil, &JWKLookupError{Description: "The client is not configured with a client secret that can be used for symmetric algorithms"}
 	}
 
 	return &jose.JSONWebKey{
@@ -331,4 +336,25 @@ func assign(a, b map[string]any) map[string]any {
 		a[k] = w
 	}
 	return a
+}
+
+func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
+	if jwk == nil {
+		return jose.JSONWebKey{}
+	}
+
+	if _, ok := jwk.Key.([]byte); ok && IsSignedJWTClientSecretAlg(jwk.Algorithm) {
+		return jose.JSONWebKey{
+			KeyID:                       jwk.KeyID,
+			Key:                         jwk.Key,
+			Algorithm:                   jwk.Algorithm,
+			Use:                         jwk.Use,
+			Certificates:                jwk.Certificates,
+			CertificatesURL:             jwk.CertificatesURL,
+			CertificateThumbprintSHA1:   jwk.CertificateThumbprintSHA1,
+			CertificateThumbprintSHA256: jwk.CertificateThumbprintSHA256,
+		}
+	}
+
+	return jwk.Public()
 }

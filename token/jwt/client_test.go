@@ -7,6 +7,7 @@ import (
 )
 
 type testClient struct {
+	id                  string
 	secret              []byte
 	secretNotPlainText  bool
 	secretNotDefined    bool
@@ -15,6 +16,10 @@ type testClient struct {
 	csigned             bool
 	jwks                *jose.JSONWebKeySet
 	jwksURI             string
+}
+
+func (r *testClient) GetID() string {
+	return r.id
 }
 
 func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
@@ -33,11 +38,11 @@ func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err err
 	return nil, true, fmt.Errorf("not supported")
 }
 
-func (r *testClient) GetSignatureKeyID() (kid string) {
+func (r *testClient) GetSigningKeyID() (kid string) {
 	return r.kid
 }
 
-func (r *testClient) GetSignatureAlg() (alg string) {
+func (r *testClient) GetSigningAlg() (alg string) {
 	return r.alg
 }
 

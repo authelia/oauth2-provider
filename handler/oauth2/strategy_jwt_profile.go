@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
-	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // JWTProfileCoreStrategy is a JWT RS256 strategy.
@@ -174,39 +174,86 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	return s.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }
 
-func validateJWT(ctx context.Context, jwtStrategy jwt.Strategy, client jwt.Client, token string) (t *jwt.Token, err error) {
-	t, err = jwtStrategy.Decode(ctx, token, jwt.WithClient(client))
-	if err == nil {
-		err = t.Claims.Valid()
-		return
+func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, tokenString string) (token *jwt.Token, err error) {
+	if token, err = strategy.Decode(ctx, tokenString, jwt.WithClient(client)); err != nil {
+		return token, fmtValidateJWTError(token, client, err)
 	}
 
-	var e *jwt.ValidationError
-	if err != nil && errors.As(err, &e) {
-		err = errorsx.WithStack(toRFCErr(e).WithWrap(err).WithDebugError(err))
+	if err = token.Claims.Valid(); err != nil {
+		return token, fmtValidateJWTError(token, client, err)
 	}
 
-	return
+	return token, nil
 }
 
-func toRFCErr(v *jwt.ValidationError) *oauth2.RFC6749Error {
-	switch {
-	case v == nil:
-		return nil
-	case v.Has(jwt.ValidationErrorMalformed):
-		return oauth2.ErrInvalidTokenFormat
-	case v.Has(jwt.ValidationErrorUnverifiable | jwt.ValidationErrorSignatureInvalid):
-		return oauth2.ErrTokenSignatureMismatch
-	case v.Has(jwt.ValidationErrorExpired):
-		return oauth2.ErrTokenExpired
-	case v.Has(jwt.ValidationErrorAudience |
-		jwt.ValidationErrorIssuedAt |
-		jwt.ValidationErrorIssuer |
-		jwt.ValidationErrorNotValidYet |
-		jwt.ValidationErrorId |
-		jwt.ValidationErrorClaimsInvalid):
-		return oauth2.ErrTokenClaim
-	default:
-		return oauth2.ErrRequestUnauthorized
+func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err error) {
+	var (
+		clientText string
+		skid, salg string
+	)
+
+	if client != nil {
+		clientText = fmt.Sprintf("provided by client with id '%s' ", client.GetID())
+		skid, salg = client.GetSigningKeyID(), client.GetSigningAlg()
+	}
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'kid' value '%s' but it was signed with the 'kid' value '%s'.", clientText, skid, token.KeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'alg' value '%s' but it was signed with the 'alg' value '%s'.", clientText, salg, token.SignatureAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'typ' value '%s' but it was signed with the 'typ' value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis malformed. %s.", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			return oauth2.ErrTokenSignatureMismatch.WithDebugf("Token %sis not able to be verified. %s.", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
+			return oauth2.ErrTokenSignatureMismatch.WithDebugf("Token %shas an invalid signature.", clientText)
+		case errJWTValidation.Has(jwt.ValidationErrorExpired):
+			exp, ok := token.Claims.GetExpiresAt()
+			if ok {
+				return oauth2.ErrTokenExpired.WithDebugf("Token %sexpired at %d.", clientText, exp)
+			} else {
+				return oauth2.ErrTokenExpired.WithDebugf("Token %sdoes not have an 'exp' claim or it has an invalid type.", clientText)
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
+			iat, ok := token.Claims.GetIssuedAt()
+			if ok {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis issued in the future. The token was issued at %d.", clientText, iat)
+			} else {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis issued in the future. The token does not have an 'iat' claim or it has an invalid type.", clientText)
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
+			nbf, ok := token.Claims.GetNotBefore()
+			if ok {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis not valid yet. The token is not valid before %d.", clientText, nbf)
+			} else {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis not valid yet. The token does not have an 'nbf' claim or it has an invalid type.", clientText)
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
+			iss, ok := token.Claims.GetIssuer()
+			if ok {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid issuer. The token was expected to have an 'iss' claim with one of the following values: ''. The 'iss' claim has a value of '%s'.", clientText, iss)
+			} else {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid issuer. The token does not have an 'iss' claim or it has an invalid type.", clientText)
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorAudience):
+			aud, ok := token.Claims.GetAudience()
+			if ok {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token was expected to have an 'iss' claim with one of the following values: ''. The 'iss' claim has a value of '%s'.", clientText, aud)
+			} else {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token does not have an 'iss' claim or it has an invalid type.", clientText)
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
+			return oauth2.ErrTokenClaim.WithDebugf("Token %shas invalid claims. Error occurred trying to validate the request objects claims: %s", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			return oauth2.ErrTokenClaim.WithDebugf("Token %scould not be validated. Error occurred trying to validate the token: %s", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		}
+	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+		return oauth2.ErrRequestUnauthorized.WithDebugf("Token %scould not be validated due to a key lookup error. %s.", clientText, errJWKLookup.Description)
+	} else {
+		return oauth2.ErrRequestUnauthorized.WithDebugf("Token %scould not be validated. %s", clientText, oauth2.ErrorToDebugRFC6749Error(inner).Error())
 	}
 }

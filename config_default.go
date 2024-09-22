@@ -397,6 +397,12 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context)
 }
 
 func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
+	if c.JWTStrategy == nil {
+		c.JWTStrategy = &jwt.DefaultStrategy{
+			Config: c,
+		}
+	}
+
 	return c.JWTStrategy
 }
 

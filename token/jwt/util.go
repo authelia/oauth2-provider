@@ -303,7 +303,7 @@ func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, us
 func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
 
-	token.SetJWS(headers, claims, jose.SignatureAlgorithm(key.Algorithm))
+	token.SetJWS(headers, claims, key.KeyID, jose.SignatureAlgorithm(key.Algorithm))
 
 	return token.CompactSigned(key)
 }
@@ -311,8 +311,8 @@ func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, 
 func encodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
-	token.SetJWS(headers, claims, jose.SignatureAlgorithm(keySig.Algorithm))
-	token.SetJWE(headersJWE, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
+	token.SetJWS(headers, claims, keySig.KeyID, jose.SignatureAlgorithm(keySig.Algorithm))
+	token.SetJWE(headersJWE, keyEnc.KeyID, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
 
 	return token.CompactEncrypted(keySig, keyEnc)
 }

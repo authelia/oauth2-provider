@@ -169,12 +169,11 @@ func (m MapClaims) VerifyNotBefore(cmp int64, required bool) (ok bool) {
 	return verifyInt64Past(nbf, cmp, required)
 }
 
-// Valid validates time based claims "exp, iat, nbf".
-// There is no accounting for clock skew.
-// As well, if any of the above claims are not in the token, it will still
-// be considered a valid claim.
-func (m MapClaims) Valid(opts ...ValidationOpt) error {
-	vopts := &optsValidation{}
+// Valid validates the given claims. By default it only validates time based claims "exp, iat, nbf"; there is no
+// accounting for clock skew, and if any of the above claims are not in the token, the claims will still be considered
+// valid. However all of these options can be tuned by the opts.
+func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
+	vopts := &ClaimValidationOptions{}
 
 	for _, opt := range opts {
 		opt(vopts)
@@ -281,9 +280,9 @@ func (m MapClaims) toInt64(claim string) (val int64, ok bool) {
 	return 0, false
 }
 
-type ValidationOpt func(opts *optsValidation)
+type ClaimValidationOption func(opts *ClaimValidationOptions)
 
-type optsValidation struct {
+type ClaimValidationOptions struct {
 	timef       func() time.Time
 	iss         string
 	aud         []string
@@ -294,50 +293,50 @@ type optsValidation struct {
 	nbfRequired bool
 }
 
-func ValidateTimeFunc(timef func() time.Time) ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.timef = timef
 	}
 }
 
-func ValidateIssuer(iss string) ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateIssuer(iss string) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.iss = iss
 	}
 }
 
-func ValidateAudienceAny(aud ...string) ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateAudienceAny(aud ...string) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.aud = aud
 	}
 }
 
-func ValidateAudienceAll(aud ...string) ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateAudienceAll(aud ...string) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.audAll = aud
 	}
 }
 
-func ValidateSubject(sub string) ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateSubject(sub string) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.sub = sub
 	}
 }
 
-func ValidateRequireExpiresAt() ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateRequireExpiresAt() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.expRequired = true
 	}
 }
 
-func ValidateRequireIssuedAt() ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateRequireIssuedAt() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.iatRequired = true
 	}
 }
 
-func ValidateRequireNotBefore() ValidationOpt {
-	return func(opts *optsValidation) {
+func ValidateRequireNotBefore() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
 		opts.nbfRequired = true
 	}
 }

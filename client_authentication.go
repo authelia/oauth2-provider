@@ -335,8 +335,16 @@ type EndpointClientAuthHandler interface {
 	// GetAuthMethod returns the appropriate auth method for this client.
 	GetAuthMethod(client AuthenticationMethodClient) string
 
+	GetAuthSigningKeyID(client AuthenticationMethodClient) string
+
 	// GetAuthSigningAlg returns the appropriate auth signature algorithm for this client.
 	GetAuthSigningAlg(client AuthenticationMethodClient) string
+
+	GetAuthEncryptionKeyID(client AuthenticationMethodClient) string
+
+	GetAuthEncryptionAlg(client AuthenticationMethodClient) string
+
+	GetAuthEncryptionEnc(client AuthenticationMethodClient) string
 
 	// Name returns the appropriate name for this endpoint for logging purposes.
 	Name() string
@@ -345,14 +353,75 @@ type EndpointClientAuthHandler interface {
 	AllowAuthMethodAny() bool
 }
 
+type EndpointClientAuthJWTClient struct {
+	client  AuthenticationMethodClient
+	handler EndpointClientAuthHandler
+}
+
+func (c *EndpointClientAuthJWTClient) GetID() string {
+	return c.client.GetID()
+}
+
+func (c *EndpointClientAuthJWTClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
+	return c.client.GetClientSecretPlainText()
+}
+
+func (c *EndpointClientAuthJWTClient) GetJSONWebKeys() (jwks *jose.JSONWebKeySet) {
+	return c.client.GetJSONWebKeys()
+}
+
+func (c *EndpointClientAuthJWTClient) GetJSONWebKeysURI() (uri string) {
+	return c.client.GetJSONWebKeysURI()
+}
+
+func (c *EndpointClientAuthJWTClient) GetSigningKeyID() (kid string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetSigningAlg() (alg string) {
+	return c.handler.GetAuthSigningAlg(c.client)
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionKeyID() (kid string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionAlg() (alg string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionEnc() (enc string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) IsClientSigned() (is bool) {
+	return true
+}
+
 type TokenEndpointClientAuthHandler struct{}
 
 func (h *TokenEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthMethod()
 }
 
+func (h *TokenEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *TokenEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthSigningAlg()
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *TokenEndpointClientAuthHandler) Name() string {
@@ -369,8 +438,24 @@ func (h *IntrospectionEndpointClientAuthHandler) GetAuthMethod(client Authentica
 	return client.GetIntrospectionEndpointAuthMethod()
 }
 
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *IntrospectionEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetIntrospectionEndpointAuthSigningAlg()
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *IntrospectionEndpointClientAuthHandler) Name() string {
@@ -387,8 +472,24 @@ func (h *RevocationEndpointClientAuthHandler) GetAuthMethod(client Authenticatio
 	return client.GetRevocationEndpointAuthMethod()
 }
 
+func (h *RevocationEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *RevocationEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetRevocationEndpointAuthSigningAlg()
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *RevocationEndpointClientAuthHandler) Name() string {

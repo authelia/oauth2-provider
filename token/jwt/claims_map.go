@@ -182,9 +182,9 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	var now int64
 
 	if vopts.timef != nil {
-		now = vopts.timef().Unix()
+		now = vopts.timef().UTC().Unix()
 	} else {
-		now = TimeFunc().Unix()
+		now = TimeFunc().UTC().Unix()
 	}
 
 	vErr := new(ValidationError)

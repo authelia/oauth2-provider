@@ -7,7 +7,6 @@ const (
 	JSONWebTokenHeaderCompressionAlgorithm = "zip"
 	JSONWebTokenHeaderPBES2Count           = "p2c"
 
-	JSONWebTokenHeaderUse         = "use"
 	JSONWebTokenHeaderType        = "typ"
 	JSONWebTokenHeaderContentType = "cty"
 )

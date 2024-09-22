@@ -72,7 +72,7 @@ func ValidateIssuedAt(iat int64) ValidatorOpt {
 	}
 }
 
-func ValidateRequireIssuedAt() TokenValidationOption {
+func ValidateRequireIssuedAt() HeaderValidationOption {
 	return func(validator *Validator) {
 		validator.requireIAT = true
 	}

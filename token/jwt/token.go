@@ -135,7 +135,8 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 // using go-json
 type Token struct {
 	KeyID                string
-	SignatureAlgorithm   jose.SignatureAlgorithm   // alg (JWS)
+	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS)
+	EncryptionKeyID      string
 	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE)
 	ContentEncryption    jose.ContentEncryption    // enc (JWE)
 	CompressionAlgorithm jose.CompressionAlgorithm // zip (JWE)
@@ -194,18 +195,20 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 }
 
 // SetJWS sets the JWS output values.
-func (t *Token) SetJWS(header Mapper, claims MapClaims, alg jose.SignatureAlgorithm) {
+func (t *Token) SetJWS(header Mapper, claims MapClaims, kid string, alg jose.SignatureAlgorithm) {
 	assign(t.Header, header.ToMap())
 
+	t.KeyID = kid
 	t.SignatureAlgorithm = alg
 
 	t.Claims = claims
 }
 
 // SetJWE sets the JWE output values.
-func (t *Token) SetJWE(header Mapper, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
+func (t *Token) SetJWE(header Mapper, kid string, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
 	assign(t.HeaderJWE, header.ToMap())
 
+	t.EncryptionKeyID = kid
 	t.KeyAlgorithm = alg
 	t.ContentEncryption = enc
 	t.CompressionAlgorithm = zip
@@ -223,6 +226,7 @@ func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
 
 	if jwe.Header.KeyID != "" {
 		t.HeaderJWE[consts.JSONWebTokenHeaderKeyIdentifier] = jwe.Header.KeyID
+		t.EncryptionKeyID = jwe.Header.KeyID
 	}
 
 	for header, value := range jwe.Header.ExtraHeaders {
@@ -344,8 +348,8 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 }
 
 // Valid validates the token headers given various input options. This does not validate any claims.
-func (t *Token) Valid(opts ...TokenValidationOption) (err error) {
-	vopts := &TokenValidationOptions{
+func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
+	vopts := &HeaderValidationOptions{
 		types: []string{consts.JSONWebTokenTypeJWT},
 	}
 
@@ -362,22 +366,43 @@ func (t *Token) Valid(opts ...TokenValidationOption) (err error) {
 
 	if len(vopts.types) != 0 {
 		if !validateTokenType(vopts.types, t.Header) {
-			vErr.Inner = errors.New("token has an invalid typ")
+			vErr.Inner = errors.New("token was signed with an invalid typ")
 			vErr.Errors |= ValidationErrorHeaderTypeInvalid
 		}
 	}
 
 	if len(vopts.alg) != 0 {
 		if vopts.alg != string(t.SignatureAlgorithm) {
-			vErr.Inner = errors.New("token has an invalid alg")
+			vErr.Inner = errors.New("token was signed with an invalid alg")
 			vErr.Errors |= ValidationErrorHeaderAlgorithmInvalid
 		}
 	}
 
 	if len(vopts.kid) != 0 {
 		if vopts.kid != t.KeyID {
-			vErr.Inner = errors.New("token has an invalid kid")
+			vErr.Inner = errors.New("token was signed with an invalid kid")
 			vErr.Errors |= ValidationErrorHeaderKeyIDInvalid
+		}
+	}
+
+	if len(vopts.keyAlg) != 0 && len(t.KeyAlgorithm) != 0 {
+		if vopts.keyAlg != string(t.KeyAlgorithm) {
+			vErr.Inner = errors.New("token was encrypted with an invalid alg")
+			vErr.Errors |= ValidationErrorHeaderKeyAlgorithmInvalid
+		}
+	}
+
+	if len(vopts.contentEnc) != 0 && len(t.ContentEncryption) != 0 {
+		if vopts.contentEnc != string(t.ContentEncryption) {
+			vErr.Inner = errors.New("token was encrypted with an invalid enc")
+			vErr.Errors |= ValidationErrorHeaderContentEncryptionInvalid
+		}
+	}
+
+	if len(vopts.kidEnc) != 0 && len(t.EncryptionKeyID) != 0 {
+		if vopts.kidEnc != t.EncryptionKeyID {
+			vErr.Inner = errors.New("token was encrypted with an invalid kid")
+			vErr.Errors |= ValidationErrorHeaderEncryptionKeyIDInvalid
 		}
 	}
 
@@ -418,29 +443,50 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	return ok && (typ == consts.JSONWebTokenTypeAccessToken || typ == consts.JSONWebTokenTypeAccessTokenAlternative)
 }
 
-type TokenValidationOption func(opts *TokenValidationOptions)
+type HeaderValidationOption func(opts *HeaderValidationOptions)
 
-type TokenValidationOptions struct {
-	types []string
-	alg   string
-	kid   string
+type HeaderValidationOptions struct {
+	types      []string
+	alg        string
+	kid        string
+	kidEnc     string
+	keyAlg     string
+	contentEnc string
 }
 
-func ValidateTypes(types ...string) TokenValidationOption {
-	return func(validator *TokenValidationOptions) {
+func ValidateTypes(types ...string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
 		validator.types = types
 	}
 }
 
-func ValidateAlgorithm(alg string) TokenValidationOption {
-	return func(validator *TokenValidationOptions) {
+func ValidateKeyID(kid string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.kid = kid
+	}
+}
+
+func ValidateAlgorithm(alg string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
 		validator.alg = alg
 	}
 }
 
-func ValidateKeyID(kid string) TokenValidationOption {
-	return func(validator *TokenValidationOptions) {
-		validator.kid = kid
+func ValidateEncryptionKeyID(kid string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.kidEnc = kid
+	}
+}
+
+func ValidateKeyAlgorithm(alg string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.keyAlg = alg
+	}
+}
+
+func ValidateContentEncryption(enc string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.contentEnc = enc
 	}
 }
 

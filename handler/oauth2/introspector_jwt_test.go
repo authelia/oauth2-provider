@@ -109,7 +109,7 @@ func TestIntrospectJWT(t *testing.T) {
 				parts := strings.Split(tokenString, ".")
 				require.Len(t, parts, 3, "%s - %v", tokenString, parts)
 				dec, err := base64.RawURLEncoding.DecodeString(parts[1])
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				s := strings.ReplaceAll(string(dec), "peter", "piper")
 				parts[1] = base64.RawURLEncoding.EncodeToString([]byte(s))
 

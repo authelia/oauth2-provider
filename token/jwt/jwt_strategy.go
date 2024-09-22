@@ -192,7 +192,6 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	}
 
 	var (
-		// key *jose.JSONWebKey
 		t   *jwt.JSONWebToken
 		jwe *jose.JSONWebEncryption
 	)
@@ -201,54 +200,6 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	if err != nil {
 		return token, err
 	}
-
-	/*
-		if IsEncryptedJWT(tokenString) {
-			if jwe, err = jose.ParseEncryptedCompact(tokenString, o.keyAlgorithm, o.contentEncryption); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-			}
-
-			var (
-				kid, alg, cty string
-			)
-
-			if kid, alg, _, cty, err = headerValidateJWE(jwe.Header); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-			}
-
-			if o.jweKeyFunc != nil {
-				if key, err = o.jweKeyFunc(ctx, jwe, kid, alg); err != nil {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-				}
-			} else if IsEncryptedJWTClientSecretAlg(alg) {
-				if o.client == nil {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-				}
-
-				if key, err = NewJWKFromClientSecret(ctx, o.client, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
-					return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-				}
-			} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
-			}
-
-			var rawJWT []byte
-
-			if rawJWT, err = jwe.Decrypt(key); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-			}
-
-			if t, err = jwt.ParseSigned(string(rawJWT), o.sigAlgorithm); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-			}
-
-			if err = headerValidateJWSNested(t.Headers, cty); err != nil {
-				return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-			}
-		} else if t, err = jwt.ParseSigned(tokenString, o.sigAlgorithm); err != nil {
-			return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-		}
-	*/
 
 	if t, err = jwt.ParseSigned(tokenString, o.sigAlgorithm); err != nil {
 		return token, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})

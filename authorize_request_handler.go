@@ -125,34 +125,23 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	optsValidHeader := []jwt.TokenValidationOption{
+	optsValidHeader := []jwt.HeaderValidationOption{
 		jwt.ValidateKeyID(client.GetRequestObjectSigningKeyID()),
 		jwt.ValidateAlgorithm(client.GetRequestObjectSigningAlg()),
+		jwt.ValidateEncryptionKeyID(client.GetRequestObjectEncryptionKeyID()),
+		jwt.ValidateKeyAlgorithm(client.GetRequestObjectEncryptionAlg()),
+		jwt.ValidateContentEncryption(client.GetRequestObjectEncryptionEnc()),
 	}
 
 	if err = token.Valid(optsValidHeader...); err != nil {
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	if algAny {
-		if token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
-			return errorsx.WithStack(
-				ErrInvalidRequestObject.
-					WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
-					WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
-		}
-	} else if string(token.SignatureAlgorithm) != alg {
+	if algAny && token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
 		return errorsx.WithStack(
 			ErrInvalidRequestObject.
 				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
-				WithDebugf("%s client with id '%s' was registered with a 'request_object_signing_alg' value of '%s' but the request object had the 'alg' value '%s' in the header.", hintRequestObjectPrefix(openid), client.GetID(), alg, token.SignatureAlgorithm))
-	}
-
-	if kid := client.GetRequestObjectSigningKeyID(); kid != "" && kid != token.KeyID {
-		return errorsx.WithStack(
-			ErrInvalidRequestObject.
-				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
-				WithDebugf("%s client with id '%s' was registered with a 'request_object_signing_key_id' value of '%s' but the request object had the 'kid' value '%s' in the header.", hintRequestObjectPrefix(openid), client.GetID(), kid, token.KeyID))
+				WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
 	}
 
 	claims := token.Claims
@@ -602,6 +591,12 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'alg' value '%s' due to the client registration 'request_object_signing_alg' value but the request object was signed with the 'alg' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningAlg(), token.SignatureAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'typ' value '%s' but the request object was signed with the 'typ' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'kid' value '%s' due to the client registration 'request_object_encryption_key_id' value but the request object was encrypted with the 'kid' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionKeyID(), token.EncryptionKeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'alg' value '%s' due to the client registration 'request_object_encryption_alg' value but the request object was encrypted with the 'alg' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionAlg(), token.KeyAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'enc' value '%s' due to the client registration 'request_object_encryption_enc' value but the request object was encrypted with the 'enc' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionEnc(), token.ContentEncryption)
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
 			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):

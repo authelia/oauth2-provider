@@ -82,7 +82,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 			CoreStrategy:               NewOAuth2HMACStrategy(config),
 			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
 			Strategy:                   strategy,
-			//Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
 		},
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,

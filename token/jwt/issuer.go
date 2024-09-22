@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// NewDefaultIssuer returns a new issuer and verifies that one RS256 key exists.
 func NewDefaultIssuer(keys ...jose.JSONWebKey) (issuer *DefaultIssuer, err error) {
 	jwks := &jose.JSONWebKeySet{
 		Keys: make([]jose.JSONWebKey, len(keys)),
@@ -21,6 +22,10 @@ func NewDefaultIssuer(keys ...jose.JSONWebKey) (issuer *DefaultIssuer, err error
 
 	for i, key := range keys {
 		jwks.Keys[i] = key
+
+		if hasRS256 {
+			continue
+		}
 
 		if key.Use != consts.JSONWebTokenUseSignature {
 			continue
@@ -37,9 +42,31 @@ func NewDefaultIssuer(keys ...jose.JSONWebKey) (issuer *DefaultIssuer, err error
 		return nil, errors.New("no RS256 signature algorithm found")
 	}
 
-	return issuer, nil
+	return NewDefaultIssuerUnverifiedFromJWKS(jwks), nil
 }
 
+func NewDefaultIssuerFromJWKS(jwks *jose.JSONWebKeySet) (issuer *DefaultIssuer, err error) {
+	for _, key := range jwks.Keys {
+		if key.Use != consts.JSONWebTokenUseSignature {
+			continue
+		}
+
+		if key.Algorithm != string(jose.RS256) {
+			continue
+		}
+
+		return &DefaultIssuer{jwks: jwks}, nil
+	}
+
+	return nil, errors.New("no RS256 signature algorithm found")
+}
+
+// NewDefaultIssuerUnverifiedFromJWKS returns a new issuer from a jose.JSONWebKeySet without verification.
+func NewDefaultIssuerUnverifiedFromJWKS(jwks *jose.JSONWebKeySet) (issuer *DefaultIssuer) {
+	return &DefaultIssuer{jwks: jwks}
+}
+
+// MustNewDefaultIssuerRS256 is the same as NewDefaultIssuerRS256 but it panics if an error occurs.
 func MustNewDefaultIssuerRS256(key any) (issuer *DefaultIssuer) {
 	var err error
 
@@ -50,6 +77,7 @@ func MustNewDefaultIssuerRS256(key any) (issuer *DefaultIssuer) {
 	return issuer
 }
 
+// NewDefaultIssuerRS256 returns an issuer with a single key and returns an error if it's not an RSA2048 or higher key.
 func NewDefaultIssuerRS256(key any) (issuer *DefaultIssuer, err error) {
 	switch k := key.(type) {
 	case *rsa.PrivateKey:
@@ -63,6 +91,7 @@ func NewDefaultIssuerRS256(key any) (issuer *DefaultIssuer, err error) {
 	}
 }
 
+// NewDefaultIssuerRS256Unverified returns an issuer with a single key asserting the type is an RSA key.
 func NewDefaultIssuerRS256Unverified(key any) (issuer *DefaultIssuer) {
 	return &DefaultIssuer{
 		jwks: &jose.JSONWebKeySet{
@@ -78,6 +107,7 @@ func NewDefaultIssuerRS256Unverified(key any) (issuer *DefaultIssuer) {
 	}
 }
 
+// GenDefaultIssuer generates a *DefaultIssuer with a random RSA key.
 func GenDefaultIssuer() (issuer *DefaultIssuer, err error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -87,6 +117,7 @@ func GenDefaultIssuer() (issuer *DefaultIssuer, err error) {
 	return NewDefaultIssuerRS256(key)
 }
 
+// MustGenDefaultIssuer is the same as GenDefaultIssuer but it panics on an error.
 func MustGenDefaultIssuer() (issuer *DefaultIssuer) {
 	var err error
 

@@ -32,9 +32,10 @@ func TestAuthenticateClient(t *testing.T) {
 	jwksRSA := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &keyRSA.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "RS256",
+				Key:       &keyRSA.PublicKey,
 			},
 		},
 	}
@@ -694,13 +695,20 @@ func TestAuthenticateClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+				AllowedJWTAssertionAudiences: []string{"token-url"},
+				HTTPClient:                   retryablehttp.NewClient(),
+			}
+
+			config.JWTStrategy = &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwksRSA),
+			}
+
 			provider := &Fosite{
-				Store: storage.NewMemoryStore(),
-				Config: &Config{
-					JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-					AllowedJWTAssertionAudiences: []string{"token-url"},
-					HTTPClient:                   retryablehttp.NewClient(),
-				},
+				Store:  storage.NewMemoryStore(),
+				Config: config,
 			}
 
 			var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
@@ -761,12 +769,19 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.Clients[client.ID] = client
 
+	config := &Config{
+		JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+		AllowedJWTAssertionAudiences: []string{"token-url"},
+	}
+
+	config.JWTStrategy = &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
 	provider := &Fosite{
-		Store: store,
-		Config: &Config{
-			JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-			AllowedJWTAssertionAudiences: []string{"token-url"},
-		},
+		Store:  store,
+		Config: config,
 	}
 
 	formValues := url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{

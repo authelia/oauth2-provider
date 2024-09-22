@@ -355,6 +355,11 @@ func (t *Token) Valid(opts ...TokenValidationOption) (err error) {
 
 	vErr := new(ValidationError)
 
+	if !t.valid {
+		vErr.Inner = errors.New("token has an invalid or unverified signature")
+		vErr.Errors |= ValidationErrorSignatureInvalid
+	}
+
 	if len(vopts.types) != 0 {
 		if !validateTokenType(vopts.types, t.Header) {
 			vErr.Inner = errors.New("token has an invalid typ")

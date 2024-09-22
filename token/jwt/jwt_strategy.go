@@ -67,7 +67,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 		if keySig, err = j.Issuer.GetIssuerJWK(ctx, "", string(jose.RS256), consts.JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
-	} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSignatureKeyID(), o.client.GetSignatureAlg(), consts.JSONWebTokenUseSignature); err != nil {
+	} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), consts.JSONWebTokenUseSignature); err != nil {
 		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 	}
 

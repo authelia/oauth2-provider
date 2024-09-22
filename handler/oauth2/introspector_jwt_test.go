@@ -6,9 +6,9 @@ package oauth2
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,87 +33,115 @@ func TestIntrospectJWT(t *testing.T) {
 		Config: config,
 	}
 
-	var v = &StatelessJWTValidator{
+	validator := &StatelessJWTValidator{
 		Strategy: strategy,
 		Config: &oauth2.Config{
 			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
 	}
 
-	for k, c := range []struct {
-		description string
-		token       func() string
-		expectErr   error
-		scopes      []string
+	testCases := []struct {
+		name     string
+		token    func(t *testing.T) string
+		err      error
+		expected string
+		scopes   []string
 	}{
 		{
-			description: "should fail because jwt is expired",
-			token: func() string {
-				jwt := jwtExpiredCase(oauth2.AccessToken)
-				token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
-				assert.NoError(t, err)
-				return token
+			name: "ShouldFailTokenExpired",
+			token: func(t *testing.T) string {
+				token := jwtExpiredCase(oauth2.AccessToken, time.Unix(1726972738, 0))
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				require.NoError(t, err)
+
+				return tokenString
 			},
-			expectErr: oauth2.ErrTokenExpired,
+			err:      oauth2.ErrTokenExpired,
+			expected: "Token expired. The token expired. Token expired at 1726969138.",
 		},
 		{
-			description: "should pass because scope was granted",
-			token: func() string {
-				jwt := jwtValidCase(oauth2.AccessToken)
-				jwt.GrantedScope = []string{"foo", "bar"}
-				token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
-				assert.NoError(t, err)
-				return token
+			name: "ShouldPassScopeGranted",
+			token: func(t *testing.T) string {
+				token := jwtValidCase(oauth2.AccessToken)
+				token.GrantedScope = []string{"foo", "bar"}
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+
+				require.NoError(t, err)
+
+				return tokenString
 			},
 			scopes: []string{"foo"},
 		},
 		{
-			description: "should fail because scope was not granted",
-			token: func() string {
-				jwt := jwtValidCase(oauth2.AccessToken)
-				token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
-				assert.NoError(t, err)
-				return token
+			name: "ShouldFailWrongTyp",
+			token: func(t *testing.T) string {
+				token := jwtInvalidTypCase(oauth2.AccessToken)
+				token.GrantedScope = []string{"foo", "bar"}
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+
+				require.NoError(t, err)
+
+				return tokenString
 			},
-			scopes:    []string{"foo"},
-			expectErr: oauth2.ErrInvalidScope,
+			scopes:   []string{"foo"},
+			err:      oauth2.ErrRequestUnauthorized,
+			expected: "The request could not be authorized. Check that you provided valid credentials in the right format. The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt'.",
 		},
 		{
-			description: "should fail because signature is invalid",
-			token: func() string {
-				jwt := jwtValidCase(oauth2.AccessToken)
-				token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
-				assert.NoError(t, err)
-				parts := strings.Split(token, ".")
-				require.Len(t, parts, 3, "%s - %v", token, parts)
+			name: "ShouldFailScopeNotGranted",
+			token: func(t *testing.T) string {
+				token := jwtValidCase(oauth2.AccessToken)
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				require.NoError(t, err)
+
+				return tokenString
+			},
+			scopes:   []string{"foo"},
+			err:      oauth2.ErrInvalidScope,
+			expected: "The requested scope is invalid, unknown, or malformed. The request scope 'foo' has not been granted or is not allowed to be requested.",
+		},
+		{
+			name: "ShouldFailInvalidSignature",
+			token: func(t *testing.T) string {
+				token := jwtValidCase(oauth2.AccessToken)
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				require.NoError(t, err)
+				parts := strings.Split(tokenString, ".")
+				require.Len(t, parts, 3, "%s - %v", tokenString, parts)
 				dec, err := base64.RawURLEncoding.DecodeString(parts[1])
 				assert.NoError(t, err)
 				s := strings.ReplaceAll(string(dec), "peter", "piper")
 				parts[1] = base64.RawURLEncoding.EncodeToString([]byte(s))
+
 				return strings.Join(parts, ".")
 			},
-			expectErr: oauth2.ErrTokenSignatureMismatch,
+			err:      oauth2.ErrTokenSignatureMismatch,
+			expected: "Token signature mismatch. Check that you provided a valid token in the right format. Token has an invalid signature.",
 		},
 		{
-			description: "should pass",
-			token: func() string {
-				jwt := jwtValidCase(oauth2.AccessToken)
-				token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
-				assert.NoError(t, err)
-				return token
+			name: "ShouldPass",
+			token: func(t *testing.T) string {
+				token := jwtValidCase(oauth2.AccessToken)
+				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				require.NoError(t, err)
+
+				return tokenString
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d:%v", k, c.description), func(t *testing.T) {
-			if c.scopes == nil {
-				c.scopes = []string{}
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.scopes == nil {
+				tc.scopes = []string{}
 			}
 
 			areq := oauth2.NewAccessRequest(nil)
-			_, err := v.IntrospectToken(context.TODO(), c.token(), oauth2.AccessToken, areq, c.scopes)
+			_, err := validator.IntrospectToken(context.TODO(), tc.token(t), oauth2.AccessToken, areq, tc.scopes)
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != nil {
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, "peter", areq.Session.GetSubject())

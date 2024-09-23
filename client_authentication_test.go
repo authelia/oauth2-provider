@@ -29,6 +29,7 @@ import (
 
 func TestAuthenticateClient(t *testing.T) {
 	keyRSA := gen.MustRSAKey()
+
 	jwksRSA := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
@@ -44,9 +45,27 @@ func TestAuthenticateClient(t *testing.T) {
 	jwksECDSA := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &keyECDSA.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "ES256",
+				Key:       &keyECDSA.PublicKey,
+			},
+		},
+	}
+
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "RS256",
+				Key:       keyRSA,
+			},
+			{
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "ES256",
+				Key:       keyECDSA,
 			},
 		},
 	}
@@ -703,7 +722,7 @@ func TestAuthenticateClient(t *testing.T) {
 
 			config.JWTStrategy = &jwt.DefaultStrategy{
 				Config: config,
-				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwksRSA),
+				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks),
 			}
 
 			provider := &Fosite{

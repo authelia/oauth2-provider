@@ -213,6 +213,8 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'alg' value '%s' but it was encrypted with the 'alg' value '%s'.", clientText, encAlg, token.KeyAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'enc' value '%s' but it was encrypted with the 'enc' value '%s'.", clientText, enc, token.ContentEncryption)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis malformed. The token does not appear to be a JWE or JWS compact serialized JWT.", clientText)
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis malformed. %s.", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):

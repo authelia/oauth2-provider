@@ -103,7 +103,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		if IsSignedJWT(tokenStringEnc) {
 			return tokenStringEnc, "", nil, nil
 		} else {
-			return tokenStringEnc, "", nil, fmt.Errorf("Provided value does not appear to be a JWE or JWS compact serialized JWT")
+			return tokenStringEnc, "", nil, errorsx.WithStack(&ValidationError{text: "Provided value does not appear to be a JWE or JWS compact serialized JWT", Errors: ValidationErrorMalformedNotCompactSerialized})
 		}
 	}
 

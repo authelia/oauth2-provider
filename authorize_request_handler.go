@@ -597,6 +597,8 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'alg' value '%s' due to the client registration 'request_object_encryption_alg' value but the request object was encrypted with the 'alg' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionAlg(), token.KeyAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'enc' value '%s' due to the client registration 'request_object_encryption_enc' value but the request object was encrypted with the 'enc' value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionEnc(), token.ContentEncryption)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. The request object does not appear to be a JWE or JWS compact serialized JWT.", hintRequestObjectPrefix(openid), client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
 			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):

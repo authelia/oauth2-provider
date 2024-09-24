@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	xjwt "github.com/golang-jwt/jwt/v5"
-
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -341,18 +339,36 @@ func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(for
 func resolveJWTErrorToRFCError(err error) (rfc error) {
 	var e *RFC6749Error
 
-	switch {
-	case errors.As(err, &e):
+	if errors.As(err, &e) {
 		return errorsx.WithStack(e)
-	case errors.Is(err, xjwt.ErrTokenMalformed):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is malformed or incomplete.").WithWrap(err).WithDebugError(err))
-	case errors.Is(err, xjwt.ErrTokenUnverifiable):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is missing the information required to validate it.").WithWrap(err).WithDebugError(err))
-	case errors.Is(err, xjwt.ErrTokenNotValidYet), errors.Is(err, xjwt.ErrTokenExpired), errors.Is(err, xjwt.ErrTokenUsedBeforeIssued):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").WithWrap(err).WithDebugError(err))
-	default:
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode 'client_assertion' value for an unknown reason.").WithWrap(err).WithDebugError(err))
 	}
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(err, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was malformed. %s.", strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.")
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was not able to be verified. %s.", strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("Unknown error occurred handling the client assertion.")
+		}
+	}
+
+	return errorsx.WithStack(e)
 }
 
 func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethodClient, handler EndpointClientAuthHandler, audience []string, inner error) (outer *RFC6749Error) {
@@ -372,6 +388,8 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'alg' value '%s' due to the client registration 'request_object_encryption_alg' value but the client assertion was encrypted with the 'alg' value '%s'.", client.GetID(), handler.GetAuthEncryptionAlg(client), token.KeyAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'enc' value '%s' due to the client registration 'request_object_encryption_enc' value but the client assertion was encrypted with the 'enc' value '%s'.", client.GetID(), handler.GetAuthEncryptionEnc(client), token.ContentEncryption)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.", client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was malformed. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):

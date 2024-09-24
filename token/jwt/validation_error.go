@@ -7,6 +7,7 @@ package jwt
 // from `jwt-go` to `go-jose`.
 const (
 	ValidationErrorMalformed                      uint32 = 1 << iota // Token is malformed
+	ValidationErrorMalformedNotCompactSerialized                     // Token is malformed specifically it does not have the compact serialized format.
 	ValidationErrorUnverifiable                                      // Token could not be verified because of signing problems
 	ValidationErrorSignatureInvalid                                  // Signature validation failed.
 	ValidationErrorHeaderKeyIDInvalid                                // Header KID invalid error.

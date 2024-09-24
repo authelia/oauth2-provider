@@ -225,7 +225,7 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 		return SearchJWKS(keys, kid, alg, use, strict)
 	}
 
-	return nil, &JWKLookupError{Description: "No JWKs have been registered for the client."}
+	return nil, &JWKLookupError{Description: "No JWKs have been registered for the client"}
 }
 
 func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {

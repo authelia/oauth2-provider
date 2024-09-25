@@ -663,7 +663,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionIssDoesNotMatchClient",
@@ -678,10 +678,10 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
-			name: "ShouldFailBecauseClientAssertionJtiIsNotSet",
+			name: "ShouldFailBecauseClientAssertionJTIIsNotSet",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
@@ -692,7 +692,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Claim 'jti' from 'client_assertion' must be set but is not.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'jti' from 'client_assertion' must be set but is not.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionAudIsNotSet",

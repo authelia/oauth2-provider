@@ -187,7 +187,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			client:    &DefaultJARClient{JSONWebKeys: jwks, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
-			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' provided a request object that could not be validated. Provided value does not appear to be a JWE or JWS compact serialized JWT.",
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' provided a request object that was malformed. The request object does not appear to be a JWE or JWS compact serialized JWT.",
 		},
 		{
 			name:      "ShouldFailUnknownKID",

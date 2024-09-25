@@ -108,7 +108,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 	}
 
 	o := &StrategyOpts{
-		sigAlgorithm:      SignatureAlgorithmsNone,
+		sigAlgorithm:      SignatureAlgorithms,
 		keyAlgorithm:      EncryptionKeyAlgorithms,
 		contentEncryption: ContentEncryptionAlgorithms,
 	}
@@ -161,7 +161,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 
 	var t *jwt.JSONWebToken
 
-	if t, err = jwt.ParseSigned(tokenString, SignatureAlgorithmsNone); err != nil {
+	if t, err = jwt.ParseSigned(tokenString, o.sigAlgorithm); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 

@@ -779,9 +779,10 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		JSONWebKeys: &jose.JSONWebKeySet{
 			Keys: []jose.JSONWebKey{
 				{
-					KeyID: "kid-foo",
-					Use:   consts.JSONWebTokenUseSignature,
-					Key:   &key.PublicKey,
+					KeyID:     "kid-foo",
+					Use:       consts.JSONWebTokenUseSignature,
+					Algorithm: "RS256",
+					Key:       &key.PublicKey,
 				},
 			},
 		},
@@ -814,13 +815,14 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	}, key, "kid-foo")}, consts.FormParameterClientAssertionType: []string{consts.ClientAssertionTypeJWTBearer}}
 
 	c, _, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
-	require.NoError(t, err, "%#v", err)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
 	c, _, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
+	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
 	assert.Nil(t, c)
 }
 

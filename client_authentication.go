@@ -111,35 +111,6 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 	return err
 }
 
-// FindClientPublicJWK takes a JARClient and a kid, alg, and use to resolve a Public JWK for the client.
-func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JSONWebKeysClient, kid, alg, use string) (key any, err error) {
-	if set := client.GetJSONWebKeys(); set != nil {
-		return findPublicKeyByKID(kid, alg, use, set)
-	}
-
-	strategy := provider.GetJWKSFetcherStrategy(ctx)
-
-	var keys *jose.JSONWebKeySet
-
-	if location := client.GetJSONWebKeysURI(); len(location) > 0 {
-		if keys, err = strategy.Resolve(ctx, location, false); err != nil {
-			return nil, err
-		}
-
-		if key, err = findPublicKeyByKID(kid, alg, use, keys); err == nil {
-			return key, nil
-		}
-
-		if keys, err = strategy.Resolve(ctx, location, true); err != nil {
-			return nil, err
-		}
-
-		return findPublicKeyByKID(kid, alg, use, keys)
-	}
-
-	return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The OAuth 2.0 Client has no JSON Web Keys set registered, but they are needed to complete the request."))
-}
-
 func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok bool, err error) {
 	auth := r.Header.Get(consts.HeaderAuthorization)
 

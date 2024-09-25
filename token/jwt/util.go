@@ -28,9 +28,17 @@ func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }
 
-// IsSignedJWTClientSecretAlg returns true if the given alg string is a client secret based signature algorithm.
-func IsSignedJWTClientSecretAlg(alg string) (csa bool) {
-	switch a := jose.SignatureAlgorithm(alg); a {
+// IsSignedJWTClientSecretAlgStr returns true if the given alg string is a client secret based signature algorithm.
+func IsSignedJWTClientSecretAlgStr(alg string) (csa bool) {
+	if a := jose.SignatureAlgorithm(alg); IsSignedJWTClientSecretAlg(a) {
+		return true
+	}
+
+	return false
+}
+
+func IsSignedJWTClientSecretAlg(alg jose.SignatureAlgorithm) (csa bool) {
+	switch alg {
 	case jose.HS256, jose.HS384, jose.HS512:
 		return true
 	default:
@@ -343,7 +351,7 @@ func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
 		return jose.JSONWebKey{}
 	}
 
-	if _, ok := jwk.Key.([]byte); ok && IsSignedJWTClientSecretAlg(jwk.Algorithm) {
+	if _, ok := jwk.Key.([]byte); ok && IsSignedJWTClientSecretAlgStr(jwk.Algorithm) {
 		return jose.JSONWebKey{
 			KeyID:                       jwk.KeyID,
 			Key:                         jwk.Key,

@@ -291,7 +291,7 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 	} else if o.client != nil && o.client.IsClientSigned() {
-		if IsSignedJWTClientSecretAlg(alg) {
+		if IsSignedJWTClientSecretAlgStr(alg) {
 			if kid != "" {
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorHeaderKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not support tokens with a kid but the token has kid '%s'", alg, kid)})
 			}

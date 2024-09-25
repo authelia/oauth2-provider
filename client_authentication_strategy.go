@@ -139,8 +139,8 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 	var (
 		token *jwt.Token
 
-		id, alg, method string
-		client          Client
+		id, method string
+		client     Client
 	)
 
 	switch assertionType {
@@ -152,7 +152,7 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
-	if token, err = strategy.Decode(ctx, assertion, jwt.WithAllowUnverified()); err != nil {
+	if token, err = strategy.Decode(ctx, assertion, jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
@@ -168,10 +168,10 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 		return &ClientAssertion{Assertion: assertion, Type: assertionType, ID: id}, nil
 	}
 
-	var c AuthenticationMethodClient
+	method = consts.ClientAuthMethodPrivateKeyJWT
 
-	if c, ok = client.(AuthenticationMethodClient); ok {
-		alg, method = handler.GetAuthSigningAlg(c), handler.GetAuthMethod(c)
+	if jwt.IsSignedJWTClientSecretAlg(token.SignatureAlgorithm) {
+		method = consts.ClientAuthMethodClientSecretJWT
 	}
 
 	return &ClientAssertion{
@@ -180,7 +180,7 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 		Parsed:    true,
 		ID:        id,
 		Method:    method,
-		Algorithm: alg,
+		Algorithm: string(token.SignatureAlgorithm),
 		Client:    client,
 	}, nil
 }
@@ -228,7 +228,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
 					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
-					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s'x or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
 		}
 	}
 
@@ -249,9 +249,19 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, handler EndpointClientAuthHandler) (method string, err error) {
 	var (
 		token *jwt.Token
+		c     AuthenticationMethodClient
+		ok    bool
 	)
 
-	if method, _, _, token, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, client, assertion, handler); err != nil {
+	if c, ok = client.(AuthenticationMethodClient); !ok {
+		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
+	}
+
+	if !assertion.Parsed {
+
+	}
+
+	if method, _, _, token, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, c, assertion, handler); err != nil {
 		return "", err
 	}
 
@@ -273,6 +283,16 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	case claims.JTI == "":
 		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'jti' from 'client_assertion' must be set but is not."))
 	default:
+		switch cmethod := handler.GetAuthMethod(c); {
+		case cmethod == "" && handler.AllowAuthMethodAny():
+			break
+		case cmethod != method:
+			return "", errorsx.WithStack(
+				ErrInvalidClient.
+					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
+		}
+
 		if err = s.Store.ClientAssertionJWTValid(ctx, claims.JTI); err != nil {
 			return "", errorsx.WithStack(ErrJTIKnown.WithHint("Claim 'jti' from 'client_assertion' MUST only be used once.").WithDebugError(err))
 		}
@@ -285,24 +305,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, handler EndpointClientAuthHandler) (method, kid, alg string, token *jwt.Token, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client AuthenticationMethodClient, assertion *ClientAssertion, handler EndpointClientAuthHandler) (method, kid, alg string, token *jwt.Token, err error) {
 	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
 
 	if len(audience) == 0 {
 		return "", "", "", nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods.").WithDebug("The authorization server could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
 
-	var (
-		c  AuthenticationMethodClient
-		ok bool
-	)
-
-	if c, ok = client.(AuthenticationMethodClient); !ok {
-		return "", "", "", nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
-	}
-
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: c, handler: handler})); err != nil {
-		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, c, handler, audience, err))
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: client, handler: handler}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
 	optsClaims := []jwt.ClaimValidationOption{
@@ -312,22 +323,22 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 
 	if err = token.Claims.Valid(optsClaims...); err != nil {
-		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, c, handler, audience, err))
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
 	optsHeader := []jwt.HeaderValidationOption{
-		jwt.ValidateKeyID(handler.GetAuthSigningKeyID(c)),
-		jwt.ValidateAlgorithm(handler.GetAuthSigningAlg(c)),
-		jwt.ValidateEncryptionKeyID(handler.GetAuthEncryptionKeyID(c)),
-		jwt.ValidateKeyAlgorithm(handler.GetAuthEncryptionAlg(c)),
-		jwt.ValidateContentEncryption(handler.GetAuthEncryptionEnc(c)),
+		jwt.ValidateKeyID(handler.GetAuthSigningKeyID(client)),
+		jwt.ValidateAlgorithm(handler.GetAuthSigningAlg(client)),
+		jwt.ValidateEncryptionKeyID(handler.GetAuthEncryptionKeyID(client)),
+		jwt.ValidateKeyAlgorithm(handler.GetAuthEncryptionAlg(client)),
+		jwt.ValidateContentEncryption(handler.GetAuthEncryptionEnc(client)),
 	}
 
 	if err = token.Valid(optsHeader...); err != nil {
-		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, c, handler, audience, err))
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
-	return method, kid, alg, token, nil
+	return assertion.Method, kid, alg, token, nil
 }
 
 func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(form url.Values) (id, secret string, ok bool) {

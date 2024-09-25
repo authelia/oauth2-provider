@@ -277,11 +277,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 
 	switch {
 	case subtle.ConstantTimeCompare([]byte(claims.Issuer), clientID) == 0:
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
 	case subtle.ConstantTimeCompare([]byte(claims.Subject), clientID) == 0:
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
 	case claims.JTI == "":
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'jti' from 'client_assertion' must be set but is not."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'jti' from 'client_assertion' must be set but is not."))
 	default:
 		switch cmethod := handler.GetAuthMethod(c); {
 		case cmethod == "" && handler.AllowAuthMethodAny():
@@ -291,6 +291,10 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 				ErrInvalidClient.
 					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
 					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
+		}
+
+		if !assertion.Parsed {
+			return "", errorsx.WithStack(ErrInvalidClient.WithDebug("The client assertion was not able to be parsed."))
 		}
 
 		if err = s.Store.ClientAssertionJWTValid(ctx, claims.JTI); err != nil {

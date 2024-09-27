@@ -317,7 +317,7 @@ func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) 
 //
 // > Get the complete, signed token
 func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
-	if _, ok := k.(unsafeNoneMagicConstant); ok {
+	if isUnsafeNoneMagicConstant(k) {
 		return unsignedToken(t)
 	}
 
@@ -588,6 +588,23 @@ func validateTokenType(typValues []string, header map[string]any) bool {
 
 	for _, t := range typValues {
 		if t == typ {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isUnsafeNoneMagicConstant(k any) bool {
+	switch key := k.(type) {
+	case unsafeNoneMagicConstant:
+		return true
+	case jose.JSONWebKey:
+		if _, ok := key.Key.(unsafeNoneMagicConstant); ok {
+			return true
+		}
+	case *jose.JSONWebKey:
+		if _, ok := key.Key.(unsafeNoneMagicConstant); ok {
 			return true
 		}
 	}

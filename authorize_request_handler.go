@@ -547,7 +547,7 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
 			return outer.WithDebugf("%s client with id '%s' provided a request object that was not able to be verified. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
-			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature.", hintRequestObjectPrefix(openid), client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
 			exp, ok := token.Claims.GetExpiresAt()
 			if ok {

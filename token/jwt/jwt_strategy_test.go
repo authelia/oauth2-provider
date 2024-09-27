@@ -719,7 +719,7 @@ func TestIniit(t *testing.T) {
 		"exp": time.Now().Add(time.Hour * 24 * 365 * 40).UTC().Unix(),
 	}
 
-	out, _, err := encodeNestedCompactEncrypted(context.TODO(), claims, &Headers{}, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+	out, _, err := EncodeNestedCompactEncrypted(context.TODO(), claims, &Headers{}, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
 
 	fmt.Println(err)
 	fmt.Println(out)

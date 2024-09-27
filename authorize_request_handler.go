@@ -206,67 +206,6 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	/*
-		if !algNone {
-			issuer := f.Config.GetIDTokenIssuer(ctx)
-
-			if len(issuer) == 0 {
-				return errorsx.WithStack(ErrServerError.WithHintf("%s request could not be processed due to an authorization server configuration issue.", hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that was signed but the issuer for this authorization server is not known.", request.GetClient().GetID()))
-			}
-
-			claimsOpts = append(claimsOpts, jwt.(issuer))
-			if err = claims.Valid(jwt.ValidateIssuer(client.GetID()), jwt.ValidateAudienceAny(issuer)); err != nil {
-
-			}
-
-			if v, ok = claims[consts.ClaimIssuer]; !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectSignedAbsentClaim, request.GetClient().GetID(), consts.ClaimIssuer))
-			}
-
-			clientID := request.GetClient().GetID()
-
-			if value, ok = v.(string); !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.ClaimIssuer, v, clientID, v))
-			}
-
-			if value != clientID {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, clientID, consts.ClaimIssuer, value, clientID))
-			}
-
-			if v, ok = claims[consts.ClaimAudience]; !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectSignedAbsentClaim, request.GetClient().GetID(), consts.ClaimAudience))
-			}
-
-			var valid bool
-
-			switch t := v.(type) {
-			case string:
-				valid = t == issuer
-			case []string:
-				for _, value = range t {
-					if value == issuer {
-						valid = true
-
-						break
-					}
-				}
-			case []any:
-				for _, x := range t {
-					if value, ok = x.(string); ok && value == issuer {
-						valid = true
-
-						break
-					}
-				}
-			}
-
-			if !valid {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' included a request object with a 'aud' claim with the values '%s' which is required match the issuer '%s'.", request.GetClient().GetID(), value, issuer))
-			}
-		}
-
-	*/
-
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 	for _, s := range scope {
 		if !stringslice.Has(claimScope, s) {

@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func ptr(d time.Duration) *time.Duration {
@@ -61,18 +61,17 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 }
 
 func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
-	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	claims := &jwt.IDTokenClaims{}
 
-	claims := &jwt.RegisteredClaims{}
+	_, err := jwt.UnsafeParseSignedAny(token, claims)
 
-	_, _, err := parser.ParseUnverified(token, claims)
 	require.NoError(t, err)
 
-	if claims.ExpiresAt == nil {
+	if claims.ExpiresAt.IsZero() {
 		return nil
 	}
 
-	return &claims.ExpiresAt.Time
+	return &claims.ExpiresAt
 }
 
 //nolint:gocyclo

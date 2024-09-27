@@ -73,9 +73,9 @@ func (c *JARMClaims) FromMap(m map[string]any) {
 				c.Audience = aud
 			}
 		case consts.ClaimIssuedAt:
-			c.IssuedAt = toTime(v, c.IssuedAt)
+			c.IssuedAt, _ = toTime(v, c.IssuedAt)
 		case consts.ClaimExpirationTime:
-			c.ExpiresAt = toTime(v, c.ExpiresAt)
+			c.ExpiresAt, _ = toTime(v, c.ExpiresAt)
 		default:
 			c.Extra[k] = v
 		}

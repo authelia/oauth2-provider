@@ -4,11 +4,15 @@
 package jwt
 
 import (
+	"bytes"
+	"fmt"
 	"time"
 
+	jjson "github.com/go-jose/go-jose/v4/json"
 	"github.com/google/uuid"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // IDTokenClaims represent the claims used in open id connect requests
@@ -28,6 +32,87 @@ type IDTokenClaims struct {
 	CodeHash                            string         `json:"c_hash"`
 	StateHash                           string         `json:"s_hash"`
 	Extra                               map[string]any `json:"ext"`
+}
+
+func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
+	claims := MapClaims{}
+
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+
+	if err := decoder.Decode(&claims); err != nil {
+		return errorsx.WithStack(err)
+	}
+
+	var ok bool
+
+	for claim, value := range claims {
+		ok = false
+
+		switch claim {
+		case consts.ClaimJWTID:
+			c.JTI, ok = value.(string)
+		case consts.ClaimIssuer:
+			c.Issuer, ok = value.(string)
+		case consts.ClaimSubject:
+			c.Subject, ok = value.(string)
+		case consts.ClaimAudience:
+			switch aud := value.(type) {
+			case string:
+				ok = true
+
+				c.Audience = []string{aud}
+			case []string:
+				ok = true
+
+				c.Audience = aud
+			case []any:
+				ok = true
+
+			loop:
+				for _, av := range aud {
+					switch a := av.(type) {
+					case string:
+						c.Audience = append(c.Audience, a)
+					default:
+						ok = false
+
+						break loop
+					}
+				}
+			}
+		case consts.ClaimNonce:
+			c.Nonce, ok = value.(string)
+		case consts.ClaimExpirationTime:
+			c.ExpiresAt, ok = toTime(value, c.ExpiresAt)
+		case consts.ClaimIssuedAt:
+			c.IssuedAt, ok = toTime(value, c.IssuedAt)
+		case consts.ClaimRequestedAt:
+			c.RequestedAt, ok = toTime(value, c.RequestedAt)
+		case consts.ClaimAuthenticationTime:
+			c.AuthTime, ok = toTime(value, c.AuthTime)
+		case consts.ClaimCodeHash:
+			c.CodeHash, ok = value.(string)
+		case consts.ClaimStateHash:
+			c.StateHash, ok = value.(string)
+		case consts.ClaimAuthenticationContextClassReference:
+			c.AuthenticationContextClassReference, ok = value.(string)
+		default:
+			if c.Extra == nil {
+				c.Extra = make(map[string]any)
+			}
+
+			c.Extra[claim] = value
+
+			continue
+		}
+
+		if !ok {
+			return fmt.Errorf("claim %s with value %v could not be decoded", claim, value)
+		}
+	}
+
+	return nil
 }
 
 // ToMap will transform the headers to a map structure

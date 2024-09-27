@@ -135,7 +135,7 @@ func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 	}
 }
 
-func WithNewStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
+func WithStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		switch c := client.(type) {
 		case IntrospectionClient:

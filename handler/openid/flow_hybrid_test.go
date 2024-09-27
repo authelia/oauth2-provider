@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	xjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -190,11 +189,9 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.NotEmpty(t, idToken)
 				assert.True(t, request.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
 
-				parser := xjwt.NewParser()
+				claims := &jwt.IDTokenClaims{}
 
-				claims := &IDTokenClaims{}
-
-				_, _, err := parser.ParseUnverified(idToken, claims)
+				_, err := jwt.UnsafeParseSignedAny(idToken, claims)
 				require.NoError(t, err)
 
 				assert.Equal(t, "MvmJNOT-fq6rnnnrUTC_2A", claims.StateHash)
@@ -337,14 +334,12 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.NotEmpty(t, idToken)
 				assert.True(t, request.GetSession().GetExpiresAt(oauth2.IDToken).IsZero())
 
-				parser := xjwt.NewParser()
+				claims := &jwt.IDTokenClaims{}
 
-				claims := &IDTokenClaims{}
-
-				_, _, err := parser.ParseUnverified(idToken, claims)
-
+				_, err := jwt.UnsafeParseSignedAny(idToken, claims)
 				require.NoError(t, err)
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.ExpiresAt.Time, time.Minute)
+
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.ExpiresAt, time.Minute)
 				assert.NotEmpty(t, claims.CodeHash)
 				assert.Empty(t, claims.StateHash)
 
@@ -413,13 +408,6 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			}
 		})
 	}
-}
-
-type IDTokenClaims struct {
-	StateHash string `json:"s_hash"`
-	CodeHash  string `json:"c_hash"`
-
-	xjwt.RegisteredClaims
 }
 
 var hmacStrategy = &hoauth2.HMACCoreStrategy{

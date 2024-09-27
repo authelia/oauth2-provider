@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	jjwt "github.com/go-jose/go-jose/v4/jwt"
 	"regexp"
 	"strings"
 
@@ -373,4 +374,16 @@ func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
 	}
 
 	return jwk.Public()
+}
+
+func UnsafeParseSignedAny(tokenString string, dest any) (token *jjwt.JSONWebToken, err error) {
+	if token, err = jjwt.ParseSigned(tokenString, SignatureAlgorithmsNone); err != nil {
+		return nil, err
+	}
+
+	if err = token.UnsafeClaimsWithoutVerification(dest); err != nil {
+		return nil, err
+	}
+
+	return token, nil
 }

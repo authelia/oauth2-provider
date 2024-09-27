@@ -4,6 +4,7 @@
 package jwt
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -183,11 +184,11 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 				c.Audience = aud
 			}
 		case consts.ClaimIssuedAt:
-			c.IssuedAt = toTime(v, c.IssuedAt)
+			c.IssuedAt, _ = toTime(v, c.IssuedAt)
 		case consts.ClaimNotBefore:
-			c.NotBefore = toTime(v, c.NotBefore)
+			c.NotBefore, _ = toTime(v, c.NotBefore)
 		case consts.ClaimExpirationTime:
-			c.ExpiresAt = toTime(v, c.ExpiresAt)
+			c.ExpiresAt, _ = toTime(v, c.ExpiresAt)
 		case consts.ClaimScopeNonStandard:
 			switch s := v.(type) {
 			case []string:
@@ -225,15 +226,41 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 	}
 }
 
-func toTime(v any, def time.Time) (t time.Time) {
+func toTime(v any, def time.Time) (t time.Time, ok bool) {
 	t = def
-	switch a := v.(type) {
-	case float64:
-		t = time.Unix(int64(a), 0).UTC()
-	case int64:
-		t = time.Unix(a, 0).UTC()
+
+	var value int64
+
+	if value, ok = toInt64(v); ok {
+		t = time.Unix(value, 0).UTC()
 	}
+
 	return
+}
+
+func toInt64(v any) (val int64, ok bool) {
+	var err error
+
+	switch t := v.(type) {
+	case float64:
+		return int64(t), true
+	case int64:
+		return t, true
+	case json.Number:
+		if val, err = t.Int64(); err == nil {
+			return val, true
+		}
+
+		var valf float64
+
+		if valf, err = t.Float64(); err != nil {
+			return 0, false
+		}
+
+		return int64(valf), true
+	}
+
+	return 0, false
 }
 
 // Add will add a key-value pair to the extra field

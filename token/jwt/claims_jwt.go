@@ -246,6 +246,10 @@ func toInt64(v any) (val int64, ok bool) {
 		return int64(t), true
 	case int64:
 		return t, true
+	case int32:
+		return int64(t), true
+	case int:
+		return int64(t), true
 	case json.Number:
 		if val, err = t.Int64(); err == nil {
 			return val, true

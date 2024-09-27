@@ -202,17 +202,21 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'kid' value '%s' but it was signed with the 'kid' value '%s'.", clientText, sigKID, token.KeyID)
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'kid' header value '%s' but it was signed with the 'kid' header value '%s'.", clientText, sigKID, token.KeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'alg' value '%s' but it was signed with the 'alg' value '%s'.", clientText, sigAlg, token.SignatureAlgorithm)
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'alg' header value '%s' but it was signed with the 'alg' header value '%s'.", clientText, sigAlg, token.SignatureAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'typ' value '%s' but it was signed with the 'typ' value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'typ' header value '%s' but it was signed with the 'typ' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'typ' header value '%s' but it was encrypted with the 'typ' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'cty' header value '%s' but it was encrypted with the 'cty' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'kid' value '%s' but it was encrypted with the 'kid' value '%s'.", clientText, encKID, token.EncryptionKeyID)
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'kid' header value '%s' but it was encrypted with the 'kid' header value '%s'.", clientText, encKID, token.EncryptionKeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'alg' value '%s' but it was encrypted with the 'alg' value '%s'.", clientText, encAlg, token.KeyAlgorithm)
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'alg' header value '%s' but it was encrypted with the 'alg' header value '%s'.", clientText, encAlg, token.KeyAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'enc' value '%s' but it was encrypted with the 'enc' value '%s'.", clientText, enc, token.ContentEncryption)
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'enc' header value '%s' but it was encrypted with the 'enc' header value '%s'.", clientText, enc, token.ContentEncryption)
 		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis malformed. The token does not appear to be a JWE or JWS compact serialized JWT.", clientText)
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):

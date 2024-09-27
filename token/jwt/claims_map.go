@@ -76,7 +76,13 @@ func (m MapClaims) VerifySubject(cmp string, required bool) (ok bool) {
 
 // GetAudience returns the aud claim.
 func (m MapClaims) GetAudience() (aud []string, ok bool) {
-	return StringSliceFromMap(m[consts.ClaimAudience])
+	var v any
+
+	if v, ok = m[consts.ClaimAudience]; !ok {
+		return nil, false
+	}
+
+	return StringSliceFromMap(v)
 }
 
 // VerifyAudience compares the aud claim against cmp.
@@ -131,7 +137,7 @@ func (m MapClaims) VerifyExpiresAt(cmp int64, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyExp(exp, cmp, required)
+	return verifyInt64Future(exp, cmp, required)
 }
 
 // GetIssuedAt returns the iat claim.
@@ -238,16 +244,13 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return vErr
 }
 
-func (m MapClaims) UnmarshalJSON(b []byte) error {
-	// This custom unmarshal allows to configure the
-	// go-jose decoding settings since there is no other way
-	// see https://github.com/square/go-jose/issues/353.
-	// If issue is closed with a better solution
-	// this custom Unmarshal method can be removed
-	d := jjson.NewDecoder(bytes.NewReader(b))
+func (m MapClaims) UnmarshalJSON(data []byte) error {
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+
 	mp := map[string]any(m)
-	d.SetNumberType(jjson.UnmarshalIntOrFloat)
-	if err := d.Decode(&mp); err != nil {
+
+	if err := decoder.Decode(&mp); err != nil {
 		return errorsx.WithStack(err)
 	}
 
@@ -255,7 +258,13 @@ func (m MapClaims) UnmarshalJSON(b []byte) error {
 }
 
 func (m MapClaims) toInt64(claim string) (val int64, ok bool) {
-	return toInt64(m[claim])
+	var v any
+
+	if v, ok = m[claim]; !ok {
+		return 0, false
+	}
+
+	return toInt64(v)
 }
 
 type ClaimValidationOption func(opts *ClaimValidationOptions)
@@ -368,26 +377,28 @@ outer:
 	return true
 }
 
-func verifyExp(exp int64, now int64, required bool) bool {
-	if exp == 0 {
+// verifyInt64Future ensures the given value is in the future.
+func verifyInt64Future(value, now int64, required bool) bool {
+	if value == 0 {
 		return !required
 	}
 
-	return now <= exp
+	return now <= value
 }
 
-func verifyInt64Past(iat int64, now int64, required bool) bool {
-	if iat == 0 {
+// verifyInt64Past ensures the given value is in the past or the current value.
+func verifyInt64Past(value, now int64, required bool) bool {
+	if value == 0 {
 		return !required
 	}
 
-	return now >= iat
+	return now >= value
 }
 
-func verifyMapString(iss string, cmp string, required bool) bool {
-	if iss == "" {
+func verifyMapString(value, cmp string, required bool) bool {
+	if value == "" {
 		return !required
 	}
 
-	return subtle.ConstantTimeCompare([]byte(iss), []byte(cmp)) == 1
+	return subtle.ConstantTimeCompare([]byte(value), []byte(cmp)) == 1
 }

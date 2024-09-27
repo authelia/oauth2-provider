@@ -319,6 +319,14 @@ func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, 
 func encodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
+	if headers == nil {
+		headers = &Headers{}
+	}
+
+	if headersJWE == nil {
+		headersJWE = &Headers{}
+	}
+
 	token.SetJWS(headers, claims, keySig.KeyID, jose.SignatureAlgorithm(keySig.Algorithm))
 	token.SetJWE(headersJWE, keyEnc.KeyID, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
 

@@ -364,6 +364,28 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorSignatureInvalid
 	}
 
+	if t.HeaderJWE != nil && (t.KeyAlgorithm != "" || t.ContentEncryption != "") {
+		var (
+			cty, typ, ttyp any
+			ok             bool
+		)
+
+		if typ, ok = t.HeaderJWE[consts.JSONWebTokenHeaderType]; !ok || typ != consts.JSONWebTokenTypeJWT {
+			vErr.Inner = errors.New("token was encrypted with invalid typ")
+			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
+		}
+
+		if ttyp, ok = t.Header[consts.JSONWebTokenHeaderType]; !ok {
+			vErr.Inner = errors.New("token was signed with invalid typ")
+			vErr.Errors |= ValidationErrorHeaderTypeInvalid
+		}
+
+		if cty, ok = t.HeaderJWE[consts.JSONWebTokenHeaderContentType]; !ok || cty != ttyp {
+			vErr.Inner = errors.New("token was encrypted with invalid cty or signed with an invalid typ")
+			vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
+		}
+	}
+
 	if len(vopts.types) != 0 {
 		if !validateTokenType(vopts.types, t.Header) {
 			vErr.Inner = errors.New("token was signed with an invalid typ")

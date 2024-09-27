@@ -6,7 +6,6 @@ package jwt
 import (
 	"bytes"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -256,28 +255,7 @@ func (m MapClaims) UnmarshalJSON(b []byte) error {
 }
 
 func (m MapClaims) toInt64(claim string) (val int64, ok bool) {
-	var err error
-
-	switch t := m[claim].(type) {
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case json.Number:
-		if val, err = t.Int64(); err == nil {
-			return val, true
-		}
-
-		var valf float64
-
-		if valf, err = t.Float64(); err != nil {
-			return 0, false
-		}
-
-		return int64(valf), true
-	}
-
-	return 0, false
+	return toInt64(m[claim])
 }
 
 type ClaimValidationOption func(opts *ClaimValidationOptions)

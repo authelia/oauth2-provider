@@ -309,15 +309,19 @@ func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, us
 	}, nil
 }
 
-func encodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
+func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
+
+	if headers == nil {
+		headers = &Headers{}
+	}
 
 	token.SetJWS(headers, claims, key.KeyID, jose.SignatureAlgorithm(key.Algorithm))
 
 	return token.CompactSigned(key)
 }
 
-func encodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+func EncodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
 	if headers == nil {

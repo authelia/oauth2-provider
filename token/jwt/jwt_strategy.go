@@ -72,13 +72,13 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 	}
 
 	if o.client == nil {
-		return encodeCompactSigned(ctx, o.claims, o.headers, keySig)
+		return EncodeCompactSigned(ctx, o.claims, o.headers, keySig)
 	}
 
 	kid, alg, enc := o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
 	if len(kid) == 0 && len(alg) == 0 {
-		return encodeCompactSigned(ctx, o.claims, o.headers, keySig)
+		return EncodeCompactSigned(ctx, o.claims, o.headers, keySig)
 	}
 
 	if len(enc) == 0 {
@@ -95,7 +95,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
 	}
 
-	return encodeNestedCompactEncrypted(ctx, o.claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
+	return EncodeNestedCompactEncrypted(ctx, o.claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
 }
 
 func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, opts ...StrategyOpt) (tokenString, signature string, jwe *jose.JSONWebEncryption, err error) {

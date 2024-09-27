@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto"
 	"fmt"
-	jjwt "github.com/go-jose/go-jose/v4/jwt"
 	"regexp"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
+	jjwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/consts"

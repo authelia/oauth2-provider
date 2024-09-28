@@ -161,15 +161,19 @@ type EndpointClientAuthHandler interface {
 	// GetAuthMethod returns the appropriate auth method for this client.
 	GetAuthMethod(client AuthenticationMethodClient) string
 
+	// GetAuthSigningKeyID returns the appropriate auth signature key id for this client.
 	GetAuthSigningKeyID(client AuthenticationMethodClient) string
 
 	// GetAuthSigningAlg returns the appropriate auth signature algorithm for this client.
 	GetAuthSigningAlg(client AuthenticationMethodClient) string
 
+	// GetAuthEncryptionKeyID returns the appropriate auth encryption key id for this client.
 	GetAuthEncryptionKeyID(client AuthenticationMethodClient) string
 
+	// GetAuthEncryptionAlg returns the appropriate auth encryption key algorithm for this client.
 	GetAuthEncryptionAlg(client AuthenticationMethodClient) string
 
+	// GetAuthEncryptionEnc returns the appropriate auth encryption content encryption for this client.
 	GetAuthEncryptionEnc(client AuthenticationMethodClient) string
 
 	// Name returns the appropriate name for this endpoint for logging purposes.

@@ -343,6 +343,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 	}
 }
 
+// EncodeCompactSigned helps encoding a token using a signature backed compact encoding.
 func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
 
@@ -355,6 +356,8 @@ func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, 
 	return token.CompactSigned(key)
 }
 
+// EncodeNestedCompactEncrypted helps encoding a token using a signature backed compact encoding, then nests that within
+// an encrypted compact encoded JWT.
 func EncodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
@@ -414,6 +417,8 @@ func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
 	return jwk.Public()
 }
 
+// UnsafeParseSignedAny is a function that will attempt to parse any signed token without any verification process.
+// It's unsafe for production and should only be used for tests.
 func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken, err error) {
 	if token, err = jwt.ParseSigned(tokenString, SignatureAlgorithmsNone); err != nil {
 		return nil, err

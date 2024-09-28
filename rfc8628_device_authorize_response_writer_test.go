@@ -68,6 +68,5 @@ func TestNewDeviceResponse(t *testing.T) {
 		} else {
 			assert.NotNil(t, responder, "%d", k)
 		}
-		t.Logf("Passed test case %d", k)
 	}
 }

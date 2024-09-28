@@ -94,7 +94,5 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 				c.check(t, token)
 			}
 		}
-
-		t.Logf("Passed test case %d", k)
 	}
 }

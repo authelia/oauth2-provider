@@ -147,7 +147,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)
@@ -182,7 +182,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)

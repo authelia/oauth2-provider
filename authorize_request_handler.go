@@ -151,7 +151,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		v        any
 	)
 
-	for k, v = range claims {
+	for k, v = range claims.ToMapClaims() {
 		switch k {
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
@@ -551,36 +551,36 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
 			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature.", hintRequestObjectPrefix(openid), client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
-			exp, ok := token.Claims.GetExpiresAt()
-			if ok {
-				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object expired at %d.", hintRequestObjectPrefix(openid), client.GetID(), exp)
+			exp, err := token.Claims.GetExpirationTime()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object expired at %d.", hintRequestObjectPrefix(openid), client.GetID(), exp.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object does not have an 'exp' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
-			iat, ok := token.Claims.GetIssuedAt()
-			if ok {
-				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object was issued at %d.", hintRequestObjectPrefix(openid), client.GetID(), iat)
+			iat, err := token.Claims.GetIssuedAt()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object was issued at %d.", hintRequestObjectPrefix(openid), client.GetID(), iat.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'iat' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
-			nbf, ok := token.Claims.GetNotBefore()
-			if ok {
-				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object is not valid before %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf)
+			nbf, err := token.Claims.GetNotBefore()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object is not valid before %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'nbf' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
-			iss, ok := token.Claims.GetIssuer()
-			if ok {
+			iss, err := token.Claims.GetIssuer()
+			if err == nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid issuer. The request object was expected to have an 'iss' claim which matches the value '%s' but the 'iss' claim had the value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetID(), iss)
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid issuer. The request object does not have an 'iss' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorAudience):
-			aud, ok := token.Claims.GetAudience()
-			if ok {
+			aud, err := token.Claims.GetAudience()
+			if err == nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object was expected to have an 'aud' claim which matches the issuer value of '%s' but the 'aud' claim had the values '%s'.", hintRequestObjectPrefix(openid), client.GetID(), issuer, strings.Join(aud, "', '"))
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object does not have an 'aud' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())

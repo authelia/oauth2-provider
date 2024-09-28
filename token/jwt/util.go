@@ -14,8 +14,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
-
-	"authelia.com/provider/oauth2/internal/consts"
 )
 
 var (
@@ -108,7 +106,7 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 	)
 
 	if IsEncryptedJWTPasswordBasedAlg(jose.KeyAlgorithm(header.Algorithm)) {
-		if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderPBES2Count]; ok {
+		if value, ok = header.ExtraHeaders[JSONWebTokenHeaderPBES2Count]; ok {
 			switch p2c := value.(type) {
 			case float64:
 				if p2c > 5000000 {
@@ -122,7 +120,7 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 		}
 	}
 
-	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderEncryptionAlgorithm]; ok {
+	if value, ok = header.ExtraHeaders[JSONWebTokenHeaderEncryptionAlgorithm]; ok {
 		switch encv := value.(type) {
 		case string:
 			if encv != "" {
@@ -137,7 +135,7 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 		}
 	}
 
-	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; ok {
+	if value, ok = header.ExtraHeaders[JSONWebTokenHeaderContentType]; ok {
 		cty, _ = value.(string)
 	}
 
@@ -277,14 +275,14 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 	}
 
 	switch use {
-	case consts.JSONWebTokenUseSignature:
+	case JSONWebTokenUseSignature:
 		return &jose.JSONWebKey{
 			Key:       secret,
 			KeyID:     kid,
 			Algorithm: alg,
 			Use:       use,
 		}, nil
-	case consts.JSONWebTokenUseEncryption:
+	case JSONWebTokenUseEncryption:
 		var (
 			hasher hash.Hash
 			bits   int
@@ -344,7 +342,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 }
 
 // EncodeCompactSigned helps encoding a token using a signature backed compact encoding.
-func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
+func EncodeCompactSigned(ctx context.Context, claims Claims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
 
 	if headers == nil {
@@ -358,7 +356,7 @@ func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, 
 
 // EncodeNestedCompactEncrypted helps encoding a token using a signature backed compact encoding, then nests that within
 // an encrypted compact encoded JWT.
-func EncodeNestedCompactEncrypted(ctx context.Context, claims MapClaims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+func EncodeNestedCompactEncrypted(ctx context.Context, claims Claims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()
 
 	if headers == nil {
@@ -429,4 +427,24 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 	}
 
 	return token, nil
+}
+
+func newError(message string, err error, more ...error) error {
+	var format string
+	var args []any
+	if message != "" {
+		format = "%w: %s"
+		args = []any{err, message}
+	} else {
+		format = "%w"
+		args = []any{err}
+	}
+
+	for _, e := range more {
+		format += ": %w"
+		args = append(args, e)
+	}
+
+	err = fmt.Errorf(format, args...)
+	return err
 }

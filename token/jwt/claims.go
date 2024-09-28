@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+type Claims interface {
+	GetExpirationTime() (exp *NumericDate, err error)
+	GetIssuedAt() (iat *NumericDate, err error)
+	GetNotBefore() (nbf *NumericDate, err error)
+	GetIssuer() (iss string, err error)
+	GetSubject() (sub string, err error)
+	GetAudience() (aud ClaimStrings, err error)
+	ToMapClaims() MapClaims
+	Valid(opts ...ClaimValidationOption) (err error)
+}
+
 // Mapper is the interface used internally to map key-value pairs
 type Mapper interface {
 	ToMap() map[string]any

@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 )
 
@@ -55,10 +54,10 @@ func TestUnsignedToken(t *testing.T) {
 			parts := strings.Split(rawToken, ".")
 			require.Len(t, parts, 3)
 			require.Empty(t, parts[2])
-			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
+			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JSONWebTokenHeaderType)])
 		})
 	}
 }
@@ -72,12 +71,12 @@ func TestJWTHeaders(t *testing.T) {
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
 			jwtHeaders:   map[string]any{},
-			expectedType: consts.JSONWebTokenTypeJWT,
+			expectedType: JSONWebTokenTypeJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken},
-			expectedType: consts.JSONWebTokenTypeAccessToken,
+			jwtHeaders:   map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+			expectedType: JSONWebTokenTypeAccessToken,
 		},
 	}
 	for _, tc := range testCases {
@@ -87,7 +86,7 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JSONWebTokenHeaderType)])
 		})
 	}
 }
@@ -322,12 +321,12 @@ func TestParser_Parse(t *testing.T) {
 			given: given{
 				name: "used before issued",
 				generate: &generate{
-					claims: MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
+					claims: MapClaims{"foo": "bar", ClaimIssuedAt: time.Now().Unix() + 500},
 				},
 			},
 			expected: expected{
 				keyFunc: defaultKeyFunc,
-				claims:  MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
+				claims:  MapClaims{"foo": "bar", ClaimIssuedAt: time.Now().Unix() + 500},
 				valid:   false,
 				errors:  ValidationErrorIssuedAt,
 			},
@@ -419,7 +418,7 @@ func TestParser_Parse(t *testing.T) {
 			// Figure out correct claims type
 			token, err = ParseWithClaims(data.tokenString, MapClaims{}, data.keyFunc)
 			// Verify result matches expectation
-			assert.EqualValues(t, data.claims, token.Claims)
+			assert.EqualValues(t, data.claims, token.Claims.ToMapClaims())
 			if data.valid && err != nil {
 				t.Errorf("[%v] Error while verifying token: %T:%v", data.name, err, err)
 			}

@@ -117,8 +117,6 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		},
 	}
 
-	fmt.Println(jwksPrivate)
-
 	jwksPublic := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			*jwkPublicSigRSA,

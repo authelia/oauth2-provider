@@ -7,7 +7,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -15,7 +14,7 @@ import (
 // specifically so it can be mocked and the opts values have very important semantics which are difficult to document.
 type Strategy interface {
 	// Encode a JWT as either a JWS or JWE nested JWS.
-	Encode(ctx context.Context, opts ...StrategyOpt) (tokenString string, signature string, err error)
+	Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error)
 
 	// Decrypt a JWT or if the provided JWT is a JWS just return it.
 	Decrypt(ctx context.Context, tokenStringEnc string, opts ...StrategyOpt) (tokenString, signature string, jwe *jose.JSONWebEncryption, err error)
@@ -47,9 +46,8 @@ type DefaultStrategy struct {
 	Issuer Issuer
 }
 
-func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (tokenString string, signature string, err error) {
+func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error) {
 	o := &StrategyOpts{
-		claims:  MapClaims{},
 		headers: NewHeaders(),
 	}
 
@@ -64,21 +62,21 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 	)
 
 	if o.client == nil {
-		if keySig, err = j.Issuer.GetIssuerJWK(ctx, "", string(jose.RS256), consts.JSONWebTokenUseSignature); err != nil {
+		if keySig, err = j.Issuer.GetIssuerJWK(ctx, "", string(jose.RS256), JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
-	} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), consts.JSONWebTokenUseSignature); err != nil {
+	} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
 		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 	}
 
 	if o.client == nil {
-		return EncodeCompactSigned(ctx, o.claims, o.headers, keySig)
+		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 
 	kid, alg, enc := o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
 	if len(kid) == 0 && len(alg) == 0 {
-		return EncodeCompactSigned(ctx, o.claims, o.headers, keySig)
+		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 
 	if len(enc) == 0 {
@@ -88,14 +86,14 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 	var keyEnc *jose.JSONWebKey
 
 	if IsEncryptedJWTClientSecretAlg(alg) {
-		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, consts.JSONWebTokenUseEncryption); err != nil {
+		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
 		}
-	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseEncryption, false); err != nil {
+	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, JSONWebTokenUseEncryption, false); err != nil {
 		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
 	}
 
-	return EncodeNestedCompactEncrypted(ctx, o.claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
+	return EncodeNestedCompactEncrypted(ctx, claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
 }
 
 func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, opts ...StrategyOpt) (tokenString, signature string, jwe *jose.JSONWebEncryption, err error) {
@@ -144,10 +142,10 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 
-		if key, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, consts.JSONWebTokenUseEncryption); err != nil {
+		if key, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
+	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 
@@ -217,7 +215,7 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 
 	validate := o.client != nil || !o.allowUnverified
 
-	if alg != consts.JSONWebTokenAlgNone && validate {
+	if alg != JSONWebTokenAlgNone && validate {
 		if err = j.validate(ctx, t, &claims, o); err != nil {
 			return nil, errorsx.WithStack(err)
 		}
@@ -286,15 +284,15 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorHeaderKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not support tokens with a kid but the token has kid '%s'", alg, kid)})
 			}
 
-			if key, err = NewClientSecretJWKFromClient(ctx, o.client, "", alg, "", consts.JSONWebTokenUseSignature); err != nil {
+			if key, err = NewClientSecretJWKFromClient(ctx, o.client, "", alg, "", JSONWebTokenUseSignature); err != nil {
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		} else {
-			if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseSignature, true); err != nil {
+			if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, JSONWebTokenUseSignature, true); err != nil {
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		}
-	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseSignature); err != nil {
+	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
 		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 

@@ -44,7 +44,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 // AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT.
 func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
-	mapClaims := token.Claims
+	mapClaims := token.Claims.ToMapClaims()
 	claims := jwt.JWTClaims{}
 	claims.FromMapClaims(mapClaims)
 

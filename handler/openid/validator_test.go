@@ -35,7 +35,7 @@ func TestValidatePrompt(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(j, config)
 
 	var genIDToken = func(c jwt.IDTokenClaims) string {
-		s, _, err := j.Encode(context.TODO(), jwt.WithClaims(c.ToMapClaims()))
+		s, _, err := j.Encode(context.TODO(), c.ToMapClaims())
 		require.NoError(t, err)
 		return s
 	}
@@ -251,7 +251,6 @@ func TestValidatePrompt(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
-			t.Logf("%s", tc.idTokenHint)
 			err := v.ValidatePrompt(context.TODO(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
 					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},

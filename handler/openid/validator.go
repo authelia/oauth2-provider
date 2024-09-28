@@ -144,7 +144,10 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return nil
 	}
 
-	tokenHint, err := v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(req.GetClient()))
+	var tokenHint *jwt.Token
+
+	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(req.GetClient()))
+
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok
@@ -152,9 +155,11 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
 
-	if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {
+	var subHint string
+
+	if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided id token from id_token_hint does not have a subject."))
-	} else if hintSub != claims.Subject {
+	} else if subHint != claims.Subject {
 		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided id token from id_token_hint does not match the current session's subject."))
 	}
 

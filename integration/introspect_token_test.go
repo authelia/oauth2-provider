@@ -52,7 +52,6 @@ func TestIntrospectToken(t *testing.T) {
 			factory:     compose.OAuth2StatelessJWTIntrospectionFactory,
 		},
 	} {
-		t.Logf("testing %v", c.description)
 		runIntrospectTokenTest(t, c.strategy, c.factory)
 	}
 }
@@ -124,7 +123,6 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			_, bytes, errs := c.prepare(s).End()
 
 			assert.Nil(t, json.Unmarshal([]byte(bytes), &res))
-			t.Logf("Got answer: %s", bytes)
 
 			assert.Len(t, errs, 0)
 			assert.Equal(t, c.isActive, res.Active)

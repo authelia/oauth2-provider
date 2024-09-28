@@ -16,8 +16,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestDefaultStrategy(t *testing.T) {
@@ -45,19 +43,19 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "rs256-sig",
 				Key:       issuerRS256,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.RS256),
 			},
 			{
 				KeyID:     "es512-sig",
 				Key:       issuerES512,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       issuerES512enc,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -68,19 +66,19 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "rs256-sig",
 				Key:       &issuerRS256.PublicKey,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.RS256),
 			},
 			{
 				KeyID:     "es512-sig",
 				Key:       &issuerES512.PublicKey,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       &issuerES512enc.PublicKey,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -95,13 +93,13 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "es512-sig",
 				Key:       clientES512,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       clientES512enc,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -112,13 +110,13 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "es512-sig",
 				Key:       &clientES512.PublicKey,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       &clientES512enc.PublicKey,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -129,13 +127,13 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "es512-sig",
 				Key:       &issuerES512.PublicKey,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       &issuerES512enc.PublicKey,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -146,13 +144,13 @@ func TestDefaultStrategy(t *testing.T) {
 			{
 				KeyID:     "es512-sig",
 				Key:       &clientES512.PublicKey,
-				Use:       consts.JSONWebTokenUseSignature,
+				Use:       JSONWebTokenUseSignature,
 				Algorithm: string(jose.ES512),
 			},
 			{
 				KeyID:     "es512-enc",
 				Key:       &clientES512enc.PublicKey,
-				Use:       consts.JSONWebTokenUseEncryption,
+				Use:       JSONWebTokenUseEncryption,
 				Algorithm: string(jose.ECDH_ES_A256KW),
 			},
 		},
@@ -208,7 +206,7 @@ func TestDefaultStrategy(t *testing.T) {
 
 	headers1 := &Headers{
 		Extra: map[string]any{
-			consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken,
+			JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken,
 		},
 	}
 
@@ -218,7 +216,7 @@ func TestDefaultStrategy(t *testing.T) {
 		token1, signature1 string
 	)
 
-	token1, signature1, err = strategy.Encode(ctx, WithClaims(claims), WithHeaders(headers1), WithClient(client))
+	token1, signature1, err = strategy.Encode(ctx, claims, WithHeaders(headers1), WithClient(client))
 	require.NoError(t, err)
 	assert.NotEmpty(t, signature1)
 
@@ -232,11 +230,11 @@ func TestDefaultStrategy(t *testing.T) {
 
 	headers2 := &Headers{
 		Extra: map[string]any{
-			consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT,
+			JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
 		},
 	}
 
-	token2, signature2, err = strategy.Encode(ctx, WithClaims(claims), WithHeaders(headers2), WithHeadersJWE(headersEnc), WithClient(clientEnc))
+	token2, signature2, err = strategy.Encode(ctx, claims, WithHeaders(headers2), WithHeadersJWE(headersEnc), WithClient(clientEnc))
 	require.NoError(t, err)
 	require.True(t, IsEncryptedJWT(token2))
 	require.NotEmpty(t, signature2)
@@ -245,7 +243,7 @@ func TestDefaultStrategy(t *testing.T) {
 		token3, signature3 string
 	)
 
-	token3, signature3, err = strategy.Encode(ctx, WithClaims(claims), WithHeaders(headers1), WithHeadersJWE(headersEnc), WithClient(clientEncAsymmetric))
+	token3, signature3, err = strategy.Encode(ctx, claims, WithHeaders(headers1), WithHeadersJWE(headersEnc), WithClient(clientEncAsymmetric))
 	require.NoError(t, err)
 	assert.NotEmpty(t, signature3)
 
@@ -361,7 +359,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		},
 	}
 
-	tokenString, sig, err := providerStrategy.Encode(context.TODO(), WithClaims(claims), WithClient(encodeClientRSA))
+	tokenString, sig, err := providerStrategy.Encode(context.TODO(), claims, WithClient(encodeClientRSA))
 	require.NoError(t, err)
 	assert.NotEmpty(t, sig)
 	assert.NotEmpty(t, tokenString)
@@ -416,7 +414,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		},
 	}
 
-	tokenString, sig, err = providerStrategy.Encode(context.TODO(), WithClaims(claims), WithClient(encodeClientECDSA))
+	tokenString, sig, err = providerStrategy.Encode(context.TODO(), claims, WithClient(encodeClientECDSA))
 	require.NoError(t, err)
 	assert.NotEmpty(t, sig)
 	assert.NotEmpty(t, tokenString)
@@ -631,13 +629,13 @@ func init() {
 		testKeySigRSA = jose.JSONWebKey{
 			Key:       k,
 			KeyID:     "test-rsa-sig",
-			Use:       consts.JSONWebTokenUseSignature,
+			Use:       JSONWebTokenUseSignature,
 			Algorithm: string(jose.RS256),
 		}
 		testKeyPublicSigRSA = jose.JSONWebKey{
 			Key:       k.Public(),
 			KeyID:     "test-rsa-sig",
-			Use:       consts.JSONWebTokenUseSignature,
+			Use:       JSONWebTokenUseSignature,
 			Algorithm: string(jose.RS256),
 		}
 	default:
@@ -653,13 +651,13 @@ func init() {
 		testKeyEncRSA = jose.JSONWebKey{
 			Key:       k,
 			KeyID:     "test-rsa-enc",
-			Use:       consts.JSONWebTokenUseEncryption,
+			Use:       JSONWebTokenUseEncryption,
 			Algorithm: string(jose.RSA_OAEP_256),
 		}
 		testKeyPublicEncRSA = jose.JSONWebKey{
 			Key:       k.Public(),
 			KeyID:     "test-rsa-enc",
-			Use:       consts.JSONWebTokenUseEncryption,
+			Use:       JSONWebTokenUseEncryption,
 			Algorithm: string(jose.RSA_OAEP_256),
 		}
 	default:
@@ -675,13 +673,13 @@ func init() {
 		testKeySigECDSA = jose.JSONWebKey{
 			Key:       k,
 			KeyID:     "test-ecdsa-sig",
-			Use:       consts.JSONWebTokenUseSignature,
+			Use:       JSONWebTokenUseSignature,
 			Algorithm: string(jose.ES256),
 		}
 		testKeyPublicSigECDSA = jose.JSONWebKey{
 			Key:       k.Public(),
 			KeyID:     "test-ecdsa-sig",
-			Use:       consts.JSONWebTokenUseSignature,
+			Use:       JSONWebTokenUseSignature,
 			Algorithm: string(jose.ES256),
 		}
 	default:
@@ -697,13 +695,13 @@ func init() {
 		testKeyEncECDSA = jose.JSONWebKey{
 			Key:       k,
 			KeyID:     "test-ecdsa-enc",
-			Use:       consts.JSONWebTokenUseEncryption,
+			Use:       JSONWebTokenUseEncryption,
 			Algorithm: string(jose.ECDH_ES_A128KW),
 		}
 		testKeyPublicEncECDSA = jose.JSONWebKey{
 			Key:       k.Public(),
 			KeyID:     "test-ecdsa-enc",
-			Use:       consts.JSONWebTokenUseEncryption,
+			Use:       JSONWebTokenUseEncryption,
 			Algorithm: string(jose.ECDH_ES_A128KW),
 		}
 	default:

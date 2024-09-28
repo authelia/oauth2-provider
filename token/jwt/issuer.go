@@ -8,8 +8,6 @@ import (
 	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
-
-	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // NewDefaultIssuer returns a new issuer and verifies that one RS256 key exists.
@@ -27,7 +25,7 @@ func NewDefaultIssuer(keys ...jose.JSONWebKey) (issuer *DefaultIssuer, err error
 			continue
 		}
 
-		if key.Use != consts.JSONWebTokenUseSignature {
+		if key.Use != JSONWebTokenUseSignature {
 			continue
 		}
 
@@ -47,7 +45,7 @@ func NewDefaultIssuer(keys ...jose.JSONWebKey) (issuer *DefaultIssuer, err error
 
 func NewDefaultIssuerFromJWKS(jwks *jose.JSONWebKeySet) (issuer *DefaultIssuer, err error) {
 	for _, key := range jwks.Keys {
-		if key.Use != consts.JSONWebTokenUseSignature {
+		if key.Use != JSONWebTokenUseSignature {
 			continue
 		}
 
@@ -100,7 +98,7 @@ func NewDefaultIssuerRS256Unverified(key any) (issuer *DefaultIssuer) {
 					Key:       key,
 					KeyID:     "default",
 					Algorithm: string(jose.RS256),
-					Use:       consts.JSONWebTokenUseSignature,
+					Use:       JSONWebTokenUseSignature,
 				},
 			},
 		},

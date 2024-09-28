@@ -9,7 +9,6 @@ import (
 
 type StrategyOpts struct {
 	client Client
-	claims MapClaims
 
 	headers, headersJWE Mapper
 
@@ -48,14 +47,6 @@ func WithHeaders(headers Mapper) StrategyOpt {
 func WithHeadersJWE(headers Mapper) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.headersJWE = headers
-
-		return nil
-	}
-}
-
-func WithClaims(claims MapClaims) StrategyOpt {
-	return func(opts *StrategyOpts) (err error) {
-		opts.claims = claims
 
 		return nil
 	}

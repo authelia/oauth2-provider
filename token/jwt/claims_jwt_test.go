@@ -30,16 +30,16 @@ var jwtClaims = &JWTClaims{
 }
 
 var jwtClaimsMap = map[string]any{
-	consts.ClaimSubject:          jwtClaims.Subject,
-	consts.ClaimIssuedAt:         jwtClaims.IssuedAt.Unix(),
-	consts.ClaimIssuer:           jwtClaims.Issuer,
-	consts.ClaimNotBefore:        jwtClaims.NotBefore.Unix(),
-	consts.ClaimAudience:         jwtClaims.Audience,
-	consts.ClaimExpirationTime:   jwtClaims.ExpiresAt.Unix(),
-	consts.ClaimJWTID:            jwtClaims.JTI,
-	consts.ClaimScopeNonStandard: []string{consts.ScopeEmail, consts.ScopeOffline},
-	"foo":                        jwtClaims.Extra["foo"],
-	"baz":                        jwtClaims.Extra["baz"],
+	ClaimSubject:          jwtClaims.Subject,
+	ClaimIssuedAt:         jwtClaims.IssuedAt.Unix(),
+	ClaimIssuer:           jwtClaims.Issuer,
+	ClaimNotBefore:        jwtClaims.NotBefore.Unix(),
+	ClaimAudience:         jwtClaims.Audience,
+	ClaimExpirationTime:   jwtClaims.ExpiresAt.Unix(),
+	ClaimJWTID:            jwtClaims.JTI,
+	ClaimScopeNonStandard: []string{consts.ScopeEmail, consts.ScopeOffline},
+	"foo":                 jwtClaims.Extra["foo"],
+	"baz":                 jwtClaims.Extra["baz"],
 }
 
 func TestClaimAddGetString(t *testing.T) {
@@ -48,7 +48,7 @@ func TestClaimAddGetString(t *testing.T) {
 }
 
 func TestClaimsToMapSetsID(t *testing.T) {
-	assert.NotEmpty(t, (&JWTClaims{}).ToMap()[consts.ClaimJWTID])
+	assert.NotEmpty(t, (&JWTClaims{}).ToMap()[ClaimJWTID])
 }
 
 func TestAssert(t *testing.T) {
@@ -78,8 +78,8 @@ func TestScopeFieldString(t *testing.T) {
 	jwtClaimsWithString := jwtClaims.WithScopeField(JWTScopeFieldString)
 	// Making a copy of jwtClaimsMap.
 	jwtClaimsMapWithString := jwtClaims.ToMap()
-	delete(jwtClaimsMapWithString, consts.ClaimScopeNonStandard)
-	jwtClaimsMapWithString[consts.ClaimScope] = "email offline"
+	delete(jwtClaimsMapWithString, ClaimScopeNonStandard)
+	jwtClaimsMapWithString[ClaimScope] = "email offline"
 	assert.Equal(t, jwtClaimsMapWithString, map[string]any(jwtClaimsWithString.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithString)
@@ -90,7 +90,7 @@ func TestScopeFieldBoth(t *testing.T) {
 	jwtClaimsWithBoth := jwtClaims.WithScopeField(JWTScopeFieldBoth)
 	// Making a copy of jwtClaimsMap
 	jwtClaimsMapWithBoth := jwtClaims.ToMap()
-	jwtClaimsMapWithBoth[consts.ClaimScope] = "email offline"
+	jwtClaimsMapWithBoth[ClaimScope] = "email offline"
 	assert.Equal(t, jwtClaimsMapWithBoth, map[string]any(jwtClaimsWithBoth.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithBoth)

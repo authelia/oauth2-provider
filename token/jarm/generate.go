@@ -79,5 +79,5 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.")
 	}
 
-	return signer.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(client))
+	return signer.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(client))
 }

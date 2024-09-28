@@ -75,6 +75,5 @@ func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
 			assert.NotNil(t, resp, "%d", k)
 			assert.Equal(t, req.Form, resp.GetRequestForm())
 		}
-		t.Logf("Passed test case %d", k)
 	}
 }

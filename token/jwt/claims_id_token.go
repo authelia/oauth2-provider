@@ -50,13 +50,13 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		ok = false
 
 		switch claim {
-		case consts.ClaimJWTID:
+		case ClaimJWTID:
 			c.JTI, ok = value.(string)
-		case consts.ClaimIssuer:
+		case ClaimIssuer:
 			c.Issuer, ok = value.(string)
-		case consts.ClaimSubject:
+		case ClaimSubject:
 			c.Subject, ok = value.(string)
-		case consts.ClaimAudience:
+		case ClaimAudience:
 			switch aud := value.(type) {
 			case string:
 				ok = true
@@ -81,21 +81,21 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 					}
 				}
 			}
-		case consts.ClaimNonce:
+		case ClaimNonce:
 			c.Nonce, ok = value.(string)
-		case consts.ClaimExpirationTime:
+		case ClaimExpirationTime:
 			c.ExpiresAt, ok = toTime(value, c.ExpiresAt)
-		case consts.ClaimIssuedAt:
+		case ClaimIssuedAt:
 			c.IssuedAt, ok = toTime(value, c.IssuedAt)
-		case consts.ClaimRequestedAt:
+		case ClaimRequestedAt:
 			c.RequestedAt, ok = toTime(value, c.RequestedAt)
-		case consts.ClaimAuthenticationTime:
+		case ClaimAuthenticationTime:
 			c.AuthTime, ok = toTime(value, c.AuthTime)
-		case consts.ClaimCodeHash:
+		case ClaimCodeHash:
 			c.CodeHash, ok = value.(string)
-		case consts.ClaimStateHash:
+		case ClaimStateHash:
 			c.StateHash, ok = value.(string)
-		case consts.ClaimAuthenticationContextClassReference:
+		case ClaimAuthenticationContextClassReference:
 			c.AuthenticationContextClassReference, ok = value.(string)
 		default:
 			if c.Extra == nil {
@@ -120,13 +120,13 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
-		ret[consts.ClaimSubject] = c.Subject
+		ret[ClaimSubject] = c.Subject
 	} else {
-		delete(ret, consts.ClaimSubject)
+		delete(ret, ClaimSubject)
 	}
 
 	if c.Issuer != "" {
-		ret[consts.ClaimIssuer] = c.Issuer
+		ret[ClaimIssuer] = c.Issuer
 	} else {
 		delete(ret, consts.ClaimIssuer)
 	}

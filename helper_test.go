@@ -25,7 +25,6 @@ func TestStringInSlice(t *testing.T) {
 		{needle: "foo", haystack: []string{}, ok: false},
 	} {
 		assert.Equal(t, c.ok, StringInSlice(c.needle, c.haystack), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }
 

@@ -171,7 +171,9 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 			s.Config.GetJWTScopeField(ctx),
 		)
 
-	return s.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
+	mapClaims := claims.ToMapClaims()
+
+	return s.Strategy.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }
 
 func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, tokenString string) (token *jwt.Token, err error) {
@@ -191,6 +193,7 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 		clientText          string
 		sigKID, sigAlg      string
 		encKID, encAlg, enc string
+		date                *jwt.NumericDate
 	)
 
 	if client != nil {
@@ -228,36 +231,35 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
 			return oauth2.ErrTokenSignatureMismatch.WithDebugf("Token %shas an invalid signature.", clientText)
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
-			exp, ok := token.Claims.GetExpiresAt()
-			if ok {
-				return oauth2.ErrTokenExpired.WithDebugf("Token %sexpired at %d.", clientText, exp)
+			if date, err = token.Claims.GetExpirationTime(); err == nil {
+				return oauth2.ErrTokenExpired.WithDebugf("Token %sexpired at %d.", clientText, date.Int64())
 			} else {
 				return oauth2.ErrTokenExpired.WithDebugf("Token %sdoes not have an 'exp' claim or it has an invalid type.", clientText)
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
-			iat, ok := token.Claims.GetIssuedAt()
-			if ok {
-				return oauth2.ErrTokenClaim.WithDebugf("Token %sis issued in the future. The token was issued at %d.", clientText, iat)
+			if date, err = token.Claims.GetIssuedAt(); err == nil {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis issued in the future. The token was issued at %d.", clientText, date.Int64())
 			} else {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %sis issued in the future. The token does not have an 'iat' claim or it has an invalid type.", clientText)
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
-			nbf, ok := token.Claims.GetNotBefore()
-			if ok {
-				return oauth2.ErrTokenClaim.WithDebugf("Token %sis not valid yet. The token is not valid before %d.", clientText, nbf)
+			if date, err = token.Claims.GetNotBefore(); err == nil {
+				return oauth2.ErrTokenClaim.WithDebugf("Token %sis not valid yet. The token is not valid before %d.", clientText, date.Int64())
 			} else {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %sis not valid yet. The token does not have an 'nbf' claim or it has an invalid type.", clientText)
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
-			iss, ok := token.Claims.GetIssuer()
-			if ok {
+			var iss string
+
+			if iss, err = token.Claims.GetIssuer(); err == nil {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid issuer. The token was expected to have an 'iss' claim with one of the following values: ''. The 'iss' claim has a value of '%s'.", clientText, iss)
 			} else {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid issuer. The token does not have an 'iss' claim or it has an invalid type.", clientText)
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorAudience):
-			aud, ok := token.Claims.GetAudience()
-			if ok {
+			var aud jwt.ClaimStrings
+
+			if aud, err = token.Claims.GetAudience(); err == nil {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token was expected to have an 'iss' claim with one of the following values: ''. The 'aud' claim has a value of '%s'.", clientText, aud)
 			} else {
 				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token does not have an 'aud' claim or it has an invalid type.", clientText)

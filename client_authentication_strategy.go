@@ -156,10 +156,8 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
-	var ok bool
-
-	if id, ok = token.Claims.GetSubject(); !ok {
-		if id, ok = token.Claims.GetIssuer(); !ok {
+	if id, err = token.Claims.GetSubject(); err != nil || len(id) == 0 {
+		if id, err = token.Claims.GetIssuer(); err != nil || len(id) == 0 {
 			return &ClientAssertion{Assertion: assertion, Type: assertionType}, nil
 		}
 	}
@@ -273,7 +271,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 
 	claims := &jwt.JWTClaims{}
 
-	claims.FromMapClaims(token.Claims)
+	claims.FromMapClaims(token.Claims.ToMapClaims())
 
 	switch {
 	case subtle.ConstantTimeCompare([]byte(claims.Issuer), clientID) == 0:
@@ -418,36 +416,36 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid signature. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
-			exp, ok := token.Claims.GetExpiresAt()
-			if ok {
-				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion expired at %d.", client.GetID(), exp)
+			exp, err := token.Claims.GetExpirationTime()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion expired at %d.", client.GetID(), exp.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion does not have an 'exp' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
-			iat, ok := token.Claims.GetIssuedAt()
-			if ok {
-				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion was issued at %d.", client.GetID(), iat)
+			iat, err := token.Claims.GetIssuedAt()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion was issued at %d.", client.GetID(), iat.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'iat' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
-			nbf, ok := token.Claims.GetNotBefore()
-			if ok {
-				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion is not valid before %d.", client.GetID(), nbf)
+			nbf, err := token.Claims.GetNotBefore()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion is not valid before %d.", client.GetID(), nbf.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'nbf' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
-			iss, ok := token.Claims.GetIssuer()
-			if ok {
+			iss, err := token.Claims.GetIssuer()
+			if err == nil {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid issuer. The client assertion was expected to have an 'iss' claim which matches the value '%s' but the 'iss' claim had the value '%s'.", client.GetID(), client.GetID(), iss)
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid issuer. The client assertion does not have an 'iss' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorAudience):
-			aud, ok := token.Claims.GetAudience()
-			if ok {
+			aud, err := token.Claims.GetAudience()
+			if err == nil {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid audience. The client assertion was expected to have an 'aud' claim which matches one of the values '%s' but the 'aud' claim had the values '%s'.", client.GetID(), strings.Join(audience, "', '"), strings.Join(aud, "', '"))
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid audience. The client assertion does not have an 'aud' claim or it has an invalid type.", client.GetID())

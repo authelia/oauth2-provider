@@ -57,7 +57,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	var parsed *jwt.JSONWebToken
 
 	if parsed, err = jwt.ParseSigned(tokenString, algs); err != nil {
-		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, Inner: err}
+		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorMalformed, Inner: err}
 	}
 
 	// fill unverified claims
@@ -68,12 +68,12 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
 	// then with the returned key, the claims gets verified.
 	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
+		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
 
 	// creates an unsafe token
 	if token, err = newToken(parsed, claims); err != nil {
-		return nil, err
+		return &Token{Claims: MapClaims(nil)}, err
 	}
 
 	if keyFunc == nil {
@@ -144,7 +144,7 @@ type Token struct {
 	Header    map[string]any
 	HeaderJWE map[string]any
 
-	Claims MapClaims
+	Claims Claims
 
 	parsedToken *jwt.JSONWebToken
 
@@ -162,13 +162,13 @@ func (t *Token) IsSignatureValid() bool {
 //
 // > For a type to be a Claims object, it must just have a Valid method that determines
 // if the token is invalid for any supported reason
-type Claims interface {
-	Valid() error
-}
+// type Claims interface {
+//	Valid() error
+//}
 
 func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
 	header = map[jose.HeaderKey]any{
-		consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT,
+		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
 	}
 
 	for k, v := range t.Header {
@@ -180,11 +180,11 @@ func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
 
 func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 	header = map[jose.HeaderKey]any{
-		consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT,
+		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
 	}
 
-	if cty, ok := t.Header[consts.JSONWebTokenHeaderType]; ok {
-		header[consts.JSONWebTokenHeaderContentType] = cty
+	if cty, ok := t.Header[JSONWebTokenHeaderType]; ok {
+		header[JSONWebTokenHeaderContentType] = cty
 	}
 
 	for k, v := range t.HeaderJWE {
@@ -195,7 +195,7 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 }
 
 // SetJWS sets the JWS output values.
-func (t *Token) SetJWS(header Mapper, claims MapClaims, kid string, alg jose.SignatureAlgorithm) {
+func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.SignatureAlgorithm) {
 	assign(t.Header, header.ToMap())
 
 	t.KeyID = kid
@@ -221,11 +221,11 @@ func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
 	}
 
 	t.HeaderJWE = map[string]any{
-		consts.JSONWebTokenHeaderAlgorithm: jwe.Header.Algorithm,
+		JSONWebTokenHeaderAlgorithm: jwe.Header.Algorithm,
 	}
 
 	if jwe.Header.KeyID != "" {
-		t.HeaderJWE[consts.JSONWebTokenHeaderKeyIdentifier] = jwe.Header.KeyID
+		t.HeaderJWE[JSONWebTokenHeaderKeyIdentifier] = jwe.Header.KeyID
 		t.EncryptionKeyID = jwe.Header.KeyID
 	}
 
@@ -235,11 +235,11 @@ func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
 		t.HeaderJWE[h] = value
 
 		switch h {
-		case consts.JSONWebTokenHeaderEncryptionAlgorithm:
+		case JSONWebTokenHeaderEncryptionAlgorithm:
 			if v, ok := value.(string); ok {
 				t.ContentEncryption = jose.ContentEncryption(v)
 			}
-		case consts.JSONWebTokenHeaderCompressionAlgorithm:
+		case JSONWebTokenHeaderCompressionAlgorithm:
 			if v, ok := value.(string); ok {
 				t.CompressionAlgorithm = jose.CompressionAlgorithm(v)
 			}
@@ -270,13 +270,13 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 		ExtraHeaders: t.toEncryptedJoseHeader(),
 	}
 
-	if _, ok := opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; !ok {
+	if _, ok := opts.ExtraHeaders[JSONWebTokenHeaderContentType]; !ok {
 		var typ any
 
-		if typ, ok = t.Header[consts.JSONWebTokenHeaderType]; ok {
-			opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType] = typ
+		if typ, ok = t.Header[JSONWebTokenHeaderType]; ok {
+			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = typ
 		} else {
-			opts.ExtraHeaders[consts.JSONWebTokenHeaderContentType] = consts.JSONWebTokenTypeJWT
+			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = JSONWebTokenTypeJWT
 		}
 	}
 
@@ -338,9 +338,9 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	// to map[string]any is required because the
 	// go-jose CompactSerialize() only support explicit maps
 	// as claims or structs but not type aliases from maps.
-	claims := map[string]any(t.Claims)
+	// claims := t.Claims.ToMapClaims()
 
-	if tokenString, err = jwt.Signed(signer).Claims(claims).Serialize(); err != nil {
+	if tokenString, err = jwt.Signed(signer).Claims(t.Claims.ToMapClaims().ToMap()).Serialize(); err != nil {
 		return "", &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
 
@@ -350,7 +350,7 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 // Valid validates the token headers given various input options. This does not validate any claims.
 func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 	vopts := &HeaderValidationOptions{
-		types: []string{consts.JSONWebTokenTypeJWT},
+		types: []string{JSONWebTokenTypeJWT},
 	}
 
 	for _, opt := range opts {
@@ -370,13 +370,13 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 			ok  bool
 		)
 
-		if typ, ok = t.HeaderJWE[consts.JSONWebTokenHeaderType]; !ok || typ != consts.JSONWebTokenTypeJWT {
+		if typ, ok = t.HeaderJWE[JSONWebTokenHeaderType]; !ok || typ != JSONWebTokenTypeJWT {
 			vErr.Inner = errors.New("token was encrypted with invalid typ")
 			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
 		}
 
-		ttyp := t.Header[consts.JSONWebTokenHeaderType]
-		cty := t.HeaderJWE[consts.JSONWebTokenHeaderContentType]
+		ttyp := t.Header[JSONWebTokenHeaderType]
+		cty := t.HeaderJWE[JSONWebTokenHeaderContentType]
 
 		if cty != ttyp {
 			vErr.Inner = errors.New("token was encrypted with a cty value that doesn't match the typ value")
@@ -448,26 +448,26 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	)
 
 	if t.HeaderJWE != nil && len(t.HeaderJWE) > 0 {
-		if raw, ok = t.HeaderJWE[consts.JSONWebTokenHeaderContentType]; ok {
+		if raw, ok = t.HeaderJWE[JSONWebTokenHeaderContentType]; ok {
 			cty, ok = raw.(string)
 
 			if !ok {
 				return false
 			}
 
-			if cty != consts.JSONWebTokenTypeAccessToken && cty != consts.JSONWebTokenTypeAccessTokenAlternative {
+			if cty != JSONWebTokenTypeAccessToken && cty != JSONWebTokenTypeAccessTokenAlternative {
 				return false
 			}
 		}
 	}
 
-	if raw, ok = t.Header[consts.JSONWebTokenHeaderType]; !ok {
+	if raw, ok = t.Header[JSONWebTokenHeaderType]; !ok {
 		return false
 	}
 
 	typ, ok = raw.(string)
 
-	return ok && (typ == consts.JSONWebTokenTypeAccessToken || typ == consts.JSONWebTokenTypeAccessTokenAlternative)
+	return ok && (typ == JSONWebTokenTypeAccessToken || typ == JSONWebTokenTypeAccessTokenAlternative)
 }
 
 type HeaderValidationOption func(opts *HeaderValidationOptions)
@@ -518,10 +518,10 @@ func ValidateContentEncryption(enc string) HeaderValidationOption {
 }
 
 func unsignedToken(token *Token) (tokenString string, err error) {
-	token.Header[consts.JSONWebTokenHeaderAlgorithm] = consts.JSONWebTokenAlgNone
+	token.Header[JSONWebTokenHeaderAlgorithm] = JSONWebTokenAlgNone
 
-	if _, ok := token.Header[consts.JSONWebTokenHeaderType]; !ok {
-		token.Header[consts.JSONWebTokenHeaderType] = consts.JSONWebTokenTypeJWT
+	if _, ok := token.Header[JSONWebTokenHeaderType]; !ok {
+		token.Header[JSONWebTokenHeaderType] = JSONWebTokenTypeJWT
 	}
 
 	var (
@@ -541,6 +541,11 @@ func unsignedToken(token *Token) (tokenString string, err error) {
 
 func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	token := &Token{Claims: claims, parsedToken: parsedToken}
+
+	if token.Claims == nil {
+		token.Claims = MapClaims{}
+	}
+
 	if len(parsedToken.Headers) != 1 {
 		return nil, &ValidationError{text: fmt.Sprintf("only one header supported, got %v", len(parsedToken.Headers)), Errors: ValidationErrorMalformed}
 	}
@@ -548,7 +553,7 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	// copy headers
 	h := parsedToken.Headers[0]
 	token.Header = map[string]any{
-		consts.JSONWebTokenHeaderAlgorithm: h.Algorithm,
+		JSONWebTokenHeaderAlgorithm: h.Algorithm,
 	}
 
 	token.SignatureAlgorithm = jose.SignatureAlgorithm(h.Algorithm)

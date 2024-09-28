@@ -123,7 +123,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 	if window == 0 {
 		window = 1 * time.Hour
 	}
-	claims := ftoken.Claims
+	claims := ftoken.Claims.ToMapClaims()
 
 	if issued, exists := claims[consts.ClaimIssuedAt]; exists {
 		if time.Unix(toInt64(issued), 0).Add(window).Before(time.Now()) {
@@ -203,7 +203,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	claims.IssuedAt = time.Now().UTC()
 
-	token, _, err := c.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient()))
+	token, _, err := c.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient()))
 	if err != nil {
 		return err
 	}

@@ -176,7 +176,7 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, tokenString string) (token *jwt.Token, err error) {
 	if token, err = strategy.Decode(ctx, tokenString, jwt.WithClient(client)); err != nil {
-		return token, fmtValidateJWTError(token, client, err)
+		return nil, fmtValidateJWTError(token, client, err)
 	}
 
 	if err = token.Claims.Valid(); err != nil {

@@ -276,9 +276,9 @@ func TestMapClaims_VerifyAudienceAny(t *testing.T) {
 		{
 			"ShouldPassMultipleAny",
 			MapClaims{
-				consts.ClaimAudience: []string{"foo"},
+				consts.ClaimAudience: []string{"foo", "baz"},
 			},
-			[]string{"foo", "bar"},
+			[]string{"bar", "baz"},
 			true,
 			true,
 		},

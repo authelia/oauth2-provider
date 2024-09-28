@@ -397,6 +397,9 @@ type JWTProfileAccessTokenClient interface {
 	// MUST NOT be specified without setting access_token_encrypted_response_alg.
 	GetAccessTokenEncryptedResponseEnc() (alg string)
 
+	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
+	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
+
 	BaseClient
 }
 

@@ -4,6 +4,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 )
 
+// NewJARClient converts a type into a Client provided it implements the JARClient.
 func NewJARClient(client any) Client {
 	switch c := client.(type) {
 	case JARClient:
@@ -13,6 +14,7 @@ func NewJARClient(client any) Client {
 	}
 }
 
+// NewIDTokenClient converts a type into a Client provided it implements the IDTokenClient.
 func NewIDTokenClient(client any) Client {
 	switch c := client.(type) {
 	case IDTokenClient:
@@ -22,6 +24,7 @@ func NewIDTokenClient(client any) Client {
 	}
 }
 
+// NewJARMClient converts a type into a Client provided it implements the JARMClient.
 func NewJARMClient(client any) Client {
 	switch c := client.(type) {
 	case JARMClient:
@@ -31,6 +34,7 @@ func NewJARMClient(client any) Client {
 	}
 }
 
+// NewUserInfoClient converts a type into a Client provided it implements the UserInfoClient.
 func NewUserInfoClient(client any) Client {
 	switch c := client.(type) {
 	case UserInfoClient:
@@ -40,6 +44,7 @@ func NewUserInfoClient(client any) Client {
 	}
 }
 
+// NewJWTProfileAccessTokenClient converts a type into a Client provided it implements the JWTProfileAccessTokenClient.
 func NewJWTProfileAccessTokenClient(client any) Client {
 	switch c := client.(type) {
 	case JWTProfileAccessTokenClient:
@@ -49,6 +54,7 @@ func NewJWTProfileAccessTokenClient(client any) Client {
 	}
 }
 
+// NewIntrospectionClient converts a type into a Client provided it implements the IntrospectionClient.
 func NewIntrospectionClient(client any) Client {
 	switch c := client.(type) {
 	case IntrospectionClient:
@@ -58,6 +64,8 @@ func NewIntrospectionClient(client any) Client {
 	}
 }
 
+// NewStatelessJWTProfileIntrospectionClient converts a type into a Client provided it implements either the
+// IntrospectionClient or JWTProfileAccessTokenClient.
 func NewStatelessJWTProfileIntrospectionClient(client any) Client {
 	switch c := client.(type) {
 	case IntrospectionClient:
@@ -69,6 +77,7 @@ func NewStatelessJWTProfileIntrospectionClient(client any) Client {
 	}
 }
 
+// Client represents a client which can be used to sign, verify, encrypt, and decrypt JWT's.
 type Client interface {
 	GetSigningKeyID() (kid string)
 	GetSigningAlg() (alg string)
@@ -81,6 +90,7 @@ type Client interface {
 	BaseClient
 }
 
+// BaseClient represents the base implementation for any JWT compatible client.
 type BaseClient interface {
 	// GetID returns the client ID.
 	GetID() string
@@ -105,6 +115,7 @@ type BaseClient interface {
 	GetJSONWebKeysURI() (uri string)
 }
 
+// JARClient represents the implementation for any JWT Authorization Request compatible client.
 type JARClient interface {
 	// GetRequestObjectSigningKeyID returns the specific key identifier used to satisfy JWS requirements of the request
 	// object specifications. If unspecified the other available parameters will be utilized to select an appropriate

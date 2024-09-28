@@ -17,6 +17,7 @@ type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
 
+	// IsPublic returns true if the client has the public client type.
 	IsPublic() (public bool)
 
 	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the

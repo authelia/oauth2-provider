@@ -420,7 +420,7 @@ func (r *decoratedJWTProfileAccessTokenClient) IsClientSigned() (is bool) {
 type IntrospectionClient interface {
 	// GetIntrospectionSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
-	//	// utilized to select an appropriate key.
+	// utilized to select an appropriate key.
 	GetIntrospectionSignedResponseKeyID() (kid string)
 
 	// GetIntrospectionSignedResponseAlg is equivalent to the 'introspection_signed_response_alg' client metadata
@@ -431,7 +431,7 @@ type IntrospectionClient interface {
 
 	// GetIntrospectionEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
-	//	// utilized to select an appropriate key.
+	// utilized to select an appropriate key.
 	GetIntrospectionEncryptedResponseKeyID() (kid string)
 
 	// GetIntrospectionEncryptedResponseAlg is equivalent to the 'introspection_encrypted_response_alg' client metadata

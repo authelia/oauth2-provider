@@ -101,58 +101,58 @@ func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
-		ret[consts.ClaimSubject] = c.Subject
+		ret[ClaimSubject] = c.Subject
 	} else {
-		delete(ret, consts.ClaimSubject)
+		delete(ret, ClaimSubject)
 	}
 
 	if c.Issuer != "" {
-		ret[consts.ClaimIssuer] = c.Issuer
+		ret[ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, consts.ClaimIssuer)
+		delete(ret, ClaimIssuer)
 	}
 
 	if c.JTI != "" {
-		ret[consts.ClaimJWTID] = c.JTI
+		ret[ClaimJWTID] = c.JTI
 	} else {
-		ret[consts.ClaimJWTID] = uuid.New().String()
+		ret[ClaimJWTID] = uuid.New().String()
 	}
 
 	if len(c.Audience) > 0 {
-		ret[consts.ClaimAudience] = c.Audience
+		ret[ClaimAudience] = c.Audience
 	} else {
-		ret[consts.ClaimAudience] = []string{}
+		ret[ClaimAudience] = []string{}
 	}
 
 	if !c.IssuedAt.IsZero() {
-		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
+		ret[ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, consts.ClaimIssuedAt)
+		delete(ret, ClaimIssuedAt)
 	}
 
 	if !c.NotBefore.IsZero() {
-		ret[consts.ClaimNotBefore] = c.NotBefore.Unix()
+		ret[ClaimNotBefore] = c.NotBefore.Unix()
 	} else {
-		delete(ret, consts.ClaimNotBefore)
+		delete(ret, ClaimNotBefore)
 	}
 
 	if !c.ExpiresAt.IsZero() {
-		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
+		ret[ClaimExpirationTime] = c.ExpiresAt.Unix()
 	} else {
-		delete(ret, consts.ClaimExpirationTime)
+		delete(ret, ClaimExpirationTime)
 	}
 
 	if c.Scope != nil {
 		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of oauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
-			ret[consts.ClaimScopeNonStandard] = c.Scope
+			ret[ClaimScopeNonStandard] = c.Scope
 		}
 		if c.ScopeField == JWTScopeFieldString || c.ScopeField == JWTScopeFieldBoth {
-			ret[consts.ClaimScope] = strings.Join(c.Scope, " ")
+			ret[ClaimScope] = strings.Join(c.Scope, " ")
 		}
 	} else {
-		delete(ret, consts.ClaimScopeNonStandard)
-		delete(ret, consts.ClaimScope)
+		delete(ret, ClaimScopeNonStandard)
+		delete(ret, ClaimScope)
 	}
 
 	return ret
@@ -265,6 +265,41 @@ func toInt64(v any) (val int64, ok bool) {
 	}
 
 	return 0, false
+}
+
+func toNumericDate(v any) (date *NumericDate, err error) {
+	switch value := v.(type) {
+	case float64:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(value), nil
+	case int64:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case int32:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case int:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case json.Number:
+		vv, _ := value.Float64()
+
+		return newNumericDateFromSeconds(vv), nil
+	}
+
+	return nil, newError("value has invalid type", ErrInvalidType)
 }
 
 // Add will add a key-value pair to the extra field

@@ -74,7 +74,6 @@ func TestGenerateIDToken(t *testing.T) {
 		if err == nil {
 			assert.NotEmpty(t, token, "(%d) %s", k, c.description)
 		}
-		t.Logf("Passed test case %d", k)
 	}
 }
 

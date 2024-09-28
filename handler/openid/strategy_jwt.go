@@ -144,8 +144,9 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	jwtClient := jwt.NewIDTokenClient(requester.GetClient())
 
 	if requester.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
-		maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
-		if err != nil {
+		var maxAge int64
+
+		if maxAge, err = strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64); err != nil {
 			maxAge = 0
 		}
 
@@ -192,7 +193,10 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		if tokenHintString := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
-			tokenHint, err := h.Strategy.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
+			var tokenHint *jwt.Token
+
+			tokenHint, err = h.Strategy.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
+
 			var ve *jwt.ValidationError
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
@@ -200,9 +204,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode id token from 'id_token_hint' parameter because %s.", err.Error()))
 			}
 
-			if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {
+			var subHint string
+
+			if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Provided id token from 'id_token_hint' does not have a subject."))
-			} else if hintSub != claims.Subject {
+			} else if subHint != claims.Subject {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Subject from authorization mismatches id token subject from 'id_token_hint'."))
 			}
 		}
@@ -236,7 +242,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
 	claims.IssuedAt = time.Now().UTC()
 
-	token, _, err = h.Strategy.Encode(ctx, jwt.WithClaims(claims.ToMapClaims()), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithClient(jwtClient))
+	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
 }

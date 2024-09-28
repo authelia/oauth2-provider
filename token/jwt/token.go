@@ -366,8 +366,8 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 
 	if t.HeaderJWE != nil && (t.KeyAlgorithm != "" || t.ContentEncryption != "") {
 		var (
-			cty, typ, ttyp any
-			ok             bool
+			typ any
+			ok  bool
 		)
 
 		if typ, ok = t.HeaderJWE[consts.JSONWebTokenHeaderType]; !ok || typ != consts.JSONWebTokenTypeJWT {
@@ -375,14 +375,19 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
 		}
 
-		if ttyp, ok = t.Header[consts.JSONWebTokenHeaderType]; !ok {
-			vErr.Inner = errors.New("token was signed with invalid typ")
-			vErr.Errors |= ValidationErrorHeaderTypeInvalid
+		ttyp := t.Header[consts.JSONWebTokenHeaderType]
+		cty := t.HeaderJWE[consts.JSONWebTokenHeaderContentType]
+
+		if cty != ttyp {
+			vErr.Inner = errors.New("token was encrypted with a cty value that doesn't match the typ value")
+			vErr.Errors |= ValidationErrorHeaderContentTypeInvalidMismatch
 		}
 
-		if cty, ok = t.HeaderJWE[consts.JSONWebTokenHeaderContentType]; !ok || cty != ttyp {
-			vErr.Inner = errors.New("token was encrypted with invalid cty or signed with an invalid typ")
-			vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
+		if len(vopts.types) != 0 {
+			if !validateTokenTypeValue(vopts.types, cty) {
+				vErr.Inner = errors.New("token was encrypted with an invalid cty")
+				vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
+			}
 		}
 	}
 
@@ -571,9 +576,8 @@ func pointer(v any) any {
 	return v
 }
 
-func validateTokenType(typValues []string, header map[string]any) bool {
+func validateTokenType(values []string, header map[string]any) bool {
 	var (
-		typ string
 		raw any
 		ok  bool
 	)
@@ -582,11 +586,20 @@ func validateTokenType(typValues []string, header map[string]any) bool {
 		return false
 	}
 
+	return validateTokenTypeValue(values, raw)
+}
+
+func validateTokenTypeValue(values []string, raw any) bool {
+	var (
+		typ string
+		ok  bool
+	)
+
 	if typ, ok = raw.(string); !ok {
 		return false
 	}
 
-	for _, t := range typValues {
+	for _, t := range values {
 		if t == typ {
 			return true
 		}

@@ -258,9 +258,9 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 		case errJWTValidation.Has(jwt.ValidationErrorAudience):
 			aud, ok := token.Claims.GetAudience()
 			if ok {
-				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token was expected to have an 'iss' claim with one of the following values: ''. The 'iss' claim has a value of '%s'.", clientText, aud)
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token was expected to have an 'iss' claim with one of the following values: ''. The 'aud' claim has a value of '%s'.", clientText, aud)
 			} else {
-				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token does not have an 'iss' claim or it has an invalid type.", clientText)
+				return oauth2.ErrTokenClaim.WithDebugf("Token %shas an invalid audience. The token does not have an 'aud' claim or it has an invalid type.", clientText)
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
 			return oauth2.ErrTokenClaim.WithDebugf("Token %shas invalid claims. Error occurred trying to validate the request objects claims: %s", clientText, strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))

@@ -3,12 +3,16 @@ package jwt
 import (
 	"context"
 	"crypto"
+	"crypto/aes"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
+	"hash"
 	"regexp"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
-	jjwt "github.com/go-jose/go-jose/v4/jwt"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -89,31 +93,6 @@ func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
 	return headers[0].KeyID, headers[0].Algorithm, nil
 }
 
-func headerValidateJWSNested(headers []jose.Header, cty string) (err error) {
-	switch len(headers) {
-	case 1:
-		break
-	case 0:
-		return fmt.Errorf("jws header is missing")
-	default:
-		return fmt.Errorf("jws header is malformed")
-	}
-
-	typ, ok := headers[0].ExtraHeaders[consts.JSONWebTokenHeaderType]
-	if !ok {
-		return fmt.Errorf("jws header 'typ' value is missing")
-	}
-
-	switch typ {
-	case "":
-		return fmt.Errorf("jws header 'typ' value is empty")
-	case cty:
-		return nil
-	default:
-		return fmt.Errorf("jws header 'typ' value '%s' is invalid: jwe header 'cty' value '%s' should match the jws header 'typ' value", typ, cty)
-	}
-}
-
 func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error) {
 	if header.KeyID == "" && !IsEncryptedJWTClientSecretAlg(header.Algorithm) {
 		return "", "", "", "", fmt.Errorf("jwe header 'kid' value is missing or empty")
@@ -137,7 +116,6 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 				} else if p2c < 200000 {
 					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': less than 200,000", int(p2c))
 				}
-
 			default:
 				return "", "", "", "", fmt.Errorf("jwe header 'p2c' value has invalid type %T", p2c)
 			}
@@ -159,25 +137,8 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 		}
 	}
 
-	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; !ok {
-		return "", "", "", "", fmt.Errorf("jwe header 'cty' value is missing")
-	} else {
-		switch ctyv := value.(type) {
-		case string:
-			switch ctyv {
-			case consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeAccessToken, consts.JSONWebTokenTypeAccessTokenAlternative, consts.JSONWebTokenTypeTokenIntrospection:
-				cty = ctyv
-				break
-			default:
-				return "", "", "", "", fmt.Errorf("jwe header 'cty' value '%s' is invalid", cty)
-			}
-		default:
-			return "", "", "", "", fmt.Errorf("jwe header 'cty' value has invalid type %T", cty)
-		}
-	}
-
-	if header.JSONWebKey != nil {
-		return "", "", "", "", fmt.Errorf("jwe header 'jwk' value is present but not supported")
+	if value, ok = header.ExtraHeaders[consts.JSONWebTokenHeaderContentType]; ok {
+		cty, _ = value.(string)
 	}
 
 	return header.KeyID, header.Algorithm, enc, cty, nil
@@ -282,8 +243,8 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 	}
 }
 
-// NewJWKFromClientSecret returns a JWK from a client secret.
-func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
+// NewClientSecretJWKFromClient returns a client secret based JWK from a client.
+func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, alg, enc, use string) (jwk *jose.JSONWebKey, err error) {
 	var (
 		secret []byte
 		ok     bool
@@ -297,16 +258,89 @@ func NewJWKFromClientSecret(ctx context.Context, client BaseClient, kid, alg, us
 		return nil, &JWKLookupError{Description: "The client is not configured with a client secret"}
 	}
 
+	return NewClientSecretJWK(ctx, secret, kid, alg, enc, use)
+}
+
+// NewClientSecretJWK returns a client secret based JWK from a client secret value.
+//
+// The symmetric encryption key is derived from the client_secret value by using the left-most bits of a truncated
+// SHA-2 hash of the octets of the UTF-8 representation of the client_secret. For keys of 256 or fewer bits, SHA-256
+// is used; for keys of 257-384 bits, SHA-384 is used; for keys of 385-512 bits, SHA-512 is used. The hash value MUST
+// be truncated retaining the left-most bits to the appropriate bit length for the AES key wrapping or direct
+// encryption algorithm used, for instance, truncating the SHA-256 hash to 128 bits for A128KW. If a symmetric key with
+// greater than 512 bits is needed, a different method of deriving the key from the client_secret would have to be
+// defined by an extension. Symmetric encryption MUST NOT be used by public (non-confidential) Clients because of
+// their inability to keep secrets.
+func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use string) (jwk *jose.JSONWebKey, err error) {
 	if len(secret) == 0 {
 		return nil, &JWKLookupError{Description: "The client is not configured with a client secret that can be used for symmetric algorithms"}
 	}
 
-	return &jose.JSONWebKey{
-		Key:       secret,
-		KeyID:     kid,
-		Algorithm: alg,
-		Use:       use,
-	}, nil
+	switch use {
+	case consts.JSONWebTokenUseSignature:
+		return &jose.JSONWebKey{
+			Key:       secret,
+			KeyID:     kid,
+			Algorithm: alg,
+			Use:       use,
+		}, nil
+	case consts.JSONWebTokenUseEncryption:
+		var (
+			hasher hash.Hash
+			bits   int
+		)
+
+		keyAlg := jose.KeyAlgorithm(alg)
+
+		switch keyAlg {
+		case jose.A128KW, jose.A128GCMKW, jose.A192KW, jose.A192GCMKW, jose.A256KW, jose.A256GCMKW, jose.PBES2_HS256_A128KW:
+			hasher = sha256.New()
+		case jose.PBES2_HS384_A192KW:
+			hasher = sha512.New384()
+		case jose.PBES2_HS512_A256KW, jose.DIRECT:
+			hasher = sha512.New()
+		default:
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported algorithm '%s'", alg)}
+		}
+
+		switch keyAlg {
+		case jose.A128KW, jose.A128GCMKW, jose.PBES2_HS256_A128KW:
+			bits = aes.BlockSize
+		case jose.A192KW, jose.A192GCMKW, jose.PBES2_HS384_A192KW:
+			bits = aes.BlockSize * 1.5
+		case jose.A256KW, jose.A256GCMKW, jose.PBES2_HS512_A256KW:
+			bits = aes.BlockSize * 2
+		case jose.DIRECT:
+			switch jose.ContentEncryption(enc) {
+			case jose.A128CBC_HS256, "":
+				bits = aes.BlockSize * 2
+			case jose.A192CBC_HS384:
+				bits = aes.BlockSize * 3
+			case jose.A256CBC_HS512:
+				bits = aes.BlockSize * 4
+			default:
+				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorthm '%s'", enc)}
+			}
+		}
+
+		if _, err = hasher.Write(secret); err != nil {
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to derive key from hashing the client secret. %s", err.Error())}
+		}
+
+		return &jose.JSONWebKey{
+			Key:       hasher.Sum(nil)[:bits],
+			KeyID:     kid,
+			Algorithm: alg,
+			Use:       use,
+		}, nil
+	default:
+		return &jose.JSONWebKey{
+			Key:       secret,
+			KeyID:     kid,
+			Algorithm: alg,
+			Use:       use,
+		}, nil
+	}
 }
 
 func EncodeCompactSigned(ctx context.Context, claims MapClaims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
@@ -380,8 +414,8 @@ func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
 	return jwk.Public()
 }
 
-func UnsafeParseSignedAny(tokenString string, dest any) (token *jjwt.JSONWebToken, err error) {
-	if token, err = jjwt.ParseSigned(tokenString, SignatureAlgorithmsNone); err != nil {
+func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken, err error) {
+	if token, err = jwt.ParseSigned(tokenString, SignatureAlgorithmsNone); err != nil {
 		return nil, err
 	}
 

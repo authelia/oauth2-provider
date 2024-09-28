@@ -88,7 +88,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, opts ...StrategyOpt) (toke
 	var keyEnc *jose.JSONWebKey
 
 	if IsEncryptedJWTClientSecretAlg(alg) {
-		if keyEnc, err = NewJWKFromClientSecret(ctx, o.client, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
+		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, consts.JSONWebTokenUseEncryption); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
 		}
 	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, consts.JSONWebTokenUseEncryption, false); err != nil {
@@ -128,10 +128,10 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 	}
 
 	var (
-		kid, alg, cty string
+		kid, alg, enc string
 	)
 
-	if kid, alg, _, cty, err = headerValidateJWE(jwe.Header); err != nil {
+	if kid, alg, enc, _, err = headerValidateJWE(jwe.Header); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
@@ -144,7 +144,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 
-		if key, err = NewJWKFromClientSecret(ctx, o.client, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
+		if key, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, consts.JSONWebTokenUseEncryption); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, consts.JSONWebTokenUseEncryption); err != nil {
@@ -158,16 +158,6 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 	}
 
 	tokenString = string(tokenRaw)
-
-	var t *jwt.JSONWebToken
-
-	if t, err = jwt.ParseSigned(tokenString, o.sigAlgorithm); err != nil {
-		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-	}
-
-	if err = headerValidateJWSNested(t.Headers, cty); err != nil {
-		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
-	}
 
 	if signature, err = getJWTSignature(tokenString); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
@@ -296,7 +286,7 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorHeaderKeyIDInvalid, Inner: fmt.Errorf("error validating the jws header: alg '%s' does not support tokens with a kid but the token has kid '%s'", alg, kid)})
 			}
 
-			if key, err = NewJWKFromClientSecret(ctx, o.client, "", alg, consts.JSONWebTokenUseSignature); err != nil {
+			if key, err = NewClientSecretJWKFromClient(ctx, o.client, "", alg, "", consts.JSONWebTokenUseSignature); err != nil {
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		} else {

@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/stretchr/testify/assert"
@@ -34,75 +35,85 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	keyECDSA, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	jwkNone := jose.JSONWebKey{
+	jwkNone := &jose.JSONWebKey{
 		Key: jwt.UnsafeAllowNoneSignatureType,
 	}
 
-	rawClientSecretHS256 := "aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"
+	rawClientSecret := "aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"
 
-	clientSecretHS256 := NewPlainTextClientSecret(rawClientSecretHS256)
+	clientSecretHS256 := NewPlainTextClientSecret(rawClientSecret)
 
-	jwkEncHS := jose.JSONWebKey{
-		Key:       []byte(rawClientSecretHS256),
-		Algorithm: string(jose.A128GCMKW),
-		Use:       consts.JSONWebTokenUseEncryption,
-	}
+	jwkEncAES256, err := jwt.NewClientSecretJWK(context.TODO(), []byte(rawClientSecret), "", string(jose.A256GCMKW), "", consts.JSONWebTokenUseEncryption)
+	require.NoError(t, err)
 
-	fmt.Println(jwkEncHS)
-
-	jwkSigHS := jose.JSONWebKey{
-		Key:       []byte(rawClientSecretHS256),
+	jwkSigHS := &jose.JSONWebKey{
+		Key:       []byte(rawClientSecret),
 		KeyID:     "hs256-sig",
 		Algorithm: string(jose.HS256),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPublicSigRSA := jose.JSONWebKey{
+	jwkPublicSigRSA := &jose.JSONWebKey{
 		Key:       keyRSA.Public(),
 		KeyID:     "rs256-sig",
 		Algorithm: string(jose.RS256),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPrivateSigRSA := jose.JSONWebKey{
+	jwkPrivateSigRSA := &jose.JSONWebKey{
 		Key:       keyRSA,
 		KeyID:     "rs256-sig",
 		Algorithm: string(jose.RS256),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPublicSigRSA384 := jose.JSONWebKey{
+	jwkPublicSigRSA384 := &jose.JSONWebKey{
 		Key:       keyRSA.Public(),
 		KeyID:     "rs384-sig",
 		Algorithm: string(jose.RS384),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPrivateSigRSA384 := jose.JSONWebKey{
+	jwkPrivateSigRSA384 := &jose.JSONWebKey{
 		Key:       keyRSA,
 		KeyID:     "rs384-sig",
 		Algorithm: string(jose.RS384),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPublicSigECDSA := jose.JSONWebKey{
+	jwkPublicSigECDSA := &jose.JSONWebKey{
 		Key:       keyECDSA.Public(),
 		KeyID:     "es256-sig",
 		Algorithm: string(jose.ES256),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
-	jwkPrivateSigECDSA := jose.JSONWebKey{
+	jwkPrivateSigECDSA := &jose.JSONWebKey{
 		Key:       keyECDSA,
 		KeyID:     "es256-sig",
 		Algorithm: string(jose.ES256),
 		Use:       consts.JSONWebTokenUseSignature,
 	}
 
+	jwkPublicEncECDSA := &jose.JSONWebKey{
+		Key:       keyECDSA.Public(),
+		KeyID:     "es256-enc",
+		Algorithm: string(jose.ECDH_ES_A128KW),
+		Use:       consts.JSONWebTokenUseEncryption,
+	}
+
+	jwkPrivateEncECDSA := &jose.JSONWebKey{
+		Key:       keyECDSA,
+		KeyID:     "es256-enc",
+		Algorithm: string(jose.ECDH_ES_A128KW),
+		Use:       consts.JSONWebTokenUseEncryption,
+	}
+
 	jwksPrivate := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
-			jwkPrivateSigRSA,
-			jwkPrivateSigECDSA,
+			*jwkPrivateSigRSA,
+			*jwkPrivateSigECDSA,
+			*jwkPrivateEncECDSA,
 		},
 	}
 
@@ -110,26 +121,34 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 	jwksPublic := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
-			jwkPublicSigRSA,
-			jwkPublicSigRSA384,
-			jwkPublicSigECDSA,
+			*jwkPublicSigRSA,
+			*jwkPublicSigRSA384,
+			*jwkPublicSigECDSA,
+			*jwkPublicEncECDSA,
 		},
 	}
 
-	assertionRequestObjectValid := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
+	assertionRequestObjectValid := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidExpired := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimExpirationTime: time.Now().Add(-time.Hour).UTC().Unix(), consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidFuture := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimIssuedAt: time.Now().Add(time.Hour).UTC().Unix(), consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidNotValidYet := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: time.Now().Add(time.Hour).UTC().Unix(), consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectInvalidSignature := mangleSig(assertionRequestObjectValid)
-	assertionRequestObjectInvalidKID := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA384)
-	assertionRequestObjectInvalidTyp := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: "abc"}}, &jwkPrivateSigRSA)
-	assertionRequestObjectEmptyHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{}, nil, &jwkSigHS)
-	assertionRequestObjectInvalidRequestInRequest := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.FormParameterRequest: "abc", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
-	assertionRequestObjectInvalidRequestURIInRequest := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.FormParameterRequestURI: "https://auth.example.com", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
-	assertionRequestObjectInvalidClientIDValue := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: 100, consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
-	assertionRequestObjectInvalidResponseTypeValue := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: 100, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
-	assertionRequestObjectInvalidAudience := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.not-example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
-	assertionRequestObjectInvalidIssuer := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "not-foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwkPrivateSigRSA)
+	assertionRequestObjectInvalidKID := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA384)
+	assertionRequestObjectInvalidTyp := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: "abc"}}, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidJWEContentType := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderContentType: "at+jwt"}}, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
+	assertionRequestObjectInvalidJWEType := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: "at+jwt"}}, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
+	assertionRequestObjectValidJWE := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, nil, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
+	assertionRequestObjectValidAssymetricJWE := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, nil, jwkPrivateSigECDSA, jwkPublicEncECDSA, jose.A128GCM)
+	assertionRequestObjectEmptyHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{}, nil, jwkSigHS)
+	assertionRequestObjectInvalidRequestInRequest := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.FormParameterRequest: "abc", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidRequestURIInRequest := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.FormParameterRequestURI: "https://auth.example.com", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidClientIDValue := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: 100, consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidResponseTypeValue := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: 100, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidAudience := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.not-example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectInvalidIssuer := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "not-foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectValidWithoutKID := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz"}, nil, &jose.JSONWebKey{Key: keyRSA, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature})
-	assertionRequestObjectValidNone := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, &jwkNone)
-	assertionRequestObjectValidHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, &jwkSigHS)
+	assertionRequestObjectValidNone := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, jwkNone)
+	assertionRequestObjectValidHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, jwkSigHS)
 
 	mux := http.NewServeMux()
 
@@ -195,6 +214,18 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}},
 			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldPassRequestJWE",
+			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidJWE}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValidJWE}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldPassRequestJWESymmetric",
+			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAssymetricJWE}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "ES256", RequestObjectSigningKeyID: "es256-sig", RequestObjectEncryptionKeyID: "es256-enc", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAssymetricJWE}, "baz": {"baz"}, "foo": {"bar"}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}},
 		},
 		{
 			name:      "ShouldFailRequestNotOpenIDConnectClient",
@@ -297,12 +328,68 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be signed with the 'typ' header value 'JWT' but the request object was signed with the 'typ' header value 'abc'.",
 		},
 		{
-			name:      "ShouldFailBadContentType",
-			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectInvalidTyp}},
+			name:      "ShouldFailJWEBadContentType",
+			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectInvalidJWEContentType}},
 			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", RequestObjectSigningKeyID: "rs256-sig", DefaultClient: &DefaultClient{ID: "test", ClientSecret: clientSecretHS256}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
-			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be signed with the 'typ' header value 'JWT' but the request object was signed with the 'typ' header value 'abc'.",
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value 'at+jwt' and signed with the 'typ' header value 'JWT'.",
+		},
+		{
+			name:      "ShouldFailJWEBadType",
+			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectInvalidJWEType}},
+			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", RequestObjectSigningKeyID: "rs256-sig", DefaultClient: &DefaultClient{ID: "test", ClientSecret: clientSecretHS256}},
+			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:       ErrInvalidRequestObject,
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted with the 'typ' header value 'JWT' but the request object was encrypted with the 'typ' header value 'at+jwt'.",
+		},
+		{
+			name:      "ShouldFailJWEBadKeyID",
+			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAssymetricJWE}},
+			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "ES256", RequestObjectSigningKeyID: "es256-sig", RequestObjectEncryptionKeyID: "abc", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:       ErrInvalidRequestObject,
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' expects request objects to be encrypted with the 'kid' header value 'abc' due to the client registration 'request_object_encryption_key_id' value but the request object was encrypted with the 'kid' header value 'es256-enc'.",
+		},
+		{
+			name:      "ShouldFailJWEBadAlg",
+			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAssymetricJWE}},
+			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "ES256", RequestObjectSigningKeyID: "es256-sig", RequestObjectEncryptionAlg: "abc", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:       ErrInvalidRequestObject,
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' expects request objects to be encrypted with the 'alg' header value 'abc' due to the client registration 'request_object_encryption_alg' value but the request object was encrypted with the 'alg' header value 'ECDH-ES+A128KW'.",
+		},
+		{
+			name:      "ShouldFailJWEBadEnc",
+			have:      url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAssymetricJWE}},
+			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "ES256", RequestObjectSigningKeyID: "es256-sig", RequestObjectEncryptionEnc: "abc", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:       ErrInvalidRequestObject,
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' expects request objects to be encrypted with the 'enc' header value 'abc' due to the client registration 'request_object_encryption_enc' value but the request object was encrypted with the 'enc' header value 'A128GCM'.",
+		},
+		{
+			name:     "ShouldFailExpired",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectInvalidExpired}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that was expired\. The request object expired at \d+\.`),
+		},
+		{
+			name:     "ShouldFailFuture",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectInvalidFuture}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that was issued in the future\. The request object was issued at \d+\.$`),
+		},
+		{
+			name:     "ShouldFailNotBefore",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectInvalidNotValidYet}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that was issued in the future\. The request object is not valid before \d+\.`),
 		},
 		{
 			name:      "ShouldFailBadSignature",
@@ -501,7 +588,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 			strategy := &jwt.DefaultStrategy{
 				Config: config,
-				Issuer: jwt.MustGenDefaultIssuer(),
+				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwksPrivate),
 			}
 
 			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}

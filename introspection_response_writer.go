@@ -272,7 +272,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			return
 		}
 
-		claims := map[string]any{
+		claims := jwt.MapClaims{
 			consts.ClaimJWTID:              jti.String(),
 			consts.ClaimIssuer:             f.Config.GetIntrospectionIssuer(ctx),
 			consts.ClaimIssuedAt:           time.Now().UTC().Unix(),
@@ -291,7 +291,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			return
 		}
 
-		if token, _, err = strategy.Encode(ctx, jwt.WithClaims(claims), jwt.WithHeaders(header), jwt.WithIntrospectionClient(r.GetAccessRequester().GetClient())); err != nil {
+		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(r.GetAccessRequester().GetClient())); err != nil {
 			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return

@@ -113,7 +113,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.AuthorizationCodeGrantIDTokenLifespan).UTC(), *idTokenExp, time.Minute)
@@ -144,7 +144,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(time.Hour), *idTokenExp, time.Minute)

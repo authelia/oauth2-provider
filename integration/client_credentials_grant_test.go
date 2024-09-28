@@ -145,8 +145,6 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			if c.check != nil {
 				c.check(t, token)
 			}
-
-			t.Logf("Passed test case %d", k)
 		})
 	}
 }

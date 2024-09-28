@@ -458,8 +458,6 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						c.setup(t, c.areq, c.authreq)
 					}
 
-					t.Logf("Processing %+v", c.areq.Client)
-
 					err := h.HandleTokenEndpointRequest(context.Background(), c.areq)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)

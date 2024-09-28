@@ -19,7 +19,7 @@ type Session interface {
 
 	// GetExpiresAt returns the expiration time of a token if set, or time.IsZero() if not.
 	//
-	//  session.GetExpiresAt(oauth2.AccessToken)
+	//  session.GetExpiresTimeX(oauth2.AccessToken)
 	GetExpiresAt(key TokenType) time.Time
 
 	// GetUsername returns the username, if set. This is optional and only used during token introspection.

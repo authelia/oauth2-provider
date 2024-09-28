@@ -23,33 +23,33 @@ func (c *JARMClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Issuer != "" {
-		ret[consts.ClaimIssuer] = c.Issuer
+		ret[ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, consts.ClaimIssuer)
+		delete(ret, ClaimIssuer)
 	}
 
 	if c.JTI != "" {
-		ret[consts.ClaimJWTID] = c.JTI
+		ret[ClaimJWTID] = c.JTI
 	} else {
-		ret[consts.ClaimJWTID] = uuid.New().String()
+		ret[ClaimJWTID] = uuid.New().String()
 	}
 
 	if len(c.Audience) > 0 {
-		ret[consts.ClaimAudience] = c.Audience
+		ret[ClaimAudience] = c.Audience
 	} else {
-		ret[consts.ClaimAudience] = []string{}
+		ret[ClaimAudience] = []string{}
 	}
 
 	if !c.IssuedAt.IsZero() {
-		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
+		ret[ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, consts.ClaimIssuedAt)
+		delete(ret, ClaimIssuedAt)
 	}
 
 	if !c.ExpiresAt.IsZero() {
-		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
+		ret[ClaimExpirationTime] = c.ExpiresAt.Unix()
 	} else {
-		delete(ret, consts.ClaimExpirationTime)
+		delete(ret, ClaimExpirationTime)
 	}
 
 	return ret
@@ -60,15 +60,15 @@ func (c *JARMClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
 	for k, v := range m {
 		switch k {
-		case consts.ClaimIssuer:
+		case ClaimIssuer:
 			if s, ok := v.(string); ok {
 				c.Issuer = s
 			}
-		case consts.ClaimJWTID:
+		case ClaimJWTID:
 			if s, ok := v.(string); ok {
 				c.JTI = s
 			}
-		case consts.ClaimAudience:
+		case ClaimAudience:
 			if aud, ok := StringSliceFromMap(v); ok {
 				c.Audience = aud
 			}

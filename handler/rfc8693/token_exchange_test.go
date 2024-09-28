@@ -266,7 +266,7 @@ func createAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, s
 }
 
 func createJWT(ctx context.Context, client any, strategy jwt.Strategy, claims jwt.MapClaims) string {
-	token, _, err := strategy.Encode(ctx, jwt.WithClaims(claims), jwt.WithIDTokenClient(client))
+	token, _, err := strategy.Encode(ctx, claims, jwt.WithIDTokenClient(client))
 
 	if err != nil {
 		panic(err.Error())

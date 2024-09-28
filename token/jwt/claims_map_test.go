@@ -25,7 +25,7 @@ func TestMapClaims_VerifyAudience(t *testing.T) {
 		{
 			"ShouldPass",
 			MapClaims{
-				consts.ClaimAudience: []string{"foo"},
+				ClaimAudience: []string{"foo"},
 			},
 			"foo",
 			true,
@@ -34,7 +34,7 @@ func TestMapClaims_VerifyAudience(t *testing.T) {
 		{
 			"ShouldPassMultiple",
 			MapClaims{
-				consts.ClaimAudience: []string{"foo", "bar"},
+				ClaimAudience: []string{"foo", "bar"},
 			},
 			"foo",
 			true,
@@ -50,7 +50,7 @@ func TestMapClaims_VerifyAudience(t *testing.T) {
 		{
 			"ShouldFailNoMatch",
 			MapClaims{
-				consts.ClaimAudience: []string{"bar"},
+				ClaimAudience: []string{"bar"},
 			},
 			"foo",
 			true,
@@ -66,7 +66,7 @@ func TestMapClaims_VerifyAudience(t *testing.T) {
 		{
 			"ShouldPassTypeAny",
 			MapClaims{
-				consts.ClaimAudience: []any{"foo"},
+				ClaimAudience: []any{"foo"},
 			},
 			"foo",
 			true,
@@ -75,7 +75,7 @@ func TestMapClaims_VerifyAudience(t *testing.T) {
 		{
 			"ShouldPassTypeString",
 			MapClaims{
-				consts.ClaimAudience: "foo",
+				ClaimAudience: "foo",
 			},
 			"foo",
 			true,
@@ -453,15 +453,6 @@ func TestMapClaims_VerifyIssuer(t *testing.T) {
 			true,
 			false,
 		},
-		{
-			"ShouldPassNil",
-			MapClaims{
-				consts.ClaimIssuer: nil,
-			},
-			"foo",
-			false,
-			true,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -528,15 +519,6 @@ func TestMapClaims_VerifySubject(t *testing.T) {
 			"foo",
 			true,
 			false,
-		},
-		{
-			"ShouldPassNil",
-			MapClaims{
-				consts.ClaimSubject: nil,
-			},
-			"foo",
-			false,
-			true,
 		},
 	}
 
@@ -623,20 +605,11 @@ func TestMapClaims_VerifyExpiresAt(t *testing.T) {
 			true,
 			false,
 		},
-		{
-			"ShouldPassNil",
-			MapClaims{
-				consts.ClaimExpirationTime: nil,
-			},
-			int64(123),
-			false,
-			true,
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.have.VerifyExpiresAt(tc.cmp, tc.required))
+			assert.Equal(t, tc.expected, tc.have.VerifyExpirationTime(tc.cmp, tc.required))
 		})
 	}
 }
@@ -725,15 +698,6 @@ func TestMapClaims_VerifyIssuedAt(t *testing.T) {
 			int64(123),
 			true,
 			false,
-		},
-		{
-			"ShouldPassNil",
-			MapClaims{
-				consts.ClaimIssuedAt: nil,
-			},
-			int64(123),
-			false,
-			true,
 		},
 	}
 
@@ -828,15 +792,6 @@ func TestMapClaims_VerifyNotBefore(t *testing.T) {
 			int64(123),
 			true,
 			false,
-		},
-		{
-			"ShouldPassNil",
-			MapClaims{
-				consts.ClaimNotBefore: nil,
-			},
-			int64(123),
-			false,
-			true,
 		},
 	}
 

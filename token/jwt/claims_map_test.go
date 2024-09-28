@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -143,7 +144,7 @@ func TestMapClaims_VerifyAudienceAll(t *testing.T) {
 			true,
 		},
 		{
-			"ShouldFailMultipleAny",
+			"ShouldFailMultipleAll",
 			MapClaims{
 				consts.ClaimAudience: []string{"foo"},
 			},
@@ -273,7 +274,7 @@ func TestMapClaims_VerifyAudienceAny(t *testing.T) {
 			true,
 		},
 		{
-			"ShouldFailMultipleAny",
+			"ShouldPassMultipleAny",
 			MapClaims{
 				consts.ClaimAudience: []string{"foo"},
 			},
@@ -864,7 +865,7 @@ func TestMapClaims_Valid(t *testing.T) {
 		{
 			"ShouldFailEXPNotPresent",
 			MapClaims{},
-			[]ClaimValidationOption{ValidateRequireExpiresAt()},
+			[]ClaimValidationOption{ValidateRequireExpiresAt(), ValidateTimeFunc(func() time.Time { return time.Unix(0, 0) })},
 			[]uint32{ValidationErrorExpired},
 			"Token is expired",
 		},
@@ -994,6 +995,8 @@ func TestMapClaims_Valid(t *testing.T) {
 				var e *ValidationError
 
 				errors.As(actual, &e)
+
+				require.NotNil(t, e)
 
 				var errs uint32
 

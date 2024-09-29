@@ -339,7 +339,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				_, err := jwt.UnsafeParseSignedAny(idToken, claims)
 				require.NoError(t, err)
 
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.ExpiresAt, time.Minute)
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), claims.GetExpirationTimeSafe(), time.Minute)
 				assert.NotEmpty(t, claims.CodeHash)
 				assert.Empty(t, claims.StateHash)
 

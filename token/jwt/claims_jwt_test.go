@@ -15,11 +15,11 @@ import (
 
 var jwtClaims = &JWTClaims{
 	Subject:   "peter",
-	IssuedAt:  time.Now().UTC().Round(time.Second),
+	IssuedAt:  time.Now().UTC().Truncate(TimePrecision),
 	Issuer:    "authelia",
-	NotBefore: time.Now().UTC().Round(time.Second),
+	NotBefore: time.Now().UTC().Truncate(TimePrecision),
 	Audience:  []string{"tests"},
-	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),
+	ExpiresAt: time.Now().UTC().Add(time.Hour).Truncate(TimePrecision),
 	JTI:       "abcdef",
 	Scope:     []string{consts.ScopeEmail, consts.ScopeOffline},
 	Extra: map[string]any{

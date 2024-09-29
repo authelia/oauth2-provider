@@ -43,7 +43,7 @@ type DefaultSession struct {
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			RequestedAt: time.Now().UTC(),
+			RequestedAt: jwt.Now(),
 		},
 		Headers: &jwt.Headers{},
 	}
@@ -121,7 +121,7 @@ type DefaultStrategy struct {
 
 // GenerateIDToken returns a JWT string.
 //
-// lifespan is ignored if requester.GetSession().IDTokenClaims().ExpiresAt is not zero.
+// lifespan is ignored if requester.GetSession().IDTokenClaims().ExpirationTime is not zero.
 //
 // TODO: Refactor time permitting.
 //
@@ -151,38 +151,38 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		// Adds a bit of wiggle room for timing issues
-		if claims.AuthTime.After(time.Now().UTC().Add(time.Second * 5)) {
+		if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
 			return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
 
 		if maxAge > 0 {
 			switch {
-			case claims.AuthTime.IsZero():
+			case claims.AuthTime == nil, claims.AuthTime.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
-			case claims.RequestedAt.IsZero():
+			case claims.RequestedAt == nil, claims.RequestedAt.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because requested at claim is required when max_age is set."))
-			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt):
+			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt.Time):
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
 			}
 		}
 
 		prompt := requester.GetRequestForm().Get(consts.FormParameterPrompt)
 		if prompt != "" {
-			if claims.AuthTime.IsZero() {
+			if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in id token claims."))
 			}
 		}
 
 		switch prompt {
 		case consts.PromptTypeNone:
-			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.After(claims.RequestedAt) {
+			if !claims.GetAuthTimeSafe().Equal(claims.GetRequestedAtSafe()) && claims.GetAuthTimeSafe().After(claims.GetRequestedAtSafe()) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate id token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
+					WithDebugf("Failed to generate id token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
 			}
 		case consts.PromptTypeLogin:
-			if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.Before(claims.RequestedAt) {
+			if !claims.GetAuthTimeSafe().Equal(claims.GetRequestedAtSafe()) && claims.GetAuthTimeSafe().Before(claims.GetRequestedAtSafe()) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate id token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
+					WithDebugf("Failed to generate id token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
 			}
 		}
 
@@ -214,16 +214,16 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 	}
 
-	if claims.ExpiresAt.IsZero() {
-		claims.ExpiresAt = time.Now().UTC().Add(lifespan)
+	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(lifespan))
 	}
 
-	if claims.ExpiresAt.Before(time.Now().UTC()) {
+	if claims.ExpirationTime.Before(time.Now().UTC()) {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because expiry claim can not be in the past."))
 	}
 
-	if claims.AuthTime.IsZero() {
-		claims.AuthTime = time.Now().Truncate(time.Second).UTC()
+	if claims.AuthTime == nil || claims.AuthTime.IsZero() {
+		claims.AuthTime = jwt.Now()
 	}
 
 	if claims.Issuer == "" {
@@ -240,7 +240,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
-	claims.IssuedAt = time.Now().UTC()
+	claims.IssuedAt = jwt.Now()
 
 	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithClient(jwtClient))
 

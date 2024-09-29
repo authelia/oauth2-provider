@@ -5,6 +5,7 @@ package jwt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,16 +23,151 @@ type IDTokenClaims struct {
 	Subject                             string         `json:"sub"`
 	Audience                            []string       `json:"aud"`
 	Nonce                               string         `json:"nonce"`
-	ExpiresAt                           time.Time      `json:"exp"`
-	IssuedAt                            time.Time      `json:"iat"`
-	RequestedAt                         time.Time      `json:"rat"`
-	AuthTime                            time.Time      `json:"auth_time"`
+	ExpirationTime                      *NumericDate   `json:"exp"`
+	IssuedAt                            *NumericDate   `json:"iat"`
+	RequestedAt                         *NumericDate   `json:"rat"`
+	AuthTime                            *NumericDate   `json:"auth_time"`
 	AccessTokenHash                     string         `json:"at_hash"`
 	AuthenticationContextClassReference string         `json:"acr"`
 	AuthenticationMethodsReferences     []string       `json:"amr"`
 	CodeHash                            string         `json:"c_hash"`
 	StateHash                           string         `json:"s_hash"`
 	Extra                               map[string]any `json:"ext"`
+}
+
+func (c *IDTokenClaims) GetExpirationTime() (exp *NumericDate, err error) {
+	return c.ExpirationTime, nil
+}
+
+func (c *IDTokenClaims) GetIssuedAt() (iat *NumericDate, err error) {
+	return c.IssuedAt, nil
+}
+
+func (c *IDTokenClaims) GetNotBefore() (nbf *NumericDate, err error) {
+	return toNumericDate(ClaimNotBefore)
+}
+
+func (c *IDTokenClaims) GetIssuer() (iss string, err error) {
+	return c.Issuer, nil
+}
+
+func (c *IDTokenClaims) GetSubject() (sub string, err error) {
+	return c.Subject, nil
+}
+
+func (c *IDTokenClaims) GetAudience() (aud ClaimStrings, err error) {
+	return c.Audience, nil
+}
+
+func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
+	vopts := &ClaimValidationOptions{}
+
+	for _, opt := range opts {
+		opt(vopts)
+	}
+
+	var now int64
+
+	if vopts.timef != nil {
+		now = vopts.timef().UTC().Unix()
+	} else {
+		now = TimeFunc().UTC().Unix()
+	}
+
+	vErr := new(ValidationError)
+
+	var date *NumericDate
+
+	if date, err = c.GetExpirationTime(); !validDate(validInt64Future, now, vopts.expRequired, date, err) {
+		vErr.Inner = errors.New("Token is expired")
+		vErr.Errors |= ValidationErrorExpired
+	}
+
+	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now, vopts.expRequired, date, err) {
+		vErr.Inner = errors.New("Token used before issued")
+		vErr.Errors |= ValidationErrorIssuedAt
+	}
+
+	if date, err = c.GetNotBefore(); !validDate(validInt64Past, now, vopts.expRequired, date, err) {
+		vErr.Inner = errors.New("Token is not valid yet")
+		vErr.Errors |= ValidationErrorNotValidYet
+	}
+
+	var str string
+
+	if len(vopts.iss) != 0 {
+		if str, err = c.GetIssuer(); err != nil {
+			vErr.Inner = errors.New("Token has invalid issuer")
+			vErr.Errors |= ValidationErrorIssuer
+		} else if !validString(str, vopts.iss, true) {
+			vErr.Inner = errors.New("Token has invalid issuer")
+			vErr.Errors |= ValidationErrorIssuer
+		}
+	}
+
+	if len(vopts.sub) != 0 {
+		if str, err = c.GetSubject(); err != nil {
+			vErr.Inner = errors.New("Token has invalid subject")
+			vErr.Errors |= ValidationErrorIssuer
+		} else if !validString(str, vopts.sub, true) {
+			vErr.Inner = errors.New("Token has invalid subject")
+			vErr.Errors |= ValidationErrorSubject
+		}
+	}
+
+	var aud ClaimStrings
+
+	if len(vopts.aud) != 0 {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAny(vopts.aud, true) {
+			vErr.Inner = errors.New("Token has invalid audience")
+			vErr.Errors |= ValidationErrorAudience
+		}
+	}
+
+	if len(vopts.audAll) != 0 {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAll(vopts.audAll, true) {
+			vErr.Inner = errors.New("Token has invalid audience")
+			vErr.Errors |= ValidationErrorAudience
+		}
+	}
+
+	if vErr.valid() {
+		return nil
+	}
+
+	return vErr
+}
+
+func (c *IDTokenClaims) GetExpirationTimeSafe() time.Time {
+	if c.ExpirationTime == nil {
+		return time.Unix(0, 0).UTC()
+	}
+
+	return c.ExpirationTime.UTC()
+}
+
+func (c *IDTokenClaims) GetIssuedAtSafe() time.Time {
+	if c.IssuedAt == nil {
+		return time.Unix(0, 0).UTC()
+	}
+
+	return c.IssuedAt.UTC()
+}
+
+func (c *IDTokenClaims) GetAuthTimeSafe() time.Time {
+	if c.AuthTime == nil {
+		return time.Unix(0, 0).UTC()
+	}
+
+	return c.AuthTime.UTC()
+}
+
+func (c *IDTokenClaims) GetRequestedAtSafe() time.Time {
+	if c.RequestedAt == nil {
+		return time.Unix(0, 0).UTC()
+	}
+
+	return c.RequestedAt.UTC()
 }
 
 func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
@@ -44,7 +180,10 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		return errorsx.WithStack(err)
 	}
 
-	var ok bool
+	var (
+		ok  bool
+		err error
+	)
 
 	for claim, value := range claims {
 		ok = false
@@ -58,6 +197,8 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			c.Subject, ok = value.(string)
 		case ClaimAudience:
 			switch aud := value.(type) {
+			case nil:
+				ok = true
 			case string:
 				ok = true
 
@@ -84,13 +225,21 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		case ClaimNonce:
 			c.Nonce, ok = value.(string)
 		case ClaimExpirationTime:
-			c.ExpiresAt, ok = toTime(value, c.ExpiresAt)
+			if c.ExpirationTime, err = toNumericDate(value); err == nil {
+				ok = true
+			}
 		case ClaimIssuedAt:
-			c.IssuedAt, ok = toTime(value, c.IssuedAt)
+			if c.IssuedAt, err = toNumericDate(value); err == nil {
+				ok = true
+			}
 		case ClaimRequestedAt:
-			c.RequestedAt, ok = toTime(value, c.RequestedAt)
+			if c.RequestedAt, err = toNumericDate(value); err == nil {
+				ok = true
+			}
 		case ClaimAuthenticationTime:
-			c.AuthTime, ok = toTime(value, c.AuthTime)
+			if c.AuthTime, err = toNumericDate(value); err == nil {
+				ok = true
+			}
 		case ClaimCodeHash:
 			c.CodeHash, ok = value.(string)
 		case ClaimStateHash:
@@ -143,14 +292,14 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		ret[consts.ClaimAudience] = []string{}
 	}
 
-	if !c.IssuedAt.IsZero() {
+	if c.IssuedAt != nil {
 		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
 		delete(ret, consts.ClaimIssuedAt)
 	}
 
-	if !c.ExpiresAt.IsZero() {
-		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
+	if c.ExpirationTime != nil {
+		ret[consts.ClaimExpirationTime] = c.ExpirationTime.Unix()
 	} else {
 		delete(ret, consts.ClaimExpirationTime)
 	}
@@ -179,7 +328,7 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, consts.ClaimStateHash)
 	}
 
-	if !c.AuthTime.IsZero() {
+	if c.AuthTime != nil {
 		ret[consts.ClaimAuthenticationTime] = c.AuthTime.Unix()
 	} else {
 		delete(ret, consts.ClaimAuthenticationTime)
@@ -200,11 +349,17 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 	return ret
 }
 
+// ToMapClaims will return a jwt-go MapClaims representation
+func (c IDTokenClaims) ToMapClaims() MapClaims {
+	return c.ToMap()
+}
+
 // Add will add a key-value pair to the extra field
 func (c *IDTokenClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
 	}
+
 	c.Extra[key] = value
 }
 
@@ -213,7 +368,19 @@ func (c *IDTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
-func (c IDTokenClaims) ToMapClaims() MapClaims {
-	return c.ToMap()
+func (c IDTokenClaims) toNumericDate(key string) (date *NumericDate, err error) {
+	var (
+		v  any
+		ok bool
+	)
+
+	if v, ok = c.Extra[key]; !ok {
+		return nil, nil
+	}
+
+	return toNumericDate(v)
 }
+
+var (
+	_ Claims = (*IDTokenClaims)(nil)
+)

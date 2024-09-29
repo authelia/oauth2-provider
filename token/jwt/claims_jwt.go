@@ -44,7 +44,7 @@ type JWTClaimsContainer interface {
 	// WithScopeField configures how a scope field should be represented in JWT.
 	WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContainer
 
-	// ToMapClaims returns the claims as a github.com/dgrijalva/jwt-go.MapClaims type.
+	// ToMapClaims returns the claims as a MapClaims type.
 	ToMapClaims() MapClaims
 }
 
@@ -269,6 +269,8 @@ func toInt64(v any) (val int64, ok bool) {
 
 func toNumericDate(v any) (date *NumericDate, err error) {
 	switch value := v.(type) {
+	case nil:
+		return nil, nil
 	case float64:
 		if value == 0 {
 			return nil, nil

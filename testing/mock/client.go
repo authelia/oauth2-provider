@@ -43,7 +43,7 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 // GetAudience mocks base method.
 func (m *MockClient) GetAudience() oauth2.Arguments {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAudienceX")
+	ret := m.ctrl.Call(m, "GetAudience")
 	ret0, _ := ret[0].(oauth2.Arguments)
 	return ret0
 }
@@ -51,7 +51,7 @@ func (m *MockClient) GetAudience() oauth2.Arguments {
 // GetAudience indicates an expected call of GetAudience.
 func (mr *MockClientMockRecorder) GetAudience() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAudienceX", reflect.TypeOf((*MockClient)(nil).GetAudience))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAudience", reflect.TypeOf((*MockClient)(nil).GetAudience))
 }
 
 // GetClientSecret mocks base method.

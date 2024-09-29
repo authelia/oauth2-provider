@@ -127,12 +127,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	return token, nil
 }
 
-// Token represets a JWT Token
-// This token provide an adaptation to
-// transit from [jwt-go](https://github.com/dgrijalva/jwt-go)
-// to [go-jose](https://github.com/square/go-jose)
-// It provides method signatures compatible with jwt-go but implemented
-// using go-json
+// Token represets a JWT Token.
 type Token struct {
 	KeyID                string
 	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS)

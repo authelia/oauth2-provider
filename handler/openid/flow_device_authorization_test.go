@@ -169,7 +169,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			setup: func() {
 				sess := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						RequestedAt: time.Now().UTC(),
+						RequestedAt: jwt.Now(),
 						Subject:     "foobar",
 					},
 					Headers: &jwt.Headers{},
@@ -297,7 +297,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			setup: func() {
 				sess := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						RequestedAt: time.Now().UTC(),
+						RequestedAt: jwt.Now(),
 						Subject:     "",
 					},
 					Headers: &jwt.Headers{},

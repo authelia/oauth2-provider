@@ -5,10 +5,8 @@ package jwt
 
 import (
 	"bytes"
-	"crypto/subtle"
 	"errors"
 	"fmt"
-	"time"
 
 	jjson "github.com/go-jose/go-jose/v4/json"
 
@@ -39,7 +37,7 @@ func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyString(iss, cmp, required)
+	return validString(iss, cmp, required)
 }
 
 // GetSubject returns the 'sub' claim.
@@ -63,7 +61,7 @@ func (m MapClaims) VerifySubject(cmp string, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyString(sub, cmp, required)
+	return validString(sub, cmp, required)
 }
 
 // GetAudience returns the 'aud' claim.
@@ -151,7 +149,7 @@ func (m MapClaims) VerifyExpirationTime(cmp int64, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyInt64Future(exp.Int64(), cmp, required)
+	return validInt64Future(exp.Int64(), cmp, required)
 }
 
 // GetIssuedAt returns the 'iat' claim.
@@ -175,7 +173,7 @@ func (m MapClaims) VerifyIssuedAt(cmp int64, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyInt64Past(iat.Int64(), cmp, required)
+	return validInt64Past(iat.Int64(), cmp, required)
 }
 
 // GetNotBefore returns the 'nbf' claim.
@@ -199,7 +197,7 @@ func (m MapClaims) VerifyNotBefore(cmp int64, required bool) (ok bool) {
 		return !required
 	}
 
-	return verifyInt64Past(nbf.Int64(), cmp, required)
+	return validInt64Past(nbf.Int64(), cmp, required)
 }
 
 func (m MapClaims) ToMapClaims() MapClaims {
@@ -360,140 +358,4 @@ func (m MapClaims) toClaimsString(key string) (ClaimStrings, error) {
 	}
 
 	return cs, nil
-}
-
-type ClaimValidationOption func(opts *ClaimValidationOptions)
-
-type ClaimValidationOptions struct {
-	timef       func() time.Time
-	iss         string
-	aud         []string
-	audAll      []string
-	sub         string
-	expRequired bool
-	iatRequired bool
-	nbfRequired bool
-}
-
-func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.timef = timef
-	}
-}
-
-func ValidateIssuer(iss string) ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.iss = iss
-	}
-}
-
-func ValidateAudienceAny(aud ...string) ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.aud = aud
-	}
-}
-
-func ValidateAudienceAll(aud ...string) ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.audAll = aud
-	}
-}
-
-func ValidateSubject(sub string) ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.sub = sub
-	}
-}
-
-func ValidateRequireExpiresAt() ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.expRequired = true
-	}
-}
-
-func ValidateRequireIssuedAt() ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.iatRequired = true
-	}
-}
-
-func ValidateRequireNotBefore() ClaimValidationOption {
-	return func(opts *ClaimValidationOptions) {
-		opts.nbfRequired = true
-	}
-}
-
-func verifyAud(aud []string, cmp string, required bool) bool {
-	if len(aud) == 0 {
-		return !required
-	}
-
-	for _, a := range aud {
-		if subtle.ConstantTimeCompare([]byte(a), []byte(cmp)) == 1 {
-			return true
-		}
-	}
-
-	return false
-}
-
-func verifyAudAny(aud []string, cmp []string, required bool) bool {
-	if len(aud) == 0 {
-		return !required
-	}
-
-	for _, c := range cmp {
-		for _, a := range aud {
-			if subtle.ConstantTimeCompare([]byte(a), []byte(c)) == 1 {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func verifyAudAll(aud []string, cmp []string, required bool) bool {
-	if len(aud) == 0 {
-		return !required
-	}
-
-outer:
-	for _, c := range cmp {
-		for _, a := range aud {
-			if subtle.ConstantTimeCompare([]byte(a), []byte(c)) == 1 {
-				continue outer
-			}
-		}
-
-		return false
-	}
-
-	return true
-}
-
-// verifyInt64Future ensures the given value is in the future.
-func verifyInt64Future(value, now int64, required bool) bool {
-	if value == 0 {
-		return !required
-	}
-
-	return now <= value
-}
-
-// verifyInt64Past ensures the given value is in the past or the current value.
-func verifyInt64Past(value, now int64, required bool) bool {
-	if value == 0 {
-		return !required
-	}
-
-	return now >= value
-}
-
-func verifyString(value, cmp string, required bool) bool {
-	if value == "" {
-		return !required
-	}
-
-	return subtle.ConstantTimeCompare([]byte(value), []byte(cmp)) == 1
 }

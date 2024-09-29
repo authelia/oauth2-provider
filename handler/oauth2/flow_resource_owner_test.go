@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -89,8 +90,8 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				store.EXPECT().Authenticate(context.TODO(), "peter", "pan").Return(nil)
 			},
 			check: func(areq *oauth2.AccessRequest) {
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-				assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
 		},
 	} {

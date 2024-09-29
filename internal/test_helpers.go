@@ -67,11 +67,11 @@ func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
 
 	require.NoError(t, err)
 
-	if claims.ExpiresAt.IsZero() {
+	if claims.ExpirationTime == nil {
 		return nil
 	}
 
-	return &claims.ExpiresAt
+	return &claims.ExpirationTime.Time
 }
 
 //nolint:gocyclo

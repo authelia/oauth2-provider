@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
@@ -114,7 +115,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        expiredSess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -139,7 +140,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -165,18 +166,18 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
-						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
+						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Truncate(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.GrantedScope)
 						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 				},
 				{
@@ -200,7 +201,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -232,7 +233,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -264,7 +265,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -294,13 +295,13 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
-						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
+						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Truncate(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.GrantedScope)
 						assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
@@ -328,7 +329,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
@@ -355,18 +356,18 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar"},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						})
 						require.NoError(t, err)
 					},
 					expect: func(t *testing.T) {
 						assert.NotEqual(t, sess, areq.Session)
-						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Round(time.Hour), areq.RequestedAt)
+						assert.NotEqual(t, time.Now().UTC().Add(-time.Hour).Truncate(time.Hour), areq.RequestedAt)
 						assert.Equal(t, oauth2.Arguments{"foo"}, areq.GrantedScope)
 						assert.Equal(t, oauth2.Arguments{"foo"}, areq.RequestedScope)
 						assert.NotEqual(t, url.Values{"foo": []string{"bar"}}, areq.Form)
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Hour).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 				},
 				{
@@ -389,7 +390,7 @@ func TestRefreshFlow_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
 							Session:        sess,
 							Form:           url.Values{"foo": []string{"bar"}},
-							RequestedAt:    time.Now().UTC().Add(-time.Hour).Round(time.Hour),
+							RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 						}
 						err = store.CreateRefreshTokenSession(context.TODO(), sig, req)
 						require.NoError(t, err)

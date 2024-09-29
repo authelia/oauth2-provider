@@ -23,8 +23,8 @@ import (
 
 var rsaKey = gen.MustRSAKey()
 
-// returns a valid JWT type. The JWTClaims.ExpiresAt time is intentionally
-// left empty to ensure it is pulled from the session's ExpiresAt map for
+// returns a valid JWT type. The JWTClaims.ExpirationTime time is intentionally
+// left empty to ensure it is pulled from the session's ExpirationTime map for
 // the given oauth2.TokenType.
 var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
@@ -132,7 +132,7 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Req
 			},
 			ExpiresAt: map[oauth2.TokenType]time.Time{
 				tokenType:           time.Now().UTC().Add(time.Hour),
-				oauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Round(time.Hour),
+				oauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Truncate(time.Hour),
 			},
 		},
 	}
@@ -144,8 +144,8 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Req
 	return r
 }
 
-// returns an expired JWT type. The JWTClaims.ExpiresAt time is intentionally
-// left empty to ensure it is pulled from the session's ExpiresAt map for
+// returns an expired JWT type. The JWTClaims.ExpirationTime time is intentionally
+// left empty to ensure it is pulled from the session's ExpirationTime map for
 // the given oauth2.TokenType.
 var jwtExpiredCase = func(tokenType oauth2.TokenType, now time.Time) *oauth2.Request {
 	r := &oauth2.Request{

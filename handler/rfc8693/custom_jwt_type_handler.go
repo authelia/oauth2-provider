@@ -176,8 +176,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.Subject = request.GetClient().GetID()
 	}
 
-	if claims.ExpiresAt.IsZero() {
-		claims.ExpiresAt = time.Now().UTC().Add(jwtType.Expiry)
+	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
 	}
 
 	if claims.Issuer == "" {
@@ -201,7 +201,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.JTI = uuid.New().String()
 	}
 
-	claims.IssuedAt = time.Now().UTC()
+	claims.IssuedAt = jwt.Now()
 
 	token, _, err := c.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient()))
 	if err != nil {
@@ -210,7 +210,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	response.SetAccessToken(token)
 	response.SetTokenType("N_A")
-	response.SetExpiresIn(time.Duration(claims.ExpiresAt.UnixNano() - time.Now().UTC().UnixNano()))
+	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
 
 	return nil
 }

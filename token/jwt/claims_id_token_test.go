@@ -14,9 +14,9 @@ import (
 )
 
 func TestIDTokenAssert(t *testing.T) {
-	assert.NoError(t, (&IDTokenClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)}).
+	assert.NoError(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
 		ToMapClaims().Valid())
-	assert.Error(t, (&IDTokenClaims{ExpiresAt: time.Now().UTC().Add(-time.Hour)}).
+	assert.Error(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(-time.Hour))}).
 		ToMapClaims().Valid())
 
 	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()[ClaimJWTID])
@@ -26,12 +26,12 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 	idTokenClaims := &IDTokenClaims{
 		JTI:                                 "foo-id",
 		Subject:                             "peter",
-		IssuedAt:                            time.Now().UTC().Round(time.Second),
+		IssuedAt:                            Now(),
 		Issuer:                              "authelia",
 		Audience:                            []string{"tests"},
-		ExpiresAt:                           time.Now().UTC().Add(time.Hour).Round(time.Second),
-		AuthTime:                            time.Now().UTC(),
-		RequestedAt:                         time.Now().UTC(),
+		ExpirationTime:                      NewNumericDate(time.Now().Add(time.Hour)),
+		AuthTime:                            Now(),
+		RequestedAt:                         Now(),
 		AccessTokenHash:                     "foobar",
 		CodeHash:                            "barfoo",
 		StateHash:                           "boofar",
@@ -48,7 +48,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
 		ClaimIssuer:             idTokenClaims.Issuer,
 		ClaimAudience:           idTokenClaims.Audience,
-		ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
+		ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
 		"foo":                   idTokenClaims.Extra["foo"],
 		"baz":                   idTokenClaims.Extra["baz"],
 		ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
@@ -66,7 +66,7 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
 		consts.ClaimIssuer:             idTokenClaims.Issuer,
 		consts.ClaimAudience:           idTokenClaims.Audience,
-		consts.ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
+		consts.ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
 		"foo":                          idTokenClaims.Extra["foo"],
 		"baz":                          idTokenClaims.Extra["baz"],
 		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,

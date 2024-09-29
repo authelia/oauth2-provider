@@ -7,6 +7,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -38,7 +39,7 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	dar.SetDeviceCodeSignature(deviceCodeSignature)
 	dar.SetUserCodeSignature(userCodeSignature)
 
-	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Round(time.Second)
+	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 

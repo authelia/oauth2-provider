@@ -13,11 +13,11 @@ import (
 )
 
 var jarmClaims = &JARMClaims{
-	Issuer:    "authelia",
-	Audience:  []string{"tests"},
-	JTI:       "abcdef",
-	IssuedAt:  time.Now().UTC().Round(time.Second),
-	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),
+	Issuer:         "authelia",
+	Audience:       []string{"tests"},
+	JTI:            "abcdef",
+	IssuedAt:       Now(),
+	ExpirationTime: NewNumericDate(time.Now().Add(time.Hour)),
 	Extra: map[string]any{
 		"foo": "bar",
 		"baz": "bar",
@@ -44,9 +44,9 @@ func TestJARMClaimsToMapSetsID(t *testing.T) {
 }
 
 func TestJARMAssert(t *testing.T) {
-	assert.Nil(t, (&JARMClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)}).
+	assert.Nil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
 		ToMapClaims().Valid())
-	assert.NotNil(t, (&JARMClaims{ExpiresAt: time.Now().UTC().Add(-2 * time.Hour)}).
+	assert.NotNil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(-2 * time.Hour))}).
 		ToMapClaims().Valid())
 }
 

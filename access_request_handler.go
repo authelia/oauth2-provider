@@ -105,7 +105,8 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	}
 
 	if !found {
-		return nil, errorsx.WithStack(ErrInvalidRequest)
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithDebugf("The client with id '%s' requested grant type '%s' which is invalid, unknown, not supported, or not configured to be handled.", accessRequest.GetRequestForm().Get(consts.FormParameterClientID), strings.Join(accessRequest.GetGrantTypes(), " ")))
 	}
+
 	return accessRequest, nil
 }

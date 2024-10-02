@@ -46,10 +46,14 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{},
 			method: "POST",
 			form: url.Values{
+				consts.FormParameterClientID:  {"bar"},
 				consts.FormParameterGrantType: {"foo"},
 			},
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+				store.EXPECT().GetClient(ctx, gomock.Eq("bar")).Return(&DefaultClient{ID: "bar"}, nil)
+			},
 			expectErr:    ErrInvalidRequest,
-			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id 'bar' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 		},
 		{
 			name:   "ShouldReturnInvalidRequestWhenEmptyClientID",
@@ -60,7 +64,7 @@ func TestNewAccessRequest(t *testing.T) {
 				consts.FormParameterClientID:  {""},
 			},
 			expectErr:    ErrInvalidRequest,
-			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
+			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 		},
 		{
 			name: "ShouldReturnInvalidClientWhenGetClientError",

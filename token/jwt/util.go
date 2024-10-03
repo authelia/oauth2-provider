@@ -276,8 +276,27 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 
 	switch use {
 	case JSONWebTokenUseSignature:
+		var (
+			hasher hash.Hash
+		)
+
+		switch jose.SignatureAlgorithm(alg) {
+		case jose.HS256:
+			hasher = sha256.New()
+		case jose.HS384:
+			hasher = sha512.New384()
+		case jose.HS512:
+			hasher = sha512.New()
+		default:
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported algorithm '%s'", alg)}
+		}
+
+		if _, err = hasher.Write(secret); err != nil {
+			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to derive key from hashing the client secret. %s", err.Error())}
+		}
+
 		return &jose.JSONWebKey{
-			Key:       secret,
+			Key:       hasher.Sum(nil),
 			KeyID:     kid,
 			Algorithm: alg,
 			Use:       use,

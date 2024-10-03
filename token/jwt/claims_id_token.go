@@ -5,6 +5,7 @@ package jwt
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -21,18 +22,18 @@ type IDTokenClaims struct {
 	JTI                                 string         `json:"jti"`
 	Issuer                              string         `json:"iss"`
 	Subject                             string         `json:"sub"`
-	Audience                            []string       `json:"aud"`
-	Nonce                               string         `json:"nonce"`
-	ExpirationTime                      *NumericDate   `json:"exp"`
-	IssuedAt                            *NumericDate   `json:"iat"`
-	RequestedAt                         *NumericDate   `json:"rat"`
-	AuthTime                            *NumericDate   `json:"auth_time"`
-	AccessTokenHash                     string         `json:"at_hash"`
-	AuthenticationContextClassReference string         `json:"acr"`
-	AuthenticationMethodsReferences     []string       `json:"amr"`
-	CodeHash                            string         `json:"c_hash"`
-	StateHash                           string         `json:"s_hash"`
-	Extra                               map[string]any `json:"ext"`
+	Audience                            []string       `json:"aud,omitempty"`
+	Nonce                               string         `json:"nonce,omitempty"`
+	ExpirationTime                      *NumericDate   `json:"exp,omitempty"`
+	IssuedAt                            *NumericDate   `json:"iat,omitempty"`
+	RequestedAt                         *NumericDate   `json:"rat,omitempty"`
+	AuthTime                            *NumericDate   `json:"auth_time,omitempty"`
+	AuthenticationContextClassReference string         `json:"acr,omitempty"`
+	AuthenticationMethodsReferences     []string       `json:"amr,omitempty"`
+	AccessTokenHash                     string         `json:"at_hash,omitempty"`
+	CodeHash                            string         `json:"c_hash,omitempty"`
+	StateHash                           string         `json:"s_hash,omitempty"`
+	Extra                               map[string]any `json:"ext,omitempty"`
 }
 
 func (c *IDTokenClaims) GetExpirationTime() (exp *NumericDate, err error) {
@@ -170,6 +171,12 @@ func (c *IDTokenClaims) GetRequestedAtSafe() time.Time {
 	return c.RequestedAt.UTC()
 }
 
+func (c *IDTokenClaims) MarshalJSON() (data []byte, err error) {
+	claims := c.ToMapClaims()
+
+	return json.Marshal(claims)
+}
+
 func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 	claims := MapClaims{}
 
@@ -196,32 +203,7 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		case ClaimSubject:
 			c.Subject, ok = value.(string)
 		case ClaimAudience:
-			switch aud := value.(type) {
-			case nil:
-				ok = true
-			case string:
-				ok = true
-
-				c.Audience = []string{aud}
-			case []string:
-				ok = true
-
-				c.Audience = aud
-			case []any:
-				ok = true
-
-			loop:
-				for _, av := range aud {
-					switch a := av.(type) {
-					case string:
-						c.Audience = append(c.Audience, a)
-					default:
-						ok = false
-
-						break loop
-					}
-				}
-			}
+			c.Audience, ok = toStringSlice(value)
 		case ClaimNonce:
 			c.Nonce, ok = value.(string)
 		case ClaimExpirationTime:
@@ -240,12 +222,16 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			if c.AuthTime, err = toNumericDate(value); err == nil {
 				ok = true
 			}
+		case ClaimAuthenticationContextClassReference:
+			c.AuthenticationContextClassReference, ok = value.(string)
+		case ClaimAuthenticationMethodsReference:
+			c.AuthenticationMethodsReferences, ok = toStringSlice(value)
+		case ClaimAccessTokenHash:
+			c.AccessTokenHash, ok = value.(string)
 		case ClaimCodeHash:
 			c.CodeHash, ok = value.(string)
 		case ClaimStateHash:
 			c.StateHash, ok = value.(string)
-		case ClaimAuthenticationContextClassReference:
-			c.AuthenticationContextClassReference, ok = value.(string)
 		default:
 			if c.Extra == nil {
 				c.Extra = make(map[string]any)
@@ -268,10 +254,10 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
-	if c.Subject != "" {
-		ret[ClaimSubject] = c.Subject
+	if c.JTI != "" {
+		ret[consts.ClaimJWTID] = c.JTI
 	} else {
-		delete(ret, ClaimSubject)
+		ret[consts.ClaimJWTID] = uuid.New().String()
 	}
 
 	if c.Issuer != "" {
@@ -280,28 +266,16 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, consts.ClaimIssuer)
 	}
 
-	if c.JTI != "" {
-		ret[consts.ClaimJWTID] = c.JTI
+	if c.Subject != "" {
+		ret[ClaimSubject] = c.Subject
 	} else {
-		ret[consts.ClaimJWTID] = uuid.New().String()
+		delete(ret, ClaimSubject)
 	}
 
 	if len(c.Audience) > 0 {
 		ret[consts.ClaimAudience] = c.Audience
 	} else {
-		ret[consts.ClaimAudience] = []string{}
-	}
-
-	if c.IssuedAt != nil {
-		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
-	} else {
-		delete(ret, consts.ClaimIssuedAt)
-	}
-
-	if c.ExpirationTime != nil {
-		ret[consts.ClaimExpirationTime] = c.ExpirationTime.Unix()
-	} else {
-		delete(ret, consts.ClaimExpirationTime)
+		delete(ret, ClaimAudience)
 	}
 
 	if len(c.Nonce) > 0 {
@@ -310,22 +284,22 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, consts.ClaimNonce)
 	}
 
-	if len(c.AccessTokenHash) > 0 {
-		ret[consts.ClaimAccessTokenHash] = c.AccessTokenHash
+	if c.ExpirationTime != nil {
+		ret[consts.ClaimExpirationTime] = c.ExpirationTime.Unix()
 	} else {
-		delete(ret, consts.ClaimAccessTokenHash)
+		delete(ret, consts.ClaimExpirationTime)
 	}
 
-	if len(c.CodeHash) > 0 {
-		ret[consts.ClaimCodeHash] = c.CodeHash
+	if c.IssuedAt != nil {
+		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, consts.ClaimCodeHash)
+		delete(ret, consts.ClaimIssuedAt)
 	}
 
-	if len(c.StateHash) > 0 {
-		ret[consts.ClaimStateHash] = c.StateHash
+	if c.RequestedAt != nil {
+		ret[consts.ClaimRequestedAt] = c.RequestedAt.Unix()
 	} else {
-		delete(ret, consts.ClaimStateHash)
+		delete(ret, consts.ClaimRequestedAt)
 	}
 
 	if c.AuthTime != nil {
@@ -344,6 +318,24 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		ret[consts.ClaimAuthenticationMethodsReference] = c.AuthenticationMethodsReferences
 	} else {
 		delete(ret, consts.ClaimAuthenticationMethodsReference)
+	}
+
+	if len(c.AccessTokenHash) > 0 {
+		ret[consts.ClaimAccessTokenHash] = c.AccessTokenHash
+	} else {
+		delete(ret, consts.ClaimAccessTokenHash)
+	}
+
+	if len(c.CodeHash) > 0 {
+		ret[consts.ClaimCodeHash] = c.CodeHash
+	} else {
+		delete(ret, consts.ClaimCodeHash)
+	}
+
+	if len(c.StateHash) > 0 {
+		ret[consts.ClaimStateHash] = c.StateHash
+	} else {
+		delete(ret, consts.ClaimStateHash)
 	}
 
 	return ret
@@ -379,6 +371,37 @@ func (c IDTokenClaims) toNumericDate(key string) (date *NumericDate, err error) 
 	}
 
 	return toNumericDate(v)
+}
+
+func toStringSlice(value any) (values []string, ok bool) {
+	switch t := value.(type) {
+	case nil:
+		ok = true
+	case string:
+		ok = true
+
+		values = []string{t}
+	case []string:
+		ok = true
+
+		values = t
+	case []any:
+		ok = true
+
+	loop:
+		for _, tv := range t {
+			switch vv := tv.(type) {
+			case string:
+				values = append(values, vv)
+			default:
+				ok = false
+
+				break loop
+			}
+		}
+	}
+
+	return values, ok
 }
 
 var (

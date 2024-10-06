@@ -3,10 +3,6 @@
 
 package jwt
 
-import (
-	"authelia.com/provider/oauth2/internal/consts"
-)
-
 // Headers is the jwt headers
 type Headers struct {
 	Extra map[string]any `json:"extra"`
@@ -18,7 +14,7 @@ func NewHeaders() *Headers {
 
 // ToMap will transform the headers to a map structure
 func (h *Headers) ToMap() map[string]any {
-	var filter = map[string]bool{consts.JSONWebTokenHeaderAlgorithm: true}
+	var filter = map[string]bool{JSONWebTokenHeaderAlgorithm: true}
 	var extra = map[string]any{}
 
 	// filter known values from extra.

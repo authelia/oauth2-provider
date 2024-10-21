@@ -17,7 +17,20 @@ type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
 
+	// GetClientSecret returns the ClientSecret.
 	GetClientSecret() (secret ClientSecret)
+
+	// GetClientSecretPlainText returns the ClientSecret as plaintext if available. The semantics of this function
+	// return values are important.
+	// If the client is not configured with a secret the return should be:
+	//   - secret with value nil, ok with value false, and err with value of nil
+	// If the client is configured with a secret but is hashed or otherwise not a plaintext value:
+	//   - secret with value nil, ok with value true, and err with value of nil
+	// If an error occurs retrieving the secret other than this:
+	//   - secret with value nil, ok with value true, and err with value of the error
+	// If the plaintext secret is successful:
+	//   - secret with value of the bytes of the plaintext secret, ok with value true, and err with value of nil
+	GetClientSecretPlainText() (secret []byte, ok bool, err error)
 
 	// GetRedirectURIs returns the client's allowed redirect URIs.
 	GetRedirectURIs() []string
@@ -230,6 +243,19 @@ type AuthenticationMethodClient interface {
 	// methods.
 	GetRevocationEndpointAuthSigningAlg() (alg string)
 
+	// GetPushedAuthorizationRequestEndpointAuthMethod is equivalent to the
+	// 'pushed_authorize_request_endpoint_auth_method' client metadata value which determines the requested Client
+	// Authentication method for the Pushed Authorization Request Endpoint. The options are client_secret_post,
+	// client_secret_basic, client_secret_jwt, and private_key_jwt.
+	GetPushedAuthorizationRequestEndpointAuthMethod() (method string)
+
+	// GetPushedAuthorizationRequestEndpointAuthSigningAlg is equivalent to the
+	// 'pushed_authorization_request_endpoint_auth_signing_alg' client metadata value which determines the JWS [JWS] alg
+	// algorithm [JWA] that MUST be used for signing the JWT [JWT] used to authenticate the
+	// Client at the Pushed Authorization Request Endpoint for the private_key_jwt and client_secret_jwt authentication
+	// methods.
+	GetPushedAuthorizationRequestEndpointAuthSigningAlg() (alg string)
+
 	JSONWebKeysClient
 }
 
@@ -368,7 +394,7 @@ type RequestedAudienceImplicitClient interface {
 type IntrospectionJWTResponseClient interface {
 	// GetIntrospectionSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
-	//	// utilized to select an appropriate key.
+	// utilized to select an appropriate key.
 	GetIntrospectionSignedResponseKeyID() (kid string)
 
 	// GetIntrospectionSignedResponseAlg is equivalent to the 'introspection_signed_response_alg' client metadata
@@ -379,7 +405,7 @@ type IntrospectionJWTResponseClient interface {
 
 	// GetIntrospectionEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be
-	//	// utilized to select an appropriate key.
+	// utilized to select an appropriate key.
 	GetIntrospectionEncryptedResponseKeyID() (kid string)
 
 	// GetIntrospectionEncryptedResponseAlg is equivalent to the 'introspection_encrypted_response_alg' client metadata
@@ -414,20 +440,22 @@ type DefaultClient struct {
 
 type DefaultJARClient struct {
 	*DefaultClient
-	JSONWebKeysURI                      string              `json:"jwks_uri"`
-	JSONWebKeys                         *jose.JSONWebKeySet `json:"jwks"`
-	TokenEndpointAuthMethod             string              `json:"token_endpoint_auth_method"`
-	IntrospectionEndpointAuthMethod     string              `json:"introspection_endpoint_auth_method"`
-	RevocationEndpointAuthMethod        string              `json:"revocation_endpoint_auth_method"`
-	RequestURIs                         []string            `json:"request_uris"`
-	RequestObjectSigningKeyID           string              `json:"request_object_signing_kid"`
-	RequestObjectSigningAlg             string              `json:"request_object_signing_alg"`
-	RequestObjectEncryptionKeyID        string              `json:"request_object_encryption_kid"`
-	RequestObjectEncryptionAlg          string              `json:"request_object_encryption_alg"`
-	RequestObjectEncryptionEnc          string              `json:"request_object_encryption_enc"`
-	TokenEndpointAuthSigningAlg         string              `json:"token_endpoint_auth_signing_alg"`
-	IntrospectionEndpointAuthSigningAlg string              `json:"introspection_endpoint_auth_signing_alg"`
-	RevocationEndpointAuthSigningAlg    string              `json:"revocation_endpoint_auth_signing_alg"`
+	JSONWebKeysURI                                   string              `json:"jwks_uri"`
+	JSONWebKeys                                      *jose.JSONWebKeySet `json:"jwks"`
+	TokenEndpointAuthMethod                          string              `json:"token_endpoint_auth_method"`
+	IntrospectionEndpointAuthMethod                  string              `json:"introspection_endpoint_auth_method"`
+	RevocationEndpointAuthMethod                     string              `json:"revocation_endpoint_auth_method"`
+	PushedAuthorizationRequestEndpointAuthMethod     string              `json:"pushed_authorization_request_endpoint_auth_method"`
+	RequestURIs                                      []string            `json:"request_uris"`
+	RequestObjectSigningKeyID                        string              `json:"request_object_signing_kid"`
+	RequestObjectSigningAlg                          string              `json:"request_object_signing_alg"`
+	RequestObjectEncryptionKeyID                     string              `json:"request_object_encryption_kid"`
+	RequestObjectEncryptionAlg                       string              `json:"request_object_encryption_alg"`
+	RequestObjectEncryptionEnc                       string              `json:"request_object_encryption_enc"`
+	TokenEndpointAuthSigningAlg                      string              `json:"token_endpoint_auth_signing_alg"`
+	IntrospectionEndpointAuthSigningAlg              string              `json:"introspection_endpoint_auth_signing_alg"`
+	RevocationEndpointAuthSigningAlg                 string              `json:"revocation_endpoint_auth_signing_alg"`
+	PushedAuthorizationRequestEndpointAuthSigningAlg string              `json:"pushed_authorization_request_endpoint_auth_signing_alg"`
 }
 
 type DefaultResponseModeClient struct {
@@ -453,6 +481,22 @@ func (c *DefaultClient) GetRedirectURIs() []string {
 
 func (c *DefaultClient) GetClientSecret() (secret ClientSecret) {
 	return c.ClientSecret
+}
+
+func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
+	if c.ClientSecret == nil || !c.ClientSecret.Valid() {
+		return nil, false, nil
+	}
+
+	if !c.ClientSecret.IsPlainText() {
+		return nil, true, nil
+	}
+
+	if secret, err = c.ClientSecret.GetPlainTextValue(); err != nil {
+		return nil, true, err
+	}
+
+	return secret, true, nil
 }
 
 func (c *DefaultClient) GetRotatedClientSecrets() (secrets []ClientSecret) {
@@ -513,6 +557,10 @@ func (c *DefaultJARClient) GetRevocationEndpointAuthSigningAlg() string {
 	return c.RevocationEndpointAuthSigningAlg
 }
 
+func (c *DefaultJARClient) GetPushedAuthorizationRequestEndpointAuthSigningAlg() (alg string) {
+	return c.PushedAuthorizationRequestEndpointAuthSigningAlg
+}
+
 func (c *DefaultJARClient) GetRequestObjectSigningKeyID() string {
 	return c.RequestObjectSigningKeyID
 }
@@ -543,6 +591,10 @@ func (c *DefaultJARClient) GetIntrospectionEndpointAuthMethod() string {
 
 func (c *DefaultJARClient) GetRevocationEndpointAuthMethod() string {
 	return c.RevocationEndpointAuthMethod
+}
+
+func (c *DefaultJARClient) GetPushedAuthorizationRequestEndpointAuthMethod() string {
+	return c.PushedAuthorizationRequestEndpointAuthMethod
 }
 
 func (c *DefaultJARClient) GetRequestURIs() []string {

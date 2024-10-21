@@ -26,10 +26,9 @@ func TestIntrospectToken(t *testing.T) {
 		EnforceJWTProfileAccessTokens: true,
 	}
 
-	signer := &jwt.DefaultSigner{
-		GetPrivateKey: func(ctx context.Context) (any, error) {
-			return defaultRSAKey, nil
-		},
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(defaultRSAKey),
 	}
 
 	for _, c := range []struct {
@@ -44,16 +43,15 @@ func TestIntrospectToken(t *testing.T) {
 		},
 		{
 			description: "JWT strategy with OAuth2TokenIntrospectionFactory",
-			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", signer),
+			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
 			factory:     compose.OAuth2TokenIntrospectionFactory,
 		},
 		{
 			description: "JWT strategy with OAuth2StatelessJWTIntrospectionFactory",
-			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", signer),
+			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
 			factory:     compose.OAuth2StatelessJWTIntrospectionFactory,
 		},
 	} {
-		t.Logf("testing %v", c.description)
 		runIntrospectTokenTest(t, c.strategy, c.factory)
 	}
 }
@@ -125,7 +123,6 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			_, bytes, errs := c.prepare(s).End()
 
 			assert.Nil(t, json.Unmarshal([]byte(bytes), &res))
-			t.Logf("Got answer: %s", bytes)
 
 			assert.Len(t, errs, 0)
 			assert.Equal(t, c.isActive, res.Active)

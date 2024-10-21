@@ -17,176 +17,47 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// Token represets a JWT Token
-// This token provide an adaptation to
-// transit from [jwt-go](https://github.com/dgrijalva/jwt-go)
-// to [go-jose](https://github.com/square/go-jose)
-// It provides method signatures compatible with jwt-go but implemented
-// using go-json
-type Token struct {
-	Header map[string]any // The first segment of the token
-	Claims MapClaims      // The second segment of the token
-	Method jose.SignatureAlgorithm
-	valid  bool
-}
-
-const (
-	SigningMethodNone = jose.SignatureAlgorithm(consts.JSONWebTokenAlgNone)
-	// This key should be use to correctly sign and verify alg:none JWT tokens
-	UnsafeAllowNoneSignatureType unsafeNoneMagicConstant = "none signing method allowed"
-
-	JWTHeaderType = jose.HeaderKey(consts.JSONWebTokenHeaderType)
-)
-
-const (
-	JWTHeaderKeyValueType = consts.JSONWebTokenHeaderType
-)
-
-const (
-	JWTHeaderTypeValueJWT            = consts.JSONWebTokenTypeJWT
-	JWTHeaderTypeValueAccessTokenJWT = consts.JSONWebTokenTypeAccessToken
-)
-
-type unsafeNoneMagicConstant string
-
-// Valid informs if the token was verified against a given verification key
-// and claims are valid
-func (t *Token) Valid() bool {
-	return t.valid
-}
-
-// Claims is a port from https://github.com/dgrijalva/jwt-go/blob/master/claims.go
-// including its validation methods, which are not available in go-jose library
-//
-// > For a type to be a Claims object, it must just have a Valid method that determines
-// if the token is invalid for any supported reason
-type Claims interface {
-	Valid() error
+// New returns a new Token.
+func New() *Token {
+	return &Token{
+		Header:    map[string]any{},
+		HeaderJWE: map[string]any{},
+	}
 }
 
 // NewWithClaims creates an unverified Token with the given claims and signing method
-func NewWithClaims(method jose.SignatureAlgorithm, claims MapClaims) *Token {
+func NewWithClaims(alg jose.SignatureAlgorithm, claims MapClaims) *Token {
 	return &Token{
-		Claims: claims,
-		Method: method,
-		Header: map[string]any{},
+		Claims:             claims,
+		SignatureAlgorithm: alg,
+		Header:             map[string]any{},
+		HeaderJWE:          map[string]any{},
 	}
 }
-
-func (t *Token) toJoseHeader() map[jose.HeaderKey]any {
-	h := map[jose.HeaderKey]any{
-		JWTHeaderType: JWTHeaderTypeValueJWT,
-	}
-	for k, v := range t.Header {
-		h[jose.HeaderKey(k)] = v
-	}
-	return h
-}
-
-// SignedString provides a compatible `jwt-go` Token.SignedString method
-//
-// > Get the complete, signed token
-func (t *Token) SignedString(k any) (rawToken string, err error) {
-	if _, ok := k.(unsafeNoneMagicConstant); ok {
-		rawToken, err = unsignedToken(t)
-		return
-	}
-
-	var signer jose.Signer
-
-	key := jose.SigningKey{
-		Algorithm: t.Method,
-		Key:       k,
-	}
-	opts := &jose.SignerOptions{ExtraHeaders: t.toJoseHeader()}
-	signer, err = jose.NewSigner(key, opts)
-	if err != nil {
-		err = errorsx.WithStack(err)
-		return
-	}
-
-	// A explicit conversion from type alias MapClaims
-	// to map[string]any is required because the
-	// go-jose CompactSerialize() only support explicit maps
-	// as claims or structs but not type aliases from maps.
-	claims := map[string]any(t.Claims)
-	rawToken, err = jwt.Signed(signer).Claims(claims).Serialize()
-	if err != nil {
-		err = &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
-		return
-	}
-	return
-}
-
-func unsignedToken(t *Token) (string, error) {
-	t.Header[consts.JSONWebTokenHeaderAlgorithm] = consts.JSONWebTokenAlgNone
-	if _, ok := t.Header[string(JWTHeaderType)]; !ok {
-		t.Header[string(JWTHeaderType)] = JWTHeaderTypeValueJWT
-	}
-	hbytes, err := json.Marshal(&t.Header)
-	if err != nil {
-		return "", errorsx.WithStack(err)
-	}
-	bbytes, err := json.Marshal(&t.Claims)
-	if err != nil {
-		return "", errorsx.WithStack(err)
-	}
-	h := base64.RawURLEncoding.EncodeToString(hbytes)
-	b := base64.RawURLEncoding.EncodeToString(bbytes)
-	return fmt.Sprintf("%v.%v.", h, b), nil
-}
-
-func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
-	token := &Token{Claims: claims}
-	if len(parsedToken.Headers) != 1 {
-		return nil, &ValidationError{text: fmt.Sprintf("only one header supported, got %v", len(parsedToken.Headers)), Errors: ValidationErrorMalformed}
-	}
-
-	// copy headers
-	h := parsedToken.Headers[0]
-	token.Header = map[string]any{
-		consts.JSONWebTokenHeaderAlgorithm: h.Algorithm,
-	}
-	if h.KeyID != "" {
-		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = h.KeyID
-	}
-	for k, v := range h.ExtraHeaders {
-		token.Header[string(k)] = v
-	}
-
-	token.Method = jose.SignatureAlgorithm(h.Algorithm)
-
-	return token, nil
-}
-
-// Keyfunc is used by parsing methods to supply the key for verification.  The function receives the parsed, but
-// unverified Token. This allows you to use properties in the Header of the token (such as `kid`) to identify which key
-// to use.
-type Keyfunc func(*Token) (any, error)
 
 // Parse is an overload for ParseCustom which accepts all normal algs including 'none'.
 func Parse(tokenString string, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustom(tokenString, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
+	return ParseCustom(tokenString, keyFunc, SignatureAlgorithmsNone...)
 }
 
 // ParseCustom parses, validates, and returns a token. The keyFunc will receive the parsed token and should
 // return the key for validating. If everything is kosher, err will be nil.
-func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
+func ParseCustom(tokenString string, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (token *Token, err error) {
 	return ParseCustomWithClaims(tokenString, MapClaims{}, keyFunc, algs...)
 }
 
 // ParseWithClaims is an overload for ParseCustomWithClaims which accepts all normal algs including 'none'.
-func ParseWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc) (*Token, error) {
-	return ParseCustomWithClaims(rawToken, claims, keyFunc, consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512)
+func ParseWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc) (token *Token, err error) {
+	return ParseCustomWithClaims(tokenString, claims, keyFunc, SignatureAlgorithmsNone...)
 }
 
 // ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should
 // return the key for validating. If everything is kosher, err will be nil.
-func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (*Token, error) {
-	// Parse the token.
-	parsedToken, err := jwt.ParseSigned(rawToken, algs)
-	if err != nil {
-		return &Token{}, &ValidationError{Errors: ValidationErrorMalformed, text: err.Error()}
+func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (token *Token, err error) {
+	var parsed *jwt.JSONWebToken
+
+	if parsed, err = jwt.ParseSigned(tokenString, algs); err != nil {
+		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorMalformed, Inner: err}
 	}
 
 	// fill unverified claims
@@ -196,23 +67,22 @@ func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, a
 	// The KeyFunc(*Token) function requires the claims to be set into the
 	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
 	// then with the returned key, the claims gets verified.
-	if err := parsedToken.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return nil, &ValidationError{Errors: ValidationErrorClaimsInvalid, text: err.Error()}
+	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
 
 	// creates an unsafe token
-	token, err := newToken(parsedToken, claims)
-	if err != nil {
-		return nil, err
+	if token, err = newToken(parsed, claims); err != nil {
+		return &Token{Claims: MapClaims(nil)}, err
 	}
 
 	if keyFunc == nil {
 		return token, &ValidationError{Errors: ValidationErrorUnverifiable, text: "no Keyfunc was provided."}
 	}
 
-	// Call keyFunc callback to get verification key
-	verificationKey, err := keyFunc(token)
-	if err != nil {
+	var key any
+
+	if key, err = keyFunc(token); err != nil {
 		// keyFunc returned an error
 		var ve *ValidationError
 
@@ -222,20 +92,21 @@ func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, a
 
 		return token, &ValidationError{Errors: ValidationErrorUnverifiable, Inner: err}
 	}
-	if verificationKey == nil {
+
+	if key == nil {
 		return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: "keyfunc returned a nil verification key"}
 	}
 	// To verify signature go-jose requires a pointer to
 	// public key instead of the public key value.
 	// The pointer values provides that pointer.
 	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
-	verificationKey = pointer(verificationKey)
+	key = pointer(key)
 
 	// verify signature with returned key
-	_, validNoneKey := verificationKey.(*unsafeNoneMagicConstant)
-	isSignedToken := !(token.Method == SigningMethodNone && validNoneKey)
+	_, validNoneKey := key.(*unsafeNoneMagicConstant)
+	isSignedToken := !(token.SignatureAlgorithm == SigningMethodNone && validNoneKey)
 	if isSignedToken {
-		if err := parsedToken.Claims(verificationKey, &claims); err != nil {
+		if err = parsed.Claims(key, &claims); err != nil {
 			return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()}
 		}
 	}
@@ -243,15 +114,454 @@ func ParseCustomWithClaims(rawToken string, claims MapClaims, keyFunc Keyfunc, a
 	// Validate claims
 	// This validation is performed to be backwards compatible
 	// with jwt-go library behavior
-	if err := claims.Valid(); err != nil {
+	if err = claims.Valid(); err != nil {
 		if e, ok := err.(*ValidationError); !ok {
 			err = &ValidationError{Inner: e, Errors: ValidationErrorClaimsInvalid}
 		}
+
 		return token, err
 	}
 
-	// set token as verified and validated
 	token.valid = true
+
+	return token, nil
+}
+
+// Token represets a JWT Token.
+type Token struct {
+	KeyID                string
+	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS)
+	EncryptionKeyID      string
+	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE)
+	ContentEncryption    jose.ContentEncryption    // enc (JWE)
+	CompressionAlgorithm jose.CompressionAlgorithm // zip (JWE)
+
+	Header    map[string]any
+	HeaderJWE map[string]any
+
+	Claims Claims
+
+	parsedToken *jwt.JSONWebToken
+
+	valid bool
+}
+
+// IsSignatureValid informs if the token was verified against a given verification key
+// and claims are valid
+func (t *Token) IsSignatureValid() bool {
+	return t.valid
+}
+
+// Claims is a port from https://github.com/dgrijalva/jwt-go/blob/master/claims.go
+// including its validation methods, which are not available in go-jose library
+//
+// > For a type to be a Claims object, it must just have a Valid method that determines
+// if the token is invalid for any supported reason
+// type Claims interface {
+//	Valid() error
+//}
+
+func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
+	header = map[jose.HeaderKey]any{
+		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
+	}
+
+	for k, v := range t.Header {
+		header[jose.HeaderKey(k)] = v
+	}
+
+	return header
+}
+
+func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
+	header = map[jose.HeaderKey]any{
+		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
+	}
+
+	if cty, ok := t.Header[JSONWebTokenHeaderType]; ok {
+		header[JSONWebTokenHeaderContentType] = cty
+	}
+
+	for k, v := range t.HeaderJWE {
+		header[jose.HeaderKey(k)] = v
+	}
+
+	return header
+}
+
+// SetJWS sets the JWS output values.
+func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.SignatureAlgorithm) {
+	assign(t.Header, header.ToMap())
+
+	t.KeyID = kid
+	t.SignatureAlgorithm = alg
+
+	t.Claims = claims
+}
+
+// SetJWE sets the JWE output values.
+func (t *Token) SetJWE(header Mapper, kid string, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
+	assign(t.HeaderJWE, header.ToMap())
+
+	t.EncryptionKeyID = kid
+	t.KeyAlgorithm = alg
+	t.ContentEncryption = enc
+	t.CompressionAlgorithm = zip
+}
+
+// AssignJWE assigns values derived from the JWE decryption process to the Token.
+func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
+	if jwe == nil {
+		return
+	}
+
+	t.HeaderJWE = map[string]any{
+		JSONWebTokenHeaderAlgorithm: jwe.Header.Algorithm,
+	}
+
+	if jwe.Header.KeyID != "" {
+		t.HeaderJWE[JSONWebTokenHeaderKeyIdentifier] = jwe.Header.KeyID
+		t.EncryptionKeyID = jwe.Header.KeyID
+	}
+
+	for header, value := range jwe.Header.ExtraHeaders {
+		h := string(header)
+
+		t.HeaderJWE[h] = value
+
+		switch h {
+		case JSONWebTokenHeaderEncryptionAlgorithm:
+			if v, ok := value.(string); ok {
+				t.ContentEncryption = jose.ContentEncryption(v)
+			}
+		case JSONWebTokenHeaderCompressionAlgorithm:
+			if v, ok := value.(string); ok {
+				t.CompressionAlgorithm = jose.CompressionAlgorithm(v)
+			}
+		}
+	}
+
+	t.KeyAlgorithm = jose.KeyAlgorithm(jwe.Header.Algorithm)
+}
+
+// CompactEncrypted serializes this token as a Compact Encrypted string, and returns the token string, signature, and
+// an error if one occurred.
+func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature string, err error) {
+	var (
+		signed string
+	)
+
+	if signed, signature, err = t.CompactSigned(keySig); err != nil {
+		return "", "", err
+	}
+
+	rcpt := jose.Recipient{
+		Algorithm: t.KeyAlgorithm,
+		Key:       keyEnc,
+	}
+
+	opts := &jose.EncrypterOptions{
+		Compression:  t.CompressionAlgorithm,
+		ExtraHeaders: t.toEncryptedJoseHeader(),
+	}
+
+	if _, ok := opts.ExtraHeaders[JSONWebTokenHeaderContentType]; !ok {
+		var typ any
+
+		if typ, ok = t.Header[JSONWebTokenHeaderType]; ok {
+			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = typ
+		} else {
+			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = JSONWebTokenTypeJWT
+		}
+	}
+
+	var encrypter jose.Encrypter
+
+	if encrypter, err = jose.NewEncrypter(t.ContentEncryption, rcpt, opts); err != nil {
+		return "", "", errorsx.WithStack(err)
+	}
+
+	var token *jose.JSONWebEncryption
+
+	if token, err = encrypter.Encrypt([]byte(signed)); err != nil {
+		return "", "", errorsx.WithStack(err)
+	}
+
+	if tokenString, err = token.CompactSerialize(); err != nil {
+		return "", "", errorsx.WithStack(err)
+	}
+
+	return tokenString, signature, nil
+}
+
+// CompactSigned serializes this token as a Compact Signed string, and returns the token string, signature, and
+// an error if one occurred.
+func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) {
+	if tokenString, err = t.CompactSignedString(k); err != nil {
+		return "", "", err
+	}
+
+	if signature, err = getJWTSignature(tokenString); err != nil {
+		return "", "", err
+	}
+
+	return tokenString, signature, nil
+}
+
+// CompactSignedString provides a compatible `jwt-go` Token.CompactSigned method
+//
+// > Get the complete, signed token
+func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
+	if isUnsafeNoneMagicConstant(k) {
+		return unsignedToken(t)
+	}
+
+	key := jose.SigningKey{
+		Algorithm: t.SignatureAlgorithm,
+		Key:       k,
+	}
+
+	opts := &jose.SignerOptions{ExtraHeaders: t.toSignedJoseHeader()}
+
+	var signer jose.Signer
+
+	if signer, err = jose.NewSigner(key, opts); err != nil {
+		return "", errorsx.WithStack(err)
+	}
+
+	// A explicit conversion from type alias MapClaims
+	// to map[string]any is required because the
+	// go-jose CompactSerialize() only support explicit maps
+	// as claims or structs but not type aliases from maps.
+	// claims := t.Claims.ToMapClaims()
+
+	if tokenString, err = jwt.Signed(signer).Claims(t.Claims.ToMapClaims().ToMap()).Serialize(); err != nil {
+		return "", &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
+	}
+
+	return tokenString, nil
+}
+
+// Valid validates the token headers given various input options. This does not validate any claims.
+func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
+	vopts := &HeaderValidationOptions{
+		types: []string{JSONWebTokenTypeJWT},
+	}
+
+	for _, opt := range opts {
+		opt(vopts)
+	}
+
+	vErr := new(ValidationError)
+
+	if !t.valid {
+		vErr.Inner = errors.New("token has an invalid or unverified signature")
+		vErr.Errors |= ValidationErrorSignatureInvalid
+	}
+
+	if t.HeaderJWE != nil && (t.KeyAlgorithm != "" || t.ContentEncryption != "") {
+		var (
+			typ any
+			ok  bool
+		)
+
+		if typ, ok = t.HeaderJWE[JSONWebTokenHeaderType]; !ok || typ != JSONWebTokenTypeJWT {
+			vErr.Inner = errors.New("token was encrypted with invalid typ")
+			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
+		}
+
+		ttyp := t.Header[JSONWebTokenHeaderType]
+		cty := t.HeaderJWE[JSONWebTokenHeaderContentType]
+
+		if cty != ttyp {
+			vErr.Inner = errors.New("token was encrypted with a cty value that doesn't match the typ value")
+			vErr.Errors |= ValidationErrorHeaderContentTypeInvalidMismatch
+		}
+
+		if len(vopts.types) != 0 {
+			if !validateTokenTypeValue(vopts.types, cty) {
+				vErr.Inner = errors.New("token was encrypted with an invalid cty")
+				vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
+			}
+		}
+	}
+
+	if len(vopts.types) != 0 {
+		if !validateTokenType(vopts.types, t.Header) {
+			vErr.Inner = errors.New("token was signed with an invalid typ")
+			vErr.Errors |= ValidationErrorHeaderTypeInvalid
+		}
+	}
+
+	if len(vopts.alg) != 0 {
+		if vopts.alg != string(t.SignatureAlgorithm) {
+			vErr.Inner = errors.New("token was signed with an invalid alg")
+			vErr.Errors |= ValidationErrorHeaderAlgorithmInvalid
+		}
+	}
+
+	if len(vopts.kid) != 0 {
+		if vopts.kid != t.KeyID {
+			vErr.Inner = errors.New("token was signed with an invalid kid")
+			vErr.Errors |= ValidationErrorHeaderKeyIDInvalid
+		}
+	}
+
+	if len(vopts.keyAlg) != 0 && len(t.KeyAlgorithm) != 0 {
+		if vopts.keyAlg != string(t.KeyAlgorithm) {
+			vErr.Inner = errors.New("token was encrypted with an invalid alg")
+			vErr.Errors |= ValidationErrorHeaderKeyAlgorithmInvalid
+		}
+	}
+
+	if len(vopts.contentEnc) != 0 && len(t.ContentEncryption) != 0 {
+		if vopts.contentEnc != string(t.ContentEncryption) {
+			vErr.Inner = errors.New("token was encrypted with an invalid enc")
+			vErr.Errors |= ValidationErrorHeaderContentEncryptionInvalid
+		}
+	}
+
+	if len(vopts.kidEnc) != 0 && len(t.EncryptionKeyID) != 0 {
+		if vopts.kidEnc != t.EncryptionKeyID {
+			vErr.Inner = errors.New("token was encrypted with an invalid kid")
+			vErr.Errors |= ValidationErrorHeaderEncryptionKeyIDInvalid
+		}
+	}
+
+	if vErr.valid() {
+		return nil
+	}
+
+	return vErr
+}
+
+// IsJWTProfileAccessToken returns true if the token is a JWT Profile Access Token.
+func (t *Token) IsJWTProfileAccessToken() (ok bool) {
+	var (
+		raw      any
+		cty, typ string
+	)
+
+	if t.HeaderJWE != nil && len(t.HeaderJWE) > 0 {
+		if raw, ok = t.HeaderJWE[JSONWebTokenHeaderContentType]; ok {
+			cty, ok = raw.(string)
+
+			if !ok {
+				return false
+			}
+
+			if cty != JSONWebTokenTypeAccessToken && cty != JSONWebTokenTypeAccessTokenAlternative {
+				return false
+			}
+		}
+	}
+
+	if raw, ok = t.Header[JSONWebTokenHeaderType]; !ok {
+		return false
+	}
+
+	typ, ok = raw.(string)
+
+	return ok && (typ == JSONWebTokenTypeAccessToken || typ == JSONWebTokenTypeAccessTokenAlternative)
+}
+
+type HeaderValidationOption func(opts *HeaderValidationOptions)
+
+type HeaderValidationOptions struct {
+	types      []string
+	alg        string
+	kid        string
+	kidEnc     string
+	keyAlg     string
+	contentEnc string
+}
+
+func ValidateTypes(types ...string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.types = types
+	}
+}
+
+func ValidateKeyID(kid string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.kid = kid
+	}
+}
+
+func ValidateAlgorithm(alg string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.alg = alg
+	}
+}
+
+func ValidateEncryptionKeyID(kid string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.kidEnc = kid
+	}
+}
+
+func ValidateKeyAlgorithm(alg string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.keyAlg = alg
+	}
+}
+
+func ValidateContentEncryption(enc string) HeaderValidationOption {
+	return func(validator *HeaderValidationOptions) {
+		validator.contentEnc = enc
+	}
+}
+
+func unsignedToken(token *Token) (tokenString string, err error) {
+	token.Header[JSONWebTokenHeaderAlgorithm] = JSONWebTokenAlgNone
+
+	if _, ok := token.Header[JSONWebTokenHeaderType]; !ok {
+		token.Header[JSONWebTokenHeaderType] = JSONWebTokenTypeJWT
+	}
+
+	var (
+		hbytes, bbytes []byte
+	)
+
+	if hbytes, err = json.Marshal(&token.Header); err != nil {
+		return "", errorsx.WithStack(err)
+	}
+
+	if bbytes, err = json.Marshal(&token.Claims); err != nil {
+		return "", errorsx.WithStack(err)
+	}
+
+	return fmt.Sprintf("%s.%s.", base64.RawURLEncoding.EncodeToString(hbytes), base64.RawURLEncoding.EncodeToString(bbytes)), nil
+}
+
+func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
+	token := &Token{Claims: claims, parsedToken: parsedToken}
+
+	if token.Claims == nil {
+		token.Claims = MapClaims{}
+	}
+
+	if len(parsedToken.Headers) != 1 {
+		return nil, &ValidationError{text: fmt.Sprintf("only one header supported, got %v", len(parsedToken.Headers)), Errors: ValidationErrorMalformed}
+	}
+
+	// copy headers
+	h := parsedToken.Headers[0]
+	token.Header = map[string]any{
+		JSONWebTokenHeaderAlgorithm: h.Algorithm,
+	}
+
+	token.SignatureAlgorithm = jose.SignatureAlgorithm(h.Algorithm)
+
+	if h.KeyID != "" {
+		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = h.KeyID
+		token.KeyID = h.KeyID
+	}
+
+	for k, v := range h.ExtraHeaders {
+		token.Header[string(k)] = v
+	}
+
 	return token, nil
 }
 
@@ -264,4 +574,53 @@ func pointer(v any) any {
 		return value.Interface()
 	}
 	return v
+}
+
+func validateTokenType(values []string, header map[string]any) bool {
+	var (
+		raw any
+		ok  bool
+	)
+
+	if raw, ok = header[consts.JSONWebTokenHeaderType]; !ok {
+		return false
+	}
+
+	return validateTokenTypeValue(values, raw)
+}
+
+func validateTokenTypeValue(values []string, raw any) bool {
+	var (
+		typ string
+		ok  bool
+	)
+
+	if typ, ok = raw.(string); !ok {
+		return false
+	}
+
+	for _, t := range values {
+		if t == typ {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isUnsafeNoneMagicConstant(k any) bool {
+	switch key := k.(type) {
+	case unsafeNoneMagicConstant:
+		return true
+	case jose.JSONWebKey:
+		if _, ok := key.Key.(unsafeNoneMagicConstant); ok {
+			return true
+		}
+	case *jose.JSONWebKey:
+		if _, ok := key.Key.(unsafeNoneMagicConstant); ok {
+			return true
+		}
+	}
+
+	return false
 }

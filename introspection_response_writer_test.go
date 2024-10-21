@@ -99,7 +99,7 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			hasExtra: false,
 		},
 		{
-			description: "should success for ExpiresAt not set access token",
+			description: "should success for ExpirationTime not set access token",
 			setup: func() {
 				ires.Active = true
 				ires.TokenUse = AccessToken

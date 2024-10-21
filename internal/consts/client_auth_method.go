@@ -1,6 +1,6 @@
 package consts
 
-// Client Auth Method strings.
+// Client Auth SignatureAlgorithm strings.
 const (
 	ClientAuthMethodClientSecretBasic = "client_secret_basic"
 	ClientAuthMethodClientSecretPost  = "client_secret_post"

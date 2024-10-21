@@ -15,8 +15,9 @@ import (
 )
 
 type CustomJWTTypeHandler struct {
-	Config      oauth2.RFC8693ConfigProvider
-	JWTStrategy jwt.Signer
+	Config oauth2.RFC8693ConfigProvider
+
+	jwt.Strategy
 	Storage
 }
 
@@ -122,7 +123,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 	if window == 0 {
 		window = 1 * time.Hour
 	}
-	claims := ftoken.Claims
+	claims := ftoken.Claims.ToMapClaims()
 
 	if issued, exists := claims[consts.ClaimIssuedAt]; exists {
 		if time.Unix(toInt64(issued), 0).Add(window).Before(time.Now()) {
@@ -154,7 +155,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 		}
 	}
 
-	return map[string]any(claims), nil
+	return claims, nil
 }
 
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) error {
@@ -175,8 +176,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.Subject = request.GetClient().GetID()
 	}
 
-	if claims.ExpiresAt.IsZero() {
-		claims.ExpiresAt = time.Now().UTC().Add(jwtType.Expiry)
+	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
 	}
 
 	if claims.Issuer == "" {
@@ -200,16 +201,17 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.JTI = uuid.New().String()
 	}
 
-	claims.IssuedAt = time.Now().UTC()
+	claims.IssuedAt = jwt.Now()
 
-	token, _, err := c.JWTStrategy.Generate(ctx, claims.ToMapClaims(), sess.IDTokenHeaders())
+	token, _, err := c.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient()))
 	if err != nil {
 		return err
 	}
 
 	response.SetAccessToken(token)
 	response.SetTokenType("N_A")
-	response.SetExpiresIn(time.Duration(claims.ExpiresAt.UnixNano() - time.Now().UTC().UnixNano()))
+	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
+
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"hash"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -466,4 +467,79 @@ func newError(message string, err error, more ...error) error {
 
 	err = fmt.Errorf(format, args...)
 	return err
+}
+
+func toMap(obj any) (result map[string]any) {
+	result = map[string]any{}
+
+	if obj == nil {
+		return result
+	}
+
+	v := reflect.TypeOf(obj)
+
+	reflectValue := reflect.ValueOf(obj)
+	reflectValue = reflect.Indirect(reflectValue)
+
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	for i := 0; i < v.NumField(); i++ {
+		tag, opts := parseTag(v.Field(i).Tag.Get("json"))
+		field := reflectValue.Field(i).Interface()
+		if tag != "" && tag != "-" {
+			if opts.Contains("omitempty") && isEmptyValue(reflect.ValueOf(field)) {
+				continue
+			}
+
+			if v.Field(i).Type.Kind() == reflect.Struct {
+				result[tag] = toMap(field)
+			} else {
+				result[tag] = field
+			}
+		}
+	}
+
+	return result
+}
+
+type tagOptionsJSON string
+
+func parseTag(tag string) (string, tagOptionsJSON) {
+	tag, opt, _ := strings.Cut(tag, ",")
+	return tag, tagOptionsJSON(opt)
+}
+
+func (o tagOptionsJSON) Contains(optionName string) bool {
+	if len(o) == 0 {
+		return false
+	}
+
+	s := string(o)
+
+	for s != "" {
+		var name string
+		name, s, _ = strings.Cut(s, ",")
+		if name == optionName {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64,
+		reflect.Interface, reflect.Pointer:
+		return v.IsZero()
+	default:
+		return false
+	}
 }

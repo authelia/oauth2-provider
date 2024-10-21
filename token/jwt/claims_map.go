@@ -13,6 +13,11 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewMapClaims returns a set of MapClaims from an object that has the appropriate JSON tags.
+func NewMapClaims(obj any) (claims MapClaims) {
+	return toMap(obj)
+}
+
 // MapClaims is a simple map based claims structure.
 type MapClaims map[string]any
 

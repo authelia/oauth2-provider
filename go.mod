@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
 	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.29.0
+	golang.org/x/crypto v0.30.0
 	golang.org/x/net v0.31.0
 	golang.org/x/oauth2 v0.24.0
 	golang.org/x/text v0.21.0
@@ -36,7 +36,7 @@ require (
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
-	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

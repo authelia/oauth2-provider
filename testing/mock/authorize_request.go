@@ -22,6 +22,7 @@ import (
 type MockAuthorizeRequester struct {
 	ctrl     *gomock.Controller
 	recorder *MockAuthorizeRequesterMockRecorder
+	isgomock struct{}
 }
 
 // MockAuthorizeRequesterMockRecorder is the mock recorder for MockAuthorizeRequester.
@@ -42,15 +43,15 @@ func (m *MockAuthorizeRequester) EXPECT() *MockAuthorizeRequesterMockRecorder {
 }
 
 // AppendRequestedScope mocks base method.
-func (m *MockAuthorizeRequester) AppendRequestedScope(arg0 string) {
+func (m *MockAuthorizeRequester) AppendRequestedScope(scope string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AppendRequestedScope", arg0)
+	m.ctrl.Call(m, "AppendRequestedScope", scope)
 }
 
 // AppendRequestedScope indicates an expected call of AppendRequestedScope.
-func (mr *MockAuthorizeRequesterMockRecorder) AppendRequestedScope(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) AppendRequestedScope(scope any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendRequestedScope", reflect.TypeOf((*MockAuthorizeRequester)(nil).AppendRequestedScope), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendRequestedScope", reflect.TypeOf((*MockAuthorizeRequester)(nil).AppendRequestedScope), scope)
 }
 
 // DidHandleAllResponseTypes mocks base method.
@@ -264,27 +265,27 @@ func (mr *MockAuthorizeRequesterMockRecorder) GetState() *gomock.Call {
 }
 
 // GrantAudience mocks base method.
-func (m *MockAuthorizeRequester) GrantAudience(arg0 string) {
+func (m *MockAuthorizeRequester) GrantAudience(audience string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "GrantAudience", arg0)
+	m.ctrl.Call(m, "GrantAudience", audience)
 }
 
 // GrantAudience indicates an expected call of GrantAudience.
-func (mr *MockAuthorizeRequesterMockRecorder) GrantAudience(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) GrantAudience(audience any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantAudience), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantAudience), audience)
 }
 
 // GrantScope mocks base method.
-func (m *MockAuthorizeRequester) GrantScope(arg0 string) {
+func (m *MockAuthorizeRequester) GrantScope(scope string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "GrantScope", arg0)
+	m.ctrl.Call(m, "GrantScope", scope)
 }
 
 // GrantScope indicates an expected call of GrantScope.
-func (mr *MockAuthorizeRequesterMockRecorder) GrantScope(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) GrantScope(scope any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantScope", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantScope), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantScope", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantScope), scope)
 }
 
 // IsRedirectURIValid mocks base method.
@@ -302,99 +303,99 @@ func (mr *MockAuthorizeRequesterMockRecorder) IsRedirectURIValid() *gomock.Call 
 }
 
 // Merge mocks base method.
-func (m *MockAuthorizeRequester) Merge(arg0 oauth2.Requester) {
+func (m *MockAuthorizeRequester) Merge(requester oauth2.Requester) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Merge", arg0)
+	m.ctrl.Call(m, "Merge", requester)
 }
 
 // Merge indicates an expected call of Merge.
-func (mr *MockAuthorizeRequesterMockRecorder) Merge(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) Merge(requester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Merge", reflect.TypeOf((*MockAuthorizeRequester)(nil).Merge), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Merge", reflect.TypeOf((*MockAuthorizeRequester)(nil).Merge), requester)
 }
 
 // Sanitize mocks base method.
-func (m *MockAuthorizeRequester) Sanitize(arg0 []string) oauth2.Requester {
+func (m *MockAuthorizeRequester) Sanitize(allowedParameters []string) oauth2.Requester {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sanitize", arg0)
+	ret := m.ctrl.Call(m, "Sanitize", allowedParameters)
 	ret0, _ := ret[0].(oauth2.Requester)
 	return ret0
 }
 
 // Sanitize indicates an expected call of Sanitize.
-func (mr *MockAuthorizeRequesterMockRecorder) Sanitize(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) Sanitize(allowedParameters any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sanitize", reflect.TypeOf((*MockAuthorizeRequester)(nil).Sanitize), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sanitize", reflect.TypeOf((*MockAuthorizeRequester)(nil).Sanitize), allowedParameters)
 }
 
 // SetDefaultResponseMode mocks base method.
-func (m *MockAuthorizeRequester) SetDefaultResponseMode(arg0 oauth2.ResponseModeType) {
+func (m *MockAuthorizeRequester) SetDefaultResponseMode(responseMode oauth2.ResponseModeType) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetDefaultResponseMode", arg0)
+	m.ctrl.Call(m, "SetDefaultResponseMode", responseMode)
 }
 
 // SetDefaultResponseMode indicates an expected call of SetDefaultResponseMode.
-func (mr *MockAuthorizeRequesterMockRecorder) SetDefaultResponseMode(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetDefaultResponseMode(responseMode any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDefaultResponseMode", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetDefaultResponseMode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDefaultResponseMode", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetDefaultResponseMode), responseMode)
 }
 
 // SetID mocks base method.
-func (m *MockAuthorizeRequester) SetID(arg0 string) {
+func (m *MockAuthorizeRequester) SetID(id string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetID", arg0)
+	m.ctrl.Call(m, "SetID", id)
 }
 
 // SetID indicates an expected call of SetID.
-func (mr *MockAuthorizeRequesterMockRecorder) SetID(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetID(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetID", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetID", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetID), id)
 }
 
 // SetRequestedAudience mocks base method.
-func (m *MockAuthorizeRequester) SetRequestedAudience(arg0 oauth2.Arguments) {
+func (m *MockAuthorizeRequester) SetRequestedAudience(audience oauth2.Arguments) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetRequestedAudience", arg0)
+	m.ctrl.Call(m, "SetRequestedAudience", audience)
 }
 
 // SetRequestedAudience indicates an expected call of SetRequestedAudience.
-func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedAudience(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedAudience(audience any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedAudience), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedAudience), audience)
 }
 
 // SetRequestedScopes mocks base method.
-func (m *MockAuthorizeRequester) SetRequestedScopes(arg0 oauth2.Arguments) {
+func (m *MockAuthorizeRequester) SetRequestedScopes(scopes oauth2.Arguments) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetRequestedScopes", arg0)
+	m.ctrl.Call(m, "SetRequestedScopes", scopes)
 }
 
 // SetRequestedScopes indicates an expected call of SetRequestedScopes.
-func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedScopes(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedScopes(scopes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedScopes", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedScopes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedScopes", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedScopes), scopes)
 }
 
 // SetResponseTypeHandled mocks base method.
-func (m *MockAuthorizeRequester) SetResponseTypeHandled(arg0 string) {
+func (m *MockAuthorizeRequester) SetResponseTypeHandled(responseType string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetResponseTypeHandled", arg0)
+	m.ctrl.Call(m, "SetResponseTypeHandled", responseType)
 }
 
 // SetResponseTypeHandled indicates an expected call of SetResponseTypeHandled.
-func (mr *MockAuthorizeRequesterMockRecorder) SetResponseTypeHandled(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetResponseTypeHandled(responseType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetResponseTypeHandled", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetResponseTypeHandled), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetResponseTypeHandled", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetResponseTypeHandled), responseType)
 }
 
 // SetSession mocks base method.
-func (m *MockAuthorizeRequester) SetSession(arg0 oauth2.Session) {
+func (m *MockAuthorizeRequester) SetSession(session oauth2.Session) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetSession", arg0)
+	m.ctrl.Call(m, "SetSession", session)
 }
 
 // SetSession indicates an expected call of SetSession.
-func (mr *MockAuthorizeRequesterMockRecorder) SetSession(arg0 any) *gomock.Call {
+func (mr *MockAuthorizeRequesterMockRecorder) SetSession(session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSession", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetSession), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSession", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetSession), session)
 }

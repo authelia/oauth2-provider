@@ -21,6 +21,7 @@ import (
 type MockOpenIDConnectRequestStorage struct {
 	ctrl     *gomock.Controller
 	recorder *MockOpenIDConnectRequestStorageMockRecorder
+	isgomock struct{}
 }
 
 // MockOpenIDConnectRequestStorageMockRecorder is the mock recorder for MockOpenIDConnectRequestStorage.
@@ -41,44 +42,44 @@ func (m *MockOpenIDConnectRequestStorage) EXPECT() *MockOpenIDConnectRequestStor
 }
 
 // CreateOpenIDConnectSession mocks base method.
-func (m *MockOpenIDConnectRequestStorage) CreateOpenIDConnectSession(arg0 context.Context, arg1 string, arg2 oauth2.Requester) error {
+func (m *MockOpenIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Context, authorizeCode string, requester oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOpenIDConnectSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateOpenIDConnectSession", ctx, authorizeCode, requester)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateOpenIDConnectSession indicates an expected call of CreateOpenIDConnectSession.
-func (mr *MockOpenIDConnectRequestStorageMockRecorder) CreateOpenIDConnectSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOpenIDConnectRequestStorageMockRecorder) CreateOpenIDConnectSession(ctx, authorizeCode, requester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).CreateOpenIDConnectSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).CreateOpenIDConnectSession), ctx, authorizeCode, requester)
 }
 
 // DeleteOpenIDConnectSession mocks base method.
-func (m *MockOpenIDConnectRequestStorage) DeleteOpenIDConnectSession(arg0 context.Context, arg1 string) error {
+func (m *MockOpenIDConnectRequestStorage) DeleteOpenIDConnectSession(ctx context.Context, authorizeCode string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteOpenIDConnectSession", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteOpenIDConnectSession", ctx, authorizeCode)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteOpenIDConnectSession indicates an expected call of DeleteOpenIDConnectSession.
-func (mr *MockOpenIDConnectRequestStorageMockRecorder) DeleteOpenIDConnectSession(arg0, arg1 any) *gomock.Call {
+func (mr *MockOpenIDConnectRequestStorageMockRecorder) DeleteOpenIDConnectSession(ctx, authorizeCode any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).DeleteOpenIDConnectSession), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).DeleteOpenIDConnectSession), ctx, authorizeCode)
 }
 
 // GetOpenIDConnectSession mocks base method.
-func (m *MockOpenIDConnectRequestStorage) GetOpenIDConnectSession(arg0 context.Context, arg1 string, arg2 oauth2.Requester) (oauth2.Requester, error) {
+func (m *MockOpenIDConnectRequestStorage) GetOpenIDConnectSession(ctx context.Context, authorizeCode string, requester oauth2.Requester) (oauth2.Requester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOpenIDConnectSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetOpenIDConnectSession", ctx, authorizeCode, requester)
 	ret0, _ := ret[0].(oauth2.Requester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOpenIDConnectSession indicates an expected call of GetOpenIDConnectSession.
-func (mr *MockOpenIDConnectRequestStorageMockRecorder) GetOpenIDConnectSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockOpenIDConnectRequestStorageMockRecorder) GetOpenIDConnectSession(ctx, authorizeCode, requester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).GetOpenIDConnectSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).GetOpenIDConnectSession), ctx, authorizeCode, requester)
 }

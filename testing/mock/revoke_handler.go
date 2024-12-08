@@ -21,6 +21,7 @@ import (
 type MockRevocationHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockRevocationHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockRevocationHandlerMockRecorder is the mock recorder for MockRevocationHandler.
@@ -41,15 +42,15 @@ func (m *MockRevocationHandler) EXPECT() *MockRevocationHandlerMockRecorder {
 }
 
 // RevokeToken mocks base method.
-func (m *MockRevocationHandler) RevokeToken(arg0 context.Context, arg1 string, arg2 oauth2.TokenType, arg3 oauth2.Client) error {
+func (m *MockRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RevokeToken", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "RevokeToken", ctx, token, tokenType, client)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RevokeToken indicates an expected call of RevokeToken.
-func (mr *MockRevocationHandlerMockRecorder) RevokeToken(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockRevocationHandlerMockRecorder) RevokeToken(ctx, token, tokenType, client any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockRevocationHandler)(nil).RevokeToken), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockRevocationHandler)(nil).RevokeToken), ctx, token, tokenType, client)
 }

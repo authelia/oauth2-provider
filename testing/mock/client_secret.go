@@ -20,6 +20,7 @@ import (
 type MockClientSecret struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientSecretMockRecorder
+	isgomock struct{}
 }
 
 // MockClientSecretMockRecorder is the mock recorder for MockClientSecret.
@@ -40,17 +41,17 @@ func (m *MockClientSecret) EXPECT() *MockClientSecretMockRecorder {
 }
 
 // Compare mocks base method.
-func (m *MockClientSecret) Compare(arg0 context.Context, arg1 []byte) error {
+func (m *MockClientSecret) Compare(ctx context.Context, secret []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Compare", arg0, arg1)
+	ret := m.ctrl.Call(m, "Compare", ctx, secret)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Compare indicates an expected call of Compare.
-func (mr *MockClientSecretMockRecorder) Compare(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientSecretMockRecorder) Compare(ctx, secret any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Compare", reflect.TypeOf((*MockClientSecret)(nil).Compare), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Compare", reflect.TypeOf((*MockClientSecret)(nil).Compare), ctx, secret)
 }
 
 // GetPlainTextValue mocks base method.

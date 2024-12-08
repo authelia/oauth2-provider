@@ -21,6 +21,7 @@ import (
 type MockRFC8628Storage struct {
 	ctrl     *gomock.Controller
 	recorder *MockRFC8628StorageMockRecorder
+	isgomock struct{}
 }
 
 // MockRFC8628StorageMockRecorder is the mock recorder for MockRFC8628Storage.
@@ -41,73 +42,73 @@ func (m *MockRFC8628Storage) EXPECT() *MockRFC8628StorageMockRecorder {
 }
 
 // CreateDeviceCodeSession mocks base method.
-func (m *MockRFC8628Storage) CreateDeviceCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.DeviceAuthorizeRequester) error {
+func (m *MockRFC8628Storage) CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateDeviceCodeSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateDeviceCodeSession", ctx, signature, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateDeviceCodeSession indicates an expected call of CreateDeviceCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) CreateDeviceCodeSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628StorageMockRecorder) CreateDeviceCodeSession(ctx, signature, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).CreateDeviceCodeSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).CreateDeviceCodeSession), ctx, signature, request)
 }
 
 // GetDeviceCodeSession mocks base method.
-func (m *MockRFC8628Storage) GetDeviceCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+func (m *MockRFC8628Storage) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeviceCodeSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetDeviceCodeSession", ctx, signature, session)
 	ret0, _ := ret[0].(oauth2.DeviceAuthorizeRequester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDeviceCodeSession indicates an expected call of GetDeviceCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSession(ctx, signature, session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSession), ctx, signature, session)
 }
 
 // GetDeviceCodeSessionByUserCode mocks base method.
-func (m *MockRFC8628Storage) GetDeviceCodeSessionByUserCode(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+func (m *MockRFC8628Storage) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeviceCodeSessionByUserCode", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetDeviceCodeSessionByUserCode", ctx, signature, session)
 	ret0, _ := ret[0].(oauth2.DeviceAuthorizeRequester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDeviceCodeSessionByUserCode indicates an expected call of GetDeviceCodeSessionByUserCode.
-func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSessionByUserCode(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628StorageMockRecorder) GetDeviceCodeSessionByUserCode(ctx, signature, session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSessionByUserCode", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSessionByUserCode), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceCodeSessionByUserCode", reflect.TypeOf((*MockRFC8628Storage)(nil).GetDeviceCodeSessionByUserCode), ctx, signature, session)
 }
 
 // InvalidateDeviceCodeSession mocks base method.
-func (m *MockRFC8628Storage) InvalidateDeviceCodeSession(arg0 context.Context, arg1 string) error {
+func (m *MockRFC8628Storage) InvalidateDeviceCodeSession(ctx context.Context, signature string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InvalidateDeviceCodeSession", arg0, arg1)
+	ret := m.ctrl.Call(m, "InvalidateDeviceCodeSession", ctx, signature)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InvalidateDeviceCodeSession indicates an expected call of InvalidateDeviceCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) InvalidateDeviceCodeSession(arg0, arg1 any) *gomock.Call {
+func (mr *MockRFC8628StorageMockRecorder) InvalidateDeviceCodeSession(ctx, signature any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).InvalidateDeviceCodeSession), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).InvalidateDeviceCodeSession), ctx, signature)
 }
 
 // UpdateDeviceCodeSession mocks base method.
-func (m *MockRFC8628Storage) UpdateDeviceCodeSession(arg0 context.Context, arg1 string, arg2 oauth2.DeviceAuthorizeRequester) error {
+func (m *MockRFC8628Storage) UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDeviceCodeSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "UpdateDeviceCodeSession", ctx, signature, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateDeviceCodeSession indicates an expected call of UpdateDeviceCodeSession.
-func (mr *MockRFC8628StorageMockRecorder) UpdateDeviceCodeSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628StorageMockRecorder) UpdateDeviceCodeSession(ctx, signature, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).UpdateDeviceCodeSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDeviceCodeSession", reflect.TypeOf((*MockRFC8628Storage)(nil).UpdateDeviceCodeSession), ctx, signature, request)
 }

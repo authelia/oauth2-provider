@@ -21,6 +21,7 @@ import (
 type MockAccessResponder struct {
 	ctrl     *gomock.Controller
 	recorder *MockAccessResponderMockRecorder
+	isgomock struct{}
 }
 
 // MockAccessResponderMockRecorder is the mock recorder for MockAccessResponder.
@@ -55,17 +56,17 @@ func (mr *MockAccessResponderMockRecorder) GetAccessToken() *gomock.Call {
 }
 
 // GetExtra mocks base method.
-func (m *MockAccessResponder) GetExtra(arg0 string) any {
+func (m *MockAccessResponder) GetExtra(key string) any {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetExtra", arg0)
+	ret := m.ctrl.Call(m, "GetExtra", key)
 	ret0, _ := ret[0].(any)
 	return ret0
 }
 
 // GetExtra indicates an expected call of GetExtra.
-func (mr *MockAccessResponderMockRecorder) GetExtra(arg0 any) *gomock.Call {
+func (mr *MockAccessResponderMockRecorder) GetExtra(key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExtra", reflect.TypeOf((*MockAccessResponder)(nil).GetExtra), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExtra", reflect.TypeOf((*MockAccessResponder)(nil).GetExtra), key)
 }
 
 // GetTokenType mocks base method.
@@ -83,15 +84,15 @@ func (mr *MockAccessResponderMockRecorder) GetTokenType() *gomock.Call {
 }
 
 // SetAccessToken mocks base method.
-func (m *MockAccessResponder) SetAccessToken(arg0 string) {
+func (m *MockAccessResponder) SetAccessToken(token string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetAccessToken", arg0)
+	m.ctrl.Call(m, "SetAccessToken", token)
 }
 
 // SetAccessToken indicates an expected call of SetAccessToken.
-func (mr *MockAccessResponderMockRecorder) SetAccessToken(arg0 any) *gomock.Call {
+func (mr *MockAccessResponderMockRecorder) SetAccessToken(token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAccessToken", reflect.TypeOf((*MockAccessResponder)(nil).SetAccessToken), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAccessToken", reflect.TypeOf((*MockAccessResponder)(nil).SetAccessToken), token)
 }
 
 // SetExpiresIn mocks base method.
@@ -107,39 +108,39 @@ func (mr *MockAccessResponderMockRecorder) SetExpiresIn(arg0 any) *gomock.Call {
 }
 
 // SetExtra mocks base method.
-func (m *MockAccessResponder) SetExtra(arg0 string, arg1 any) {
+func (m *MockAccessResponder) SetExtra(key string, value any) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetExtra", arg0, arg1)
+	m.ctrl.Call(m, "SetExtra", key, value)
 }
 
 // SetExtra indicates an expected call of SetExtra.
-func (mr *MockAccessResponderMockRecorder) SetExtra(arg0, arg1 any) *gomock.Call {
+func (mr *MockAccessResponderMockRecorder) SetExtra(key, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExtra", reflect.TypeOf((*MockAccessResponder)(nil).SetExtra), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExtra", reflect.TypeOf((*MockAccessResponder)(nil).SetExtra), key, value)
 }
 
 // SetScopes mocks base method.
-func (m *MockAccessResponder) SetScopes(arg0 oauth2.Arguments) {
+func (m *MockAccessResponder) SetScopes(scopes oauth2.Arguments) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetScopes", arg0)
+	m.ctrl.Call(m, "SetScopes", scopes)
 }
 
 // SetScopes indicates an expected call of SetScopes.
-func (mr *MockAccessResponderMockRecorder) SetScopes(arg0 any) *gomock.Call {
+func (mr *MockAccessResponderMockRecorder) SetScopes(scopes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetScopes", reflect.TypeOf((*MockAccessResponder)(nil).SetScopes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetScopes", reflect.TypeOf((*MockAccessResponder)(nil).SetScopes), scopes)
 }
 
 // SetTokenType mocks base method.
-func (m *MockAccessResponder) SetTokenType(arg0 string) {
+func (m *MockAccessResponder) SetTokenType(tokenType string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetTokenType", arg0)
+	m.ctrl.Call(m, "SetTokenType", tokenType)
 }
 
 // SetTokenType indicates an expected call of SetTokenType.
-func (mr *MockAccessResponderMockRecorder) SetTokenType(arg0 any) *gomock.Call {
+func (mr *MockAccessResponderMockRecorder) SetTokenType(tokenType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTokenType", reflect.TypeOf((*MockAccessResponder)(nil).SetTokenType), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTokenType", reflect.TypeOf((*MockAccessResponder)(nil).SetTokenType), tokenType)
 }
 
 // ToMap mocks base method.

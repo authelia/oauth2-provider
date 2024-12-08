@@ -75,7 +75,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	kid, alg, enc := o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
-	if len(kid) == 0 && len(alg) == 0 {
+	if len(kid)+len(alg) == 0 {
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 

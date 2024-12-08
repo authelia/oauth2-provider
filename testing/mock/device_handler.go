@@ -21,6 +21,7 @@ import (
 type MockRFC8628DeviceAuthorizeEndpointHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockRFC8628DeviceAuthorizeEndpointHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockRFC8628DeviceAuthorizeEndpointHandlerMockRecorder is the mock recorder for MockRFC8628DeviceAuthorizeEndpointHandler.
@@ -41,23 +42,24 @@ func (m *MockRFC8628DeviceAuthorizeEndpointHandler) EXPECT() *MockRFC8628DeviceA
 }
 
 // HandleRFC8628DeviceAuthorizeEndpointRequest mocks base method.
-func (m *MockRFC8628DeviceAuthorizeEndpointHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(arg0 context.Context, arg1 oauth2.DeviceAuthorizeRequester, arg2 oauth2.DeviceAuthorizeResponder) error {
+func (m *MockRFC8628DeviceAuthorizeEndpointHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, requester oauth2.DeviceAuthorizeRequester, responder oauth2.DeviceAuthorizeResponder) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleRFC8628DeviceAuthorizeEndpointRequest", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "HandleRFC8628DeviceAuthorizeEndpointRequest", ctx, requester, responder)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleRFC8628DeviceAuthorizeEndpointRequest indicates an expected call of HandleRFC8628DeviceAuthorizeEndpointRequest.
-func (mr *MockRFC8628DeviceAuthorizeEndpointHandlerMockRecorder) HandleRFC8628DeviceAuthorizeEndpointRequest(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628DeviceAuthorizeEndpointHandlerMockRecorder) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx, requester, responder any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleRFC8628DeviceAuthorizeEndpointRequest", reflect.TypeOf((*MockRFC8628DeviceAuthorizeEndpointHandler)(nil).HandleRFC8628DeviceAuthorizeEndpointRequest), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleRFC8628DeviceAuthorizeEndpointRequest", reflect.TypeOf((*MockRFC8628DeviceAuthorizeEndpointHandler)(nil).HandleRFC8628DeviceAuthorizeEndpointRequest), ctx, requester, responder)
 }
 
 // MockRFC8628UserAuthorizeEndpointHandler is a mock of RFC8628UserAuthorizeEndpointHandler interface.
 type MockRFC8628UserAuthorizeEndpointHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockRFC8628UserAuthorizeEndpointHandlerMockRecorder is the mock recorder for MockRFC8628UserAuthorizeEndpointHandler.
@@ -78,29 +80,29 @@ func (m *MockRFC8628UserAuthorizeEndpointHandler) EXPECT() *MockRFC8628UserAutho
 }
 
 // HandleRFC8628UserAuthorizeEndpointRequest mocks base method.
-func (m *MockRFC8628UserAuthorizeEndpointHandler) HandleRFC8628UserAuthorizeEndpointRequest(arg0 context.Context, arg1 oauth2.DeviceAuthorizeRequester) error {
+func (m *MockRFC8628UserAuthorizeEndpointHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleRFC8628UserAuthorizeEndpointRequest", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleRFC8628UserAuthorizeEndpointRequest", ctx, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleRFC8628UserAuthorizeEndpointRequest indicates an expected call of HandleRFC8628UserAuthorizeEndpointRequest.
-func (mr *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder) HandleRFC8628UserAuthorizeEndpointRequest(arg0, arg1 any) *gomock.Call {
+func (mr *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder) HandleRFC8628UserAuthorizeEndpointRequest(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleRFC8628UserAuthorizeEndpointRequest", reflect.TypeOf((*MockRFC8628UserAuthorizeEndpointHandler)(nil).HandleRFC8628UserAuthorizeEndpointRequest), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleRFC8628UserAuthorizeEndpointRequest", reflect.TypeOf((*MockRFC8628UserAuthorizeEndpointHandler)(nil).HandleRFC8628UserAuthorizeEndpointRequest), ctx, request)
 }
 
 // PopulateRFC8628UserAuthorizeEndpointResponse mocks base method.
-func (m *MockRFC8628UserAuthorizeEndpointHandler) PopulateRFC8628UserAuthorizeEndpointResponse(arg0 context.Context, arg1 oauth2.DeviceAuthorizeRequester, arg2 oauth2.DeviceUserAuthorizeResponder) error {
+func (m *MockRFC8628UserAuthorizeEndpointHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, requester oauth2.DeviceAuthorizeRequester, responder oauth2.DeviceUserAuthorizeResponder) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PopulateRFC8628UserAuthorizeEndpointResponse", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PopulateRFC8628UserAuthorizeEndpointResponse", ctx, requester, responder)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PopulateRFC8628UserAuthorizeEndpointResponse indicates an expected call of PopulateRFC8628UserAuthorizeEndpointResponse.
-func (mr *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder) PopulateRFC8628UserAuthorizeEndpointResponse(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC8628UserAuthorizeEndpointHandlerMockRecorder) PopulateRFC8628UserAuthorizeEndpointResponse(ctx, requester, responder any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateRFC8628UserAuthorizeEndpointResponse", reflect.TypeOf((*MockRFC8628UserAuthorizeEndpointHandler)(nil).PopulateRFC8628UserAuthorizeEndpointResponse), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateRFC8628UserAuthorizeEndpointResponse", reflect.TypeOf((*MockRFC8628UserAuthorizeEndpointHandler)(nil).PopulateRFC8628UserAuthorizeEndpointResponse), ctx, requester, responder)
 }

@@ -21,6 +21,7 @@ import (
 type MockResourceOwnerPasswordCredentialsGrantStorage struct {
 	ctrl     *gomock.Controller
 	recorder *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder
+	isgomock struct{}
 }
 
 // MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder is the mock recorder for MockResourceOwnerPasswordCredentialsGrantStorage.
@@ -41,101 +42,101 @@ func (m *MockResourceOwnerPasswordCredentialsGrantStorage) EXPECT() *MockResourc
 }
 
 // Authenticate mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) Authenticate(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) Authenticate(ctx context.Context, name, secret string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Authenticate", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Authenticate", ctx, name, secret)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Authenticate indicates an expected call of Authenticate.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) Authenticate(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) Authenticate(ctx, name, secret any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).Authenticate), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).Authenticate), ctx, name, secret)
 }
 
 // CreateAccessTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) CreateAccessTokenSession(arg0 context.Context, arg1 string, arg2 oauth2.Requester) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateAccessTokenSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateAccessTokenSession", ctx, signature, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateAccessTokenSession indicates an expected call of CreateAccessTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) CreateAccessTokenSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) CreateAccessTokenSession(ctx, signature, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).CreateAccessTokenSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).CreateAccessTokenSession), ctx, signature, request)
 }
 
 // CreateRefreshTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) CreateRefreshTokenSession(arg0 context.Context, arg1 string, arg2 oauth2.Requester) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) CreateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRefreshTokenSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateRefreshTokenSession", ctx, signature, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateRefreshTokenSession indicates an expected call of CreateRefreshTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) CreateRefreshTokenSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) CreateRefreshTokenSession(ctx, signature, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).CreateRefreshTokenSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).CreateRefreshTokenSession), ctx, signature, request)
 }
 
 // DeleteAccessTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) DeleteAccessTokenSession(arg0 context.Context, arg1 string) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) DeleteAccessTokenSession(ctx context.Context, signature string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAccessTokenSession", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteAccessTokenSession", ctx, signature)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteAccessTokenSession indicates an expected call of DeleteAccessTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) DeleteAccessTokenSession(arg0, arg1 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) DeleteAccessTokenSession(ctx, signature any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).DeleteAccessTokenSession), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).DeleteAccessTokenSession), ctx, signature)
 }
 
 // DeleteRefreshTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) DeleteRefreshTokenSession(arg0 context.Context, arg1 string) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) DeleteRefreshTokenSession(ctx context.Context, signature string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRefreshTokenSession", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteRefreshTokenSession", ctx, signature)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRefreshTokenSession indicates an expected call of DeleteRefreshTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) DeleteRefreshTokenSession(arg0, arg1 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) DeleteRefreshTokenSession(ctx, signature any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).DeleteRefreshTokenSession), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).DeleteRefreshTokenSession), ctx, signature)
 }
 
 // GetAccessTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) GetAccessTokenSession(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.Requester, error) {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccessTokenSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetAccessTokenSession", ctx, signature, session)
 	ret0, _ := ret[0].(oauth2.Requester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetAccessTokenSession indicates an expected call of GetAccessTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) GetAccessTokenSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) GetAccessTokenSession(ctx, signature, session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).GetAccessTokenSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccessTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).GetAccessTokenSession), ctx, signature, session)
 }
 
 // GetRefreshTokenSession mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) GetRefreshTokenSession(arg0 context.Context, arg1 string, arg2 oauth2.Session) (oauth2.Requester, error) {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRefreshTokenSession", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetRefreshTokenSession", ctx, signature, session)
 	ret0, _ := ret[0].(oauth2.Requester)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetRefreshTokenSession indicates an expected call of GetRefreshTokenSession.
-func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) GetRefreshTokenSession(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockResourceOwnerPasswordCredentialsGrantStorageMockRecorder) GetRefreshTokenSession(ctx, signature, session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).GetRefreshTokenSession), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRefreshTokenSession", reflect.TypeOf((*MockResourceOwnerPasswordCredentialsGrantStorage)(nil).GetRefreshTokenSession), ctx, signature, session)
 }

@@ -26,7 +26,7 @@ func TestNewAccessRequest(t *testing.T) {
 		name         string
 		header       http.Header
 		form         url.Values
-		mock         func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient)
+		mock         func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient)
 		method       string
 		expectErr    error
 		expectStrErr string
@@ -49,7 +49,7 @@ func TestNewAccessRequest(t *testing.T) {
 				consts.FormParameterClientID:  {"bar"},
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(ctx, gomock.Eq("bar")).Return(&DefaultClient{ID: "bar"}, nil)
 			},
 			expectErr:    ErrInvalidRequest,
@@ -77,7 +77,7 @@ func TestNewAccessRequest(t *testing.T) {
 			},
 			expectErr:    ErrInvalidClient,
 			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(nil, errors.New(""))
 			},
 			handlers: func(handler *mock.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -107,7 +107,7 @@ func TestNewAccessRequest(t *testing.T) {
 			},
 			expectErr:    ErrInvalidClient,
 			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
@@ -127,7 +127,7 @@ func TestNewAccessRequest(t *testing.T) {
 			},
 			expectErr:    ErrServerError,
 			expectStrErr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
@@ -146,7 +146,7 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
@@ -173,7 +173,7 @@ func TestNewAccessRequest(t *testing.T) {
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, hasher *mock.MockHasher, client *DefaultClient) {
+			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = true
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
@@ -200,7 +200,6 @@ func TestNewAccessRequest(t *testing.T) {
 			handler := mock.NewMockTokenEndpointHandler(ctrl)
 			handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 			handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
-			hasher := mock.NewMockHasher(ctrl)
 			defer ctrl.Finish()
 
 			ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
@@ -217,7 +216,7 @@ func TestNewAccessRequest(t *testing.T) {
 			}
 
 			if tc.mock != nil {
-				tc.mock(ctx, handler, store, hasher, client)
+				tc.mock(ctx, handler, store, client)
 			}
 
 			if tc.handlers != nil {

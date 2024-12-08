@@ -22,6 +22,7 @@ import (
 type MockRFC7523KeyStorage struct {
 	ctrl     *gomock.Controller
 	recorder *MockRFC7523KeyStorageMockRecorder
+	isgomock struct{}
 }
 
 // MockRFC7523KeyStorageMockRecorder is the mock recorder for MockRFC7523KeyStorage.
@@ -42,75 +43,75 @@ func (m *MockRFC7523KeyStorage) EXPECT() *MockRFC7523KeyStorageMockRecorder {
 }
 
 // GetPublicKey mocks base method.
-func (m *MockRFC7523KeyStorage) GetPublicKey(arg0 context.Context, arg1, arg2, arg3 string) (*jose.JSONWebKey, error) {
+func (m *MockRFC7523KeyStorage) GetPublicKey(ctx context.Context, issuer, subject, keyId string) (*jose.JSONWebKey, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPublicKey", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "GetPublicKey", ctx, issuer, subject, keyId)
 	ret0, _ := ret[0].(*jose.JSONWebKey)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPublicKey indicates an expected call of GetPublicKey.
-func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKey(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKey(ctx, issuer, subject, keyId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKey", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKey), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKey", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKey), ctx, issuer, subject, keyId)
 }
 
 // GetPublicKeyScopes mocks base method.
-func (m *MockRFC7523KeyStorage) GetPublicKeyScopes(arg0 context.Context, arg1, arg2, arg3 string) ([]string, error) {
+func (m *MockRFC7523KeyStorage) GetPublicKeyScopes(ctx context.Context, issuer, subject, keyId string) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPublicKeyScopes", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "GetPublicKeyScopes", ctx, issuer, subject, keyId)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPublicKeyScopes indicates an expected call of GetPublicKeyScopes.
-func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKeyScopes(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKeyScopes(ctx, issuer, subject, keyId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKeyScopes", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKeyScopes), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKeyScopes", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKeyScopes), ctx, issuer, subject, keyId)
 }
 
 // GetPublicKeys mocks base method.
-func (m *MockRFC7523KeyStorage) GetPublicKeys(arg0 context.Context, arg1, arg2 string) (*jose.JSONWebKeySet, error) {
+func (m *MockRFC7523KeyStorage) GetPublicKeys(ctx context.Context, issuer, subject string) (*jose.JSONWebKeySet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPublicKeys", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetPublicKeys", ctx, issuer, subject)
 	ret0, _ := ret[0].(*jose.JSONWebKeySet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPublicKeys indicates an expected call of GetPublicKeys.
-func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKeys(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC7523KeyStorageMockRecorder) GetPublicKeys(ctx, issuer, subject any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKeys", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKeys), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicKeys", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).GetPublicKeys), ctx, issuer, subject)
 }
 
 // IsJWTUsed mocks base method.
-func (m *MockRFC7523KeyStorage) IsJWTUsed(arg0 context.Context, arg1 string) (bool, error) {
+func (m *MockRFC7523KeyStorage) IsJWTUsed(ctx context.Context, jti string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsJWTUsed", arg0, arg1)
+	ret := m.ctrl.Call(m, "IsJWTUsed", ctx, jti)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsJWTUsed indicates an expected call of IsJWTUsed.
-func (mr *MockRFC7523KeyStorageMockRecorder) IsJWTUsed(arg0, arg1 any) *gomock.Call {
+func (mr *MockRFC7523KeyStorageMockRecorder) IsJWTUsed(ctx, jti any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsJWTUsed", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).IsJWTUsed), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsJWTUsed", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).IsJWTUsed), ctx, jti)
 }
 
 // MarkJWTUsedForTime mocks base method.
-func (m *MockRFC7523KeyStorage) MarkJWTUsedForTime(arg0 context.Context, arg1 string, arg2 time.Time) error {
+func (m *MockRFC7523KeyStorage) MarkJWTUsedForTime(ctx context.Context, jti string, exp time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MarkJWTUsedForTime", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "MarkJWTUsedForTime", ctx, jti, exp)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MarkJWTUsedForTime indicates an expected call of MarkJWTUsedForTime.
-func (mr *MockRFC7523KeyStorageMockRecorder) MarkJWTUsedForTime(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRFC7523KeyStorageMockRecorder) MarkJWTUsedForTime(ctx, jti, exp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkJWTUsedForTime", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).MarkJWTUsedForTime), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkJWTUsedForTime", reflect.TypeOf((*MockRFC7523KeyStorage)(nil).MarkJWTUsedForTime), ctx, jti, exp)
 }

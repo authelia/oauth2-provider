@@ -21,6 +21,7 @@ import (
 type MockAuthorizeResponder struct {
 	ctrl     *gomock.Controller
 	recorder *MockAuthorizeResponderMockRecorder
+	isgomock struct{}
 }
 
 // MockAuthorizeResponderMockRecorder is the mock recorder for MockAuthorizeResponder.
@@ -41,27 +42,27 @@ func (m *MockAuthorizeResponder) EXPECT() *MockAuthorizeResponderMockRecorder {
 }
 
 // AddHeader mocks base method.
-func (m *MockAuthorizeResponder) AddHeader(arg0, arg1 string) {
+func (m *MockAuthorizeResponder) AddHeader(key, value string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddHeader", arg0, arg1)
+	m.ctrl.Call(m, "AddHeader", key, value)
 }
 
 // AddHeader indicates an expected call of AddHeader.
-func (mr *MockAuthorizeResponderMockRecorder) AddHeader(arg0, arg1 any) *gomock.Call {
+func (mr *MockAuthorizeResponderMockRecorder) AddHeader(key, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MockAuthorizeResponder)(nil).AddHeader), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeader", reflect.TypeOf((*MockAuthorizeResponder)(nil).AddHeader), key, value)
 }
 
 // AddParameter mocks base method.
-func (m *MockAuthorizeResponder) AddParameter(arg0, arg1 string) {
+func (m *MockAuthorizeResponder) AddParameter(key, value string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddParameter", arg0, arg1)
+	m.ctrl.Call(m, "AddParameter", key, value)
 }
 
 // AddParameter indicates an expected call of AddParameter.
-func (mr *MockAuthorizeResponderMockRecorder) AddParameter(arg0, arg1 any) *gomock.Call {
+func (mr *MockAuthorizeResponderMockRecorder) AddParameter(key, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddParameter", reflect.TypeOf((*MockAuthorizeResponder)(nil).AddParameter), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddParameter", reflect.TypeOf((*MockAuthorizeResponder)(nil).AddParameter), key, value)
 }
 
 // GetCode mocks base method.

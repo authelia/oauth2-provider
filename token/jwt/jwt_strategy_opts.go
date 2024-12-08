@@ -62,8 +62,7 @@ func WithClient(client Client) StrategyOpt {
 
 func WithIDTokenClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case IDTokenClient:
+		if c, ok := client.(IDTokenClient); ok {
 			opts.client = &decoratedIDTokenClient{IDTokenClient: c}
 		}
 
@@ -73,8 +72,7 @@ func WithIDTokenClient(client any) StrategyOpt {
 
 func WithUserInfoClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case UserInfoClient:
+		if c, ok := client.(UserInfoClient); ok {
 			opts.client = &decoratedUserInfoClient{UserInfoClient: c}
 		}
 
@@ -84,8 +82,7 @@ func WithUserInfoClient(client any) StrategyOpt {
 
 func WithIntrospectionClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case IntrospectionClient:
+		if c, ok := client.(IntrospectionClient); ok {
 			opts.client = &decoratedIntrospectionClient{IntrospectionClient: c}
 		}
 
@@ -95,8 +92,7 @@ func WithIntrospectionClient(client any) StrategyOpt {
 
 func WithJARMClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case JARMClient:
+		if c, ok := client.(JARMClient); ok {
 			opts.client = &decoratedJARMClient{JARMClient: c}
 		}
 
@@ -106,8 +102,7 @@ func WithJARMClient(client any) StrategyOpt {
 
 func WithJARClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case JARClient:
+		if c, ok := client.(JARClient); ok {
 			opts.client = &decoratedJARClient{JARClient: c}
 		}
 
@@ -117,8 +112,7 @@ func WithJARClient(client any) StrategyOpt {
 
 func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case JWTProfileAccessTokenClient:
+		if c, ok := client.(JWTProfileAccessTokenClient); ok {
 			opts.client = &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
 		}
 
@@ -128,10 +122,9 @@ func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 
 func WithStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
-		switch c := client.(type) {
-		case IntrospectionClient:
+		if c, ok := client.(IntrospectionClient); ok {
 			opts.client = &decoratedIntrospectionClient{IntrospectionClient: c}
-		case JWTProfileAccessTokenClient:
+		} else if c, ok := client.(JWTProfileAccessTokenClient); ok {
 			opts.client = &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: c}
 		}
 

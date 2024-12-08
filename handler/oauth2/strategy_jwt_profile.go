@@ -44,12 +44,12 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 		ok     bool
 	)
 
-	if s.Config.GetEnforceJWTProfileAccessTokens(ctx) {
-		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, nil)
-	}
+	enforce := s.Config.GetEnforceJWTProfileAccessTokens(ctx)
 
-	if client, ok = requester.GetClient().(oauth2.JWTProfileClient); ok && client.GetEnableJWTProfileOAuthAccessTokens() {
+	if client, ok = requester.GetClient().(oauth2.JWTProfileClient); ok && (enforce || client.GetEnableJWTProfileOAuthAccessTokens()) {
 		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, client)
+	} else if enforce {
+		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, nil)
 	}
 
 	return s.HMACCoreStrategy.GenerateAccessToken(ctx, requester)

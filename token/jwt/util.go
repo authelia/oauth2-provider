@@ -328,7 +328,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 			bits = aes.BlockSize * 1.5
 		case jose.A256KW, jose.A256GCMKW, jose.PBES2_HS512_A256KW:
 			bits = aes.BlockSize * 2
-		case jose.DIRECT:
+		default:
 			switch jose.ContentEncryption(enc) {
 			case jose.A128CBC_HS256, "":
 				bits = aes.BlockSize * 2

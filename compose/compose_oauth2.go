@@ -111,7 +111,7 @@ func OAuth2TokenIntrospectionFactory(config oauth2.Configurator, storage any, st
 // If you need revocation, you can validate JWTs statefully, using the other factories.
 func OAuth2StatelessJWTIntrospectionFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &hoauth2.StatelessJWTValidator{
-		Signer: strategy.(jwt.Signer),
-		Config: config,
+		Strategy: strategy.(jwt.Strategy),
+		Config:   config,
 	}
 }

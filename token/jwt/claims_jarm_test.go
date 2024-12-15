@@ -9,16 +9,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
 var jarmClaims = &JARMClaims{
-	Issuer:    "authelia",
-	Audience:  []string{"tests"},
-	JTI:       "abcdef",
-	IssuedAt:  time.Now().UTC().Round(time.Second),
-	ExpiresAt: time.Now().UTC().Add(time.Hour).Round(time.Second),
+	Issuer:         "authelia",
+	Audience:       []string{"tests"},
+	JTI:            "abcdef",
+	IssuedAt:       Now(),
+	ExpirationTime: NewNumericDate(time.Now().Add(time.Hour)),
 	Extra: map[string]any{
 		"foo": "bar",
 		"baz": "bar",
@@ -26,13 +25,13 @@ var jarmClaims = &JARMClaims{
 }
 
 var jarmClaimsMap = map[string]any{
-	consts.ClaimIssuer:         jwtClaims.Issuer,
-	consts.ClaimAudience:       jwtClaims.Audience,
-	consts.ClaimJWTID:          jwtClaims.JTI,
-	consts.ClaimIssuedAt:       jwtClaims.IssuedAt.Unix(),
-	consts.ClaimExpirationTime: jwtClaims.ExpiresAt.Unix(),
-	"foo":                      jwtClaims.Extra["foo"],
-	"baz":                      jwtClaims.Extra["baz"],
+	ClaimIssuer:         jwtClaims.Issuer,
+	ClaimAudience:       jwtClaims.Audience,
+	ClaimJWTID:          jwtClaims.JTI,
+	ClaimIssuedAt:       jwtClaims.IssuedAt.Unix(),
+	ClaimExpirationTime: jwtClaims.ExpiresAt.Unix(),
+	"foo":               jwtClaims.Extra["foo"],
+	"baz":               jwtClaims.Extra["baz"],
 }
 
 func TestJARMClaimAddGetString(t *testing.T) {
@@ -41,13 +40,13 @@ func TestJARMClaimAddGetString(t *testing.T) {
 }
 
 func TestJARMClaimsToMapSetsID(t *testing.T) {
-	assert.NotEmpty(t, (&JARMClaims{}).ToMap()[consts.ClaimJWTID])
+	assert.NotEmpty(t, (&JARMClaims{}).ToMap()[ClaimJWTID])
 }
 
 func TestJARMAssert(t *testing.T) {
-	assert.Nil(t, (&JARMClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)}).
+	assert.Nil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
 		ToMapClaims().Valid())
-	assert.NotNil(t, (&JARMClaims{ExpiresAt: time.Now().UTC().Add(-2 * time.Hour)}).
+	assert.NotNil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(-2 * time.Hour))}).
 		ToMapClaims().Valid())
 }
 

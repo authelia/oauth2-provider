@@ -10,6 +10,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -161,7 +162,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	issueRefreshToken := c.canIssueRefreshToken(request)
 	if issueRefreshToken {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Round(time.Second))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 		refresh, refreshSignature, err := c.CoreStrategy.GenerateRefreshToken(ctx, request)
 		if err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))

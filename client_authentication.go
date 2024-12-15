@@ -6,19 +6,15 @@ package oauth2
 import (
 	"context"
 	"crypto"
-	"crypto/ecdsa"
-	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/go-jose/go-jose/v4"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -45,34 +41,6 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 	}
 
 	return strategy.AuthenticateClient(ctx, r, form, handler)
-}
-
-func (f *Fosite) findClientPublicJWK(ctx context.Context, client JARClient, t *jwt.Token, expectsRSAKey bool) (key any, err error) {
-	var (
-		keys *jose.JSONWebKeySet
-	)
-
-	if keys = client.GetJSONWebKeys(); keys != nil {
-		return findPublicKey(t, keys, expectsRSAKey)
-	}
-
-	if location := client.GetJSONWebKeysURI(); len(location) > 0 {
-		if keys, err = f.Config.GetJWKSFetcherStrategy(ctx).Resolve(ctx, location, false); err != nil {
-			return nil, err
-		}
-
-		if key, err = findPublicKey(t, keys, expectsRSAKey); err == nil {
-			return key, nil
-		}
-
-		if keys, err = f.Config.GetJWKSFetcherStrategy(ctx).Resolve(ctx, location, true); err != nil {
-			return nil, err
-		}
-
-		return findPublicKey(t, keys, expectsRSAKey)
-	}
-
-	return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The OAuth 2.0 Client has no JSON Web Keys set registered, but they are needed to complete the request."))
 }
 
 // CompareClientSecret compares a raw secret input from a client to the registered client secret. If the secret is valid
@@ -109,35 +77,6 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 	}
 
 	return err
-}
-
-// FindClientPublicJWK takes a JARClient and a kid, alg, and use to resolve a Public JWK for the client.
-func FindClientPublicJWK(ctx context.Context, provider JWKSFetcherStrategyProvider, client JSONWebKeysClient, kid, alg, use string) (key any, err error) {
-	if set := client.GetJSONWebKeys(); set != nil {
-		return findPublicKeyByKID(kid, alg, use, set)
-	}
-
-	strategy := provider.GetJWKSFetcherStrategy(ctx)
-
-	var keys *jose.JSONWebKeySet
-
-	if location := client.GetJSONWebKeysURI(); len(location) > 0 {
-		if keys, err = strategy.Resolve(ctx, location, false); err != nil {
-			return nil, err
-		}
-
-		if key, err = findPublicKeyByKID(kid, alg, use, keys); err == nil {
-			return key, nil
-		}
-
-		if keys, err = strategy.Resolve(ctx, location, true); err != nil {
-			return nil, err
-		}
-
-		return findPublicKeyByKID(kid, alg, use, keys)
-	}
-
-	return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The OAuth 2.0 Client has no JSON Web Keys set registered, but they are needed to complete the request."))
 }
 
 func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok bool, err error) {
@@ -188,119 +127,6 @@ func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok boo
 	return id, secret, secret != "", nil
 }
 
-func getJWTHeaderKIDAlg(header map[string]any) (kid, alg string) {
-	kid, _ = header[consts.JSONWebTokenHeaderKeyIdentifier].(string)
-	alg, _ = header[consts.JSONWebTokenHeaderAlgorithm].(string)
-
-	return kid, alg
-}
-
-type partial struct {
-	points int
-	jwk    jose.JSONWebKey
-}
-
-func findPublicKeyByKID(kid, alg, use string, set *jose.JSONWebKeySet) (key any, err error) {
-	if len(set.Keys) == 0 {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The retrieved JSON Web Key Set does not contain any JSON Web Keys."))
-	}
-
-	partials := []partial{}
-
-	for _, jwk := range set.Keys {
-		if jwk.Use == use && jwk.Algorithm == alg && jwk.KeyID == kid {
-			switch k := jwk.Key.(type) {
-			case PrivateKey:
-				return k.Public(), nil
-			default:
-				return k, nil
-			}
-		}
-
-		p := partial{}
-
-		if jwk.KeyID != kid {
-			if jwk.KeyID == "" {
-				p.points -= 3
-			} else {
-				continue
-			}
-		}
-
-		if jwk.Use != use {
-			if jwk.Use == "" {
-				p.points -= 2
-			} else {
-				continue
-			}
-		}
-
-		if jwk.Algorithm != alg && jwk.Algorithm != "" {
-			if jwk.Algorithm == "" {
-				p.points -= 1
-			} else {
-				continue
-			}
-		}
-
-		p.jwk = jwk
-
-		partials = append(partials, p)
-	}
-
-	if len(partials) != 0 {
-		sort.Slice(partials, func(i, j int) bool {
-			return partials[i].points > partials[j].points
-		})
-
-		switch k := partials[0].jwk.Key.(type) {
-		case PrivateKey:
-			return k.Public(), nil
-		default:
-			return k, nil
-		}
-	}
-
-	return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to find JWK with kid value '%s', alg value '%s', and use value '%s' in the JSON Web Key Set.", kid, alg, use))
-}
-
-func findPublicKey(t *jwt.Token, set *jose.JSONWebKeySet, expectsRSAKey bool) (any, error) {
-	keys := set.Keys
-	if len(keys) == 0 {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The retrieved JSON Web Key Set does not contain any key."))
-	}
-
-	kid, ok := t.Header[consts.JSONWebTokenHeaderKeyIdentifier].(string)
-	if ok {
-		keys = set.Key(kid)
-	}
-
-	if len(keys) == 0 {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The JSON Web Token uses signing key with kid '%s', which could not be found.", kid))
-	}
-
-	for _, key := range keys {
-		if key.Use != consts.JSONWebTokenUseSignature {
-			continue
-		}
-		if expectsRSAKey {
-			if k, ok := key.Key.(*rsa.PublicKey); ok {
-				return k, nil
-			}
-		} else {
-			if k, ok := key.Key.(*ecdsa.PublicKey); ok {
-				return k, nil
-			}
-		}
-	}
-
-	if expectsRSAKey {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to find RSA public key with use='sig' for kid '%s' in JSON Web Key Set.", kid))
-	} else {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to find ECDSA public key with use='sig' for kid '%s' in JSON Web Key Set.", kid))
-	}
-}
-
 func getClientCredentialsClientAssertion(form url.Values) (assertion, assertionType string, hasAssertion bool) {
 	assertionType, assertion = form.Get(consts.FormParameterClientAssertionType), form.Get(consts.FormParameterClientAssertion)
 
@@ -335,8 +161,20 @@ type EndpointClientAuthHandler interface {
 	// GetAuthMethod returns the appropriate auth method for this client.
 	GetAuthMethod(client AuthenticationMethodClient) string
 
+	// GetAuthSigningKeyID returns the appropriate auth signature key id for this client.
+	GetAuthSigningKeyID(client AuthenticationMethodClient) string
+
 	// GetAuthSigningAlg returns the appropriate auth signature algorithm for this client.
 	GetAuthSigningAlg(client AuthenticationMethodClient) string
+
+	// GetAuthEncryptionKeyID returns the appropriate auth encryption key id for this client.
+	GetAuthEncryptionKeyID(client AuthenticationMethodClient) string
+
+	// GetAuthEncryptionAlg returns the appropriate auth encryption key algorithm for this client.
+	GetAuthEncryptionAlg(client AuthenticationMethodClient) string
+
+	// GetAuthEncryptionEnc returns the appropriate auth encryption content encryption for this client.
+	GetAuthEncryptionEnc(client AuthenticationMethodClient) string
 
 	// Name returns the appropriate name for this endpoint for logging purposes.
 	Name() string
@@ -345,14 +183,75 @@ type EndpointClientAuthHandler interface {
 	AllowAuthMethodAny() bool
 }
 
+type EndpointClientAuthJWTClient struct {
+	client  AuthenticationMethodClient
+	handler EndpointClientAuthHandler
+}
+
+func (c *EndpointClientAuthJWTClient) GetID() string {
+	return c.client.GetID()
+}
+
+func (c *EndpointClientAuthJWTClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
+	return c.client.GetClientSecretPlainText()
+}
+
+func (c *EndpointClientAuthJWTClient) GetJSONWebKeys() (jwks *jose.JSONWebKeySet) {
+	return c.client.GetJSONWebKeys()
+}
+
+func (c *EndpointClientAuthJWTClient) GetJSONWebKeysURI() (uri string) {
+	return c.client.GetJSONWebKeysURI()
+}
+
+func (c *EndpointClientAuthJWTClient) GetSigningKeyID() (kid string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetSigningAlg() (alg string) {
+	return c.handler.GetAuthSigningAlg(c.client)
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionKeyID() (kid string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionAlg() (alg string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) GetEncryptionEnc() (enc string) {
+	return ""
+}
+
+func (c *EndpointClientAuthJWTClient) IsClientSigned() (is bool) {
+	return true
+}
+
 type TokenEndpointClientAuthHandler struct{}
 
 func (h *TokenEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthMethod()
 }
 
+func (h *TokenEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *TokenEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthSigningAlg()
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *TokenEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *TokenEndpointClientAuthHandler) Name() string {
@@ -369,8 +268,24 @@ func (h *IntrospectionEndpointClientAuthHandler) GetAuthMethod(client Authentica
 	return client.GetIntrospectionEndpointAuthMethod()
 }
 
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *IntrospectionEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetIntrospectionEndpointAuthSigningAlg()
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *IntrospectionEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *IntrospectionEndpointClientAuthHandler) Name() string {
@@ -387,8 +302,24 @@ func (h *RevocationEndpointClientAuthHandler) GetAuthMethod(client Authenticatio
 	return client.GetRevocationEndpointAuthMethod()
 }
 
+func (h *RevocationEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
 func (h *RevocationEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
 	return client.GetRevocationEndpointAuthSigningAlg()
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *RevocationEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
 }
 
 func (h *RevocationEndpointClientAuthHandler) Name() string {

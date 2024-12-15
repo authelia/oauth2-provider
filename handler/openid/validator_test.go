@@ -21,11 +21,12 @@ func TestValidatePrompt(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,
 	}
+
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			}},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
 		Config: &oauth2.Config{
 			MinParameterEntropy: oauth2.MinParameterEntropy,
 		},
@@ -34,7 +35,7 @@ func TestValidatePrompt(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(j, config)
 
 	var genIDToken = func(c jwt.IDTokenClaims) string {
-		s, _, err := j.Generate(context.TODO(), c.ToMapClaims(), jwt.NewHeaders())
+		s, _, err := j.Encode(context.TODO(), c.ToMapClaims())
 		require.NoError(t, err)
 		return s
 	}
@@ -58,8 +59,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Minute),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
 			},
 		},
@@ -73,8 +74,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Minute),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
 			},
 		},
@@ -88,8 +89,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Minute),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
 			},
 		},
@@ -102,7 +103,7 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
+					RequestedAt: jwt.Now(),
 				},
 			},
 		},
@@ -115,8 +116,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC().Add(-time.Minute),
-					AuthTime:    time.Now().UTC(),
+					RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+					AuthTime:    jwt.Now(),
 				},
 			},
 		},
@@ -129,8 +130,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Minute),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
 			},
 		},
@@ -143,8 +144,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC(),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.Now(),
 				},
 			},
 		},
@@ -157,8 +158,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC(),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.Now(),
 				},
 			},
 		},
@@ -171,8 +172,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC().Add(-time.Second * 5),
-					AuthTime:    time.Now().UTC().Add(-time.Second),
+					RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Second * 5)),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
 			},
 		},
@@ -185,8 +186,8 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC().Add(-time.Second * 5),
-					AuthTime:    time.Now().UTC().Add(-time.Second),
+					RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Second * 5)),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
 			},
 		},
@@ -199,14 +200,14 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Second),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
-				Subject:     "bar",
-				RequestedAt: time.Now(),
-				ExpiresAt:   time.Now().Add(time.Hour),
+				Subject:        "bar",
+				RequestedAt:    jwt.Now(),
+				ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			}),
 		},
 		{
@@ -218,14 +219,14 @@ func TestValidatePrompt(t *testing.T) {
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
 					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Second),
+					RequestedAt: jwt.Now(),
+					AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
-				Subject:     "foo",
-				RequestedAt: time.Now(),
-				ExpiresAt:   time.Now().Add(time.Hour),
+				Subject:        "foo",
+				RequestedAt:    jwt.Now(),
+				ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			}),
 		},
 		{
@@ -236,21 +237,20 @@ func TestValidatePrompt(t *testing.T) {
 			s: &DefaultSession{
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
-					Subject:     "foo",
-					RequestedAt: time.Now().UTC(),
-					AuthTime:    time.Now().UTC().Add(-time.Second),
-					ExpiresAt:   time.Now().UTC().Add(-time.Second),
+					Subject:        "foo",
+					RequestedAt:    jwt.Now(),
+					AuthTime:       jwt.NewNumericDate(time.Now().Add(-time.Second)),
+					ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
-				Subject:     "foo",
-				RequestedAt: time.Now(),
-				ExpiresAt:   time.Now().Add(time.Hour),
+				Subject:        "foo",
+				RequestedAt:    jwt.Now(),
+				ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			}),
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
-			t.Logf("%s", tc.idTokenHint)
 			err := v.ValidatePrompt(context.TODO(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
 					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},

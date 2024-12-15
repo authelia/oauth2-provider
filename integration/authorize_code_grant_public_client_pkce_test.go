@@ -79,19 +79,11 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
 			c.setup()
 
-			t.Logf("Got url: %s", authCodeUrl)
-
 			resp, err := http.Get(authCodeUrl) //nolint:gosec
 			require.NoError(t, err)
 			require.Equal(t, resp.StatusCode, c.authStatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				// This should fail because no verifier was given
-				// _, err := oauthClient.Exchange(xoauth2.NoContext, resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
-				// require.Error(t, err)
-				// require.Empty(t, token.AccessToken)
-				t.Logf("Got redirect url: %s", resp.Request.URL)
-
 				resp, err := http.PostForm(ts.URL+"/token", url.Values{
 					consts.FormParameterAuthorizationCode: {resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode)},
 					consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},

@@ -21,7 +21,7 @@ type OpenIDConnectHybridHandler struct {
 	OpenIDConnectRequestValidator     *OpenIDConnectRequestValidator
 	OpenIDConnectRequestStorage       OpenIDConnectRequestStorage
 
-	Enigma *jwt.DefaultSigner
+	Enigma *jwt.DefaultStrategy
 
 	Config interface {
 		oauth2.IDTokenLifespanProvider
@@ -132,11 +132,11 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		// sets the proper access/refresh token lifetimes.
 		//
 		// if c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan > -1 {
-		// 	 requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan).Round(time.Second))
+		// 	 requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 		// }
 
 		// This is required because we must limit the authorize code lifespan.
-		requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Round(time.Second))
+		requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Truncate(jwt.TimePrecision))
 
 		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

@@ -66,8 +66,12 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 						Request: oauth2.Request{
 							Client: &oauth2.DefaultClient{
+								Public:        true,
 								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 								RedirectURIs:  []string{"http://asdf.com/cb"},
+							},
+							Session: &oauth2.DefaultSession{
+								ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 							},
 						},
 						RedirectURI: parseUrl("http://asdf.com/cb"),
@@ -91,6 +95,36 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					},
 					description: "should fail because audience doesn't match",
 					expectErr:   oauth2.ErrInvalidRequest,
+				},
+				{
+					handler: handler,
+					areq: &oauth2.AuthorizeRequest{
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+						Request: oauth2.Request{
+							Client: &oauth2.DefaultClient{
+								ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+								RedirectURIs:  []string{"http://asdf.de/cb"},
+								Audience:      []string{"https://www.authelia.com/api"},
+							},
+							RequestedAudience: []string{"https://www.authelia.com/api"},
+							GrantedScope:      oauth2.Arguments{"a", "b"},
+							Session: &oauth2.DefaultSession{
+								ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+							},
+							RequestedAt: time.Now().UTC(),
+						},
+						State:       "superstate",
+						RedirectURI: parseUrl("http://asdf.de/cb"),
+					},
+					description: "should pass redirect uri http confidential",
+					expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
+						code := aresp.GetParameters().Get(consts.FormParameterAuthorizationCode)
+						assert.NotEmpty(t, code)
+
+						assert.Equal(t, strings.Join(areq.GrantedScope, " "), aresp.GetParameters().Get(consts.FormParameterScope))
+						assert.Equal(t, areq.State, aresp.GetParameters().Get(consts.FormParameterState))
+						assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
+					},
 				},
 				{
 					handler: handler,

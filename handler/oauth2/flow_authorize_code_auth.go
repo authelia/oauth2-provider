@@ -40,11 +40,12 @@ var (
 	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
 )
 
-func (c *AuthorizeExplicitGrantHandler) secureChecker(ctx context.Context) func(context.Context, *url.URL) bool {
-	if c.Config.GetRedirectSecureChecker(ctx) == nil {
-		return oauth2.IsRedirectURISecure
+func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Context) (checker func(context.Context, *url.URL) bool) {
+	if checker = c.Config.GetRedirectSecureChecker(ctx); checker != nil {
+		return checker
 	}
-	return c.Config.GetRedirectSecureChecker(ctx)
+
+	return oauth2.IsRedirectURISecure
 }
 
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
@@ -55,16 +56,12 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 
 	requester.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
-	// Disabled because this is already handled at the authorize_request_handler
-	// if !requester.GetClient().GetResponseTypes().Has("code") {
-	// 	 return errorsx.WithStack(oauth2.ErrInvalidGrant)
-	// }
+	client := requester.GetClient()
 
-	if !c.secureChecker(ctx)(ctx, requester.GetRedirectURI()) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	if client.IsPublic() && !c.GetRedirectSecureChecker(ctx)(ctx, requester.GetRedirectURI()) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
-	client := requester.GetClient()
 	for _, scope := range requester.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))

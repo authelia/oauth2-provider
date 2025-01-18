@@ -16,4 +16,5 @@ const (
 	valueNonce        = "nonce"
 	valueDeviceCode   = "device_code"
 	valueUserCode     = "user_code"
+	valueEnc          = "enc"
 )

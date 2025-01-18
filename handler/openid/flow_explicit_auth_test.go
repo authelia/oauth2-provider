@@ -120,13 +120,14 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}
 
-	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
-		},
+	jwtStrategy := &jwt.DefaultStrategy{
 		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	var j = &DefaultStrategy{
+		Strategy: jwtStrategy,
+		Config:   config,
 	}
 
 	return OpenIDConnectExplicitHandler{
@@ -134,7 +135,7 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: j,
 		},
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Signer, config),
+		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		Config:                        config,
 	}, store
 }

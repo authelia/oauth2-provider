@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestWriteDeviceAuthorizeResponse(t *testing.T) {
@@ -25,10 +26,10 @@ func TestWriteDeviceAuthorizeResponse(t *testing.T) {
 	resp.SetUserCode("AAAA")
 	resp.SetDeviceCode("BBBB")
 	resp.SetInterval(int(
-		oauth2.Config.GetRFC8628TokenPollingInterval(context.TODO()).Round(time.Second).Seconds(),
+		oauth2.Config.GetRFC8628TokenPollingInterval(context.TODO()).Truncate(jwt.TimePrecision).Seconds(),
 	))
 	resp.SetExpiresIn(int64(
-		time.Now().Round(time.Second).Add(oauth2.Config.GetRFC8628CodeLifespan(context.TODO())).Second(),
+		time.Now().Truncate(jwt.TimePrecision).Add(oauth2.Config.GetRFC8628CodeLifespan(context.TODO())).Second(),
 	))
 	resp.SetVerificationURI(oauth2.Config.GetRFC8628UserVerificationURL(context.TODO()))
 	resp.SetVerificationURIComplete(

@@ -12,6 +12,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -49,7 +50,7 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 	}
 
 	// We need to reset the expires at value as this would be the previous expiry.
-	sess.IDTokenClaims().ExpiresAt = time.Time{}
+	sess.IDTokenClaims().ExpirationTime = jwt.NewNumericDate(time.Time{})
 
 	// These will be recomputed in PopulateTokenEndpointResponse
 	sess.IDTokenClaims().JTI = ""
@@ -92,7 +93,7 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
 	claims.JTI = uuid.New().String()
 	claims.CodeHash = ""
-	claims.IssuedAt = time.Now().Truncate(time.Second)
+	claims.IssuedAt = jwt.Now()
 
 	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 	return c.IssueExplicitIDToken(ctx, idTokenLifespan, requester, responder)

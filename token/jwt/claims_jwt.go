@@ -4,6 +4,7 @@
 package jwt
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -43,7 +44,7 @@ type JWTClaimsContainer interface {
 	// WithScopeField configures how a scope field should be represented in JWT.
 	WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContainer
 
-	// ToMapClaims returns the claims as a github.com/dgrijalva/jwt-go.MapClaims type.
+	// ToMapClaims returns the claims as a MapClaims type.
 	ToMapClaims() MapClaims
 }
 
@@ -100,58 +101,58 @@ func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
 	if c.Subject != "" {
-		ret[consts.ClaimSubject] = c.Subject
+		ret[ClaimSubject] = c.Subject
 	} else {
-		delete(ret, consts.ClaimSubject)
+		delete(ret, ClaimSubject)
 	}
 
 	if c.Issuer != "" {
-		ret[consts.ClaimIssuer] = c.Issuer
+		ret[ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, consts.ClaimIssuer)
+		delete(ret, ClaimIssuer)
 	}
 
 	if c.JTI != "" {
-		ret[consts.ClaimJWTID] = c.JTI
+		ret[ClaimJWTID] = c.JTI
 	} else {
-		ret[consts.ClaimJWTID] = uuid.New().String()
+		ret[ClaimJWTID] = uuid.New().String()
 	}
 
 	if len(c.Audience) > 0 {
-		ret[consts.ClaimAudience] = c.Audience
+		ret[ClaimAudience] = c.Audience
 	} else {
-		ret[consts.ClaimAudience] = []string{}
+		ret[ClaimAudience] = []string{}
 	}
 
 	if !c.IssuedAt.IsZero() {
-		ret[consts.ClaimIssuedAt] = c.IssuedAt.Unix()
+		ret[ClaimIssuedAt] = c.IssuedAt.Unix()
 	} else {
-		delete(ret, consts.ClaimIssuedAt)
+		delete(ret, ClaimIssuedAt)
 	}
 
 	if !c.NotBefore.IsZero() {
-		ret[consts.ClaimNotBefore] = c.NotBefore.Unix()
+		ret[ClaimNotBefore] = c.NotBefore.Unix()
 	} else {
-		delete(ret, consts.ClaimNotBefore)
+		delete(ret, ClaimNotBefore)
 	}
 
 	if !c.ExpiresAt.IsZero() {
-		ret[consts.ClaimExpirationTime] = c.ExpiresAt.Unix()
+		ret[ClaimExpirationTime] = c.ExpiresAt.Unix()
 	} else {
-		delete(ret, consts.ClaimExpirationTime)
+		delete(ret, ClaimExpirationTime)
 	}
 
 	if c.Scope != nil {
 		// ScopeField default (when value is JWTScopeFieldUnset) is the list for backwards compatibility with old versions of oauth2.
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
-			ret[consts.ClaimScopeNonStandard] = c.Scope
+			ret[ClaimScopeNonStandard] = c.Scope
 		}
 		if c.ScopeField == JWTScopeFieldString || c.ScopeField == JWTScopeFieldBoth {
-			ret[consts.ClaimScope] = strings.Join(c.Scope, " ")
+			ret[ClaimScope] = strings.Join(c.Scope, " ")
 		}
 	} else {
-		delete(ret, consts.ClaimScopeNonStandard)
-		delete(ret, consts.ClaimScope)
+		delete(ret, ClaimScopeNonStandard)
+		delete(ret, ClaimScope)
 	}
 
 	return ret
@@ -183,11 +184,11 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 				c.Audience = aud
 			}
 		case consts.ClaimIssuedAt:
-			c.IssuedAt = toTime(v, c.IssuedAt)
+			c.IssuedAt, _ = toTime(v, c.IssuedAt)
 		case consts.ClaimNotBefore:
-			c.NotBefore = toTime(v, c.NotBefore)
+			c.NotBefore, _ = toTime(v, c.NotBefore)
 		case consts.ClaimExpirationTime:
-			c.ExpiresAt = toTime(v, c.ExpiresAt)
+			c.ExpiresAt, _ = toTime(v, c.ExpiresAt)
 		case consts.ClaimScopeNonStandard:
 			switch s := v.(type) {
 			case []string:
@@ -225,15 +226,82 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 	}
 }
 
-func toTime(v any, def time.Time) (t time.Time) {
+func toTime(v any, def time.Time) (t time.Time, ok bool) {
 	t = def
-	switch a := v.(type) {
-	case float64:
-		t = time.Unix(int64(a), 0).UTC()
-	case int64:
-		t = time.Unix(a, 0).UTC()
+
+	var value int64
+
+	if value, ok = toInt64(v); ok {
+		t = time.Unix(value, 0).UTC()
 	}
+
 	return
+}
+
+func toInt64(v any) (val int64, ok bool) {
+	var err error
+
+	switch t := v.(type) {
+	case float64:
+		return int64(t), true
+	case int64:
+		return t, true
+	case int32:
+		return int64(t), true
+	case int:
+		return int64(t), true
+	case json.Number:
+		if val, err = t.Int64(); err == nil {
+			return val, true
+		}
+
+		var valf float64
+
+		if valf, err = t.Float64(); err != nil {
+			return 0, false
+		}
+
+		return int64(valf), true
+	}
+
+	return 0, false
+}
+
+func toNumericDate(v any) (date *NumericDate, err error) {
+	switch value := v.(type) {
+	case nil:
+		return nil, nil
+	case float64:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(value), nil
+	case int64:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case int32:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case int:
+		if value == 0 {
+			return nil, nil
+		}
+
+		return newNumericDateFromSeconds(float64(value)), nil
+	case json.Number:
+		vv, _ := value.Float64()
+
+		return newNumericDateFromSeconds(vv), nil
+	}
+
+	return nil, newError("value has invalid type", ErrInvalidType)
 }
 
 // Add will add a key-value pair to the extra field

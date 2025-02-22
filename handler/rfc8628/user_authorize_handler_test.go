@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *testing.T) {
@@ -37,7 +38,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		dar.SetSession(openid.NewDefaultSession())
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
-				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
+				f.Config.GetRFC8628CodeLifespan(a.ctx)).Truncate(jwt.TimePrecision))
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
@@ -243,7 +244,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		dar.SetSession(openid.NewDefaultSession())
 		dar.GetSession().SetExpiresAt(oauth2.UserCode,
 			time.Now().UTC().Add(
-				f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
+				f.Config.GetRFC8628CodeLifespan(a.ctx)).Truncate(jwt.TimePrecision))
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
@@ -400,7 +401,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.SetSession(openid.NewDefaultSession())
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(
-						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
+						f.Config.GetRFC8628CodeLifespan(a.ctx)).Truncate(jwt.TimePrecision))
 				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)
@@ -443,7 +444,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				dar.SetSession(openid.NewDefaultSession())
 				dar.GetSession().SetExpiresAt(oauth2.UserCode,
 					time.Now().UTC().Add(time.Duration(-1)*
-						f.Config.GetRFC8628CodeLifespan(a.ctx)).Round(time.Second))
+						f.Config.GetRFC8628CodeLifespan(a.ctx)).Truncate(jwt.TimePrecision))
 				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 				require.NoError(t, err)
 				dar.SetUserCodeSignature(sig)

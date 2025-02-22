@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 )
 
@@ -49,16 +48,16 @@ func TestUnsignedToken(t *testing.T) {
 				"sub": "nestor",
 			})
 			token.Header = tc.jwtHeaders
-			rawToken, err := token.SignedString(key)
+			rawToken, err := token.CompactSignedString(key)
 			require.NoError(t, err)
 			require.NotEmpty(t, rawToken)
 			parts := strings.Split(rawToken, ".")
 			require.Len(t, parts, 3)
 			require.Empty(t, parts[2])
-			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{consts.JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
+			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(consts.JSONWebTokenHeaderType)])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JSONWebTokenHeaderType)])
 		})
 	}
 }
@@ -72,12 +71,12 @@ func TestJWTHeaders(t *testing.T) {
 		{
 			name:         "set JWT as 'typ' when the the type is not specified in the headers",
 			jwtHeaders:   map[string]any{},
-			expectedType: JWTHeaderTypeValueJWT,
+			expectedType: JSONWebTokenTypeJWT,
 		},
 		{
 			name:         "'typ' set explicitly",
-			jwtHeaders:   map[string]any{JWTHeaderKeyValueType: JWTHeaderTypeValueAccessTokenJWT},
-			expectedType: JWTHeaderTypeValueAccessTokenJWT,
+			jwtHeaders:   map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+			expectedType: JSONWebTokenTypeAccessToken,
 		},
 	}
 	for _, tc := range testCases {
@@ -87,7 +86,7 @@ func TestJWTHeaders(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
 			require.Equal(t, tk.Headers[0].Algorithm, "RS256")
-			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JWTHeaderKeyValueType)])
+			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JSONWebTokenHeaderType)])
 		})
 	}
 }
@@ -102,7 +101,6 @@ var (
 	nilKeyFunc        Keyfunc = nil
 )
 
-// Many test cases where taken from https://github.com/dgrijalva/jwt-go/blob/master/parser_test.go
 // Test cases related to json.Number where excluded because that is not supported by go-jose,
 // it is not used here and therefore not supported.
 //
@@ -322,12 +320,12 @@ func TestParser_Parse(t *testing.T) {
 			given: given{
 				name: "used before issued",
 				generate: &generate{
-					claims: MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
+					claims: MapClaims{"foo": "bar", ClaimIssuedAt: time.Now().Unix() + 500},
 				},
 			},
 			expected: expected{
 				keyFunc: defaultKeyFunc,
-				claims:  MapClaims{"foo": "bar", consts.ClaimIssuedAt: time.Now().Unix() + 500},
+				claims:  MapClaims{"foo": "bar", ClaimIssuedAt: time.Now().Unix() + 500},
 				valid:   false,
 				errors:  ValidationErrorIssuedAt,
 			},
@@ -419,7 +417,7 @@ func TestParser_Parse(t *testing.T) {
 			// Figure out correct claims type
 			token, err = ParseWithClaims(data.tokenString, MapClaims{}, data.keyFunc)
 			// Verify result matches expectation
-			assert.EqualValues(t, data.claims, token.Claims)
+			assert.EqualValues(t, data.claims, token.Claims.ToMapClaims())
 			if data.valid && err != nil {
 				t.Errorf("[%v] Error while verifying token: %T:%v", data.name, err, err)
 			}
@@ -428,7 +426,7 @@ func TestParser_Parse(t *testing.T) {
 				t.Errorf("[%v] Invalid token passed validation", data.name)
 			}
 
-			if (err == nil && !token.Valid()) || (err != nil && token.Valid()) {
+			if (err == nil && !token.IsSignatureValid()) || (err != nil && token.IsSignatureValid()) {
 				t.Errorf("[%v] Inconsistent behavior between returned error and token.Valid", data.name)
 			}
 
@@ -453,7 +451,7 @@ func TestParser_Parse(t *testing.T) {
 
 func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
-	s, e := token.SignedString(key)
+	s, e := token.CompactSignedString(key)
 
 	if e != nil {
 		panic(e.Error())
@@ -465,7 +463,7 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
-	s, e := token.SignedString(key)
+	s, e := token.CompactSignedString(key)
 
 	if e != nil {
 		panic(e.Error())

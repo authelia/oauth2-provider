@@ -9,8 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/go-jose/go-jose/v4"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -19,14 +19,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
-
-func wrapSigningKeyFailure(outer *RFC6749Error, inner error) *RFC6749Error {
-	outer = outer.WithWrap(inner).WithDebugError(inner)
-	if e := new(RFC6749Error); errors.As(inner, &e) {
-		return outer.WithHintf("%s %s", outer.Reason(), e.Reason())
-	}
-	return outer
-}
 
 // TODO: Refactor time permitting.
 //
@@ -74,12 +66,13 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 	}
 
 	var (
-		algAny, algNone bool
+		alg    string
+		algAny bool
 	)
 
-	switch alg := client.GetRequestObjectSigningAlg(); alg {
+	switch alg = client.GetRequestObjectSigningAlg(); alg {
 	case consts.JSONWebTokenAlgNone:
-		algNone = true
+		break
 	case "":
 		algAny = true
 	default:
@@ -123,65 +116,32 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		assertion = request.Form.Get(consts.FormParameterRequest)
 	}
 
-	token, err := jwt.ParseWithClaims(assertion, jwt.MapClaims{}, func(t *jwt.Token) (key any, err error) {
-		// request_object_signing_alg - OPTIONAL.
-		//  JWS [JWS] alg algorithm [JWA] that MUST be used for signing Request Objects sent to the OP. All Request Objects from this Client MUST be rejected,
-		// 	if not signed with this algorithm. Request Objects are described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST
-		//	be used both when the Request Object is passed by value (using the request parameter) and when it is passed by reference (using the request_uri parameter).
-		//	Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is that any algorithm supported by the OP and the RP MAY be used.
-		if !algAny && client.GetRequestObjectSigningAlg() != fmt.Sprintf("%s", t.Header[consts.JSONWebTokenHeaderAlgorithm]) {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
+	issuer := f.Config.GetIDTokenIssuer(ctx)
 
-		if t.Method == jwt.SigningMethodNone {
-			algNone = true
+	strategy := f.Config.GetJWTStrategy(ctx)
 
-			return jwt.UnsafeAllowNoneSignatureType, nil
-		} else if algNone {
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' expects request objects to be signed with the '%s' algorithm but the request object was signed with the '%s' algorithm.", request.GetClient().GetID(), client.GetRequestObjectSigningAlg(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
-
-		switch t.Method {
-		case jose.RS256, jose.RS384, jose.RS512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, true); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		case jose.ES256, jose.ES384, jose.ES512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, false); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve ECDSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		case jose.PS256, jose.PS384, jose.PS512:
-			if key, err = f.findClientPublicJWK(ctx, client, t, true); err != nil {
-				return nil, wrapSigningKeyFailure(
-					ErrInvalidRequestObject.WithHint("Unable to retrieve RSA signing key from OAuth 2.0 Client."), err)
-			}
-
-			return key, nil
-		default:
-			return nil, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that uses the unsupported signing algorithm '%s'.", request.GetClient().GetID(), t.Header[consts.JSONWebTokenHeaderAlgorithm]))
-		}
-	})
-
+	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...), jwt.WithJARClient(client))
 	if err != nil {
-		// Do not re-process already enhanced errors
-		var e *jwt.ValidationError
-		if errors.As(err, &e) {
-			if e.Inner != nil {
-				return e.Inner
-			}
+		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
+	}
 
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object which failed to validate with error: %+v.", request.GetClient().GetID(), err).WithWrap(err))
-		}
+	optsValidHeader := []jwt.HeaderValidationOption{
+		jwt.ValidateKeyID(client.GetRequestObjectSigningKeyID()),
+		jwt.ValidateAlgorithm(client.GetRequestObjectSigningAlg()),
+		jwt.ValidateEncryptionKeyID(client.GetRequestObjectEncryptionKeyID()),
+		jwt.ValidateKeyAlgorithm(client.GetRequestObjectEncryptionAlg()),
+		jwt.ValidateContentEncryption(client.GetRequestObjectEncryptionEnc()),
+	}
 
-		return err
-	} else if err = token.Claims.Valid(); err != nil {
-		return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectValidate, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object which could not be validated because its claims could not be validated with error: %+v.", request.GetClient().GetID(), err).WithWrap(err))
+	if err = token.Valid(optsValidHeader...); err != nil {
+		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
+	}
+
+	if algAny && token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
+		return errorsx.WithStack(
+			ErrInvalidRequestObject.
+				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
+				WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
 	}
 
 	claims := token.Claims
@@ -191,7 +151,7 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		v        any
 	)
 
-	for k, v = range claims {
+	for k, v = range claims.ToMapClaims() {
 		switch k {
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
@@ -230,57 +190,20 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		}
 	}
 
-	if !algNone {
-		issuer := f.Config.GetIDTokenIssuer(ctx)
+	if len(issuer) == 0 {
+		return errorsx.WithStack(ErrServerError.WithHintf("%s request could not be processed due to an authorization server configuration issue.", hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that was signed but the issuer for this authorization server is not known.", request.GetClient().GetID()))
+	}
 
-		if len(issuer) == 0 {
-			return errorsx.WithStack(ErrServerError.WithHintf("%s request could not be processed due to an authorization server configuration issue.", hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that was signed but the issuer for this authorization server is not known.", request.GetClient().GetID()))
-		}
+	optsValidClaims := []jwt.ClaimValidationOption{
+		jwt.ValidateTimeFunc(func() time.Time {
+			return time.Now().UTC()
+		}),
+		jwt.ValidateIssuer(client.GetID()),
+		jwt.ValidateAudienceAny(issuer),
+	}
 
-		if v, ok = claims[consts.ClaimIssuer]; !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectSignedAbsentClaim, request.GetClient().GetID(), consts.ClaimIssuer))
-		}
-
-		clientID := request.GetClient().GetID()
-
-		if value, ok = v.(string); !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.ClaimIssuer, v, clientID, v))
-		}
-
-		if value != clientID {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, clientID, consts.ClaimIssuer, value, clientID))
-		}
-
-		if v, ok = claims[consts.ClaimAudience]; !ok {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectSignedAbsentClaim, request.GetClient().GetID(), consts.ClaimAudience))
-		}
-
-		var valid bool
-
-		switch t := v.(type) {
-		case string:
-			valid = t == issuer
-		case []string:
-			for _, value = range t {
-				if value == issuer {
-					valid = true
-
-					break
-				}
-			}
-		case []any:
-			for _, x := range t {
-				if value, ok = x.(string); ok && value == issuer {
-					valid = true
-
-					break
-				}
-			}
-		}
-
-		if !valid {
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' included a request object with a 'aud' claim with the values '%s' which is required match the issuer '%s'.", request.GetClient().GetID(), value, issuer))
-		}
+	if err = claims.Valid(optsValidClaims...); err != nil {
+		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
@@ -594,4 +517,82 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	}
 
 	return request, nil
+}
+
+func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer string, openid bool, inner error) (outer *RFC6749Error) {
+	outer = ErrInvalidRequestObject.WithWrap(inner).WithHintf("%s request object could not be decoded or validated.", hintRequestObjectPrefix(openid))
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'kid' header value '%s' due to the client registration 'request_object_signing_key_id' value but the request object was signed with the 'kid' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningKeyID(), token.KeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'alg' header value '%s' due to the client registration 'request_object_signing_alg' value but the request object was signed with the 'alg' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningAlg(), token.SignatureAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'typ' header value '%s' but the request object was signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'typ' header value '%s' but the request object was encrypted with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), token.HeaderJWE[consts.JSONWebTokenHeaderContentType], token.HeaderJWE[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'cty' header value '%s' but the request object was encrypted with the 'cty' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the request object was encrypted with the 'kid' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionKeyID(), token.EncryptionKeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'alg' header value '%s' due to the client registration 'request_object_encryption_alg' value but the request object was encrypted with the 'alg' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionAlg(), token.KeyAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'enc' header value '%s' due to the client registration 'request_object_encryption_enc' value but the request object was encrypted with the 'enc' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionEnc(), token.ContentEncryption)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. The request object does not appear to be a JWE or JWS compact serialized JWT.", hintRequestObjectPrefix(openid), client.GetID())
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was malformed. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that was not able to be verified. %s.", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature.", hintRequestObjectPrefix(openid), client.GetID())
+		case errJWTValidation.Has(jwt.ValidationErrorExpired):
+			exp, err := token.Claims.GetExpirationTime()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object expired at %d.", hintRequestObjectPrefix(openid), client.GetID(), exp.Int64())
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object does not have an 'exp' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
+			iat, err := token.Claims.GetIssuedAt()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object was issued at %d.", hintRequestObjectPrefix(openid), client.GetID(), iat.Int64())
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'iat' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
+			nbf, err := token.Claims.GetNotBefore()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object is not valid before %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf.Int64())
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'nbf' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
+			iss, err := token.Claims.GetIssuer()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid issuer. The request object was expected to have an 'iss' claim which matches the value '%s' but the 'iss' claim had the value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetID(), iss)
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid issuer. The request object does not have an 'iss' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorAudience):
+			aud, err := token.Claims.GetAudience()
+			if err == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object was expected to have an 'aud' claim which matches the issuer value of '%s' but the 'aud' claim had the values '%s'.", hintRequestObjectPrefix(openid), client.GetID(), issuer, strings.Join(aud, "', '"))
+			} else {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object does not have an 'aud' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
+			return outer.WithDebugf("%s client with id '%s' provided a request object that had one or more invalid claims. Error occurred trying to validate the request objects claims: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. Error occurred trying to validate the request object: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		}
+	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated due to a key lookup error. %s.", hintRequestObjectPrefix(openid), client.GetID(), errJWKLookup.Description)
+	} else {
+		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. %s.", hintRequestObjectPrefix(openid), client.GetID(), ErrorToDebugRFC6749Error(inner).Error())
+	}
 }

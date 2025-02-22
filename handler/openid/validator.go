@@ -31,11 +31,11 @@ type openIDConnectRequestValidatorConfigProvider interface {
 }
 
 type OpenIDConnectRequestValidator struct {
-	Strategy jwt.Signer
+	Strategy jwt.Strategy
 	Config   openIDConnectRequestValidatorConfigProvider
 }
 
-func NewOpenIDConnectRequestValidator(strategy jwt.Signer, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
+func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
 	return &OpenIDConnectRequestValidator{
 		Strategy: strategy,
 		Config:   config,
@@ -108,34 +108,34 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 	}
 
 	// Adds a bit of wiggle room for timing issues
-	if claims.AuthTime.After(time.Now().UTC().Add(time.Second * 5)) {
+	if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 	}
 
 	if maxAge > 0 {
 		switch {
-		case claims.AuthTime.IsZero():
+		case claims.AuthTime == nil, claims.AuthTime.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
-		case claims.RequestedAt.IsZero():
+		case claims.RequestedAt == nil, claims.RequestedAt.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
-		case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(claims.RequestedAt):
+		case claims.GetAuthTimeSafe().Add(time.Second * time.Duration(maxAge)).Before(claims.GetRequestedAtSafe()):
 			return errorsx.WithStack(oauth2.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
 		}
 	}
 
 	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-		if claims.AuthTime.IsZero() {
+		if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
-		if !claims.AuthTime.Equal(claims.RequestedAt) && claims.AuthTime.After(claims.RequestedAt) {
+		if !claims.GetAuthTimeSafe().Equal(claims.GetRequestedAtSafe()) && claims.GetAuthTimeSafe().After(claims.GetRequestedAtSafe()) {
 			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
-			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.AuthTime, claims.RequestedAt))
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
 		}
 	}
 
 	if stringslice.Has(requiredPrompt, consts.PromptTypeLogin) {
-		if claims.AuthTime.Before(claims.RequestedAt) {
-			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.AuthTime, claims.RequestedAt))
+		if claims.GetAuthTimeSafe().Before(claims.GetRequestedAtSafe()) {
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
 		}
 	}
 
@@ -144,7 +144,10 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return nil
 	}
 
-	tokenHint, err := v.Strategy.Decode(ctx, idTokenHint)
+	var tokenHint *jwt.Token
+
+	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(req.GetClient()))
+
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok
@@ -152,9 +155,11 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding id token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
 
-	if hintSub, _ := tokenHint.Claims[consts.ClaimSubject].(string); hintSub == "" {
+	var subHint string
+
+	if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided id token from id_token_hint does not have a subject."))
-	} else if hintSub != claims.Subject {
+	} else if subHint != claims.Subject {
 		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided id token from id_token_hint does not match the current session's subject."))
 	}
 

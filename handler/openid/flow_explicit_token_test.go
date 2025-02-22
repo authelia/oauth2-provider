@@ -113,7 +113,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.AuthorizationCodeGrantIDTokenLifespan).UTC(), *idTokenExp, time.Minute)
@@ -144,7 +144,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(time.Hour), *idTokenExp, time.Minute)
@@ -211,15 +211,18 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			aresp := oauth2.NewAccessResponse()
 			areq := oauth2.NewAccessRequest(session)
 
+			config := &oauth2.Config{
+				MinParameterEntropy: oauth2.MinParameterEntropy,
+			}
+
+			jwtStrategy := &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+			}
+
 			var j = &DefaultStrategy{
-				Signer: &jwt.DefaultSigner{
-					GetPrivateKey: func(ctx context.Context) (any, error) {
-						return key, nil
-					},
-				},
-				Config: &oauth2.Config{
-					MinParameterEntropy: oauth2.MinParameterEntropy,
-				},
+				Strategy: jwtStrategy,
+				Config:   config,
 			}
 
 			h := &OpenIDConnectExplicitHandler{

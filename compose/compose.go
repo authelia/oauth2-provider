@@ -69,13 +69,19 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 	keyGetter := func(context.Context) (any, error) {
 		return key, nil
 	}
+
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
 	return Compose(
 		config,
 		storage,
 		&CommonStrategy{
 			CoreStrategy:               NewOAuth2HMACStrategy(config),
-			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, config),
-			Signer:                     &jwt.DefaultSigner{GetPrivateKey: keyGetter},
+			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
+			Strategy:                   strategy,
 		},
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,

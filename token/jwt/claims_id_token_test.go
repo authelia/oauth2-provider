@@ -14,24 +14,24 @@ import (
 )
 
 func TestIDTokenAssert(t *testing.T) {
-	assert.NoError(t, (&IDTokenClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)}).
+	assert.NoError(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
 		ToMapClaims().Valid())
-	assert.Error(t, (&IDTokenClaims{ExpiresAt: time.Now().UTC().Add(-time.Hour)}).
+	assert.Error(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(-time.Hour))}).
 		ToMapClaims().Valid())
 
-	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()[consts.ClaimJWTID])
+	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()[ClaimJWTID])
 }
 
 func TestIDTokenClaimsToMap(t *testing.T) {
 	idTokenClaims := &IDTokenClaims{
 		JTI:                                 "foo-id",
 		Subject:                             "peter",
-		IssuedAt:                            time.Now().UTC().Round(time.Second),
+		IssuedAt:                            Now(),
 		Issuer:                              "authelia",
 		Audience:                            []string{"tests"},
-		ExpiresAt:                           time.Now().UTC().Add(time.Hour).Round(time.Second),
-		AuthTime:                            time.Now().UTC(),
-		RequestedAt:                         time.Now().UTC(),
+		ExpirationTime:                      NewNumericDate(time.Now().Add(time.Hour)),
+		AuthTime:                            Now(),
+		RequestedAt:                         Now(),
 		AccessTokenHash:                     "foobar",
 		CodeHash:                            "barfoo",
 		StateHash:                           "boofar",
@@ -43,18 +43,19 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		},
 	}
 	assert.Equal(t, map[string]any{
-		consts.ClaimJWTID:              idTokenClaims.JTI,
-		consts.ClaimSubject:            idTokenClaims.Subject,
-		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
-		consts.ClaimIssuer:             idTokenClaims.Issuer,
-		consts.ClaimAudience:           idTokenClaims.Audience,
-		consts.ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
-		"foo":                          idTokenClaims.Extra["foo"],
-		"baz":                          idTokenClaims.Extra["baz"],
-		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
-		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
-		consts.ClaimStateHash:          idTokenClaims.StateHash,
-		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
+		ClaimJWTID:              idTokenClaims.JTI,
+		ClaimSubject:            idTokenClaims.Subject,
+		ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
+		ClaimIssuer:             idTokenClaims.Issuer,
+		ClaimAudience:           idTokenClaims.Audience,
+		ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
+		ClaimRequestedAt:        idTokenClaims.RequestedAt.Unix(),
+		"foo":                   idTokenClaims.Extra["foo"],
+		"baz":                   idTokenClaims.Extra["baz"],
+		ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
+		ClaimCodeHash:           idTokenClaims.CodeHash,
+		ClaimStateHash:          idTokenClaims.StateHash,
+		ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
 		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
 		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
 	}, idTokenClaims.ToMap())
@@ -66,7 +67,8 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
 		consts.ClaimIssuer:             idTokenClaims.Issuer,
 		consts.ClaimAudience:           idTokenClaims.Audience,
-		consts.ClaimExpirationTime:     idTokenClaims.ExpiresAt.Unix(),
+		consts.ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
+		consts.ClaimRequestedAt:        idTokenClaims.RequestedAt.Unix(),
 		"foo":                          idTokenClaims.Extra["foo"],
 		"baz":                          idTokenClaims.Extra["baz"],
 		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,

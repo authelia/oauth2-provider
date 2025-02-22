@@ -5,120 +5,279 @@ package jwt
 
 import (
 	"bytes"
-	"crypto/subtle"
-	"encoding/json"
 	"errors"
-	"time"
+	"fmt"
 
 	jjson "github.com/go-jose/go-jose/v4/json"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-var TimeFunc = time.Now
+// NewMapClaims returns a set of MapClaims from an object that has the appropriate JSON tags.
+func NewMapClaims(obj any) (claims MapClaims) {
+	return toMap(obj)
+}
 
-// MapClaims provides backwards compatible validations not available in `go-jose`.
-// It was taken from [here](https://raw.githubusercontent.com/form3tech-oss/jwt-go/master/map_claims.go).
-//
-// Claims type that uses the map[string]any for JSON decoding
-// This is the default claims type if you don't supply one
+// MapClaims is a simple map based claims structure.
 type MapClaims map[string]any
 
-// VerifyAudience compares the aud claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyAudience(cmp string, req bool) bool {
-	var (
-		aud []string
-		ok  bool
-	)
-
-	if aud, ok = StringSliceFromMap(m[consts.ClaimAudience]); ok {
-		return verifyAud(aud, cmp, req)
-	}
-
-	return false
-}
-
-// VerifyExpiresAt compares the exp claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyExpiresAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimExpirationTime); ok {
-		return verifyExp(v, cmp, req)
-	}
-	return !req
-}
-
-// VerifyIssuedAt compares the iat claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyIssuedAt(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimIssuedAt); ok {
-		return verifyIat(v, cmp, req)
-	}
-	return !req
+// GetIssuer returns the 'iss' claim.
+func (m MapClaims) GetIssuer() (iss string, err error) {
+	return m.toString(ClaimIssuer)
 }
 
 // VerifyIssuer compares the iss claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyIssuer(cmp string, req bool) bool {
-	iss, _ := m[consts.ClaimIssuer].(string)
-	return verifyIss(iss, cmp, req)
+func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
+	var (
+		iss string
+		err error
+	)
+
+	if iss, err = m.GetIssuer(); err != nil {
+		return false
+	}
+
+	if iss == "" {
+		return !required
+	}
+
+	return validString(iss, cmp, required)
+}
+
+// GetSubject returns the 'sub' claim.
+func (m MapClaims) GetSubject() (sub string, err error) {
+	return m.toString(ClaimSubject)
+}
+
+// VerifySubject compares the syv claim against cmp.
+// If required is false, this method will return true if the value matches or is unset
+func (m MapClaims) VerifySubject(cmp string, required bool) (ok bool) {
+	var (
+		sub string
+		err error
+	)
+
+	if sub, err = m.GetSubject(); err != nil {
+		return false
+	}
+
+	if sub == "" {
+		return !required
+	}
+
+	return validString(sub, cmp, required)
+}
+
+// GetAudience returns the 'aud' claim.
+func (m MapClaims) GetAudience() (aud ClaimStrings, err error) {
+	return m.toClaimsString(ClaimAudience)
+}
+
+// VerifyAudience compares the aud claim against cmp.
+// If required is false, this method will return true if the value matches or is unset
+func (m MapClaims) VerifyAudience(cmp string, required bool) (ok bool) {
+	var (
+		aud ClaimStrings
+		err error
+	)
+
+	if aud, err = m.GetAudience(); err != nil {
+		return false
+	}
+
+	if aud == nil {
+		return !required
+	}
+
+	return verifyAud(aud, cmp, required)
+}
+
+// VerifyAudienceAll compares the aud claim against cmp.
+// If required is false, this method will return true if the value matches or is unset.
+// This variant requires all of the audience values in the cmp.
+func (m MapClaims) VerifyAudienceAll(cmp []string, required bool) (ok bool) {
+	var (
+		aud ClaimStrings
+		err error
+	)
+
+	if aud, err = m.GetAudience(); err != nil {
+		return false
+	}
+
+	if aud == nil {
+		return !required
+	}
+
+	return verifyAudAll(aud, cmp, required)
+}
+
+// VerifyAudienceAny compares the aud claim against cmp.
+// If required is false, this method will return true if the value matches or is unset.
+// This variant requires any of the audience values in the cmp.
+func (m MapClaims) VerifyAudienceAny(cmp []string, required bool) (ok bool) {
+	var (
+		aud ClaimStrings
+		err error
+	)
+
+	if aud, err = m.GetAudience(); err != nil {
+		return false
+	}
+
+	if aud == nil {
+		return !required
+	}
+
+	return verifyAudAny(aud, cmp, required)
+}
+
+// GetExpirationTime returns the 'exp' claim.
+func (m MapClaims) GetExpirationTime() (exp *NumericDate, err error) {
+	return m.toNumericDate(ClaimExpirationTime)
+}
+
+// VerifyExpirationTime compares the exp claim against cmp.
+// If required is false, this method will return true if the value matches or is unset
+func (m MapClaims) VerifyExpirationTime(cmp int64, required bool) (ok bool) {
+	var (
+		exp *NumericDate
+		err error
+	)
+
+	if exp, err = m.GetExpirationTime(); err != nil {
+		return false
+	}
+
+	if exp == nil {
+		return !required
+	}
+
+	return validInt64Future(exp.Int64(), cmp, required)
+}
+
+// GetIssuedAt returns the 'iat' claim.
+func (m MapClaims) GetIssuedAt() (iat *NumericDate, err error) {
+	return m.toNumericDate(ClaimIssuedAt)
+}
+
+// VerifyIssuedAt compares the iat claim against cmp.
+// If required is false, this method will return true if the value matches or is unset
+func (m MapClaims) VerifyIssuedAt(cmp int64, required bool) (ok bool) {
+	var (
+		iat *NumericDate
+		err error
+	)
+
+	if iat, err = m.GetIssuedAt(); err != nil {
+		return false
+	}
+
+	if iat == nil {
+		return !required
+	}
+
+	return validInt64Past(iat.Int64(), cmp, required)
+}
+
+// GetNotBefore returns the 'nbf' claim.
+func (m MapClaims) GetNotBefore() (nbf *NumericDate, err error) {
+	return m.toNumericDate(ClaimNotBefore)
 }
 
 // VerifyNotBefore compares the nbf claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
-func (m MapClaims) VerifyNotBefore(cmp int64, req bool) bool {
-	if v, ok := m.toInt64(consts.ClaimNotBefore); ok {
-		return verifyNbf(v, cmp, req)
+func (m MapClaims) VerifyNotBefore(cmp int64, required bool) (ok bool) {
+	var (
+		nbf *NumericDate
+		err error
+	)
+
+	if nbf, err = m.GetNotBefore(); err != nil {
+		return false
 	}
 
-	return !req
-}
-
-func (m MapClaims) toInt64(claim string) (int64, bool) {
-	switch t := m[claim].(type) {
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case json.Number:
-		v, err := t.Int64()
-		if err == nil {
-			return v, true
-		}
-
-		vf, err := t.Float64()
-		if err != nil {
-			return 0, false
-		}
-
-		return int64(vf), true
+	if nbf == nil {
+		return !required
 	}
 
-	return 0, false
+	return validInt64Past(nbf.Int64(), cmp, required)
 }
 
-// Valid validates time based claims "exp, iat, nbf".
-// There is no accounting for clock skew.
-// As well, if any of the above claims are not in the token, it will still
-// be considered a valid claim.
-func (m MapClaims) Valid() error {
+func (m MapClaims) ToMapClaims() MapClaims {
+	if m == nil {
+		return nil
+	}
+
+	return m
+}
+
+func (m MapClaims) ToMap() map[string]any {
+	return m
+}
+
+// Valid validates the given claims. By default it only validates time based claims "exp, iat, nbf"; there is no
+// accounting for clock skew, and if any of the above claims are not in the token, the claims will still be considered
+// valid. However all of these options can be tuned by the opts.
+func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
+	vopts := &ClaimValidationOptions{}
+
+	for _, opt := range opts {
+		opt(vopts)
+	}
+
+	var now int64
+
+	if vopts.timef != nil {
+		now = vopts.timef().UTC().Unix()
+	} else {
+		now = TimeFunc().UTC().Unix()
+	}
+
 	vErr := new(ValidationError)
-	now := TimeFunc().Unix()
 
-	if !m.VerifyExpiresAt(now, false) {
+	if !m.VerifyExpirationTime(now, vopts.expRequired) {
 		vErr.Inner = errors.New("Token is expired")
 		vErr.Errors |= ValidationErrorExpired
 	}
 
-	if !m.VerifyIssuedAt(now, false) {
+	if !m.VerifyIssuedAt(now, vopts.iatRequired) {
 		vErr.Inner = errors.New("Token used before issued")
 		vErr.Errors |= ValidationErrorIssuedAt
 	}
 
-	if !m.VerifyNotBefore(now, false) {
+	if !m.VerifyNotBefore(now, vopts.nbfRequired) {
 		vErr.Inner = errors.New("Token is not valid yet")
 		vErr.Errors |= ValidationErrorNotValidYet
+	}
+
+	if len(vopts.iss) != 0 {
+		if !m.VerifyIssuer(vopts.iss, true) {
+			vErr.Inner = errors.New("Token has invalid issuer")
+			vErr.Errors |= ValidationErrorIssuer
+		}
+	}
+
+	if len(vopts.sub) != 0 {
+		if !m.VerifySubject(vopts.sub, true) {
+			vErr.Inner = errors.New("Token has invalid subject")
+			vErr.Errors |= ValidationErrorSubject
+		}
+	}
+
+	if len(vopts.aud) != 0 {
+		if !m.VerifyAudienceAny(vopts.aud, true) {
+			vErr.Inner = errors.New("Token has invalid audience")
+			vErr.Errors |= ValidationErrorAudience
+		}
+	}
+
+	if len(vopts.audAll) != 0 {
+		if !m.VerifyAudienceAll(vopts.audAll, true) {
+			vErr.Inner = errors.New("Token has invalid audience")
+			vErr.Errors |= ValidationErrorAudience
+		}
 	}
 
 	if vErr.valid() {
@@ -128,68 +287,80 @@ func (m MapClaims) Valid() error {
 	return vErr
 }
 
-func (m MapClaims) UnmarshalJSON(b []byte) error {
-	// This custom unmarshal allows to configure the
-	// go-jose decoding settings since there is no other way
-	// see https://github.com/square/go-jose/issues/353.
-	// If issue is closed with a better solution
-	// this custom Unmarshal method can be removed
-	d := jjson.NewDecoder(bytes.NewReader(b))
+func (m MapClaims) UnmarshalJSON(data []byte) error {
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+
 	mp := map[string]any(m)
-	d.SetNumberType(jjson.UnmarshalIntOrFloat)
-	if err := d.Decode(&mp); err != nil {
+
+	if err := decoder.Decode(&mp); err != nil {
 		return errorsx.WithStack(err)
 	}
 
 	return nil
 }
 
-func verifyAud(aud []string, cmp string, required bool) bool {
-	if len(aud) == 0 {
-		return !required
+func (m MapClaims) toInt64(claim string) (val int64, ok bool) {
+	var v any
+
+	if v, ok = m[claim]; !ok {
+		return 0, false
 	}
 
-	for _, a := range aud {
-		if subtle.ConstantTimeCompare([]byte(a), []byte(cmp)) != 0 {
-			return true
+	return toInt64(v)
+}
+
+func (m MapClaims) toNumericDate(key string) (date *NumericDate, err error) {
+	var (
+		v  any
+		ok bool
+	)
+
+	if v, ok = m[key]; !ok {
+		return nil, nil
+	}
+
+	return toNumericDate(v)
+}
+
+func (m MapClaims) toString(key string) (value string, err error) {
+	var (
+		ok  bool
+		raw any
+	)
+
+	if raw, ok = m[key]; !ok {
+		return "", nil
+	}
+
+	if value, ok = raw.(string); !ok {
+		return "", newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
+	}
+
+	return value, nil
+}
+
+func (m MapClaims) toClaimsString(key string) (ClaimStrings, error) {
+	var cs []string
+
+	switch v := m[key].(type) {
+	case string:
+		cs = append(cs, v)
+	case []string:
+		cs = v
+	case []any:
+		for _, a := range v {
+			if vs, ok := a.(string); !ok {
+				return nil, newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
+			} else {
+				cs = append(cs, vs)
+			}
 		}
+	case nil:
+		return nil, nil
+	default:
+		return cs, newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
 	}
 
-	return false
-}
-
-func verifyExp(exp int64, now int64, required bool) bool {
-	if exp == 0 {
-		return !required
-	}
-
-	return now <= exp
-}
-
-func verifyIat(iat int64, now int64, required bool) bool {
-	if iat == 0 {
-		return !required
-	}
-
-	return now >= iat
-}
-
-func verifyIss(iss string, cmp string, required bool) bool {
-	if iss == "" {
-		return !required
-	}
-
-	if subtle.ConstantTimeCompare([]byte(iss), []byte(cmp)) != 0 {
-		return true
-	} else {
-		return false
-	}
-}
-
-func verifyNbf(nbf int64, now int64, required bool) bool {
-	if nbf == 0 {
-		return !required
-	}
-
-	return now >= nbf
+	return cs, nil
 }

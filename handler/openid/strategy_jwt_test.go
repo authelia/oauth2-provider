@@ -17,14 +17,16 @@ import (
 )
 
 func TestJWTStrategy_GenerateIDToken(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(_ context.Context) (any, error) {
-				return key, nil
-			}},
-		Config: &oauth2.Config{
-			MinParameterEntropy: oauth2.MinParameterEntropy,
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
+		Config: config,
 	}
 
 	var req *oauth2.AccessRequest
@@ -50,8 +52,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().UTC(),
-						RequestedAt: time.Now().UTC(),
+						AuthTime:    jwt.Now(),
+						RequestedAt: jwt.Now(),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -64,8 +66,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:   "peter",
-						ExpiresAt: time.Now().UTC().Add(-time.Hour),
+						Subject:        "peter",
+						ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -113,8 +115,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().UTC(),
-						RequestedAt: time.Now().UTC(),
+						AuthTime:    jwt.Now(),
+						RequestedAt: jwt.Now(),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -128,7 +130,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:  "peter",
-						AuthTime: time.Now().Add(-time.Hour).UTC(),
+						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -142,8 +144,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.Now(),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -157,8 +159,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.Now(),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -173,8 +175,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().Add(-time.Hour).UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -188,8 +190,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.Now(),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -203,8 +205,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().Add(-time.Hour).UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -218,8 +220,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().Add(-time.Hour).UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -239,15 +241,15 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().Add(-time.Hour).UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:   "peter",
-						ExpiresAt: time.Now().Add(-time.Hour).UTC(),
+						Subject:        "peter",
+						ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
 				}))
@@ -261,8 +263,8 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				req = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:     "peter",
-						AuthTime:    time.Now().Add(-time.Hour).UTC(),
-						RequestedAt: time.Now().Add(-time.Minute),
+						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 					},
 					Headers: &jwt.Headers{},
 				})

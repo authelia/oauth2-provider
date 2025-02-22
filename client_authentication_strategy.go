@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	xjwt "github.com/golang-jwt/jwt/v5"
-
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -21,12 +20,13 @@ type DefaultClientAuthenticationStrategy struct {
 		ClientManager
 	}
 	Config interface {
+		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
 		AllowedJWTAssertionAudiencesProvider
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, resolver EndpointClientAuthHandler) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, handler EndpointClientAuthHandler) (client Client, method string, err error) {
 	var (
 		id, secret string
 
@@ -48,7 +48,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	var assertion *ClientAssertion
 
 	if hasAssertion {
-		if assertion, err = NewClientAssertion(ctx, s.Store, assertionValue, assertionType, resolver); err != nil {
+		if assertion, err = NewClientAssertion(ctx, s.Config.GetJWTStrategy(ctx), s.Store, assertionValue, assertionType, handler); err != nil {
 			return nil, "", err
 		}
 	}
@@ -64,10 +64,10 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 
 	hasNone := !hasPost && !hasBasic && assertion == nil && len(id) != 0
 
-	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone, resolver)
+	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone, handler)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, resolver EndpointClientAuthHandler) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, handler EndpointClientAuthHandler) (client Client, method string, err error) {
 	var methods []string
 
 	if hasBasic {
@@ -115,16 +115,16 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.
 			WithHintf("Client Authentication failed with more than one known authentication method included in the request which is not permitted.").
-			WithDebugf("The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), resolver.Name(), strings.Join(methods, "', '")))
+			WithDebugf("The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), handler.Name(), strings.Join(methods, "', '")))
 	}
 
 	switch {
 	case assertion != nil:
-		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, resolver)
+		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, handler)
 	case hasBasic, hasPost:
-		method, err = s.doAuthenticateClientSecret(ctx, client, secret, hasBasic, hasPost, resolver)
+		method, err = s.doAuthenticateClientSecret(ctx, client, secret, hasBasic, hasPost, handler)
 	default:
-		method, err = s.doAuthenticateNone(ctx, client, resolver)
+		method, err = s.doAuthenticateNone(ctx, client, handler)
 	}
 
 	if err != nil {
@@ -134,54 +134,58 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	return client, method, nil
 }
 
-func NewClientAssertion(ctx context.Context, store ClientManager, raw, assertionType string, resolver EndpointClientAuthHandler) (assertion *ClientAssertion, err error) {
+// NewClientAssertion converts a raw assertion string into a *ClientAssertion.
+func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store ClientManager, assertion, assertionType string, handler EndpointClientAuthHandler) (a *ClientAssertion, err error) {
 	var (
-		token *xjwt.Token
+		token *jwt.Token
 
-		id, alg, method string
-		client          Client
+		id, method string
+		client     Client
 	)
 
 	switch assertionType {
 	case consts.ClientAssertionTypeJWTBearer:
-		if len(raw) == 0 {
-			return &ClientAssertion{Raw: raw, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("The request parameter 'client_assertion' must be set when using 'client_assertion_type' of '%s'.", consts.ClientAssertionTypeJWTBearer))
+		if len(assertion) == 0 {
+			return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("The request parameter 'client_assertion' must be set when using 'client_assertion_type' of '%s'.", consts.ClientAssertionTypeJWTBearer))
 		}
 	default:
-		return &ClientAssertion{Raw: raw, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
-	if token, _, err = xjwt.NewParser(xjwt.WithoutClaimsValidation()).ParseUnverified(raw, &xjwt.MapClaims{}); err != nil {
-		return &ClientAssertion{Raw: raw, Type: assertionType}, resolveJWTErrorToRFCError(err)
+	if token, err = strategy.Decode(ctx, assertion, jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
-	if id, err = token.Claims.GetSubject(); err != nil {
-		if id, err = token.Claims.GetIssuer(); err != nil {
-			return &ClientAssertion{Raw: raw, Type: assertionType}, nil
+	if id, err = token.Claims.GetSubject(); err != nil || len(id) == 0 {
+		if id, err = token.Claims.GetIssuer(); err != nil || len(id) == 0 {
+			return &ClientAssertion{Assertion: assertion, Type: assertionType}, nil
 		}
 	}
 
 	if client, err = store.GetClient(ctx, id); err != nil {
-		return &ClientAssertion{Raw: raw, Type: assertionType, ID: id}, nil
+		return &ClientAssertion{Assertion: assertion, Type: assertionType, ID: id}, nil
 	}
 
-	if c, ok := client.(AuthenticationMethodClient); ok {
-		alg, method = resolver.GetAuthSigningAlg(c), resolver.GetAuthMethod(c)
+	method = consts.ClientAuthMethodPrivateKeyJWT
+
+	if jwt.IsSignedJWTClientSecretAlg(token.SignatureAlgorithm) {
+		method = consts.ClientAuthMethodClientSecretJWT
 	}
 
 	return &ClientAssertion{
-		Raw:       raw,
+		Assertion: assertion,
 		Type:      assertionType,
 		Parsed:    true,
 		ID:        id,
 		Method:    method,
-		Algorithm: alg,
+		Algorithm: string(token.SignatureAlgorithm),
 		Client:    client,
 	}, nil
 }
 
+// ClientAssertion represents a client assertion.
 type ClientAssertion struct {
-	Raw, Type             string
+	Assertion, Type       string
 	Parsed                bool
 	ID, Method, Algorithm string
 	Client                Client
@@ -222,7 +226,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 			return "", errorsx.WithStack(
 				ErrInvalidClient.
 					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
-					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s'x or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
 		}
 	}
 
@@ -240,35 +244,62 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, handler EndpointClientAuthHandler) (method string, err error) {
 	var (
-		token  *xjwt.Token
-		claims *xjwt.RegisteredClaims
+		token *jwt.Token
+		c     AuthenticationMethodClient
+		ok    bool
 	)
 
-	if method, _, _, token, claims, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, client, assertion, resolver); err != nil {
+	if c, ok = client.(AuthenticationMethodClient); !ok {
+		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
+	}
+
+	if !assertion.Parsed {
+
+	}
+
+	if method, _, _, token, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, c, assertion, handler); err != nil {
 		return "", err
 	}
 
 	if token == nil {
-		return "", err
+		return "", errorsx.WithStack(ErrInvalidClient.WithDebug("The client assertion did not result in a parsed token."))
 	}
 
 	clientID := []byte(client.GetID())
 
+	claims := &jwt.JWTClaims{}
+
+	claims.FromMapClaims(token.Claims.ToMapClaims())
+
 	switch {
 	case subtle.ConstantTimeCompare([]byte(claims.Issuer), clientID) == 0:
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
 	case subtle.ConstantTimeCompare([]byte(claims.Subject), clientID) == 0:
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
-	case claims.ID == "":
-		return "", errorsx.WithStack(ErrInvalidClient.WithHint("Claim 'jti' from 'client_assertion' must be set but is not."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
+	case claims.JTI == "":
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'jti' from 'client_assertion' must be set but is not."))
 	default:
-		if err = s.Store.ClientAssertionJWTValid(ctx, claims.ID); err != nil {
+		switch cmethod := handler.GetAuthMethod(c); {
+		case cmethod == "" && handler.AllowAuthMethodAny():
+			break
+		case cmethod != method:
+			return "", errorsx.WithStack(
+				ErrInvalidClient.
+					WithHintf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the OAuth 2.0 client registration does not allow this method.", handler.Name(), method).
+					WithDebugf("The registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", client.GetID(), handler.Name(), cmethod, handler.Name(), method, cmethod))
+		}
+
+		if !assertion.Parsed {
+			return "", errorsx.WithStack(ErrInvalidClient.WithDebug("The client assertion was not able to be parsed."))
+		}
+
+		if err = s.Store.ClientAssertionJWTValid(ctx, claims.JTI); err != nil {
 			return "", errorsx.WithStack(ErrJTIKnown.WithHint("Claim 'jti' from 'client_assertion' MUST only be used once.").WithDebugError(err))
 		}
 
-		if err = s.Store.SetClientAssertionJWT(ctx, claims.ID, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
+		if err = s.Store.SetClientAssertionJWT(ctx, claims.JTI, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
 			return "", err
 		}
 
@@ -276,147 +307,40 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	}
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, resolver EndpointClientAuthHandler) (method, kid, alg string, token *xjwt.Token, claims *xjwt.RegisteredClaims, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client AuthenticationMethodClient, assertion *ClientAssertion, handler EndpointClientAuthHandler) (method, kid, alg string, token *jwt.Token, err error) {
 	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
 
 	if len(audience) == 0 {
-		return "", "", "", nil, nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods.").WithDebug("The authorization server could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
+		return "", "", "", nil, errorsx.WithStack(ErrMisconfiguration.WithHint("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods.").WithDebug("The authorization server could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
 
-	opts := []xjwt.ParserOption{
-		xjwt.WithStrictDecoding(),
-		//xjwt.WithAudience(tokenURI),   // Satisfies RFC7523 Section 3 Point 3.
-		xjwt.WithExpirationRequired(), // Satisfies RFC7523 Section 3 Point 4.
-		xjwt.WithIssuedAt(),           // Satisfies RFC7523 Section 3 Point 6.
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: client, handler: handler}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
-	// Automatically satisfies RFC7523 Section 3 Point 5, 8, 9, and 10.
-	parser := xjwt.NewParser(opts...)
-
-	claims = &xjwt.RegisteredClaims{}
-
-	if token, err = parser.ParseWithClaims(assertion.Raw, claims, func(token *xjwt.Token) (key any, err error) {
-		if subtle.ConstantTimeCompare([]byte(client.GetID()), []byte(claims.Subject)) == 0 {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The supplied 'client_id' did not match the 'sub' claim of the 'client_assertion'."))
-		}
-
-		// The following check satisfies RFC7523 Section 3 Point 2.
-		// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3.
-		if claims.Subject == "" {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The claim 'sub' from the 'client_assertion' isn't defined."))
-		}
-
-		var (
-			c  AuthenticationMethodClient
-			ok bool
-		)
-
-		if c, ok = client.(AuthenticationMethodClient); !ok {
-			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
-		}
-
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx, token.Header, c, resolver)
-	}); err != nil {
-		return "", "", "", nil, nil, resolveJWTErrorToRFCError(err)
+	optsClaims := []jwt.ClaimValidationOption{
+		jwt.ValidateAudienceAny(audience...), // Satisfies RFC7523 Section 3 Point 3.
+		jwt.ValidateRequireExpiresAt(),       // Satisfies RFC7523 Section 3 Point 4.
+		jwt.ValidateTimeFunc(time.Now),
 	}
 
-	// Satisfies RFC7523 Section 3 Point 3.
-	if err = s.doAuthenticateAssertionJWTBearerClaimAudience(ctx, audience, claims); err != nil {
-		return "", "", "", nil, nil, err
+	if err = token.Claims.Valid(optsClaims...); err != nil {
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
-	return method, kid, alg, token, claims, nil
-}
-
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearerClaimAudience(ctx context.Context, audience []string, claims *xjwt.RegisteredClaims) (err error) {
-	if len(claims.Audience) == 0 {
-		return errorsx.WithStack(
-			ErrInvalidClient.
-				WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").
-				WithDebug("Unable to validate the 'aud' claim of the 'client_assertion' as it was empty."),
-		)
+	optsHeader := []jwt.HeaderValidationOption{
+		jwt.ValidateKeyID(handler.GetAuthSigningKeyID(client)),
+		jwt.ValidateAlgorithm(handler.GetAuthSigningAlg(client)),
+		jwt.ValidateEncryptionKeyID(handler.GetAuthEncryptionKeyID(client)),
+		jwt.ValidateKeyAlgorithm(handler.GetAuthEncryptionAlg(client)),
+		jwt.ValidateContentEncryption(handler.GetAuthEncryptionEnc(client)),
 	}
 
-	validAudience := false
-
-	var aud, unverified string
-
-verification:
-	for _, unverified = range claims.Audience {
-		for _, aud = range audience {
-			if subtle.ConstantTimeCompare([]byte(aud), []byte(unverified)) == 1 {
-				validAudience = true
-				break verification
-			}
-		}
+	if err = token.Valid(optsHeader...); err != nil {
+		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
-	if !validAudience {
-		return errorsx.WithStack(
-			ErrInvalidClient.
-				WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").
-				WithDebugf("Unable to validate the 'aud' claim of the 'client_assertion' value '%s' as it doesn't match any of the expected values '%s'.", strings.Join(claims.Audience, "', '"), strings.Join(audience, "', '")),
-		)
-	}
-
-	return nil
-}
-
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKey(ctx context.Context, header map[string]any, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
-	var kid, alg, method string
-
-	kid, alg = getJWTHeaderKIDAlg(header)
-
-	if calg := handler.GetAuthSigningAlg(client); calg != alg && calg != "" {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg).WithDebugf("The registered OAuth 2.0 client with id '%s' only supports the '%s' algorithm.", client.GetID(), calg))
-	}
-
-	switch method = handler.GetAuthMethod(client); method {
-	case consts.ClientAuthMethodClientSecretJWT:
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(ctx, kid, alg, client, handler)
-	case consts.ClientAuthMethodPrivateKeyJWT:
-		return s.doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx, kid, alg, client, handler)
-	case consts.ClientAuthMethodNone:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHint("This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request."))
-	case consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however 'client_assertion' was provided in the request.", method))
-	default:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("This requested OAuth 2.0 client only supports client authentication method '%s', however that method is not supported by this server.", method))
-	}
-}
-
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyClientSecretJWT(_ context.Context, _, alg string, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
-	switch alg {
-	case xjwt.SigningMethodHS256.Alg(), xjwt.SigningMethodHS384.Alg(), xjwt.SigningMethodRS512.Alg():
-		secret := client.GetClientSecret()
-
-		if secret == nil || !secret.IsPlainText() {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
-		}
-
-		if key, err = secret.GetPlainTextValue(); err != nil {
-			return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 client does not support the client authentication method 'client_secret_jwt' "))
-		}
-
-		return key, nil
-	default:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg))
-	}
-}
-
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearerFindKeyPrivateKeyJWT(ctx context.Context, kid, alg string, client AuthenticationMethodClient, handler EndpointClientAuthHandler) (key any, err error) {
-	switch alg {
-	case xjwt.SigningMethodRS256.Alg(), xjwt.SigningMethodRS384.Alg(), xjwt.SigningMethodRS512.Alg(),
-		xjwt.SigningMethodPS256.Alg(), xjwt.SigningMethodPS384.Alg(), xjwt.SigningMethodPS512.Alg(),
-		xjwt.SigningMethodES256.Alg(), xjwt.SigningMethodES384.Alg(), xjwt.SigningMethodES512.Alg():
-		if key, err = FindClientPublicJWK(ctx, s.Config, client, kid, alg, "sig"); err != nil {
-			return nil, err
-		}
-
-		return key, nil
-	default:
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHintf("The requested OAuth 2.0 client does not support the '%s_endpoint_auth_signing_alg' value '%s'.", handler.Name(), alg))
-	}
+	return assertion.Method, kid, alg, token, nil
 }
 
 func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(form url.Values) (id, secret string, ok bool) {
@@ -428,16 +352,112 @@ func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(for
 func resolveJWTErrorToRFCError(err error) (rfc error) {
 	var e *RFC6749Error
 
-	switch {
-	case errors.As(err, &e):
+	if errors.As(err, &e) {
 		return errorsx.WithStack(e)
-	case errors.Is(err, xjwt.ErrTokenMalformed):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is malformed or incomplete.").WithWrap(err).WithDebugError(err))
-	case errors.Is(err, xjwt.ErrTokenUnverifiable):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode the 'client_assertion' value as it is missing the information required to validate it.").WithWrap(err).WithDebugError(err))
-	case errors.Is(err, xjwt.ErrTokenNotValidYet), errors.Is(err, xjwt.ErrTokenExpired), errors.Is(err, xjwt.ErrTokenUsedBeforeIssued):
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint.").WithWrap(err).WithDebugError(err))
-	default:
-		return errorsx.WithStack(ErrInvalidClient.WithHint("Unable to decode 'client_assertion' value for an unknown reason.").WithWrap(err).WithDebugError(err))
+	}
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(err, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was malformed. %s.", strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.")
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("OAuth 2.0 client provided a client assertion that was not able to be verified. %s.", strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			e = ErrInvalidClient.
+				WithHint("OAuth 2.0 client provided a client assertion which could not be decoded or validated.").
+				WithWrap(err).
+				WithDebugf("Unknown error occurred handling the client assertion.")
+		}
+	}
+
+	return errorsx.WithStack(e)
+}
+
+func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethodClient, handler EndpointClientAuthHandler, audience []string, inner error) (outer *RFC6749Error) {
+	outer = ErrInvalidClient.WithWrap(inner).WithHintf("OAuth 2.0 client with id '%s' provided a client assertion which could not be decoded or validated.", client.GetID())
+
+	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+		switch {
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'kid' header value '%s' due to the client registration 'request_object_signing_key_id' value but the client assertion was signed with the 'kid' header value '%s'.", client.GetID(), handler.GetAuthSigningKeyID(client), token.KeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'alg' header value '%s' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value '%s'.", client.GetID(), handler.GetAuthSigningAlg(client), token.SignatureAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'typ' header value '%s' but the client assertion was signed with the 'typ' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'typ' header value '%s' but the client assertion was encrypted with the 'typ' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the client assertions was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", client.GetID(), token.HeaderJWE[consts.JSONWebTokenHeaderContentType], token.HeaderJWE[consts.JSONWebTokenHeaderType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the client assertion was encrypted with the 'kid' header value '%s'.", client.GetID(), handler.GetAuthEncryptionKeyID(client), token.EncryptionKeyID)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'alg' header value '%s' due to the client registration 'request_object_encryption_alg' value but the client assertion was encrypted with the 'alg' header value '%s'.", client.GetID(), handler.GetAuthEncryptionAlg(client), token.KeyAlgorithm)
+		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'enc' header value '%s' due to the client registration 'request_object_encryption_enc' value but the client assertion was encrypted with the 'enc' header value '%s'.", client.GetID(), handler.GetAuthEncryptionEnc(client), token.ContentEncryption)
+		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.", client.GetID())
+		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was malformed. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorUnverifiable):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was not able to be verified. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorSignatureInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid signature. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		case errJWTValidation.Has(jwt.ValidationErrorExpired):
+			exp, err := token.Claims.GetExpirationTime()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion expired at %d.", client.GetID(), exp.Int64())
+			} else {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion does not have an 'exp' claim or it has an invalid type.", client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
+			iat, err := token.Claims.GetIssuedAt()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion was issued at %d.", client.GetID(), iat.Int64())
+			} else {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'iat' claim or it has an invalid type.", client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
+			nbf, err := token.Claims.GetNotBefore()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion is not valid before %d.", client.GetID(), nbf.Int64())
+			} else {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'nbf' claim or it has an invalid type.", client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorIssuer):
+			iss, err := token.Claims.GetIssuer()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid issuer. The client assertion was expected to have an 'iss' claim which matches the value '%s' but the 'iss' claim had the value '%s'.", client.GetID(), client.GetID(), iss)
+			} else {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid issuer. The client assertion does not have an 'iss' claim or it has an invalid type.", client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorAudience):
+			aud, err := token.Claims.GetAudience()
+			if err == nil {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid audience. The client assertion was expected to have an 'aud' claim which matches one of the values '%s' but the 'aud' claim had the values '%s'.", client.GetID(), strings.Join(audience, "', '"), strings.Join(aud, "', '"))
+			} else {
+				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid audience. The client assertion does not have an 'aud' claim or it has an invalid type.", client.GetID())
+			}
+		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that had one or more invalid claims. Error occurred trying to validate the client assertions claims: %s", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		default:
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated. Error occurred trying to validate the client assertion: %s", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
+		}
+	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated due to a key lookup error. %s.", client.GetID(), errJWKLookup.Description)
+	} else {
+		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated. %s.", client.GetID(), ErrorToDebugRFC6749Error(inner).Error())
 	}
 }

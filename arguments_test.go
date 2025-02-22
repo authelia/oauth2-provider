@@ -54,7 +54,6 @@ func TestArgumentsExactOne(t *testing.T) {
 
 	for k, c := range testCases {
 		assert.Equal(t, c.expect, c.args.ExactOne(c.exact), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }
 
@@ -106,7 +105,6 @@ func TestArgumentsHas(t *testing.T) {
 		},
 	} {
 		assert.Equal(t, c.expect, c.args.Has(c.has...), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }
 
@@ -192,7 +190,6 @@ func TestArgumentsMatchesExact(t *testing.T) {
 	}...)
 	for k, c := range testCases {
 		assert.Equal(t, c.expect, c.args.MatchesExact(c.is...), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }
 
@@ -224,7 +221,6 @@ func TestArgumentsMatches(t *testing.T) {
 	}...)
 	for k, c := range testCases {
 		assert.Equal(t, c.expect, c.args.Matches(c.is...), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }
 
@@ -251,6 +247,5 @@ func TestArgumentsOneOf(t *testing.T) {
 		},
 	} {
 		assert.Equal(t, c.expect, c.args.HasOneOf(c.oneOf...), "%d", k)
-		t.Logf("Passed test case %d", k)
 	}
 }

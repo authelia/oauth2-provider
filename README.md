@@ -22,9 +22,9 @@ following list of differences:
 - [x] Minimum dependency is go version 1.21
 - [x] Replace string values with constants where applicable
       <sup>[commit](https://github.com/authelia/oauth2-provider/commit/de536dc0c9cd5f080c387621799e644319587bd0)</sup>
-- [ ] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5`
+- [x] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5`
       or other such libraries
-- [ ] Implement internal JWKS logic
+- [x] Implement internal JWKS logic
 - [x] Higher Debug error information visibility (Debug Field includes the
       complete RFC6749 error with debug information if available)
 - Fixes:
@@ -103,10 +103,10 @@ following list of differences:
     - [x] General Refactor
     - [x] Prevent Multiple Client Authentication Methods
     - [x] Client Secret Validation Interface
-    - [ ] JWE support for Client Authentication and Issuance
+    - [x] JWE support for Client Authentication and Issuance
   - [x] Testing Package (mocks, etc)
   - [ ] Clock Drift Support
-  - [ ] Key Management
+  - [x] Key Management
   - [ ] Injectable Clock Configurator
   - [x] Support `s_hash`
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/edbbbe9467c70a2578db4b9af4d6cd319f74886e)</sup>
@@ -125,6 +125,7 @@ following list of differences:
   - [x] `github.com/gobuffalo/packr`
   - [x] `github.com/form3tech-oss/jwt-go`
   - [x] `github.com/dgrijalva/jwt-go`
+  - [x] `github.com/golang-jwt/jwt`
 - Migration of the following dependencies:
   - [x] `github.com/go-jose/go-jose/v3` => `github.com/go-jose/go-jose/v4`
   - [x] `github.com/golang/mock` => `github.com/uber-go/mock`

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"testing"
 	"time"
 
@@ -29,12 +30,14 @@ import (
 
 func TestAuthenticateClient(t *testing.T) {
 	keyRSA := gen.MustRSAKey()
+
 	jwksRSA := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &keyRSA.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "RS256",
+				Key:       &keyRSA.PublicKey,
 			},
 		},
 	}
@@ -43,9 +46,27 @@ func TestAuthenticateClient(t *testing.T) {
 	jwksECDSA := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				KeyID: "kid-foo",
-				Use:   "sig",
-				Key:   &keyECDSA.PublicKey,
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "ES256",
+				Key:       &keyECDSA.PublicKey,
+			},
+		},
+	}
+
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "RS256",
+				Key:       &keyRSA.PublicKey,
+			},
+			{
+				KeyID:     "kid-foo",
+				Use:       "sig",
+				Algorithm: "ES256",
+				Key:       &keyECDSA.PublicKey,
 			},
 		},
 	}
@@ -60,6 +81,7 @@ func TestAuthenticateClient(t *testing.T) {
 		r             *http.Request
 		form          url.Values
 		err           string
+		errRegexp     *regexp.Regexp
 		expectErr     error
 	}{
 		{
@@ -372,7 +394,7 @@ func TestAuthenticateClient(t *testing.T) {
 		{
 			name: "ShouldFailBecauseRSAAssertionIsUsedButECDSAAssertionIsRequired",
 			client: func(ts *httptest.Server) Client {
-				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwks, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
 				consts.ClaimSubject:        "bar",
 				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
@@ -382,7 +404,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the 'token_endpoint_auth_signing_alg' value 'RS256'. The registered OAuth 2.0 client with id 'bar' only supports the 'ES256' algorithm.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'ES256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'RS256'.",
 		},
 		{
 			name: "ShouldFailBecauseMalformedAssertionUsed",
@@ -391,7 +413,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, form: url.Values{"client_assertion": []string{"bad.assertion"}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to decode the 'client_assertion' value as it is malformed or incomplete. token is malformed: token contains an invalid number of segments",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client provided a client assertion which could not be decoded or validated. OAuth 2.0 client provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.",
 		},
 		{
 			name: "ShouldFailBecauseExpired",
@@ -406,7 +428,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyECDSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is expired",
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was expired\. The client assertion expired at \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseNotBefore",
@@ -422,7 +444,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyECDSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is not valid yet",
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseIssuedInFuture",
@@ -438,7 +460,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyECDSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token used before issued",
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion was issued at \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseNoKeys",
@@ -453,10 +475,10 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyECDSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client has no JSON Web Keys set registered, but they are needed to complete the request.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' provided a client assertion that was not able to be verified. Error occurred retrieving the JSON Web Key. No JWKs have been registered for the client.",
 		},
 		{
-			name: "ShouldFailBecauseNotBefore",
+			name: "ShouldFailBecauseNotBeforeAlternative",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: "private_key_jwt", TokenEndpointAuthSigningAlg: "ES256"}
 			}, form: url.Values{"client_assertion": {mustGenerateECDSAAssertion(t, jwt.MapClaims{
@@ -469,7 +491,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyECDSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. token has invalid claims: token is not valid yet",
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretJwt",
@@ -484,7 +506,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the 'token_endpoint_auth_signing_alg' value 'RS256'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_jwt'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_jwt'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButNone",
@@ -499,7 +521,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). This requested OAuth 2.0 client does not support client authentication, however 'client_assertion' was provided in the request.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'none'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'none'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretPost",
@@ -514,7 +536,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). This requested OAuth 2.0 client only supports client authentication method 'client_secret_post', however 'client_assertion' was provided in the request.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_post'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_post'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretBasic",
@@ -529,7 +551,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). This requested OAuth 2.0 client only supports client authentication method 'client_secret_basic', however 'client_assertion' was provided in the request.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButFoobar",
@@ -571,7 +593,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unable to verify the integrity of the 'client_assertion' value. It may have been used before it was issued, may have been used before it's allowed to be used, may have been used after it's expired, or otherwise doesn't meet a particular validation constraint. Unable to validate the 'aud' claim of the 'client_assertion' value 'token-url-1', 'token-url-2' as it doesn't match any of the expected values 'token-url'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' provided a client assertion that has an invalid audience. The client assertion was expected to have an 'aud' claim which matches one of the values 'token-url' but the 'aud' claim had the values 'token-url-1', 'token-url-2'.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsAreSetWithinTheClient",
@@ -613,7 +635,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 client does not support the 'token_endpoint_auth_signing_alg' value 'none'. The registered OAuth 2.0 client with id 'bar' only supports the 'RS256' algorithm.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'RS256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'none'.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsURIIsSet",
@@ -641,7 +663,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The supplied 'client_id' did not match the 'sub' claim of the 'client_assertion'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionIssDoesNotMatchClient",
@@ -656,10 +678,10 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
-			name: "ShouldFailBecauseClientAssertionJtiIsNotSet",
+			name: "ShouldFailBecauseClientAssertionJTIClaimIsNotSet",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
 			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
@@ -670,7 +692,7 @@ func TestAuthenticateClient(t *testing.T) {
 			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Claim 'jti' from 'client_assertion' must be set but is not.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'jti' from 'client_assertion' must be set but is not.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionAudIsNotSet",
@@ -694,13 +716,20 @@ func TestAuthenticateClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+				AllowedJWTAssertionAudiences: []string{"token-url"},
+				HTTPClient:                   retryablehttp.NewClient(),
+			}
+
+			config.JWTStrategy = &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks),
+			}
+
 			provider := &Fosite{
-				Store: storage.NewMemoryStore(),
-				Config: &Config{
-					JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-					AllowedJWTAssertionAudiences: []string{"token-url"},
-					HTTPClient:                   retryablehttp.NewClient(),
-				},
+				Store:  storage.NewMemoryStore(),
+				Config: config,
 			}
 
 			var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
@@ -720,11 +749,7 @@ func TestAuthenticateClient(t *testing.T) {
 
 			c, _, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
 
-			if len(tc.err) != 0 {
-				require.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-			}
-
-			if len(tc.err) == 0 && tc.expectErr == nil {
+			if len(tc.err) == 0 && tc.expectErr == nil && tc.errRegexp == nil {
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 				assert.EqualValues(t, client, c)
 			} else {
@@ -734,6 +759,10 @@ func TestAuthenticateClient(t *testing.T) {
 
 				if tc.expectErr != nil {
 					assert.EqualError(t, err, tc.expectErr.Error())
+				}
+
+				if tc.errRegexp != nil {
+					require.Regexp(t, tc.errRegexp, ErrorToDebugRFC6749Error(err).Error())
 				}
 			}
 		})
@@ -750,9 +779,10 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		JSONWebKeys: &jose.JSONWebKeySet{
 			Keys: []jose.JSONWebKey{
 				{
-					KeyID: "kid-foo",
-					Use:   consts.JSONWebTokenUseSignature,
-					Key:   &key.PublicKey,
+					KeyID:     "kid-foo",
+					Use:       consts.JSONWebTokenUseSignature,
+					Algorithm: "RS256",
+					Key:       &key.PublicKey,
 				},
 			},
 		},
@@ -761,12 +791,19 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.Clients[client.ID] = client
 
+	config := &Config{
+		JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+		AllowedJWTAssertionAudiences: []string{"token-url"},
+	}
+
+	config.JWTStrategy = &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
 	provider := &Fosite{
-		Store: store,
-		Config: &Config{
-			JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-			AllowedJWTAssertionAudiences: []string{"token-url"},
-		},
+		Store:  store,
+		Config: config,
 	}
 
 	formValues := url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateRSAAssertion(t, jwt.MapClaims{
@@ -778,13 +815,14 @@ func TestAuthenticateClientTwice(t *testing.T) {
 	}, key, "kid-foo")}, consts.FormParameterClientAssertionType: []string{consts.ClientAssertionTypeJWTBearer}}
 
 	c, _, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
-	require.NoError(t, err, "%#v", err)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
 	c, _, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
+	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
 	assert.Nil(t, c)
 }
 
@@ -792,7 +830,7 @@ func TestAuthenticateClientTwice(t *testing.T) {
 func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.RS256, claims)
 	token.Header["kid"] = kid
-	tokenString, err := token.SignedString(key)
+	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
 	return tokenString
 }
@@ -800,7 +838,7 @@ func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priva
 func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.ES256, claims)
 	token.Header["kid"] = kid
-	tokenString, err := token.SignedString(key)
+	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
 	return tokenString
 }
@@ -808,7 +846,7 @@ func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.P
 //nolint:unparam
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.SignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
+	tokenString, err := token.CompactSignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
 	require.NoError(t, err)
 	return tokenString
 }
@@ -816,7 +854,7 @@ func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Privat
 //nolint:unparam
 func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
-	tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	tokenString, err := token.CompactSignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 	return tokenString
 }

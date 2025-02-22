@@ -221,7 +221,6 @@ func TestDoesClientWhiteListRedirect(t *testing.T) {
 			require.NotNil(t, redir, "%d", k)
 			assert.Equal(t, c.expected, redir.String(), "%d", k)
 		}
-		t.Logf("Passed test case %d", k)
 	}
 }
 

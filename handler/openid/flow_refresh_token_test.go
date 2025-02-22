@@ -82,11 +82,12 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T) {
+	config := &oauth2.Config{}
+
 	var j = &DefaultStrategy{
-		Signer: &jwt.DefaultSigner{
-			GetPrivateKey: func(ctx context.Context) (any, error) {
-				return key, nil
-			},
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
 		},
 		Config: &oauth2.Config{
 			MinParameterEntropy: oauth2.MinParameterEntropy,
@@ -97,7 +98,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: j,
 		},
-		Config: &oauth2.Config{},
+		Config: config,
 	}
 	for _, c := range []struct {
 		areq        *oauth2.AccessRequest
@@ -146,7 +147,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)
@@ -181,7 +182,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
-				claims := decodedIdToken.Claims
+				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)

@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/hmac"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
@@ -428,16 +429,16 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						},
 					},
 					check: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
 						authreq = oauth2.NewDeviceAuthorizeRequest()
 						authreq.SetSession(openid.NewDefaultSession())
 						authreq.GetSession().SetExpiresAt(oauth2.UserCode,
-							time.Now().Add(-time.Hour).UTC().Round(time.Second))
+							time.Now().Add(-time.Hour).UTC().Truncate(jwt.TimePrecision))
 						authreq.GetSession().SetExpiresAt(oauth2.DeviceCode,
-							time.Now().Add(-time.Hour).UTC().Round(time.Second))
+							time.Now().Add(-time.Hour).UTC().Truncate(jwt.TimePrecision))
 						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
 						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
@@ -457,8 +458,6 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					if c.setup != nil {
 						c.setup(t, c.areq, c.authreq)
 					}
-
-					t.Logf("Processing %+v", c.areq.Client)
 
 					err := h.HandleTokenEndpointRequest(context.Background(), c.areq)
 					if c.expectErr != nil {

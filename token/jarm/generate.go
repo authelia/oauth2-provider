@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"time"
-
-	"github.com/google/uuid"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -22,15 +19,15 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 }
 
 // Generate generates the token and signature for a JARM response.
-func Generate(ctx context.Context, config Configurator, client Client, session any, in url.Values) (token, signature string, err error) {
+func Generate(ctx context.Context, config Configurator, client Client, session any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
 	if alg := client.GetAuthorizationSignedResponseAlg(); len(alg) > 0 {
-		headers[consts.JSONWebTokenHeaderAlgorithm] = alg
+		headers[jwt.JSONWebTokenHeaderAlgorithm] = alg
 	}
 
 	if kid := client.GetAuthorizationSignedResponseKeyID(); len(kid) > 0 {
-		headers[consts.JSONWebTokenHeaderKeyIdentifier] = kid
+		headers[jwt.JSONWebTokenHeaderKeyIdentifier] = kid
 	}
 
 	var issuer string
@@ -55,29 +52,22 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 			return "", "", errors.New("The JARM response modes require the Authorize Requester session to implement either the openid.Session or oauth2.JWTSessionContainer interfaces but it doesn't.")
 		}
 
-		if value, ok = src[consts.ClaimIssuer]; ok {
+		if value, ok = src[jwt.ClaimIssuer]; ok {
 			issuer, _ = value.(string)
 		}
 	}
 
-	claims := &jwt.JARMClaims{
-		JTI:       uuid.New().String(),
-		Issuer:    issuer,
-		IssuedAt:  time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx)),
-		Audience:  []string{client.GetID()},
-		Extra:     map[string]any{},
+	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))
+
+	for param := range parameters {
+		claims.Extra[param] = parameters.Get(param)
 	}
 
-	for param := range in {
-		claims.Extra[param] = in.Get(param)
+	var strategy jwt.Strategy
+
+	if strategy = config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx); strategy == nil {
+		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.")
 	}
 
-	var signer jwt.Signer
-
-	if signer = config.GetJWTSecuredAuthorizeResponseModeSigner(ctx); signer == nil {
-		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Signer but it didn't.")
-	}
-
-	return signer.Generate(ctx, claims.ToMapClaims(), &jwt.Headers{Extra: headers})
+	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(client))
 }

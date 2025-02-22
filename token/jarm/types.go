@@ -9,13 +9,16 @@ import (
 
 type Configurator interface {
 	GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string
-	GetJWTSecuredAuthorizeResponseModeSigner(ctx context.Context) jwt.Signer
+	GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 
 type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
+
+	// IsPublic returns true if the client has the public client type.
+	IsPublic() (public bool)
 
 	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the
 	// JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters

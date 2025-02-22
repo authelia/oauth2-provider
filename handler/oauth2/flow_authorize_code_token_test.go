@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
@@ -462,8 +463,8 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				require.NoError(t, s.InvalidateAuthorizeCodeSession(context.TODO(), sig))
 			},
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
-				assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), r.GetSession().GetExpiresAt(oauth2.AccessToken))
-				assert.Equal(t, time.Now().Add(time.Minute).UTC().Round(time.Second), r.GetSession().GetExpiresAt(oauth2.RefreshToken))
+				assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), r.GetSession().GetExpiresAt(oauth2.AccessToken))
+				assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), r.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code has already been used.",
 		},

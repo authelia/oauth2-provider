@@ -342,10 +342,6 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
 				consts.ClaimIssuedAt:         int64(100000),
 				consts.ClaimClientIdentifier: "aclient",
-				//"aclaim":                     1,
-				//consts.ClaimSubject: "asubj",
-				//consts.ClaimExpirationTime:   int64(1000000),
-				//consts.ClaimUsername: "auser",
 			},
 		},
 	}

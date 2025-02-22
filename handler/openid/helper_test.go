@@ -15,16 +15,16 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
 var strategy = &DefaultStrategy{
-	Signer: &jwt.DefaultSigner{
-		GetPrivateKey: func(_ context.Context) (any, error) {
-			return gen.MustRSAKey(), nil
+	Strategy: &jwt.DefaultStrategy{
+		Config: &oauth2.Config{
+			MinParameterEntropy: oauth2.MinParameterEntropy,
 		},
+		Issuer: jwt.MustGenDefaultIssuer(),
 	},
 	Config: &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,
@@ -74,7 +74,6 @@ func TestGenerateIDToken(t *testing.T) {
 		if err == nil {
 			assert.NotEmpty(t, token, "(%d) %s", k, c.description)
 		}
-		t.Logf("Passed test case %d", k)
 	}
 }
 

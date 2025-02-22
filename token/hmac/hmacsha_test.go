@@ -65,7 +65,7 @@ func TestValidateSignatureRejects(t *testing.T) {
 	cg := HMACStrategy{
 		Config: &oauth2.Config{GlobalSecret: []byte("1234567890123456789012345678901234567890")},
 	}
-	for k, c := range []string{
+	for _, c := range []string{
 		"",
 		" ",
 		"foo.bar",
@@ -74,7 +74,6 @@ func TestValidateSignatureRejects(t *testing.T) {
 	} {
 		err = cg.Validate(context.Background(), c)
 		assert.Error(t, err)
-		t.Logf("Passed test case %d", k)
 	}
 }
 

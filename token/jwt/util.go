@@ -361,7 +361,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 	}
 }
 
-// EncodeCompactSigned helps encoding a token using a signature backed compact encoding.
+// EncodeCompactSigned helps to encode a token using a signature backed compact encoding.
 func EncodeCompactSigned(ctx context.Context, claims Claims, headers Mapper, key *jose.JSONWebKey) (tokenString string, signature string, err error) {
 	token := New()
 
@@ -374,7 +374,7 @@ func EncodeCompactSigned(ctx context.Context, claims Claims, headers Mapper, key
 	return token.CompactSigned(key)
 }
 
-// EncodeNestedCompactEncrypted helps encoding a token using a signature backed compact encoding, then nests that within
+// EncodeNestedCompactEncrypted helps to encode a token using a signature backed compact encoding, then nests that within
 // an encrypted compact encoded JWT.
 func EncodeNestedCompactEncrypted(ctx context.Context, claims Claims, headers, headersJWE Mapper, keySig, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
 	token := New()

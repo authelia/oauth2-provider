@@ -50,7 +50,7 @@ func (m MapClaims) GetSubject() (sub string, err error) {
 	return m.toString(ClaimSubject)
 }
 
-// VerifySubject compares the iss claim against cmp.
+// VerifySubject compares the syv claim against cmp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifySubject(cmp string, required bool) (ok bool) {
 	var (

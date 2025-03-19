@@ -274,7 +274,7 @@ verify:
 
 	if claims.Expiry.Time().Before(time.Now()) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The JWT in 'assertion' request parameter expired."),
+			WithHint("The JWT provided in the 'assertion' request parameter is expired."),
 		)
 	}
 

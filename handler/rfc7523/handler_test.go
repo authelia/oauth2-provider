@@ -381,7 +381,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
 	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because assertion expired")
 	s.Equal(
-		"The JWT in 'assertion' request parameter expired.",
+		"The JWT provided in the 'assertion' request parameter is expired.",
 		oauth2.ErrorToRFC6749Error(err).HintField,
 	)
 }

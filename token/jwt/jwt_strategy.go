@@ -7,6 +7,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -75,7 +76,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	kid, alg, enc := o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
-	if len(kid)+len(alg) == 0 {
+	if len(kid) == 0 && (alg == "" || alg == consts.JSONWebTokenAlgNone) {
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 

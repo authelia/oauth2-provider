@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
-	github.com/dgraph-io/ristretto v0.1.1
+	github.com/dgraph-io/ristretto v0.2.0
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -27,7 +27,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elazarl/goproxy v0.0.0-20221015165544-a0805db90819 // indirect
-	github.com/golang/glog v1.2.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect

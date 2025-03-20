@@ -284,13 +284,13 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx co
 
 	if errors.Is(storageErr, oauth2.ErrSerializationFailure) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
-			WithDebugf(storageErr.Error()).
+			WithDebug(storageErr.Error()).
 			WithHint("Failed to refresh token because of multiple concurrent requests using the same token which is not allowed."))
 	}
 
 	if errors.Is(storageErr, oauth2.ErrNotFound) || errors.Is(storageErr, oauth2.ErrInactiveToken) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
-			WithDebugf(storageErr.Error()).
+			WithDebug(storageErr.Error()).
 			WithHint("Failed to refresh token because of multiple concurrent requests using the same token which is not allowed."))
 	}
 

@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -360,12 +362,7 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 	}
 
 	if t.HeaderJWE != nil && (t.KeyAlgorithm != "" || t.ContentEncryption != "") {
-		var (
-			typ any
-			ok  bool
-		)
-
-		if typ, ok = t.HeaderJWE[JSONWebTokenHeaderType]; !ok || typ != JSONWebTokenTypeJWT {
+		if !validateTokenType([]string{consts.JSONWebTokenTypeJWT}, t.HeaderJWE, vopts.allowEmptyType) {
 			vErr.Inner = errors.New("token was encrypted with invalid typ")
 			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
 		}
@@ -387,7 +384,7 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 	}
 
 	if len(vopts.types) != 0 {
-		if !validateTokenType(vopts.types, t.Header) {
+		if !validateTokenType(vopts.types, t.Header, vopts.allowEmptyType) {
 			vErr.Inner = errors.New("token was signed with an invalid typ")
 			vErr.Errors |= ValidationErrorHeaderTypeInvalid
 		}
@@ -468,12 +465,19 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 type HeaderValidationOption func(opts *HeaderValidationOptions)
 
 type HeaderValidationOptions struct {
-	types      []string
-	alg        string
-	kid        string
-	kidEnc     string
-	keyAlg     string
-	contentEnc string
+	allowEmptyType bool
+	types          []string
+	alg            string
+	kid            string
+	kidEnc         string
+	keyAlg         string
+	contentEnc     string
+}
+
+func ValidateAllowEmptyType(value bool) HeaderValidationOption {
+	return func(opts *HeaderValidationOptions) {
+		opts.allowEmptyType = value
+	}
 }
 
 func ValidateTypes(types ...string) HeaderValidationOption {
@@ -576,14 +580,21 @@ func pointer(v any) any {
 	return v
 }
 
-func validateTokenType(values []string, header map[string]any) bool {
+func validateTokenType(values []string, header map[string]any, allowEmpty bool) bool {
 	var (
 		raw any
 		ok  bool
 	)
 
 	if raw, ok = header[consts.JSONWebTokenHeaderType]; !ok {
-		return false
+		// Only allow the JWT typ to be empty explicitly. In addition if it's allowed we must assume the media type
+		// is JWT for safety so unless it's allowed we should return a validation error here.
+		if !allowEmpty || !stringslice.HasI(values, consts.JSONWebTokenTypeJWT) {
+			return false
+		}
+
+		// Assume JWT if not present.
+		return validateTokenTypeValue(values, consts.JSONWebTokenTypeJWT)
 	}
 
 	return validateTokenTypeValue(values, raw)
@@ -600,7 +611,8 @@ func validateTokenTypeValue(values []string, raw any) bool {
 	}
 
 	for _, t := range values {
-		if t == typ {
+		// 5.1 Media type names are not case sensitive.
+		if strings.EqualFold(t, typ) {
 			return true
 		}
 	}

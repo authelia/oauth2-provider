@@ -131,6 +131,8 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 		jwt.ValidateEncryptionKeyID(client.GetRequestObjectEncryptionKeyID()),
 		jwt.ValidateKeyAlgorithm(client.GetRequestObjectEncryptionAlg()),
 		jwt.ValidateContentEncryption(client.GetRequestObjectEncryptionEnc()),
+		jwt.ValidateTypes(consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest),
+		jwt.ValidateAllowEmptyType(true),
 	}
 
 	if err = token.Valid(optsValidHeader...); err != nil {
@@ -529,13 +531,13 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'alg' header value '%s' due to the client registration 'request_object_signing_alg' value but the request object was signed with the 'alg' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningAlg(), token.SignatureAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
-			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'typ' header value '%s' but the request object was signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'typ' header value '%s' but the request object was signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderType, token.Header))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
-			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'typ' header value '%s' but the request object was encrypted with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'typ' header value '%s' but the request object was encrypted with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderType, token.HeaderJWE))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
-			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), token.HeaderJWE[consts.JSONWebTokenHeaderContentType], token.HeaderJWE[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), headerValueString(consts.JSONWebTokenHeaderContentType, token.HeaderJWE), headerValueString(consts.JSONWebTokenHeaderType, token.HeaderJWE))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
-			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'cty' header value '%s' but the request object was encrypted with the 'cty' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
+			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'cty' header value '%s' but the request object was encrypted with the 'cty' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderContentType, token.HeaderJWE))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the request object was encrypted with the 'kid' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectEncryptionKeyID(), token.EncryptionKeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
@@ -594,5 +596,13 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated due to a key lookup error. %s.", hintRequestObjectPrefix(openid), client.GetID(), errJWKLookup.Description)
 	} else {
 		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. %s.", hintRequestObjectPrefix(openid), client.GetID(), ErrorToDebugRFC6749Error(inner).Error())
+	}
+}
+
+func headerValueString(key string, headers map[string]any) string {
+	if value, ok := headers[key]; !ok || value == nil {
+		return ""
+	} else {
+		return fmt.Sprintf("%s", value)
 	}
 }

@@ -17,10 +17,11 @@ const (
 )
 
 const (
-	JSONWebTokenTypeJWT                    = "JWT"
-	JSONWebTokenTypeAccessToken            = "at+jwt"
-	JSONWebTokenTypeAccessTokenAlternative = "application/at+jwt"
-	JSONWebTokenTypeTokenIntrospection     = "token-introspection+jwt"
+	JSONWebTokenTypeJWT                            = "JWT"
+	JSONWebTokenTypeAccessToken                    = "at+jwt"
+	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt"
+	JSONWebTokenTypeAccessTokenAlternative         = "application/at+jwt"
+	JSONWebTokenTypeTokenIntrospection             = "token-introspection+jwt"
 )
 
 const (

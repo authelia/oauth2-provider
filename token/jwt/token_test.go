@@ -18,8 +18,209 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 )
+
+func TestToken_Valid(t *testing.T) {
+	testCases := []struct {
+		name   string
+		have   *Token
+		opts   []HeaderValidationOption
+		errors uint32
+		err    string
+	}{
+		{
+			"ShouldErrorNoTyp",
+			&Token{valid: true},
+			nil,
+			ValidationErrorHeaderTypeInvalid,
+			"token was signed with an invalid typ",
+		},
+		{
+			"ShouldNotErrorNoTyp",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true)},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorTypNormal",
+			&Token{valid: true, Header: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT}},
+			[]HeaderValidationOption{ValidateTypes(consts.JSONWebTokenTypeJWT)},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorTypLowerCase",
+			&Token{valid: true, Header: map[string]any{consts.JSONWebTokenHeaderType: "jwt"}},
+			[]HeaderValidationOption{ValidateTypes(consts.JSONWebTokenTypeJWT)},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidSignature",
+			&Token{valid: false},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true)},
+			ValidationErrorSignatureInvalid,
+			"token has an invalid or unverified signature",
+		},
+		{
+			"ShouldErrorInvalidAlg",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateAlgorithm("RS256")},
+			ValidationErrorHeaderAlgorithmInvalid,
+			"token was signed with an invalid alg",
+		},
+		{
+			"ShouldNotErrorValidAlg",
+			&Token{valid: true, SignatureAlgorithm: "RS256"},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateAlgorithm("RS256")},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidKID",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateKeyID("abc")},
+			ValidationErrorHeaderKeyIDInvalid,
+			"token was signed with an invalid kid",
+		},
+		{
+			"ShouldNotErrorValidKID",
+			&Token{valid: true, KeyID: "abc"},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateKeyID("abc")},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidKeyAlgorithm",
+			&Token{valid: true, KeyAlgorithm: jose.RSA_OAEP},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateKeyAlgorithm("RSA-OAEP-256")},
+			ValidationErrorHeaderKeyAlgorithmInvalid,
+			"token was encrypted with an invalid alg",
+		},
+		{
+			"ShouldNotErrorValidKeyAlgorithm",
+			&Token{valid: true, KeyAlgorithm: jose.RSA_OAEP_256},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateKeyAlgorithm("RSA-OAEP-256")},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorAbsentKeyAlgorithm",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateKeyAlgorithm("RSA-OAEP-256")},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidCEK",
+			&Token{valid: true, ContentEncryption: jose.A192CBC_HS384},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateContentEncryption("A128CBC-HS256")},
+			ValidationErrorHeaderContentEncryptionInvalid,
+			"token was encrypted with an invalid enc",
+		},
+		{
+			"ShouldNotErrorValidCEK",
+			&Token{valid: true, ContentEncryption: jose.A128CBC_HS256},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateContentEncryption("A128CBC-HS256")},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorAbsentCEK",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateContentEncryption("A128CBC-HS256")},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidEncKID",
+			&Token{valid: true, EncryptionKeyID: "abc"},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateEncryptionKeyID("123")},
+			ValidationErrorHeaderEncryptionKeyIDInvalid,
+			"token was encrypted with an invalid kid",
+		},
+		{
+			"ShouldNotErrorValidCEK",
+			&Token{valid: true, EncryptionKeyID: "abc"},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateEncryptionKeyID("abc")},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorAbsentCEK",
+			&Token{valid: true},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateEncryptionKeyID("abc")},
+			0,
+			"",
+		},
+
+		{
+			"ShouldNotErrorValidCtyTyp",
+			&Token{
+				valid:     true,
+				Header:    map[string]any{consts.JSONWebTokenHeaderType: "JWT"},
+				HeaderJWE: map[string]any{consts.JSONWebTokenHeaderType: "JWT", consts.JSONWebTokenHeaderContentType: "JWT"},
+			},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true)},
+			0,
+			"",
+		},
+		{
+			"ShouldNotErrorInvalidJWETyp",
+			&Token{
+				valid:     true,
+				Header:    map[string]any{consts.JSONWebTokenHeaderType: "JWT"},
+				HeaderJWE: map[string]any{consts.JSONWebTokenHeaderType: "JWT", consts.JSONWebTokenHeaderContentType: "JWT"},
+			},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true)},
+			0,
+			"",
+		},
+		{
+			"ShouldErrorInvalidJWETypCty",
+			&Token{
+				valid:             true,
+				ContentEncryption: jose.A128CBC_HS256,
+				KeyAlgorithm:      jose.RSA_OAEP_256,
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: "a"},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: "a", consts.JSONWebTokenHeaderContentType: "a"},
+			},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateTypes("x")},
+			ValidationErrorHeaderTypeInvalid + ValidationErrorHeaderContentTypeInvalid + ValidationErrorHeaderEncryptionTypeInvalid,
+			"token was signed with an invalid typ",
+		},
+		{
+			"ShouldErrorInvalidJWEMismatchTypCty",
+			&Token{
+				valid:             true,
+				ContentEncryption: jose.A128CBC_HS256,
+				KeyAlgorithm:      jose.RSA_OAEP_256,
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: "a"},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: "JWT", consts.JSONWebTokenHeaderContentType: "c"},
+			},
+			[]HeaderValidationOption{ValidateAllowEmptyType(true), ValidateTypes("a")},
+			ValidationErrorHeaderContentTypeInvalidMismatch + ValidationErrorHeaderContentTypeInvalid,
+			"token was encrypted with an invalid cty",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.have.Valid(tc.opts...)
+
+			if tc.errors == 0 {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+				e := err.(*ValidationError)
+				assert.Equal(t, tc.errors, e.Errors)
+			}
+		})
+	}
+}
 
 func TestUnsignedToken(t *testing.T) {
 	var testCases = []struct {
@@ -69,12 +270,12 @@ func TestJWTHeaders(t *testing.T) {
 		expectedType string
 	}{
 		{
-			name:         "set JWT as 'typ' when the the type is not specified in the headers",
+			name:         "SetJWTAsHeaderTypWhenNotSpecified",
 			jwtHeaders:   map[string]any{},
 			expectedType: JSONWebTokenTypeJWT,
 		},
 		{
-			name:         "'typ' set explicitly",
+			name:         "ExplicitlySetheaderTyp",
 			jwtHeaders:   map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
 			expectedType: JSONWebTokenTypeAccessToken,
 		},

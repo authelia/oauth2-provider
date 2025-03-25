@@ -100,7 +100,7 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		if str, err = c.GetIssuer(); err != nil {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
-		} else if !validString(str, vopts.iss, true) {
+		} else if !validString(str, vopts.iss, !vopts.issNotRequired) {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
 		}
@@ -119,14 +119,14 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	var aud ClaimStrings
 
 	if len(vopts.aud) != 0 {
-		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAny(vopts.aud, true) {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAny(vopts.aud, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}
 	}
 
 	if len(vopts.audAll) != 0 {
-		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAll(vopts.audAll, true) {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAll(vopts.audAll, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}

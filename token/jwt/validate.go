@@ -17,6 +17,7 @@ type ClaimValidationOptions struct {
 	iatRequired    bool
 	nbfRequired    bool
 	issNotRequired bool
+	audNotRequired bool
 }
 
 func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
@@ -46,6 +47,12 @@ func ValidateAudienceAny(aud ...string) ClaimValidationOption {
 func ValidateAudienceAll(aud ...string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.audAll = aud
+	}
+}
+
+func ValidateDoNotRequireAudience() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.audNotRequired = true
 	}
 }
 

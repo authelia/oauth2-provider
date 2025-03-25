@@ -8,14 +8,15 @@ import (
 type ClaimValidationOption func(opts *ClaimValidationOptions)
 
 type ClaimValidationOptions struct {
-	timef       func() time.Time
-	iss         string
-	aud         []string
-	audAll      []string
-	sub         string
-	expRequired bool
-	iatRequired bool
-	nbfRequired bool
+	timef          func() time.Time
+	iss            string
+	aud            []string
+	audAll         []string
+	sub            string
+	expRequired    bool
+	iatRequired    bool
+	nbfRequired    bool
+	issNotRequired bool
 }
 
 func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
@@ -27,6 +28,12 @@ func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
 func ValidateIssuer(iss string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.iss = iss
+	}
+}
+
+func ValidateDoNotRequireIssuer() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.issNotRequired = true
 	}
 }
 

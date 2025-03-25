@@ -253,7 +253,7 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	}
 
 	if len(vopts.iss) != 0 {
-		if !m.VerifyIssuer(vopts.iss, true) {
+		if !m.VerifyIssuer(vopts.iss, !vopts.issNotRequired) {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
 		}

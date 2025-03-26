@@ -27,9 +27,10 @@ import (
 func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
 	return &defaultSession{
 		DefaultSession: &openid.DefaultSession{
-			Claims:  j,
-			Headers: &jwt.Headers{},
-			Subject: j.Subject,
+			Claims:      j,
+			Headers:     &jwt.Headers{},
+			Subject:     j.Subject,
+			RequestedAt: time.Now().UTC().UnixMicro(),
 		},
 	}
 }
@@ -104,9 +105,8 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(time.Second)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			}),
 			description: "should not pass missing redirect uri",
 			setup: func(oauthClient *xoauth2.Config) string {
@@ -129,22 +129,21 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(time.Second)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			}),
 			description: "should pass",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
+
 				return oauthClient.AuthCodeURL("12345678901234567890") + "&nonce=1234567890&prompt=login"
 			},
 			authStatusCode: http.StatusOK,
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(time.Second)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			}),
 			description: "should not pass missing redirect uri",
 			setup: func(oauthClient *xoauth2.Config) string {
@@ -157,9 +156,8 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(time.Second)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			}),
 			description: "should not pass missing redirect uri",
 			setup: func(oauthClient *xoauth2.Config) string {
@@ -172,9 +170,8 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 			}),
 			description: "should fail because authentication was in the past",
 			setup: func(oauthClient *xoauth2.Config) string {
@@ -186,9 +183,8 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
-				Subject:     "peter",
-				RequestedAt: jwt.Now(),
-				AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				Subject:  "peter",
+				AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 			}),
 			description: "should pass because authorization was in the past and no login was required",
 			setup: func(oauthClient *xoauth2.Config) string {

@@ -25,7 +25,6 @@ type IDTokenClaims struct {
 	ExpirationTime                      *NumericDate   `json:"exp"`
 	IssuedAt                            *NumericDate   `json:"iat"`
 	AuthTime                            *NumericDate   `json:"auth_time,omitempty"`
-	RequestedAt                         *NumericDate   `json:"rat,omitempty"`
 	Nonce                               string         `json:"nonce,omitempty"`
 	AuthenticationContextClassReference string         `json:"acr,omitempty"`
 	AuthenticationMethodsReferences     []string       `json:"amr,omitempty"`
@@ -163,14 +162,6 @@ func (c *IDTokenClaims) GetAuthTimeSafe() time.Time {
 	return c.AuthTime.UTC()
 }
 
-func (c *IDTokenClaims) GetRequestedAtSafe() time.Time {
-	if c.RequestedAt == nil {
-		return time.Unix(0, 0).UTC()
-	}
-
-	return c.RequestedAt.UTC()
-}
-
 func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 	claims := MapClaims{}
 
@@ -208,10 +199,6 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			}
 		case ClaimAuthenticationTime:
 			if c.AuthTime, err = toNumericDate(value); err == nil {
-				ok = true
-			}
-		case ClaimRequestedAt:
-			if c.RequestedAt, err = toNumericDate(value); err == nil {
 				ok = true
 			}
 		case ClaimNonce:
@@ -292,12 +279,6 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		ret[ClaimAuthenticationTime] = c.AuthTime.Unix()
 	} else {
 		delete(ret, ClaimAuthenticationTime)
-	}
-
-	if c.RequestedAt != nil {
-		ret[ClaimRequestedAt] = c.RequestedAt.Unix()
-	} else {
-		delete(ret, ClaimRequestedAt)
 	}
 
 	if len(c.Nonce) > 0 {

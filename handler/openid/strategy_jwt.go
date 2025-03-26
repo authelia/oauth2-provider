@@ -28,24 +28,28 @@ type Session interface {
 	// Session should store this pointer and return always the same pointer.
 	IDTokenHeaders() *jwt.Headers
 
+	SetRequestedAt(rat time.Time)
+
+	GetRequestedAt() (rat time.Time)
+
 	oauth2.Session
 }
 
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
-	Claims    *jwt.IDTokenClaims             `json:"id_token_claims"`
-	Headers   *jwt.Headers                   `json:"headers"`
-	ExpiresAt map[oauth2.TokenType]time.Time `json:"expires_at"`
-	Username  string                         `json:"username"`
-	Subject   string                         `json:"subject"`
+	Claims      *jwt.IDTokenClaims             `json:"id_token_claims"`
+	Headers     *jwt.Headers                   `json:"headers"`
+	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at"`
+	Username    string                         `json:"username"`
+	Subject     string                         `json:"subject"`
+	RequestedAt int64                          `json:"requested_at"`
 }
 
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			RequestedAt: jwt.Now(),
-		},
-		Headers: &jwt.Headers{},
+		Claims:      &jwt.IDTokenClaims{},
+		Headers:     &jwt.Headers{},
+		RequestedAt: time.Now().UTC().UnixMicro(),
 	}
 }
 
@@ -74,6 +78,14 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 		return time.Time{}
 	}
 	return s.ExpiresAt[key]
+}
+
+func (s *DefaultSession) SetRequestedAt(rat time.Time) {
+	s.RequestedAt = rat.UnixMicro()
+}
+
+func (s *DefaultSession) GetRequestedAt() (rat time.Time) {
+	return time.UnixMicro(s.RequestedAt).UTC()
 }
 
 func (s *DefaultSession) GetUsername() string {
@@ -131,12 +143,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		lifespan = defaultExpiryTime
 	}
 
-	sess, ok := requester.GetSession().(Session)
+	session, ok := requester.GetSession().(Session)
 	if !ok {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}
@@ -155,19 +167,13 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
 
-		var rat time.Time
-
-		if claims.RequestedAt != nil {
-			rat = claims.GetRequestedAtSafe()
-		} else {
-			rat = requester.GetRequestedAt()
-		}
+		rat := session.GetRequestedAt()
 
 		if maxAge > 0 {
 			switch {
 			case claims.AuthTime == nil, claims.AuthTime.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
-			case rat.IsZero():
+			case rat.Unix() <= 0:
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because requested at value is required when max_age is set."))
 			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(rat):
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
@@ -250,7 +256,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
 	claims.IssuedAt = jwt.Now()
 
-	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(sess.IDTokenHeaders()), jwt.WithClient(jwtClient))
+	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
 }

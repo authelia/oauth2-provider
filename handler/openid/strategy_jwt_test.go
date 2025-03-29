@@ -5,7 +5,6 @@ package openid
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -29,201 +28,243 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 		Config: config,
 	}
 
-	var req *oauth2.AccessRequest
-	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   bool
+	testCases := []struct {
+		name  string
+		setup func() (requester *oauth2.AccessRequest)
+		err   string
 	}{
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldHandleNonce",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+
+				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldHandleNonceAndMaxAge",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.Now(),
-						RequestedAt: jwt.Now(),
+						Subject:  "peter",
+						AuthTime: jwt.Now(),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
-				req.Form.Set(consts.FormParameterMaximumAge, "1234")
+
+				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+				requester.Form.Set(consts.FormParameterMaximumAge, "1234")
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailExpiresInPast",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:        "peter",
 						ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+
+				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because expiry claim can not be in the past.",
 		},
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailAuthMaxAgeNoAuthTime",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
 					},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
-				req.Form.Set(consts.FormParameterMaximumAge, "1234")
+
+				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+				requester.Form.Set(consts.FormParameterMaximumAge, "1234")
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because authentication time claim is required when max_age is set.",
 		},
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailEmptySubject",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims:  &jwt.IDTokenClaims{},
 					Headers: &jwt.Headers{},
 				})
-				req.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because subject is an empty string.",
 		},
 		{
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassWithSubject",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "peter",
 					},
 					Headers: &jwt.Headers{},
 				})
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should pass because max_age was requested and auth_time happened after initial request time",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassMaxAgeWhenSameAuthTimeAndRequestTime",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.Now(),
-						RequestedAt: jwt.Now(),
+						Subject:  "peter",
+						AuthTime: jwt.Now(),
 					},
-					Headers: &jwt.Headers{},
+					RequestedAt: time.Now().UnixMicro(),
+					Headers:     &jwt.Headers{},
 				})
-				req.Form.Set(consts.FormParameterMaximumAge, "60")
+				requester.Form.Set(consts.FormParameterMaximumAge, "60")
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should fail because max_age was requested and auth_time has expired",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailAuthTimeBeforeMaxAge",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject:  "peter",
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterMaximumAge, "60")
+
+				requester.Form.Set(consts.FormParameterMaximumAge, "60")
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because authentication time does not satisfy max_age time.",
 		},
 		{
-			description: "should fail because prompt=none was requested and auth_time indicates fresh login",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailPromptNoneAndAuthTimeIndicatesFreshLogin",
+			setup: func() (requester *oauth2.AccessRequest) {
+				now := time.Unix(1000000000, 0).UTC()
+
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.Now(),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: &jwt.NumericDate{Time: now},
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: now.Add(-time.Minute).UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because prompt was set to 'none' but auth_time ('2001-09-09 01:46:40 +0000 UTC') happened after the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was logged in during this request which is not allowed.",
 		},
 		{
-			description: "should pass because prompt=none was requested and auth_time indicates fresh login but grant type is refresh_token",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassPromptNoneWithAuthTimeFreshLoginFlowRefresh",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.Now(),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.Now(),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
-				req.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+				requester.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should pass because prompt=none was requested and auth_time indicates old login",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassPromptNoneAndAuthTimeOldLogin",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should pass because prompt=login was requested and auth_time indicates fresh login",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "should pass because prompt=login was requested and auth_time indicates fresh login",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.Now(),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.Now(),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should fail because prompt=login was requested and auth_time indicates old login",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailPromptLoginAuthTimeIsBeforeRequest",
+			setup: func() (requester *oauth2.AccessRequest) {
+				now := time.Unix(1000000000, 0).UTC()
+
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.NewNumericDate(now.Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: now.Add(-time.Minute).UnixMicro(),
 				})
-				req.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because prompt was set to 'login' but auth_time ('2001-09-09 00:46:40 +0000 UTC') happened before the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was not re-authenticated which is forbidden.",
 		},
 		{
-			description: "should pass because id_token_hint subject matches subject from claims",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassIDTokenHintSubjectMatches",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -231,20 +272,22 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				}))
-				req.Form.Set(consts.FormParameterIDTokenHint, token)
+				requester.Form.Set(consts.FormParameterIDTokenHint, token)
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should pass even though token is expired",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldPassIDTokenHintExpired",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -253,34 +296,50 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 					},
 					Headers: &jwt.Headers{},
 				}))
-				req.Form.Set(consts.FormParameterIDTokenHint, token)
+				requester.Form.Set(consts.FormParameterIDTokenHint, token)
+
+				return requester
 			},
-			expectErr: false,
+			err: "",
 		},
 		{
-			description: "should fail because id_token_hint subject does not match subject from claims",
-			setup: func() {
-				req = oauth2.NewAccessRequest(&DefaultSession{
+			name: "ShouldFailIDTokenHintDoesNotMatch",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:     "peter",
-						AuthTime:    jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						RequestedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						Subject:  "peter",
+						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "alice"}, Headers: &jwt.Headers{},
 				}))
-				req.Form.Set(consts.FormParameterIDTokenHint, token)
+				requester.Form.Set(consts.FormParameterIDTokenHint, token)
+
+				return requester
 			},
-			expectErr: true,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Subject from authorization mismatches id token subject from 'id_token_hint'.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			c.setup()
-			token, err := j.GenerateIDToken(context.TODO(), time.Duration(0), req)
-			assert.Equal(t, c.expectErr, err != nil, "%d: %+v", k, err)
-			if !c.expectErr {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requester *oauth2.AccessRequest
+
+			if tc.setup != nil {
+				requester = tc.setup()
+			} else {
+				requester = oauth2.NewAccessRequest(&DefaultSession{})
+			}
+
+			token, err := j.GenerateIDToken(context.TODO(), time.Duration(0), requester)
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+			} else {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 				assert.NotEmpty(t, token)
 			}
 		})

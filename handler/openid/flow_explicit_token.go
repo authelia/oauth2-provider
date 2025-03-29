@@ -39,12 +39,12 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'authorization_code'."))
 	}
 
-	sess, ok := authorize.GetSession().(Session)
+	session, ok := authorize.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}

@@ -76,7 +76,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
 	}
 
-	sess, ok := requester.GetSession().(Session)
+	session, ok := requester.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(ErrInvalidSession)
 	}
@@ -92,7 +92,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		}
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 
 	var (
 		hash string
@@ -107,7 +107,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	//  - https://openid.bitbucket.io/fapi/fapi-2_0-security-profile.html#section-5.6
 	if requester.GetResponseTypes().Matches(consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
 		if state := requester.GetState(); len(state) != 0 && claims != nil {
-			if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, requester.GetState()); err != nil {
+			if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, requester.GetState()); err != nil {
 				return err
 			}
 
@@ -145,7 +145,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		responder.AddParameter(consts.FormParameterAuthorizationCode, code)
 		requester.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
-		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, responder.GetParameters().Get(consts.FormParameterAuthorizationCode)); err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, responder.GetParameters().Get(consts.FormParameterAuthorizationCode)); err != nil {
 			return err
 		}
 
@@ -167,7 +167,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 		requester.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
 
-		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, sess, responder.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, responder.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
 			return err
 		}
 

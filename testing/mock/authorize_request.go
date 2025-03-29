@@ -352,6 +352,18 @@ func (mr *MockAuthorizeRequesterMockRecorder) SetID(id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetID", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetID), id)
 }
 
+// SetRequestedAt mocks base method.
+func (m *MockAuthorizeRequester) SetRequestedAt(rat time.Time) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetRequestedAt", rat)
+}
+
+// SetRequestedAt indicates an expected call of SetRequestedAt.
+func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedAt(rat any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedAt", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedAt), rat)
+}
+
 // SetRequestedAudience mocks base method.
 func (m *MockAuthorizeRequester) SetRequestedAudience(audience oauth2.Arguments) {
 	m.ctrl.T.Helper()

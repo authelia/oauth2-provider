@@ -76,7 +76,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		}
 	}
 
-	sess, ok := requester.GetSession().(Session)
+	session, ok := requester.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(ErrInvalidSession)
 	}
@@ -85,14 +85,14 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 	if requester.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
 		if err := c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, requester, responder); err != nil {
 			return errorsx.WithStack(err)
 		}
 
 		requester.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
-		hash, err := c.ComputeHash(ctx, sess, responder.GetParameters().Get(consts.AccessResponseAccessToken))
+		hash, err := c.ComputeHash(ctx, session, responder.GetParameters().Get(consts.AccessResponseAccessToken))
 		if err != nil {
 			return err
 		}

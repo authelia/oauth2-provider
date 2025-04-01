@@ -2,7 +2,7 @@ module authelia.com/provider/oauth2
 
 go 1.24
 
-toolchain go1.24.1
+toolchain go1.24.2
 
 require (
 	github.com/dgraph-io/ristretto v0.2.0

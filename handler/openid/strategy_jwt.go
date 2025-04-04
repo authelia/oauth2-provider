@@ -85,6 +85,10 @@ func (s *DefaultSession) SetRequestedAt(rat time.Time) {
 }
 
 func (s *DefaultSession) GetRequestedAt() (rat time.Time) {
+	if s.RequestedAt == 0 {
+		return rat
+	}
+
 	return time.UnixMicro(s.RequestedAt).UTC()
 }
 
@@ -173,7 +177,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			switch {
 			case claims.AuthTime == nil, claims.AuthTime.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
-			case rat.Unix() <= 0:
+			case rat.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because requested at value is required when max_age is set."))
 			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(rat):
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))

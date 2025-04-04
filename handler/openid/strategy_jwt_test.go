@@ -15,6 +15,32 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestDefaultSession_GetRequestedAt(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *DefaultSession
+		expected time.Time
+		zero     bool
+	}{
+		{
+			"ShouldHandleZero",
+			&DefaultSession{},
+			time.Time{},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			have := tc.have.GetRequestedAt()
+
+			assert.Equal(t, tc.expected, have)
+			assert.Equal(t, tc.zero, have.IsZero())
+			assert.Equal(t, tc.zero, tc.expected.IsZero())
+		})
+	}
+}
+
 func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,

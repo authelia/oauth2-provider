@@ -5,6 +5,8 @@ package openid
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -35,21 +37,50 @@ type Session interface {
 	oauth2.Session
 }
 
+type TimeMilliseconds struct {
+	time.Time
+}
+
+func (t TimeMilliseconds) MarshalJSON() (b []byte, err error) {
+	output := []byte(strconv.FormatInt(t.UnixMicro(), 10))
+
+	return output, nil
+}
+
+func (t *TimeMilliseconds) UnmarshalJSON(b []byte) (err error) {
+	var (
+		number json.Number
+		milli  int64
+	)
+
+	if err = json.Unmarshal(b, &number); err != nil {
+		return fmt.Errorf("could not parse PrecisionTime: %w", err)
+	}
+
+	if milli, err = number.Int64(); err != nil {
+		return fmt.Errorf("could not convert json number value to integer: %w", err)
+	}
+
+	*t = TimeMilliseconds{Time: time.UnixMicro(milli).UTC()}
+
+	return nil
+}
+
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
-	Claims      *jwt.IDTokenClaims             `json:"id_token_claims"`
-	Headers     *jwt.Headers                   `json:"headers"`
-	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at"`
-	Username    string                         `json:"username"`
-	Subject     string                         `json:"subject"`
-	RequestedAt int64                          `json:"requested_at"`
+	Claims      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
+	Headers     *jwt.Headers                   `json:"headers,omitempty"`
+	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
+	Username    string                         `json:"username,omitempty"`
+	Subject     string                         `json:"subject,omitempty"`
+	RequestedAt TimeMilliseconds               `json:"requested_at"`
 }
 
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		Claims:      &jwt.IDTokenClaims{},
 		Headers:     &jwt.Headers{},
-		RequestedAt: time.Now().UTC().UnixMicro(),
+		RequestedAt: TimeMilliseconds{Time: time.Now().UTC()},
 	}
 }
 
@@ -81,15 +112,11 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 }
 
 func (s *DefaultSession) SetRequestedAt(rat time.Time) {
-	s.RequestedAt = rat.UnixMicro()
+	s.RequestedAt = TimeMilliseconds{Time: rat.UTC()}
 }
 
 func (s *DefaultSession) GetRequestedAt() (rat time.Time) {
-	if s.RequestedAt == 0 {
-		return rat
-	}
-
-	return time.UnixMicro(s.RequestedAt).UTC()
+	return s.RequestedAt.Time
 }
 
 func (s *DefaultSession) GetUsername() string {

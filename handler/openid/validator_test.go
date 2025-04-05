@@ -39,7 +39,7 @@ func TestValidatePrompt(t *testing.T) {
 		return s
 	}
 
-	now := time.Unix(1000000000, 0)
+	now := time.Unix(1000000000, 0).UTC()
 
 	testCases := []struct {
 		name        string
@@ -62,7 +62,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -105,7 +105,7 @@ func TestValidatePrompt(t *testing.T) {
 				Claims: &jwt.IDTokenClaims{
 					Subject: "foo",
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -118,7 +118,7 @@ func TestValidatePrompt(t *testing.T) {
 				Claims: &jwt.IDTokenClaims{
 					Subject: "foo",
 				},
-				RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 			},
 		},
 		{
@@ -132,7 +132,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -146,7 +146,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.Now(),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.Now(),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 		},
 		{
@@ -174,7 +174,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
-				RequestedAt: time.Now().Add(-time.Second * 5).UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Second * 5)},
 			},
 		},
 		{
@@ -188,7 +188,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
-				RequestedAt: time.Now().Add(-time.Second * 5).UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Second * 5)},
 			},
 		},
 		{
@@ -202,7 +202,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(now.Add(-time.Second)),
 				},
-				RequestedAt: now.UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: now},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
 				Subject:        "bar",
@@ -220,7 +220,7 @@ func TestValidatePrompt(t *testing.T) {
 					Subject:  "foo",
 					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
 				Subject:        "foo",
@@ -239,7 +239,7 @@ func TestValidatePrompt(t *testing.T) {
 					AuthTime:       jwt.NewNumericDate(time.Now().Add(-time.Second)),
 					ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
 				},
-				RequestedAt: time.Now().UnixMicro(),
+				RequestedAt: TimeMilliseconds{Time: time.Now()},
 			},
 			idTokenHint: genIDToken(jwt.IDTokenClaims{
 				Subject:        "foo",

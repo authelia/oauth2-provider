@@ -5,10 +5,12 @@ package openid
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -84,7 +86,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				})
 
 				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
@@ -163,7 +165,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						Subject:  "peter",
 						AuthTime: jwt.Now(),
 					},
-					RequestedAt: time.Now().UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 					Headers:     &jwt.Headers{},
 				})
 				requester.Form.Set(consts.FormParameterMaximumAge, "60")
@@ -181,7 +183,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				})
 
 				requester.Form.Set(consts.FormParameterMaximumAge, "60")
@@ -201,7 +203,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: &jwt.NumericDate{Time: now},
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: now.Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: now.Add(-time.Minute)},
 				})
 
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
@@ -219,7 +221,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 				requester.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
@@ -237,7 +239,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 
@@ -254,7 +256,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 
@@ -273,7 +275,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(now.Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: now.Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: now.Add(-time.Minute)},
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 
@@ -290,7 +292,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -313,7 +315,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -337,7 +339,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now().Add(-time.Minute).UnixMicro(),
+					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "alice"}, Headers: &jwt.Headers{},
@@ -368,6 +370,54 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 				assert.NotEmpty(t, token)
 			}
+		})
+	}
+}
+
+func TestDefaultSession_MarshalJSON(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *DefaultSession
+		expected string
+	}{
+		{
+			"ShouldHandleEmptyTime",
+			&DefaultSession{
+				Claims:      nil,
+				Headers:     nil,
+				ExpiresAt:   nil,
+				Username:    "",
+				Subject:     "",
+				RequestedAt: TimeMilliseconds{},
+			},
+			`{"requested_at":-62135596800000000}`,
+		},
+		{
+			"ShouldHandleTimeValue",
+			&DefaultSession{
+				Claims:      nil,
+				Headers:     nil,
+				ExpiresAt:   nil,
+				Username:    "",
+				Subject:     "",
+				RequestedAt: TimeMilliseconds{time.Unix(1743845057, 1000).UTC()},
+			},
+			`{"requested_at":1743845057000001}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(tc.have)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, string(data))
+
+			actual := &DefaultSession{}
+
+			require.NoError(t, json.Unmarshal(data, actual))
+
+			assert.Equal(t, tc.have, actual)
 		})
 	}
 }

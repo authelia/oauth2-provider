@@ -201,7 +201,9 @@ func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx co
 			return time.Now().UTC()
 		}),
 		jwt.ValidateIssuer(client.GetID()),
+		jwt.ValidateDoNotRequireIssuer(),
 		jwt.ValidateAudienceAny(issuer),
+		jwt.ValidateDoNotRequireAudience(),
 	}
 
 	if err = claims.Valid(optsValidClaims...); err != nil {

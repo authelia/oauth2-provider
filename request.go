@@ -58,6 +58,10 @@ func (a *Request) GetRequestedAt() time.Time {
 	return a.RequestedAt
 }
 
+func (a *Request) SetRequestedAt(rat time.Time) {
+	a.RequestedAt = rat
+}
+
 func (a *Request) GetClient() Client {
 	return a.Client
 }

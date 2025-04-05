@@ -169,10 +169,10 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			setup: func() {
 				sess := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						RequestedAt: jwt.Now(),
-						Subject:     "foobar",
+						Subject: "foobar",
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				}
 
 				req = oauth2.NewAccessRequest(nil)
@@ -297,10 +297,10 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			setup: func() {
 				sess := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						RequestedAt: jwt.Now(),
-						Subject:     "",
+						Subject: "",
 					},
-					Headers: &jwt.Headers{},
+					Headers:     &jwt.Headers{},
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				}
 
 				req = oauth2.NewAccessRequest(nil)

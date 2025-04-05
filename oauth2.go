@@ -274,6 +274,9 @@ type Requester interface {
 	// GetRequestedAt returns the time the request was created.
 	GetRequestedAt() (requestedAt time.Time)
 
+	// SetRequestedAt sets the time the request was created.
+	SetRequestedAt(rat time.Time)
+
 	// GetClient returns the request's client.
 	GetClient() (client Client)
 

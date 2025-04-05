@@ -47,11 +47,11 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnec
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req oauth2.AuthorizeRequester) error {
+func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requester oauth2.AuthorizeRequester) error {
 	// Specification Note: prompt is case sensitive.
-	requiredPrompt := oauth2.RemoveEmpty(strings.Split(req.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+	requiredPrompt := oauth2.RemoveEmpty(strings.Split(requester.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	if req.GetClient().IsPublic() {
+	if requester.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
 		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
 		//
@@ -72,7 +72,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 
 		checker := v.Config.GetRedirectSecureChecker(ctx)
 		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-			if !checker(ctx, req.GetRedirectURI()) {
+			if !checker(ctx, requester.GetRedirectURI()) {
 				return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested."))
 			}
 		}
@@ -92,12 +92,12 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
-	maxAge, err := strconv.ParseInt(req.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
+	maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
 	if err != nil {
 		maxAge = 0
 	}
 
-	session, ok := req.GetSession().(Session)
+	session, ok := requester.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because session is not of type oauth2/handler/openid.Session."))
 	}
@@ -112,13 +112,15 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 	}
 
+	rat := session.GetRequestedAt()
+
 	if maxAge > 0 {
 		switch {
 		case claims.AuthTime == nil, claims.AuthTime.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
-		case claims.RequestedAt == nil, claims.RequestedAt.IsZero():
+		case rat.IsZero():
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
-		case claims.GetAuthTimeSafe().Add(time.Second * time.Duration(maxAge)).Before(claims.GetRequestedAtSafe()):
+		case claims.GetAuthTimeSafe().Add(time.Second * time.Duration(maxAge)).Before(rat):
 			return errorsx.WithStack(oauth2.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
 		}
 	}
@@ -127,26 +129,27 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, req 
 		if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
-		if !claims.GetAuthTimeSafe().Equal(claims.GetRequestedAtSafe()) && claims.GetAuthTimeSafe().After(claims.GetRequestedAtSafe()) {
+
+		if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
 			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
-			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
 	}
 
 	if stringslice.Has(requiredPrompt, consts.PromptTypeLogin) {
-		if claims.GetAuthTimeSafe().Before(claims.GetRequestedAtSafe()) {
-			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), claims.GetRequestedAtSafe()))
+		if claims.GetAuthTimeSafe().Before(rat) {
+			return errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}
 	}
 
-	idTokenHint := req.GetRequestForm().Get(consts.FormParameterIDTokenHint)
+	idTokenHint := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint)
 	if idTokenHint == "" {
 		return nil
 	}
 
 	var tokenHint *jwt.Token
 
-	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(req.GetClient()))
+	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(requester.GetClient()))
 
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {

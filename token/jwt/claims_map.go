@@ -253,7 +253,7 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	}
 
 	if len(vopts.iss) != 0 {
-		if !m.VerifyIssuer(vopts.iss, true) {
+		if !m.VerifyIssuer(vopts.iss, !vopts.issNotRequired) {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
 		}
@@ -267,14 +267,14 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	}
 
 	if len(vopts.aud) != 0 {
-		if !m.VerifyAudienceAny(vopts.aud, true) {
+		if !m.VerifyAudienceAny(vopts.aud, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}
 	}
 
 	if len(vopts.audAll) != 0 {
-		if !m.VerifyAudienceAll(vopts.audAll, true) {
+		if !m.VerifyAudienceAll(vopts.audAll, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}

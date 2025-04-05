@@ -25,7 +25,6 @@ type IDTokenClaims struct {
 	ExpirationTime                      *NumericDate   `json:"exp"`
 	IssuedAt                            *NumericDate   `json:"iat"`
 	AuthTime                            *NumericDate   `json:"auth_time,omitempty"`
-	RequestedAt                         *NumericDate   `json:"rat,omitempty"`
 	Nonce                               string         `json:"nonce,omitempty"`
 	AuthenticationContextClassReference string         `json:"acr,omitempty"`
 	AuthenticationMethodsReferences     []string       `json:"amr,omitempty"`
@@ -100,7 +99,7 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		if str, err = c.GetIssuer(); err != nil {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
-		} else if !validString(str, vopts.iss, true) {
+		} else if !validString(str, vopts.iss, !vopts.issNotRequired) {
 			vErr.Inner = errors.New("Token has invalid issuer")
 			vErr.Errors |= ValidationErrorIssuer
 		}
@@ -119,14 +118,14 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	var aud ClaimStrings
 
 	if len(vopts.aud) != 0 {
-		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAny(vopts.aud, true) {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAny(vopts.aud, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}
 	}
 
 	if len(vopts.audAll) != 0 {
-		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAll(vopts.audAll, true) {
+		if aud, err = c.GetAudience(); err != nil || aud == nil || !aud.ValidAll(vopts.audAll, !vopts.audNotRequired) {
 			vErr.Inner = errors.New("Token has invalid audience")
 			vErr.Errors |= ValidationErrorAudience
 		}
@@ -161,14 +160,6 @@ func (c *IDTokenClaims) GetAuthTimeSafe() time.Time {
 	}
 
 	return c.AuthTime.UTC()
-}
-
-func (c *IDTokenClaims) GetRequestedAtSafe() time.Time {
-	if c.RequestedAt == nil {
-		return time.Unix(0, 0).UTC()
-	}
-
-	return c.RequestedAt.UTC()
 }
 
 func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
@@ -208,10 +199,6 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			}
 		case ClaimAuthenticationTime:
 			if c.AuthTime, err = toNumericDate(value); err == nil {
-				ok = true
-			}
-		case ClaimRequestedAt:
-			if c.RequestedAt, err = toNumericDate(value); err == nil {
 				ok = true
 			}
 		case ClaimNonce:
@@ -292,12 +279,6 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		ret[ClaimAuthenticationTime] = c.AuthTime.Unix()
 	} else {
 		delete(ret, ClaimAuthenticationTime)
-	}
-
-	if c.RequestedAt != nil {
-		ret[ClaimRequestedAt] = c.RequestedAt.Unix()
-	} else {
-		delete(ret, ClaimRequestedAt)
 	}
 
 	if len(c.Nonce) > 0 {

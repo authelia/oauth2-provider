@@ -30,7 +30,7 @@ func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
 			Claims:      j,
 			Headers:     &jwt.Headers{},
 			Subject:     j.Subject,
-			RequestedAt: time.Now().UTC(),
+			RequestedAt: openid.TimeMilliseconds{Time: time.Now().UTC()},
 		},
 	}
 }

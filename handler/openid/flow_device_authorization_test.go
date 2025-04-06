@@ -172,7 +172,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 						Subject: "foobar",
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now(),
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				}
 
 				req = oauth2.NewAccessRequest(nil)
@@ -300,7 +300,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 						Subject: "",
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: time.Now(),
+					RequestedAt: TimeMilliseconds{Time: time.Now()},
 				}
 
 				req = oauth2.NewAccessRequest(nil)

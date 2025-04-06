@@ -390,7 +390,7 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 				Subject:     "",
 				RequestedAt: time.Time{},
 			},
-			`{"requested_at":-62135596800000000}`,
+			`{"requested_at":"0001-01-01T00:00:00Z"}`,
 		},
 		{
 			"ShouldHandleTimeValue",
@@ -402,7 +402,7 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 				Subject:     "",
 				RequestedAt: time.Unix(1743845057, 1000).UTC(),
 			},
-			`{"requested_at":1743845057000001}`,
+			`{"requested_at":"2025-04-05T09:24:17.000001Z"}`,
 		},
 	}
 

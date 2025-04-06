@@ -6,7 +6,6 @@ package openid
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -37,35 +36,6 @@ type Session interface {
 	oauth2.Session
 }
 
-type TimeMilliseconds struct {
-	time.Time
-}
-
-func (t TimeMilliseconds) MarshalJSON() (b []byte, err error) {
-	output := []byte(strconv.FormatInt(t.UnixMicro(), 10))
-
-	return output, nil
-}
-
-func (t *TimeMilliseconds) UnmarshalJSON(b []byte) (err error) {
-	var (
-		number json.Number
-		milli  int64
-	)
-
-	if err = json.Unmarshal(b, &number); err != nil {
-		return fmt.Errorf("could not parse PrecisionTime: %w", err)
-	}
-
-	if milli, err = number.Int64(); err != nil {
-		return fmt.Errorf("could not convert json number value to integer: %w", err)
-	}
-
-	*t = TimeMilliseconds{Time: time.UnixMicro(milli).UTC()}
-
-	return nil
-}
-
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
 	Claims      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
@@ -73,14 +43,50 @@ type DefaultSession struct {
 	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
 	Username    string                         `json:"username,omitempty"`
 	Subject     string                         `json:"subject,omitempty"`
-	RequestedAt TimeMilliseconds               `json:"requested_at"`
+	RequestedAt time.Time                      `json:"requested_at"`
+}
+
+func (s DefaultSession) MarshalJSON() (b []byte, err error) {
+	o := &defaultSessionJSON{
+		Claims:      s.Claims,
+		Headers:     s.Headers,
+		ExpiresAt:   s.ExpiresAt,
+		Username:    s.Username,
+		Subject:     s.Subject,
+		RequestedAt: s.RequestedAt.UnixMicro(),
+	}
+
+	return json.Marshal(o)
+}
+
+func (s *DefaultSession) UnmarshalJSON(b []byte) (err error) {
+	if s == nil {
+		return errors.New("error occurred unmarshalling: the DefaultSession is a nil pointer")
+	}
+
+	o := &defaultSessionJSON{}
+
+	if err = json.Unmarshal(b, o); err != nil {
+		return err
+	}
+
+	*s = DefaultSession{
+		Claims:      o.Claims,
+		Headers:     o.Headers,
+		ExpiresAt:   o.ExpiresAt,
+		Username:    o.Username,
+		Subject:     o.Subject,
+		RequestedAt: time.UnixMicro(o.RequestedAt).UTC(),
+	}
+
+	return nil
 }
 
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		Claims:      &jwt.IDTokenClaims{},
 		Headers:     &jwt.Headers{},
-		RequestedAt: TimeMilliseconds{Time: time.Now().UTC()},
+		RequestedAt: time.Now().UTC(),
 	}
 }
 
@@ -97,7 +103,7 @@ func (s *DefaultSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 		s.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
 
-	s.ExpiresAt[key] = exp
+	s.ExpiresAt[key] = exp.UTC()
 }
 
 func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
@@ -112,11 +118,11 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 }
 
 func (s *DefaultSession) SetRequestedAt(rat time.Time) {
-	s.RequestedAt = TimeMilliseconds{Time: rat.UTC()}
+	s.RequestedAt = rat.UTC()
 }
 
 func (s *DefaultSession) GetRequestedAt() (rat time.Time) {
-	return s.RequestedAt.Time
+	return s.RequestedAt.UTC()
 }
 
 func (s *DefaultSession) GetUsername() string {
@@ -290,4 +296,13 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
+}
+
+type defaultSessionJSON struct {
+	Claims      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
+	Headers     *jwt.Headers                   `json:"headers,omitempty"`
+	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
+	Username    string                         `json:"username,omitempty"`
+	Subject     string                         `json:"subject,omitempty"`
+	RequestedAt int64                          `json:"requested_at"`
 }

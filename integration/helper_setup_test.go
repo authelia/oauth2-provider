@@ -113,6 +113,10 @@ var store = &storage.MemoryStore{
 	PARSessions:            map[string]oauth2.AuthorizeRequester{},
 }
 
+func newDefaultSession() *defaultSession {
+	return &defaultSession{DefaultSession: &openid.DefaultSession{}}
+}
+
 type defaultSession struct {
 	*openid.DefaultSession
 }

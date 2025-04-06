@@ -5,7 +5,6 @@ package openid
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -44,42 +43,6 @@ type DefaultSession struct {
 	Username    string                         `json:"username,omitempty"`
 	Subject     string                         `json:"subject,omitempty"`
 	RequestedAt time.Time                      `json:"requested_at"`
-}
-
-func (s DefaultSession) MarshalJSON() (b []byte, err error) {
-	o := &defaultSessionJSON{
-		Claims:      s.Claims,
-		Headers:     s.Headers,
-		ExpiresAt:   s.ExpiresAt,
-		Username:    s.Username,
-		Subject:     s.Subject,
-		RequestedAt: s.RequestedAt.UnixMicro(),
-	}
-
-	return json.Marshal(o)
-}
-
-func (s *DefaultSession) UnmarshalJSON(b []byte) (err error) {
-	if s == nil {
-		return errors.New("error occurred unmarshalling: the DefaultSession is a nil pointer")
-	}
-
-	o := &defaultSessionJSON{}
-
-	if err = json.Unmarshal(b, o); err != nil {
-		return err
-	}
-
-	*s = DefaultSession{
-		Claims:      o.Claims,
-		Headers:     o.Headers,
-		ExpiresAt:   o.ExpiresAt,
-		Username:    o.Username,
-		Subject:     o.Subject,
-		RequestedAt: time.UnixMicro(o.RequestedAt).UTC(),
-	}
-
-	return nil
 }
 
 func NewDefaultSession() *DefaultSession {
@@ -296,13 +259,4 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
-}
-
-type defaultSessionJSON struct {
-	Claims      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
-	Headers     *jwt.Headers                   `json:"headers,omitempty"`
-	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
-	Username    string                         `json:"username,omitempty"`
-	Subject     string                         `json:"subject,omitempty"`
-	RequestedAt int64                          `json:"requested_at"`
 }

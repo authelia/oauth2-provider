@@ -86,7 +86,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now()},
+					RequestedAt: time.Now(),
 				})
 
 				requester.Form.Set(consts.FormParameterNonce, "some-secure-nonce-state")
@@ -165,7 +165,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						Subject:  "peter",
 						AuthTime: jwt.Now(),
 					},
-					RequestedAt: TimeMilliseconds{Time: time.Now()},
+					RequestedAt: time.Now(),
 					Headers:     &jwt.Headers{},
 				})
 				requester.Form.Set(consts.FormParameterMaximumAge, "60")
@@ -183,7 +183,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now()},
+					RequestedAt: time.Now(),
 				})
 
 				requester.Form.Set(consts.FormParameterMaximumAge, "60")
@@ -203,7 +203,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: &jwt.NumericDate{Time: now},
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: now.Add(-time.Minute)},
+					RequestedAt: now.Add(-time.Minute),
 				})
 
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
@@ -221,7 +221,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 				requester.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
@@ -239,7 +239,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 
@@ -256,7 +256,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 
@@ -275,7 +275,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(now.Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: now.Add(-time.Minute)},
+					RequestedAt: now.Add(-time.Minute),
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
 
@@ -292,7 +292,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -315,7 +315,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
@@ -339,7 +339,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
-					RequestedAt: TimeMilliseconds{Time: time.Now().Add(-time.Minute)},
+					RequestedAt: time.Now().Add(-time.Minute),
 				})
 				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "alice"}, Headers: &jwt.Headers{},
@@ -388,7 +388,7 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 				ExpiresAt:   nil,
 				Username:    "",
 				Subject:     "",
-				RequestedAt: TimeMilliseconds{},
+				RequestedAt: time.Time{},
 			},
 			`{"requested_at":-62135596800000000}`,
 		},
@@ -400,7 +400,7 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 				ExpiresAt:   nil,
 				Username:    "",
 				Subject:     "",
-				RequestedAt: TimeMilliseconds{time.Unix(1743845057, 1000).UTC()},
+				RequestedAt: time.Unix(1743845057, 1000).UTC(),
 			},
 			`{"requested_at":1743845057000001}`,
 		},

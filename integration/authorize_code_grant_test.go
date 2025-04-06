@@ -85,7 +85,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			check: func(t *testing.T, r *http.Response, _ *xoauth2.Token) {
 				var b oauth2.AccessRequest
 				b.Client = new(oauth2.DefaultClient)
-				b.Session = new(defaultSession)
+				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
 				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.RequestedAudience)
 				assert.EqualValues(t, oauth2.Arguments{"https://www.authelia.com/api"}, b.GrantedAudience)
@@ -112,7 +112,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			check: func(t *testing.T, r *http.Response, token *xoauth2.Token) {
 				var b oauth2.AccessRequest
 				b.Client = new(oauth2.DefaultClient)
-				b.Session = new(defaultSession)
+				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
 				atExp := b.Session.GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan), atExp, time.Minute)

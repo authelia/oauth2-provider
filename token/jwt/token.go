@@ -280,13 +280,13 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 	var encrypter jose.Encrypter
 
 	if encrypter, err = jose.NewEncrypter(t.ContentEncryption, rcpt, opts); err != nil {
-		return "", "", errorsx.WithStack(err)
+		return "", "", fmt.Errorf("error initializing jwt encrypter using key algorithm '%s' and content encryption '%s' and key id '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, errorsx.WithStack(err))
 	}
 
 	var token *jose.JSONWebEncryption
 
 	if token, err = encrypter.Encrypt([]byte(signed)); err != nil {
-		return "", "", errorsx.WithStack(err)
+		return "", "", fmt.Errorf("error encrypting jwt using key algorithm '%s' and content encryption '%s' and key id '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, errorsx.WithStack(err))
 	}
 
 	if tokenString, err = token.CompactSerialize(); err != nil {
@@ -328,7 +328,7 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	var signer jose.Signer
 
 	if signer, err = jose.NewSigner(key, opts); err != nil {
-		return "", errorsx.WithStack(err)
+		return "", fmt.Errorf("error signing jwt using alg '%s' and kid '%s': %w", t.SignatureAlgorithm, t.KeyID, errorsx.WithStack(err))
 	}
 
 	// A explicit conversion from type alias MapClaims

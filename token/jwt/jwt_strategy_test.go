@@ -183,6 +183,14 @@ func TestDefaultStrategy(t *testing.T) {
 	_, err = rand.Read(key128)
 	require.NoError(t, err)
 
+	clientAsymmetric := &testClient{
+		alg:     "HS512",
+		csigned: true,
+		secret:  key128,
+		jwks:    issuerJWKSenc,
+		jwksURI: "",
+	}
+
 	clientEncAsymmetric := &testClient{
 		kid:     "es512-sig",
 		alg:     "ES512",
@@ -240,6 +248,14 @@ func TestDefaultStrategy(t *testing.T) {
 	require.NotEmpty(t, signature2)
 
 	var (
+		token3sig, signature3sig string
+	)
+
+	token3sig, signature3sig, err = strategy.Encode(ctx, claims, WithHeaders(headers1), WithClient(clientAsymmetric))
+	require.NoError(t, err)
+	assert.NotEmpty(t, signature3sig)
+
+	var (
 		token3, signature3 string
 	)
 
@@ -282,6 +298,11 @@ func TestDefaultStrategy(t *testing.T) {
 
 	tok, err = clientStrategy.Decode(ctx, token2, WithClient(issuerClient))
 	require.NoError(t, err)
+
+	tok, err = clientStrategy.Decode(ctx, token3sig, WithClient(clientAsymmetric))
+	require.NoError(t, err)
+	require.NotNil(t, tok)
+	assert.Equal(t, jose.HS512, tok.SignatureAlgorithm)
 
 	tok, err = clientStrategy.Decode(ctx, token3, WithClient(clientEncAsymmetric))
 	require.NoError(t, err)

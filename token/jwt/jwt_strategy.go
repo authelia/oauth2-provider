@@ -7,7 +7,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -59,24 +58,33 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 	}
 
 	var (
-		keySig *jose.JSONWebKey
+		keySig        *jose.JSONWebKey
+		kid, alg, enc string
 	)
 
 	if o.client == nil {
 		if keySig, err = j.Issuer.GetIssuerJWK(ctx, "", string(jose.RS256), JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
-	} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
-		return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
+	} else {
+		kid, alg = o.client.GetSigningKeyID(), o.client.GetSigningAlg()
+
+		if len(kid) == 0 && IsSignedJWTClientSecretAlgStr(alg) {
+			if keySig, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, "", JSONWebTokenUseSignature); err != nil {
+				return "", "", errorsx.WithStack(fmt.Errorf("Failed to sign the JWT using the client secret. %w", err))
+			}
+		} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
+			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
+		}
 	}
 
 	if o.client == nil {
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 
-	kid, alg, enc := o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
+	kid, alg, enc = o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
-	if len(kid) == 0 && (alg == "" || alg == consts.JSONWebTokenAlgNone) {
+	if len(kid) == 0 && IsNoneAlg(alg) {
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 
@@ -86,7 +94,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	var keyEnc *jose.JSONWebKey
 
-	if IsEncryptedJWTClientSecretAlg(alg) {
+	if len(kid) == 0 && IsEncryptedJWTClientSecretAlgStr(alg) {
 		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
 		}
@@ -138,7 +146,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		if key, err = o.jweKeyFunc(ctx, jwe, kid, alg); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if IsEncryptedJWTClientSecretAlg(alg) {
+	} else if IsEncryptedJWTClientSecretAlgStr(alg) {
 		if o.client == nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}

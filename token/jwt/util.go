@@ -32,15 +32,16 @@ func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }
 
-// IsSignedJWTClientSecretAlgStr returns true if the given alg string is a client secret based signature algorithm.
-func IsSignedJWTClientSecretAlgStr(alg string) (csa bool) {
-	if a := jose.SignatureAlgorithm(alg); IsSignedJWTClientSecretAlg(a) {
-		return true
-	}
-
-	return false
+func IsNoneAlg(alg string) (none bool) {
+	return alg == "" || alg == "none"
 }
 
+// IsSignedJWTClientSecretAlgStr returns true if the given alg string is a client secret based signature algorithm.
+func IsSignedJWTClientSecretAlgStr(alg string) (csa bool) {
+	return IsSignedJWTClientSecretAlg(jose.SignatureAlgorithm(alg))
+}
+
+// IsSignedJWTClientSecretAlg returns true if a given alg is a client secret based encryption algorithm i.e. symmetric.
 func IsSignedJWTClientSecretAlg(alg jose.SignatureAlgorithm) (csa bool) {
 	switch alg {
 	case jose.HS256, jose.HS384, jose.HS512:
@@ -50,14 +51,18 @@ func IsSignedJWTClientSecretAlg(alg jose.SignatureAlgorithm) (csa bool) {
 	}
 }
 
-// IsEncryptedJWTClientSecretAlg returns true if a given alg string is a client secret based encryption algorithm
+// IsEncryptedJWTClientSecretAlgStr returns true if a given alg string is a client secret based encryption algorithm
 // i.e. symmetric.
-func IsEncryptedJWTClientSecretAlg(alg string) (csa bool) {
-	switch a := jose.KeyAlgorithm(alg); a {
+func IsEncryptedJWTClientSecretAlgStr(alg string) (csa bool) {
+	return IsEncryptedJWTClientSecretAlg(jose.KeyAlgorithm(alg))
+}
+
+func IsEncryptedJWTClientSecretAlg(alg jose.KeyAlgorithm) (csa bool) {
+	switch alg {
 	case jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW:
 		return true
 	default:
-		return IsEncryptedJWTPasswordBasedAlg(a)
+		return IsEncryptedJWTPasswordBasedAlg(alg)
 	}
 }
 
@@ -93,7 +98,7 @@ func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
 }
 
 func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error) {
-	if header.KeyID == "" && !IsEncryptedJWTClientSecretAlg(header.Algorithm) {
+	if header.KeyID == "" && !IsEncryptedJWTClientSecretAlgStr(header.Algorithm) {
 		return "", "", "", "", fmt.Errorf("jwe header 'kid' value is missing or empty")
 	}
 

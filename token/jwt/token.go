@@ -280,13 +280,13 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 	var encrypter jose.Encrypter
 
 	if encrypter, err = jose.NewEncrypter(t.ContentEncryption, rcpt, opts); err != nil {
-		return "", "", fmt.Errorf("error initializing jwt encrypter using key algorithm '%s' and content encryption '%s' and key id '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, errorsx.WithStack(err))
+		return "", "", fmt.Errorf("error initializing jwt encrypter using key algorithm '%s' and content encryption '%s' and key id '%s' using key type '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, strKeyType(keyEnc), errorsx.WithStack(err))
 	}
 
 	var token *jose.JSONWebEncryption
 
 	if token, err = encrypter.Encrypt([]byte(signed)); err != nil {
-		return "", "", fmt.Errorf("error encrypting jwt using key algorithm '%s' and content encryption '%s' and key id '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, errorsx.WithStack(err))
+		return "", "", fmt.Errorf("error encrypting jwt using key algorithm '%s' and content encryption '%s' and key id '%s' using key type '%s': %w", t.KeyAlgorithm, t.ContentEncryption, t.KeyID, strKeyType(keyEnc), errorsx.WithStack(err))
 	}
 
 	if tokenString, err = token.CompactSerialize(); err != nil {
@@ -298,8 +298,8 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 
 // CompactSigned serializes this token as a Compact Signed string, and returns the token string, signature, and
 // an error if one occurred.
-func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) {
-	if tokenString, err = t.CompactSignedString(k); err != nil {
+func (t *Token) CompactSigned(keySig any) (tokenString, signature string, err error) {
+	if tokenString, err = t.CompactSignedString(keySig); err != nil {
 		return "", "", err
 	}
 
@@ -313,14 +313,14 @@ func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) 
 // CompactSignedString provides a compatible `jwt-go` Token.CompactSigned method
 //
 // > Get the complete, signed token
-func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
-	if isUnsafeNoneMagicConstant(k) {
+func (t *Token) CompactSignedString(keySig any) (tokenString string, err error) {
+	if isUnsafeNoneMagicConstant(keySig) {
 		return unsignedToken(t)
 	}
 
 	key := jose.SigningKey{
 		Algorithm: t.SignatureAlgorithm,
-		Key:       k,
+		Key:       keySig,
 	}
 
 	opts := &jose.SignerOptions{ExtraHeaders: t.toSignedJoseHeader()}
@@ -328,7 +328,7 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	var signer jose.Signer
 
 	if signer, err = jose.NewSigner(key, opts); err != nil {
-		return "", fmt.Errorf("error signing jwt using alg '%s' and kid '%s': %w", t.SignatureAlgorithm, t.KeyID, errorsx.WithStack(err))
+		return "", fmt.Errorf("error signing jwt using alg '%s' and key id '%s' using key type '%s': %w", t.SignatureAlgorithm, t.KeyID, strKeyType(keySig), errorsx.WithStack(err))
 	}
 
 	// A explicit conversion from type alias MapClaims

@@ -548,3 +548,14 @@ func isEmptyValue(v reflect.Value) bool {
 		return false
 	}
 }
+
+func strKeyType(key any) string {
+	switch k := key.(type) {
+	case *jose.JSONWebKey:
+		return fmt.Sprintf("%T", k.Key)
+	case jose.JSONWebKey:
+		return fmt.Sprintf("%T", k.Key)
+	default:
+		return fmt.Sprintf("%T", k)
+	}
+}

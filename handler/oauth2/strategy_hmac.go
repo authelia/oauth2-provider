@@ -45,6 +45,11 @@ type HMACCoreStrategy struct {
 	prefix    string
 }
 
+// IsOpaqueAccessToken implements oauth2.AccessTokenStrategy.
+func (s *HMACCoreStrategy) IsOpaqueAccessToken(ctx context.Context, tokenString string) bool {
+	return s.usePrefix && s.hasPrefix(tokenString, tokenPrefixPartAccessToken)
+}
+
 // AccessTokenSignature implements oauth2.AccessTokenStrategy.
 func (s *HMACCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	return s.Enigma.Signature(tokenString)
@@ -72,6 +77,11 @@ func (s *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Req
 	}
 
 	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAccessToken))
+}
+
+// IsOpaqueRefreshToken implements oauth2.RefreshTokenStrategy.
+func (s *HMACCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, tokenString string) bool {
+	return s.usePrefix && s.hasPrefix(tokenString, tokenPrefixPartRefreshToken)
 }
 
 // RefreshTokenSignature implements oauth2.RefreshTokenStrategy.
@@ -103,9 +113,14 @@ func (s *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Re
 	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
 }
 
+// IsOpaqueAuthorizeCode implements oauth2.AuthorizeCodeStrategy.
+func (s *HMACCoreStrategy) IsOpaqueAuthorizeCode(ctx context.Context, tokenString string) bool {
+	return s.usePrefix && s.hasPrefix(tokenString, tokenPrefixPartAuthorizeCode)
+}
+
 // AuthorizeCodeSignature implements oauth2.AuthorizeCodeStrategy.
-func (s *HMACCoreStrategy) AuthorizeCodeSignature(ctx context.Context, token string) string {
-	return s.Enigma.Signature(token)
+func (s *HMACCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
+	return s.Enigma.Signature(tokenString)
 }
 
 // GenerateAuthorizeCode implements oauth2.AuthorizeCodeStrategy.
@@ -166,6 +181,11 @@ func (s *HMACCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2
 	}
 
 	return nil
+}
+
+// IsOpaqueRFC8628DeviceCode implements rfc8628.DeviceCodeStrategy.
+func (s *HMACCoreStrategy) IsOpaqueRFC8628DeviceCode(ctx context.Context, tokenString string) bool {
+	return s.usePrefix && s.hasPrefix(tokenString, tokenPrefixPartDeviceCode)
 }
 
 // RFC8628DeviceCodeSignature implements rfc8628.DeviceCodeStrategy.

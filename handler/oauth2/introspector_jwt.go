@@ -13,17 +13,34 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-type StatelessJWTValidator struct {
+type StatelessJWTStrategy interface {
 	jwt.Strategy
+	AccessTokenStrategy
+	RefreshTokenStrategy
+}
+
+type StatelessJWTValidator struct {
+	StatelessJWTStrategy
 	Config interface {
 		oauth2.ScopeStrategyProvider
 	}
 }
 
 func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, requester oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
+	// This context value allows skipping the StatelessJWTValidator and continuing to the next.
+	if val := ctx.Value(ContextKeySkipStatelessIntrospection); val != nil {
+		if skip, ok := val.(bool); ok && skip {
+			return "", oauth2.ErrUnknownRequest
+		}
+	}
+
+	if v.StatelessJWTStrategy.IsOpaqueAccessToken(ctx, tokenString) || v.StatelessJWTStrategy.IsOpaqueRefreshToken(ctx, tokenString) {
+		return "", oauth2.ErrUnknownRequest
+	}
+
 	var token *jwt.Token
 
-	if token, err = validateJWT(ctx, v.Strategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
+	if token, err = validateJWT(ctx, v.StatelessJWTStrategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
 		return "", err
 	}
 
@@ -89,4 +106,9 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		RequestedAudience: claims.Audience,
 		GrantedAudience:   claims.Audience,
 	}
+}
+
+// SetSkipStatelessIntrospection sets the ContextKeySkipStatelessIntrospection to true.
+func SetSkipStatelessIntrospection(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ContextKeySkipStatelessIntrospection, true)
 }

@@ -28,6 +28,10 @@ type JWTProfileCoreStrategy struct {
 	}
 }
 
+func (s *JWTProfileCoreStrategy) IsOpaqueAccessToken(ctx context.Context, tokenString string) bool {
+	return s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString)
+}
+
 func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	var possible bool
 
@@ -65,12 +69,12 @@ func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, reques
 	return s.HMACCoreStrategy.ValidateAccessToken(ctx, requester, tokenString)
 }
 
-func (s *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
-	return s.HMACCoreStrategy.RefreshTokenSignature(ctx, tokenString)
+func (s *JWTProfileCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, tokenString string) bool {
+	return s.HMACCoreStrategy.IsOpaqueRefreshToken(ctx, tokenString)
 }
 
-func (s *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
-	return s.HMACCoreStrategy.AuthorizeCodeSignature(ctx, tokenString)
+func (s *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
+	return s.HMACCoreStrategy.RefreshTokenSignature(ctx, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
@@ -79,6 +83,14 @@ func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, req o
 
 func (s *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, req oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateRefreshToken(ctx, req, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
+	return s.HMACCoreStrategy.AuthorizeCodeSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) IsOpaqueAuthorizeCode(ctx context.Context, tokenString string) bool {
+	return s.HMACCoreStrategy.IsOpaqueAuthorizeCode(ctx, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
@@ -99,6 +111,10 @@ func (s *JWTProfileCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (t
 
 func (s *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, r, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) IsOpaqueRFC8628DeviceCode(ctx context.Context, tokenString string) bool {
+	return s.HMACCoreStrategy.IsOpaqueRFC8628DeviceCode(ctx, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {

@@ -57,6 +57,20 @@ func (mr *MockRefreshTokenStrategyMockRecorder) GenerateRefreshToken(ctx, reques
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).GenerateRefreshToken), ctx, requester)
 }
 
+// IsOpaqueRefreshToken mocks base method.
+func (m *MockRefreshTokenStrategy) IsOpaqueRefreshToken(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueRefreshToken", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueRefreshToken indicates an expected call of IsOpaqueRefreshToken.
+func (mr *MockRefreshTokenStrategyMockRecorder) IsOpaqueRefreshToken(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).IsOpaqueRefreshToken), ctx, token)
+}
+
 // RefreshTokenSignature mocks base method.
 func (m *MockRefreshTokenStrategy) RefreshTokenSignature(ctx context.Context, token string) string {
 	m.ctrl.T.Helper()

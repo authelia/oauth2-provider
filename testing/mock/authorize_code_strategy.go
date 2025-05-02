@@ -71,6 +71,20 @@ func (mr *MockAuthorizeCodeStrategyMockRecorder) GenerateAuthorizeCode(ctx, requ
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).GenerateAuthorizeCode), ctx, requester)
 }
 
+// IsOpaqueAuthorizeCode mocks base method.
+func (m *MockAuthorizeCodeStrategy) IsOpaqueAuthorizeCode(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueAuthorizeCode", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueAuthorizeCode indicates an expected call of IsOpaqueAuthorizeCode.
+func (mr *MockAuthorizeCodeStrategyMockRecorder) IsOpaqueAuthorizeCode(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).IsOpaqueAuthorizeCode), ctx, token)
+}
+
 // ValidateAuthorizeCode mocks base method.
 func (m *MockAuthorizeCodeStrategy) ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()

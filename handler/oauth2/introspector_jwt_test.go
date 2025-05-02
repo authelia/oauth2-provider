@@ -34,7 +34,7 @@ func TestIntrospectJWT(t *testing.T) {
 	}
 
 	validator := &StatelessJWTValidator{
-		Strategy: strategy,
+		StatelessJWTStrategy: strategy,
 		Config: &oauth2.Config{
 			ScopeStrategy: oauth2.HierarchicScopeStrategy,
 		},
@@ -162,7 +162,7 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 	}
 
 	v := &StatelessJWTValidator{
-		Strategy: strategy,
+		StatelessJWTStrategy: strategy,
 	}
 
 	jwt := jwtValidCase(oauth2.AccessToken)

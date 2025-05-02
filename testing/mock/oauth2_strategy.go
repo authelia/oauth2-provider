@@ -149,6 +149,62 @@ func (mr *MockCoreStrategyMockRecorder) GenerateRefreshToken(ctx, requester any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateRefreshToken), ctx, requester)
 }
 
+// IsOpaqueAccessToken mocks base method.
+func (m *MockCoreStrategy) IsOpaqueAccessToken(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueAccessToken", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueAccessToken indicates an expected call of IsOpaqueAccessToken.
+func (mr *MockCoreStrategyMockRecorder) IsOpaqueAccessToken(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueAccessToken", reflect.TypeOf((*MockCoreStrategy)(nil).IsOpaqueAccessToken), ctx, token)
+}
+
+// IsOpaqueAuthorizeCode mocks base method.
+func (m *MockCoreStrategy) IsOpaqueAuthorizeCode(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueAuthorizeCode", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueAuthorizeCode indicates an expected call of IsOpaqueAuthorizeCode.
+func (mr *MockCoreStrategyMockRecorder) IsOpaqueAuthorizeCode(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueAuthorizeCode", reflect.TypeOf((*MockCoreStrategy)(nil).IsOpaqueAuthorizeCode), ctx, token)
+}
+
+// IsOpaqueRFC8628DeviceCode mocks base method.
+func (m *MockCoreStrategy) IsOpaqueRFC8628DeviceCode(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueRFC8628DeviceCode", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueRFC8628DeviceCode indicates an expected call of IsOpaqueRFC8628DeviceCode.
+func (mr *MockCoreStrategyMockRecorder) IsOpaqueRFC8628DeviceCode(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueRFC8628DeviceCode", reflect.TypeOf((*MockCoreStrategy)(nil).IsOpaqueRFC8628DeviceCode), ctx, token)
+}
+
+// IsOpaqueRefreshToken mocks base method.
+func (m *MockCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, token string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOpaqueRefreshToken", ctx, token)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOpaqueRefreshToken indicates an expected call of IsOpaqueRefreshToken.
+func (mr *MockCoreStrategyMockRecorder) IsOpaqueRefreshToken(ctx, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpaqueRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).IsOpaqueRefreshToken), ctx, token)
+}
+
 // RFC8628DeviceCodeSignature mocks base method.
 func (m *MockCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, code string) (string, error) {
 	m.ctrl.T.Helper()

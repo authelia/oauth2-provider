@@ -13,8 +13,14 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-type StatelessJWTValidator struct {
+type StatelessJWTStrategy interface {
 	jwt.Strategy
+	AccessTokenStrategy
+	RefreshTokenStrategy
+}
+
+type StatelessJWTValidator struct {
+	StatelessJWTStrategy
 	Config interface {
 		oauth2.ScopeStrategyProvider
 	}
@@ -28,9 +34,13 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		}
 	}
 
+	if v.StatelessJWTStrategy.IsOpaqueAccessToken(ctx, tokenString) || v.StatelessJWTStrategy.IsOpaqueRefreshToken(ctx, tokenString) {
+		return "", oauth2.ErrUnknownRequest
+	}
+
 	var token *jwt.Token
 
-	if token, err = validateJWT(ctx, v.Strategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
+	if token, err = validateJWT(ctx, v.StatelessJWTStrategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
 		return "", err
 	}
 

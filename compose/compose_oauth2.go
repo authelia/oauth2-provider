@@ -6,7 +6,6 @@ package compose
 import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
-	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // OAuth2AuthorizeExplicitFactory creates an OAuth2 authorize code grant ("authorize explicit flow") handler and registers
@@ -111,7 +110,7 @@ func OAuth2TokenIntrospectionFactory(config oauth2.Configurator, storage any, st
 // If you need revocation, you can validate JWTs statefully, using the other factories.
 func OAuth2StatelessJWTIntrospectionFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &hoauth2.StatelessJWTValidator{
-		Strategy: strategy.(jwt.Strategy),
-		Config:   config,
+		StatelessJWTStrategy: strategy.(hoauth2.StatelessJWTStrategy),
+		Config:               config,
 	}
 }

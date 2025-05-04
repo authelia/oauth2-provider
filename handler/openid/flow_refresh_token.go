@@ -95,8 +95,9 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	claims.CodeHash = ""
 	claims.IssuedAt = jwt.Now()
 
-	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	return c.IssueExplicitIDToken(ctx, idTokenLifespan, requester, responder)
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	return c.IssueExplicitIDToken(ctx, lifespan, requester, responder)
 }
 
 func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
@@ -104,7 +105,5 @@ func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, req
 }
 
 func (c *OpenIDConnectRefreshHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "refresh_token"
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }

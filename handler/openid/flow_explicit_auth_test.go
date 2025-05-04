@@ -91,7 +91,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because redirect url is missing",
 			setup: func() OpenIDConnectExplicitHandler {
-				areq.Form.Del("redirect_uri")
+				areq.Form.Del(consts.FormParameterRedirectURI)
 				h, store := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
 				store.EXPECT().CreateOpenIDConnectSession(gomock.Any(), "codeexample", gomock.Eq(areq.Sanitize(oidcParameters))).AnyTimes().Return(nil)
 				return h

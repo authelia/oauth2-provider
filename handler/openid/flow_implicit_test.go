@@ -268,7 +268,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should fail without redirect_uri",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form.Del("redirect_uri")
+				areq.Form.Del(consts.FormParameterRedirectURI)
 				return makeOpenIDConnectImplicitHandler(4)
 			},
 			expectErr: oauth2.ErrInvalidRequest,

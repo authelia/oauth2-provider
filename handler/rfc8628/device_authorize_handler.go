@@ -21,16 +21,19 @@ type DeviceAuthorizeHandler struct {
 
 // HandleRFC8628DeviceAuthorizeEndpointRequest is a response handler for the Device Authorization Grant as
 // defined in https://tools.ietf.org/html/rfc8628#section-3.1
-func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, dar oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceAuthorizeResponder) error {
+func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, dar oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceAuthorizeResponder) (err error) {
 	session := dar.GetSession()
 
-	deviceCode, deviceCodeSignature, err := d.Strategy.GenerateRFC8628DeviceCode(ctx)
-	if err != nil {
+	var (
+		deviceCode, userCode                   string
+		deviceCodeSignature, userCodeSignature string
+	)
+
+	if deviceCode, deviceCodeSignature, err = d.Strategy.GenerateRFC8628DeviceCode(ctx); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	userCode, userCodeSignature, err := d.Strategy.GenerateRFC8628UserCode(ctx)
-	if err != nil {
+	if userCode, userCodeSignature, err = d.Strategy.GenerateRFC8628UserCode(ctx); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -48,8 +51,10 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	}
 
 	raw := d.Config.GetRFC8628UserVerificationURL(ctx)
-	uri, err := url.ParseRequestURI(raw)
-	if err != nil {
+
+	var uri *url.URL
+
+	if uri, err = url.ParseRequestURI(raw); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("Failed to parse the RFC8628 User Verification URL.").WithWrap(err).WithDebugError(err))
 	}
 

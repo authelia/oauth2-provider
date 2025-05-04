@@ -27,7 +27,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpoint
 }
 
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, _ oauth2.DeviceUserAuthorizeResponder) (err error) {
-	if !(req.GetGrantedScopes().Has(consts.ScopeOpenID)) {
+	if !req.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return nil
 	}
 
@@ -39,8 +39,8 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The device code has not been issued yet, indicating a broken code configuration."))
 	}
 
-	if err := c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, req.GetDeviceCodeSignature(), req.Sanitize(oidcParameters)); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, req.GetDeviceCodeSignature(), req.Sanitize(oidcParameters)); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
@@ -55,18 +55,24 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	signature, err := c.DeviceCodeSignature(ctx, requester.GetRequestForm().Get(consts.FormParameterDeviceCode))
-	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
-	}
-	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, requester)
-	if errors.Is(err, ErrNoSessionFound) {
-		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebug(err.Error()))
-	} else if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug(err.Error()))
+	var (
+		signature string
+		ar        oauth2.Requester
+		session   Session
+		ok        bool
+	)
+
+	if signature, err = c.DeviceCodeSignature(ctx, requester.GetRequestForm().Get(consts.FormParameterDeviceCode)); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if !authorize.GetGrantedScopes().Has(consts.ScopeOpenID) {
+	if ar, err = c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, requester); errors.Is(err, ErrNoSessionFound) {
+		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
+	} else if err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if !ar.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration."))
 	}
 
@@ -74,8 +80,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'urn:ietf:params:oauth:grant-type:device_code'."))
 	}
 
-	session, ok := authorize.GetSession().(Session)
-	if !ok {
+	if session, ok = ar.GetSession().(Session); !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type 'openid.Session'."))
 	}
 
@@ -86,8 +91,9 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
 
-	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	return c.IssueExplicitIDToken(ctx, idTokenLifespan, authorize, responder)
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	return c.IssueExplicitIDToken(ctx, lifespan, ar, responder)
 }
 
 func (c *OpenIDConnectDeviceAuthorizeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {

@@ -204,5 +204,6 @@ func (c *AccessTokenTypeHandler) getExpiresIn(r oauth2.Requester, key oauth2.Tok
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan
 	}
+
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
 }

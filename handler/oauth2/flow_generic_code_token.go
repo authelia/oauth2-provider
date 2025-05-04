@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -48,9 +49,9 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		return err
 	}
 
-	code, _, authorizeRequest, err := c.GetCodeAndSession(ctx, request)
+	code, _, ar, err := c.GetCodeAndSession(ctx, request)
 	if errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
-		if authorizeRequest == nil {
+		if ar == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
 				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
@@ -59,14 +60,14 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		hint := "The authorization code has already been used."
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint))
 	} else if errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
-		if authorizeRequest == nil {
+		if ar == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
 				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
 		}
 
 		// If an authorize code is used twice, we revoke all refresh and access tokens associated with this request.
-		reqID := authorizeRequest.GetID()
+		reqID := ar.GetID()
 		hint := "The authorization code has already been used."
 		debug := ""
 		if revErr := c.TokenRevocationStorage.RevokeAccessToken(ctx, reqID); revErr != nil {
@@ -90,26 +91,26 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	// update last checked if there is error validating / processing the request.
 	defer func() {
-		if err != nil && authorizeRequest != nil {
-			_ = c.UpdateLastChecked(ctx, request, authorizeRequest)
+		if err != nil && ar != nil {
+			_ = c.UpdateLastChecked(ctx, request, ar)
 		}
 	}()
 
-	err = c.ValidateCodeAndSession(ctx, request, authorizeRequest, code)
+	err = c.ValidateCodeAndSession(ctx, request, ar, code)
 	if err != nil {
 		return errorsx.WithStack(err)
 	}
 
-	// Override scopes
-	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
+	// Override scopes.
+	request.SetRequestedScopes(ar.GetRequestedScopes())
 
-	// Override audiences
-	request.SetRequestedAudience(authorizeRequest.GetRequestedAudience())
+	// Override audiences.
+	request.SetRequestedAudience(ar.GetRequestedAudience())
 
 	// The authorization server MUST ensure that the authorization code was issued to the authenticated
 	// confidential client, or if the client is public, ensure that the
 	// code was issued to "client_id" in the request,
-	if authorizeRequest.GetClient().GetID() != request.GetClient().GetID() {
+	if ar.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
 
@@ -117,8 +118,8 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	// "redirect_uri" parameter was included in the initial authorization
 	// request as described in Section 4.1.1, and if included ensure that
 	// their values are identical.
-	forcedRedirectURI := authorizeRequest.GetRequestForm().Get("redirect_uri")
-	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get("redirect_uri") {
+	forcedRedirectURI := ar.GetRequestForm().Get(consts.FormParameterRedirectURI)
+	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
 	}
 
@@ -127,15 +128,25 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	// credentials (or assigned other authentication requirements), the
 	// client MUST authenticate with the authorization server as described
 	// in Section 3.2.1.
-	request.SetSession(authorizeRequest.GetSession())
-	request.SetID(authorizeRequest.GetID())
+	request.SetSession(ar.GetSession())
+	request.SetID(ar.GetID())
 
-	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	gt := oauth2.GrantTypeAuthorizationCode
 
-	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+		gt = oauth2.GrantTypeDeviceCode
+	}
+
+	var lifespan time.Duration
+
+	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+
+	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
+
+	if lifespan > -1 {
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil
@@ -146,19 +157,19 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	code, signature, authorizeRequest, err := c.GetCodeAndSession(ctx, requester)
+	code, signature, ar, err := c.GetCodeAndSession(ctx, requester)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err := c.ValidateCodeAndSession(ctx, requester, authorizeRequest, code); err != nil {
+	} else if err := c.ValidateCodeAndSession(ctx, requester, ar, code); err != nil {
 		// This needs to happen after store retrieval for the session to be hydrated properly
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
-	for _, scope := range authorizeRequest.GetGrantedScopes() {
+	for _, scope := range ar.GetGrantedScopes() {
 		requester.GrantScope(scope)
 	}
 
-	for _, audience := range authorizeRequest.GetGrantedAudience() {
+	for _, audience := range ar.GetGrantedAudience() {
 		requester.GrantAudience(audience)
 	}
 
@@ -168,7 +179,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	}
 
 	var refresh, refreshSignature string
-	if c.canIssueRefreshToken(ctx, authorizeRequest) {
+	if c.canIssueRefreshToken(ctx, ar) {
 		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -187,7 +198,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		}
 	}()
 
-	if err = c.InvalidateSession(ctx, signature, authorizeRequest); err != nil {
+	if err = c.InvalidateSession(ctx, signature, ar); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -205,7 +216,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	if refresh != "" {
-		responder.SetExtra("refresh_token", refresh)
+		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	if err = storage.MaybeCommitTx(ctx, c.CoreStorage); err != nil {
@@ -217,14 +228,17 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Context, request oauth2.Requester) bool {
 	scope := c.Config.GetRefreshTokenScopes(ctx)
+
 	// Require one of the refresh token scopes, if set.
 	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
 		return false
 	}
+
 	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
-	if !request.GetClient().GetGrantTypes().Has("refresh_token") {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return false
 	}
+
 	return true
 }
 

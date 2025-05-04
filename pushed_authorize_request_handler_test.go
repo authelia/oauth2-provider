@@ -65,7 +65,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		{
 			desc:          "invalid redirect uri fails",
 			provider:      provider,
-			query:         url.Values{"redirect_uri": []string{"invalid"}},
+			query:         url.Values{consts.FormParameterRedirectURI: []string{"invalid"}},
 			expectedError: ErrInvalidClient,
 			mock:          func() {},
 		},

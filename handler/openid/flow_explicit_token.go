@@ -62,8 +62,9 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	// 	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
 	// }
 
-	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	return c.IssueExplicitIDToken(ctx, idTokenLifespan, authorize, responder)
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	return c.IssueExplicitIDToken(ctx, lifespan, authorize, responder)
 }
 
 func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {

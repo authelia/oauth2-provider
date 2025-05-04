@@ -102,15 +102,15 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		responder.AddParameter(consts.FormParameterState, requester.GetState())
 	}
 
-	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	if err := c.IssueImplicitIDToken(ctx, idTokenLifespan, requester, responder); err != nil {
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	if err := c.IssueImplicitIDToken(ctx, lifespan, requester, responder); err != nil {
 		return errorsx.WithStack(err)
 	}
 
-	// there is no need to check for https, because implicit flow does not require https
-	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
-
 	requester.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 
+	// There is no need to check for https, because implicit flow does not require https,
+	// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 	return nil
 }

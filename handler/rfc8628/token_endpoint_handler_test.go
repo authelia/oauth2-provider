@@ -16,6 +16,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/hmac"
@@ -56,11 +57,11 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 							},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
@@ -70,19 +71,19 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						code, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						areq.Form.Set("device_code", code)
+						areq.Form.Set(consts.FormParameterDeviceCode, code)
 					},
 					expectErr: oauth2.ErrServerError,
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken},
 							},
-							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
@@ -100,24 +101,24 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 
-						areq.Form.Add("device_code", dCode)
+						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should pass with offline scope and refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo offline", aresp.GetExtra("scope"))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo offline", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken},
 							},
 							GrantedScope: oauth2.Arguments{"foo"},
 							Session:      &oauth2.DefaultSession{},
@@ -139,24 +140,24 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 
-						areq.Form.Add("device_code", dCode)
+						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should pass with refresh token always provided",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo", aresp.GetExtra("scope"))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 							},
 							GrantedScope: oauth2.Arguments{},
 							Session:      &oauth2.DefaultSession{},
@@ -178,24 +179,24 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 
-						areq.Form.Add("device_code", dCode)
+						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should pass with no refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Empty(t, aresp.GetExtra("scope"))
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 							},
 							GrantedScope: oauth2.Arguments{"foo"},
 							Session:      &oauth2.DefaultSession{},
@@ -215,15 +216,15 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
 
-						areq.Form.Add("device_code", dCode)
+						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should not have refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
 						assert.NotEmpty(t, aresp.AccessToken)
 						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra("refresh_token"))
-						assert.NotEmpty(t, aresp.GetExtra("expires_in"))
-						assert.Equal(t, "foo", aresp.GetExtra("scope"))
+						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
 					},
 				},
 			} {
@@ -232,7 +233,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 						AccessTokenLifespan:      time.Minute,
-						RefreshTokenScopes:       []string{"offline"},
+						RefreshTokenScopes:       []string{consts.ScopeOffline},
 					}
 					h = hoauth2.GenericCodeTokenEndpointHandler{
 						CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
@@ -281,7 +282,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 				AccessTokenLifespan:      time.Minute,
-				RefreshTokenScopes:       []string{"offline"},
+				RefreshTokenScopes:       []string{consts.ScopeOffline},
 			}
 			h := hoauth2.GenericCodeTokenEndpointHandler{
 				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
@@ -311,7 +312,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
 							Session:     &oauth2.DefaultSession{},
@@ -323,9 +324,9 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"}},
+							Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -334,16 +335,16 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
 						deviceCode, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
 						require.NoError(t, err)
-						areq.Form = url.Values{"device_code": {deviceCode}}
+						areq.Form = url.Values{consts.FormParameterDeviceCode: {deviceCode}}
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
-							Form:        url.Values{"device_code": {"AAAA"}},
-							Client:      &oauth2.DefaultClient{GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"}},
+							Form:        url.Values{consts.FormParameterDeviceCode: {"AAAA"}},
+							Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -353,9 +354,9 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"}},
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
@@ -380,22 +381,22 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 
-						areq.Form = url.Values{"device_code": {dCode}}
+						areq.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
-							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"}},
+							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:     &oauth2.DefaultSession{},
 							RequestedAt: time.Now().UTC(),
 						},
 					},
 					authreq: &oauth2.DeviceAuthorizeRequest{
 						Request: oauth2.Request{
-							Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"}},
+							Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:        &oauth2.DefaultSession{},
 							RequestedScope: oauth2.Arguments{"a", "b"},
 							RequestedAt:    time.Now().UTC(),
@@ -412,18 +413,18 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 
-						areq.Form = url.Values{"device_code": {dCode}}
+						areq.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
 					},
 				},
 				{
 					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
 							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+								GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 							},
-							GrantedScope: oauth2.Arguments{"foo", "offline"},
+							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
 							Session:      &oauth2.DefaultSession{},
 							RequestedAt:  time.Now().UTC(),
 						},
@@ -448,7 +449,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
 
-						areq.Form.Add("device_code", dCode)
+						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should fail because device code has expired",
 					expectErr:   oauth2.ErrDeviceExpiredToken,
@@ -481,12 +482,12 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 	strategy := o2hmacshaStrategy
 	deviceStrategy := o2hmacshaStrategy
 	request := &oauth2.AccessRequest{
-		GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code"},
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 		Request: oauth2.Request{
 			Client: &oauth2.DefaultClient{
-				GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, "refresh_token"},
 			},
-			GrantedScope: oauth2.Arguments{"offline"},
+			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},
 			RequestedAt:  time.Now().UTC(),
 		},
@@ -494,9 +495,9 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 	deviceAuthReq := &oauth2.DeviceAuthorizeRequest{
 		Request: oauth2.Request{
 			Client: &oauth2.DefaultClient{
-				GrantTypes: oauth2.Arguments{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, "refresh_token"},
 			},
-			GrantedScope: oauth2.Arguments{"offline"},
+			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},
 			RequestedAt:  time.Now().UTC(),
 		},
@@ -504,7 +505,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 	}
 	token, _, err := deviceStrategy.GenerateRFC8628DeviceCode(context.TODO())
 	require.NoError(t, err)
-	request.Form = url.Values{"device_code": {token}}
+	request.Form = url.Values{consts.FormParameterDeviceCode: {token}}
 	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
 
@@ -743,7 +744,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 						AccessTokenLifespan:      time.Minute,
-						RefreshTokenScopes:       []string{"offline"},
+						RefreshTokenScopes:       []string{consts.ScopeOffline},
 					},
 				},
 				CoreStorage: coreTransactionalStore{

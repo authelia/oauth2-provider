@@ -12,6 +12,7 @@ func GetEffectiveLifespan(c Client, gt GrantType, tt TokenType, fallback time.Du
 	if clc, ok := c.(CustomTokenLifespansClient); ok {
 		return clc.GetEffectiveLifespan(gt, tt, fallback)
 	}
+
 	return fallback
 }
 
@@ -33,6 +34,9 @@ type ClientLifespanConfig struct {
 	AuthorizationCodeGrantAccessTokenLifespan  *time.Duration `json:"authorization_code_grant_access_token_lifespan"`
 	AuthorizationCodeGrantIDTokenLifespan      *time.Duration `json:"authorization_code_grant_id_token_lifespan"`
 	AuthorizationCodeGrantRefreshTokenLifespan *time.Duration `json:"authorization_code_grant_refresh_token_lifespan"`
+	DeviceCodeGrantAccessTokenLifespan         *time.Duration `json:"device_code_grant_access_token_lifespan"`
+	DeviceCodeGrantIDTokenLifespan             *time.Duration `json:"device_code_grant_id_token_lifespan"`
+	DeviceCodeGrantRefreshTokenLifespan        *time.Duration `json:"device_code_grant_refresh_token_lifespan"`
 	ClientCredentialsGrantAccessTokenLifespan  *time.Duration `json:"client_credentials_grant_access_token_lifespan"`
 	ImplicitGrantAccessTokenLifespan           *time.Duration `json:"implicit_grant_access_token_lifespan"`
 	ImplicitGrantIDTokenLifespan               *time.Duration `json:"implicit_grant_id_token_lifespan"`
@@ -74,10 +78,19 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 		switch tt {
 		case AccessToken:
 			cl = c.TokenLifespans.AuthorizationCodeGrantAccessTokenLifespan
-		case IDToken:
-			cl = c.TokenLifespans.AuthorizationCodeGrantIDTokenLifespan
 		case RefreshToken:
 			cl = c.TokenLifespans.AuthorizationCodeGrantRefreshTokenLifespan
+		case IDToken:
+			cl = c.TokenLifespans.AuthorizationCodeGrantIDTokenLifespan
+		}
+	case GrantTypeDeviceCode:
+		switch tt {
+		case AccessToken:
+			cl = c.TokenLifespans.DeviceCodeGrantAccessTokenLifespan
+		case RefreshToken:
+			cl = c.TokenLifespans.DeviceCodeGrantRefreshTokenLifespan
+		case IDToken:
+			cl = c.TokenLifespans.DeviceCodeGrantIDTokenLifespan
 		}
 	case GrantTypeClientCredentials:
 		if tt == AccessToken {
@@ -105,10 +118,10 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 		switch tt {
 		case AccessToken:
 			cl = c.TokenLifespans.RefreshTokenGrantAccessTokenLifespan
-		case IDToken:
-			cl = c.TokenLifespans.RefreshTokenGrantIDTokenLifespan
 		case RefreshToken:
 			cl = c.TokenLifespans.RefreshTokenGrantRefreshTokenLifespan
+		case IDToken:
+			cl = c.TokenLifespans.RefreshTokenGrantIDTokenLifespan
 		}
 	}
 

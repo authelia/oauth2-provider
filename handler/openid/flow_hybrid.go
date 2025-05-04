@@ -184,15 +184,16 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return nil
 	}
 
-	// Hybrid flow uses implicit flow config for the id token's lifespan
-	idTokenLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
-	if err = c.IDTokenHandleHelper.IssueImplicitIDToken(ctx, idTokenLifespan, requester, responder); err != nil {
+	// Hybrid flow uses implicit flow config for the ID Token's lifespan.
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	if err = c.IDTokenHandleHelper.IssueImplicitIDToken(ctx, lifespan, requester, responder); err != nil {
 		return errorsx.WithStack(err)
 	}
 
 	requester.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 
-	// there is no need to check for https, because implicit flow does not require https
-	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
+	// There is no need to check for https, because implicit flow does not require https,
+	// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 	return nil
 }

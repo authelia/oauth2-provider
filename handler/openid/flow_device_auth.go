@@ -90,6 +90,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
 	}
 
+	if err = c.OpenIDConnectRequestStorage.DeleteOpenIDConnectSession(ctx, signature); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
 
 	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeDeviceCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))

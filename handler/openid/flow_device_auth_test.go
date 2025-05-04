@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -61,7 +62,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		{
 			description: "Success",
 			setup: func() {
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
@@ -78,7 +79,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		{
 			description: "Success - client does not support device code grant type",
 			setup: func() {
-				req.GrantedScope = []string{"openid", "foobar"}
+				req.GrantedScope = []string{consts.ScopeOpenID, "foobar"}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeImplicit)},
 				}
@@ -87,7 +88,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		{
 			description: "Fail - request does not have device signature",
 			setup: func() {
-				req.GrantedScope = []string{"openid", "foobar"}
+				req.GrantedScope = []string{consts.ScopeOpenID, "foobar"}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
 				}
@@ -98,7 +99,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 		{
 			description: "Fail - failed to create OIDC session",
 			setup: func() {
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
@@ -176,7 +177,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				}
 
 				req = oauth2.NewAccessRequest(nil)
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = sess
 				req.Client = &oauth2.DefaultClient{
@@ -186,18 +187,19 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				resp = oauth2.NewAccessResponse()
 
 				authReq = oauth2.NewAuthorizeRequest()
-				authReq.GrantedScope = []string{"openid"}
+				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = sess
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+				oidcStore.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 		},
 		{
 			description: "Failed - request has no device code grant type ",
 			setup: func() {
 				req = oauth2.NewAccessRequest(nil)
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeAuthorizationCode)}
 			},
 			expectErr: oauth2.ErrUnknownRequest,
@@ -254,7 +256,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			description: "Failed - client has no device code grant type",
 			setup: func() {
 				req = oauth2.NewAccessRequest(nil)
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeAuthorizationCode)},
@@ -263,7 +265,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				resp = oauth2.NewAccessResponse()
 
 				authReq = oauth2.NewAuthorizeRequest()
-				authReq.GrantedScope = []string{"openid"}
+				authReq.GrantedScope = []string{consts.ScopeOpenID}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
@@ -274,7 +276,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			description: "Failed - no session",
 			setup: func() {
 				req = oauth2.NewAccessRequest(nil)
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = nil
 				req.Client = &oauth2.DefaultClient{
@@ -284,7 +286,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				resp = oauth2.NewAccessResponse()
 
 				authReq = oauth2.NewAuthorizeRequest()
-				authReq.GrantedScope = []string{"openid"}
+				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = nil
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
@@ -304,7 +306,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				}
 
 				req = oauth2.NewAccessRequest(nil)
-				req.GrantedScope = []string{"openid"}
+				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = sess
 				req.Client = &oauth2.DefaultClient{
@@ -314,7 +316,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				resp = oauth2.NewAccessResponse()
 
 				authReq = oauth2.NewAuthorizeRequest()
-				authReq.GrantedScope = []string{"openid"}
+				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = sess
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)

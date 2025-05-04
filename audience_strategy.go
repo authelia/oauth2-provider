@@ -96,14 +96,14 @@ func GetAudiences(form url.Values) []string {
 }
 
 //nolint:unparam
-func (f *Fosite) validateAuthorizeAudience(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
-	audience := GetAudiences(request.Form)
+func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request Requester) error {
+	audience := GetAudiences(request.GetRequestForm())
 
 	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) {
-		if client, ok := request.Client.(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
+		if client, ok := request.GetClient().(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
 			audience = client.GetAudience()
 		}
-	} else if err := f.Config.GetAudienceStrategy(ctx)(request.Client.GetAudience(), audience); err != nil {
+	} else if err := f.Config.GetAudienceStrategy(ctx)(request.GetClient().GetAudience(), audience); err != nil {
 		return err
 	}
 

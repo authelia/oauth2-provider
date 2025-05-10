@@ -57,7 +57,7 @@ func (h *DefaultResponseModeHandler) WriteAuthorizeError(ctx context.Context, rw
 		WithLocalizer(h.Config.GetMessageCatalog(ctx), getLangFromRequester(requester))
 
 	if !requester.IsRedirectURIValid() {
-		h.handleWriteAuthorizeErrorJSON(ctx, rw, rfc)
+		h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, rfc)
 
 		return
 	}
@@ -101,7 +101,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 	switch rm {
 	case ResponseModeFormPost, ResponseModeFormPostJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -118,7 +118,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		}
 
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -128,7 +128,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		location = redirectURI.String()
 	case ResponseModeFragment, ResponseModeFragmentJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithWrap(err).WithDebugError(err))
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -157,7 +157,15 @@ func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm 
 	}
 }
 
-func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorJSON(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
+func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, rfc *RFC6749Error) {
+	if strategy := h.Config.GetAuthorizeErrorFieldResponseStrategy(ctx); strategy != nil {
+		strategy.WriteErrorFieldResponse(ctx, rw, requester, rfc)
+	} else {
+		h.handleWriteAuthorizeErrorFieldResponseJSON(ctx, rw, rfc)
+	}
+}
+
+func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponseJSON(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	var (
@@ -260,6 +268,7 @@ type ResponseModeHandlerConfigurator interface {
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider
+	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
 }
 

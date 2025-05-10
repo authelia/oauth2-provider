@@ -198,6 +198,7 @@ type Configurator interface {
 	IntrospectionIssuerProvider
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider
+	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
 }
 

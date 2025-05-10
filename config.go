@@ -398,3 +398,7 @@ type PushedAuthorizeRequestConfigProvider interface {
 	// must contain the PAR request_uri.
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
 }
+
+type AuthorizeErrorFieldResponseStrategyProvider interface {
+	GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy)
+}

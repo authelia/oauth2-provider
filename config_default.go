@@ -142,6 +142,12 @@ type Config struct {
 	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests
 	ClientAuthenticationStrategy ClientAuthenticationStrategy
 
+	// AuthorizeErrorFieldResponseStrategy handles authorize error responses when the user can't be redirected in a
+	// normal way for example when the redirect uri is invalid or for any other reason, just writing the fields in some
+	// way to the response. By default this happens as a JSON document but this may also be a redirect to a internal
+	// page as well.
+	AuthorizeErrorFieldResponseStrategy AuthorizeErrorFieldResponseStrategy
+
 	// ResponseModeHandlers provides the handlers for performing response mode formatting.
 	ResponseModeHandlers ResponseModeHandlers
 
@@ -626,7 +632,16 @@ func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration
 	if c.RFC8628TokenPollingInterval == 0 {
 		return time.Second * 10
 	}
+
 	return c.RFC8628TokenPollingInterval
+}
+
+func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy) {
+	if c.AuthorizeErrorFieldResponseStrategy == nil {
+		c.AuthorizeErrorFieldResponseStrategy = &JSONAuthorizeErrorFieldResponseStrategy{Config: c}
+	}
+
+	return c.AuthorizeErrorFieldResponseStrategy
 }
 
 var (
@@ -680,4 +695,5 @@ var (
 	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
 	_ IntrospectionIssuerProvider                     = (*Config)(nil)
 	_ IntrospectionJWTResponseStrategyProvider        = (*Config)(nil)
+	_ AuthorizeErrorFieldResponseStrategyProvider     = (*Config)(nil)
 )

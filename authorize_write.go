@@ -17,5 +17,5 @@ func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWri
 		}
 	}
 
-	f.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithHint("The Authorization Server was unable to process the requested Response Mode."))
+	f.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithHint("The Authorization Server was unable to process the requested Response Mode."))
 }

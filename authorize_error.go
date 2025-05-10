@@ -24,14 +24,19 @@ func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter
 		}
 	}
 
+	f.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithHint("The Authorization Server was unable to process the requested Response Mode."))
+
+}
+
+func (f *Fosite) handleWriteAuthorizeErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, rfc *RFC6749Error) {
 	if strategy := f.Config.GetAuthorizeErrorFieldResponseStrategy(ctx); strategy != nil {
-		strategy.WriteErrorFieldResponse(ctx, rw, requester, ErrServerError.WithHint("The Authorization Server was unable to process the requested Response Mode."))
+		strategy.WriteErrorFieldResponse(ctx, rw, requester, rfc)
 	} else {
-		f.handleWriteAuthorizeErrorJSON(ctx, rw, ErrServerError.WithHint("The Authorization Server was unable to process the requested Response Mode."))
+		f.handleWriteAuthorizeErrorFieldResponseJSON(ctx, rw, rfc)
 	}
 }
 
-func (f *Fosite) handleWriteAuthorizeErrorJSON(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
+func (f *Fosite) handleWriteAuthorizeErrorFieldResponseJSON(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	var (

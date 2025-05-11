@@ -34,7 +34,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		}
 	}
 
-	if v.StatelessJWTStrategy.IsOpaqueAccessToken(ctx, tokenString) || v.StatelessJWTStrategy.IsOpaqueRefreshToken(ctx, tokenString) {
+	if v.IsOpaqueAccessToken(ctx, tokenString) || v.IsOpaqueRefreshToken(ctx, tokenString) {
 		return "", oauth2.ErrUnknownRequest
 	}
 

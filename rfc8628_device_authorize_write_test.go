@@ -26,14 +26,14 @@ func TestWriteDeviceAuthorizeResponse(t *testing.T) {
 	resp.SetUserCode("AAAA")
 	resp.SetDeviceCode("BBBB")
 	resp.SetInterval(int(
-		oauth2.Config.GetRFC8628TokenPollingInterval(context.TODO()).Truncate(jwt.TimePrecision).Seconds(),
+		oauth2.Config.GetRFC8628TokenPollingInterval(t.Context()).Truncate(jwt.TimePrecision).Seconds(),
 	))
 	resp.SetExpiresIn(int64(
-		time.Now().Truncate(jwt.TimePrecision).Add(oauth2.Config.GetRFC8628CodeLifespan(context.TODO())).Second(),
+		time.Now().Truncate(jwt.TimePrecision).Add(oauth2.Config.GetRFC8628CodeLifespan(t.Context())).Second(),
 	))
-	resp.SetVerificationURI(oauth2.Config.GetRFC8628UserVerificationURL(context.TODO()))
+	resp.SetVerificationURI(oauth2.Config.GetRFC8628UserVerificationURL(t.Context()))
 	resp.SetVerificationURIComplete(
-		oauth2.Config.GetRFC8628UserVerificationURL(context.TODO()) + "?user_code=" + resp.GetUserCode(),
+		oauth2.Config.GetRFC8628UserVerificationURL(t.Context()) + "?user_code=" + resp.GetUserCode(),
 	)
 
 	oauth2.WriteRFC862DeviceAuthorizeResponse(context.Background(), rw, ar, resp)

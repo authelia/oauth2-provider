@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -51,7 +50,7 @@ func TestIntrospectJWT(t *testing.T) {
 			name: "ShouldFailTokenExpired",
 			token: func(t *testing.T) string {
 				token := jwtExpiredCase(oauth2.AccessToken, time.Unix(1726972738, 0))
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 				require.NoError(t, err)
 
 				return tokenString
@@ -64,7 +63,7 @@ func TestIntrospectJWT(t *testing.T) {
 			token: func(t *testing.T) string {
 				token := jwtValidCase(oauth2.AccessToken)
 				token.GrantedScope = []string{"foo", "bar"}
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 
 				require.NoError(t, err)
 
@@ -77,7 +76,7 @@ func TestIntrospectJWT(t *testing.T) {
 			token: func(t *testing.T) string {
 				token := jwtInvalidTypCase(oauth2.AccessToken)
 				token.GrantedScope = []string{"foo", "bar"}
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 
 				require.NoError(t, err)
 
@@ -91,7 +90,7 @@ func TestIntrospectJWT(t *testing.T) {
 			name: "ShouldFailScopeNotGranted",
 			token: func(t *testing.T) string {
 				token := jwtValidCase(oauth2.AccessToken)
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 				require.NoError(t, err)
 
 				return tokenString
@@ -104,7 +103,7 @@ func TestIntrospectJWT(t *testing.T) {
 			name: "ShouldFailInvalidSignature",
 			token: func(t *testing.T) string {
 				token := jwtValidCase(oauth2.AccessToken)
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 				require.NoError(t, err)
 				parts := strings.Split(tokenString, ".")
 				require.Len(t, parts, 3, "%s - %v", tokenString, parts)
@@ -122,7 +121,7 @@ func TestIntrospectJWT(t *testing.T) {
 			name: "ShouldPass",
 			token: func(t *testing.T) string {
 				token := jwtValidCase(oauth2.AccessToken)
-				tokenString, _, err := strategy.GenerateAccessToken(context.TODO(), token)
+				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 				require.NoError(t, err)
 
 				return tokenString
@@ -137,7 +136,7 @@ func TestIntrospectJWT(t *testing.T) {
 			}
 
 			areq := oauth2.NewAccessRequest(nil)
-			_, err := validator.IntrospectToken(context.TODO(), tc.token(t), oauth2.AccessToken, areq, tc.scopes)
+			_, err := validator.IntrospectToken(t.Context(), tc.token(t), oauth2.AccessToken, areq, tc.scopes)
 
 			if tc.err != nil {
 				assert.EqualError(t, err, tc.err.Error())
@@ -166,12 +165,12 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 	}
 
 	jwt := jwtValidCase(oauth2.AccessToken)
-	token, _, err := strategy.GenerateAccessToken(context.TODO(), jwt)
+	token, _, err := strategy.GenerateAccessToken(b.Context(), jwt)
 	assert.NoError(b, err)
 	areq := oauth2.NewAccessRequest(nil)
 
 	for n := 0; n < b.N; n++ {
-		_, err = v.IntrospectToken(context.TODO(), token, oauth2.AccessToken, areq, []string{})
+		_, err = v.IntrospectToken(b.Context(), token, oauth2.AccessToken, areq, []string{})
 	}
 
 	assert.NoError(b, err)

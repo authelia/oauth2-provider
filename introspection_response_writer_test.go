@@ -77,9 +77,9 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			setup: func() {
 				ires.Active = true
 				ires.TokenUse = AccessToken
-				sess := &DefaultSession{}
-				sess.SetExpiresAt(ires.TokenUse, time.Now().Add(time.Hour*2))
-				ires.AccessRequester = NewAccessRequest(sess)
+				session := &DefaultSession{}
+				session.SetExpiresAt(ires.TokenUse, time.Now().Add(time.Hour*2))
+				ires.AccessRequester = NewAccessRequest(session)
 			},
 			active:   true,
 			hasExp:   true,
@@ -90,9 +90,9 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			setup: func() {
 				ires.Active = false
 				ires.TokenUse = AccessToken
-				sess := &DefaultSession{}
-				sess.SetExpiresAt(ires.TokenUse, time.Now().Add(-time.Hour*2))
-				ires.AccessRequester = NewAccessRequest(sess)
+				session := &DefaultSession{}
+				session.SetExpiresAt(ires.TokenUse, time.Now().Add(-time.Hour*2))
+				ires.AccessRequester = NewAccessRequest(session)
 			},
 			active:   false,
 			hasExp:   false,
@@ -103,9 +103,9 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			setup: func() {
 				ires.Active = true
 				ires.TokenUse = AccessToken
-				sess := &DefaultSession{}
-				sess.SetExpiresAt(ires.TokenUse, time.Time{})
-				ires.AccessRequester = NewAccessRequest(sess)
+				session := &DefaultSession{}
+				session.SetExpiresAt(ires.TokenUse, time.Time{})
+				ires.AccessRequester = NewAccessRequest(session)
 			},
 			active:   true,
 			hasExp:   false,
@@ -116,14 +116,14 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			setup: func() {
 				ires.Active = true
 				ires.TokenUse = AccessToken
-				sess := &DefaultSession{}
-				sess.GetExtraClaims()["extra"] = "foobar"
+				session := &DefaultSession{}
+				session.GetExtraClaims()["extra"] = "foobar"
 				// We try to set these, but they should be ignored.
 				for _, field := range []string{consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername} {
-					sess.GetExtraClaims()[field] = "invalid"
+					session.GetExtraClaims()[field] = "invalid"
 				}
-				sess.SetExpiresAt(ires.TokenUse, time.Time{})
-				ires.AccessRequester = NewAccessRequest(sess)
+				session.SetExpiresAt(ires.TokenUse, time.Time{})
+				ires.AccessRequester = NewAccessRequest(session)
 			},
 			active:   true,
 			hasExp:   false,

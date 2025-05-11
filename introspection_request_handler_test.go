@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -31,7 +30,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
-	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+	ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
 	config := new(Config)
 	provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
@@ -73,7 +72,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			res, err := provider.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
+			res, err := provider.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 			require.NoError(t, err)
 			assert.Equal(t, c.expectedATT, res.GetAccessTokenType())
 			assert.Equal(t, c.expectedTU, res.GetTokenUse())
@@ -82,8 +81,8 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 }
 
 func TestIntrospectionResponse(t *testing.T) {
-	r := &oauth2.IntrospectionResponse{
-		AccessRequester: oauth2.NewAccessRequest(nil),
+	r := &IntrospectionResponse{
+		AccessRequester: NewAccessRequest(nil),
 		Active:          true,
 	}
 
@@ -96,7 +95,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 	validator := mock.NewMockTokenIntrospector(ctrl)
 	defer ctrl.Finish()
 
-	ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+	ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
 	config := new(Config)
 	f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
@@ -213,7 +212,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			res, err := f.NewIntrospectionRequest(context.TODO(), httpreq, &DefaultSession{})
+			res, err := f.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
@@ -300,9 +299,6 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
 				consts.ClaimIssuedAt:         int64(100000),
 				consts.ClaimClientIdentifier: "aclient",
-				//"aclaim":                     1,
-				//consts.ClaimSubject:          "asubj",
-				//consts.ClaimExpirationTime:   int64(1000000),
 			},
 		},
 		{

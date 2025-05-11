@@ -8,13 +8,13 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -292,13 +292,13 @@ func TestJWTHeaders(t *testing.T) {
 	}
 }
 
-var keyFuncError = fmt.Errorf("error loading key")
+var errKeyLoading = errors.New("error loading key")
 
 var (
 	jwtTestDefaultKey         = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
 	defaultKeyFunc    Keyfunc = func(t *Token) (any, error) { return jwtTestDefaultKey, nil }
 	emptyKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, nil }
-	errorKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, keyFuncError }
+	errorKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, errKeyLoading }
 	nilKeyFunc        Keyfunc = nil
 )
 
@@ -641,8 +641,8 @@ func TestParser_Parse(t *testing.T) {
 						t.Errorf("[%v] Errors don't match expectation.  %v != %v", data.name, e, data.errors)
 					}
 
-					if err.Error() == keyFuncError.Error() && ve.Inner != keyFuncError {
-						t.Errorf("[%v] Inner error does not match expectation.  %v != %v", data.name, ve.Inner, keyFuncError)
+					if err.Error() == errKeyLoading.Error() && ve.Inner != errKeyLoading {
+						t.Errorf("[%v] Inner error does not match expectation.  %v != %v", data.name, ve.Inner, errKeyLoading)
 					}
 				}
 			}

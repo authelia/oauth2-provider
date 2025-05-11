@@ -39,7 +39,7 @@ type AuthorizeJWTGrantRequestHandlerTestSuite struct {
 	mockStore               *mock.MockRFC7523KeyStorage
 	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
 	mockAccessTokenStore    *mock.MockAccessTokenStorage
-	accessRequest           *oauth2.AccessRequest
+	requester               *oauth2.AccessRequest
 	handler                 *Handler
 }
 
@@ -67,9 +67,9 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
 	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
-	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
-	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
+	s.requester = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
+	s.requester.Form = url.Values{}
+	s.requester.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
 	s.handler = &Handler{
 		Storage: s.mockStore,
 		Config: &oauth2.Config{
@@ -99,10 +99,10 @@ func TestAuthorizeJWTGrantRequestHandlerTestSuite(t *testing.T) {
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithInvalidGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
+	s.requester.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrUnknownRequest))
@@ -111,12 +111,12 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithInvalidGrantTy
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrUnauthorizedClient))
@@ -129,10 +129,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestClientIsNotRegisteredForG
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithoutAssertion() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidRequest))
@@ -145,11 +145,11 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithoutAssertion()
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAssertion() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, "fjigjgfkjgkf")
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.Form.Add(consts.FormParameterAssertion, "fjigjgfkjgkf")
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -162,14 +162,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestWithMalformedAsser
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIssuer() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	cl := s.createStandardClaim()
 	cl.Issuer = ""
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -182,14 +182,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutIs
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSubject() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	cl := s.createStandardClaim()
 	cl.Subject = ""
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(context.Background(), s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -203,14 +203,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestAssertionWithoutSu
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	cl := s.createStandardClaim()
-	keyID := "my_key"
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	keyID := keyID
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(nil, oauth2.ErrNotFound)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -227,14 +227,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToChec
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -251,15 +251,15 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToChe
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "wrong_key"
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	jwk := s.createRandomTestJWK()
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&jwk, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -270,14 +270,14 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAsse
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAssertionSignature() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(s.createJWS(s.createRandomTestJWK(), s.createRandomTestJWK()), nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -294,16 +294,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAss
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.Audience = []string{}
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -317,16 +317,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.Audience = jwt.Audience{"leela", "fry"}
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -343,16 +343,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.Expiry = nil
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -366,16 +366,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion()
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, -1, 0))
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -389,17 +389,17 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBeforeDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	nbf := time.Now().AddDate(0, 1, 0)
 	cl := s.createStandardClaim()
 	cl.NotBefore = jwt.NewNumericDate(nbf)
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -416,17 +416,17 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBefor
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredIssueDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -440,19 +440,19 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFarInPast() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	issuedAt := time.Now().AddDate(0, 0, -31)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = jwt.NewNumericDate(issuedAt)
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -470,19 +470,19 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDateFarInFuture() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = jwt.NewNumericDate(time.Now().AddDate(0, 0, -15))
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 20))
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -500,19 +500,19 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDateFarInFutureWithNoIssuerDate() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 31))
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -522,16 +522,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredTokenID() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.ID = ""
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
@@ -545,16 +545,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredT
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(true, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrJTIKnown))
@@ -564,16 +564,16 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, oauth2.ErrServerError)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrServerError))
@@ -583,18 +583,18 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUs
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrServerError))
@@ -604,18 +604,18 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed()
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKeyScope() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, oauth2.ErrServerError)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrServerError))
@@ -625,19 +625,19 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKey
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScopes() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.accessRequest.RequestedScope = []string{"some_scope"}
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.RequestedScope = []string{"some_scope"}
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrInvalidScope))
@@ -651,20 +651,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScope
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestValidAssertion() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.accessRequest.RequestedScope = []string{"valid_scope"}
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.RequestedScope = []string{"valid_scope"}
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.NoError(err, "no error expected, because assertion must be valid")
@@ -673,18 +673,18 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestValidAssertion() {
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenNoScopesPassed() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.NoError(err, "no error expected, because assertion must be valid")
@@ -693,18 +693,18 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenNoSco
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIDIsOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIDOptional = true
 	cl.ID = ""
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.NoError(err, "no error expected, because assertion must be valid, when no jti claim and it is allowed by option")
@@ -713,20 +713,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTID
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIssuedDateOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	cl.IssuedAt = nil
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.NoError(err, "no error expected, because assertion must be valid, when no iss claim and it is allowed by option")
@@ -735,20 +735,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIs
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestIsValidWhenClientAuthOptional() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	keyID := "my_key"
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
-	s.accessRequest.Client = &oauth2.DefaultClient{}
+	s.requester.Client = &oauth2.DefaultClient{}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = true
-	s.accessRequest.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
 	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
-	err := s.handler.HandleTokenEndpointRequest(ctx, s.accessRequest)
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
 	// assert
 	s.NoError(err, "no error expected, because request must be valid, when no client unauthenticated and it is allowed by option")
@@ -814,8 +814,8 @@ type AuthorizeJWTGrantPopulateTokenEndpointTestSuite struct {
 	mockStore               *mock.MockRFC7523KeyStorage
 	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
 	mockAccessTokenStore    *mock.MockAccessTokenStorage
-	accessRequest           *oauth2.AccessRequest
-	accessResponse          *oauth2.AccessResponse
+	requester               *oauth2.AccessRequest
+	responder               *oauth2.AccessResponse
 	handler                 *Handler
 }
 
@@ -843,10 +843,10 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
 	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
-	s.accessRequest = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
-	s.accessRequest.Form = url.Values{}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
-	s.accessResponse = oauth2.NewAccessResponse()
+	s.requester = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
+	s.requester.Form = url.Values{}
+	s.requester.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
+	s.responder = oauth2.NewAccessResponse()
 	s.handler = &Handler{
 		Storage: s.mockStore,
 		Config: &oauth2.Config{
@@ -876,10 +876,10 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointTestSuite(t *testing.T) {
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestRequestWithInvalidGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
+	s.requester.GrantTypes = []string{consts.GrantTypeAuthorizationCode}
 
 	// act
-	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
+	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.requester, s.responder)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrUnknownRequest))
@@ -888,12 +888,12 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestRequestWithInvalid
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegisteredForGrantType() {
 	// arrange
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	s.accessRequest.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.requester.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = false
 
 	// act
-	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
+	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.requester, s.responder)
 
 	// assert
 	s.True(errors.Is(err, oauth2.ErrUnauthorizedClient))
@@ -907,29 +907,27 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestClientIsNotRegiste
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedSuccessfully() {
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	token := "token"
-	sig := "sig"
-	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.accessRequest).Return(token, sig, nil)
-	s.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(ctx, sig, s.accessRequest.Sanitize([]string{}))
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.requester).Return(token, sig, nil)
+	s.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(ctx, sig, s.requester.Sanitize([]string{}))
 
 	// act
-	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
+	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.requester, s.responder)
 
 	// assert
 	s.NoError(err, "no error expected")
-	s.Equal(s.accessResponse.AccessToken, token, "access token expected in response")
-	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
+	s.Equal(s.responder.AccessToken, token, "access token expected in response")
+	s.Equal(s.responder.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
 	s.Equal(
-		s.accessResponse.GetExtra(consts.AccessResponseExpiresIn), int64(s.handler.HandleHelper.Config.GetAccessTokenLifespan(context.TODO()).Seconds()),
+		s.responder.GetExtra(consts.AccessResponseExpiresIn), int64(s.handler.HandleHelper.Config.GetAccessTokenLifespan(s.T().Context()).Seconds()),
 		"token expiration time expected in response to be equal to AccessTokenLifespan setting in handler",
 	)
-	s.Equal(s.accessResponse.GetExtra(consts.AccessResponseScope), "", "no scopes expected in response")
-	s.Nil(s.accessResponse.GetExtra(consts.AccessResponseRefreshToken), "refresh token not expected in response")
+	s.Equal(s.responder.GetExtra(consts.AccessResponseScope), "", "no scopes expected in response")
+	s.Nil(s.responder.GetExtra(consts.AccessResponseRefreshToken), "refresh token not expected in response")
 }
 
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedSuccessfullyWithCustomLifespan() {
-	s.accessRequest.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+	s.requester.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 		DefaultClient: &oauth2.DefaultClient{
 			GrantTypes: []string{consts.GrantTypeOAuthJWTBearer},
 		},
@@ -937,23 +935,21 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TestAccessTokenIssuedS
 	}
 	// arrange
 	ctx := context.Background()
-	s.accessRequest.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	token := "token"
-	sig := "sig"
-	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.accessRequest).Return(token, sig, nil)
-	s.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(ctx, sig, s.accessRequest.Sanitize([]string{}))
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	s.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(ctx, s.requester).Return(token, sig, nil)
+	s.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(ctx, sig, s.requester.Sanitize([]string{}))
 
 	// act
-	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.accessRequest, s.accessResponse)
+	err := s.handler.PopulateTokenEndpointResponse(context.Background(), s.requester, s.responder)
 
 	// assert
 	s.NoError(err, "no error expected")
-	s.Equal(s.accessResponse.AccessToken, token, "access token expected in response")
-	s.Equal(s.accessResponse.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
+	s.Equal(s.responder.AccessToken, token, "access token expected in response")
+	s.Equal(s.responder.TokenType, oauth2.BearerAccessToken, "token type expected to be 'bearer'")
 	s.Equal(
-		s.accessResponse.GetExtra(consts.AccessResponseExpiresIn), int64(internal.TestLifespans.JwtBearerGrantAccessTokenLifespan.Seconds()),
+		s.responder.GetExtra(consts.AccessResponseExpiresIn), int64(internal.TestLifespans.JwtBearerGrantAccessTokenLifespan.Seconds()),
 		"token expiration time expected in response to be equal to the pertinent AccessTokenLifespan setting in client",
 	)
-	s.Equal(s.accessResponse.GetExtra(consts.AccessResponseScope), "", "no scopes expected in response")
-	s.Nil(s.accessResponse.GetExtra(consts.AccessResponseRefreshToken), "refresh token not expected in response")
+	s.Equal(s.responder.GetExtra(consts.AccessResponseScope), "", "no scopes expected in response")
+	s.Nil(s.responder.GetExtra(consts.AccessResponseRefreshToken), "refresh token not expected in response")
 }

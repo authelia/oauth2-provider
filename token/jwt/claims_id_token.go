@@ -59,6 +59,7 @@ func (c *IDTokenClaims) GetAudience() (aud ClaimStrings, err error) {
 	return c.Audience, nil
 }
 
+//nolint:gocyclo
 func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	vopts := &ClaimValidationOptions{}
 
@@ -162,6 +163,9 @@ func (c *IDTokenClaims) GetAuthTimeSafe() time.Time {
 	return c.AuthTime.UTC()
 }
 
+// UnmarshalJSON handles the JSON unmarshalling for the IDTokenClaims.
+//
+//nolint:gocyclo
 func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 	claims := MapClaims{}
 
@@ -343,19 +347,6 @@ func (c *IDTokenClaims) Add(key string, value any) {
 // Get will get a value from the extra field based on a given key
 func (c *IDTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
-}
-
-func (c IDTokenClaims) toNumericDate(key string) (date *NumericDate, err error) {
-	var (
-		v  any
-		ok bool
-	)
-
-	if v, ok = c.Extra[key]; !ok {
-		return nil, nil
-	}
-
-	return toNumericDate(v)
 }
 
 func toStringSlice(value any) (values []string, ok bool) {

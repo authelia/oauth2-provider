@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,8 +39,8 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
-	oauthClient.ClientID = "public-client"
-	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	oauthClient.ClientID = testClientIDPublic
+	store.Clients[testClientIDPublic].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var authCodeUrl string
 	var verifier string
@@ -54,7 +53,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 		{
 			description: "should fail because no challenge was given",
 			setup: func() {
-				authCodeUrl = oauthClient.AuthCodeURL("12345678901234567890")
+				authCodeUrl = oauthClient.AuthCodeURL(testState)
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
@@ -62,7 +61,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 			description: "should pass",
 			setup: func() {
 				verifier = "somechallengesomechallengesomechallengesomechallengesomechallengesomechallenge"
-				authCodeUrl = oauthClient.AuthCodeURL("12345678901234567890") + "&code_challenge=somechallengesomechallengesomechallengesomechallengesomechallengesomechallenge"
+				authCodeUrl = oauthClient.AuthCodeURL(testState) + "&code_challenge=somechallengesomechallengesomechallengesomechallengesomechallengesomechallenge"
 			},
 			authStatusCode: http.StatusOK,
 		},
@@ -70,7 +69,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 			description: "should fail because the verifier is mismatching",
 			setup: func() {
 				verifier = "failchallengefailchallengefailchallengefailchallengefailchallengefailchallengefailchallengefailchallenge"
-				authCodeUrl = oauthClient.AuthCodeURL("12345678901234567890") + "&code_challenge=somechallengesomechallengesomechallengesomechallengesomechallengesomechallengesomechallengesomechallenge"
+				authCodeUrl = oauthClient.AuthCodeURL(testState) + "&code_challenge=somechallengesomechallengesomechallengesomechallengesomechallengesomechallengesomechallengesomechallenge"
 			},
 			authStatusCode:  http.StatusOK,
 			tokenStatusCode: http.StatusBadRequest,
@@ -87,7 +86,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 				resp, err := http.PostForm(ts.URL+"/token", url.Values{
 					consts.FormParameterAuthorizationCode: {resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode)},
 					consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
-					consts.FormParameterClientID:          {"public-client"},
+					consts.FormParameterClientID:          {testClientIDPublic},
 					consts.FormParameterRedirectURI:       {ts.URL + "/callback"},
 					consts.FormParameterCodeVerifier:      {verifier},
 				})
@@ -111,7 +110,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 
 				require.NotEmpty(t, token.AccessToken, "Got body: %s", string(body))
 
-				httpClient := oauthClient.Client(context.TODO(), &token)
+				httpClient := oauthClient.Client(t.Context(), &token)
 				resp, err = httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

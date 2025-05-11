@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"hash"
 	"strconv"
 	"time"
 
@@ -20,81 +21,94 @@ type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }
 
-func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) string {
+func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (sum string) {
+	var err error
+
 	token := responder.GetAccessToken()
-	// The session should always be a openid.Session but best to safely cast
 	if session, ok := requester.GetSession().(Session); ok {
-		val, err := i.ComputeHash(ctx, session, token)
-		if err != nil {
-			// this should never happen
+		if sum, err = i.ComputeHash(ctx, session, token); err != nil {
+			// The Digest function Write always returns nil for err, the panic should never happen.
 			panic(err)
 		}
 
-		return val
+		return sum
 	}
 
 	buffer := bytes.NewBufferString(token)
-	hash := sha256.New()
-	// sha256.digest.Write() always returns nil for err, the panic should never happen
-	_, err := hash.Write(buffer.Bytes())
-	if err != nil {
+	h := sha256.New()
+
+	if _, err = h.Write(buffer.Bytes()); err != nil {
+		// The sha256.Digest function Write always returns nil for err, the panic should never happen.
 		panic(err)
 	}
-	hashBuf := bytes.NewBuffer(hash.Sum([]byte{}))
+
+	hashBuf := bytes.NewBuffer(h.Sum([]byte{}))
 
 	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2])
 }
 
-func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, fosr oauth2.Requester) (token string, err error) {
-	token, err = i.IDTokenStrategy.GenerateIDToken(ctx, lifespan, fosr)
-	if err != nil {
+func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error) {
+	if token, err = i.IDTokenStrategy.GenerateIDToken(ctx, lifespan, requester); err != nil {
 		return "", err
 	}
 
 	return token, nil
 }
 
-func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, ar oauth2.Requester, resp oauth2.AuthorizeResponder) error {
-	token, err := i.generateIDToken(ctx, lifespan, ar)
-	if err != nil {
+func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester, responder oauth2.AuthorizeResponder) (err error) {
+	var token string
+
+	if token, err = i.generateIDToken(ctx, lifespan, requester); err != nil {
 		return err
 	}
-	resp.AddParameter(consts.AccessResponseIDToken, token)
+
+	responder.AddParameter(consts.AccessResponseIDToken, token)
 
 	return nil
 }
 
-func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, ar oauth2.Requester, resp oauth2.AccessResponder) error {
-	token, err := i.generateIDToken(ctx, lifespan, ar)
-	if err != nil {
+func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester, responder oauth2.AccessResponder) (err error) {
+	var token string
+
+	if token, err = i.generateIDToken(ctx, lifespan, requester); err != nil {
 		return err
 	}
 
-	resp.SetExtra(consts.AccessResponseIDToken, token)
+	responder.SetExtra(consts.AccessResponseIDToken, token)
 
 	return nil
 }
 
 // ComputeHash computes the hash using the alg defined in the id_token header
-func (i *IDTokenHandleHelper) ComputeHash(ctx context.Context, sess Session, token string) (string, error) {
-	var err error
-	hash := sha256.New()
-	if alg, ok := sess.IDTokenHeaders().Get(consts.JSONWebTokenHeaderAlgorithm).(string); ok && len(alg) > 2 {
-		if hashSize, err := strconv.Atoi(alg[2:]); err == nil {
-			if hashSize == 384 {
-				hash = sha512.New384()
-			} else if hashSize == 512 {
-				hash = sha512.New()
+func (i *IDTokenHandleHelper) ComputeHash(_ context.Context, session Session, token string) (sum string, err error) {
+	var h hash.Hash
+
+	if alg, ok := session.IDTokenHeaders().Get(consts.JSONWebTokenHeaderAlgorithm).(string); ok && len(alg) > 2 {
+		var bits int
+
+		if bits, err = strconv.Atoi(alg[2:]); err == nil {
+			switch bits / 8 {
+			case sha512.Size:
+				h = sha512.New()
+			case sha512.Size384:
+				h = sha512.New384()
+			case sha512.Size256:
+				h = sha256.New()
 			}
 		}
 	}
 
+	if h == nil {
+		h = sha256.New()
+	}
+
 	buffer := bytes.NewBufferString(token)
-	_, err = hash.Write(buffer.Bytes())
-	if err != nil {
+
+	if _, err = h.Write(buffer.Bytes()); err != nil {
 		return "", err
 	}
-	hashBuf := bytes.NewBuffer(hash.Sum([]byte{}))
+
+	hashBuf := bytes.NewBuffer(h.Sum([]byte{}))
 
 	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2]), nil
 }

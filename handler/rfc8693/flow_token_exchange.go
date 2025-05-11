@@ -18,12 +18,15 @@ type TokenExchangeGrantHandler struct {
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
-func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+//
+//nolint:gocyclo
+func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	client := request.GetClient()
+
 	if client.IsPublic() {
 		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:token-exchange'."))
 	}
@@ -34,19 +37,32 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 			"The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", "urn:ietf:params:oauth:grant-type:token-exchange"))
 	}
 
-	session, _ := request.GetSession().(Session)
-	if session == nil {
+	var (
+		session Session
+		ok      bool
+	)
+
+	if session, ok = request.GetSession().(Session); !ok || session == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
 	form := request.GetRequestForm()
 	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
-	var supportedSubjectTypes, supportedActorTypes, supportedRequestTypes oauth2.Arguments
-	if teClient, ok := client.(Client); ok {
-		supportedRequestTypes = teClient.GetSupportedRequestTokenTypes()
-		supportedActorTypes = teClient.GetSupportedActorTokenTypes()
-		supportedSubjectTypes = teClient.GetSupportedSubjectTokenTypes()
+
+	var (
+		supportedSubjectTypes, supportedActorTypes, supportedRequestTypes oauth2.Arguments
+		rfc8693Client                                                     Client
+	)
+
+	if rfc8693Client, ok = client.(Client); ok {
+		supportedRequestTypes = rfc8693Client.GetSupportedRequestTokenTypes()
+		supportedActorTypes = rfc8693Client.GetSupportedActorTokenTypes()
+		supportedSubjectTypes = rfc8693Client.GetSupportedSubjectTokenTypes()
 	}
+
+	var (
+		subjectToken, subjectTokenType string
+	)
 
 	// From https://tools.ietf.org/html/rfc8693#section-2.1:
 	//
@@ -55,8 +71,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	//		party on behalf of whom the request is being made.  Typically, the
 	//		subject of this token will be the subject of the security token
 	//		issued in response to the request.
-	subjectToken := form.Get(consts.FormParameterSubjectToken)
-	if subjectToken == "" {
+	if subjectToken = form.Get(consts.FormParameterSubjectToken); subjectToken == "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("Mandatory parameter '%s' is missing.", "subject_token"))
 	}
 
@@ -66,8 +81,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	//		REQUIRED.  An identifier, as described in Section 3, that
 	//		indicates the type of the security token in the "subject_token"
 	//		parameter.
-	subjectTokenType := form.Get(consts.FormParameterSubjectTokenType)
-	if subjectTokenType == "" {
+	if subjectTokenType = form.Get(consts.FormParameterSubjectTokenType); subjectTokenType == "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("Mandatory parameter '%s' is missing.", consts.FormParameterSubjectTokenType))
 	}
 
@@ -80,22 +94,24 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 			"The OAuth 2.0 client is not allowed to use '%s' as '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType))
 	}
 
+	var (
+		actorToken, actorTokenType string
+	)
+
 	// From https://tools.ietf.org/html/rfc8693#section-2.1:
 	//
 	//	actor_token
 	//		OPTIONAL . A security token that represents the identity of the acting party.
 	//		Typically, this will be the party that is authorized to use the requested security
 	//		token and act on behalf of the subject.
-	actorToken := form.Get(consts.FormParameterActorToken)
-	actorTokenType := form.Get(consts.FormParameterActorTokenType)
-	if actorToken != "" {
+	if actorToken = form.Get(consts.FormParameterActorToken); actorToken != "" {
 		// From https://tools.ietf.org/html/rfc8693#section-2.1:
 		//
 		//	actor_token_type
 		//		An identifier, as described in Section 3, that indicates the type of the security token
 		//		in the actor_token parameter. This is REQUIRED when the actor_token parameter is present
 		//		in the request but MUST NOT be included otherwise.
-		if actorTokenType == "" {
+		if actorTokenType = form.Get(consts.FormParameterActorTokenType); actorTokenType == "" {
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is empty even though the '%s' is not empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
 		}
 
@@ -108,7 +124,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
 				"The OAuth 2.0 client is not allowed to use '%s' as '%s'.", actorTokenType, consts.FormParameterActorTokenType))
 		}
-	} else if actorTokenType != "" {
+	} else if actorTokenType = form.Get(consts.FormParameterActorTokenType); actorTokenType != "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is not empty even though the '%s' is empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
 	}
 
@@ -127,17 +143,16 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not allowed to use '%s' as '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
-	// Check scope
+	// Check the requested scope.
 	for _, scope := range request.GetRequestedScopes() {
 		if !c.ScopeStrategy(client.GetScopes(), scope) {
 			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	// Check audience
-	if err := c.AudienceMatchingStrategy(client.GetAudience(), request.GetRequestedAudience()); err != nil {
-		// TODO: Need to convert to using invalid_target
-		return err
+	// Check the requested audience.
+	if err = c.AudienceMatchingStrategy(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
 	return nil

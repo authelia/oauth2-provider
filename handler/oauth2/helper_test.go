@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -50,27 +49,27 @@ func TestIssueAccessToken(t *testing.T) {
 	}{
 		{
 			mock: func() {
-				accessStrat.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("", "", errors.New(""))
+				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("", "", errors.New(""))
 			},
 			err: errors.New(""),
 		},
 		{
 			mock: func() {
-				accessStrat.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("token", "signature", nil)
-				accessStore.EXPECT().CreateAccessTokenSession(context.TODO(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
+				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("token", "signature", nil)
+				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},
 			err: errors.New(""),
 		},
 		{
 			mock: func() {
-				accessStrat.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("token", "signature", nil)
-				accessStore.EXPECT().CreateAccessTokenSession(context.TODO(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("token", "signature", nil)
+				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			err: nil,
 		},
 	} {
 		c.mock()
-		err := helper.IssueAccessToken(context.TODO(), helper.Config.GetAccessTokenLifespan(context.TODO()), areq, aresp)
+		err := helper.IssueAccessToken(t.Context(), helper.Config.GetAccessTokenLifespan(t.Context()), areq, aresp)
 		require.Equal(t, err == nil, c.err == nil)
 		if c.err != nil {
 			assert.EqualError(t, err, c.err.Error(), "Case %d", k)

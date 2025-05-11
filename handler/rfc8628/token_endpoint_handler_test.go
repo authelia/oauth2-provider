@@ -42,21 +42,21 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 
 			var h hoauth2.GenericCodeTokenEndpointHandler
 			for _, c := range []struct {
-				areq        *oauth2.AccessRequest
-				description string
-				setup       func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config)
-				check       func(t *testing.T, aresp *oauth2.AccessResponse)
-				expectErr   error
+				requester *oauth2.AccessRequest
+				name      string
+				setup     func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config)
+				check     func(t *testing.T, responder *oauth2.AccessResponse)
+				expectErr error
 			}{
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{"123"},
 					},
-					description: "should fail because not responsible",
-					expectErr:   oauth2.ErrUnknownRequest,
+					name:      "should fail because not responsible",
+					expectErr: oauth2.ErrUnknownRequest,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -67,16 +67,16 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					description: "should fail because device code not found",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+					name: "should fail because device code not found",
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
+						code, _, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						areq.Form.Set(consts.FormParameterDeviceCode, code)
+						requester.Form.Set(consts.FormParameterDeviceCode, code)
 					},
 					expectErr: oauth2.ErrServerError,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -88,32 +88,32 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
 						dar := oauth2.NewDeviceAuthorizeRequest()
-						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+						dar.Merge(requester)
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, dar))
 
-						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
+						requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
-					description: "should pass with offline scope and refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo offline", aresp.GetExtra(consts.AccessResponseScope))
+					name: "should pass with offline scope and refresh token",
+					check: func(t *testing.T, responder *oauth2.AccessResponse) {
+						assert.NotEmpty(t, responder.AccessToken)
+						assert.Equal(t, "bearer", responder.TokenType)
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo offline", responder.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -125,34 +125,34 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
 
 						dar := oauth2.NewDeviceAuthorizeRequest()
-						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+						dar.Merge(requester)
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, dar))
 
-						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
+						requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
-					description: "should pass with refresh token always provided",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
+					name: "should pass with refresh token always provided",
+					check: func(t *testing.T, responder *oauth2.AccessResponse) {
+						assert.NotEmpty(t, responder.AccessToken)
+						assert.Equal(t, "bearer", responder.TokenType)
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", responder.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -164,34 +164,34 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
 
 						dar := oauth2.NewDeviceAuthorizeRequest()
-						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+						dar.Merge(requester)
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
 						dar.SetDeviceCodeSignature(dSig)
 						dar.SetUserCodeSignature(uSig)
 						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, dar))
 
-						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
+						requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
-					description: "should pass with no refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseScope))
+					name: "should pass with no refresh token",
+					check: func(t *testing.T, responder *oauth2.AccessResponse) {
+						assert.NotEmpty(t, responder.AccessToken)
+						assert.Equal(t, "bearer", responder.TokenType)
+						assert.Empty(t, responder.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Empty(t, responder.GetExtra(consts.AccessResponseScope))
 					},
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -203,32 +203,32 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						dar := oauth2.NewDeviceAuthorizeRequest()
-						dar.Merge(areq)
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
+						deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+						deviceRequester.Merge(requester)
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
-						dar.SetDeviceCodeSignature(dSig)
-						dar.SetUserCodeSignature(uSig)
-						dar.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+						deviceRequester.SetDeviceCodeSignature(dSig)
+						deviceRequester.SetUserCodeSignature(uSig)
+						deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, dar))
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
 
-						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
+						requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
-					description: "should not have refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, "bearer", aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
+					name: "should not have refresh token",
+					check: func(t *testing.T, responder *oauth2.AccessResponse) {
+						assert.NotEmpty(t, responder.AccessToken)
+						assert.Equal(t, "bearer", responder.TokenType)
+						assert.Empty(t, responder.GetExtra(consts.AccessResponseRefreshToken))
+						assert.NotEmpty(t, responder.GetExtra(consts.AccessResponseExpiresIn))
+						assert.Equal(t, "foo", responder.GetExtra(consts.AccessResponseScope))
 					},
 				},
 			} {
-				t.Run("case="+c.description, func(t *testing.T) {
+				t.Run("case="+c.name, func(t *testing.T) {
 					config := &oauth2.Config{
 						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
 						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
@@ -249,11 +249,11 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					}
 
 					if c.setup != nil {
-						c.setup(t, c.areq, config)
+						c.setup(t, c.requester, config)
 					}
 
-					aresp := oauth2.NewAccessResponse()
-					err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
+					responder := oauth2.NewAccessResponse()
+					err := h.PopulateTokenEndpointResponse(t.Context(), c.requester, responder)
 
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
@@ -262,7 +262,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					}
 
 					if c.check != nil {
-						c.check(t, aresp)
+						c.check(t, responder)
 					}
 				})
 			}
@@ -296,22 +296,22 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				Config:               config,
 			}
 			for i, c := range []struct {
-				areq        *oauth2.AccessRequest
-				authreq     *oauth2.DeviceAuthorizeRequest
-				description string
-				setup       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest)
-				check       func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest)
-				expectErr   error
+				requester       *oauth2.AccessRequest
+				deviceRequester *oauth2.DeviceAuthorizeRequest
+				description     string
+				setup           func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest)
+				check           func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest)
+				expectErr       error
 			}{
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{"12345678"},
 					},
 					description: "should fail because not responsible",
 					expectErr:   oauth2.ErrUnknownRequest,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{""}},
@@ -323,7 +323,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					expectErr:   oauth2.ErrUnauthorizedClient,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
@@ -332,15 +332,15 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						},
 					},
 					description: "should fail because device code could not be retrieved",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						deviceCode, _, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
+						deviceCode, _, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						areq.Form = url.Values{consts.FormParameterDeviceCode: {deviceCode}}
+						requester.Form = url.Values{consts.FormParameterDeviceCode: {deviceCode}}
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form:        url.Values{consts.FormParameterDeviceCode: {"AAAA"}},
@@ -353,7 +353,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					expectErr:   oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
@@ -361,7 +361,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					authreq: &oauth2.DeviceAuthorizeRequest{
+					deviceRequester: &oauth2.DeviceAuthorizeRequest{
 						Request: oauth2.Request{
 							Client:         &oauth2.DefaultClient{ID: "bar"},
 							RequestedScope: oauth2.Arguments{"a", "b"},
@@ -369,24 +369,24 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						},
 					},
 					description: "should fail because client mismatch",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
-						authreq.SetDeviceCodeSignature(dSig)
-						authreq.SetUserCodeSignature(uSig)
-						authreq.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().UTC().Add(time.Hour))
-						authreq.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().UTC().Add(time.Hour))
-						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
+						deviceRequester.SetDeviceCodeSignature(dSig)
+						deviceRequester.SetUserCodeSignature(uSig)
+						deviceRequester.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().UTC().Add(time.Hour))
+						deviceRequester.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().UTC().Add(time.Hour))
+						deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
 
-						areq.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
+						requester.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
 					},
 					expectErr: oauth2.ErrInvalidGrant,
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Client:      &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
@@ -394,7 +394,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedAt: time.Now().UTC(),
 						},
 					},
-					authreq: &oauth2.DeviceAuthorizeRequest{
+					deviceRequester: &oauth2.DeviceAuthorizeRequest{
 						Request: oauth2.Request{
 							Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 							Session:        &oauth2.DefaultSession{},
@@ -403,21 +403,21 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 						},
 					},
 					description: "should pass",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
-						authreq.SetDeviceCodeSignature(dSig)
-						authreq.SetUserCodeSignature(uSig)
-						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
+						deviceRequester.SetDeviceCodeSignature(dSig)
+						deviceRequester.SetUserCodeSignature(uSig)
+						deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
 
-						areq.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
+						requester.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
 					},
 				},
 				{
-					areq: &oauth2.AccessRequest{
+					requester: &oauth2.AccessRequest{
 						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 						Request: oauth2.Request{
 							Form: url.Values{},
@@ -429,27 +429,27 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 							RequestedAt:  time.Now().UTC(),
 						},
 					},
-					check: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
-						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+					check: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), requester.GetSession().GetExpiresAt(oauth2.AccessToken))
+						assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), requester.GetSession().GetExpiresAt(oauth2.RefreshToken))
 					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, authreq *oauth2.DeviceAuthorizeRequest) {
-						authreq = oauth2.NewDeviceAuthorizeRequest()
-						authreq.SetSession(openid.NewDefaultSession())
-						authreq.GetSession().SetExpiresAt(oauth2.UserCode,
+					setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
+						deviceRequester = oauth2.NewDeviceAuthorizeRequest()
+						deviceRequester.SetSession(openid.NewDefaultSession())
+						deviceRequester.GetSession().SetExpiresAt(oauth2.UserCode,
 							time.Now().Add(-time.Hour).UTC().Truncate(jwt.TimePrecision))
-						authreq.GetSession().SetExpiresAt(oauth2.DeviceCode,
+						deviceRequester.GetSession().SetExpiresAt(oauth2.DeviceCode,
 							time.Now().Add(-time.Hour).UTC().Truncate(jwt.TimePrecision))
-						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(context.TODO())
+						dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 						require.NoError(t, err)
-						_, uSig, err := strategy.GenerateRFC8628UserCode(context.TODO())
+						_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
 						require.NoError(t, err)
-						authreq.SetDeviceCodeSignature(dSig)
-						authreq.SetUserCodeSignature(uSig)
-						authreq.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
-						require.NoError(t, store.CreateDeviceCodeSession(context.TODO(), dSig, authreq))
+						deviceRequester.SetDeviceCodeSignature(dSig)
+						deviceRequester.SetUserCodeSignature(uSig)
+						deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+						require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
 
-						areq.Form.Add(consts.FormParameterDeviceCode, dCode)
+						requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 					},
 					description: "should fail because device code has expired",
 					expectErr:   oauth2.ErrDeviceExpiredToken,
@@ -457,16 +457,16 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			} {
 				t.Run(fmt.Sprintf("case=%d/description=%s", i, c.description), func(t *testing.T) {
 					if c.setup != nil {
-						c.setup(t, c.areq, c.authreq)
+						c.setup(t, c.requester, c.deviceRequester)
 					}
 
-					err := h.HandleTokenEndpointRequest(context.Background(), c.areq)
+					err := h.HandleTokenEndpointRequest(context.Background(), c.requester)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
 					} else {
 						require.NoError(t, err, "%+v", err)
 						if c.check != nil {
-							c.check(t, c.areq, c.authreq)
+							c.check(t, c.requester, c.deviceRequester)
 						}
 					}
 				})
@@ -503,7 +503,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 		},
 		Status: oauth2.DeviceAuthorizeStatusApproved,
 	}
-	token, _, err := deviceStrategy.GenerateRFC8628DeviceCode(context.TODO())
+	token, _, err := deviceStrategy.GenerateRFC8628DeviceCode(t.Context())
 	require.NoError(t, err)
 	request.Form = url.Values{consts.FormParameterDeviceCode: {token}}
 	response := oauth2.NewAccessResponse()

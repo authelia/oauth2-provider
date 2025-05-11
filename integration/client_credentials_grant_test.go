@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -56,7 +55,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 
 	oauthClient := newOAuth2AppClient(ts)
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	store.Clients["custom-lifespan-client"].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients[testClientIDLifespan].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 	for k, c := range []struct {
 		description string
 		setup       func()
@@ -112,7 +111,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 		{
 			description: "should pass with custom client token lifespans",
 			setup: func() {
-				oauthClient.ClientID = "custom-lifespan-client"
+				oauthClient.ClientID = testClientIDLifespan
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
 				var j json.RawMessage
@@ -136,7 +135,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			c.setup()
 
 			oauthClient.EndpointParams = c.params
-			token, err := oauthClient.Token(context.TODO())
+			token, err := oauthClient.Token(t.Context())
 			require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
 			if !c.err {
 				assert.NotEmpty(t, token.AccessToken, "(%d) %s\n%s", k, c.description, token)

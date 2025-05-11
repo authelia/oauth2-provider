@@ -192,7 +192,7 @@ func TestNewRevocationRequest(t *testing.T) {
 			c.mock()
 
 			config.RevocationHandlers = c.handlers
-			err := provider.NewRevocationRequest(context.TODO(), r)
+			err := provider.NewRevocationRequest(t.Context(), r)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

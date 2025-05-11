@@ -79,7 +79,7 @@ func TestScopeFieldString(t *testing.T) {
 	// Making a copy of jwtClaimsMap.
 	jwtClaimsMapWithString := jwtClaims.ToMap()
 	delete(jwtClaimsMapWithString, ClaimScopeNonStandard)
-	jwtClaimsMapWithString[ClaimScope] = "email offline"
+	jwtClaimsMapWithString[ClaimScope] = scopeEmailOffline
 	assert.Equal(t, jwtClaimsMapWithString, map[string]any(jwtClaimsWithString.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithString)
@@ -90,9 +90,11 @@ func TestScopeFieldBoth(t *testing.T) {
 	jwtClaimsWithBoth := jwtClaims.WithScopeField(JWTScopeFieldBoth)
 	// Making a copy of jwtClaimsMap
 	jwtClaimsMapWithBoth := jwtClaims.ToMap()
-	jwtClaimsMapWithBoth[ClaimScope] = "email offline"
+	jwtClaimsMapWithBoth[ClaimScope] = scopeEmailOffline
 	assert.Equal(t, jwtClaimsMapWithBoth, map[string]any(jwtClaimsWithBoth.ToMapClaims()))
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMapWithBoth)
 	assert.Equal(t, jwtClaimsWithBoth, &claims)
 }
+
+const scopeEmailOffline = "email offline"

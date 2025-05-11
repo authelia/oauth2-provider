@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -38,10 +37,10 @@ func TestGenerateIDToken(t *testing.T) {
 	chgen := mock.NewMockOpenIDConnectTokenStrategy(ctrl)
 	defer ctrl.Finish()
 
-	ar := oauth2.NewAccessRequest(nil)
-	sess := &DefaultSession{
+	requester := oauth2.NewAccessRequest(nil)
+	session := &DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Subject: "peter",
+			Subject: testSubjectPeter,
 		},
 		Headers: &jwt.Headers{},
 	}
@@ -55,21 +54,21 @@ func TestGenerateIDToken(t *testing.T) {
 		{
 			description: "should fail because generator failed",
 			setup: func() {
-				ar.Form.Set("nonce", "11111111111111111111111111111111111")
-				ar.SetSession(sess)
-				chgen.EXPECT().GenerateIDToken(context.TODO(), time.Duration(0), ar).Return("", fooErr)
+				requester.Form.Set("nonce", "11111111111111111111111111111111111")
+				requester.SetSession(session)
+				chgen.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).Return("", fooErr)
 			},
 			expectErr: fooErr,
 		},
 		{
 			description: "should pass",
 			setup: func() {
-				chgen.EXPECT().GenerateIDToken(context.TODO(), time.Duration(0), ar).AnyTimes().Return("asdf", nil)
+				chgen.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).AnyTimes().Return("asdf", nil)
 			},
 		},
 	} {
 		c.setup()
-		token, err := h.generateIDToken(context.TODO(), time.Duration(0), ar)
+		token, err := h.generateIDToken(t.Context(), time.Duration(0), requester)
 		assert.True(t, err == c.expectErr, "(%d) %s\n%s\n%s", k, c.description, err, c.expectErr)
 		if err == nil {
 			assert.NotEmpty(t, token, "(%d) %s", k, c.description)
@@ -85,12 +84,12 @@ func TestIssueExplicitToken(t *testing.T) {
 	ar := oauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
-		Subject: "peter",
+		Subject: testSubjectPeter,
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().SetExtra("id_token", gomock.Any())
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
-	err := h.IssueExplicitIDToken(context.TODO(), time.Duration(0), ar, resp)
+	err := h.IssueExplicitIDToken(t.Context(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)
 }
 
@@ -102,12 +101,12 @@ func TestIssueImplicitToken(t *testing.T) {
 	ar := oauth2.NewAuthorizeRequest()
 	ar.Form = url.Values{"nonce": {"111111111111"}}
 	ar.SetSession(&DefaultSession{Claims: &jwt.IDTokenClaims{
-		Subject: "peter",
+		Subject: testSubjectPeter,
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().AddParameter(consts.AccessResponseIDToken, gomock.Any())
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
-	err := h.IssueImplicitIDToken(context.TODO(), time.Duration(0), ar, resp)
+	err := h.IssueImplicitIDToken(t.Context(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)
 }
 
@@ -123,7 +122,7 @@ func TestGetAccessTokenHash(t *testing.T) {
 
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
-	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
+	hash := h.GetAccessTokenHash(t.Context(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
 }
 
@@ -144,7 +143,7 @@ func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
 
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
-	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
+	hash := h.GetAccessTokenHash(t.Context(), req, resp)
 	assert.Equal(t, "VNX38yiOyeqBPheW5jDsWQKa6IjJzK66", hash)
 }
 
@@ -165,7 +164,7 @@ func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
 
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
-	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
+	hash := h.GetAccessTokenHash(t.Context(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
 }
 
@@ -186,6 +185,6 @@ func TestGetAccessTokenHashWithMissingKeyLength(t *testing.T) {
 
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 
-	hash := h.GetAccessTokenHash(context.TODO(), req, resp)
+	hash := h.GetAccessTokenHash(t.Context(), req, resp)
 	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
 }

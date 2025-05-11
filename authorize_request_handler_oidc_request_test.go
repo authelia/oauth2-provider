@@ -43,7 +43,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 	clientSecretHS256 := NewPlainTextClientSecret(rawClientSecret)
 
-	jwkEncAES256, err := jwt.NewClientSecretJWK(context.TODO(), []byte(rawClientSecret), "", string(jose.A256GCMKW), "", consts.JSONWebTokenUseEncryption)
+	jwkEncAES256, err := jwt.NewClientSecretJWK(t.Context(), []byte(rawClientSecret), "", string(jose.A256GCMKW), "", consts.JSONWebTokenUseEncryption)
 	require.NoError(t, err)
 
 	jwkSigHS := &jose.JSONWebKey{
@@ -623,13 +623,6 @@ func mustGenerateAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateK
 	return tokenString
 }
 
-func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims) string {
-	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.CompactSignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
-	require.NoError(t, err)
-	return tokenString
-}
-
 func mangleSig(tokenString string) string {
 	parts := strings.Split(tokenString, ".")
 	raw, err := base64.RawURLEncoding.DecodeString(parts[2])
@@ -645,14 +638,15 @@ func mangleSig(tokenString string) string {
 }
 
 func mustGenerateRequestObjectJWS(t *testing.T, claims jwt.MapClaims, headers jwt.Mapper, key *jose.JSONWebKey) string {
-	token, _, err := jwt.EncodeCompactSigned(context.TODO(), claims, headers, key)
+	token, _, err := jwt.EncodeCompactSigned(t.Context(), claims, headers, key)
 	require.NoError(t, err)
 
 	return token
 }
 
+//nolint:unparam
 func mustGenerateRequestObjectJWE(t *testing.T, claims jwt.MapClaims, headers, headersJWE jwt.Mapper, key *jose.JSONWebKey, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) string {
-	token, _, err := jwt.EncodeNestedCompactEncrypted(context.TODO(), claims, headers, headersJWE, key, keyEnc, enc)
+	token, _, err := jwt.EncodeNestedCompactEncrypted(t.Context(), claims, headers, headersJWE, key, keyEnc, enc)
 	require.NoError(t, err)
 
 	return token

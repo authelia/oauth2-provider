@@ -36,7 +36,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 		{
 			name:      "should pass id token (id_token code) with PKCE applied.",
 			have:      consts.ResponseTypeHybridFlowIDToken,
-			state:     "12345678901234567890",
+			state:     testState,
 			nonce:     "1111111111111111",
 			setup:     nil,
 			challenge: "J11vOtKUitab04a_N0Ogm0dQBytTgl0fgHzYk4xUryo",
@@ -63,10 +63,10 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			oauthClient := newOAuth2Client(ts)
 
 			oauthClient.ClientSecret = ""
-			oauthClient.ClientID = "public-client"
+			oauthClient.ClientID = testClientIDPublic
 			oauthClient.Scopes = []string{consts.ScopeOpenID}
 
-			store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+			store.Clients[testClientIDPublic].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 			if tc.setup != nil {
 				tc.setup(t)
@@ -104,7 +104,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			response, err = http.PostForm(oauthClient.Endpoint.TokenURL, url.Values{
 				consts.FormParameterAuthorizationCode: {code},
 				consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
-				consts.FormParameterClientID:          {"public-client"},
+				consts.FormParameterClientID:          {testClientIDPublic},
 				consts.FormParameterRedirectURI:       {ts.URL + "/callback"},
 				consts.FormParameterCodeVerifier:      {tc.verifier},
 			})

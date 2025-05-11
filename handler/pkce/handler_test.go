@@ -4,7 +4,6 @@
 package pkce
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -191,7 +190,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
 			},
@@ -219,7 +218,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
 			},
@@ -247,7 +246,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
 			},
@@ -316,7 +315,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
 			},
@@ -343,7 +342,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						CreatePKCERequestSession(context.TODO(), gomock.Any(), gomock.Any()).
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(fmt.Errorf("bad connection")),
 				)
 			},
@@ -385,7 +384,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				Config:                config,
 			}
 
-			err := handler.HandleAuthorizeEndpointRequest(context.TODO(), tc.requester, responder)
+			err := handler.HandleAuthorizeEndpointRequest(t.Context(), tc.requester, responder)
 
 			if len(tc.expected) == 0 && tc.err == nil {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -437,7 +436,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(nil, oauth2.ErrNotFound),
 				)
 			},
@@ -462,7 +461,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(nil, oauth2.ErrNotFound),
 				)
 			},
@@ -488,7 +487,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(nil, oauth2.ErrNotFound),
 				)
 			},
@@ -514,7 +513,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(nil, errors.New("bad connection")),
 				)
 			},
@@ -540,11 +539,11 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(errors.New("bad connection")),
 				)
 			},
@@ -570,11 +569,11 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -599,11 +598,11 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -628,13 +627,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -659,13 +658,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -690,13 +689,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -721,13 +720,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -752,13 +751,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -783,13 +782,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -814,13 +813,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -845,13 +844,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -876,13 +875,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -907,7 +906,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 							Form: url.Values{
@@ -917,7 +916,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -942,7 +941,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 							Form: url.Values{
@@ -951,7 +950,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -976,7 +975,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 							Form: url.Values{
@@ -986,7 +985,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1011,7 +1010,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 							Form: url.Values{
@@ -1021,7 +1020,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1046,7 +1045,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 							Form: url.Values{
@@ -1056,7 +1055,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1081,7 +1080,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1091,7 +1090,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1117,7 +1116,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1126,7 +1125,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1152,7 +1151,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1162,7 +1161,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1188,7 +1187,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1197,7 +1196,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1223,7 +1222,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1233,7 +1232,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1259,7 +1258,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
-						GetPKCERequestSession(context.TODO(), "sig", gomock.Any()).
+						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
@@ -1269,7 +1268,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						}, nil),
 					store.
 						EXPECT().
-						DeletePKCERequestSession(context.TODO(), "sig").
+						DeletePKCERequestSession(t.Context(), "sig").
 						Return(nil),
 				)
 			},
@@ -1309,7 +1308,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				Config:                config,
 			}
 
-			err := handler.HandleTokenEndpointRequest(context.TODO(), tc.requester)
+			err := handler.HandleTokenEndpointRequest(t.Context(), tc.requester)
 
 			if len(tc.expected) == 0 && tc.err == nil {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -1341,8 +1340,8 @@ func TestMiscellaneous(t *testing.T) {
 		Config:                config,
 	}
 
-	assert.False(t, handler.CanSkipClientAuth(context.TODO(), oauth2.NewAccessRequest(&oauth2.DefaultSession{})))
-	assert.NoError(t, handler.PopulateTokenEndpointResponse(context.TODO(), oauth2.NewAccessRequest(&oauth2.DefaultSession{}), oauth2.NewAccessResponse()))
+	assert.False(t, handler.CanSkipClientAuth(t.Context(), oauth2.NewAccessRequest(&oauth2.DefaultSession{})))
+	assert.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), oauth2.NewAccessRequest(&oauth2.DefaultSession{}), oauth2.NewAccessResponse()))
 }
 
 type TestPKCEClient struct {

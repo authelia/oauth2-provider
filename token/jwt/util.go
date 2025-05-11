@@ -275,6 +275,8 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 // greater than 512 bits is needed, a different method of deriving the key from the client_secret would have to be
 // defined by an extension. Symmetric encryption MUST NOT be used by public (non-confidential) Clients because of
 // their inability to keep secrets.
+//
+//nolint:gocyclo
 func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use string) (jwk *jose.JSONWebKey, err error) {
 	if len(secret) == 0 {
 		return nil, &JWKLookupError{Description: "The client is not configured with a client secret that can be used for symmetric algorithms"}
@@ -409,14 +411,13 @@ func getJWTSignature(tokenString string) (signature string, err error) {
 	}
 }
 
-func assign(a, b map[string]any) map[string]any {
+func assign(a, b map[string]any) {
 	for k, w := range b {
 		if _, ok := a[k]; ok {
 			continue
 		}
 		a[k] = w
 	}
-	return a
 }
 
 func getPublicJWK(jwk *jose.JSONWebKey) jose.JSONWebKey {
@@ -454,9 +455,11 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 	return token, nil
 }
 
+//nolint:unparam
 func newError(message string, err error, more ...error) error {
 	var format string
 	var args []any
+
 	if message != "" {
 		format = "%w: %s"
 		args = []any{err, message}
@@ -470,8 +473,7 @@ func newError(message string, err error, more ...error) error {
 		args = append(args, e)
 	}
 
-	err = fmt.Errorf(format, args...)
-	return err
+	return fmt.Errorf(format, args...)
 }
 
 func toMap(obj any) (result map[string]any) {

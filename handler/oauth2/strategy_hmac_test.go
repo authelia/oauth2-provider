@@ -114,7 +114,7 @@ func TestHMACAccessToken(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAccessToken(nil, &c.r)
+			token, signature, err := hmacshaStrategy.GenerateAccessToken(t.Context(), &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_at_")
@@ -124,7 +124,7 @@ func TestHMACAccessToken(t *testing.T) {
 				strings.TrimPrefix(token, "authelia_at_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAccessToken(nil, &c.r, token)
+					err = hmacshaStrategy.ValidateAccessToken(t.Context(), &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)
@@ -153,7 +153,7 @@ func TestHMACRefreshToken(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateRefreshToken(nil, &c.r)
+			token, signature, err := hmacshaStrategy.GenerateRefreshToken(t.Context(), &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_rt_")
@@ -163,7 +163,7 @@ func TestHMACRefreshToken(t *testing.T) {
 				strings.TrimPrefix(token, "authelia_rt_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateRefreshToken(nil, &c.r, token)
+					err = hmacshaStrategy.ValidateRefreshToken(t.Context(), &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)
@@ -192,7 +192,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(nil, &c.r)
+			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(t.Context(), &c.r)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_ac_")
@@ -202,7 +202,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 				strings.TrimPrefix(token, "authelia_ac_"),
 			} {
 				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAuthorizeCode(nil, &c.r, token)
+					err = hmacshaStrategy.ValidateAuthorizeCode(t.Context(), &c.r, token)
 					if c.pass {
 						assert.NoError(t, err)
 						validate := hmacshaStrategy.Enigma.Signature(token)

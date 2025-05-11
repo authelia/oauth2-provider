@@ -300,16 +300,6 @@ func (m MapClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (m MapClaims) toInt64(claim string) (val int64, ok bool) {
-	var v any
-
-	if v, ok = m[claim]; !ok {
-		return 0, false
-	}
-
-	return toInt64(v)
-}
-
 func (m MapClaims) toNumericDate(key string) (date *NumericDate, err error) {
 	var (
 		v  any

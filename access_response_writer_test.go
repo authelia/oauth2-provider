@@ -50,8 +50,8 @@ func TestNewAccessResponse(t *testing.T) {
 		},
 		{
 			mock: func() {
-				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, resp AccessResponder) {
-					resp.SetAccessToken("foo")
+				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, responder AccessResponder) {
+					responder.SetAccessToken("foo")
 				}).Return(nil)
 			},
 			handlers:  TokenEndpointHandlers{handler},
@@ -59,9 +59,9 @@ func TestNewAccessResponse(t *testing.T) {
 		},
 		{
 			mock: func() {
-				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, resp AccessResponder) {
-					resp.SetAccessToken("foo")
-					resp.SetTokenType("bar")
+				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, responder AccessResponder) {
+					responder.SetAccessToken("foo")
+					responder.SetTokenType("bar")
 				}).Return(nil)
 			},
 			handlers: TokenEndpointHandlers{handler},
@@ -75,7 +75,7 @@ func TestNewAccessResponse(t *testing.T) {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			config.TokenEndpointHandlers = c.handlers
 			c.mock()
-			ar, err := provider.NewAccessResponse(context.TODO(), nil)
+			ar, err := provider.NewAccessResponse(t.Context(), nil)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

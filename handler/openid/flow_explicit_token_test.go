@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -27,7 +26,7 @@ func TestHandleTokenEndpointRequest(t *testing.T) {
 	areq.Client = &oauth2.DefaultClient{
 		//ResponseTypes: oauth2.Arguments{"id_token"},
 	}
-	assert.EqualError(t, h.HandleTokenEndpointRequest(context.TODO(), areq), oauth2.ErrUnknownRequest.Error())
+	assert.EqualError(t, h.HandleTokenEndpointRequest(t.Context(), areq), oauth2.ErrUnknownRequest.Error())
 }
 
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
@@ -49,7 +48,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, ErrNoSessionFound)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
 			expectErr: oauth2.ErrUnknownRequest,
 		},
@@ -58,7 +57,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(nil, errors.New(""))
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(nil, errors.New(""))
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -67,7 +66,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
 			},
 			expectErr: oauth2.ErrMisconfiguration,
 		},
@@ -81,7 +80,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrUnauthorizedClient,
 		},
@@ -97,13 +96,13 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
-					Claims: &jwt.IDTokenClaims{Subject: "peter"},
+					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				storedReq.Form.Set(consts.FormParameterNonce, "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -128,13 +127,13 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				storedSession := &DefaultSession{
-					Claims: &jwt.IDTokenClaims{Subject: "peter"},
+					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				storedReq.Form.Set("nonce", "1111111111111111")
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
 			},
 			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -161,7 +160,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -173,7 +172,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope(consts.ScopeOpenID)
-				store.EXPECT().GetOpenIDConnectSession(context.TODO(), "foobar", req).Return(storedReq, nil)
+				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -186,7 +185,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
 				storedSession := &DefaultSession{
-					Claims: &jwt.IDTokenClaims{Subject: "peter"},
+					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = storedSession
@@ -204,7 +203,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 
 			session := &DefaultSession{
 				Claims: &jwt.IDTokenClaims{
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				},
 				Headers: &jwt.Headers{},
 			}
@@ -234,7 +233,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			}
 
 			c.setup(store, areq)
-			err := h.PopulateTokenEndpointResponse(context.TODO(), areq, aresp)
+			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

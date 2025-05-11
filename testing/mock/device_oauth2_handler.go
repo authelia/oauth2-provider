@@ -85,9 +85,9 @@ func (mr *MockCodeTokenEndpointHandlerMockRecorder) DeviceCodeSignature(ctx, cod
 }
 
 // GetCodeAndSession mocks base method.
-func (m *MockCodeTokenEndpointHandler) GetCodeAndSession(ctx context.Context, request oauth2.AccessRequester) (string, string, oauth2.Requester, error) {
+func (m *MockCodeTokenEndpointHandler) GetCodeAndSession(ctx context.Context, requester oauth2.AccessRequester) (string, string, oauth2.Requester, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCodeAndSession", ctx, request)
+	ret := m.ctrl.Call(m, "GetCodeAndSession", ctx, requester)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(oauth2.Requester)
@@ -96,51 +96,51 @@ func (m *MockCodeTokenEndpointHandler) GetCodeAndSession(ctx context.Context, re
 }
 
 // GetCodeAndSession indicates an expected call of GetCodeAndSession.
-func (mr *MockCodeTokenEndpointHandlerMockRecorder) GetCodeAndSession(ctx, request any) *gomock.Call {
+func (mr *MockCodeTokenEndpointHandlerMockRecorder) GetCodeAndSession(ctx, requester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeAndSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).GetCodeAndSession), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeAndSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).GetCodeAndSession), ctx, requester)
 }
 
 // InvalidateSession mocks base method.
-func (m *MockCodeTokenEndpointHandler) InvalidateSession(ctx context.Context, signature string, authorizeRequest oauth2.Requester) error {
+func (m *MockCodeTokenEndpointHandler) InvalidateSession(ctx context.Context, signature string, requester oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InvalidateSession", ctx, signature, authorizeRequest)
+	ret := m.ctrl.Call(m, "InvalidateSession", ctx, signature, requester)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InvalidateSession indicates an expected call of InvalidateSession.
-func (mr *MockCodeTokenEndpointHandlerMockRecorder) InvalidateSession(ctx, signature, authorizeRequest any) *gomock.Call {
+func (mr *MockCodeTokenEndpointHandlerMockRecorder) InvalidateSession(ctx, signature, requester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).InvalidateSession), ctx, signature, authorizeRequest)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).InvalidateSession), ctx, signature, requester)
 }
 
 // UpdateLastChecked mocks base method.
-func (m *MockCodeTokenEndpointHandler) UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) error {
+func (m *MockCodeTokenEndpointHandler) UpdateLastChecked(ctx context.Context, requester oauth2.AccessRequester, authorizeRequester oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateLastChecked", ctx, request, authorizeRequest)
+	ret := m.ctrl.Call(m, "UpdateLastChecked", ctx, requester, authorizeRequester)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateLastChecked indicates an expected call of UpdateLastChecked.
-func (mr *MockCodeTokenEndpointHandlerMockRecorder) UpdateLastChecked(ctx, request, authorizeRequest any) *gomock.Call {
+func (mr *MockCodeTokenEndpointHandlerMockRecorder) UpdateLastChecked(ctx, requester, authorizeRequester any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastChecked", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).UpdateLastChecked), ctx, request, authorizeRequest)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastChecked", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).UpdateLastChecked), ctx, requester, authorizeRequester)
 }
 
 // ValidateCodeAndSession mocks base method.
-func (m *MockCodeTokenEndpointHandler) ValidateCodeAndSession(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) error {
+func (m *MockCodeTokenEndpointHandler) ValidateCodeAndSession(ctx context.Context, requester oauth2.AccessRequester, authorizeRequester oauth2.Requester, code string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateCodeAndSession", ctx, request, authorizeRequest, code)
+	ret := m.ctrl.Call(m, "ValidateCodeAndSession", ctx, requester, authorizeRequester, code)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateCodeAndSession indicates an expected call of ValidateCodeAndSession.
-func (mr *MockCodeTokenEndpointHandlerMockRecorder) ValidateCodeAndSession(ctx, request, authorizeRequest, code any) *gomock.Call {
+func (mr *MockCodeTokenEndpointHandlerMockRecorder) ValidateCodeAndSession(ctx, requester, authorizeRequester, code any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateCodeAndSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).ValidateCodeAndSession), ctx, request, authorizeRequest, code)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateCodeAndSession", reflect.TypeOf((*MockCodeTokenEndpointHandler)(nil).ValidateCodeAndSession), ctx, requester, authorizeRequester, code)
 }
 
 // ValidateGrantTypes mocks base method.

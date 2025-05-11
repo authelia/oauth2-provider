@@ -40,18 +40,18 @@ var (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, request) {
+func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) error {
+	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
+	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'refresh_token'."))
 	}
 
-	refresh := request.GetRequestForm().Get(consts.FormParameterRefreshToken)
+	refresh := requester.GetRequestForm().Get(consts.FormParameterRefreshToken)
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, refresh)
-	orequest, err := c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, request.GetSession())
+	orequest, err := c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, requester.GetSession())
 
 	switch {
 	case err == nil:
@@ -84,12 +84,12 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	}
 
 	// The authorization server MUST ... and ensure that the refresh token was issued to the authenticated client
-	if orequest.GetClient().GetID() != request.GetClient().GetID() {
+	if orequest.GetClient().GetID() != requester.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."))
 	}
 
-	request.SetID(orequest.GetID())
-	request.SetSession(orequest.GetSession().Clone())
+	requester.SetID(orequest.GetID())
+	requester.SetSession(orequest.GetSession().Clone())
 
 	/*
 			There are two key points in the following spec section this addresses:
@@ -108,20 +108,20 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	oscopes := false
 
 	// Addresses point 1 of the text in RFC6749 Section 6.
-	if len(request.GetRequestedScopes()) == 0 {
-		request.SetRequestedScopes(scopes)
+	if len(requester.GetRequestedScopes()) == 0 {
+		requester.SetRequestedScopes(scopes)
 		oscopes = true
 	}
 
-	if len(request.GetRequestedAudience()) == 0 {
-		request.SetRequestedAudience(orequest.GetGrantedAudience())
+	if len(requester.GetRequestedAudience()) == 0 {
+		requester.SetRequestedAudience(orequest.GetGrantedAudience())
 	}
 
 	strategy := c.Config.GetScopeStrategy(ctx)
 
-	for _, scope := range request.GetRequestedScopes() {
+	for _, scope := range requester.GetRequestedScopes() {
 		if !oscopes && !scopes.Has(scope) {
-			if client, ok := request.GetClient().(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
+			if client, ok := requester.GetClient().(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
 				// Skips addressing point 2 of the text in RFC6749 Section 6 and instead just prevents the scope
 				// requested from being granted.
 				continue
@@ -131,27 +131,27 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The requested scope '%s' was not originally granted by the resource owner.", scope))
 		}
 
-		if !strategy(request.GetClient().GetScopes(), scope) {
+		if !strategy(requester.GetClient().GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 
-		request.GrantScope(scope)
+		requester.GrantScope(scope)
 	}
 
-	if err = c.Config.GetAudienceStrategy(ctx)(request.GetClient().GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = c.Config.GetAudienceStrategy(ctx)(requester.GetClient().GetAudience(), requester.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	for _, audience := range request.GetRequestedAudience() {
-		request.GrantAudience(audience)
+	for _, audience := range requester.GetRequestedAudience() {
+		requester.GrantAudience(audience)
 	}
 
-	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
-	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
+	rtLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 	if rtLifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+		requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil

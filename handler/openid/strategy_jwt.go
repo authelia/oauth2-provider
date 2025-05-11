@@ -209,7 +209,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		if tokenHintString := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
 			var tokenHint *jwt.Token
 
-			tokenHint, err = h.Strategy.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
+			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
 
 			var ve *jwt.ValidationError
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
@@ -256,7 +256,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
 	claims.IssuedAt = jwt.Now()
 
-	token, _, err = h.Strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
+	token, _, err = h.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
 }

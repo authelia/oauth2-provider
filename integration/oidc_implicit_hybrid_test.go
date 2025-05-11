@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -102,7 +101,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 			client := newOAuth2Client(ts)
 			store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
-			var state = "12345678901234567890"
+			var state = testState
 
 			if tc.setup != nil {
 				tc.setup(t, client)
@@ -166,7 +165,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 				Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 			}
 
-			httpClient := client.Client(context.TODO(), token)
+			httpClient := client.Client(t.Context(), token)
 			response, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, response.StatusCode)

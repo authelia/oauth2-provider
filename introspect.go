@@ -15,7 +15,7 @@ import (
 )
 
 type TokenIntrospector interface {
-	IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, accessRequest AccessRequester, scopes []string) (TokenUse, error)
+	IntrospectToken(ctx context.Context, token string, tokenUseHint TokenUse, requester AccessRequester, scopes []string) (tokenUse TokenUse, err error)
 }
 
 func AccessTokenFromRequest(req *http.Request) string {

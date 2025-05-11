@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -47,7 +46,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
-				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).Return("", "", errors.New(""))
+				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return("", "", errors.New(""))
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -82,8 +81,8 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			description: "should fail because persistence failed",
 			setup: func() {
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
-				chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).AnyTimes().Return("access.ats", "ats", nil)
-				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
+				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).AnyTimes().Return("access.ats", "ats", nil)
+				store.EXPECT().CreateAccessTokenSession(t.Context(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},
 			expectErr: oauth2.ErrServerError,
 		},
@@ -93,7 +92,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 				areq.State = "state"
 				areq.GrantedScope = oauth2.Arguments{"scope"}
 
-				store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
+				store.EXPECT().CreateAccessTokenSession(t.Context(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 
 				aresp.EXPECT().AddParameter(consts.AccessResponseAccessToken, "access.ats")
 				aresp.EXPECT().AddParameter(consts.AccessResponseExpiresIn, gomock.Any())
@@ -106,7 +105,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
 			} else {
@@ -154,15 +153,15 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 		TokenLifespans: &internal.TestLifespans,
 	}
 
-	store.EXPECT().CreateAccessTokenSession(context.TODO(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
+	store.EXPECT().CreateAccessTokenSession(t.Context(), "ats", gomock.Eq(areq.Sanitize([]string{}))).AnyTimes().Return(nil)
 	aresp.EXPECT().AddParameter(consts.AccessResponseAccessToken, "access.ats")
 	aresp.EXPECT().AddParameter(consts.AccessResponseExpiresIn, gomock.Any())
 	aresp.EXPECT().AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
 	aresp.EXPECT().AddParameter(consts.FormParameterState, "state")
 	aresp.EXPECT().AddParameter(consts.FormParameterScope, "scope")
-	chgen.EXPECT().GenerateAccessToken(context.TODO(), areq).AnyTimes().Return("access.ats", "ats", nil)
+	chgen.EXPECT().GenerateAccessToken(t.Context(), areq).AnyTimes().Return("access.ats", "ats", nil)
 
-	err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
+	err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
 	assert.NoError(t, err)
 	assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
 

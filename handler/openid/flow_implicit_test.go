@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"testing"
@@ -62,9 +61,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	aresp := oauth2.NewAuthorizeResponse()
-	areq := oauth2.NewAuthorizeRequest()
-	areq.Session = new(oauth2.DefaultSession)
+	responder := oauth2.NewAuthorizeResponse()
+	requester := oauth2.NewAuthorizeRequest()
+	requester.Session = new(oauth2.DefaultSession)
 
 	for k, c := range []struct {
 		description string
@@ -81,32 +80,32 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
-				areq.State = "foostate"
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.State = "foostate"
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{}
-				areq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				requester.ResponseTypes = oauth2.Arguments{}
+				requester.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
-				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
-				areq.Client = &oauth2.DefaultClient{
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+				requester.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+				requester.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{},
 					ResponseTypes: oauth2.Arguments{},
 					Scopes:        []string{consts.ScopeOpenID, "oauth2"},
@@ -118,9 +117,9 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
-				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
-				areq.Client = &oauth2.DefaultClient{
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+				requester.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeImplicit},
 					//ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes: []string{consts.ScopeOpenID, "oauth2"},
@@ -132,10 +131,10 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should not do anything because request requirements are not met",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"short"}, consts.FormParameterRedirectURI: {"https://example.com"}}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
-				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
-				areq.Client = &oauth2.DefaultClient{
+				requester.Form = url.Values{consts.FormParameterNonce: {"short"}, consts.FormParameterRedirectURI: {"https://example.com"}}
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+				requester.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID, "oauth2"},
@@ -147,10 +146,10 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should fail because session not set",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form = url.Values{consts.FormParameterNonce: {"long-enough"}, consts.FormParameterRedirectURI: {"https://example.com"}}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
-				areq.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
-				areq.Client = &oauth2.DefaultClient{
+				requester.Form = url.Values{consts.FormParameterNonce: {"long-enough"}, consts.FormParameterRedirectURI: {"https://example.com"}}
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+				requester.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID, "oauth2"},
@@ -162,29 +161,29 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass because nonce set",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Session = &DefaultSession{
+				requester.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
-				areq.Form.Add(consts.FormParameterNonce, "some-random-foo-nonce-wow")
-				areq.Form.Add(consts.FormParameterRedirectURI, "https://example.com")
+				requester.Form.Add(consts.FormParameterNonce, "some-random-foo-nonce-wow")
+				requester.Form.Add(consts.FormParameterRedirectURI, "https://example.com")
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
-				assert.Empty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.FormParameterState))
+				assert.Empty(t, responder.GetParameters().Get(consts.AccessResponseAccessToken))
 
-				idToken := aresp.GetParameters().Get(consts.AccessResponseIDToken)
+				idToken := responder.GetParameters().Get(consts.AccessResponseIDToken)
 				assert.NotEmpty(t, idToken)
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(time.Hour), *idTokenExp, time.Minute)
@@ -193,30 +192,30 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass with nondefault id token lifespan",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = oauth2.NewAuthorizeResponse()
-				areq.Session = &DefaultSession{
+				responder = oauth2.NewAuthorizeResponse()
+				requester.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
-				areq.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
+				requester.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
 						GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
 						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken},
 						Scopes:        []string{consts.ScopeOpenID, "oauth2"},
 					},
 				}
-				areq.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+				requester.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
-				idToken := aresp.GetParameters().Get(consts.AccessResponseIDToken)
+				idToken := responder.GetParameters().Get(consts.AccessResponseIDToken)
 				assert.NotEmpty(t, idToken)
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
-				assert.Empty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.FormParameterState))
+				assert.Empty(t, responder.GetParameters().Get(consts.AccessResponseAccessToken))
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan), *idTokenExp, time.Minute)
 			},
@@ -224,51 +223,51 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				aresp = oauth2.NewAuthorizeResponse()
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
+				responder = oauth2.NewAuthorizeResponse()
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.FormParameterState))
 
-				idToken := aresp.GetParameters().Get(consts.AccessResponseIDToken)
+				idToken := responder.GetParameters().Get(consts.AccessResponseIDToken)
 				assert.NotEmpty(t, idToken)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantIDTokenLifespan).UTC(), *internal.ExtractJwtExpClaim(t, idToken), time.Minute)
 
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
-				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), areq.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.AccessResponseAccessToken))
+				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan).UTC(), requester.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
 			},
 		},
 		{
 			description: "should pass",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}
-				areq.RequestedScope = oauth2.Arguments{"oauth2", consts.ScopeOpenID}
+				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}
+				requester.RequestedScope = oauth2.Arguments{"oauth2", consts.ScopeOpenID}
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseIDToken))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
-				assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.AccessResponseIDToken))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.FormParameterState))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.Equal(t, oauth2.ResponseModeFragment, requester.GetResponseMode())
 			},
 		},
 		{
 			description: "should pass with low min entropy",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form.Set(consts.FormParameterNonce, "short")
+				requester.Form.Set(consts.FormParameterNonce, "short")
 				return makeOpenIDConnectImplicitHandler(4)
 			},
 			check: func() {
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseIDToken))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.FormParameterState))
-				assert.NotEmpty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.AccessResponseIDToken))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.FormParameterState))
+				assert.NotEmpty(t, responder.GetParameters().Get(consts.AccessResponseAccessToken))
 			},
 		},
 		{
 			description: "should fail without redirect_uri",
 			setup: func() OpenIDConnectImplicitHandler {
-				areq.Form.Del(consts.FormParameterRedirectURI)
+				requester.Form.Del(consts.FormParameterRedirectURI)
 				return makeOpenIDConnectImplicitHandler(4)
 			},
 			expectErr: oauth2.ErrInvalidRequest,
@@ -276,7 +275,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			h := c.setup()
-			err := h.HandleAuthorizeEndpointRequest(context.TODO(), areq, aresp)
+			err := h.HandleAuthorizeEndpointRequest(t.Context(), requester, responder)
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

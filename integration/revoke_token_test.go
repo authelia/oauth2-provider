@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -33,7 +32,7 @@ func runRevokeTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	token, err := oauthClient.Token(context.TODO())
+	token, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
 
 	resp, _, errs := gorequest.New().Post(ts.URL+"/revoke").

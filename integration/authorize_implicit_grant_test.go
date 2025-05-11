@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -37,7 +36,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 				xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/not-api"),
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
-			state:          "12345678901234567890",
+			state:          testState,
 			authStatusCode: http.StatusNotAcceptable,
 		},
 		{
@@ -45,7 +44,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 			params: []xoauth2.AuthCodeOption{
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
-			state: "12345678901234567890",
+			state: testState,
 			setup: func(t *testing.T, client *xoauth2.Config) {
 				client.Scopes = []string{"not-exist"}
 			},
@@ -57,7 +56,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 				xoauth2.SetAuthURLParam(consts.FormParameterAudience, "https://www.authelia.com/api"),
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
-			state: "12345678901234567890",
+			state: testState,
 			setup: func(t *testing.T, client *xoauth2.Config) {
 				client.Scopes = []string{"oauth2"}
 			},
@@ -74,7 +73,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 		},
 		{
 			name:  "ShouldPassWithoutAudience",
-			state: "12345678901234567890",
+			state: testState,
 			params: []xoauth2.AuthCodeOption{
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, consts.ResponseTypeImplicitFlowToken),
 			},
@@ -121,7 +120,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 					Expiry:       time.Now().UTC().Add(time.Duration(expires) * time.Second),
 				}
 
-				httpClient := oauthClient.Client(context.TODO(), token)
+				httpClient := oauthClient.Client(t.Context(), token)
 				resp, err := httpClient.Get(server.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

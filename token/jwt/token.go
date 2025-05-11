@@ -345,6 +345,8 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 }
 
 // Valid validates the token headers given various input options. This does not validate any claims.
+//
+//nolint:gocyclo
 func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 	vopts := &HeaderValidationOptions{
 		types: []string{JSONWebTokenTypeJWT},
@@ -439,7 +441,7 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 		cty, typ string
 	)
 
-	if t.HeaderJWE != nil && len(t.HeaderJWE) > 0 {
+	if len(t.HeaderJWE) > 0 {
 		if raw, ok = t.HeaderJWE[JSONWebTokenHeaderContentType]; ok {
 			cty, ok = raw.(string)
 

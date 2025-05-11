@@ -814,12 +814,12 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		consts.ClaimAudience:       "token-url",
 	}, key, "kid-foo")}, consts.FormParameterClientAssertionType: []string{consts.ClientAssertionTypeJWTBearer}}
 
-	c, _, err := provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 	require.NoError(t, ErrorToDebugRFC6749Error(err))
 	assert.Equal(t, client, c)
 
 	// replay the request and expect it to fail
-	c, _, err = provider.AuthenticateClient(context.TODO(), new(http.Request), formValues)
+	c, _, err = provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 	require.Error(t, err)
 	assert.EqualError(t, err, ErrJTIKnown.Error())
 	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
@@ -835,6 +835,7 @@ func mustGenerateRSAAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priva
 	return tokenString
 }
 
+//nolint:unparam
 func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.PrivateKey, kid string) string {
 	token := jwt.NewWithClaims(jose.ES256, claims)
 	token.Header["kid"] = kid

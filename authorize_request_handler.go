@@ -330,7 +330,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request
 	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode '%s'.", m))
 }
 
-func (f *Fosite) validateResponseMode(r *http.Request, request *AuthorizeRequest) error {
+func (f *Fosite) validateResponseMode(_ *http.Request, request *AuthorizeRequest) error {
 	if request.ResponseMode == ResponseModeDefault {
 		return nil
 	}
@@ -410,7 +410,7 @@ func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (Auth
 //nolint:gocyclo
 func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (requester AuthorizeRequester, err error) {
 	request := NewAuthorizeRequest()
-	request.Request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
+	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
@@ -523,6 +523,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	return request, nil
 }
 
+//nolint:gocyclo
 func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer string, openid bool, inner error) (outer *RFC6749Error) {
 	outer = ErrInvalidRequestObject.WithWrap(inner).WithHintf("%s request object could not be decoded or validated.", hintRequestObjectPrefix(openid))
 

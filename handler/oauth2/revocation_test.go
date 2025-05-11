@@ -526,7 +526,7 @@ func TestRevokeToken(t *testing.T) {
 
 			tc.setup(t, tc, store, atStrat, rtStrat, ar)
 
-			err := h.RevokeToken(context.TODO(), tc.have, tc.tokenType, tc.client)
+			err := h.RevokeToken(t.Context(), tc.have, tc.tokenType, tc.client)
 
 			if tc.expected != nil {
 				require.EqualError(t, err, tc.expected.Error())

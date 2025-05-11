@@ -58,7 +58,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					description: "should fail because authcode not found",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+						code, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 						require.NoError(t, err)
 						areq.Form.Set("code", code)
 					},
@@ -78,7 +78,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					description: "should fail because validation failed",
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), "bar", areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), "bar", areq))
 					},
 					expectErr: oauth2.ErrInvalidRequest,
 				},
@@ -96,11 +96,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						},
 					},
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 						require.NoError(t, err)
 						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
 					},
 					description: "should pass with offline scope and refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -126,11 +126,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 						require.NoError(t, err)
 						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
 					},
 					description: "should pass with refresh token always provided",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -156,11 +156,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					},
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
 						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 						require.NoError(t, err)
 						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
 					},
 					description: "should pass with no refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -185,11 +185,11 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 						},
 					},
 					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 						require.NoError(t, err)
 						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(context.TODO(), sig, areq))
+						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
 					},
 					description: "should not have refresh token",
 					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
@@ -221,7 +221,7 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
 					}
 
 					aresp := oauth2.NewAccessResponse()
-					err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
+					err := h.PopulateTokenEndpointResponse(t.Context(), c.areq, aresp)
 
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
@@ -317,11 +317,11 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				},
 			},
 			func(t *testing.T, s CoreStorage, areq *oauth2.AccessRequest, authreq *oauth2.AuthorizeRequest) {
-				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 
 				areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
-				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, authreq))
+				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, authreq))
 			},
 			nil,
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The 'redirect_uri' parameter is required when using OpenID Connect 1.0.",
@@ -363,7 +363,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			},
 			nil,
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
-				token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				token, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 			},
@@ -403,11 +403,11 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				},
 			},
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
-				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
-				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, ar))
+				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, ar))
 			},
 			nil,
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request.",
@@ -430,11 +430,11 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				},
 			},
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
-				token, signature, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
-				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), signature, ar))
+				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, ar))
 			},
 			nil,
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The 'redirect_uri' from this request does not match the one from the authorize request. The 'redirect_uri' parameter value '' utilized in the Access Request does not match the original 'redirect_uri' parameter value 'request-redir' requested in the Authorize Request which is not permitted.",
@@ -455,12 +455,12 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			},
 			nil,
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
-				code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 				r.Form.Add("code", code)
 
-				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), sig, r))
-				require.NoError(t, s.InvalidateAuthorizeCodeSession(context.TODO(), sig))
+				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), sig, r))
+				require.NoError(t, s.InvalidateAuthorizeCodeSession(t.Context(), sig))
 			},
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
 				assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), r.GetSession().GetExpiresAt(oauth2.AccessToken))
@@ -486,7 +486,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			}
 
 			if tc.ar != nil {
-				code, sig, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
 
 				if tc.r != nil {
@@ -497,7 +497,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 					tc.r.Form.Add("code", code)
 				}
 
-				require.NoError(t, s.CreateAuthorizeCodeSession(context.TODO(), sig, tc.ar))
+				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), sig, tc.ar))
 			}
 
 			if tc.setup != nil {
@@ -535,7 +535,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			RequestedAt:  time.Now().UTC(),
 		},
 	}
-	token, _, err := strategy.GenerateAuthorizeCode(context.TODO(), nil)
+	token, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 	require.NoError(t, err)
 	request.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 	response := oauth2.NewAccessResponse()

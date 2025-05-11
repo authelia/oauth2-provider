@@ -14,7 +14,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
-	"authelia.com/provider/oauth2/handler/rfc8693"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -59,7 +58,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{
 				Name: consts.TokenTypeRFC8693RefreshToken,
 			},
-			customJWTType.GetName(context.TODO()): customJWTType,
+			customJWTType.GetName(t.Context()): customJWTType,
 		},
 		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
 	}
@@ -117,7 +116,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 						"subject_token": []string{createAccessToken(context.Background(), coreStrategy, store,
 							store.Clients["custom-lifespan-client"])},
 					},
-					Session: &rfc8693.DefaultSession{
+					Session: &DefaultSession{
 						DefaultSession: &openid.DefaultSession{},
 						Extra:          map[string]any{},
 					},
@@ -148,7 +147,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 							"exp":     time.Now().Add(15 * time.Minute).Unix(),
 						})},
 					},
-					Session: &rfc8693.DefaultSession{
+					Session: &DefaultSession{
 						DefaultSession: &openid.DefaultSession{},
 						Extra:          map[string]any{},
 					},

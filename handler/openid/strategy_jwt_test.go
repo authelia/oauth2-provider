@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -66,7 +65,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -82,7 +81,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
@@ -101,7 +100,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:        "peter",
+						Subject:        testSubjectPeter,
 						ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
@@ -118,7 +117,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -148,7 +147,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
 				})
@@ -162,7 +161,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.Now(),
 					},
 					RequestedAt: time.Now(),
@@ -179,7 +178,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
@@ -199,7 +198,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: &jwt.NumericDate{Time: now},
 					},
 					Headers:     &jwt.Headers{},
@@ -217,7 +216,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
@@ -235,7 +234,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
@@ -252,7 +251,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.Now(),
 					},
 					Headers:     &jwt.Headers{},
@@ -271,7 +270,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(now.Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
@@ -288,15 +287,15 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
 					RequestedAt: time.Now().Add(-time.Minute),
 				})
-				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
+				token, _ := j.GenerateIDToken(t.Context(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
 				}))
@@ -311,15 +310,15 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
 					RequestedAt: time.Now().Add(-time.Minute),
 				})
-				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
+				token, _ := j.GenerateIDToken(t.Context(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:        "peter",
+						Subject:        testSubjectPeter,
 						ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers: &jwt.Headers{},
@@ -335,13 +334,13 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 			setup: func() (requester *oauth2.AccessRequest) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject:  "peter",
+						Subject:  testSubjectPeter,
 						AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					},
 					Headers:     &jwt.Headers{},
 					RequestedAt: time.Now().Add(-time.Minute),
 				})
-				token, _ := j.GenerateIDToken(context.TODO(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
+				token, _ := j.GenerateIDToken(t.Context(), time.Duration(0), oauth2.NewAccessRequest(&DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: "alice"}, Headers: &jwt.Headers{},
 				}))
 				requester.Form.Set(consts.FormParameterIDTokenHint, token)
@@ -362,7 +361,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				requester = oauth2.NewAccessRequest(&DefaultSession{})
 			}
 
-			token, err := j.GenerateIDToken(context.TODO(), time.Duration(0), requester)
+			token, err := j.GenerateIDToken(t.Context(), time.Duration(0), requester)
 
 			if tc.err != "" {
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)

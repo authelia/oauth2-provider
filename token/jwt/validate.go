@@ -163,11 +163,7 @@ func validDate(valid validDateFunc, now int64, required bool, date *NumericDate,
 	}
 
 	if date == nil {
-		if required {
-			return false
-		}
-
-		return true
+		return !required
 	}
 
 	if valid(date.Int64(), now, required) {

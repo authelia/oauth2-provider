@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,7 +45,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 	oauthClient := newOAuth2Client(ts)
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	store.Clients["custom-lifespan-client"].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
+	store.Clients[testClientIDLifespan].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
@@ -61,7 +60,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/not-api")},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
@@ -71,7 +70,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"not-exist"}
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
@@ -80,7 +79,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			check: func(t *testing.T, r *http.Response, _ *xoauth2.Token) {
 				var b oauth2.AccessRequest
@@ -97,7 +96,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			description: "should pass",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusOK,
 		},
@@ -105,9 +104,9 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			description: "should pass with custom client token lifespans",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.ClientID = "custom-lifespan-client"
+				oauthClient.ClientID = testClientIDLifespan
 				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline}
-				state = "12345678901234567890"
+				state = testState
 			},
 			check: func(t *testing.T, r *http.Response, token *xoauth2.Token) {
 				var b oauth2.AccessRequest
@@ -132,11 +131,11 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+				token, err := oauthClient.Exchange(t.Context(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
-				httpClient := oauthClient.Client(context.TODO(), token)
+				httpClient := oauthClient.Client(t.Context(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -156,13 +155,13 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 
 	client := newOAuth2Client(ts)
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
-	state := "12345678901234567890"
+	state := testState
 
 	resp, err := http.Get(client.AuthCodeURL(state))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	token, err := client.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	token, err := client.Exchange(t.Context(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.NoError(t, err)
 	require.NotEmpty(t, token.AccessToken)
 
@@ -174,7 +173,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, err = client.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	_, err = client.Exchange(t.Context(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 	require.Error(t, err)
 
 	resp, err = http.DefaultClient.Get(ts.URL + "/info")

@@ -19,7 +19,7 @@ import (
 )
 
 func TestDefaultStrategy(t *testing.T) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	config := &testConfig{}
 
@@ -290,18 +290,22 @@ func TestDefaultStrategy(t *testing.T) {
 	assert.NotNil(t, jwe)
 
 	tokenString, signature, jwe, err = clientStrategy.Decrypt(ctx, token3, WithClient(clientEncAsymmetric))
-	require.NoError(t, err)
+	assert.NotEmpty(t, tokenString)
+	assert.NotEmpty(t, signature)
+	assert.NotNil(t, jwe)
+	assert.NoError(t, err)
 
 	tok, err := clientStrategy.Decode(ctx, token1, WithClient(issuerClient))
-	require.NoError(t, err)
-	require.NotNil(t, tok)
+	assert.NoError(t, err)
+	assert.NotNil(t, tok)
 
 	tok, err = clientStrategy.Decode(ctx, token2, WithClient(issuerClient))
-	require.NoError(t, err)
+	assert.NoError(t, err)
+	assert.NotNil(t, tok)
 
 	tok, err = clientStrategy.Decode(ctx, token3sig, WithClient(clientAsymmetric))
-	require.NoError(t, err)
-	require.NotNil(t, tok)
+	assert.NoError(t, err)
+	assert.NotNil(t, tok)
 	assert.Equal(t, jose.HS512, tok.SignatureAlgorithm)
 
 	tok, err = clientStrategy.Decode(ctx, token3, WithClient(clientEncAsymmetric))
@@ -338,7 +342,7 @@ func TestDefaultStrategy_Decode_RejectNonCompactSerializedJWT(t *testing.T) {
 	for _, tc := range testCases {
 		for _, input := range inputs {
 			t.Run(fmt.Sprintf("%s/%s", tc.name, input.name), func(t *testing.T) {
-				_, err := tc.strategy.Decode(context.TODO(), input.value)
+				_, err := tc.strategy.Decode(t.Context(), input.value)
 
 				assert.EqualError(t, err, "Provided value does not appear to be a JWE or JWS compact serialized JWT")
 			})
@@ -380,7 +384,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		},
 	}
 
-	tokenString, sig, err := providerStrategy.Encode(context.TODO(), claims, WithClient(encodeClientRSA))
+	tokenString, sig, err := providerStrategy.Encode(t.Context(), claims, WithClient(encodeClientRSA))
 	require.NoError(t, err)
 	assert.NotEmpty(t, sig)
 	assert.NotEmpty(t, tokenString)
@@ -411,7 +415,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		csigned: true,
 	}
 
-	token, err := clientStrategy.Decode(context.TODO(), tokenString, WithClient(decodeClientRSA))
+	token, err := clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientRSA))
 	require.NoError(t, err)
 
 	assert.NotNil(t, token)
@@ -435,7 +439,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		},
 	}
 
-	tokenString, sig, err = providerStrategy.Encode(context.TODO(), claims, WithClient(encodeClientECDSA))
+	tokenString, sig, err = providerStrategy.Encode(t.Context(), claims, WithClient(encodeClientECDSA))
 	require.NoError(t, err)
 	assert.NotEmpty(t, sig)
 	assert.NotEmpty(t, tokenString)
@@ -466,7 +470,7 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		csigned: true,
 	}
 
-	token, err = clientStrategy.Decode(context.TODO(), tokenString, WithClient(decodeClientECDSA))
+	token, err = clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientECDSA))
 	require.NoError(t, err)
 
 	assert.NotNil(t, token)
@@ -498,7 +502,9 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		csigned: true,
 	}
 
-	token, err = clientStrategy.Decode(context.TODO(), tokenString, WithClient(decodeClientECDSA))
+	token, err = clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientECDSA))
+
+	assert.Nil(t, token)
 	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 
 	clientStrategy = &DefaultStrategy{
@@ -510,7 +516,9 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		}),
 	}
 
-	token, err = clientStrategy.Decode(context.TODO(), tokenString, WithClient(decodeClientECDSA))
+	token, err = clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientECDSA))
+
+	assert.Nil(t, token)
 	assert.EqualError(t, err, "Error occurred retrieving the JSON Web Key. The JSON Web Token uses signing key with kid 'test-ecdsa-enc' which was not found")
 
 	clientStrategy = &DefaultStrategy{
@@ -528,7 +536,9 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 		}),
 	}
 
-	token, err = clientStrategy.Decode(context.TODO(), tokenString, WithClient(decodeClientECDSA))
+	token, err = clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientECDSA))
+
+	assert.Nil(t, token)
 	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 }
 
@@ -595,7 +605,7 @@ func (f *testFetcher) Resolve(ctx context.Context, location string, _ bool) (jwk
 		return nil, err
 	}
 
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 
 	var resp *http.Response
 
@@ -730,7 +740,7 @@ func init() {
 	}
 }
 
-func TestIniit(t *testing.T) {
+func TestInit(t *testing.T) {
 	claims := MapClaims{
 		"iss": "example.com",
 		"sub": "john",
@@ -738,8 +748,8 @@ func TestIniit(t *testing.T) {
 		"exp": time.Now().Add(time.Hour * 24 * 365 * 40).UTC().Unix(),
 	}
 
-	out, _, err := EncodeNestedCompactEncrypted(context.TODO(), claims, &Headers{}, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+	out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, &Headers{}, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
 
-	fmt.Println(err)
-	fmt.Println(out)
+	require.NoError(t, err)
+	require.NotEmpty(t, out)
 }

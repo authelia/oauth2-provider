@@ -58,9 +58,9 @@ var store = &storage.MemoryStore{
 			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
 			Audience:      []string{tokenURL},
 		},
-		"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
+		testClientIDLifespan: &oauth2.DefaultClientWithCustomTokenLifespans{
 			DefaultClient: &oauth2.DefaultClient{
-				ID:                   "custom-lifespan-client",
+				ID:                   testClientIDLifespan,
 				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
 				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
 				RedirectURIs:         []string{"http://localhost:3846/callback"},
@@ -70,8 +70,8 @@ var store = &storage.MemoryStore{
 			},
 			TokenLifespans: &internal.TestLifespans,
 		},
-		"public-client": &oauth2.DefaultClient{
-			ID:            "public-client",
+		testClientIDPublic: &oauth2.DefaultClient{
+			ID:            testClientIDPublic,
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},

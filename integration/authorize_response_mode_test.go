@@ -48,8 +48,8 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		DefaultClient: defaultClient,
 		ResponseModes: []oauth2.ResponseModeType{},
 	}
-	store.Clients["response-mode-client"] = responseModeClient
-	oauthClient.ClientID = "response-mode-client"
+	store.Clients[testClientIDResponseMode] = responseModeClient
+	oauthClient.ClientID = testClientIDResponseMode
 
 	var state string
 	for k, c := range []struct {
@@ -64,7 +64,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
@@ -79,7 +79,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
@@ -96,7 +96,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
@@ -111,7 +111,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
@@ -128,7 +128,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeAuthorizationCodeFlow,
 			responseMode: consts.ResponseModeFragment,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFragment}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -141,7 +141,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeAuthorizationCodeFlow,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
@@ -154,7 +154,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 			},
@@ -169,7 +169,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeQuery,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeQuery}
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
@@ -188,7 +188,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			responseType: consts.ResponseTypeHybridFlowToken,
 			responseMode: consts.ResponseModeFormPost,
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				responseModeClient.ResponseModes = []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}
 			},
@@ -246,7 +246,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			case oauth2.ResponseModeFormPost:
 				// form_post
 				require.NoError(t, err)
-				code, state, iDToken, token, _, errResp, err = internal.ParseFormPostResponse(store.Clients["response-mode-client"].GetRedirectURIs()[0], resp.Body)
+				code, state, iDToken, token, _, errResp, err = internal.ParseFormPostResponse(store.Clients[testClientIDResponseMode].GetRedirectURIs()[0], resp.Body)
 				assert.NoError(t, err)
 			default:
 				t.FailNow()

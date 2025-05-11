@@ -4,7 +4,6 @@
 package oauth2_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -17,20 +16,21 @@ import (
 )
 
 func TestWriteAccessResponse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	provider := &Fosite{Config: new(Config)}
 	header := http.Header{}
-	ctrl := gomock.NewController(t)
 	rw := mock.NewMockResponseWriter(ctrl)
-	ar := mock.NewMockAccessRequester(ctrl)
-	resp := mock.NewMockAccessResponder(ctrl)
-	defer ctrl.Finish()
+	requester := mock.NewMockAccessRequester(ctrl)
+	responder := mock.NewMockAccessResponder(ctrl)
 
 	rw.EXPECT().Header().AnyTimes().Return(header)
 	rw.EXPECT().WriteHeader(http.StatusOK)
 	rw.EXPECT().Write(gomock.Any())
-	resp.EXPECT().ToMap().Return(map[string]any{})
+	responder.EXPECT().ToMap().Return(map[string]any{})
 
-	provider.WriteAccessResponse(context.TODO(), rw, ar, resp)
+	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
 	assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
 	assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
 	assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))

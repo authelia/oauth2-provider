@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,8 +34,8 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 
 	oauthClient := newOAuth2Client(ts)
 	oauthClient.ClientSecret = ""
-	oauthClient.ClientID = "public-client"
-	store.Clients["public-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+	oauthClient.ClientID = testClientIDPublic
+	store.Clients[testClientIDPublic].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
 	for k, c := range []struct {
@@ -50,7 +49,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			description: "should fail because of audience",
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/not-api")},
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
@@ -59,7 +58,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			params:      []xoauth2.AuthCodeOption{},
 			setup: func() {
 				oauthClient.Scopes = []string{"not-exist"}
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusNotAcceptable,
 		},
@@ -67,7 +66,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			description: "should pass with proper audience",
 			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 				oauthClient.Scopes = []string{"oauth2"}
 			},
 			check: func(t *testing.T, r *http.Response) {
@@ -84,7 +83,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 		{
 			description: "should pass",
 			setup: func() {
-				state = "12345678901234567890"
+				state = testState
 			},
 			authStatusCode: http.StatusOK,
 		},
@@ -97,11 +96,11 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			require.Equal(t, c.authStatusCode, resp.StatusCode)
 
 			if resp.StatusCode == http.StatusOK {
-				token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+				token, err := oauthClient.Exchange(t.Context(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
 				require.NoError(t, err)
 				require.NotEmpty(t, token.AccessToken)
 
-				httpClient := oauthClient.Client(context.TODO(), token)
+				httpClient := oauthClient.Client(t.Context(), token)
 				resp, err := httpClient.Get(ts.URL + "/info")
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)

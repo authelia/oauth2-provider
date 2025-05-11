@@ -72,7 +72,7 @@ func TestIntrospect(t *testing.T) {
 			scopes:      []string{"foo"},
 			setup: func() {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
 			},
 			expectErr: ErrRequestUnauthorized,
 		},
@@ -80,15 +80,15 @@ func TestIntrospect(t *testing.T) {
 			description: "should fail",
 			scopes:      []string{"foo"},
 			setup: func() {
-				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
 			},
 			expectErr: ErrInvalidClient,
 		},
 		{
 			description: "should pass",
 			setup: func() {
-				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, accessRequest AccessRequester, _ []string) {
-					accessRequest.(*AccessRequest).GrantedScope = []string{"bar"}
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) {
+					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
 		},
@@ -96,15 +96,15 @@ func TestIntrospect(t *testing.T) {
 			description: "should pass",
 			scopes:      []string{"bar"},
 			setup: func() {
-				validator.EXPECT().IntrospectToken(context.TODO(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, accessRequest AccessRequester, _ []string) {
-					accessRequest.(*AccessRequest).GrantedScope = []string{"bar"}
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, requester AccessRequester, _ []string) {
+					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			_, _, err := provider.IntrospectToken(context.TODO(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
+			_, _, err := provider.IntrospectToken(t.Context(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())
 			} else {

@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -68,10 +67,10 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 			description: "should pass with custom client token lifespans",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				oauthClient.ClientID = "custom-lifespan-client"
+				oauthClient.ClientID = testClientIDLifespan
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
-				s, err := store.GetAccessTokenSession(context.TODO(), strings.Split(token.AccessToken, ".")[1], nil)
+				s, err := store.GetAccessTokenSession(t.Context(), strings.Split(token.AccessToken, ".")[1], nil)
 				require.NoError(t, err)
 				atExp := s.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)
@@ -84,7 +83,7 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 	} {
 		c.setup()
 
-		token, err := oauthClient.PasswordCredentialsToken(context.TODO(), username, password)
+		token, err := oauthClient.PasswordCredentialsToken(t.Context(), username, password)
 		require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
 
 		if !c.err {

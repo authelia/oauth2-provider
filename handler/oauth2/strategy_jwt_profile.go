@@ -189,7 +189,7 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	mapClaims := claims.ToMapClaims()
 
-	return s.Strategy.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
+	return s.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }
 
 func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, tokenString string) (token *jwt.Token, err error) {
@@ -204,6 +204,7 @@ func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, 
 	return token, nil
 }
 
+//nolint:gocyclo
 func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err error) {
 	var (
 		clientText          string

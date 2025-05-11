@@ -110,7 +110,7 @@ func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, requeste
 		lastChecked = time.Now()
 	}
 
-	r.SetLastChecked(requester.GetRequestedAt())
+	r.SetLastChecked(lastChecked)
 
 	return c.Storage.UpdateDeviceCodeSession(ctx, r.GetDeviceCodeSignature(), r)
 }

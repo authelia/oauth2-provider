@@ -70,7 +70,7 @@ func TestValidateResponseTypes(t *testing.T) {
 				r = &http.Request{Form: url.Values{}}
 			}
 			ar := NewAuthorizeRequest()
-			ar.Request.Client = &DefaultClient{ResponseTypes: tc.art}
+			ar.Client = &DefaultClient{ResponseTypes: tc.art}
 
 			err := provider.validateResponseTypes(r, ar)
 			if tc.expectErr {

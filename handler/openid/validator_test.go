@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -34,7 +33,7 @@ func TestValidatePrompt(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(j, config)
 
 	var genIDToken = func(c jwt.IDTokenClaims) string {
-		s, _, err := j.Encode(context.TODO(), c.ToMapClaims())
+		s, _, err := j.Encode(t.Context(), c.ToMapClaims())
 		require.NoError(t, err)
 		return s
 	}
@@ -250,7 +249,7 @@ func TestValidatePrompt(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := v.ValidatePrompt(context.TODO(), &oauth2.AuthorizeRequest{
+			err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
 					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},
 					Client:  &oauth2.DefaultClient{Public: tc.isPublic},

@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -62,7 +61,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "should fail because nonce set but too short for non-default min entropy",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form = url.Values{consts.FormParameterNonce: {"some-foobar-nonce-win"}, consts.FormParameterRedirectURI: {"https://example.com"}}
+				request.Form = url.Values{consts.FormParameterNonce: {testNonce}, consts.FormParameterRedirectURI: {"https://example.com"}}
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -103,10 +102,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
@@ -118,16 +117,16 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "should pass with exact one state parameter in response",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
-				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterState, testState)
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}
-				request.State = "some-foobar-state-win"
+				request.State = testState
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -152,19 +151,19 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWithStateParameterAndGenerateStateHash",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
-				request.Form.Set(consts.FormParameterState, "some-foobar-state-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterState, testState)
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
-				request.State = "some-foobar-state-win"
+				request.State = testState
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
@@ -200,7 +199,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWhenNonceHasMinimumEntropy",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
@@ -248,7 +247,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWhenExpiresAtSetWithCodeLifespanZero",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClient{
@@ -258,10 +257,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
@@ -273,7 +272,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPass",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
@@ -286,10 +285,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
@@ -304,7 +303,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWithCustomLifespan",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
@@ -317,10 +316,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 				request.GetClient().(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
 
@@ -351,7 +350,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldHandleDefaultResponseMode",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
-				request.Form.Set(consts.FormParameterNonce, "some-foobar-nonce-win")
+				request.Form.Set(consts.FormParameterNonce, testNonce)
 				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
 				request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
@@ -364,10 +363,10 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
-						Subject: "peter",
+						Subject: testSubjectPeter,
 					},
 					Headers: &jwt.Headers{},
-					Subject: "peter",
+					Subject: testSubjectPeter,
 				}
 
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
@@ -394,7 +393,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			response := oauth2.NewAuthorizeResponse()
 
 			h := tc.setup(t, request, response)
-			err := h.HandleAuthorizeEndpointRequest(context.TODO(), request, response)
+			err := h.HandleAuthorizeEndpointRequest(t.Context(), request, response)
 
 			if len(tc.expected) != 0 {
 				require.EqualError(t, err, tc.expectedField)

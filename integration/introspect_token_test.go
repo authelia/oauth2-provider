@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -62,9 +61,9 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
-	a, err := oauthClient.Token(context.TODO())
+	a, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
-	b, err := oauthClient.Token(context.TODO())
+	b, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
 
 	for k, c := range []struct {

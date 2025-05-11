@@ -86,7 +86,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				},
 			},
 			args: args{
-				ctx:    context.TODO(),
+				ctx:    t.Context(),
 				req:    oauth2.NewDeviceAuthorizeRequest(),
 				resp:   oauth2.NewRFC8628UserAuthorizeResponse(),
 				status: oauth2.DeviceAuthorizeStatusApproved,
@@ -115,7 +115,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				},
 			},
 			args: args{
-				ctx:    context.TODO(),
+				ctx:    t.Context(),
 				req:    oauth2.NewDeviceAuthorizeRequest(),
 				resp:   oauth2.NewRFC8628UserAuthorizeResponse(),
 				status: oauth2.DeviceAuthorizeStatusDenied,
@@ -144,7 +144,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				},
 			},
 			args: args{
-				ctx:    context.TODO(),
+				ctx:    t.Context(),
 				req:    oauth2.NewDeviceAuthorizeRequest(),
 				resp:   oauth2.NewRFC8628UserAuthorizeResponse(),
 				status: oauth2.DeviceAuthorizeStatusNew,
@@ -173,7 +173,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 				},
 			},
 			args: args{
-				ctx:    context.TODO(),
+				ctx:    t.Context(),
 				req:    oauth2.NewDeviceAuthorizeRequest(),
 				resp:   oauth2.NewRFC8628UserAuthorizeResponse(),
 				status: 1234,
@@ -286,7 +286,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				},
 			},
 			args: args{
-				ctx: context.TODO(),
+				ctx: t.Context(),
 				req: NewDeviceAuthorizeRequest(
 					[]string{
 						string(oauth2.GrantTypeDeviceCode),
@@ -319,7 +319,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				},
 			},
 			args: args{
-				ctx: context.TODO(),
+				ctx: t.Context(),
 				req: NewDeviceAuthorizeRequest(
 					[]string{
 						string(oauth2.GrantTypeImplicit),
@@ -351,7 +351,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				},
 			},
 			args: args{
-				ctx: context.TODO(),
+				ctx: t.Context(),
 				req: NewDeviceAuthorizeRequest(
 					[]string{
 						string(oauth2.GrantTypeDeviceCode),
@@ -387,7 +387,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				},
 			},
 			args: args{
-				ctx: context.TODO(),
+				ctx: t.Context(),
 				req: NewDeviceAuthorizeRequest(
 					[]string{
 						string(oauth2.GrantTypeDeviceCode),
@@ -430,7 +430,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 				},
 			},
 			args: args{
-				ctx: context.TODO(),
+				ctx: t.Context(),
 				req: NewDeviceAuthorizeRequest(
 					[]string{
 						string(oauth2.GrantTypeDeviceCode),

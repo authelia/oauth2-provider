@@ -132,23 +132,23 @@ func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.R
 
 		ctx := oauth2.NewContext()
 
-		accessRequest, err := provider.NewAccessRequest(ctx, req, &hoauth2.JWTSession{})
+		requester, err := provider.NewAccessRequest(ctx, req, &hoauth2.JWTSession{})
 		if err != nil {
-			provider.WriteAccessError(req.Context(), rw, accessRequest, err)
+			provider.WriteAccessError(req.Context(), rw, requester, err)
 			return
 		}
 
-		if accessRequest.GetRequestedScopes().Has("oauth2") {
-			accessRequest.GrantScope("oauth2")
+		if requester.GetRequestedScopes().Has("oauth2") {
+			requester.GrantScope("oauth2")
 		}
 
-		response, err := provider.NewAccessResponse(ctx, accessRequest)
+		response, err := provider.NewAccessResponse(ctx, requester)
 		if err != nil {
-			provider.WriteAccessError(req.Context(), rw, accessRequest, err)
+			provider.WriteAccessError(req.Context(), rw, requester, err)
 			return
 		}
 
-		provider.WriteAccessResponse(req.Context(), rw, accessRequest, response)
+		provider.WriteAccessResponse(req.Context(), rw, requester, response)
 	}
 }
 

@@ -19,7 +19,7 @@ const (
 const (
 	JSONWebTokenTypeJWT                            = "JWT"
 	JSONWebTokenTypeAccessToken                    = "at+jwt"
-	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt"
+	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt" //nolint:gosec // This is a credential type, not a credential.
 	JSONWebTokenTypeAccessTokenAlternative         = "application/at+jwt"
 	JSONWebTokenTypeTokenIntrospection             = "token-introspection+jwt"
 )

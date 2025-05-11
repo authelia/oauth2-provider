@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -197,7 +196,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			} {
 				t.Run("case="+c.description, func(t *testing.T) {
 					aresp := oauth2.NewAuthorizeResponse()
-					err := c.handler.HandleAuthorizeEndpointRequest(context.TODO(), c.areq, aresp)
+					err := c.handler.HandleAuthorizeEndpointRequest(t.Context(), c.areq, aresp)
 					if c.expectErr != nil {
 						require.EqualError(t, err, c.expectErr.Error())
 					} else {

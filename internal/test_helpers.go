@@ -119,10 +119,12 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 
 	for node := getNextNoneTextNode(form.FirstChild); node != nil; node = getNextNoneTextNode(node.NextSibling) {
 		var k, v string
+
 		for _, attr := range node.Attr {
-			if attr.Key == "name" {
+			switch attr.Key {
+			case "name":
 				k = attr.Val
-			} else if attr.Key == "value" {
+			case "value":
 				v = attr.Val
 			}
 		}

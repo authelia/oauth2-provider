@@ -42,6 +42,7 @@ const (
 	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
 
 	BearerAccessToken string = "bearer"
+	RFC8693NAToken    string = "N_A"
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.

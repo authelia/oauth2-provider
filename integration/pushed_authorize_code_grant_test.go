@@ -4,7 +4,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,7 +53,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/not-api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			parStatusCode:  http.StatusBadRequest,
 			authStatusCode: http.StatusNotAcceptable,
@@ -65,7 +64,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"not-exist"}
-				state = "12345678901234567890"
+				state = testState
 			},
 			parStatusCode:  http.StatusBadRequest,
 			authStatusCode: http.StatusNotAcceptable,
@@ -75,7 +74,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			check: func(t *testing.T, r *http.Response) {
 				var b oauth2.AccessRequest
@@ -93,7 +92,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			description: "should pass",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
-				state = "12345678901234567890"
+				state = testState
 			},
 			parStatusCode:  http.StatusCreated,
 			authStatusCode: http.StatusOK,
@@ -162,11 +161,11 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 			require.NotEmpty(t, resp.Request.URL.Query().Get("code"), "Auth code is empty")
 
-			token, err := oauthClient.Exchange(context.TODO(), resp.Request.URL.Query().Get("code"))
+			token, err := oauthClient.Exchange(t.Context(), resp.Request.URL.Query().Get("code"))
 			require.NoError(t, err)
 			require.NotEmpty(t, token.AccessToken)
 
-			httpClient := oauthClient.Client(context.TODO(), token)
+			httpClient := oauthClient.Client(t.Context(), token)
 			resp, err = httpClient.Get(ts.URL + "/info")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)

@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,9 +34,9 @@ func TestCompare(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.shouldError {
-				assert.Error(t, secret.Compare(context.TODO(), []byte(tc.have)))
+				assert.Error(t, secret.Compare(t.Context(), []byte(tc.have)))
 			} else {
-				assert.NoError(t, secret.Compare(context.TODO(), []byte(tc.have)))
+				assert.NoError(t, secret.Compare(t.Context(), []byte(tc.have)))
 			}
 		})
 	}

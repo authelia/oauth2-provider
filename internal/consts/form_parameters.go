@@ -38,7 +38,7 @@ const (
 	FormParameterAuthenticationContextClassReferenceValues = "acr_values"
 	FormParameterIDTokenHint                               = "id_token_hint"
 	FormParameterRequestedTokenType                        = "requested_token_type"
-	FormParameterIssuedTokenType                           = "issued_token_type"
+	FormParameterIssuedTokenType                           = "issued_token_type" //nolint:gosec // This is a credential type, not a credential.
 	FormParameterSubjectTokenType                          = "subject_token_type"
 	FormParameterSubjectToken                              = "subject_token"
 	FormParameterActorTokenType                            = "actor_token_type"

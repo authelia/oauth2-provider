@@ -46,6 +46,9 @@ type DefaultStrategy struct {
 	Issuer Issuer
 }
 
+// Encode handles encoding JWT's.
+//
+//nolint:gocyclo
 func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error) {
 	o := &StrategyOpts{
 		headers: NewHeaders(),
@@ -105,6 +108,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 	return EncodeNestedCompactEncrypted(ctx, claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
 }
 
+// Decrypt handles decrypting JWT's.
 func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, opts ...StrategyOpt) (tokenString, signature string, jwe *jose.JSONWebEncryption, err error) {
 	if !IsEncryptedJWT(tokenStringEnc) {
 		if IsSignedJWT(tokenStringEnc) {
@@ -173,6 +177,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 	return tokenString, signature, jwe, nil
 }
 
+// Decode handles decoding JWT's.
 func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts ...StrategyOpt) (token *Token, err error) {
 	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,
@@ -235,6 +240,7 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	return token, nil
 }
 
+// Validate handles validation of JWT's.
 func (j *DefaultStrategy) Validate(ctx context.Context, token *Token, opts ...StrategyOpt) (err error) {
 	if token == nil {
 		return errorsx.WithStack(fmt.Errorf("token is nil"))

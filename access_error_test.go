@@ -4,7 +4,6 @@
 package oauth2_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,7 +29,7 @@ func TestWriteAccessError(t *testing.T) {
 	rw.EXPECT().WriteHeader(http.StatusBadRequest)
 	rw.EXPECT().Write(gomock.Any())
 
-	provider.WriteAccessError(context.TODO(), rw, nil, ErrInvalidRequest)
+	provider.WriteAccessError(t.Context(), rw, nil, ErrInvalidRequest)
 }
 
 func TestWriteAccessError_RFC6749(t *testing.T) {
@@ -62,7 +61,7 @@ func TestWriteAccessError_RFC6749(t *testing.T) {
 			config.UseLegacyErrorFormat = c.includeExtraFields
 
 			rw := httptest.NewRecorder()
-			provider.WriteAccessError(context.TODO(), rw, nil, c.err)
+			provider.WriteAccessError(t.Context(), rw, nil, c.err)
 
 			var params struct {
 				Error       string `json:"error"`             // specified by RFC, required

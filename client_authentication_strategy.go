@@ -191,7 +191,7 @@ type ClientAssertion struct {
 	Client                Client
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(ctx context.Context, client Client, handler EndpointClientAuthHandler) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(_ context.Context, client Client, handler EndpointClientAuthHandler) (method string, err error) {
 	if c, ok := client.(AuthenticationMethodClient); ok {
 		if method = handler.GetAuthMethod(c); method != consts.ClientAuthMethodNone {
 			return "", errorsx.WithStack(
@@ -255,15 +255,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 	}
 
-	if !assertion.Parsed {
-
-	}
-
 	if method, _, _, token, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, c, assertion, handler); err != nil {
 		return "", err
 	}
 
-	if token == nil {
+	if token == nil || !assertion.Parsed {
 		return "", errorsx.WithStack(ErrInvalidClient.WithDebug("The client assertion did not result in a parsed token."))
 	}
 
@@ -340,6 +336,16 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
+	if raw, ok := token.Header[consts.JSONWebTokenHeaderKeyIdentifier]; ok {
+		kid, _ = raw.(string)
+	}
+
+	if raw, ok := token.Header[consts.JSONWebTokenHeaderAlgorithm]; ok {
+		alg, _ = raw.(string)
+	}
+
+	assertion.Parsed = true
+
 	return assertion.Method, kid, alg, token, nil
 }
 
@@ -384,6 +390,7 @@ func resolveJWTErrorToRFCError(err error) (rfc error) {
 	return errorsx.WithStack(e)
 }
 
+//nolint:gocyclo
 func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethodClient, handler EndpointClientAuthHandler, audience []string, inner error) (outer *RFC6749Error) {
 	outer = ErrInvalidClient.WithWrap(inner).WithHintf("OAuth 2.0 client with id '%s' provided a client assertion which could not be decoded or validated.", client.GetID())
 

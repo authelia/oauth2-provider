@@ -1,7 +1,6 @@
 package rfc8628_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -48,7 +47,7 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 
 	resp := &oauth2.DeviceAuthorizeResponse{Extra: map[string]any{}}
 
-	assert.NoError(t, handler.HandleRFC8628DeviceAuthorizeEndpointRequest(context.TODO(), req, resp))
+	assert.NoError(t, handler.HandleRFC8628DeviceAuthorizeEndpointRequest(t.Context(), req, resp))
 	assert.NotEmpty(t, resp.GetDeviceCode())
 	assert.NotEmpty(t, resp.GetUserCode())
 	assert.Equal(t, 8, len(resp.GetUserCode()))

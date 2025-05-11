@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -70,7 +69,7 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := handler.HandleTokenEndpointRequest(context.TODO(), tc.requester)
+			err := handler.HandleTokenEndpointRequest(t.Context(), tc.requester)
 
 			if tc.error != nil {
 				require.EqualError(t, err, tc.error.Error(), "%v", err)
@@ -223,7 +222,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 	} {
 		t.Run("case="+c.description, func(t *testing.T) {
 			aresp := oauth2.NewAccessResponse()
-			err := h.PopulateTokenEndpointResponse(context.TODO(), c.areq, aresp)
+			err := h.PopulateTokenEndpointResponse(t.Context(), c.areq, aresp)
 			if c.expectedErr != nil {
 				require.EqualError(t, err, c.expectedErr.Error(), "%v", err)
 			} else {

@@ -202,7 +202,7 @@ func TestNewAccessRequest(t *testing.T) {
 			handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
 			defer ctrl.Finish()
 
-			ctx := gomock.AssignableToTypeOf(context.WithValue(context.TODO(), ContextKey("test"), nil))
+			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
 			client := &DefaultClient{}
 			config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
@@ -223,7 +223,7 @@ func TestNewAccessRequest(t *testing.T) {
 				config.TokenEndpointHandlers = tc.handlers(handler)
 			}
 
-			ar, err := provider.NewAccessRequest(context.TODO(), r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
 
 			if tc.expectErr != nil {
 				assert.EqualError(t, err, tc.expectErr.Error())
@@ -453,7 +453,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			}
 			c.mock()
 			config.TokenEndpointHandlers = c.handlers
-			ar, err := provider.NewAccessRequest(context.TODO(), r, new(DefaultSession))
+			ar, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
 
 			if c.expectErr != nil {
 				assert.EqualError(t, err, c.expectErr.Error())

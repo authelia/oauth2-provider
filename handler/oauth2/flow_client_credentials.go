@@ -23,12 +23,12 @@ type ClientCredentialsGrantHandler struct {
 }
 
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.2
-func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, request) {
+func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	client := request.GetClient()
+	client := requester.GetClient()
 
 	// The client MUST authenticate with the authorization server as described in Section 3.2.1.
 	// This requirement is already fulfilled because we require all token requests to be authenticated as described
@@ -41,11 +41,11 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
 	}
 
-	scopes := request.GetRequestedScopes()
+	scopes := requester.GetRequestedScopes()
 
-	if len(scopes) == 0 && !request.GetRequestForm().Has(consts.FormParameterScope) {
+	if len(scopes) == 0 && !requester.GetRequestForm().Has(consts.FormParameterScope) {
 		if pclient, ok := client.(oauth2.ClientCredentialsFlowRequestedScopeImplicitClient); ok && pclient.GetClientCredentialsFlowRequestedScopeImplicit() {
-			request.SetRequestedScopes(client.GetScopes())
+			requester.SetRequestedScopes(client.GetScopes())
 		}
 	} else {
 		for _, scope := range scopes {
@@ -55,59 +55,59 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		}
 	}
 
-	audience := request.GetRequestedAudience()
+	audience := requester.GetRequestedAudience()
 
-	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) {
+	if len(audience) == 0 && !requester.GetRequestForm().Has(consts.FormParameterAudience) {
 		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
-			request.SetRequestedAudience(ac.GetAudience())
+			requester.SetRequestedAudience(ac.GetAudience())
 		}
 	} else {
-		if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		if err = c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
 			return err
 		}
 	}
 
 	lifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan))
+	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan))
 
 	return nil
 }
 
 // PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.3
-func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, request) {
+func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeClientCredentials) {
+	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeClientCredentials) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
 	}
 
 	if c.Config.GetClientCredentialsFlowImplicitGrantRequested(ctx) {
-		if len(request.GetGrantedScopes()) == 0 {
-			for _, scope := range request.GetRequestedScopes() {
-				request.GrantScope(scope)
+		if len(requester.GetGrantedScopes()) == 0 {
+			for _, scope := range requester.GetRequestedScopes() {
+				requester.GrantScope(scope)
 			}
 		}
 
-		if len(request.GetGrantedAudience()) == 0 {
-			for _, audience := range request.GetRequestedAudience() {
-				request.GrantAudience(audience)
+		if len(requester.GetGrantedAudience()) == 0 {
+			for _, audience := range requester.GetRequestedAudience() {
+				requester.GrantAudience(audience)
 			}
 		}
 	}
 
-	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	return c.IssueAccessToken(ctx, lifespan, request, response)
+	return c.IssueAccessToken(ctx, lifespan, requester, responder)
 }
 
-func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials)
 }
 

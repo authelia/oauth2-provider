@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/testing/mock"
 )
@@ -79,7 +78,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				ar.EXPECT().GetResponseTypes().Return([]string{"token", "code"})
 			},
 			isErr:     true,
-			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, oauth2.Arguments{"token", "code"}),
+			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, Arguments{"token", "code"}),
 		},
 	} {
 		c.mock()

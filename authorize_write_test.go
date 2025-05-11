@@ -4,7 +4,6 @@
 package oauth2_test
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -221,7 +220,7 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 			header := http.Header{}
 
 			tc.setup(t, rw, requester, responder, header)
-			provider.WriteAuthorizeResponse(context.TODO(), rw, requester, responder)
+			provider.WriteAuthorizeResponse(t.Context(), rw, requester, responder)
 			tc.expect(t, rw, requester, responder, header)
 		})
 	}

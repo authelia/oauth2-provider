@@ -60,7 +60,7 @@ func (d *DeviceAuthorizeRequest) GetStatus() DeviceAuthorizeStatus {
 }
 
 func (d *DeviceAuthorizeRequest) SetLastChecked(lastChecked time.Time) {
-	d.LastChecked = lastChecked
+	d.LastChecked = lastChecked.UTC()
 }
 
 func (d *DeviceAuthorizeRequest) GetLastChecked() time.Time {

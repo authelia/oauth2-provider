@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -111,7 +110,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			err := handler.PopulateRFC8628UserAuthorizeEndpointResponse(context.TODO(), req, resp)
+			err := handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), req, resp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())
@@ -168,7 +167,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 		{
 			description: "Success",
 			setup: func() {
-				sess := &DefaultSession{
+				session := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "foobar",
 					},
@@ -179,7 +178,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				req = oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
-				req.Session = sess
+				req.Session = session
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
@@ -188,7 +187,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				authReq = oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
-				authReq.Session = sess
+				authReq.Session = session
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
@@ -297,7 +296,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 		{
 			description: "Failed - ID Token Claim has no subject",
 			setup: func() {
-				sess := &DefaultSession{
+				session := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "",
 					},
@@ -308,7 +307,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				req = oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
-				req.Session = sess
+				req.Session = session
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
@@ -317,7 +316,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				authReq = oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
-				authReq.Session = sess
+				authReq.Session = session
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
@@ -327,7 +326,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
 			c.setup()
-			err := handler.PopulateTokenEndpointResponse(context.TODO(), req, resp)
+			err := handler.PopulateTokenEndpointResponse(t.Context(), req, resp)
 
 			if c.expectErr != nil {
 				require.EqualError(t, err, c.expectErr.Error())

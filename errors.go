@@ -39,7 +39,7 @@ var (
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRequestForbidden = &RFC6749Error{
-		ErrorField:       errRequestForbidden,
+		ErrorField:       errRequestForbiddenName,
 		DescriptionField: "The request is not allowed.",
 		HintField:        "You are not allowed to perform this action.",
 		CodeField:        http.StatusForbidden,
@@ -165,75 +165,81 @@ var (
 		CodeField:        http.StatusUnauthorized,
 	}
 	ErrLoginRequired = &RFC6749Error{
-		ErrorField:       errLoginRequired,
+		ErrorField:       errLoginRequiredName,
 		DescriptionField: "The Authorization Server requires End-User authentication.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrInteractionRequired = &RFC6749Error{
 		DescriptionField: "The Authorization Server requires End-User interaction of some form to proceed.",
-		ErrorField:       errInteractionRequired,
+		ErrorField:       errInteractionRequiredName,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrConsentRequired = &RFC6749Error{
+		ErrorField:       errConsentRequiredName,
 		DescriptionField: "The Authorization Server requires End-User consent.",
-		ErrorField:       errConsentRequired,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRequestNotSupported = &RFC6749Error{
-		DescriptionField: "The authorization server does not support the use of the request parameter.",
 		ErrorField:       errRequestNotSupportedName,
+		DescriptionField: "The authorization server does not support the use of the request parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRequestURINotSupported = &RFC6749Error{
-		DescriptionField: "The authorization server does not support the use of the request_uri parameter.",
 		ErrorField:       errRequestURINotSupportedName,
+		DescriptionField: "The authorization server does not support the use of the request_uri parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrRegistrationNotSupported = &RFC6749Error{
-		DescriptionField: "The OP does not support use of the registration parameter.",
 		ErrorField:       errRegistrationNotSupportedName,
+		DescriptionField: "The OP does not support use of the registration parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrInvalidRequestURI = &RFC6749Error{
+		ErrorField:       errInvalidRequestURIName,
 		DescriptionField: "The request_uri in the authorization request returns an error or contains invalid data.",
-		ErrorField:       errInvalidRequestURI,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrInvalidRequestObject = &RFC6749Error{
+		ErrorField:       errInvalidRequestObjectName,
 		DescriptionField: "The request parameter contains an invalid Request Object.",
-		ErrorField:       errInvalidRequestObject,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrJTIKnown = &RFC6749Error{
-		DescriptionField: "The jti was already used.",
 		ErrorField:       errJTIKnownName,
+		DescriptionField: "The jti was already used.",
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrAuthorizationPending = &RFC6749Error{
+		ErrorField:       errAuthorizationPendingName,
 		DescriptionField: "The authorization request is still pending as the end user hasn't yet completed the user-interaction steps.",
-		ErrorField:       errAuthorizationPending,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrDeviceExpiredToken = &RFC6749Error{
+		ErrorField:       errDeviceExpiredTokenName,
 		DescriptionField: "The device_code has expired, and the device authorization session has concluded.",
-		ErrorField:       errDeviceExpiredToken,
 		CodeField:        http.StatusBadRequest,
 	}
 	ErrSlowDown = &RFC6749Error{
+		ErrorField:       errSlowDownName,
 		DescriptionField: "Too many requests within a short time period.",
-		ErrorField:       errSlowDown,
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrInvalidTarget = &RFC6749Error{
+		ErrorField:       errInvalidTargetName,
+		DescriptionField: "The authorization server is unwilling or unable to perform a token exchange for the target service.",
+		HintField:        "Check the requested resource or audience is permitted to be requested by the registered client.",
 		CodeField:        http.StatusBadRequest,
 	}
 )
 
 const (
-	errInvalidRequestURI           = "invalid_request_uri"
-	errInvalidRequestObject        = "invalid_request_object"
-	errConsentRequired             = "consent_required"
-	errInteractionRequired         = "interaction_required"
-	errLoginRequired               = "login_required"
+	errInvalidRequestURIName       = "invalid_request_uri"
+	errInvalidRequestObjectName    = "invalid_request_object"
+	errConsentRequiredName         = "consent_required"
+	errInteractionRequiredName     = "interaction_required"
+	errLoginRequiredName           = "login_required"
 	errRequestUnauthorizedName     = "request_unauthorized"
-	errRequestForbidden            = "request_forbidden"
+	errRequestForbiddenName        = "request_forbidden"
 	errInvalidRequestName          = "invalid_request"
 	errUnauthorizedClientName      = "unauthorized_client"
 	errAccessDeniedName            = "access_denied"
@@ -261,9 +267,10 @@ const (
 	errRequestURINotSupportedName   = "request_uri_not_supported"
 	errRegistrationNotSupportedName = "registration_not_supported"
 	errJTIKnownName                 = "jti_known"
-	errAuthorizationPending         = "authorization_pending"
-	errDeviceExpiredToken           = "expired_token"
-	errSlowDown                     = "slow_down"
+	errAuthorizationPendingName     = "authorization_pending"
+	errDeviceExpiredTokenName       = "expired_token"
+	errSlowDownName                 = "slow_down"
+	errInvalidTargetName            = "invalid_target"
 )
 
 type (

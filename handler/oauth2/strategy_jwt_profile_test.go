@@ -58,7 +58,7 @@ var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 var jwtInvalidTypCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r := &oauth2.Request{
 		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+			ClientSecret: mustNewBCryptClientSecretPlain("xfoobarfoobarfoobarfoobar"),
 		},
 		Session: &JWTSession{
 			JWTClaims: &jwt.JWTClaims{
@@ -218,7 +218,7 @@ func TestAccessToken(t *testing.T) {
 
 				strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
 
-				token, signature, err := strategy.GenerateAccessToken(context.TODO(), c.r)
+				token, signature, err := strategy.GenerateAccessToken(t.Context(), c.r)
 				assert.NoError(t, err)
 
 				parts := strings.Split(token, ".")

@@ -193,31 +193,44 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 			switch s := v.(type) {
 			case []string:
 				c.Scope = s
-				if c.ScopeField == JWTScopeFieldString {
+
+				switch c.ScopeField {
+				case JWTScopeFieldString:
 					c.ScopeField = JWTScopeFieldBoth
-				} else if c.ScopeField == JWTScopeFieldUnset {
+				case JWTScopeFieldUnset:
 					c.ScopeField = JWTScopeFieldList
+				default:
+					break
 				}
 			case []any:
 				c.Scope = make([]string, len(s))
+
 				for i, vi := range s {
 					if s, ok := vi.(string); ok {
 						c.Scope[i] = s
 					}
 				}
-				if c.ScopeField == JWTScopeFieldString {
+
+				switch c.ScopeField {
+				case JWTScopeFieldString:
 					c.ScopeField = JWTScopeFieldBoth
-				} else if c.ScopeField == JWTScopeFieldUnset {
+				case JWTScopeFieldUnset:
 					c.ScopeField = JWTScopeFieldList
+				default:
+					break
 				}
 			}
 		case consts.ClaimScope:
 			if s, ok := v.(string); ok {
 				c.Scope = strings.Split(s, " ")
-				if c.ScopeField == JWTScopeFieldList {
+
+				switch c.ScopeField {
+				case JWTScopeFieldList:
 					c.ScopeField = JWTScopeFieldBoth
-				} else if c.ScopeField == JWTScopeFieldUnset {
+				case JWTScopeFieldUnset:
 					c.ScopeField = JWTScopeFieldString
+				default:
+					break
 				}
 			}
 		default:
@@ -226,6 +239,7 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 	}
 }
 
+//nolint:unparam
 func toTime(v any, def time.Time) (t time.Time, ok bool) {
 	t = def
 
@@ -309,6 +323,7 @@ func (c *JWTClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
 	}
+
 	c.Extra[key] = value
 }
 

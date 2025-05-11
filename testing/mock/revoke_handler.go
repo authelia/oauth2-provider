@@ -42,7 +42,7 @@ func (m *MockRevocationHandler) EXPECT() *MockRevocationHandlerMockRecorder {
 }
 
 // RevokeToken mocks base method.
-func (m *MockRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenUse, client oauth2.Client) error {
+func (m *MockRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RevokeToken", ctx, token, tokenType, client)
 	ret0, _ := ret[0].(error)

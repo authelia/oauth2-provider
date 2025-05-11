@@ -609,6 +609,20 @@ func TestAuthenticateClient(t *testing.T) {
 			r: new(http.Request),
 		},
 		{
+			name: "ShouldPassWhenJWTAlgorithmIsHS256Permitted",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
+			}, form: url.Values{"client_id": []string{"bar"}, "client_assertion": {mustGenerateHSAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, []byte("bar"))}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+		},
+		{
 			name: "ShouldFailBecauseJWTAlgorithmIsHS256",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: "private_key_jwt"}
@@ -618,7 +632,7 @@ func TestAuthenticateClient(t *testing.T) {
 				consts.ClaimIssuer:         "bar",
 				consts.ClaimJWTID:          "12345",
 				consts.ClaimAudience:       "token-url",
-			}, keyRSA, "kid-foo")}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
+			}, []byte("aaaa"))}, "client_assertion_type": []string{consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
 		},
@@ -845,9 +859,12 @@ func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.P
 }
 
 //nolint:unparam
-func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateKey, kid string) string {
+func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key []byte) string {
+	jwk, err := jwt.NewClientSecretJWK(t.Context(), key, "", string(jose.HS256), "", "sig")
+	require.NoError(t, err)
+
 	token := jwt.NewWithClaims(jose.HS256, claims)
-	tokenString, err := token.CompactSignedString([]byte("aaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccddddddddddddddddddddddd"))
+	tokenString, err := token.CompactSignedString(jwk)
 	require.NoError(t, err)
 	return tokenString
 }

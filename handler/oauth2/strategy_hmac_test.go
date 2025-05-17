@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -24,32 +23,6 @@ var hmacshaStrategy = HMACCoreStrategy{
 	},
 	usePrefix: true,
 	prefix:    "authelia_%s_",
-}
-
-var hmacExpiredCase = oauth2.Request{
-	Client: &oauth2.DefaultClient{
-		ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-	},
-	Session: &oauth2.DefaultSession{
-		ExpiresAt: map[oauth2.TokenType]time.Time{
-			oauth2.AccessToken:   time.Now().UTC().Add(-time.Hour),
-			oauth2.AuthorizeCode: time.Now().UTC().Add(-time.Hour),
-			oauth2.RefreshToken:  time.Now().UTC().Add(-time.Hour),
-		},
-	},
-}
-
-var hmacValidCase = oauth2.Request{
-	Client: &oauth2.DefaultClient{
-		ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-	},
-	Session: &oauth2.DefaultSession{
-		ExpiresAt: map[oauth2.TokenType]time.Time{
-			oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
-			oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
-			oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
-		},
-	},
 }
 
 func TestNewHMACSHAStrategy(t *testing.T) {
@@ -100,117 +73,272 @@ func TestNewHMACSHAStrategy(t *testing.T) {
 }
 
 func TestHMACAccessToken(t *testing.T) {
-	for k, c := range []struct {
-		r    oauth2.Request
-		pass bool
+	testCases := []struct {
+		name   string
+		have   oauth2.Requester
+		setup  func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string)
+		err    error
+		errStr string
 	}{
 		{
-			r:    hmacValidCase,
-			pass: true,
+			"ShouldPassStillValid",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+						oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+						oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
+					},
+				},
+			},
+			func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string) {
+				var err error
+
+				token, signature, err = strategy.GenerateAccessToken(t.Context(), r)
+
+				require.NoError(t, err)
+
+				return
+			},
+			nil,
+			"",
 		},
 		{
-			r:    hmacExpiredCase,
-			pass: false,
+			"ShouldFailExpired",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Unix(90000000, 0).UTC(),
+						oauth2.AuthorizeCode: time.Unix(90000000, 0).UTC(),
+						oauth2.RefreshToken:  time.Unix(90000000, 0).UTC(),
+					},
+				},
+			},
+			func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string) {
+				var err error
+
+				token, signature, err = strategy.GenerateAccessToken(t.Context(), r)
+
+				require.NoError(t, err)
+
+				return
+			},
+			oauth2.ErrTokenExpired,
+			"Token expired. Access Token expired at '1972-11-07 16:00:00 +0000 UTC'.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAccessToken(t.Context(), &c.r)
-			assert.NoError(t, err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &HMACCoreStrategy{
+				Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+				Config: &oauth2.Config{
+					AccessTokenLifespan:   time.Hour * 24,
+					AuthorizeCodeLifespan: time.Hour * 24,
+				},
+				usePrefix: true,
+				prefix:    "authelia_%s_",
+			}
+
+			token, signature, err := strategy.GenerateAccessToken(t.Context(), tc.have)
+			require.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_at_")
 
-			for k, token := range []string{
-				token,
-				strings.TrimPrefix(token, "authelia_at_"),
-			} {
-				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAccessToken(t.Context(), &c.r, token)
-					if c.pass {
-						assert.NoError(t, err)
-						validate := hmacshaStrategy.Enigma.Signature(token)
-						assert.Equal(t, signature, validate)
-					} else {
-						assert.Error(t, err)
-					}
-				})
+			if tc.err == nil {
+				assert.NoError(t, strategy.ValidateAccessToken(t.Context(), tc.have, token))
+				assert.True(t, strategy.IsOpaqueAccessToken(t.Context(), token))
+
+				trimmed := strings.TrimPrefix(token, "authelia_at_")
+
+				assert.False(t, strategy.IsOpaqueAccessToken(t.Context(), trimmed))
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAccessToken(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be an Access Token.")
+			} else {
+				err = strategy.ValidateAccessToken(t.Context(), tc.have, token)
+
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.errStr)
 			}
 		})
 	}
 }
 
 func TestHMACRefreshToken(t *testing.T) {
-	for k, c := range []struct {
-		r    oauth2.Request
-		pass bool
+	testCases := []struct {
+		name   string
+		have   oauth2.Requester
+		setup  func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string)
+		err    error
+		errStr string
 	}{
 		{
-			r:    hmacValidCase,
-			pass: true,
+			"ShouldPassValid",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+						oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+						oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
+					},
+				},
+			},
+			func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string) {
+				var err error
+
+				token, signature, err = strategy.GenerateAccessToken(t.Context(), r)
+
+				require.NoError(t, err)
+
+				return
+			},
+			nil,
+			"",
 		},
 		{
-			r:    hmacExpiredCase,
-			pass: false,
+			"ShouldFailExpired",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Unix(90000000, 0).UTC(),
+						oauth2.AuthorizeCode: time.Unix(90000000, 0).UTC(),
+						oauth2.RefreshToken:  time.Unix(90000000, 0).UTC(),
+					},
+				},
+			},
+			func(t *testing.T, r oauth2.Requester, strategy CoreStrategy) (token, signature string) {
+				var err error
+
+				token, signature, err = strategy.GenerateAccessToken(t.Context(), r)
+
+				require.NoError(t, err)
+
+				return
+			},
+			oauth2.ErrTokenExpired,
+			"Token expired. Refresh Token expired at '1972-11-07 16:00:00 +0000 UTC'.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateRefreshToken(t.Context(), &c.r)
-			assert.NoError(t, err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &HMACCoreStrategy{
+				Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+				Config: &oauth2.Config{
+					AccessTokenLifespan:   time.Hour * 24,
+					AuthorizeCodeLifespan: time.Hour * 24,
+				},
+				usePrefix: true,
+				prefix:    "authelia_%s_",
+			}
+
+			token, signature, err := strategy.GenerateRefreshToken(t.Context(), tc.have)
+			require.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_rt_")
 
-			for k, token := range []string{
-				token,
-				strings.TrimPrefix(token, "authelia_rt_"),
-			} {
-				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateRefreshToken(t.Context(), &c.r, token)
-					if c.pass {
-						assert.NoError(t, err)
-						validate := hmacshaStrategy.Enigma.Signature(token)
-						assert.Equal(t, signature, validate)
-					} else {
-						assert.Error(t, err)
-					}
-				})
+			if tc.err == nil {
+				assert.NoError(t, strategy.ValidateRefreshToken(t.Context(), tc.have, token))
+				assert.True(t, strategy.IsOpaqueRefreshToken(t.Context(), token))
+
+				trimmed := strings.TrimPrefix(token, "authelia_rt_")
+
+				assert.False(t, strategy.IsOpaqueRefreshToken(t.Context(), trimmed))
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateRefreshToken(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be a Refresh Token.")
+			} else {
+				err = strategy.ValidateRefreshToken(t.Context(), tc.have, token)
+
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.errStr)
 			}
 		})
 	}
 }
 
 func TestHMACAuthorizeCode(t *testing.T) {
-	for k, c := range []struct {
-		r    oauth2.Request
-		pass bool
+	testCases := []struct {
+		name   string
+		have   oauth2.Requester
+		err    error
+		errStr string
 	}{
 		{
-			r:    hmacValidCase,
-			pass: true,
+			"ShouldPassValid",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Now().UTC().Add(time.Hour),
+						oauth2.AuthorizeCode: time.Now().UTC().Add(time.Hour),
+						oauth2.RefreshToken:  time.Now().UTC().Add(time.Hour),
+					},
+				},
+			},
+			nil,
+			"",
 		},
 		{
-			r:    hmacExpiredCase,
-			pass: false,
+			"ShouldFailExpired",
+			&oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
+				},
+				Session: &oauth2.DefaultSession{
+					ExpiresAt: map[oauth2.TokenType]time.Time{
+						oauth2.AccessToken:   time.Unix(90000000, 0).UTC(),
+						oauth2.AuthorizeCode: time.Unix(90000000, 0).UTC(),
+						oauth2.RefreshToken:  time.Unix(90000000, 0).UTC(),
+					},
+				},
+			},
+			oauth2.ErrTokenExpired,
+			"Token expired. Authorize Code expired at '1972-11-07 16:00:00 +0000 UTC'.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			token, signature, err := hmacshaStrategy.GenerateAuthorizeCode(t.Context(), &c.r)
-			assert.NoError(t, err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &HMACCoreStrategy{
+				Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+				Config: &oauth2.Config{
+					AccessTokenLifespan:   time.Hour * 24,
+					AuthorizeCodeLifespan: time.Hour * 24,
+				},
+				usePrefix: true,
+				prefix:    "authelia_%s_",
+			}
+
+			token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), tc.have)
+			require.NoError(t, err)
 			assert.Equal(t, strings.Split(token, ".")[1], signature)
 			assert.Contains(t, token, "authelia_ac_")
 
-			for k, token := range []string{
-				token,
-				strings.TrimPrefix(token, "authelia_ac_"),
-			} {
-				t.Run(fmt.Sprintf("prefix=%v", k == 0), func(t *testing.T) {
-					err = hmacshaStrategy.ValidateAuthorizeCode(t.Context(), &c.r, token)
-					if c.pass {
-						assert.NoError(t, err)
-						validate := hmacshaStrategy.Enigma.Signature(token)
-						assert.Equal(t, signature, validate)
-					} else {
-						assert.Error(t, err)
-					}
-				})
+			if tc.err == nil {
+				assert.NoError(t, strategy.ValidateAuthorizeCode(t.Context(), tc.have, token))
+				assert.True(t, strategy.IsOpaqueAuthorizeCode(t.Context(), token))
+
+				trimmed := strings.TrimPrefix(token, "authelia_ac_")
+
+				assert.False(t, strategy.IsOpaqueAuthorizeCode(t.Context(), trimmed))
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAuthorizeCode(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be an Authorization Code.")
+			} else {
+				err = strategy.ValidateAuthorizeCode(t.Context(), tc.have, token)
+
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.errStr)
 			}
 		})
 	}

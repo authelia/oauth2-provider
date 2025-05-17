@@ -22,217 +22,219 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestAuthorizeCode_PopulateTokenEndpointResponse(t *testing.T) {
-	for k, strategy := range map[string]CoreStrategy{
-		"hmac": &hmacshaStrategy,
-	} {
-		t.Run("strategy="+k, func(t *testing.T) {
+func TestAuthorizeCode_PopulateTokenEndpointResponse_HMAC(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *oauth2.AccessRequest
+		setup    func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage)
+		expected func(t *testing.T, r *oauth2.AccessResponse)
+		err      error
+		errStr   string
+	}{
+		{
+			name: "ShouldFailBecauseNotResponsible",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{"123"},
+			},
+			err:    oauth2.ErrUnknownRequest,
+			errStr: "The handler is not responsible for this request.",
+		},
+		{
+			name: "ShouldFailBecauseCodeNotFound",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				code, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+				r.Form.Set(consts.FormParameterAuthorizationCode, code)
+			},
+			err:    oauth2.ErrServerError,
+			errStr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not find the requested resource(s).",
+		},
+		{
+			name: "ShouldFailBecauseValidationFailed",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{consts.FormParameterAuthorizationCode: []string{"authelia_ac_foo.bar"}},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), "bar", r))
+			},
+			err:    oauth2.ErrInvalidRequest,
+			errStr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. Token signature mismatch. Check that you provided a valid token in the right format.",
+		},
+		{
+			name: "ShouldPassWithOfflineScopeAndRefreshToken",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+					},
+					GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+				r.Form.Add(consts.FormParameterAuthorizationCode, code)
+
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, r))
+			},
+			expected: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				assert.NotEmpty(t, aresp.AccessToken)
+				assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+				assert.Equal(t, "foo offline", aresp.GetExtra(consts.AccessResponseScope))
+			},
+		},
+		{
+			name: "ShouldPassWithRefreshTokenAlwaysProvided",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+					},
+					GrantedScope: oauth2.Arguments{"foo"},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				config.RefreshTokenScopes = []string{}
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+				r.Form.Add(consts.FormParameterAuthorizationCode, code)
+
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, r))
+			},
+			expected: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				assert.NotEmpty(t, aresp.AccessToken)
+				assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+				assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
+			},
+		},
+		{
+			name: "ShouldPassWithNoRefreshToken",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					},
+					GrantedScope: oauth2.Arguments{},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				config.RefreshTokenScopes = []string{}
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+				r.Form.Add(consts.FormParameterAuthorizationCode, code)
+
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, r))
+			},
+			expected: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				assert.NotEmpty(t, aresp.AccessToken)
+				assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+				assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+				assert.Empty(t, aresp.GetExtra(consts.AccessResponseScope))
+			},
+		},
+		{
+			name: "ShouldNotHaveRefreshToken",
+			have: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					},
+					GrantedScope: oauth2.Arguments{"foo"},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
+				code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+				r.Form.Add(consts.FormParameterAuthorizationCode, code)
+
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, r))
+			},
+			expected: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				assert.NotEmpty(t, aresp.AccessToken)
+				assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
+				assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+				assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
+				assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			store := storage.NewMemoryStore()
+			strategy := &hmacshaStrategy
+			config := &oauth2.Config{
+				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+				AccessTokenLifespan:      time.Minute,
+				RefreshTokenScopes:       []string{consts.ScopeOffline},
+			}
 
-			var h AuthorizeExplicitGrantHandler
-			for _, c := range []struct {
-				areq        *oauth2.AccessRequest
-				description string
-				setup       func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config)
-				check       func(t *testing.T, aresp *oauth2.AccessResponse)
-				expectErr   error
-			}{
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{"123"},
-					},
-					description: "should fail because not responsible",
-					expectErr:   oauth2.ErrUnknownRequest,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-							},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					description: "should fail because authcode not found",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
-						require.NoError(t, err)
-						areq.Form.Set("code", code)
-					},
-					expectErr: oauth2.ErrServerError,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{consts.FormParameterAuthorizationCode: []string{"foo.bar"}},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-							},
-							Session:     &oauth2.DefaultSession{},
-							RequestedAt: time.Now().UTC(),
-						},
-					},
-					description: "should fail because validation failed",
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), "bar", areq))
-					},
-					expectErr: oauth2.ErrInvalidRequest,
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
-							},
-							GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
-							Session:      &oauth2.DefaultSession{},
-							RequestedAt:  time.Now().UTC(),
-						},
-					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
-						require.NoError(t, err)
-						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
+			handler := AuthorizeExplicitGrantHandler{
+				CoreStorage:           store,
+				AuthorizeCodeStrategy: strategy,
+				AccessTokenStrategy:   strategy,
+				RefreshTokenStrategy:  strategy,
+				Config:                config,
+			}
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
-					},
-					description: "should pass with offline scope and refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo offline", aresp.GetExtra(consts.AccessResponseScope))
-					},
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
-							},
-							GrantedScope: oauth2.Arguments{"foo"},
-							Session:      &oauth2.DefaultSession{},
-							RequestedAt:  time.Now().UTC(),
-						},
-					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
-						require.NoError(t, err)
-						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
+			if tc.setup != nil {
+				tc.setup(t, tc.have, config, strategy, store)
+			}
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
-					},
-					description: "should pass with refresh token always provided",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
-					},
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-							},
-							GrantedScope: oauth2.Arguments{},
-							Session:      &oauth2.DefaultSession{},
-							RequestedAt:  time.Now().UTC(),
-						},
-					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						config.RefreshTokenScopes = []string{}
-						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
-						require.NoError(t, err)
-						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
+			response := oauth2.NewAccessResponse()
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
-					},
-					description: "should pass with no refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseScope))
-					},
-				},
-				{
-					areq: &oauth2.AccessRequest{
-						GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-						Request: oauth2.Request{
-							Form: url.Values{},
-							Client: &oauth2.DefaultClient{
-								GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-							},
-							GrantedScope: oauth2.Arguments{"foo"},
-							Session:      &oauth2.DefaultSession{},
-							RequestedAt:  time.Now().UTC(),
-						},
-					},
-					setup: func(t *testing.T, areq *oauth2.AccessRequest, config *oauth2.Config) {
-						code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
-						require.NoError(t, err)
-						areq.Form.Add(consts.FormParameterAuthorizationCode, code)
+			err := handler.PopulateTokenEndpointResponse(t.Context(), tc.have, response)
 
-						require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, areq))
-					},
-					description: "should not have refresh token",
-					check: func(t *testing.T, aresp *oauth2.AccessResponse) {
-						assert.NotEmpty(t, aresp.AccessToken)
-						assert.Equal(t, oauth2.BearerAccessToken, aresp.TokenType)
-						assert.Empty(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
-						assert.NotEmpty(t, aresp.GetExtra(consts.AccessResponseExpiresIn))
-						assert.Equal(t, "foo", aresp.GetExtra(consts.AccessResponseScope))
-					},
-				},
-			} {
-				t.Run("case="+c.description, func(t *testing.T) {
-					config := &oauth2.Config{
-						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-						AccessTokenLifespan:      time.Minute,
-						RefreshTokenScopes:       []string{consts.ScopeOffline},
-					}
-					h = AuthorizeExplicitGrantHandler{
-						CoreStorage:           store,
-						AuthorizeCodeStrategy: strategy,
-						AccessTokenStrategy:   strategy,
-						RefreshTokenStrategy:  strategy,
-						Config:                config,
-					}
+			if tc.err != nil {
+				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.errStr)
+			} else {
+				require.NoError(t, err)
+			}
 
-					if c.setup != nil {
-						c.setup(t, c.areq, config)
-					}
-
-					aresp := oauth2.NewAccessResponse()
-					err := h.PopulateTokenEndpointResponse(t.Context(), c.areq, aresp)
-
-					if c.expectErr != nil {
-						require.EqualError(t, err, c.expectErr.Error(), "%+v", err)
-					} else {
-						require.NoError(t, err, "%+v", err)
-					}
-
-					if c.check != nil {
-						c.check(t, aresp)
-					}
-				})
+			if tc.expected != nil {
+				tc.expected(t, response)
 			}
 		})
 	}

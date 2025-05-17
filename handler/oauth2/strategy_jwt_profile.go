@@ -130,7 +130,7 @@ func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, 
 }
 
 func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (jwt bool, signature string) {
-	if s.HMACCoreStrategy.hasPrefix(tokenString, tokenPrefixPartAccessToken) {
+	if s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString) {
 		return false, ""
 	}
 

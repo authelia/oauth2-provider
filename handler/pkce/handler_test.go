@@ -427,7 +427,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -451,7 +451,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -476,7 +476,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abc123"},
 					},
 				},
@@ -502,7 +502,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abc123"},
 					},
 				},
@@ -528,7 +528,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abc123"},
 					},
 				},
@@ -558,7 +558,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abc123"},
 					},
 				},
@@ -588,7 +588,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -617,7 +617,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -648,7 +648,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -679,7 +679,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -710,7 +710,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -741,7 +741,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -772,7 +772,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 					},
 				},
 			},
@@ -803,7 +803,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"short"},
 					},
 				},
@@ -834,7 +834,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 					},
 				},
@@ -865,7 +865,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 					},
 				},
@@ -896,7 +896,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -931,7 +931,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -965,7 +965,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -1000,7 +1000,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -1035,7 +1035,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -1070,7 +1070,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: false, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9@@"},
 					},
 				},
@@ -1105,7 +1105,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 					},
 				},
@@ -1140,7 +1140,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 					},
 				},
@@ -1176,7 +1176,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
 					},
 				},
@@ -1211,7 +1211,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
 					},
 				},
@@ -1247,7 +1247,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Client:  &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"abc123.sig"},
+						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
 						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc1"},
 					},
 				},

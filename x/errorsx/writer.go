@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	stderr "errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -34,4 +36,94 @@ func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err er
 	w.WriteHeader(code)
 
 	_ = json.NewEncoder(w).Encode(err)
+}
+
+type Fields map[string]string
+
+func (f Fields) EncodeRFC6750() string {
+	var items []string
+
+	for key, value := range f {
+		items = append(items, fmt.Sprintf(`%s="%s"`, key, value))
+	}
+
+	return fmt.Sprintf("Bearer %s", strings.Join(items, ", "))
+}
+
+// WriteRFC6750Error handles a RFC6750 error response.
+func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
+	var (
+		fields = make(Fields)
+		err    error
+	)
+
+	switch et := e.(type) {
+	case error:
+		err = et
+
+		if rfc, ok := et.(RFCError); ok {
+			if field := rfc.Error(); len(field) != 0 {
+				fields[fieldError] = field
+			}
+
+			if field := rfc.GetDescription(); len(field) != 0 {
+				fields[fieldErrorDescription] = field
+			}
+
+			if field := rfc.Reason(); len(field) != 0 {
+				fields[fieldErrorHint] = field
+			}
+		} else {
+			fields[fieldError] = et.Error()
+		}
+	case map[string]any:
+		for field, value := range et {
+			fields[field] = fmt.Sprintf("%s", value)
+
+			if err != nil {
+				continue
+			}
+
+			switch field {
+			case fieldError, fieldErrorDescription:
+				if ev, ok := value.(error); ok {
+					err = ev
+				}
+			}
+		}
+
+		if err != nil {
+			break
+		}
+
+		if value, ok := fields[fieldErrorDescription]; ok {
+			err = errors.New(value)
+		} else if value, ok = fields[fieldError]; ok {
+			err = errors.New(value)
+		}
+	case nil:
+		break
+	default:
+		fields[fieldError] = "invalid_request"
+		fields[fieldErrorDescription] = fmt.Sprintf("%s", e)
+		err = errors.New(fields[fieldErrorDescription])
+	}
+
+	var ok bool
+
+	for k, v := range extra {
+		if _, ok = fields[k]; ok {
+			continue
+		}
+
+		fields[k] = v
+	}
+
+	w.Header().Set(consts.HeaderWWWAuthenticate, fields.EncodeRFC6750())
+	w.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+	w.WriteHeader(http.StatusUnauthorized)
+
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(err)
+	}
 }

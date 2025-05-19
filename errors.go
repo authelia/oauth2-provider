@@ -77,6 +77,11 @@ var (
 		DescriptionField: "The requested scope is invalid, unknown, or malformed.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInsufficientScope = &RFC6749Error{
+		ErrorField:       errInsufficientScopeName,
+		DescriptionField: " The request requires higher privileges than provided by the access token.",
+		CodeField:        http.StatusForbidden,
+	}
 	ErrServerError = &RFC6749Error{
 		ErrorField:       errServerErrorName,
 		DescriptionField: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
@@ -246,6 +251,7 @@ const (
 	errUnsupportedResponseTypeName = "unsupported_response_type"
 	errUnsupportedResponseModeName = "unsupported_response_mode"
 	errInvalidScopeName            = "invalid_scope"
+	errInsufficientScopeName       = "insufficient_scope"
 	errServerErrorName             = "server_error"
 	errTemporarilyUnavailableName  = "temporarily_unavailable"
 	errUnsupportedGrantTypeName    = "unsupported_grant_type"

@@ -158,7 +158,7 @@ func TestHMACAccessToken(t *testing.T) {
 				trimmed := strings.TrimPrefix(token, "authelia_at_")
 
 				assert.False(t, strategy.IsOpaqueAccessToken(t.Context(), trimmed))
-				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAccessToken(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be an Access Token.")
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAccessToken(t.Context(), tc.have, trimmed)), "The token provided is expired, revoked, malformed, or invalid for other reasons. Provided Token does not appear to be an Access Token.")
 			} else {
 				err = strategy.ValidateAccessToken(t.Context(), tc.have, token)
 
@@ -255,7 +255,7 @@ func TestHMACRefreshToken(t *testing.T) {
 				trimmed := strings.TrimPrefix(token, "authelia_rt_")
 
 				assert.False(t, strategy.IsOpaqueRefreshToken(t.Context(), trimmed))
-				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateRefreshToken(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be a Refresh Token.")
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateRefreshToken(t.Context(), tc.have, trimmed)), "The token provided is expired, revoked, malformed, or invalid for other reasons. Provided Token does not appear to be a Refresh Token.")
 			} else {
 				err = strategy.ValidateRefreshToken(t.Context(), tc.have, token)
 
@@ -333,7 +333,7 @@ func TestHMACAuthorizeCode(t *testing.T) {
 				trimmed := strings.TrimPrefix(token, "authelia_ac_")
 
 				assert.False(t, strategy.IsOpaqueAuthorizeCode(t.Context(), trimmed))
-				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAuthorizeCode(t.Context(), tc.have, trimmed)), "Invalid token format. Provided Token does not appear to be an Authorization Code.")
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(strategy.ValidateAuthorizeCode(t.Context(), tc.have, trimmed)), "The token provided is expired, revoked, malformed, or invalid for other reasons. Provided Token does not appear to be an Authorization Code.")
 			} else {
 				err = strategy.ValidateAuthorizeCode(t.Context(), tc.have, token)
 

@@ -53,6 +53,7 @@ func (f Fields) EncodeRFC6750() string {
 // WriteRFC6750Error handles a RFC6750 error response.
 func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
 	var (
+		code   int
 		fields = make(Fields)
 		err    error
 	)
@@ -73,21 +74,27 @@ func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
 			if field := rfc.Reason(); len(field) != 0 {
 				fields[fieldErrorHint] = field
 			}
+
+			code = rfc.StatusCode()
 		} else {
 			fields[fieldError] = et.Error()
 		}
 	case map[string]any:
 		for field, value := range et {
-			fields[field] = fmt.Sprintf("%s", value)
+			if statusCode, ok := value.(int); ok && field == fieldStatusCode {
+				code = statusCode
+			} else {
+				fields[field] = fmt.Sprintf("%s", value)
 
-			if err != nil {
-				continue
-			}
+				if err != nil {
+					continue
+				}
 
-			switch field {
-			case fieldError, fieldErrorDescription:
-				if ev, ok := value.(error); ok {
-					err = ev
+				switch field {
+				case fieldError, fieldErrorDescription:
+					if ev, ok := value.(error); ok {
+						err = ev
+					}
 				}
 			}
 		}
@@ -104,6 +111,7 @@ func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
 	case nil:
 		break
 	default:
+		code = http.StatusBadRequest
 		fields[fieldError] = "invalid_request"
 		fields[fieldErrorDescription] = fmt.Sprintf("%s", e)
 		err = errors.New(fields[fieldErrorDescription])
@@ -119,9 +127,13 @@ func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
 		fields[k] = v
 	}
 
+	if code < http.StatusBadRequest || code > http.StatusForbidden {
+		code = http.StatusBadRequest
+	}
+
 	w.Header().Set(consts.HeaderWWWAuthenticate, fields.EncodeRFC6750())
 	w.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-	w.WriteHeader(http.StatusUnauthorized)
+	w.WriteHeader(code)
 
 	if err != nil {
 		_ = json.NewEncoder(w).Encode(err)

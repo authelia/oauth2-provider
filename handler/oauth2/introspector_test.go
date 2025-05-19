@@ -145,7 +145,7 @@ func TestIntrospectToken(t *testing.T) {
 				)
 			},
 			error:    oauth2.ErrInvalidTokenFormat,
-			errorStr: "Invalid token format. Check that you provided a valid token in the right format.",
+			errorStr: "The token provided is expired, revoked, malformed, or invalid for other reasons. Check that you provided a valid token in the right format.",
 		},
 		{
 			name: "ShouldPass",

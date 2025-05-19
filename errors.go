@@ -141,7 +141,7 @@ var (
 	}
 	ErrInvalidTokenFormat = &RFC6749Error{
 		ErrorField:       errInvalidTokenFormatName,
-		DescriptionField: "Invalid token format.",
+		DescriptionField: "The token provided is expired, revoked, malformed, or invalid for other reasons.",
 		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}

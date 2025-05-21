@@ -591,7 +591,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}
 
-			err = provider.authorizeRequestParametersFromOpenIDConnectRequestObject(context.Background(), r, tc.par)
+			err = provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
 			if tc.err != nil {
 				assert.EqualError(t, err, tc.err.Error())
 				if tc.errString != "" {

@@ -33,4 +33,9 @@ const (
 	ClaimNonce                               = valueNonce
 	ClaimAuthorizedActor                     = "may_act"
 	ClaimActor                               = "act"
+	ClaimEvents                              = "events"
+)
+
+const (
+	ClaimEventBackChannelLogout = "http://schemas.openid.net/event/backchannel-logout"
 )

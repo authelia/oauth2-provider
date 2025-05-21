@@ -12,7 +12,6 @@ import (
 	jjson "github.com/go-jose/go-jose/v4/json"
 	"github.com/google/uuid"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -84,12 +83,12 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorExpired
 	}
 
-	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now, vopts.expRequired, date, err) {
+	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now, vopts.iatRequired, date, err) {
 		vErr.Inner = errors.New("Token used before issued")
 		vErr.Errors |= ValidationErrorIssuedAt
 	}
 
-	if date, err = c.GetNotBefore(); !validDate(validInt64Past, now, vopts.expRequired, date, err) {
+	if date, err = c.GetNotBefore(); !validDate(validInt64Past, now, vopts.nbfRequired, date, err) {
 		vErr.Inner = errors.New("Token is not valid yet")
 		vErr.Errors |= ValidationErrorNotValidYet
 	}
@@ -109,7 +108,7 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	if len(vopts.sub) != 0 {
 		if str, err = c.GetSubject(); err != nil {
 			vErr.Inner = errors.New("Token has invalid subject")
-			vErr.Errors |= ValidationErrorIssuer
+			vErr.Errors |= ValidationErrorSubject
 		} else if !validString(str, vopts.sub, true) {
 			vErr.Inner = errors.New("Token has invalid subject")
 			vErr.Errors |= ValidationErrorSubject
@@ -252,7 +251,7 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 	if c.Issuer != "" {
 		ret[ClaimIssuer] = c.Issuer
 	} else {
-		delete(ret, consts.ClaimIssuer)
+		delete(ret, ClaimIssuer)
 	}
 
 	if c.Subject != "" {

@@ -23,7 +23,7 @@ import (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (f *Fosite) authorizeRequestParametersFromOpenIDConnectRequestObject(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
+func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
 	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	openid := scope.Has(consts.ScopeOpenID)
@@ -460,7 +460,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	//
 	// All other parse methods should come afterwards so that we ensure that the data is taken
 	// from the request_object if set.
-	if err = f.authorizeRequestParametersFromOpenIDConnectRequestObject(ctx, request, isPARRequest); err != nil {
+	if err = f.authorizeRequestParametersFromJAR(ctx, request, isPARRequest); err != nil {
 		return request, err
 	}
 

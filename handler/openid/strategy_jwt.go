@@ -260,3 +260,18 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	return token, err
 }
+
+func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
+	if lifespan == 0 {
+		lifespan = defaultExpiryTime
+	}
+
+	token, _, err = h.Encode(
+		ctx,
+		jwt.NewLogoutTokenClaims(subject, audience, sid, extra).ToMapClaims(),
+		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeLogoutToken}}),
+		jwt.WithClient(jwt.NewIDTokenClient(client)),
+	)
+
+	return token, err
+}

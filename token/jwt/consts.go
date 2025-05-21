@@ -65,6 +65,8 @@ const (
 	ClaimNonce                               = consts.ClaimNonce
 	ClaimAuthorizedActor                     = consts.ClaimAuthorizedActor
 	ClaimActor                               = consts.ClaimActor
+	ClaimEvents                              = consts.ClaimEvents
+	ClaimEventBackChannelLogout              = consts.ClaimEventBackChannelLogout
 )
 
 const (

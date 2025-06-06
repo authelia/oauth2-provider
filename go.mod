@@ -16,10 +16,10 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
 	go.uber.org/mock v0.5.2
-	golang.org/x/crypto v0.38.0
+	golang.org/x/crypto v0.39.0
 	golang.org/x/net v0.40.0
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/text v0.25.0
+	golang.org/x/text v0.26.0
 )
 
 require (

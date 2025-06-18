@@ -9,7 +9,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/hashicorp/go-retryablehttp v0.7.7
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/parnurzeal/gorequest v0.3.0
 	github.com/pkg/errors v0.9.1

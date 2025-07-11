@@ -193,13 +193,19 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 }
 
 func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.ClientLifespanConfig) error {
+	s.clientsMutex.RLock()
+	defer s.clientsMutex.RUnlock()
+
 	if client, ok := s.Clients[clientID]; ok {
 		if clc, ok := client.(*oauth2.DefaultClientWithCustomTokenLifespans); ok {
 			clc.SetTokenLifespans(lifespans)
+
 			return nil
 		}
+
 		return oauth2.ErrorToRFC6749Error(errors.New("failed to set token lifespans due to failed client type assertion"))
 	}
+
 	return oauth2.ErrNotFound
 }
 

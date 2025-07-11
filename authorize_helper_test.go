@@ -5,7 +5,6 @@ package oauth2_test
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/url"
 	"strings"
@@ -49,6 +48,177 @@ func TestIsLocalhost(t *testing.T) {
 // The authorization server may also enforce the usage and validation
 // of pre-registered redirect URIs (see Section 5.2.3.5).
 func TestDoesClientWhiteListRedirect(t *testing.T) {
+	testCases := []struct {
+		name          string
+		client        oauth2.Client
+		have          string
+		expected      string
+		expectedMatch bool
+	}{
+		{
+			name:          "ShouldNotMatchClientWithEmptyURI",
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{""}},
+			have:          "https://foo.com/cb",
+			expected:      "",
+			expectedMatch: false,
+		},
+		{
+			name:          "ShouldMatchNativeAppRegistered",
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"wta://auth"}},
+			have:          "wta://auth",
+			expected:      "wta://auth",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"wta:///auth"}},
+			have:          "wta:///auth",
+			expected:      "wta:///auth",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"wta://foo/auth"}},
+			have:          "wta://foo/auth",
+			expected:      "wta://foo/auth",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			have:          "https://foo.com/cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			have:          "",
+			expectedMatch: true,
+			expected:      "https://bar.com/cb",
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{""}},
+			have:          "",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			have:          "https://bar.com/cb",
+			expectedMatch: true,
+			expected:      "https://bar.com/cb",
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://bar.com/cb"}},
+			have:          "https://bar.com/cb123",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			have:          "http://[::1]:1024",
+			expected:      "http://[::1]:1024",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			have:          "http://[::1]:1024/cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]/cb"}},
+			have:          "http://[::1]:1024/cb",
+			expected:      "http://[::1]:1024/cb",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			have:          "http://foo.bar/bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			have:          "http://127.0.0.1:1024",
+			expected:      "http://127.0.0.1:1024",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/cb"}},
+			have:          "http://127.0.0.1:64000/cb",
+			expected:      "http://127.0.0.1:64000/cb",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			have:          "http://127.0.0.1:64000/cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			have:          "http://127.0.0.1",
+			expected:      "http://127.0.0.1",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/Cb"}},
+			have:          "http://127.0.0.1:8080/Cb",
+			expected:      "http://127.0.0.1:8080/Cb",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			have:          "http://foo.bar/bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			have:          ":/invalid.uri)bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			have:          "http://127.0.0.1:8080/Cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			have:          "http://127.0.0.1:8080/cb?foo=bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
+			have:          "http://127.0.0.1:8080/cb?foo=bar",
+			expected:      "http://127.0.0.1:8080/cb?foo=bar",
+			expectedMatch: true,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar"}},
+			have:          "http://127.0.0.1:8080/cb?baz=bar&foo=bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb?foo=bar&baz=bar"}},
+			have:          "http://127.0.0.1:8080/cb?baz=bar&foo=bar",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://www.authelia.com/cb"}},
+			have:          "http://127.0.0.1:8080/cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:8080/cb"}},
+			have:          "https://www.authelia.com/cb",
+			expectedMatch: false,
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"web+application://callback"}},
+			have:          "web+application://callback",
+			expectedMatch: true,
+			expected:      "web+application://callback",
+		},
+		{
+			client:        &oauth2.DefaultClient{RedirectURIs: []string{"https://google.com/?foo=bar%20foo+baz"}},
+			have:          "https://google.com/?foo=bar%20foo+baz",
+			expectedMatch: true,
+			expected:      "https://google.com/?foo=bar%20foo+baz",
+		},
+	}
+
 	for k, c := range []struct {
 		client   oauth2.Client
 		url      string
@@ -225,24 +395,67 @@ func TestDoesClientWhiteListRedirect(t *testing.T) {
 }
 
 func TestIsRedirectURISecure(t *testing.T) {
-	for d, c := range []struct {
-		u   string
-		err bool
+	testCases := []struct {
+		name        string
+		redirectURI *url.URL
+		expected    bool
 	}{
-		{u: "http://google.com", err: true},
-		{u: "https://google.com", err: false},
-		{u: "http://localhost", err: false},
-		{u: "http://test.localhost", err: false},
-		{u: "http://127.0.0.1/", err: false},
-		{u: "http://[::1]/", err: false},
-		{u: "http://127.0.0.1:8080/", err: false},
-		{u: "http://[::1]:8080/", err: false},
-		{u: "http://testlocalhost", err: true},
-		{u: "wta://auth", err: false},
-	} {
-		uu, err := url.Parse(c.u)
-		require.NoError(t, err)
-		assert.Equal(t, !c.err, oauth2.IsRedirectURISecure(context.Background(), uu), "case %d", d)
+		{
+			"ShouldConsiderHTTPInSecure",
+			&url.URL{Scheme: "http", Host: "google.com", Path: "/callback"},
+			false,
+		},
+		{
+			"ShouldConsiderHTTPSSecure",
+			&url.URL{Scheme: "https", Host: "google.com", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldNotConsiderHTTPWithHostSimilarToLocalHost",
+			&url.URL{Scheme: "http", Host: "testlocalhost", Path: "/callback"},
+			false,
+		},
+		{
+			"ShouldConsiderLocalHostSecure",
+			&url.URL{Scheme: "http", Host: "localhost", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderLocalHostSubDomainSecure",
+			&url.URL{Scheme: "http", Host: "test.localhost", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderLocalHostIPv4Secure",
+			&url.URL{Scheme: "http", Host: "127.0.0.1", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderLocalHostIPv6Secure",
+			&url.URL{Scheme: "http", Host: "[::1]", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderLocalHostIPv4WithPortSecure",
+			&url.URL{Scheme: "http", Host: "127.0.0.1:8080", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderLocalHostIPv6WithPortSecure",
+			&url.URL{Scheme: "http", Host: "[::1]:8080", Path: "/callback"},
+			true,
+		},
+		{
+			"ShouldConsiderNativeAppSecure",
+			&url.URL{Scheme: "wta", Host: "auth", Path: "/callback"},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, oauth2.IsRedirectURISecure(t.Context(), tc.redirectURI))
+		})
 	}
 }
 

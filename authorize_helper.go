@@ -173,8 +173,14 @@ func IsValidRedirectURI(redirectURI *url.URL) bool {
 	return true
 }
 
+// IsRedirectURISecure returns true if the provided Redirect URI is effectively secure for the purposes of
+// OAuth 2.0 Redirection.
 func IsRedirectURISecure(ctx context.Context, redirectURI *url.URL) bool {
-	return !(redirectURI.Scheme == consts.SchemeHTTP && !IsLocalhost(redirectURI))
+	if redirectURI.Scheme != "" && redirectURI.Scheme != consts.SchemeHTTP {
+		return true
+	}
+
+	return IsLocalhost(redirectURI)
 }
 
 // IsRedirectURISecureStrict is stricter than IsRedirectURISecure and it does not allow custom-scheme

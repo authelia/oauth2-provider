@@ -742,10 +742,10 @@ func init() {
 
 func TestInit(t *testing.T) {
 	claims := MapClaims{
-		"iss": "example.com",
-		"sub": "john",
-		"iat": time.Now().UTC().Unix(),
-		"exp": time.Now().Add(time.Hour * 24 * 365 * 40).UTC().Unix(),
+		ClaimIssuer:         "example.com",
+		ClaimSubject:        "john",
+		ClaimIssuedAt:       time.Now().UTC().Unix(),
+		ClaimExpirationTime: time.Now().Add(time.Hour * 24 * 365 * 40).UTC().Unix(),
 	}
 
 	out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, &Headers{}, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)

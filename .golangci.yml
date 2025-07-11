@@ -60,6 +60,10 @@ linters:
           permissions to be 0600 or less)
       - path: (.+)\.go$
         text: Potential file inclusion via variable
+      - path: (.+)\.go$
+        text: ST1005
+      - path: (.+)\.go$
+        text: ST1005
     paths:
       - third_party$
       - builtin$

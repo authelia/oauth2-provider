@@ -21,15 +21,15 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
-	var token, signature string
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (signature string, err error) {
+	var token string
 
 	if token, signature, err = h.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
-		return err
+		return "", err
 	}
 
 	if err = h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, requester.Sanitize([]string{})); err != nil {
-		return err
+		return "", err
 	}
 
 	responder.SetAccessToken(token)
@@ -37,7 +37,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 
-	return nil
+	return signature, nil
 }
 
 //nolint:unparam

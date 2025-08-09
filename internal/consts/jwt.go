@@ -26,5 +26,8 @@ const (
 )
 
 const (
-	JSONWebTokenAlgNone = valueNone
+	JSONWebTokenAlgNone       = valueNone
+	JSONWebTokenAlgHMACSHA256 = "HS256"
+	JSONWebTokenAlgHMACSHA384 = "HS384"
+	JSONWebTokenAlgHMACSHA512 = "HS512"
 )

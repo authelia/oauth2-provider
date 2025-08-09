@@ -23,7 +23,7 @@ import (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) error {
+func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) (err error) {
 	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	openid := scope.Has(consts.ScopeOpenID)
@@ -75,9 +75,15 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		break
 	case "":
 		algAny = true
+	case consts.JSONWebTokenAlgHMACSHA256, consts.JSONWebTokenAlgHMACSHA384, consts.JSONWebTokenAlgHMACSHA512:
+		if _, ok, err = client.GetClientSecretPlainText(); err != nil {
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'. Error occurred retrieving the client secret: %+v", request.GetClient().GetID(), alg, err))
+		} else if !ok {
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'.", request.GetClient().GetID(), alg))
+		}
 	default:
 		if client.GetJSONWebKeys() == nil && len(client.GetJSONWebKeysURI()) == 0 {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered which is required for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
 		}
 	}
 

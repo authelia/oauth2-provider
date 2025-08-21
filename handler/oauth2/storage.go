@@ -42,9 +42,11 @@ type AccessTokenStorage interface {
 }
 
 type RefreshTokenStorage interface {
-	CreateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error)
+	CreateRefreshTokenSession(ctx context.Context, signature, accessSignature string, request oauth2.Requester) (err error)
 
 	GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error)
 
 	DeleteRefreshTokenSession(ctx context.Context, signature string) (err error)
+
+	RotateRefreshToken(ctx context.Context, requestID, signature string) (err error)
 }

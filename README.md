@@ -1,15 +1,13 @@
 ## OAuth 2.0 Framework
 
-This library is the Authelia OAuth 2.0 Framework which is internally used to
-deliver OAuth 2.0 and OpenID Connect 1.0 Flows to its users.
+This library is the Authelia OAuth 2.0 Framework which is internally used to deliver OAuth 2.0 and OpenID Connect 1.0
+Flows to its users.
 
 ## Notable Implemented or Intended Differences
 
-In an effort to assist users who wish to use this library we aim to maintain the
-following list of differences:
+In an effort to assist users who wish to use this library we aim to maintain the following list of differences:
 
-- [x] Module path changed from `github.com/ory/fosite` to
-      `authelia.com/provider/oauth2`.
+- [x] Module path changed from `github.com/ory/fosite` to `authelia.com/provider/oauth2`.
 - Documentation:
   - [ ] Add spec support documentation
 - Overhaul testing:
@@ -22,11 +20,10 @@ following list of differences:
 - [x] Minimum dependency is go version 1.21
 - [x] Replace string values with constants where applicable
       <sup>[commit](https://github.com/authelia/oauth2-provider/commit/de536dc0c9cd5f080c387621799e644319587bd0)</sup>
-- [x] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5`
-      or other such libraries
+- [x] Simplify the internal JWT logic to leverage `github.com/golang-jwt/jwt/v5` or other such libraries
 - [x] Implement internal JWKS logic
-- [x] Higher Debug error information visibility (Debug Field includes the
-      complete RFC6749 error with debug information if available)
+- [x] Higher Debug error information visibility (Debug Field includes the complete RFC6749 error with debug information
+      if available)
 - Fixes:
   - [x] ~~Basic Scheme Rejects Special Characters~~
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/2314625eb1f21987a9199fb1cdf6da6cee4df965)</sup>
@@ -73,18 +70,15 @@ following list of differences:
   - [x] Introspection Client Authentication
   - [x] Custom Form Post Response Writer
   - [ ] UserInfo support
-  - [x] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
-        support
+  - [x] [RFC8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628) support
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/be088375c5c0077f33976991cfbc056450fd6d58)</sup>
-  - [x] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
-        support
+  - [x] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693) support
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/add3cbecb9d35e2b7c29426cf5d898c9b1599e3b)</sup>
   - [ ] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
         support
   - [ ] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
         support
-  - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396)
-        support
+  - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
   - [x] [RFC9101: OAuth 2.0 JWT-Secured Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9101)
   - [ ] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
         support
@@ -97,8 +91,8 @@ following list of differences:
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/28cb8cddc09d1dcd4b9ec42870499d8a37223366)</sup>
     - [x] Response Type None
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/22c6e980c01eff4fb659c2b4a0a9b53d9e93edea)</sup>
-  - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on
-        request <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
+  - [x] Revocation Flow per policy can decide to revoke Refresh Tokens on request
+        <sup>[commit](e3ffc451f1c7056494f9dc3e51d47e84f12357de)</sup>
   - Client Authentication Rework:
     - [x] General Refactor
     - [x] Prevent Multiple Client Authentication Methods
@@ -133,16 +127,13 @@ following list of differences:
 
 ## Thanks
 
-This is a hard fork of [ORY Fosite](https://github.com/ory/fosite) under the
-[Apache 2.0 License](LICENSE) for the purpose of performing self-maintenance of
-this critical Authelia dependency.
+This is a hard fork of [ORY Fosite](https://github.com/ory/fosite) under the [Apache 2.0 License](LICENSE) for the
+purpose of performing self-maintenance of this critical Authelia dependency.
 
 We however:
 
-- Acknowledge the amazing hard work of the ORY developers in making such an
-  amazing framework that we can do this with.
+- Acknowledge the amazing hard work of the ORY developers in making such an amazing framework that we can do this with.
 - Plan to continue to contribute back to te ORY fosite and related projects.
 - Have ensured the licensing is unchanged in this fork of the library.
-- Do not have a formal affiliation with ORY and individuals utilizing this
-  library should not allow their usage to be a reflection on ORY as this library
-  is not maintained by them.
+- Do not have a formal affiliation with ORY and individuals utilizing this library should not allow their usage to be a
+  reflection on ORY as this library is not maintained by them.

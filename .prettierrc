@@ -1,0 +1,5 @@
+singleQuote: true
+proseWrap: 'always'
+semi: false
+trailingComma: 'all'
+printWidth: 120

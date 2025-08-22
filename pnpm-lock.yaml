@@ -78,7 +78,6 @@ packages:
   debuglog@1.0.1:
     resolution:
       { integrity: sha512-syBZ+rnAK3EgMsH2aYEOLUW7mZSY9Gb+0wUMCFsZvcmiz+HigA0LOcq/HoQqVuGG+EKykunc7QG2bzrponfaSw== }
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   detect-indent@7.0.1:
     resolution:
@@ -124,7 +123,6 @@ packages:
   glob@7.2.3:
     resolution:
       { integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q== }
-    deprecated: Glob versions prior to v9 are no longer supported
 
   graceful-fs@4.2.11:
     resolution:
@@ -147,9 +145,6 @@ packages:
   inflight@1.0.6:
     resolution:
       { integrity: sha512-k92I/b08q4wvFscXCLvqfsHCrjrF7yiXsQuIVvVE7N82W3+aqpzuUdBbfhWcy/FZR3/4IgflMgKLOsvPDrGCJA== }
-    deprecated:
-      This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested
-      way to coalesce async requests by a key value, which is much more comprehensive and powerful.
 
   inherits@2.0.4:
     resolution:
@@ -221,7 +216,6 @@ packages:
   osenv@0.1.5:
     resolution:
       { integrity: sha512-0CWcCECdMVc2Rw3U5w9ZjqX6ga6ubk1xDVKxtBQPK7wis/0F2r9T6k4ydGYhecl7YUBxBVxhL5oisPsNxAPe2g== }
-    deprecated: This package is no longer supported.
 
   path-is-absolute@1.0.1:
     resolution:
@@ -255,17 +249,14 @@ packages:
   read-installed@4.0.3:
     resolution:
       { integrity: sha512-O03wg/IYuV/VtnK2h/KXEt9VIbMUFbk3ERG0Iu4FhLZw0EP0T9znqrYDGn6ncbEsXUFaUjiVAWXHzxwt3lhRPQ== }
-    deprecated: This package is no longer supported.
 
   read-package-json@2.1.2:
     resolution:
       { integrity: sha512-D1KmuLQr6ZSJS0tW8hf3WGpRlwszJOXZ3E8Yd/DNRaM5d+1wVRZdHlpGBLAuovjr28LbWvjpWkBHMxpRGGjzNA== }
-    deprecated: This package is no longer supported. Please use @npmcli/package-json instead.
 
   readdir-scoped-modules@1.1.0:
     resolution:
       { integrity: sha512-asaikDeqAQg7JifRsZn1NJZXo9E+VwlyCfbkZhwyISinqk5zNS6266HS5kah6P0SaQKGF6SkNnZVHUzHFYxYDw== }
-    deprecated: This functionality has been moved to @npmcli/fs
 
   resolve@1.22.10:
     resolution:

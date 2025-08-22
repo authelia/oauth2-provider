@@ -21,7 +21,7 @@ test:  # runs all tests
 .bin/mockgen: Makefile
 	GOBIN=$(shell pwd)/.bin go install go.uber.org/mock/mockgen@latest
 
-node_modules: package-lock.json
+node_modules: pnpm-lock.yaml
 	pnpm install --fix-lockfile
 
 .DEFAULT_GOAL := help

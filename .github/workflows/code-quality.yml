@@ -9,8 +9,8 @@ on:
 permissions:
   contents: 'read'
 jobs:
-  format:
-    name: 'Format'
+  format-goimports-reviser:
+    name: 'Format (goimports-reviser)'
     runs-on: 'ubuntu-latest'
     steps:
       - name: 'Harden Runner'
@@ -25,7 +25,27 @@ jobs:
           go-version: 1.25
       - name: 'Perform Make'
         run: |
-          make format
+          make format-goimports-reviser
+      - name: 'Feedback'
+        run: |
+          git diff HEAD --exit-code --color
+  format-prettier:
+    name: 'Format (prettier)'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
+        with:
+          egress-policy: 'audit'
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 'Setup (go)'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: 1.25
+      - name: 'Perform Make'
+        run: |
+          make format-prettier
       - name: 'Feedback'
         run: |
           git diff HEAD --exit-code --color

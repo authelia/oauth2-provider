@@ -7,7 +7,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'authelia/oauth2-provider'
     permissions:
-      pull-requests: 'write'
+      contents: 'write'
     steps:
       - name: 'Harden Runner'
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
@@ -17,10 +17,10 @@ jobs:
         id: 'metadata'
         uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
       - name: 'Enable Auto-Merge'
         run: |
           gh pr merge --auto --squash "$PR_URL"
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: '${{ github.event.pull_request.html_url }}'
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'

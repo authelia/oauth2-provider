@@ -1,13 +1,13 @@
 name: 'Dependabot'
 on:
   pull_request: {}
+permissions:
+  pull-requests: 'write'
 jobs:
   automerge:
     name: 'Auto-Merge'
     runs-on: 'ubuntu-latest'
-    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'authelia/oauth2-provider'
-    permissions:
-      pull-requests: 'write'
+    if: github.repository == 'authelia/oauth2-provider'
     steps:
       - name: 'Harden Runner'
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0

@@ -1,6 +1,9 @@
 name: 'Dependabot'
 on:
   pull_request: {}
+permissions:
+  contents: read
+
 jobs:
   automerge:
     name: 'Auto-Merge'

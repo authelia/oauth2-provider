@@ -41,7 +41,7 @@ func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err er
 type Fields map[string]string
 
 func (f Fields) EncodeRFC6750() string {
-	var items []string
+	items := make([]string, 0, len(f))
 
 	for key, value := range f {
 		items = append(items, fmt.Sprintf(`%s="%s"`, key, value))

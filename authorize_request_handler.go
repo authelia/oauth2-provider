@@ -301,13 +301,14 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 	// response types is defined by their respective specifications.
 	responseTypes := RemoveEmpty(strings.Split(r.Form.Get(consts.FormParameterResponseType), " "))
 	if len(responseTypes) == 0 {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("`The request is missing the 'response_type' parameter."))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The request is missing the 'response_type' parameter."))
 	}
 
 	var found bool
 	for _, t := range request.GetClient().GetResponseTypes() {
 		if Arguments(responseTypes).Matches(RemoveEmpty(strings.Split(t, " "))...) {
 			found = true
+
 			break
 		}
 	}
@@ -317,6 +318,7 @@ func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeReques
 	}
 
 	request.ResponseTypes = responseTypes
+
 	return nil
 }
 

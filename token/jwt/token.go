@@ -104,10 +104,9 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
 	key = pointer(key)
 
-	// verify signature with returned key
+	// verify signature with returned key.
 	_, validNoneKey := key.(*unsafeNoneMagicConstant)
-	isSignedToken := !(token.SignatureAlgorithm == SigningMethodNone && validNoneKey)
-	if isSignedToken {
+	if token.SignatureAlgorithm != SigningMethodNone || !validNoneKey {
 		if err = parsed.Claims(key, &claims); err != nil {
 			return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()}
 		}

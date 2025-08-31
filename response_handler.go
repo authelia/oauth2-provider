@@ -83,8 +83,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 	rm := requester.GetResponseMode()
 
-	switch rm {
-	case ResponseModeJWT:
+	if rm == ResponseModeJWT {
 		if requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 			rm = ResponseModeQueryJWT
 		} else {

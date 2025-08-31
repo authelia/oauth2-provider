@@ -858,7 +858,6 @@ func mustGenerateECDSAAssertion(t *testing.T, claims jwt.MapClaims, key *ecdsa.P
 	return tokenString
 }
 
-//nolint:unparam
 func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key []byte) string {
 	jwk, err := jwt.NewClientSecretJWK(t.Context(), key, "", string(jose.HS256), "", "sig")
 	require.NoError(t, err)

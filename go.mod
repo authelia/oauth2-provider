@@ -1,6 +1,6 @@
 module authelia.com/provider/oauth2
 
-go 1.24
+go 1.24.0
 
 toolchain go1.25.0
 
@@ -18,7 +18,7 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.41.0
 	golang.org/x/net v0.43.0
-	golang.org/x/oauth2 v0.30.0
+	golang.org/x/oauth2 v0.31.0
 	golang.org/x/text v0.28.0
 )
 

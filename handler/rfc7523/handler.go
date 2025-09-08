@@ -123,13 +123,16 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	return nil
 }
 
-func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
-	if err := c.CheckRequest(ctx, request); err != nil {
+func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if err = c.CheckRequest(ctx, request); err != nil {
 		return err
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeJWTBearer, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	return c.IssueAccessToken(ctx, atLifespan, request, response)
+
+	_, err = c.IssueAccessToken(ctx, atLifespan, request, response)
+
+	return err
 }
 
 func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {

@@ -160,7 +160,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	}
 
 	if refreshSignature != "" {
-		if err = c.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
+		if err = c.CreateRefreshTokenSession(ctx, refreshSignature, "", request.Sanitize([]string{})); err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.Storage); rollBackTxnErr != nil {
 				err = rollBackTxnErr
 			}

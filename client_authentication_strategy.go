@@ -325,6 +325,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 
 	optsHeader := []jwt.HeaderValidationOption{
+		jwt.ValidateTypes(jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT),
+		jwt.ValidateAllowEmptyType(true),
 		jwt.ValidateKeyID(handler.GetAuthSigningKeyID(client)),
 		jwt.ValidateAlgorithm(handler.GetAuthSigningAlg(client)),
 		jwt.ValidateEncryptionKeyID(handler.GetAuthEncryptionKeyID(client)),
@@ -401,13 +403,13 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'alg' header value '%s' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value '%s'.", client.GetID(), handler.GetAuthSigningAlg(client), token.SignatureAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'typ' header value '%s' but the client assertion was signed with the 'typ' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'typ' header value '%s' or '%s' but the client assertion was signed with the 'typ' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.Header, jwt.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'typ' header value '%s' but the client assertion was encrypted with the 'typ' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'typ' header value '%s' but the client assertion was encrypted with the 'typ' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the client assertions was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", client.GetID(), token.HeaderJWE[consts.JSONWebTokenHeaderContentType], token.HeaderJWE[consts.JSONWebTokenHeaderType])
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the client assertions was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", client.GetID(), fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType), fmtHeaderValue(token.HeaderJWE, consts.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' or '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the client assertion was encrypted with the 'kid' header value '%s'.", client.GetID(), handler.GetAuthEncryptionKeyID(client), token.EncryptionKeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
@@ -466,5 +468,16 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated due to a key lookup error. %s.", client.GetID(), errJWKLookup.Description)
 	} else {
 		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated. %s.", client.GetID(), ErrorToDebugRFC6749Error(inner).Error())
+	}
+}
+
+func fmtHeaderValue(header map[string]any, key string) string {
+	switch v := header[key].(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }

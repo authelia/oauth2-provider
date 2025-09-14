@@ -194,7 +194,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		alg, kid = client.GetIntrospectionSignedResponseAlg(), client.GetIntrospectionSignedResponseKeyID()
 	}
 
-	response := map[string]any{consts.ClaimActive: false}
+	response := map[string]any{jwt.ClaimActive: false}
 
 	if !r.IsActive() {
 		f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
@@ -202,7 +202,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		return
 	}
 
-	response[consts.ClaimActive] = true
+	response[jwt.ClaimActive] = true
 
 	extraClaimsSession, ok := r.GetAccessRequester().GetSession().(ExtraClaimsSession)
 	if ok {
@@ -210,7 +210,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername:
+			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername:
 				continue
 			default:
 				response[name] = value
@@ -219,25 +219,25 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 
 	if !r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).IsZero() {
-		response[consts.ClaimExpirationTime] = r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).Unix()
+		response[jwt.ClaimExpirationTime] = r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).Unix()
 	}
 	if r.GetAccessRequester().GetClient().GetID() != "" {
-		response[consts.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()
+		response[jwt.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()
 	}
 	if len(r.GetAccessRequester().GetGrantedScopes()) > 0 {
-		response[consts.ClaimScope] = strings.Join(r.GetAccessRequester().GetGrantedScopes(), " ")
+		response[jwt.ClaimScope] = strings.Join(r.GetAccessRequester().GetGrantedScopes(), " ")
 	}
 	if !r.GetAccessRequester().GetRequestedAt().IsZero() {
-		response[consts.ClaimIssuedAt] = r.GetAccessRequester().GetRequestedAt().Unix()
+		response[jwt.ClaimIssuedAt] = r.GetAccessRequester().GetRequestedAt().Unix()
 	}
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
-		response[consts.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
+		response[jwt.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
 	}
 	if len(r.GetAccessRequester().GetGrantedAudience()) > 0 {
-		response[consts.ClaimAudience] = r.GetAccessRequester().GetGrantedAudience()
+		response[jwt.ClaimAudience] = r.GetAccessRequester().GetGrantedAudience()
 	}
 	if r.GetAccessRequester().GetSession().GetUsername() != "" {
-		response[consts.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
+		response[jwt.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}
 
 	f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
@@ -245,7 +245,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 
 func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder, response map[string]any, alg, kid string) {
 	switch {
-	case (alg != "" && alg != consts.JSONWebTokenAlgNone) || (kid != "" && alg != consts.JSONWebTokenAlgNone):
+	case (alg != "" && alg != jwt.JSONWebTokenAlgNone) || (kid != "" && alg != jwt.JSONWebTokenAlgNone):
 		var (
 			token string
 			jti   uuid.UUID
@@ -254,16 +254,16 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 
 		header := &jwt.Headers{
 			Extra: map[string]any{
-				consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTokenIntrospection,
+				jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeTokenIntrospection,
 			},
 		}
 
 		if alg != "" {
-			header.Add(consts.JSONWebTokenHeaderAlgorithm, alg)
+			header.Add(jwt.JSONWebTokenHeaderAlgorithm, alg)
 		}
 
 		if kid != "" {
-			header.Add(consts.JSONWebTokenHeaderKeyIdentifier, kid)
+			header.Add(jwt.JSONWebTokenHeaderKeyIdentifier, kid)
 		}
 
 		if jti, err = uuid.NewRandom(); err != nil {
@@ -273,14 +273,14 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 		}
 
 		claims := jwt.MapClaims{
-			consts.ClaimJWTID:              jti.String(),
-			consts.ClaimIssuer:             f.Config.GetIntrospectionIssuer(ctx),
-			consts.ClaimIssuedAt:           time.Now().UTC().Unix(),
-			consts.ClaimTokenIntrospection: response,
+			jwt.ClaimJWTID:              jti.String(),
+			jwt.ClaimIssuer:             f.Config.GetIntrospectionIssuer(ctx),
+			jwt.ClaimIssuedAt:           time.Now().UTC().Unix(),
+			jwt.ClaimTokenIntrospection: response,
 		}
 
 		if aud, _ := r.ToMap(); len(aud) != 0 {
-			claims[consts.ClaimAudience] = aud
+			claims[jwt.ClaimAudience] = aud
 		}
 
 		strategy := f.Config.GetIntrospectionJWTResponseStrategy(ctx)

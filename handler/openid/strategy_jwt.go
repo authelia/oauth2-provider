@@ -275,7 +275,7 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	token, _, err = h.Encode(
 		ctx,
 		claims.ToMapClaims(),
-		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeLogoutToken}}),
+		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeLogoutToken}}),
 		jwt.WithClient(jwt.NewIDTokenClient(client)),
 	)
 

@@ -131,17 +131,17 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	optsValidHeader := []jwt.HeaderValidationOption{
+	optsHeader := []jwt.HeaderValidationOption{
+		jwt.ValidateTypes(jwt.JSONWebTokenTypeJWTSecuredAuthorizationRequest, jwt.JSONWebTokenTypeJWT),
+		jwt.ValidateAllowEmptyType(true),
 		jwt.ValidateKeyID(client.GetRequestObjectSigningKeyID()),
 		jwt.ValidateAlgorithm(client.GetRequestObjectSigningAlg()),
 		jwt.ValidateEncryptionKeyID(client.GetRequestObjectEncryptionKeyID()),
 		jwt.ValidateKeyAlgorithm(client.GetRequestObjectEncryptionAlg()),
 		jwt.ValidateContentEncryption(client.GetRequestObjectEncryptionEnc()),
-		jwt.ValidateTypes(consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest),
-		jwt.ValidateAllowEmptyType(true),
 	}
 
-	if err = token.Valid(optsValidHeader...); err != nil {
+	if err = token.Valid(optsHeader...); err != nil {
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 

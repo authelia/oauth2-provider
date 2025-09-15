@@ -17,12 +17,32 @@ const (
 )
 
 const (
-	JSONWebTokenTypeJWT                            = "JWT"
-	JSONWebTokenTypeAccessToken                    = "at+jwt"
-	JSONWebTokenTypeLogoutToken                    = "logout+jwt"
+	JSONWebTokenTypeJWT = "JWT"
+
+	// JSONWebTokenTypeAccessToken represents the JWT type value for a JWT Profile Access Token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.1
+	JSONWebTokenTypeAccessToken = "at+jwt"
+
+	// JSONWebTokenTypeLogoutToken represents the JWT type value for OpenID Connect Back-Channel Logout 1.0.
+	//
+	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
+	JSONWebTokenTypeLogoutToken = "logout+jwt"
+
+	// JSONWebTokenTypeJWTSecuredAuthorizationRequest represents the JWT type value for JWT Secured Authorization Requests.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101.html#section-4
 	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt" //nolint:gosec // This is a credential type, not a credential.
-	JSONWebTokenTypeAccessTokenAlternative         = "application/at+jwt"
-	JSONWebTokenTypeTokenIntrospection             = "token-introspection+jwt"
+
+	// JSONWebTokenTypeClientAuthentication represents the JWT type value for Client Assertions.
+	//
+	// See: https://www.ietf.org/archive/id/draft-ietf-oauth-rfc7523bis-02.html#section-4
+	JSONWebTokenTypeClientAuthentication = "client-authentication+jwt"
+
+	// JSONWebTokenTypeTokenIntrospection represents the JWT type value for a JWT Response for OAuth Token Introspection.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9701.html#section-5
+	JSONWebTokenTypeTokenIntrospection = "token-introspection+jwt"
 )
 
 const (

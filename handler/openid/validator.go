@@ -48,7 +48,7 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnec
 //
 //nolint:gocyclo
 func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requester oauth2.AuthorizeRequester) error {
-	// Specification Note: prompt is case sensitive.
+	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(requester.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
 	if requester.GetClient().IsPublic() {

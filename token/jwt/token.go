@@ -104,10 +104,9 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
 	key = pointer(key)
 
-	// verify signature with returned key
+	// verify signature with returned key.
 	_, validNoneKey := key.(*unsafeNoneMagicConstant)
-	isSignedToken := !(token.SignatureAlgorithm == SigningMethodNone && validNoneKey)
-	if isSignedToken {
+	if token.SignatureAlgorithm != SigningMethodNone || !validNoneKey {
 		if err = parsed.Claims(key, &claims); err != nil {
 			return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: err.Error()}
 		}
@@ -378,7 +377,7 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 		}
 
 		if len(vopts.types) != 0 {
-			if !validateTokenTypeValue(vopts.types, cty) {
+			if !validateTokenTypeValue(cty, vopts.types...) {
 				vErr.Inner = errors.New("token was encrypted with an invalid cty")
 				vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
 			}
@@ -436,20 +435,11 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 
 // IsJWTProfileAccessToken returns true if the token is a JWT Profile Access Token.
 func (t *Token) IsJWTProfileAccessToken() (ok bool) {
-	var (
-		raw      any
-		cty, typ string
-	)
+	var raw any
 
 	if len(t.HeaderJWE) > 0 {
 		if raw, ok = t.HeaderJWE[JSONWebTokenHeaderContentType]; ok {
-			cty, ok = raw.(string)
-
-			if !ok {
-				return false
-			}
-
-			if cty != JSONWebTokenTypeAccessToken && cty != JSONWebTokenTypeAccessTokenAlternative {
+			if !validateTokenTypeValue(raw, JSONWebTokenTypeAccessToken) {
 				return false
 			}
 		}
@@ -459,9 +449,7 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 		return false
 	}
 
-	typ, ok = raw.(string)
-
-	return ok && (typ == JSONWebTokenTypeAccessToken || typ == JSONWebTokenTypeAccessTokenAlternative)
+	return validateTokenTypeValue(raw, JSONWebTokenTypeAccessToken)
 }
 
 type HeaderValidationOption func(opts *HeaderValidationOptions)
@@ -596,13 +584,13 @@ func validateTokenType(values []string, header map[string]any, allowEmpty bool) 
 		}
 
 		// Assume JWT if not present.
-		return validateTokenTypeValue(values, consts.JSONWebTokenTypeJWT)
+		return validateTokenTypeValue(consts.JSONWebTokenTypeJWT, values...)
 	}
 
-	return validateTokenTypeValue(values, raw)
+	return validateTokenTypeValue(raw, values...)
 }
 
-func validateTokenTypeValue(values []string, raw any) bool {
+func validateTokenTypeValue(raw any, values ...string) bool {
 	var (
 		typ string
 		ok  bool
@@ -613,8 +601,15 @@ func validateTokenTypeValue(values []string, raw any) bool {
 	}
 
 	for _, t := range values {
-		// 5.1 Media type names are not case sensitive.
+		// 5.1 Media type names are not case-sensitive.
 		if strings.EqualFold(t, typ) {
+			return true
+		}
+
+		// 3.1.1 Use Explicit Typing (RFC8725)
+		//
+		// See: https://www.rfc-editor.org/rfc/rfc8725.html#section-3.11
+		if strings.EqualFold(fmt.Sprintf("application/%s", t), typ) {
 			return true
 		}
 	}

@@ -223,9 +223,7 @@ func (c *LogoutTokenClaims) UnmarshalJSON(data []byte) error {
 func (c *LogoutTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
-	if _, ok := ret[ClaimNonce]; ok {
-		delete(ret, ClaimNonce)
-	}
+	delete(ret, ClaimNonce)
 
 	if c.JTI != "" {
 		ret[ClaimJWTID] = c.JTI

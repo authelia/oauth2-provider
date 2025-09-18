@@ -1,0 +1,88 @@
+name: 'Code Quality'
+on:
+  pull_request:
+    branches:
+      - 'master'
+  push:
+    branches:
+      - 'master'
+permissions:
+  contents: 'read'
+jobs:
+  format-goimports-reviser:
+    name: 'Format (goimports-reviser)'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: 'audit'
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 'Setup (go)'
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: 1.25
+      - name: 'Run Go Imports Reviser'
+        run: |
+          make format-goimports-reviser
+      - name: 'Feedback'
+        run: |
+          git diff HEAD --exit-code --color
+  format-prettier:
+    name: 'Format (prettier)'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: 'audit'
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 'Setup (pnpm)'
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 10
+      - name: 'Run Prettier'
+        run: |
+          make format-prettier
+      - name: 'Feedback'
+        run: |
+          git diff HEAD --exit-code --color
+  generate:
+    name: 'Generate'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: 'audit'
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 'Setup (go)'
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: 1.25
+      - name: 'Run Generate'
+        run: |
+          make generate
+      - name: 'Feedback'
+        run: |
+          git diff HEAD --exit-code --color
+  test:
+    name: 'Unit Tests'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: 'audit'
+      - name: 'Checkout'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 'Setup (go)'
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: 1.25
+      - name: 'Perform Make'
+        run: |
+          make test

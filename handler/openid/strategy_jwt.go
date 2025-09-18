@@ -266,10 +266,16 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 		lifespan = defaultExpiryTime
 	}
 
+	claims := jwt.NewLogoutTokenClaims(subject, audience, sid, extra)
+
+	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().UTC().Add(lifespan))
+	}
+
 	token, _, err = h.Encode(
 		ctx,
-		jwt.NewLogoutTokenClaims(subject, audience, sid, extra).ToMapClaims(),
-		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeLogoutToken}}),
+		claims.ToMapClaims(),
+		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeLogoutToken}}),
 		jwt.WithClient(jwt.NewIDTokenClient(client)),
 	)
 

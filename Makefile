@@ -1,6 +1,10 @@
-format: .bin/goimports-reviser node_modules  # formats the source code
+format: format-goimports-reviser format-prettier
+
+format-goimports-reviser: .bin/goimports-reviser
 	.bin/goimports-reviser -rm-unused -recursive .
-	npm exec -- prettier --write .
+
+format-prettier: node_modules
+	pnpm exec -- prettier --write .
 
 generate: .bin/mockgen
 	MOCKGEN=".bin/mockgen" ./generate-mocks.sh
@@ -17,8 +21,7 @@ test:  # runs all tests
 .bin/mockgen: Makefile
 	GOBIN=$(shell pwd)/.bin go install go.uber.org/mock/mockgen@latest
 
-node_modules: package-lock.json
-	npm ci
-	touch node_modules
+node_modules: pnpm-lock.yaml
+	pnpm install --fix-lockfile
 
 .DEFAULT_GOAL := help

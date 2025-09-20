@@ -62,13 +62,13 @@ var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<ht
 //     particular end-user authorization and validates this redirect URI
 //     with the redirect URI passed to the token's endpoint, such an
 //     attack is detected (see Section 5.2.4.5).
-func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.URL, error) {
-	if rawurl == "" && len(client.GetRedirectURIs()) == 1 {
+func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL, error) {
+	if raw == "" && len(client.GetRedirectURIs()) == 1 {
 		if redirectURIFromClient, err := url.Parse(client.GetRedirectURIs()[0]); err == nil && IsValidRedirectURI(redirectURIFromClient) {
-			// If no redirect_uri was given and the client has exactly one valid redirect_uri registered, use that instead
+			// If no redirect_uri was given and the client has exactly one valid redirect_uri registered, use that instead.
 			return redirectURIFromClient, nil
 		}
-	} else if redirectTo, ok := IsMatchingRedirectURI(rawurl, client.GetRedirectURIs()); rawurl != "" && ok {
+	} else if redirectTo, ok := IsMatchingRedirectURI(raw, client.GetRedirectURIs()); raw != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -77,7 +77,7 @@ func MatchRedirectURIWithClientRedirectURIs(rawurl string, client Client) (*url.
 		}
 	}
 
-	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s'.", client.GetID(), rawurl))
+	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s'.", client.GetID(), raw))
 }
 
 // IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs.

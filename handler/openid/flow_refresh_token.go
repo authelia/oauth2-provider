@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -46,7 +45,8 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 
 	sess, ok := request.GetSession().(Session)
 	if !ok {
-		return errors.New("Failed to generate id token because session must be of type oauth2/handler/openid.Session")
+		return errorsx.WithStack(oauth2.ErrServerError.
+			WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required."))
 	}
 
 	// We need to reset the expires at value as this would be the previous expiry.
@@ -82,12 +82,12 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 
 	sess, ok := requester.GetSession().(Session)
 	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required."))
 	}
 
 	claims := sess.IDTokenClaims()
 	if claims.Subject == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}
 
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)

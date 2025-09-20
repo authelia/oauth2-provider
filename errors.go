@@ -79,7 +79,7 @@ var (
 	}
 	ErrInsufficientScope = &RFC6749Error{
 		ErrorField:       errInsufficientScopeName,
-		DescriptionField: "The request requires higher privileges than provided by the access token.",
+		DescriptionField: "The request requires higher privileges than provided by the Access Token.",
 		CodeField:        http.StatusForbidden,
 	}
 	ErrServerError = &RFC6749Error{

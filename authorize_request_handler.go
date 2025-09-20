@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -250,9 +251,8 @@ const (
 	debugRequestObjectSignedAbsentClaim             = "The OAuth 2.0 client with id '%s' provided a request object that was signed but it did not include the '%s' claim which is required."
 )
 
-func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *AuthorizeRequest) error {
-	// Fetch redirect URI from request
-	rawRedirURI := request.Form.Get(consts.FormParameterRedirectURI)
+func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *AuthorizeRequest) (err error) {
+	raw := request.Form.Get(consts.FormParameterRedirectURI)
 
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
 	//
@@ -260,19 +260,21 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 	// Implicit Flow - https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthRequest
 	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
 	//
-	// Note: as per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
-	if len(rawRedirURI) == 0 && request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+	// Note: As per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
+	if len(raw) == 0 && request.GetRequestedScopes().Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
 	}
 
-	// Validate redirect uri
-	redirectURI, err := MatchRedirectURIWithClientRedirectURIs(rawRedirURI, request.Client)
-	if err != nil {
+	var redirectURI *url.URL
+
+	if redirectURI, err = MatchRedirectURIWithClientRedirectURIs(raw, request.Client); err != nil {
 		return err
 	} else if !IsValidRedirectURI(redirectURI) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("The redirect URI '%s' contains an illegal character (for example #) or is otherwise invalid.", redirectURI))
 	}
+
 	request.RedirectURI = redirectURI
+
 	return nil
 }
 

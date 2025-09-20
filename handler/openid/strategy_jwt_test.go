@@ -110,7 +110,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because expiry claim can not be in the past.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because expiry claim can not be in the past.",
 		},
 		{
 			name: "ShouldFailAuthMaxAgeNoAuthTime",
@@ -127,7 +127,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because authentication time claim is required when max_age is set.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time claim is required when max_age is set.",
 		},
 		{
 			name: "ShouldFailEmptySubject",
@@ -140,7 +140,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because subject is an empty string.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because subject is an empty string.",
 		},
 		{
 			name: "ShouldPassWithSubject",
@@ -189,7 +189,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because authentication time does not satisfy max_age time.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time does not satisfy max_age time.",
 		},
 		{
 			name: "ShouldFailPromptNoneAndAuthTimeIndicatesFreshLogin",
@@ -209,7 +209,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because prompt was set to 'none' but auth_time ('2001-09-09 01:46:40 +0000 UTC') happened after the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was logged in during this request which is not allowed.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because prompt was set to 'none' but auth_time ('2001-09-09 01:46:40 +0000 UTC') happened after the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was logged in during this request which is not allowed.",
 		},
 		{
 			name: "ShouldPassPromptNoneWithAuthTimeFreshLoginFlowRefresh",
@@ -280,7 +280,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate id token because prompt was set to 'login' but auth_time ('2001-09-09 00:46:40 +0000 UTC') happened before the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was not re-authenticated which is forbidden.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because prompt was set to 'login' but auth_time ('2001-09-09 00:46:40 +0000 UTC') happened before the authorization request ('2001-09-09 01:45:40 +0000 UTC') was registered, indicating that the user was not re-authenticated which is forbidden.",
 		},
 		{
 			name: "ShouldPassIDTokenHintSubjectMatches",
@@ -347,7 +347,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 
 				return requester
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Subject from authorization mismatches id token subject from 'id_token_hint'.",
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Subject from authorization mismatches ID Token subject from 'id_token_hint'.",
 		},
 	}
 

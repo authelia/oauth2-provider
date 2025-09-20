@@ -152,7 +152,7 @@ func TestValidatePrompt(t *testing.T) {
 			name:     "ShouldFailPromptFoo",
 			prompt:   "foo",
 			isPublic: false,
-			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Used unknown value '[foo]' for prompt parameter",
+			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'foo' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
 			session: &DefaultSession{
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
@@ -249,7 +249,7 @@ func TestValidatePrompt(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
+			session, err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
 					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},
 					Client:  &oauth2.DefaultClient{Public: tc.isPublic},
@@ -260,8 +260,10 @@ func TestValidatePrompt(t *testing.T) {
 
 			if tc.err != "" {
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+				assert.Nil(t, session)
 			} else {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.NotNil(t, session)
 			}
 		})
 	}

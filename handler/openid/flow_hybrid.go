@@ -39,7 +39,7 @@ var (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
+func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) (err error) {
 	if len(requester.GetResponseTypes()) < 2 {
 		return nil
 	}
@@ -51,6 +51,16 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	requester.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
 	// There is no requirement to check response types here as they are validated in the AuthorizeRequestHandler.
+
+	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, requester); err != nil {
+		return err
+	}
+
+	var session Session
+
+	if session, err = c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, requester); err != nil {
+		return err
+	}
 
 	// The nonce is actually not required for hybrid flows. It fails the OpenID Connect Conformity
 	// Test Module "oidcc-ensure-request-without-nonce-succeeds-for-code-flow" if enabled.
@@ -65,26 +75,6 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
 	}
 
-	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
-	//
-	// Authorization Code Flow - https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
-	// Implicit Flow - https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthRequest
-	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
-	//
-	// Note: as per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
-	if len(requester.GetRequestForm().Get(consts.FormParameterRedirectURI)) == 0 {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
-	}
-
-	session, ok := requester.GetSession().(Session)
-	if !ok {
-		return errorsx.WithStack(ErrInvalidSession)
-	}
-
-	if err := c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, requester); err != nil {
-		return err
-	}
-
 	client := requester.GetClient()
 	for _, scope := range requester.GetRequestedScopes() {
 		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
@@ -94,10 +84,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	claims := session.IDTokenClaims()
 
-	var (
-		hash string
-		err  error
-	)
+	var hash string
 
 	// FAPI 1.0 Advanced. This fulfills the ID Token as a detached signature requirement. It should be noted that in
 	// the FAPI 2.0 profile this is replaced by PKCE and PAR.
@@ -173,6 +160,8 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 		claims.AccessTokenHash = hash
 	}
+
+	var ok bool
 
 	if _, ok = responder.GetParameters()[consts.FormParameterState]; !ok {
 		responder.AddParameter(consts.FormParameterState, requester.GetState())

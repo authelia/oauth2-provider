@@ -78,11 +78,11 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		hint := "The authorization code has already been used."
 		debug := ""
 		if revErr := c.TokenRevocationStorage.RevokeAccessToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the access token revocation."
+			hint += " Additionally, an error occurred during processing the Access Token revocation."
 			debug += "Revocation of access_token lead to error " + revErr.Error() + "."
 		}
 		if revErr := c.TokenRevocationStorage.RevokeRefreshToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the refresh token revocation."
+			hint += " Additionally, an error occurred during processing the Refresh Token revocation."
 			debug += "Revocation of refresh_token lead to error " + revErr.Error() + "."
 		}
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))

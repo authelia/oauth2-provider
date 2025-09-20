@@ -32,7 +32,7 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	}
 
 	if !authorize.GetGrantedScopes().Has(consts.ScopeOpenID) {
-		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration."))
+		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect 1.0 session was found but the 'openid' scope is missing, probably due to a broken code configuration."))
 	}
 
 	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
@@ -41,12 +41,12 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 
 	session, ok := authorize.GetSession().(Session)
 	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required."))
 	}
 
 	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}
 
 	if err = c.OpenIDConnectRequestStorage.DeleteOpenIDConnectSession(ctx, code); err != nil {

@@ -354,8 +354,8 @@ type AuthorizeRequester interface {
 	// DidHandleAllResponseTypes returns if all requested response types have been handled correctly
 	DidHandleAllResponseTypes() (didHandle bool)
 
-	// GetRedirectURI returns the requested redirect URI
-	GetRedirectURI() (redirectURL *url.URL)
+	// GetRedirectURI returns the requested redirect URI.
+	GetRedirectURI() (uri *url.URL)
 
 	// IsRedirectURIValid returns false if the redirect is not rfc-conform (i.e. missing client, not on white list,
 	// or malformed)
@@ -364,13 +364,13 @@ type AuthorizeRequester interface {
 	// GetState returns the request's state.
 	GetState() (state string)
 
-	// GetResponseMode returns response_mode of the authorization request
+	// GetResponseMode returns response_mode of the authorization request.
 	GetResponseMode() (responseMode ResponseModeType)
 
-	// SetDefaultResponseMode sets default response mode for a response type in a flow
+	// SetDefaultResponseMode sets default response mode for a response type in a flow.
 	SetDefaultResponseMode(responseMode ResponseModeType)
 
-	// GetDefaultResponseMode gets default response mode for a response type in a flow
+	// GetDefaultResponseMode gets default response mode for a response type in a flow.
 	GetDefaultResponseMode() (responseMode ResponseModeType)
 
 	Requester
@@ -378,16 +378,16 @@ type AuthorizeRequester interface {
 
 // DeviceAuthorizeRequester is a device authorization endpoint's request context.
 type DeviceAuthorizeRequester interface {
-	// SetDeviceCodeSignature set the device code signature
+	// SetDeviceCodeSignature set the device code signature.
 	SetDeviceCodeSignature(signature string)
 
-	// GetDeviceCodeSignature returns the device code signature
+	// GetDeviceCodeSignature returns the device code signature.
 	GetDeviceCodeSignature() (signature string)
 
-	// SetUserCodeSignature set the user code signature
+	// SetUserCodeSignature set the user code signature.
 	SetUserCodeSignature(signature string)
 
-	// GetUserCodeSignature returns the user code signature
+	// GetUserCodeSignature returns the user code signature.
 	GetUserCodeSignature() (signature string)
 
 	SetStatus(status DeviceAuthorizeStatus)
@@ -416,7 +416,7 @@ type AccessResponder interface {
 	// SetAccessToken sets the responses mandatory access token.
 	SetAccessToken(token string)
 
-	// SetTokenType set's the responses mandatory token type
+	// SetTokenType set's the responses mandatory token type.
 	SetTokenType(tokenType string)
 
 	// GetAccessToken returns the responses access token.
@@ -434,37 +434,37 @@ type AuthorizeResponder interface {
 	// GetCode returns the response's authorize code if set.
 	GetCode() (code string)
 
-	// GetHeader returns the response's header
+	// GetHeader returns the response's header.
 	GetHeader() (header http.Header)
 
-	// AddHeader adds a header key value pair to the response
+	// AddHeader adds a header key value pair to the response.
 	AddHeader(key, value string)
 
-	// GetParameters returns the response's parameters
+	// GetParameters returns the response's parameters.
 	GetParameters() (query url.Values)
 
-	// AddParameter adds key value pair to the response
+	// AddParameter adds key value pair to the response.
 	AddParameter(key, value string)
 }
 
-// PushedAuthorizeResponder is the response object for PAR
+// PushedAuthorizeResponder is the response object for PAR.
 type PushedAuthorizeResponder interface {
 	// GetRequestURI returns the request_uri
 	GetRequestURI() (uri string)
 
-	// SetRequestURI sets the request_uri
+	// SetRequestURI sets the request_uri.
 	SetRequestURI(requestURI string)
 
-	// GetExpiresIn gets the expires_in
+	// GetExpiresIn gets the expires_in.
 	GetExpiresIn() (expires int)
 
-	// SetExpiresIn sets the expires_in
+	// SetExpiresIn sets the expires_in.
 	SetExpiresIn(seconds int)
 
-	// GetHeader returns the response's header
+	// GetHeader returns the response's header.
 	GetHeader() (header http.Header)
 
-	// AddHeader adds a header key value pair to the response
+	// AddHeader adds a header key value pair to the response.
 	AddHeader(key, value string)
 
 	// SetExtra sets a key value pair for the response.
@@ -482,10 +482,10 @@ type DeviceAuthorizeResponder interface {
 
 	SetDeviceCode(code string)
 
-	// GetHeader returns the response's header
+	// GetHeader returns the response's header.
 	GetHeader() (header http.Header)
 
-	// AddHeader adds an header key value pair to the response
+	// AddHeader adds an header key value pair to the response.
 	AddHeader(key, value string)
 
 	GetUserCode() (code string)
@@ -520,22 +520,22 @@ type DeviceAuthorizeResponder interface {
 
 // DeviceUserAuthorizeResponder is device grant user verification endpoint response.
 type DeviceUserAuthorizeResponder interface {
-	// GetHeader returns the response's header
+	// GetHeader returns the response's header.
 	GetHeader() (header http.Header)
 
-	// AddHeader adds an header key value pair to the response
+	// AddHeader adds an header key value pair to the response.
 	AddHeader(key, value string)
 
-	// GetParameters returns the response's parameters
+	// GetParameters returns the response's parameters.
 	GetParameters() (query url.Values)
 
-	// AddParameter adds key value pair to the response
+	// AddParameter adds key value pair to the response.
 	AddParameter(key, value string)
 
-	// GetStatus returns the device grant user verification status
+	// GetStatus returns the device grant user verification status.
 	GetStatus() (status string)
 
-	// SetStatus sets the device grant user verification status
+	// SetStatus sets the device grant user verification status.
 	SetStatus(status string)
 
 	// SetExtra sets a key value pair for the access response.
@@ -548,9 +548,9 @@ type DeviceUserAuthorizeResponder interface {
 	ToMap() (values map[string]any)
 }
 
-// G11NContext is the globalization context
+// G11NContext is the globalization context.
 type G11NContext interface {
-	// GetLang returns the current language in the context
+	// GetLang returns the current language in the context.
 	GetLang() (lang language.Tag)
 }
 

@@ -145,12 +145,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	session, ok := requester.GetSession().(Session)
 	if !ok {
-		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because session must be of type oauth2/handler/openid.Session."))
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required"))
 	}
 
 	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
-		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because subject is an empty string."))
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}
 
 	jwtClient := jwt.NewIDTokenClient(requester.GetClient())
@@ -172,18 +172,18 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		if maxAge > 0 {
 			switch {
 			case claims.AuthTime == nil, claims.AuthTime.IsZero():
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time claim is required when max_age is set."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when max_age is set."))
 			case rat.IsZero():
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because requested at value is required when max_age is set."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because requested at value is required when max_age is set."))
 			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(rat):
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because authentication time does not satisfy max_age time."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time does not satisfy max_age time."))
 			}
 		}
 
 		prompt := requester.GetRequestForm().Get(consts.FormParameterPrompt)
 		if prompt != "" {
 			if claims.AuthTime == nil || claims.AuthTime.IsZero() {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in id token claims."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in ID Token claims."))
 			}
 		}
 
@@ -191,12 +191,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		case consts.PromptTypeNone:
 			if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate id token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
+					WithDebugf("Failed to generate ID Token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 			}
 		case consts.PromptTypeLogin:
 			if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().Before(rat) {
 				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate id token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
+					WithDebugf("Failed to generate ID Token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 			}
 		}
 
@@ -215,15 +215,15 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
 			} else if err != nil {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode id token from 'id_token_hint' parameter because %s.", err.Error()))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode ID Token from 'id_token_hint' parameter because %s.", err.Error()))
 			}
 
 			var subHint string
 
 			if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Provided id token from 'id_token_hint' does not have a subject."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Provided ID Token from 'id_token_hint' does not have a subject."))
 			} else if subHint != claims.Subject {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Subject from authorization mismatches id token subject from 'id_token_hint'."))
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Subject from authorization mismatches ID Token subject from 'id_token_hint'."))
 			}
 		}
 	}
@@ -233,7 +233,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	if claims.ExpirationTime.Before(time.Now().UTC()) {
-		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate id token because expiry claim can not be in the past."))
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because expiry claim can not be in the past."))
 	}
 
 	if claims.AuthTime == nil || claims.AuthTime.IsZero() {

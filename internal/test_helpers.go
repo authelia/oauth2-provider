@@ -49,6 +49,8 @@ func RequireEqualDuration(t *testing.T, expected time.Duration, actual time.Dura
 }
 
 func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precision time.Duration) {
+	t.Helper()
+
 	delta := expected.Sub(actual)
 	if delta < 0 {
 		delta = -delta

@@ -9,9 +9,9 @@
     ":separatePatchReleases"
   ],
   "ignorePresets": [
+    ":combinePatchMinorReleases",
     ":prHourlyLimit2",
-    ":semanticPrefixFixDepsChoreOthers",
-    "workarounds:all"
+    ":semanticPrefixFixDepsChoreOthers"
   ],
   "enabledManagers": [
     "gomod",
@@ -23,5 +23,17 @@
   "postUpdateOptions": [
     "gomodTidy",
     "gomodMassage"
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "digest",
+        "minor",
+        "patch"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    }
   ]
 }

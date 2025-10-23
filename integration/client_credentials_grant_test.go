@@ -16,7 +16,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
@@ -84,10 +83,10 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			setup: func() {
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
-				var j json.RawMessage
+				var j map[string]any
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
+				assert.Equal(t, oauthClient.ClientID, j[consts.ClaimClientIdentifier])
+				assert.Equal(t, "oauth2", j[consts.ClaimScope])
 			},
 		},
 		{
@@ -95,11 +94,11 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			setup: func() {
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
-				var j json.RawMessage
+				var j map[string]any
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
+				assert.Equal(t, oauthClient.ClientID, j[consts.ClaimClientIdentifier])
+				assert.Equal(t, "oauth2", j[consts.ClaimScope])
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
 				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
@@ -114,11 +113,11 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 				oauthClient.ClientID = testClientIDLifespan
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
-				var j json.RawMessage
+				var j map[string]any
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
-				assert.Equal(t, oauthClient.ClientID, gjson.GetBytes(j, consts.ClaimClientIdentifier).String())
-				assert.Equal(t, "oauth2", gjson.GetBytes(j, consts.ClaimScope).String())
+				assert.Equal(t, oauthClient.ClientID, j[consts.ClaimClientIdentifier])
+				assert.Equal(t, "oauth2", j[consts.ClaimScope])
 
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)

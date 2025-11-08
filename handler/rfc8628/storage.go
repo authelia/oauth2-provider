@@ -14,8 +14,8 @@ type Storage interface {
 	UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 
 	// GetDeviceCodeSession hydrates the session based on the given device code and returns the device request.
-	// If the device code has been invalidated with `InvalidateDeviceCodeSession`, this
-	// method should return the ErrInvalidatedDeviceCode error.
+	// If the device code has been invalidated with `InvalidateDeviceCodeSession`, this method should return
+	// the oauth2.ErrInvalidatedDeviceCode error.
 	//
 	// Make sure to also return the oauth2.Requester value when returning the oauth2.ErrInvalidatedDeviceCode error.
 	GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error)

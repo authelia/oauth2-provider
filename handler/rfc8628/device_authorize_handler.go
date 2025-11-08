@@ -11,6 +11,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// DeviceAuthorizeHandler implements the Device Authorization Grant Flow's relying party interactions as defined in
+// RFC8638 Section 3.1 and Section 3.2.
+//
+// See: https://tools.ietf.org/html/rfc8628#section-3.1 and https://tools.ietf.org/html/rfc8628#section-3.2
 type DeviceAuthorizeHandler struct {
 	Storage  Storage
 	Strategy CodeStrategy
@@ -19,8 +23,10 @@ type DeviceAuthorizeHandler struct {
 	}
 }
 
-// HandleRFC8628DeviceAuthorizeEndpointRequest is a response handler for the Device Authorization Grant as
-// defined in https://tools.ietf.org/html/rfc8628#section-3.1
+// HandleRFC8628DeviceAuthorizeEndpointRequest implements the Device Authorization Grant Flow's relying party
+// Device Authorization Request and Device Authorization Response as defined in RFC8638 Section 3.1 and Section 3.2.
+//
+// See: https://tools.ietf.org/html/rfc8628#section-3.1 and https://tools.ietf.org/html/rfc8628#section-3.2
 func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, dar oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceAuthorizeResponder) (err error) {
 	session := dar.GetSession()
 

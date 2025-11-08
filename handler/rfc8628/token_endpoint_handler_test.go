@@ -485,7 +485,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
 		Request: oauth2.Request{
 			Client: &oauth2.DefaultClient{
-				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, "refresh_token"},
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken},
 			},
 			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},
@@ -495,7 +495,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 	deviceAuthReq := &oauth2.DeviceAuthorizeRequest{
 		Request: oauth2.Request{
 			Client: &oauth2.DefaultClient{
-				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, "refresh_token"},
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken},
 			},
 			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},

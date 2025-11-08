@@ -87,7 +87,6 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 		return "", "", nil, errorsx.WithStack(oauth2.ErrAuthorizationPending.WithHintf("The user has not authorized the request."))
 	}
 
-	// Update status and session into access request and device authorization request.
 	deviceAuthReq.Merge(userAuthReq)
 	requester.SetSession(deviceAuthReq.GetSession())
 	requester.SetID(deviceAuthReq.GetID())

@@ -10,6 +10,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// IDTokenTypeHandler is a response handler for the ID Token grant using the implicit grant type
+// as defined in RFC8693.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
 	Config             oauth2.Configurator
 	Strategy           jwt.Strategy
@@ -18,7 +22,9 @@ type IDTokenTypeHandler struct {
 	Storage
 }
 
-// HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
+// HandleTokenEndpointRequest implements RFC8693 Section 2.1 and the oauth2.TokenEndpointHandler.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -57,7 +63,9 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 	return nil
 }
 
-// PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
+// PopulateTokenEndpointResponse implements RFC8693 Section 2.2 and the oauth2.TokenEndpointHandler.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2
 func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, responder oauth2.AccessResponder) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -87,15 +95,16 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 	return nil
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped, which is not possible for RFC8693.
 func (c *IDTokenTypeHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled which is true only if the
+// 'grant_type' is exactly and only 'urn:ietf:params:oauth:grant-type:token-exchange'.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "password".
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
@@ -122,13 +131,13 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 }
 
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
-	sess, ok := request.GetSession().(openid.Session)
+	session, ok := request.GetSession().(openid.Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug(
 			"Failed to generate ID Token because session must be of type 'openid.Session'."))
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}

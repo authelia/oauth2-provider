@@ -132,9 +132,26 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
+	var (
+		allowEmptyType bool
+		types          []string
+	)
+
+	if vclient, ok := client.(JWTSecuredAuthorizationRequestJWTValidationOptionsClient); ok {
+		allowEmptyType = vclient.GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowEmptyType()
+		types = vclient.GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowTypes()
+
+		if len(types) == 0 {
+			types = []string{jwt.JSONWebTokenTypeJWTSecuredAuthorizationRequest, jwt.JSONWebTokenTypeJWT}
+		}
+	} else {
+		allowEmptyType = false
+		types = []string{jwt.JSONWebTokenTypeJWTSecuredAuthorizationRequest, jwt.JSONWebTokenTypeJWT}
+	}
+
 	optsHeader := []jwt.HeaderValidationOption{
-		jwt.ValidateTypes(jwt.JSONWebTokenTypeJWTSecuredAuthorizationRequest, jwt.JSONWebTokenTypeJWT),
-		jwt.ValidateAllowEmptyType(true),
+		jwt.ValidateTypes(types...),
+		jwt.ValidateAllowEmptyType(allowEmptyType),
 		jwt.ValidateKeyID(client.GetRequestObjectSigningKeyID()),
 		jwt.ValidateAlgorithm(client.GetRequestObjectSigningAlg()),
 		jwt.ValidateEncryptionKeyID(client.GetRequestObjectEncryptionKeyID()),

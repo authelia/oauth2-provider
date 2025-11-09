@@ -324,9 +324,26 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, handler, audience, err))
 	}
 
+	var (
+		allowEmptyType bool
+		types          []string
+	)
+
+	if vclient, ok := client.(ClientAssertionJWTValidationOptionsClient); ok {
+		allowEmptyType = vclient.GetClientAssertionJWTValidationHeaderAllowEmptyType()
+		types = vclient.GetClientAssertionJWTValidationHeaderAllowTypes()
+
+		if len(types) == 0 {
+			types = []string{jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT}
+		}
+	} else {
+		allowEmptyType = true
+		types = []string{jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT}
+	}
+
 	optsHeader := []jwt.HeaderValidationOption{
-		jwt.ValidateTypes(jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT),
-		jwt.ValidateAllowEmptyType(true),
+		jwt.ValidateTypes(types...),
+		jwt.ValidateAllowEmptyType(allowEmptyType),
 		jwt.ValidateKeyID(handler.GetAuthSigningKeyID(client)),
 		jwt.ValidateAlgorithm(handler.GetAuthSigningAlg(client)),
 		jwt.ValidateEncryptionKeyID(handler.GetAuthEncryptionKeyID(client)),

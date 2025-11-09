@@ -425,6 +425,24 @@ type IntrospectionJWTResponseClient interface {
 	Client
 }
 
+// ClientAssertionJWTValidationOptionsClient allows extending the client assertion validation and strengthening the
+// security posture of client assertion through strict typing.
+type ClientAssertionJWTValidationOptionsClient interface {
+	GetClientAssertionJWTValidationHeaderAllowEmptyType() (allow bool)
+	GetClientAssertionJWTValidationHeaderAllowTypes() (algs []string)
+
+	Client
+}
+
+// JWTSecuredAuthorizationRequestJWTValidationOptionsClient allows extending the JWT-Secured Authorization Request (JAR)
+// validation and strengthening the security posture of JAR through strict typing.
+type JWTSecuredAuthorizationRequestJWTValidationOptionsClient interface {
+	GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowEmptyType() (allow bool)
+	GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowTypes() (algs []string)
+
+	Client
+}
+
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`

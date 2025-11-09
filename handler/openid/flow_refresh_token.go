@@ -36,28 +36,16 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'refresh_token'."))
 	}
 
-	// Refresh tokens can only be issued by an authorize_code which in turn disables the need to check if the id_token
-	// response type is enabled by the client.
-	//
-	// if !request.GetClient().GetResponseTypes().Has("id_token") {
-	// 	return errorsx.WithStack(oauth2.ErrUnknownRequest.WithDebug("The client is not allowed to use response type id_token"))
-	// }
-
-	sess, ok := request.GetSession().(Session)
+	session, ok := request.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.
 			WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required."))
 	}
 
-	// We need to reset the expires at value as this would be the previous expiry.
-	sess.IDTokenClaims().ExpirationTime = jwt.NewNumericDate(time.Time{})
-
-	// These will be recomputed in PopulateTokenEndpointResponse
-	sess.IDTokenClaims().JTI = ""
-	sess.IDTokenClaims().AccessTokenHash = ""
-
-	// We are not issuing a code so there is no need for this field.
-	sess.IDTokenClaims().CodeHash = ""
+	session.IDTokenClaims().ExpirationTime = jwt.NewNumericDate(time.Time{})
+	session.IDTokenClaims().JTI = ""
+	session.IDTokenClaims().AccessTokenHash = ""
+	session.IDTokenClaims().CodeHash = ""
 
 	return nil
 }
@@ -75,17 +63,12 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'refresh_token'."))
 	}
 
-	// Disabled because this is already handled at the authorize_request_handler
-	// if !requester.GetClient().GetResponseTypes().Has("id_token") {
-	// 	 return errorsx.WithStack(oauth2.ErrUnknownRequest.WithDebug("The client is not allowed to use response type id_token"))
-	// }
-
-	sess, ok := requester.GetSession().(Session)
+	session, ok := requester.GetSession().(Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required."))
 	}
 
-	claims := sess.IDTokenClaims()
+	claims := session.IDTokenClaims()
 	if claims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}

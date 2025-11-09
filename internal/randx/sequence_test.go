@@ -84,6 +84,6 @@ func BenchmarkTestInt64(b *testing.B) {
 	length := 25
 	pattern := []rune("abcdefghijklmnopqrstuvwxyz")
 	for i := 0; i < b.N; i++ {
-		RuneSequence(length, pattern)
+		_, _ = RuneSequence(length, pattern)
 	}
 }

@@ -27,7 +27,7 @@ const (
 	// JSONWebTokenTypeLogoutToken represents the JWT type value for OpenID Connect Back-Channel Logout 1.0.
 	//
 	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
-	JSONWebTokenTypeLogoutToken = "logout+jwt"
+	JSONWebTokenTypeLogoutToken = "logout+jwt" //nolint:gosec // This is a credential type, not a credential.
 
 	// JSONWebTokenTypeJWTSecuredAuthorizationRequest represents the JWT type value for JWT Secured Authorization Requests.
 	//

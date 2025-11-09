@@ -56,8 +56,6 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	switch {
 	case err == nil:
 		if err = c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); err != nil {
-			// The authorization server MUST ... validate the refresh token.
-			// This needs to happen after store retrieval for the session to be hydrated properly.
 			if errors.Is(err, oauth2.ErrTokenExpired) {
 				return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 			}
@@ -65,7 +63,6 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
-		// Detected refresh token reuse.
 		if e := c.handleRefreshTokenReuse(ctx, signature, orequest); e != nil {
 			return errorsx.WithStack(e)
 		}
@@ -83,7 +80,6 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		return errorsx.WithStack(oauth2.ErrScopeNotGranted.WithHint(hint))
 	}
 
-	// The authorization server MUST ... and ensure that the refresh token was issued to the authenticated client
 	if orequest.GetClient().GetID() != requester.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."))
 	}

@@ -19,19 +19,20 @@ type UserAuthorizeHandler struct {
 	}
 }
 
-// PopulateRFC8628UserAuthorizeEndpointResponse is a response handler for the Device Authorisation Grant as
-// defined in https://tools.ietf.org/html/rfc8628#section-3.1
+// PopulateRFC8628UserAuthorizeEndpointResponse implements the Device Authorization Grant Flow's resource owner / user
+// interactions Device Authorization Request as defined in RFC8638 Section 3.3 and 3.4.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.3 and https://datatracker.ietf.org/doc/html/rfc8628#section-3.4
 func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request oauth2.DeviceAuthorizeRequester, response oauth2.DeviceUserAuthorizeResponder) (err error) {
 	status := request.GetStatus()
 
-	// The request shall be either approved or denied.
+	// At this stage the request must be either approved or denied.
 	if status != oauth2.DeviceAuthorizeStatusApproved && status != oauth2.DeviceAuthorizeStatusDenied {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("Failed to perform device authorization because the request status is invalid."))
 	}
 
 	response.SetStatus(oauth2.DeviceAuthorizeStatusToString(status))
 
-	// Stores the auth session and approval status into user code session instead of device code session.
 	if err = d.Storage.UpdateDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -39,18 +40,22 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 	return nil
 }
 
+// HandleRFC8628UserAuthorizeEndpointRequest implements the Device Authorization Grant Flow's resource owner / user
+// interactions Device Authorization Response as defined in RFC8638 Section 3.5.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
 func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester) (err error) {
 	var (
-		userCode, signature string
+		code, signature string
 
 		storedReq oauth2.DeviceAuthorizeRequester
 	)
 
-	if userCode = request.GetRequestForm().Get(consts.FormParameterUserCode); len(userCode) == 0 {
+	if code = request.GetRequestForm().Get(consts.FormParameterUserCode); len(code) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user_code is missing."))
 	}
 
-	if signature, err = d.Strategy.RFC8628UserCodeSignature(ctx, userCode); err != nil {
+	if signature, err = d.Strategy.RFC8628UserCodeSignature(ctx, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

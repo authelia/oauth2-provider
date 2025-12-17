@@ -5,3 +5,4 @@
 .github/pull_request_template.md
 CHANGELOG.md
 CONTRIBUTING.md
+pnpm-lock.yaml

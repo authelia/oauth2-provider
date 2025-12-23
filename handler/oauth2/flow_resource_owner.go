@@ -87,20 +87,21 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
+	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	accessTokenSignature, err := c.IssueAccessToken(ctx, atLifespan, requester, responder)
+	if err != nil {
+		return err
+	}
+
 	var refresh, refreshSignature string
 	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || requester.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
 		var err error
 		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
+		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessTokenSignature, requester.Sanitize([]string{})); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
-	}
-
-	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	if err := c.IssueAccessToken(ctx, atLifespan, requester, responder); err != nil {
-		return err
 	}
 
 	if refresh != "" {

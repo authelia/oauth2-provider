@@ -44,7 +44,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return nil
 	}
 
-	if !c.secureChecker(ctx, requester.GetRedirectURI()) {
+	if !c.isRedirectURISecure(ctx, requester.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
@@ -71,7 +71,6 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))
 	}
 
-	// generate an ID
 	stateKey, err := hmac.RandomBytes(defaultPARKeyLength)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHint("Unable to generate the random part of the request_uri.").WithWrap(err).WithDebugError(err))
@@ -79,7 +78,6 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 
 	requestURI := fmt.Sprintf("%s%s", config.GetPushedAuthorizeRequestURIPrefix(ctx), base64.RawURLEncoding.EncodeToString(stateKey))
 
-	// store
 	if err = storage.CreatePARSession(ctx, requestURI, requester); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("Unable to store the PAR session").WithWrap(err).WithDebugError(err))
 	}
@@ -89,11 +87,12 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
-func (c *PushedAuthorizeHandler) secureChecker(ctx context.Context, u *url.URL) bool {
-	isRedirectURISecure := c.Config.GetRedirectSecureChecker(ctx)
-	if isRedirectURISecure == nil {
-		isRedirectURISecure = oauth2.IsRedirectURISecure
+func (c *PushedAuthorizeHandler) isRedirectURISecure(ctx context.Context, redirectURI *url.URL) (secure bool) {
+	checker := c.Config.GetRedirectSecureChecker(ctx)
+
+	if checker == nil {
+		checker = oauth2.IsRedirectURISecure
 	}
 
-	return isRedirectURISecure(ctx, u)
+	return checker(ctx, redirectURI)
 }

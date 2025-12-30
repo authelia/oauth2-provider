@@ -40,14 +40,6 @@ var (
 	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
 )
 
-func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Context) (checker func(context.Context, *url.URL) bool) {
-	if checker = c.Config.GetRedirectSecureChecker(ctx); checker != nil {
-		return checker
-	}
-
-	return oauth2.IsRedirectURISecure
-}
-
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
@@ -58,7 +50,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 
 	client := requester.GetClient()
 
-	if client.IsPublic() && !c.GetRedirectSecureChecker(ctx)(ctx, requester.GetRedirectURI()) {
+	if client.IsPublic() && !c.isRedirectURISecure(ctx, requester.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
@@ -104,4 +96,14 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 	}
 
 	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
+}
+
+func (c *AuthorizeExplicitGrantHandler) isRedirectURISecure(ctx context.Context, redirectURI *url.URL) (secure bool) {
+	checker := c.Config.GetRedirectSecureChecker(ctx)
+
+	if checker == nil {
+		checker = oauth2.IsRedirectURISecure
+	}
+
+	return checker(ctx, redirectURI)
 }

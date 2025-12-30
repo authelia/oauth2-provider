@@ -5,6 +5,7 @@ package openid
 
 import (
 	"context"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -85,9 +86,8 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		//  unless the identity of the client can be proven, the request SHOULD
 		//  be processed as if no previous request had been approved.
 
-		checker := v.Config.GetRedirectSecureChecker(ctx)
 		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-			if !checker(ctx, requester.GetRedirectURI()) {
+			if !v.isRedirectURISecure(ctx, requester.GetRedirectURI()) {
 				return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested."))
 			}
 		}
@@ -145,7 +145,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
 
-		if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
+		if authtime := claims.GetAuthTimeSafe(); authtime.Equal(rat) && authtime.After(rat) {
 			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
@@ -182,6 +182,16 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	}
 
 	return session, nil
+}
+
+func (c *OpenIDConnectRequestValidator) isRedirectURISecure(ctx context.Context, redirectURI *url.URL) (secure bool) {
+	checker := c.Config.GetRedirectSecureChecker(ctx)
+
+	if checker == nil {
+		checker = oauth2.IsRedirectURISecure
+	}
+
+	return checker(ctx, redirectURI)
 }
 
 func isWhitelisted(items []string, whiteList []string) bool {

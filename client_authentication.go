@@ -330,6 +330,48 @@ func (h *RevocationEndpointClientAuthHandler) AllowAuthMethodAny() bool {
 	return true
 }
 
+type PushedAuthorizationRequestEndpointClientAuthHandler struct{}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthMethod(client AuthenticationMethodClient) string {
+	if method := client.GetPushedAuthorizationRequestEndpointAuthMethod(); method != "" {
+		return method
+	}
+
+	return client.GetTokenEndpointAuthMethod()
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthSigningKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthSigningAlg(client AuthenticationMethodClient) string {
+	if alg := client.GetPushedAuthorizationRequestEndpointAuthSigningAlg(); alg != "" {
+		return alg
+	}
+
+	return client.GetTokenEndpointAuthSigningAlg()
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthEncryptionKeyID(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthEncryptionAlg(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) GetAuthEncryptionEnc(client AuthenticationMethodClient) string {
+	return ""
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) Name() string {
+	return "pushed_authorization_request"
+}
+
+func (h *PushedAuthorizationRequestEndpointClientAuthHandler) AllowAuthMethodAny() bool {
+	return false
+}
+
 // PrivateKey properly describes crypto.PrivateKey.
 type PrivateKey interface {
 	Public() crypto.PublicKey

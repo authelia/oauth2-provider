@@ -32,7 +32,7 @@ func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Con
 
 	requester.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
-	if !c.GetRedirectSecureChecker(ctx)(ctx, requester.GetRedirectURI()) {
+	if !c.isRedirectURISecure(ctx, requester.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
@@ -58,10 +58,12 @@ func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Con
 	return nil
 }
 
-func (c *NoneResponseTypeHandler) GetRedirectSecureChecker(ctx context.Context) func(context.Context, *url.URL) bool {
-	if c.Config.GetRedirectSecureChecker(ctx) == nil {
-		return oauth2.IsRedirectURISecure
+func (c *NoneResponseTypeHandler) isRedirectURISecure(ctx context.Context, redirectURI *url.URL) (secure bool) {
+	checker := c.Config.GetRedirectSecureChecker(ctx)
+
+	if checker == nil {
+		checker = oauth2.IsRedirectURISecure
 	}
 
-	return c.Config.GetRedirectSecureChecker(ctx)
+	return checker(ctx, redirectURI)
 }

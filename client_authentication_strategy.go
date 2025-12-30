@@ -23,6 +23,7 @@ type DefaultClientAuthenticationStrategy struct {
 		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
 		AllowedJWTAssertionAudiencesProvider
+		ClockConfigProvider
 	}
 }
 
@@ -317,7 +318,9 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	optsClaims := []jwt.ClaimValidationOption{
 		jwt.ValidateAudienceAny(audience...), // Satisfies RFC7523 Section 3 Point 3.
 		jwt.ValidateRequireExpiresAt(),       // Satisfies RFC7523 Section 3 Point 4.
-		jwt.ValidateTimeFunc(time.Now),
+		jwt.ValidateTimeFunc(func() time.Time {
+			return s.Config.GetClock(ctx).Now()
+		}),
 	}
 
 	if err = token.Claims.Valid(optsClaims...); err != nil {

@@ -20,6 +20,7 @@ type OpenIDConnectRefreshHandler struct {
 
 	Config interface {
 		oauth2.IDTokenLifespanProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -76,7 +77,7 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
 	claims.JTI = uuid.New().String()
 	claims.CodeHash = ""
-	claims.IssuedAt = jwt.Now()
+	claims.IssuedAt = jwt.NewNumericDate(c.Config.GetClock(ctx).Now())
 
 	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 

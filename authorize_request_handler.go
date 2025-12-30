@@ -222,7 +222,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	optsValidClaims := []jwt.ClaimValidationOption{
 		jwt.ValidateTimeFunc(func() time.Time {
-			return time.Now().UTC()
+			return f.Config.GetClock(ctx).Now().UTC()
 		}),
 		jwt.ValidateIssuer(client.GetID()),
 		jwt.ValidateDoNotRequireIssuer(),

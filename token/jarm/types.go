@@ -13,6 +13,11 @@ type Configurator interface {
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 
+// ClockProvider describes a type which provides clock functions.
+type ClockProvider interface {
+	Now() time.Time
+}
+
 type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)

@@ -15,7 +15,10 @@ import (
 )
 
 type CustomJWTTypeHandler struct {
-	Config oauth2.RFC8693ConfigProvider
+	Config interface {
+		oauth2.RFC8693ConfigProvider
+		oauth2.ClockConfigProvider
+	}
 
 	jwt.Strategy
 	Storage
@@ -136,7 +139,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 	claims := ftoken.Claims.ToMapClaims()
 
 	if issued, exists := claims[consts.ClaimIssuedAt]; exists {
-		if time.Unix(toInt64(issued), 0).Add(window).Before(time.Now()) {
+		if time.Unix(toInt64(issued), 0).Add(window).Before(c.Config.GetClock(ctx).Now()) {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iat' from token is too far in the past."))
 		}
 	}
@@ -145,7 +148,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is missing."))
 	}
 	expiry := toInt64(claims[consts.ClaimExpirationTime])
-	if time.Now().Add(window).Before(time.Unix(expiry, 0)) {
+	if c.Config.GetClock(ctx).Now().Add(window).Before(time.Unix(expiry, 0)) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is too far in the future."))
 	}
 
@@ -189,7 +192,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
+		claims.ExpirationTime = jwt.NewNumericDate(c.Config.GetClock(ctx).Now().Add(jwtType.Expiry))
 	}
 
 	if claims.Issuer == "" {
@@ -214,7 +217,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 		claims.JTI = uuid.New().String()
 	}
 
-	claims.IssuedAt = jwt.Now()
+	claims.IssuedAt = jwt.NewNumericDate(c.Config.GetClock(ctx).Now())
 
 	var token string
 
@@ -224,7 +227,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 
 	responder.SetAccessToken(token)
 	responder.SetTokenType(oauth2.RFC8693NAToken)
-	responder.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
+	responder.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - c.Config.GetClock(ctx).Now().UTC().UnixNano()))
 
 	return nil
 }

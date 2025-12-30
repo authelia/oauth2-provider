@@ -224,7 +224,6 @@ func (s *MemoryStore) SetClientAssertionJWT(_ context.Context, jti string, exp t
 	s.blacklistedJTIsMutex.Lock()
 	defer s.blacklistedJTIsMutex.Unlock()
 
-	// delete expired jtis
 	for j, e := range s.BlacklistedJTIs {
 		if e.Before(time.Now()) {
 			delete(s.BlacklistedJTIs, j)

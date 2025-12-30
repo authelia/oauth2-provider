@@ -7,9 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewJARMClaims(issuer string, aud ClaimStrings, lifespan time.Duration) *JARMClaims {
-	now := time.Now()
-
+func NewJARMClaims(issuer string, aud ClaimStrings, now time.Time, lifespan time.Duration) *JARMClaims {
 	return &JARMClaims{
 		Issuer:         issuer,
 		Audience:       aud,

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -275,7 +274,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 		claims := jwt.MapClaims{
 			jwt.ClaimJWTID:              jti.String(),
 			jwt.ClaimIssuer:             f.Config.GetIntrospectionIssuer(ctx),
-			jwt.ClaimIssuedAt:           time.Now().UTC().Unix(),
+			jwt.ClaimIssuedAt:           f.Config.GetClock(ctx).Now().UTC().Unix(),
 			jwt.ClaimTokenIntrospection: response,
 		}
 

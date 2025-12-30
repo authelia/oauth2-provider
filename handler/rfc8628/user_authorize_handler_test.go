@@ -25,6 +25,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		Strategy CodeStrategy
 		Config   interface {
 			oauth2.RFC9628DeviceAuthorizeConfigProvider
+			oauth2.ClockConfigProvider
 		}
 	}
 	type args struct {
@@ -214,6 +215,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		Strategy CodeStrategy
 		Config   interface {
 			oauth2.RFC9628DeviceAuthorizeConfigProvider
+			oauth2.ClockConfigProvider
 		}
 	}
 	type args struct {

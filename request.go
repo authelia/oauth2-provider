@@ -27,6 +27,7 @@ type Request struct {
 	Lang              language.Tag `json:"-"`
 }
 
+// TODO: Inject Clock?
 func NewRequest() *Request {
 	return &Request{
 		Client:            &DefaultClient{},

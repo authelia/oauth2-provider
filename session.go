@@ -13,13 +13,9 @@ import (
 // when a session expires or what the subject's name was.
 type Session interface {
 	// SetExpiresAt sets the expiration time of a token.
-	//
-	//  session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
 	SetExpiresAt(key TokenType, exp time.Time)
 
 	// GetExpiresAt returns the expiration time of a token if set, or time.IsZero() if not.
-	//
-	//  session.GetExpiresTimeX(oauth2.AccessToken)
 	GetExpiresAt(key TokenType) time.Time
 
 	// GetUsername returns the username, if set. This is optional and only used during token introspection.

@@ -15,7 +15,10 @@ import (
 )
 
 type RefreshTokenTypeHandler struct {
-	Config               oauth2.RFC8693ConfigProvider
+	Config interface {
+		oauth2.RFC8693ConfigProvider
+		oauth2.ClockConfigProvider
+	}
 	RefreshTokenLifespan time.Duration
 	RefreshTokenScopes   []string
 	hoauth2.CoreStrategy
@@ -153,7 +156,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
-	request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.RefreshToken, c.Config.GetClock(ctx).Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 	refresh, refreshSignature, err := c.GenerateRefreshToken(ctx, request)
 	if err != nil {
 		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
@@ -171,7 +174,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 
 	response.SetAccessToken(refresh)
 	response.SetTokenType("N_A")
-	response.SetExpiresIn(c.getExpiresIn(request, oauth2.RefreshToken, c.RefreshTokenLifespan, time.Now().UTC()))
+	response.SetExpiresIn(c.getExpiresIn(request, oauth2.RefreshToken, c.RefreshTokenLifespan, c.Config.GetClock(ctx).Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 
 	return nil

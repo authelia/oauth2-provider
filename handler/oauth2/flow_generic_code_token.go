@@ -35,6 +35,7 @@ type GenericCodeTokenEndpointHandler struct {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.RefreshTokenScopesProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -147,12 +148,12 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	lifespan = oauth2.GetEffectiveLifespan(requester.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+	requester.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 
 	lifespan = oauth2.GetEffectiveLifespan(requester.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
 	if lifespan > -1 {
-		requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+		requester.GetSession().SetExpiresAt(oauth2.RefreshToken, c.Config.GetClock(ctx).Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil
@@ -224,7 +225,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	responder.SetAccessToken(access)
 	responder.SetTokenType(oauth2.BearerAccessToken)
 	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
+	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, c.Config.GetClock(ctx).Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 
 	if refresh != "" {

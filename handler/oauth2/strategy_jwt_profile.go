@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -25,6 +24,7 @@ type JWTProfileCoreStrategy struct {
 		oauth2.AccessTokenIssuerProvider
 		oauth2.JWTScopeFieldProvider
 		oauth2.JWTProfileAccessTokensProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -179,8 +179,8 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 			requester.GetGrantedAudience(),
 		).
 		WithDefaults(
-			time.Now().UTC(),
-			time.Now().UTC(),
+			s.Config.GetClock(ctx).Now().UTC(),
+			s.Config.GetClock(ctx).Now().UTC(),
 			s.Config.GetAccessTokenIssuer(ctx),
 		).
 		WithScopeField(

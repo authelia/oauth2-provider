@@ -15,7 +15,10 @@ import (
 )
 
 type AccessTokenTypeHandler struct {
-	Config               oauth2.RFC8693ConfigProvider
+	Config               interface {
+		oauth2.RFC8693ConfigProvider
+		oauth2.ClockConfigProvider
+	}
 	AccessTokenLifespan  time.Duration
 	RefreshTokenLifespan time.Duration
 	RefreshTokenScopes   []string
@@ -173,7 +176,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 }
 
 func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(c.AccessTokenLifespan))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(c.AccessTokenLifespan))
 
 	var token, signature string
 
@@ -188,7 +191,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	if issueRefreshToken {
 		var refresh, refreshSignature string
 
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, c.Config.GetClock(ctx).Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 		if refresh, refreshSignature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}
@@ -207,7 +210,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.BearerAccessToken)
-	response.SetExpiresIn(c.getExpiresIn(request, oauth2.AccessToken, c.AccessTokenLifespan, time.Now().UTC()))
+	response.SetExpiresIn(c.getExpiresIn(request, oauth2.AccessToken, c.AccessTokenLifespan, c.Config.GetClock(ctx).Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 
 	return nil

@@ -100,7 +100,9 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	return c.IssueAccessToken(ctx, lifespan, requester, responder)
+	_, err = c.IssueAccessToken(ctx, lifespan, requester, responder)
+
+	return err
 }
 
 func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {

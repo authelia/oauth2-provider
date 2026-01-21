@@ -94,8 +94,10 @@ type StoreAuthorizeCode struct {
 }
 
 type StoreRefreshToken struct {
-	active bool
 	oauth2.Requester
+
+	active      bool
+	atsignature string
 }
 
 func NewExampleStore() *MemoryStore {
@@ -334,7 +336,7 @@ func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature stri
 	return nil
 }
 
-func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
+func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature, accessTokenSignature string, req oauth2.Requester) error {
 	// We first lock refreshTokenRequestIDsMutex and then refreshTokensMutex because this is the same order
 	// locking happens in RevokeRefreshToken and using the same order prevents deadlocks.
 	s.refreshTokenRequestIDsMutex.Lock()
@@ -342,7 +344,7 @@ func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature str
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
-	s.RefreshTokens[signature] = StoreRefreshToken{active: true, Requester: req}
+	s.RefreshTokens[signature] = StoreRefreshToken{active: true, Requester: req, atsignature: accessTokenSignature}
 	s.RefreshTokenRequestIDs[req.GetID()] = signature
 	return nil
 }
@@ -396,11 +398,6 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 		s.RefreshTokens[signature] = rel
 	}
 	return nil
-}
-
-func (s *MemoryStore) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
-	// no configuration option is available; grace period is not available with memory store
-	return s.RevokeRefreshToken(ctx, requestID)
 }
 
 func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) error {
@@ -512,6 +509,14 @@ func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (
 	delete(s.PARSessions, requestURI)
 
 	return nil
+}
+
+func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, refreshTokenSignature string) (err error) {
+	if err = s.RevokeRefreshToken(ctx, requestID); err != nil {
+		return err
+	}
+
+	return s.RevokeAccessToken(ctx, requestID)
 }
 
 func (s *MemoryStore) SetTokenExchangeCustomJWT(ctx context.Context, jti string, exp time.Time) error {

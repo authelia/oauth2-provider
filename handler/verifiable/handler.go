@@ -5,7 +5,6 @@ package verifiable
 
 import (
 	"context"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -21,6 +20,7 @@ const (
 type Handler struct {
 	Config interface {
 		oauth2.VerifiableCredentialsNonceLifespanProvider
+		oauth2.ClockConfigProvider
 	}
 	NonceManager
 }
@@ -47,7 +47,7 @@ func (c *Handler) PopulateTokenEndpointResponse(
 	}
 
 	lifespan := c.Config.GetVerifiableCredentialsNonceLifespan(ctx)
-	expiry := time.Now().UTC().Add(lifespan)
+	expiry := c.Config.GetClock(ctx).Now().UTC().Add(lifespan)
 	nonce, err := c.NewNonce(ctx, response.GetAccessToken(), expiry)
 	if err != nil {
 		return err

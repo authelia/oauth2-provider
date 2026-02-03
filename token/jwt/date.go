@@ -15,7 +15,7 @@ type NumericDate struct {
 }
 
 func Now() *NumericDate {
-	return NewNumericDate(time.Now())
+	return NewNumericDate(TimeFunc())
 }
 
 func NewNumericDate(t time.Time) *NumericDate {

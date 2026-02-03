@@ -150,7 +150,7 @@ func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm 
 			return nil, errorsx.WithStack(ErrServerError.WithDebug("The client is not capable of handling the JWT-Secured Authorization Response Mode."))
 		}
 
-		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, requester.GetSession(), parameters))
+		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, h.Config.GetClock(ctx), jclient, requester.GetSession(), parameters))
 	default:
 		return parameters, nil
 	}
@@ -268,6 +268,7 @@ type ResponseModeHandlerConfigurator interface {
 	MessageCatalogProvider
 	SendDebugMessagesToClientsProvider
 	AuthorizeErrorFieldResponseStrategyProvider
+	ClockConfigProvider
 	UseLegacyErrorFormatProvider
 }
 

@@ -25,17 +25,18 @@ var defaultPrompts = []string{
 	consts.PromptTypeSelectAccount,
 }
 
-type openIDConnectRequestValidatorConfigProvider interface {
+type OpenIDConnectRequestValidatorConfigProvider interface {
 	oauth2.RedirectSecureCheckerProvider
 	oauth2.AllowedPromptsProvider
+	oauth2.ClockConfigProvider
 }
 
 type OpenIDConnectRequestValidator struct {
 	Strategy jwt.Strategy
-	Config   openIDConnectRequestValidatorConfigProvider
+	Config   OpenIDConnectRequestValidatorConfigProvider
 }
 
-func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
+func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config OpenIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
 	return &OpenIDConnectRequestValidator{
 		Strategy: strategy,
 		Config:   config,
@@ -123,7 +124,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	}
 
 	// Adds a bit of wiggle room for timing issues
-	if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
+	if claims.GetAuthTimeSafe().After(v.Config.GetClock(ctx).Now().UTC().Add(time.Second * 5)) {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because authentication time is in the future."))
 	}
 

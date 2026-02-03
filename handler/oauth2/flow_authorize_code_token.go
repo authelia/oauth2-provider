@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -107,11 +106,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	request.SetID(authorizeRequest.GetID())
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 	if rtLifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, c.Config.GetClock(ctx).Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil
@@ -196,7 +195,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	responder.SetAccessToken(access)
 	responder.SetTokenType(oauth2.BearerAccessToken)
 	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
+	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, c.Config.GetClock(ctx).Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 	if refresh != "" {
 		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)

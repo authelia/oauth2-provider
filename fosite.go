@@ -199,6 +199,7 @@ type Configurator interface {
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider
 	AuthorizeErrorFieldResponseStrategyProvider
+	ClockConfigProvider
 	UseLegacyErrorFormatProvider
 }
 

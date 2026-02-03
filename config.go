@@ -402,3 +402,9 @@ type PushedAuthorizeRequestConfigProvider interface {
 type AuthorizeErrorFieldResponseStrategyProvider interface {
 	GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy)
 }
+
+// ClockConfigProvider is the configuration provider for clock functionality.
+type ClockConfigProvider interface {
+	// GetClock returns the configured ClockProvider.
+	GetClock(ctx context.Context) ClockProvider
+}

@@ -13,6 +13,7 @@ import (
 type HandleHelperConfigProvider interface {
 	oauth2.AccessTokenLifespanProvider
 	oauth2.RefreshTokenLifespanProvider
+	oauth2.ClockConfigProvider
 }
 
 type HandleHelper struct {
@@ -34,7 +35,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 
 	responder.SetAccessToken(token)
 	responder.SetTokenType(oauth2.BearerAccessToken)
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
+	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, h.Config.GetClock(ctx).Now().UTC()))
 	responder.SetScopes(requester.GetGrantedScopes())
 
 	return nil

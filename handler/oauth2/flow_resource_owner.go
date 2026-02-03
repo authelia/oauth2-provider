@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -29,6 +28,7 @@ type ResourceOwnerPasswordCredentialsGrantHandler struct {
 		oauth2.RefreshTokenScopesProvider
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.AccessTokenLifespanProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -71,11 +71,11 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	delete(request.GetRequestForm(), consts.FormParameterPassword)
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 	if rtLifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, c.Config.GetClock(ctx).Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil

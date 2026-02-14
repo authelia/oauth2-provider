@@ -6,6 +6,7 @@ toolchain go1.26.0
 
 require (
 	github.com/dgraph-io/ristretto v0.2.0
+	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1

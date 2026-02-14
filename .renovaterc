@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "constraints": {
-    "go": "1.25"
+    "go": "1.26"
   },
   "extends": [
     "config:recommended",
@@ -15,16 +15,28 @@
   ],
   "enabledManagers": [
     "gomod",
-    "npm"
+    "npm",
+    "github-actions"
   ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "branchPrefix": "renovate-",
+  "rebaseWhen": "conflicted",
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 100,
   "labels": [
     "dependencies"
   ],
-  "postUpdateOptions": [
-    "gomodTidy",
-    "gomodMassage"
-  ],
   "packageRules": [
+    {
+      "matchDatasources": [
+        "go"
+      ],
+      "addLabels": [
+        "go"
+      ]
+    },
     {
       "matchUpdateTypes": [
         "digest",

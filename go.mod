@@ -1,6 +1,6 @@
 module authelia.com/provider/oauth2
 
-go 1.24.0
+go 1.25.0
 
 toolchain go1.26.0
 
@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.48.0
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.51.0
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/text v0.34.0
 )

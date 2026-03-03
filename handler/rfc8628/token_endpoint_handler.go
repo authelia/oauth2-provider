@@ -2,7 +2,6 @@ package rfc8628
 
 import (
 	"context"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -17,6 +16,7 @@ type DeviceCodeTokenHandler struct {
 	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -60,7 +60,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, requeste
 	interval := c.Config.GetRFC8628TokenPollingInterval(ctx)
 
 	if requestedAt.IsZero() {
-		requestedAt = time.Now()
+		requestedAt = c.Config.GetClock(ctx).Now().UTC()
 	}
 
 	if last.Add(interval).After(requestedAt) {
@@ -106,7 +106,7 @@ func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, requeste
 
 	lastChecked := requester.GetRequestedAt()
 	if lastChecked.IsZero() {
-		lastChecked = time.Now()
+		lastChecked = c.Config.GetClock(ctx).Now().UTC()
 	}
 
 	r.SetLastChecked(lastChecked)

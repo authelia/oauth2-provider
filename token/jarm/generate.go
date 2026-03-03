@@ -19,7 +19,7 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 }
 
 // Generate generates the token and signature for a JARM response.
-func Generate(ctx context.Context, config Configurator, client Client, session any, parameters url.Values) (token, signature string, err error) {
+func Generate(ctx context.Context, config Configurator, clock ClockProvider, client Client, session any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
 	if alg := client.GetAuthorizationSignedResponseAlg(); len(alg) > 0 {
@@ -57,7 +57,7 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 		}
 	}
 
-	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))
+	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, clock.Now(), config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))
 
 	for param := range parameters {
 		claims.Extra[param] = parameters.Get(param)

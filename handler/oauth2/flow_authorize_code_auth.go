@@ -7,7 +7,6 @@ import (
 	"context"
 	"net/url"
 	"strings"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -32,6 +31,7 @@ type AuthorizeExplicitGrantHandler struct {
 		oauth2.RefreshTokenScopesProvider
 		oauth2.OmitRedirectScopeParamProvider
 		oauth2.SanitationAllowedProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -81,7 +81,7 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
+	requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, c.Config.GetClock(ctx).Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
 
 	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

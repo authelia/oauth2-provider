@@ -3,7 +3,6 @@ package rfc8628
 import (
 	"context"
 	"net/url"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -20,6 +19,7 @@ type DeviceAuthorizeHandler struct {
 	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -48,7 +48,7 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	dar.SetDeviceCodeSignature(deviceCodeSignature)
 	dar.SetUserCodeSignature(userCodeSignature)
 
-	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
+	expireAt := d.Config.GetClock(ctx).Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 
@@ -74,7 +74,7 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	resp.SetUserCode(userCode)
 	resp.SetVerificationURI(raw)
 	resp.SetVerificationURIComplete(uri.String())
-	resp.SetExpiresIn(int64(time.Until(expireAt).Seconds()))
+	resp.SetExpiresIn(int64(d.Config.GetClock(ctx).Until(expireAt).Seconds()))
 	resp.SetInterval(int(d.Config.GetRFC8628TokenPollingInterval(ctx).Seconds()))
 
 	return nil

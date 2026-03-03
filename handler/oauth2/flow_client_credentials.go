@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -19,6 +18,7 @@ type ClientCredentialsGrantHandler struct {
 		oauth2.AudienceStrategyProvider
 		oauth2.AccessTokenLifespanProvider
 		oauth2.ClientCredentialsImplicitProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -69,7 +69,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	lifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan))
+	requester.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(lifespan))
 
 	return nil
 }

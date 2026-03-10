@@ -75,6 +75,9 @@ type Config struct {
 	// should be prioritized even if it returns false.
 	EnforceRevokeFlowRevokeRefreshTokensExplicitClient bool
 
+	// ClockProvider is the clock provider for this config.
+	ClockProvider ClockProvider
+
 	// ScopeStrategy sets the scope strategy that should be supported, for example oauth2.WildcardScopeStrategy.
 	ScopeStrategy ScopeStrategy
 
@@ -644,6 +647,14 @@ func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (st
 	return c.AuthorizeErrorFieldResponseStrategy
 }
 
+func (c *Config) GetClock(ctx context.Context) ClockProvider {
+	if c.ClockProvider == nil {
+		c.ClockProvider = NewRealClock()
+	}
+
+	return c.ClockProvider
+}
+
 var (
 	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
@@ -696,4 +707,6 @@ var (
 	_ IntrospectionIssuerProvider                     = (*Config)(nil)
 	_ IntrospectionJWTResponseStrategyProvider        = (*Config)(nil)
 	_ AuthorizeErrorFieldResponseStrategyProvider     = (*Config)(nil)
+	_ ClockConfigProvider                             = (*Config)(nil)
+	_ UseLegacyErrorFormatProvider                    = (*Config)(nil)
 )

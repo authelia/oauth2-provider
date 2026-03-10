@@ -45,6 +45,7 @@ type DefaultSession struct {
 	RequestedAt time.Time                      `json:"requested_at"`
 }
 
+// TODO: inject clock?
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		Claims:      &jwt.IDTokenClaims{},
@@ -128,6 +129,7 @@ type DefaultStrategy struct {
 		oauth2.IDTokenIssuerProvider
 		oauth2.IDTokenLifespanProvider
 		oauth2.MinParameterEntropyProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -163,7 +165,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		// Adds a bit of wiggle room for timing issues
-		if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
+		if claims.GetAuthTimeSafe().After(h.Config.GetClock(ctx).Now().UTC().Add(time.Second * 5)) {
 			return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
 
@@ -229,15 +231,15 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(lifespan))
+		claims.ExpirationTime = jwt.NewNumericDate(h.Config.GetClock(ctx).Now().UTC().Add(lifespan))
 	}
 
-	if claims.ExpirationTime.Before(time.Now().UTC()) {
+	if claims.ExpirationTime.Before(h.Config.GetClock(ctx).Now().UTC()) {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because expiry claim can not be in the past."))
 	}
 
 	if claims.AuthTime == nil || claims.AuthTime.IsZero() {
-		claims.AuthTime = jwt.Now()
+		claims.AuthTime = jwt.NewNumericDate(h.Config.GetClock(ctx).Now())
 	}
 
 	if claims.Issuer == "" {
@@ -254,7 +256,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
-	claims.IssuedAt = jwt.Now()
+	claims.IssuedAt = jwt.NewNumericDate(h.Config.GetClock(ctx).Now())
 
 	token, _, err = h.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
@@ -269,7 +271,7 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	claims := jwt.NewLogoutTokenClaims(subject, audience, sid, extra)
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().UTC().Add(lifespan))
+		claims.ExpirationTime = jwt.NewNumericDate(h.Config.GetClock(ctx).Now().UTC().Add(lifespan))
 	}
 
 	token, _, err = h.Encode(

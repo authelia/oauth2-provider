@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -68,7 +67,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 	}
 
 	if requester.GetSession() != nil {
-		requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))
+		requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, c.Config.GetClock(ctx).Now().UTC().Add(expiresIn))
 	}
 
 	// generate an ID

@@ -26,6 +26,7 @@ type AuthorizeImplicitGrantTypeHandler struct {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -71,7 +72,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	// Only override expiry if none is set.
 	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeImplicit, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	if requester.GetSession().GetExpiresAt(oauth2.AccessToken).IsZero() {
-		requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+		requester.GetSession().SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 	}
 
 	// Generate the code
@@ -84,7 +85,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 	responder.AddParameter(consts.AccessResponseAccessToken, token)
-	responder.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
+	responder.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(requester, oauth2.AccessToken, atLifespan, c.Config.GetClock(ctx).Now().UTC())/time.Second), 10))
 	responder.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
 	responder.AddParameter(consts.FormParameterState, requester.GetState())
 	responder.AddParameter(consts.AccessResponseScope, strings.Join(requester.GetGrantedScopes(), " "))

@@ -5,7 +5,6 @@ package openid
 
 import (
 	"context"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -27,6 +26,7 @@ type OpenIDConnectHybridHandler struct {
 		oauth2.IDTokenLifespanProvider
 		oauth2.MinParameterEntropyProvider
 		oauth2.ScopeStrategyProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -119,11 +119,11 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		// sets the proper access/refresh token lifetimes.
 		//
 		// if c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan > -1 {
-		// 	 requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
+		// 	 requester.GetSession().SetExpiresAt(oauth2.RefreshToken, s.Config.GetClock(ctx).Now().UTC().Add(c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 		// }
 
 		// This is required because we must limit the authorize code lifespan.
-		requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Truncate(jwt.TimePrecision))
+		requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, c.Config.GetClock(ctx).Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Truncate(jwt.TimePrecision))
 
 		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

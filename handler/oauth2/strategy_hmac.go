@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/randx"
@@ -39,6 +38,7 @@ type HMACCoreStrategy struct {
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.AuthorizeCodeLifespanProvider
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.ClockConfigProvider
 	}
 
 	usePrefix bool
@@ -76,11 +76,11 @@ func (s *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Req
 
 	var exp = r.GetSession().GetExpiresAt(oauth2.AccessToken)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx)).Before(time.Now().UTC()) {
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx)).Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access Token expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx))))
 	}
 
-	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
+	if !exp.IsZero() && exp.Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access Token expired at '%s'.", exp))
 	}
 
@@ -122,7 +122,7 @@ func (s *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Re
 		return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
 	}
 
-	if exp.Before(time.Now().UTC()) {
+	if exp.Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Refresh Token expired at '%s'.", exp))
 	}
 
@@ -160,11 +160,11 @@ func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.R
 
 	var exp = r.GetSession().GetExpiresAt(oauth2.AuthorizeCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx)).Before(time.Now().UTC()) {
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx)).Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize Code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx))))
 	}
 
-	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
+	if !exp.IsZero() && exp.Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize Code expired at '%s'.", exp))
 	}
 
@@ -196,11 +196,11 @@ func (s *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenSt
 func (s *HMACCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error) {
 	var exp = r.GetSession().GetExpiresAt(oauth2.UserCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User Code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
-	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
+	if !exp.IsZero() && exp.Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("User Code expired at '%s'.", exp))
 	}
 
@@ -239,11 +239,11 @@ func (s *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oaut
 
 	var exp = r.GetSession().GetExpiresAt(oauth2.DeviceCode)
 
-	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
+	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device Code expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx))))
 	}
 
-	if !exp.IsZero() && exp.Before(time.Now().UTC()) {
+	if !exp.IsZero() && exp.Before(s.Config.GetClock(ctx).Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device Code expired at '%s'.", exp))
 	}
 
@@ -306,4 +306,5 @@ type HMACCoreStrategyConfigurator interface {
 	oauth2.RotatedGlobalSecretsProvider
 	oauth2.HMACHashingProvider
 	oauth2.RFC9628DeviceAuthorizeConfigProvider
+	oauth2.ClockConfigProvider
 }

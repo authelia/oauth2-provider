@@ -107,6 +107,11 @@ type IDTokenClient interface {
 	// jwks_uri element from OpenID Connect Discovery 1.0 [OpenID.Discovery].
 	GetIDTokenSignedResponseAlg() (alg string)
 
+	// GetIDTokenSignedResponseAlgValuesSupported is equivalent to the 'id_token_signing_alg_values_supported' client
+	// metadata value which determines the JWS [JWS] alg values supported by the RP when validating the ID Token
+	// signature. If a 'id_token_signed_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetIDTokenSignedResponseAlgValuesSupported() (algs []string)
+
 	// GetIDTokenEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the ID
 	// Token specifications. If unspecified the other available parameters will be utilized to select an appropriate
 	// key.
@@ -118,11 +123,21 @@ type IDTokenClient interface {
 	// The default, if omitted, is that no encryption is performed.
 	GetIDTokenEncryptedResponseAlg() (alg string)
 
+	// GetIDTokenEncryptedResponseAlgValuesSupported is equivalent to the 'id_token_encryption_alg_values_supported'
+	// client metadata value which determines the JWE [JWE] alg values supported by the RP when decrypting the ID Token.
+	// If a 'id_token_encrypted_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetIDTokenEncryptedResponseAlgValuesSupported() (algs []string)
+
 	// GetIDTokenEncryptedResponseEnc is equivalent to the 'id_token_encrypted_response_enc' client metadata value which
 	// determines the JWE enc algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If
 	// id_token_encrypted_response_alg is specified, the default id_token_encrypted_response_enc value is A128CBC-HS256.
 	// When id_token_encrypted_response_enc is included, id_token_encrypted_response_alg MUST also be provided.
 	GetIDTokenEncryptedResponseEnc() (enc string)
+
+	// GetIDTokenEncryptedResponseEncValuesSupported is equivalent to the 'id_token_encryption_enc_values_supported'
+	// client metadata value which determines the JWE enc values supported by the RP when decrypting the ID Token. If a
+	// 'id_token_encrypted_response_enc' metadata parameter is also present, its value MUST be in the list.
+	GetIDTokenEncryptedResponseEncValuesSupported() (encs []string)
 
 	JSONWebKeysClient
 }
@@ -140,6 +155,11 @@ type UserInfoClient interface {
 	// Response to return the Claims as a UTF-8 [RFC3629] encoded JSON object using the application/json content-type.
 	GetUserinfoSignedResponseAlg() (alg string)
 
+	// GetUserinfoSignedResponseAlgValuesSupported is equivalent to the 'userinfo_signing_alg_values_supported' client
+	// metadata value which determines the JWS alg values supported by the RP when validating the UserInfo Response
+	// signature. If a 'userinfo_signed_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetUserinfoSignedResponseAlgValuesSupported() (algs []string)
+
 	// GetUserinfoEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the
 	// User Info specifications. If unspecified the other available parameters will be utilized to select an appropriate
 	// key.
@@ -151,11 +171,21 @@ type UserInfoClient interface {
 	// [JWT]. The default, if omitted, is that no encryption is performed.
 	GetUserinfoEncryptedResponseAlg() (alg string)
 
+	// GetUserinfoEncryptedResponseAlgValuesSupported is equivalent to the 'userinfo_encryption_alg_values_supported'
+	// client metadata value which determines the JWE alg values supported by the RP when decrypting the UserInfo
+	// Response. If a 'userinfo_encrypted_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetUserinfoEncryptedResponseAlgValuesSupported() (algs []string)
+
 	// GetUserinfoEncryptedResponseEnc is equivalent to the 'userinfo_encrypted_response_enc' client metadata value
 	// which determines the JWE enc algorithm [JWA] REQUIRED for encrypting UserInfo Responses. If
 	// userinfo_encrypted_response_alg is specified, the default userinfo_encrypted_response_enc value is A128CBC-HS256.
 	// When userinfo_encrypted_response_enc is included, userinfo_encrypted_response_alg MUST also be provided.
 	GetUserinfoEncryptedResponseEnc() (enc string)
+
+	// GetUserinfoEncryptedResponseEncValuesSupported is equivalent to the 'userinfo_encryption_enc_values_supported'
+	// client metadata value which determines the JWE enc values supported by the RP when decrypting the UserInfo
+	// Response. If a userinfo_encrypted_response_enc metadata parameter is also present, its value MUST be in the list.
+	GetUserinfoEncryptedResponseEncValuesSupported() (encs []string)
 
 	JSONWebKeysClient
 }

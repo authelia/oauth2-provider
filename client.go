@@ -208,6 +208,11 @@ type JARClient interface {
 	// that any algorithm supported by the OP and the RP MAY be used.
 	GetRequestObjectSigningAlg() (alg string)
 
+	// GetRequestObjectSigningAlgValuesSupported is equivalent to the 'request_object_signing_alg_values_supported'
+	// client metadata value which determines the JWS alg values supported by the RP when signing Request Objects. If a
+	// 'request_object_signing_alg' metadata parameter is also present, its value MUST be in the list.
+	GetRequestObjectSigningAlgValuesSupported() (algs []string)
+
 	// GetRequestObjectEncryptionKeyID returns the specific key identifier used to satisfy JWE requirements of the
 	// request object specifications. If unspecified the other available parameters will be utilized to select an
 	// appropriate key.
@@ -320,6 +325,11 @@ type JARMClient interface {
 	// algorithm none is not allowed. The default, if omitted, is RS256.
 	GetAuthorizationSignedResponseAlg() (alg string)
 
+	// GetAuthorizationSignedResponseAlgValuesSupported is equivalent to the 'authorization_signing_alg_values_supported'
+	// client metadata value which determines the JWS alg values supported by the RP when signing authorization
+	// responses. If a 'authorization_signed_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetAuthorizationSignedResponseAlgValuesSupported() (algs []string)
+
 	// GetAuthorizationEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of
 	// the JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters will be
 	// utilized to select an appropriate key.
@@ -375,6 +385,11 @@ type JWTProfileClient interface {
 	// the configured algorithm. The default, if omitted, is none; i.e. unsigned responses unless the
 	// GetEnableJWTProfileOAuthAccessTokens receiver returns true in which case the default is RS256.
 	GetAccessTokenSignedResponseAlg() (alg string)
+
+	// GetAccessTokenSignedResponseAlgValuesSupported is equivalent to the 'access_token_signing_alg_values_supported'
+	// client metadata value which determines the JWS alg values supported by the RP when signing JWT Profile Access
+	// Token responses. If a 'access_token_signed_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetAccessTokenSignedResponseAlgValuesSupported() (algs []string)
 
 	// GetAccessTokenEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
 	// JWT Profile for OAuth 2.0 Access Tokens specifications. If unspecified the other available parameters will be
@@ -432,6 +447,11 @@ type IntrospectionJWTResponseClient interface {
 	// introspection responses. If this is specified, the response will be signed using JWS and the configured
 	// algorithm. The default, if omitted, is RS256.
 	GetIntrospectionSignedResponseAlg() (alg string)
+
+	// GetIntrospectionSignedResponseAlgValuesSupported is equivalent to the 'introspection_signing_alg_values_supported'
+	// client metadata value which determines the JWS alg values supported by the RP when signing introspection
+	// responses. If a 'introspection_signed_response_alg' metadata parameter is also present, its value MUST be in the list.
+	GetIntrospectionSignedResponseAlgValuesSupported() (algs []string)
 
 	// GetIntrospectionEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be

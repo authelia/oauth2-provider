@@ -59,8 +59,15 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 
 	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))
 
-	for param := range parameters {
-		claims.Extra[param] = parameters.Get(param)
+	for param, values := range parameters {
+		switch len(values) {
+		case 0:
+			continue
+		case 1:
+			claims.Extra[param] = values[0]
+		default:
+			claims.Extra[param] = values
+		}
 	}
 
 	var strategy jwt.Strategy

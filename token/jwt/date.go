@@ -52,7 +52,7 @@ func (date *NumericDate) UnmarshalJSON(b []byte) (err error) {
 	)
 
 	if err = json.Unmarshal(b, &number); err != nil {
-		return fmt.Errorf("could not parse NumericData: %w", err)
+		return fmt.Errorf("could not parse NumericDate: %w", err)
 	}
 
 	if f, err = number.Float64(); err != nil {

@@ -152,7 +152,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		}
 	} else if IsEncryptedJWTClientSecretAlgStr(alg) {
 		if o.client == nil {
-			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: fmt.Errorf("failed to link client to the request")})
 		}
 
 		if key, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {

@@ -47,7 +47,7 @@ func (c *JARMClaims) GetIssuer() (iss string, err error) {
 }
 
 func (c *JARMClaims) GetSubject() (sub string, err error) {
-	return c.toString(ClaimIssuer)
+	return c.toString(ClaimSubject)
 }
 
 func (c *JARMClaims) GetAudience() (aud ClaimStrings, err error) {

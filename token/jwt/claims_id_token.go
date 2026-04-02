@@ -43,7 +43,7 @@ func (c *IDTokenClaims) GetIssuedAt() (iat *NumericDate, err error) {
 }
 
 func (c *IDTokenClaims) GetNotBefore() (nbf *NumericDate, err error) {
-	return toNumericDate(ClaimNotBefore)
+	return toNumericDate(c.Extra[ClaimNotBefore])
 }
 
 func (c *IDTokenClaims) GetIssuer() (iss string, err error) {

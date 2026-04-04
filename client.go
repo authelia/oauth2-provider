@@ -443,6 +443,177 @@ type JWTSecuredAuthorizationRequestJWTValidationOptionsClient interface {
 	Client
 }
 
+// RPMetadataChoicesSubjectClient is a client which can declare the subject_type values supported by the RP.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesSubjectClient interface {
+	// GetSubjectTypesSupported is equivalent to the 'subject_types_supported' client metadata value which is a JSON
+	// array containing a list of the subject_type values supported by the RP. If a subject_type value is also present,
+	// its value MUST be present in the array.
+	GetSubjectTypesSupported() (types []string)
+
+	Client
+}
+
+// RPMetadataChoicesIDTokenClient is a client which can declare the supported algorithm values for ID Token responses.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesIDTokenClient interface {
+	// GetIDTokenSigningAlgValuesSupported is equivalent to the 'id_token_signing_alg_values_supported' client metadata
+	// value which is a JSON array containing a list of the JWS algorithms supported by the RP for validating the ID
+	// Token issued to this Client. If id_token_signed_response_alg is also present, its value MUST be present in the
+	// array.
+	GetIDTokenSigningAlgValuesSupported() (algs []string)
+
+	// GetIDTokenEncryptionAlgValuesSupported is equivalent to the 'id_token_encryption_alg_values_supported' client
+	// metadata value which is a JSON array containing a list of the JWE alg algorithms supported by the RP for
+	// decrypting the ID Token issued to this Client. If id_token_encrypted_response_alg is also present, its value
+	// MUST be present in the array.
+	GetIDTokenEncryptionAlgValuesSupported() (algs []string)
+
+	// GetIDTokenEncryptionEncValuesSupported is equivalent to the 'id_token_encryption_enc_values_supported' client
+	// metadata value which is a JSON array containing a list of the JWE enc algorithms supported by the RP for
+	// decrypting the ID Token issued to this Client. If id_token_encrypted_response_enc is also present, its value
+	// MUST be present in the array.
+	GetIDTokenEncryptionEncValuesSupported() (encs []string)
+
+	Client
+}
+
+// RPMetadataChoicesUserInfoClient is a client which can declare the supported algorithm values for UserInfo responses.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesUserInfoClient interface {
+	// GetUserinfoSigningAlgValuesSupported is equivalent to the 'userinfo_signing_alg_values_supported' client metadata
+	// value which is a JSON array containing a list of the JWS algorithms supported by the RP for validating UserInfo
+	// Responses. If userinfo_signed_response_alg is also present, its value MUST be present in the array.
+	GetUserinfoSigningAlgValuesSupported() (algs []string)
+
+	// GetUserinfoEncryptionAlgValuesSupported is equivalent to the 'userinfo_encryption_alg_values_supported' client
+	// metadata value which is a JSON array containing a list of the JWE alg algorithms supported by the RP for
+	// decrypting UserInfo Responses. If userinfo_encrypted_response_alg is also present, its value MUST be present in
+	// the array.
+	GetUserinfoEncryptionAlgValuesSupported() (algs []string)
+
+	// GetUserinfoEncryptionEncValuesSupported is equivalent to the 'userinfo_encryption_enc_values_supported' client
+	// metadata value which is a JSON array containing a list of the JWE enc algorithms supported by the RP for
+	// decrypting UserInfo Responses. If userinfo_encrypted_response_enc is also present, its value MUST be present in
+	// the array.
+	GetUserinfoEncryptionEncValuesSupported() (encs []string)
+
+	Client
+}
+
+// RPMetadataChoicesRequestObjectClient is a client which can declare the supported algorithm values for Request Objects.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesRequestObjectClient interface {
+	// GetRequestObjectSigningAlgValuesSupported is equivalent to the 'request_object_signing_alg_values_supported'
+	// client metadata value which is a JSON array containing a list of the JWS algorithms supported by the RP for
+	// signing Request Objects. If request_object_signing_alg is also present, its value MUST be present in the array.
+	GetRequestObjectSigningAlgValuesSupported() (algs []string)
+
+	// GetRequestObjectEncryptionAlgValuesSupported is equivalent to the
+	// 'request_object_encryption_alg_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE alg algorithms supported by the RP for encrypting Request Objects. If
+	// request_object_encryption_alg is also present, its value MUST be present in the array.
+	GetRequestObjectEncryptionAlgValuesSupported() (algs []string)
+
+	// GetRequestObjectEncryptionEncValuesSupported is equivalent to the
+	// 'request_object_encryption_enc_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE enc algorithms supported by the RP for encrypting Request Objects. If
+	// request_object_encryption_enc is also present, its value MUST be present in the array.
+	GetRequestObjectEncryptionEncValuesSupported() (encs []string)
+
+	Client
+}
+
+// RPMetadataChoicesTokenEndpointAuthClient is a client which can declare the supported client authentication methods
+// and algorithm values for the Token Endpoint.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesTokenEndpointAuthClient interface {
+	// GetTokenEndpointAuthMethodsSupported is equivalent to the 'token_endpoint_auth_methods_supported' client metadata
+	// value which is a JSON array containing a list of Client Authentication methods supported by the Client. If
+	// token_endpoint_auth_method is also present, its value MUST be present in the array.
+	GetTokenEndpointAuthMethodsSupported() (methods []string)
+
+	// GetTokenEndpointAuthSigningAlgValuesSupported is equivalent to the
+	// 'token_endpoint_auth_signing_alg_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWS algorithms supported by the RP for signing the JWT used to authenticate the Client at the Token
+	// Endpoint for the private_key_jwt and client_secret_jwt authentication methods. If
+	// token_endpoint_auth_signing_alg is also present, its value MUST be present in the array.
+	GetTokenEndpointAuthSigningAlgValuesSupported() (algs []string)
+
+	Client
+}
+
+// RPMetadataChoicesCIBAClient is a client which can declare the supported algorithm values for CIBA authentication
+// requests.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesCIBAClient interface {
+	// GetBackchannelAuthenticationRequestSigningAlgValuesSupported is equivalent to the
+	// 'backchannel_authentication_request_signing_alg_values_supported' client metadata value which is a JSON array
+	// containing a list of the JWS algorithms supported by the RP for signing CIBA authentication requests. If
+	// backchannel_authentication_request_signing_alg is also present, its value MUST be present in the array.
+	GetBackchannelAuthenticationRequestSigningAlgValuesSupported() (algs []string)
+
+	Client
+}
+
+// RPMetadataChoicesAuthorizationClient is a client which can declare the supported algorithm values for JWT-secured
+// Authorization Responses (JARM).
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesAuthorizationClient interface {
+	// GetAuthorizationSigningAlgValuesSupported is equivalent to the 'authorization_signing_alg_values_supported'
+	// client metadata value which is a JSON array containing a list of the JWS algorithms supported by the RP for
+	// validating signed authorization responses. If authorization_signed_response_alg is also present, its value MUST
+	// be present in the array.
+	GetAuthorizationSigningAlgValuesSupported() (algs []string)
+
+	// GetAuthorizationEncryptionAlgValuesSupported is equivalent to the
+	// 'authorization_encryption_alg_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE alg algorithms supported by the RP for decrypting encrypted authorization responses. If
+	// authorization_encrypted_response_alg is also present, its value MUST be present in the array.
+	GetAuthorizationEncryptionAlgValuesSupported() (algs []string)
+
+	// GetAuthorizationEncryptionEncValuesSupported is equivalent to the
+	// 'authorization_encryption_enc_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE enc algorithms supported by the RP for decrypting encrypted authorization responses. If
+	// authorization_encrypted_response_enc is also present, its value MUST be present in the array.
+	GetAuthorizationEncryptionEncValuesSupported() (encs []string)
+
+	Client
+}
+
+// RPMetadataChoicesIntrospectionClient is a client which can declare the supported algorithm values for Introspection
+// responses.
+//
+// See: https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html
+type RPMetadataChoicesIntrospectionClient interface {
+	// GetIntrospectionSigningAlgValuesSupported is equivalent to the 'introspection_signing_alg_values_supported'
+	// client metadata value which is a JSON array containing a list of the JWS algorithms supported by the RP for
+	// validating Introspection Responses. If introspection_signed_response_alg is also present, its value MUST be
+	// present in the array.
+	GetIntrospectionSigningAlgValuesSupported() (algs []string)
+
+	// GetIntrospectionEncryptionAlgValuesSupported is equivalent to the
+	// 'introspection_encryption_alg_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE alg algorithms supported by the RP for decrypting Introspection Responses. If
+	// introspection_encrypted_response_alg is also present, its value MUST be present in the array.
+	GetIntrospectionEncryptionAlgValuesSupported() (algs []string)
+
+	// GetIntrospectionEncryptionEncValuesSupported is equivalent to the
+	// 'introspection_encryption_enc_values_supported' client metadata value which is a JSON array containing a list
+	// of the JWE enc algorithms supported by the RP for decrypting Introspection Responses. If
+	// introspection_encrypted_response_enc is also present, its value MUST be present in the array.
+	GetIntrospectionEncryptionEncValuesSupported() (encs []string)
+
+	Client
+}
+
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
 	ID                   string         `json:"id"`
@@ -458,22 +629,41 @@ type DefaultClient struct {
 
 type DefaultJARClient struct {
 	*DefaultClient
-	JSONWebKeysURI                                   string              `json:"jwks_uri"`
-	JSONWebKeys                                      *jose.JSONWebKeySet `json:"jwks"`
-	TokenEndpointAuthMethod                          string              `json:"token_endpoint_auth_method"`
-	IntrospectionEndpointAuthMethod                  string              `json:"introspection_endpoint_auth_method"`
-	RevocationEndpointAuthMethod                     string              `json:"revocation_endpoint_auth_method"`
-	PushedAuthorizationRequestEndpointAuthMethod     string              `json:"pushed_authorization_request_endpoint_auth_method"`
-	RequestURIs                                      []string            `json:"request_uris"`
-	RequestObjectSigningKeyID                        string              `json:"request_object_signing_kid"`
-	RequestObjectSigningAlg                          string              `json:"request_object_signing_alg"`
-	RequestObjectEncryptionKeyID                     string              `json:"request_object_encryption_kid"`
-	RequestObjectEncryptionAlg                       string              `json:"request_object_encryption_alg"`
-	RequestObjectEncryptionEnc                       string              `json:"request_object_encryption_enc"`
-	TokenEndpointAuthSigningAlg                      string              `json:"token_endpoint_auth_signing_alg"`
-	IntrospectionEndpointAuthSigningAlg              string              `json:"introspection_endpoint_auth_signing_alg"`
-	RevocationEndpointAuthSigningAlg                 string              `json:"revocation_endpoint_auth_signing_alg"`
-	PushedAuthorizationRequestEndpointAuthSigningAlg string              `json:"pushed_authorization_request_endpoint_auth_signing_alg"`
+	JSONWebKeysURI                                            string              `json:"jwks_uri"`
+	JSONWebKeys                                               *jose.JSONWebKeySet `json:"jwks"`
+	TokenEndpointAuthMethod                                   string              `json:"token_endpoint_auth_method"`
+	IntrospectionEndpointAuthMethod                           string              `json:"introspection_endpoint_auth_method"`
+	RevocationEndpointAuthMethod                              string              `json:"revocation_endpoint_auth_method"`
+	PushedAuthorizationRequestEndpointAuthMethod              string              `json:"pushed_authorization_request_endpoint_auth_method"`
+	RequestURIs                                               []string            `json:"request_uris"`
+	RequestObjectSigningKeyID                                 string              `json:"request_object_signing_kid"`
+	RequestObjectSigningAlg                                   string              `json:"request_object_signing_alg"`
+	RequestObjectEncryptionKeyID                              string              `json:"request_object_encryption_kid"`
+	RequestObjectEncryptionAlg                                string              `json:"request_object_encryption_alg"`
+	RequestObjectEncryptionEnc                                string              `json:"request_object_encryption_enc"`
+	TokenEndpointAuthSigningAlg                               string              `json:"token_endpoint_auth_signing_alg"`
+	IntrospectionEndpointAuthSigningAlg                       string              `json:"introspection_endpoint_auth_signing_alg"`
+	RevocationEndpointAuthSigningAlg                          string              `json:"revocation_endpoint_auth_signing_alg"`
+	PushedAuthorizationRequestEndpointAuthSigningAlg          string              `json:"pushed_authorization_request_endpoint_auth_signing_alg"`
+	SubjectTypesSupported                                     []string            `json:"subject_types_supported,omitempty"`
+	IDTokenSigningAlgValuesSupported                          []string            `json:"id_token_signing_alg_values_supported,omitempty"`
+	IDTokenEncryptionAlgValuesSupported                       []string            `json:"id_token_encryption_alg_values_supported,omitempty"`
+	IDTokenEncryptionEncValuesSupported                       []string            `json:"id_token_encryption_enc_values_supported,omitempty"`
+	UserinfoSigningAlgValuesSupported                         []string            `json:"userinfo_signing_alg_values_supported,omitempty"`
+	UserinfoEncryptionAlgValuesSupported                      []string            `json:"userinfo_encryption_alg_values_supported,omitempty"`
+	UserinfoEncryptionEncValuesSupported                      []string            `json:"userinfo_encryption_enc_values_supported,omitempty"`
+	RequestObjectSigningAlgValuesSupported                    []string            `json:"request_object_signing_alg_values_supported,omitempty"`
+	RequestObjectEncryptionAlgValuesSupported                 []string            `json:"request_object_encryption_alg_values_supported,omitempty"`
+	RequestObjectEncryptionEncValuesSupported                 []string            `json:"request_object_encryption_enc_values_supported,omitempty"`
+	TokenEndpointAuthMethodsSupported                         []string            `json:"token_endpoint_auth_methods_supported,omitempty"`
+	TokenEndpointAuthSigningAlgValuesSupported                []string            `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
+	BackchannelAuthenticationRequestSigningAlgValuesSupported []string            `json:"backchannel_authentication_request_signing_alg_values_supported,omitempty"`
+	AuthorizationSigningAlgValuesSupported                    []string            `json:"authorization_signing_alg_values_supported,omitempty"`
+	AuthorizationEncryptionAlgValuesSupported                 []string            `json:"authorization_encryption_alg_values_supported,omitempty"`
+	AuthorizationEncryptionEncValuesSupported                 []string            `json:"authorization_encryption_enc_values_supported,omitempty"`
+	IntrospectionSigningAlgValuesSupported                    []string            `json:"introspection_signing_alg_values_supported,omitempty"`
+	IntrospectionEncryptionAlgValuesSupported                 []string            `json:"introspection_encryption_alg_values_supported,omitempty"`
+	IntrospectionEncryptionEncValuesSupported                 []string            `json:"introspection_encryption_enc_values_supported,omitempty"`
 }
 
 type DefaultResponseModeClient struct {
@@ -619,6 +809,82 @@ func (c *DefaultJARClient) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
+func (c *DefaultJARClient) GetSubjectTypesSupported() []string {
+	return c.SubjectTypesSupported
+}
+
+func (c *DefaultJARClient) GetIDTokenSigningAlgValuesSupported() []string {
+	return c.IDTokenSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetIDTokenEncryptionAlgValuesSupported() []string {
+	return c.IDTokenEncryptionAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetIDTokenEncryptionEncValuesSupported() []string {
+	return c.IDTokenEncryptionEncValuesSupported
+}
+
+func (c *DefaultJARClient) GetUserinfoSigningAlgValuesSupported() []string {
+	return c.UserinfoSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetUserinfoEncryptionAlgValuesSupported() []string {
+	return c.UserinfoEncryptionAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetUserinfoEncryptionEncValuesSupported() []string {
+	return c.UserinfoEncryptionEncValuesSupported
+}
+
+func (c *DefaultJARClient) GetRequestObjectSigningAlgValuesSupported() []string {
+	return c.RequestObjectSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetRequestObjectEncryptionAlgValuesSupported() []string {
+	return c.RequestObjectEncryptionAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetRequestObjectEncryptionEncValuesSupported() []string {
+	return c.RequestObjectEncryptionEncValuesSupported
+}
+
+func (c *DefaultJARClient) GetTokenEndpointAuthMethodsSupported() []string {
+	return c.TokenEndpointAuthMethodsSupported
+}
+
+func (c *DefaultJARClient) GetTokenEndpointAuthSigningAlgValuesSupported() []string {
+	return c.TokenEndpointAuthSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetBackchannelAuthenticationRequestSigningAlgValuesSupported() []string {
+	return c.BackchannelAuthenticationRequestSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetAuthorizationSigningAlgValuesSupported() []string {
+	return c.AuthorizationSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetAuthorizationEncryptionAlgValuesSupported() []string {
+	return c.AuthorizationEncryptionAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetAuthorizationEncryptionEncValuesSupported() []string {
+	return c.AuthorizationEncryptionEncValuesSupported
+}
+
+func (c *DefaultJARClient) GetIntrospectionSigningAlgValuesSupported() []string {
+	return c.IntrospectionSigningAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetIntrospectionEncryptionAlgValuesSupported() []string {
+	return c.IntrospectionEncryptionAlgValuesSupported
+}
+
+func (c *DefaultJARClient) GetIntrospectionEncryptionEncValuesSupported() []string {
+	return c.IntrospectionEncryptionEncValuesSupported
+}
+
 func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
@@ -627,4 +893,13 @@ var (
 	_ Client             = (*DefaultClient)(nil)
 	_ ResponseModeClient = (*DefaultResponseModeClient)(nil)
 	_ JARClient          = (*DefaultJARClient)(nil)
+
+	_ RPMetadataChoicesSubjectClient           = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesIDTokenClient           = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesUserInfoClient          = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesRequestObjectClient     = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesTokenEndpointAuthClient = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesCIBAClient              = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesAuthorizationClient     = (*DefaultJARClient)(nil)
+	_ RPMetadataChoicesIntrospectionClient     = (*DefaultJARClient)(nil)
 )

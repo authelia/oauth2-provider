@@ -178,43 +178,19 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	defer func() {
-		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
-	}()
-
-	var orequester oauth2.Requester
-
-	if orequester, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
-		return err
-	}
-
-	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, orequester.GetID()); err != nil {
-		return err
-	}
-
-	if err = c.TokenRevocationStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, orequester.GetID(), signature); err != nil {
-		return err
-	}
-
 	srequester := requester.Sanitize(nil)
-	srequester.SetID(orequester.GetID())
+	srequester.SetID(requester.GetID())
+
+	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, requester.GetID(), signature); err != nil {
+		return c.handleRefreshTokenEndpointStorageError(ctx, err)
+	}
 
 	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, srequester); err != nil {
-		return err
+		return c.handleRefreshTokenEndpointStorageError(ctx, err)
 	}
 
-	if rtrequester, ok := requester.(oauth2.RefreshTokenAccessRequester); ok {
-		srtrequester := rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequester)
-
-		srtrequester.SetSession(requester.GetSession().Clone())
-
-		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, srtrequester); err != nil {
-			return err
-		}
-	} else {
-		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, srequester); err != nil {
-			return err
-		}
+	if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, srequester); err != nil {
+		return c.handleRefreshTokenEndpointStorageError(ctx, err)
 	}
 
 	responder.SetAccessToken(accessToken)
@@ -224,7 +200,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	responder.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
 
 	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
-		return err
+		return c.handleRefreshTokenEndpointStorageError(ctx, err)
 	}
 
 	return nil
@@ -281,13 +257,13 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx co
 	if errors.Is(storageErr, oauth2.ErrSerializationFailure) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
 			WithDebug(storageErr.Error()).
-			WithHint("Failed to refresh token because of multiple concurrent requests using the same token which is not allowed."))
+			WithHint("Failed to refresh token because of multiple concurrent requests using the same token. Please retry the request."))
 	}
 
 	if errors.Is(storageErr, oauth2.ErrNotFound) || errors.Is(storageErr, oauth2.ErrInactiveToken) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
 			WithDebug(storageErr.Error()).
-			WithHint("Failed to refresh token because of multiple concurrent requests using the same token which is not allowed."))
+			WithHint("Failed to refresh token. Please retry the request."))
 	}
 
 	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebugError(storageErr))

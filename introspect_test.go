@@ -5,7 +5,6 @@ package oauth2_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -44,69 +43,74 @@ func TestAccessTokenFromRequestQuery(t *testing.T) {
 }
 
 func TestIntrospect(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	validator := mock.NewMockTokenIntrospector(ctrl)
-	defer ctrl.Finish()
-
-	config := new(Config)
-	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
-
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
 	req.Header.Add(consts.HeaderAuthorization, "bearer some-token")
 
-	for k, c := range []struct {
-		description string
-		scopes      []string
-		setup       func()
-		expectErr   error
+	testCases := []struct {
+		name   string
+		scopes []string
+		setup  func(config *Config, validator *mock.MockTokenIntrospector)
+		err    string
 	}{
 		{
-			description: "should fail",
-			scopes:      []string{},
-			setup: func() {
+			name:   "ShouldFailNoIntrospectors",
+			scopes: []string{},
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
 			},
-			expectErr: ErrRequestUnauthorized,
+			err: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
 		},
 		{
-			description: "should fail",
-			scopes:      []string{"foo"},
-			setup: func() {
+			name:   "ShouldFailIntrospectorReturnsErrUnknownRequest",
+			scopes: []string{"foo"},
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
 			},
-			expectErr: ErrRequestUnauthorized,
+			err: "The request could not be authorized. Unable to find a suitable validation strategy for the token, thus it is invalid.",
 		},
 		{
-			description: "should fail",
-			scopes:      []string{"foo"},
-			setup: func() {
+			name:   "ShouldFailIntrospectorReturnsErrInvalidClient",
+			scopes: []string{"foo"},
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
 			},
-			expectErr: ErrInvalidClient,
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 		},
 		{
-			description: "should pass",
-			setup: func() {
+			name: "ShouldPass",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) {
 					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
 		},
 		{
-			description: "should pass",
-			scopes:      []string{"bar"},
-			setup: func() {
+			name:   "ShouldPassWithScopes",
+			scopes: []string{"bar"},
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, requester AccessRequester, _ []string) {
 					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
-			_, _, err := provider.IntrospectToken(t.Context(), AccessTokenFromRequest(req), AccessToken, nil, c.scopes...)
-			if c.expectErr != nil {
-				assert.EqualError(t, err, c.expectErr.Error())
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			validator := mock.NewMockTokenIntrospector(ctrl)
+			config := new(Config)
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
+
+			tc.setup(config, validator)
+			_, _, err := provider.IntrospectToken(t.Context(), AccessTokenFromRequest(req), AccessToken, nil, tc.scopes...)
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}

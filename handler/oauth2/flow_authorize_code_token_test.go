@@ -5,7 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"testing"
 	"time"
@@ -520,11 +519,6 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 }
 
 func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
-	var (
-		mockTransactional *mock.MockTransactional
-		mockCoreStore     *mock.MockCoreStorage
-	)
-
 	strategy := hmacshaStrategy
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"authorization_code"},
@@ -540,7 +534,6 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	token, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 	require.NoError(t, err)
 	request.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
-	response := oauth2.NewAccessResponse()
 	propagatedContext := context.Background()
 
 	// some storage implementation that has support for transactions, notice the embedded type `storage.Transactional`
@@ -549,14 +542,14 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 		CoreStorage
 	}
 
-	for _, testCase := range []struct {
-		description string
-		setup       func()
-		expectError error
+	testCases := []struct {
+		name  string
+		setup func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage)
+		err   string
 	}{
 		{
-			description: "transaction should be committed successfully if no errors occur",
-			setup: func() {
+			name: "ShouldCommitTransactionWhenNoErrors",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -589,8 +582,8 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			description: "transaction should be rolled back if `InvalidateAuthorizeCodeSession` returns an error",
-			setup: func() {
+			name: "ShouldRollbackTransactionWhenInvalidateAuthorizeCodeSessionReturnsError",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -611,11 +604,11 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 		},
 		{
-			description: "transaction should be rolled back if `CreateAccessTokenSession` returns an error",
-			setup: func() {
+			name: "ShouldRollbackTransactionWhenCreateAccessTokenSessionReturnsError",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -641,11 +634,11 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 		},
 		{
-			description: "should result in a server error if transaction cannot be created",
-			setup: func() {
+			name: "ShouldFailWhenTransactionCannotBeCreated",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -656,11 +649,11 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					BeginTX(propagatedContext).
 					Return(nil, errors.New("Whoops, unable to create transaction!"))
 			},
-			expectError: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, unable to create transaction!",
 		},
 		{
-			description: "should result in a server error if transaction cannot be rolled back",
-			setup: func() {
+			name: "ShouldFailWhenTransactionCannotBeRolledBack",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -681,11 +674,11 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(errors.New("Whoops, unable to rollback transaction!")).
 					Times(1)
 			},
-			expectError: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. error: server_error; rollback error: Whoops, unable to rollback transaction!",
 		},
 		{
-			description: "should result in a server error if transaction cannot be committed",
-			setup: func() {
+			name: "ShouldFailWhenTransactionCannotBeCommitted",
+			setup: func(mockTransactional *mock.MockTransactional, mockCoreStore *mock.MockCoreStorage) {
 				mockCoreStore.
 					EXPECT().
 					GetAuthorizeCodeSession(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -721,16 +714,18 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Return(nil).
 					Times(1)
 			},
-			expectError: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, unable to commit transaction!",
 		},
-	} {
-		t.Run(fmt.Sprintf("scenario=%s", testCase.description), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockTransactional = mock.NewMockTransactional(ctrl)
-			mockCoreStore = mock.NewMockCoreStorage(ctrl)
-			testCase.setup()
+			mockTransactional := mock.NewMockTransactional(ctrl)
+			mockCoreStore := mock.NewMockCoreStorage(ctrl)
+			tc.setup(mockTransactional, mockCoreStore)
 
 			handler := AuthorizeExplicitGrantHandler{
 				CoreStorage: transactionalStore{
@@ -747,8 +742,12 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 				},
 			}
 
-			if err := handler.PopulateTokenEndpointResponse(propagatedContext, request, response); testCase.expectError != nil {
-				assert.EqualError(t, err, testCase.expectError.Error())
+			response := oauth2.NewAccessResponse()
+			err := handler.PopulateTokenEndpointResponse(propagatedContext, request, response)
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

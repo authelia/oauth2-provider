@@ -55,7 +55,7 @@ func TestDefaultJWKSFetcherStrategy(t *testing.T) {
 	var h http.HandlerFunc
 
 	s := NewDefaultJWKSFetcherStrategy()
-	t.Run("case=fetching", func(t *testing.T) {
+	t.Run("Fetching", func(t *testing.T) {
 		var set *jose.JSONWebKeySet
 		h = func(w http.ResponseWriter, r *http.Request) {
 			require.NoError(t, json.NewEncoder(w).Encode(set))
@@ -148,7 +148,7 @@ func TestDefaultJWKSFetcherStrategy(t *testing.T) {
 		require.ErrorIs(t, err, errRoundTrip)
 	})
 
-	t.Run("case=error_network", func(t *testing.T) {
+	t.Run("ErrorNetwork", func(t *testing.T) {
 		s := NewDefaultJWKSFetcherStrategy()
 		h = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(400)
@@ -163,7 +163,7 @@ func TestDefaultJWKSFetcherStrategy(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("case=error_encoding", func(t *testing.T) {
+	t.Run("ErrorEncoding", func(t *testing.T) {
 		s := NewDefaultJWKSFetcherStrategy()
 		h = func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("[]"))

@@ -2,7 +2,6 @@ package oauth2_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -17,69 +16,59 @@ import (
 )
 
 func TestNewDeviceAuthorizeRequest(t *testing.T) {
-	var store *mock.MockStorage
-	for k, c := range []struct {
-		desc          string
-		conf          *Fosite
-		r             *http.Request
-		query         url.Values
-		expectedError error
-		mock          func()
-		expect        *DeviceAuthorizeRequest
+	testCases := []struct {
+		name   string
+		r      *http.Request
+		query  url.Values
+		err    string
+		mock   func(store *mock.MockStorage)
+		expect *DeviceAuthorizeRequest
 	}{
-		/* empty request */
 		{
-			desc:          "empty request fails",
-			conf:          &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
-			expectedError: ErrInvalidClient,
-			mock: func() {
+			name: "ShouldFailEmptyRequest",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
 		},
-		/* invalid client */
 		{
-			desc: "invalid client fails",
-			conf: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name: "ShouldFailInvalidClient",
 			r: &http.Request{
 				PostForm: url.Values{
 					"client_id": {"1234"},
 					"scope":     {"foo bar"},
 				},
 			},
-			expectedError: ErrInvalidClient,
-			mock: func() {
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
 		},
-		/* fails because scope not given */
 		{
-			desc: "should fail because client does not have scope baz",
-			conf: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name: "ShouldFailClientWithoutScopeBaz",
 			r: &http.Request{
 				PostForm: url.Values{
 					"client_id": {"1234"},
 					"scope":     {"foo bar baz"},
 				},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"},
 					Scopes:     []string{"foo", "bar"},
 				}, nil)
 			},
-			expectedError: ErrInvalidScope,
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
-		/* success case */
 		{
-			desc: "should pass",
-			conf: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name: "ShouldPass",
 			r: &http.Request{
 				PostForm: url.Values{
 					"client_id": {"1234"},
 					"scope":     {"foo bar"},
 				},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					Scopes:     []string{"foo", "bar"},
 					GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"},
@@ -94,38 +83,40 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* should fail because doesn't have proper grant */
 		{
-			desc: "should pass",
-			conf: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name: "ShouldFailClientWithoutDeviceCodeGrant",
 			r: &http.Request{
 				PostForm: url.Values{
 					"client_id": {"1234"},
 					"scope":     {"foo bar"},
 				},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					Scopes: []string{"foo", "bar"},
 				}, nil)
 			},
-			expectedError: ErrInvalidGrant,
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The requested OAuth 2.0 Client does not have the 'urn:ietf:params:oauth:grant-type:device_code' grant.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store = mock.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 
-			c.mock()
-			if c.r == nil {
-				c.r = &http.Request{Header: http.Header{}}
+			store := mock.NewMockStorage(ctrl)
+			conf := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}}
+
+			tc.mock(store)
+			r := tc.r
+			if r == nil {
+				r = &http.Request{Header: http.Header{}}
 			}
 
-			c.conf.Store = store
-			ar, err := c.conf.NewRFC862DeviceAuthorizeRequest(context.Background(), c.r)
-			if c.expectedError != nil {
-				assert.EqualError(t, err, c.expectedError.Error())
+			ar, err := conf.NewRFC862DeviceAuthorizeRequest(context.Background(), r)
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 				assert.NotNil(t, ar.GetRequestedAt())

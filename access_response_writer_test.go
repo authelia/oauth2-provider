@@ -5,7 +5,6 @@ package oauth2_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,71 +16,81 @@ import (
 )
 
 func TestNewAccessResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	handler := mock.NewMockTokenEndpointHandler(ctrl)
-	defer ctrl.Finish()
-
-	config := &Config{}
-	provider := &Fosite{Config: config}
-	for k, c := range []struct {
-		handlers  TokenEndpointHandlers
-		mock      func()
-		expectErr error
-		expect    AccessResponder
+	testCases := []struct {
+		name         string
+		emptyHandler bool
+		mock         func(handler *mock.MockTokenEndpointHandler)
+		err          string
+		expect       AccessResponder
 	}{
 		{
-			mock:      func() {},
-			handlers:  TokenEndpointHandlers{},
-			expectErr: ErrServerError,
+			name:         "ShouldFailNoHandlers",
+			emptyHandler: true,
+			mock:         func(handler *mock.MockTokenEndpointHandler) {},
+			err:          "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. An internal server occurred while trying to complete the request. Access token or token type not set by TokenEndpointHandlers.",
 		},
 		{
-			mock: func() {
+			name: "ShouldFailHandlerReturnsError",
+			mock: func(handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Return(ErrServerError)
 			},
-			handlers:  TokenEndpointHandlers{handler},
-			expectErr: ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			mock: func() {
+			name: "ShouldFailHandlerSetsNoToken",
+			mock: func(handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
-			handlers:  TokenEndpointHandlers{handler},
-			expectErr: ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. An internal server occurred while trying to complete the request. Access token or token type not set by TokenEndpointHandlers.",
 		},
 		{
-			mock: func() {
+			name: "ShouldFailHandlerSetsOnlyAccessToken",
+			mock: func(handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, responder AccessResponder) {
 					responder.SetAccessToken("foo")
 				}).Return(nil)
 			},
-			handlers:  TokenEndpointHandlers{handler},
-			expectErr: ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. An internal server occurred while trying to complete the request. Access token or token type not set by TokenEndpointHandlers.",
 		},
 		{
-			mock: func() {
+			name: "ShouldPass",
+			mock: func(handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, responder AccessResponder) {
 					responder.SetAccessToken("foo")
 					responder.SetTokenType("bar")
 				}).Return(nil)
 			},
-			handlers: TokenEndpointHandlers{handler},
 			expect: &AccessResponse{
 				Extra:       map[string]any{},
 				AccessToken: "foo",
 				TokenType:   "bar",
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			config.TokenEndpointHandlers = c.handlers
-			c.mock()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			handler := mock.NewMockTokenEndpointHandler(ctrl)
+
+			config := &Config{}
+			if tc.emptyHandler {
+				config.TokenEndpointHandlers = TokenEndpointHandlers{}
+			} else {
+				config.TokenEndpointHandlers = TokenEndpointHandlers{handler}
+			}
+			provider := &Fosite{Config: config}
+
+			tc.mock(handler)
 			ar, err := provider.NewAccessResponse(t.Context(), nil)
 
-			if c.expectErr != nil {
-				assert.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, ar, c.expect)
+				assert.Equal(t, ar, tc.expect)
 			}
 		})
 	}

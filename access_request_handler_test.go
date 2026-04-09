@@ -238,56 +238,49 @@ func TestNewAccessRequest(t *testing.T) {
 }
 
 func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mock.NewMockStorage(ctrl)
-	handler := mock.NewMockTokenEndpointHandler(ctrl)
-	handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	defer ctrl.Finish()
-
 	client := &DefaultClient{}
 	anotherClient := &DefaultClient{ID: "another", ClientSecret: testClientSecretBar}
-	config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	provider := &Fosite{Store: store, Config: config}
-	for k, c := range []struct {
-		header    http.Header
-		form      url.Values
-		mock      func()
-		method    string
-		expectErr error
-		expect    *AccessRequest
-		handlers  TokenEndpointHandlers
+
+	testCases := []struct {
+		name     string
+		header   http.Header
+		form     url.Values
+		mock     func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler)
+		method   string
+		err      string
+		expect   *AccessRequest
+		handlers TokenEndpointHandlers
 	}{
-		// No grant type -> error
 		{
+			name: "ShouldFailNoGrantType",
 			form: url.Values{},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 			},
-			method:    "POST",
-			expectErr: ErrInvalidRequest,
+			method: "POST",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
-		// No registered handlers -> error
 		{
+			name: "ShouldFailNoRegisteredHandlers",
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 			},
-			method:    "POST",
-			expectErr: ErrInvalidRequest,
-			handlers:  TokenEndpointHandlers{},
+			method:   "POST",
+			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
+			handlers: TokenEndpointHandlers{},
 		},
-		// Handler can skip client auth and ignores missing client.
 		{
+			name: "ShouldPassHandlerSkipsClientAuthAndIgnoresMissingClient",
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				// despite error from storage, we should success, because client auth is not required
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(nil, errors.New("no client")).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
@@ -299,14 +292,13 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 					Client: client,
 				},
 			},
-			handlers: TokenEndpointHandlers{handler},
 		},
-		// Should pass if no auth is set in the header and can skip!
 		{
+			name: "ShouldPassNoAuthHeaderCanSkip",
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method: "POST",
@@ -316,17 +308,16 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 					Client: client,
 				},
 			},
-			handlers: TokenEndpointHandlers{handler},
 		},
-		// Should also pass if client auth is set!
 		{
+			name: "ShouldPassWithClientAuthSet",
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(anotherClient, nil).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -337,26 +328,43 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 					Client: anotherClient,
 				},
 			},
-			handlers: TokenEndpointHandlers{handler},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			r := &http.Request{
-				Header:   c.header,
-				PostForm: c.form,
-				Form:     c.form,
-				Method:   c.method,
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			handler := mock.NewMockTokenEndpointHandler(ctrl)
+			handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+
+			config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+			provider := &Fosite{Store: store, Config: config}
+
+			handlers := tc.handlers
+			if handlers == nil {
+				handlers = TokenEndpointHandlers{handler}
 			}
-			c.mock()
+			config.TokenEndpointHandlers = handlers
+
+			r := &http.Request{
+				Header:   tc.header,
+				PostForm: tc.form,
+				Form:     tc.form,
+				Method:   tc.method,
+			}
+			tc.mock(store, handler)
 			ctx := NewContext()
-			config.TokenEndpointHandlers = c.handlers
 			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
-			if c.expectErr != nil {
-				assert.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
-				AssertObjectKeysEqual(t, c.expect, ar, "GrantTypes", "Client")
+				AssertObjectKeysEqual(t, tc.expect, ar, "GrantTypes", "Client")
 				assert.NotNil(t, ar.GetRequestedAt())
 			}
 		})
@@ -365,56 +373,43 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 
 // In this test case one handler requires client auth and another handler not.
 func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mock.NewMockStorage(ctrl)
-
-	handlerWithClientAuth := mock.NewMockTokenEndpointHandler(ctrl)
-	handlerWithClientAuth.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	handlerWithClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
-
-	handlerWithoutClientAuth := mock.NewMockTokenEndpointHandler(ctrl)
-	handlerWithoutClientAuth.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	handlerWithoutClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-
-	defer ctrl.Finish()
-
 	client := &DefaultClient{}
-	config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
-	provider := &Fosite{Store: store, Config: config}
-	for k, c := range []struct {
-		header    http.Header
-		form      url.Values
-		mock      func()
-		method    string
-		expectErr error
-		expect    *AccessRequest
-		handlers  TokenEndpointHandlers
+
+	testCases := []struct {
+		name   string
+		header http.Header
+		form   url.Values
+		mock   func(store *mock.MockStorage, handlerWithClientAuth, handlerWithoutClientAuth *mock.MockTokenEndpointHandler)
+		method string
+		err    string
+		expect *AccessRequest
 	}{
 		{
+			name: "ShouldFailWrongClientSecret",
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handlerWithClientAuth, handlerWithoutClientAuth *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method:    "POST",
-			expectErr: ErrInvalidClient,
-			handlers:  TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
+			method: "POST",
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
+			name: "ShouldPassValidClientSecret",
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handlerWithClientAuth, handlerWithoutClientAuth *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretBar
@@ -428,38 +423,57 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 					Client: client,
 				},
 			},
-			handlers: TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
 		},
 		{
+			name:   "ShouldFailMissingClientAuthHeader",
 			header: http.Header{},
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage, handlerWithClientAuth, handlerWithoutClientAuth *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method:    "POST",
-			expectErr: ErrInvalidRequest,
-			handlers:  TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
+			method: "POST",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			r := &http.Request{
-				Header:   c.header,
-				PostForm: c.form,
-				Form:     c.form,
-				Method:   c.method,
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+
+			handlerWithClientAuth := mock.NewMockTokenEndpointHandler(ctrl)
+			handlerWithClientAuth.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			handlerWithClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+
+			handlerWithoutClientAuth := mock.NewMockTokenEndpointHandler(ctrl)
+			handlerWithoutClientAuth.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			handlerWithoutClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+
+			config := &Config{
+				AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
+				TokenEndpointHandlers:    TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
 			}
-			c.mock()
-			config.TokenEndpointHandlers = c.handlers
+			provider := &Fosite{Store: store, Config: config}
+
+			r := &http.Request{
+				Header:   tc.header,
+				PostForm: tc.form,
+				Form:     tc.form,
+				Method:   tc.method,
+			}
+			tc.mock(store, handlerWithClientAuth, handlerWithoutClientAuth)
 			ar, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
 
-			if c.expectErr != nil {
-				assert.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
-				AssertObjectKeysEqual(t, c.expect, ar, "GrantTypes", "Client")
+				AssertObjectKeysEqual(t, tc.expect, ar, "GrantTypes", "Client")
 				assert.NotNil(t, ar.GetRequestedAt())
 			}
 		})

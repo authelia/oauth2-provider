@@ -15,7 +15,7 @@ import (
 )
 
 func TestRFC6749Error(t *testing.T) {
-	t.Run("case=wrap", func(t *testing.T) {
+	t.Run("Wrap", func(t *testing.T) {
 		orig := errors.New("hi")
 		wrap := new(RFC6749Error)
 		wrap.Wrap(orig)
@@ -23,7 +23,7 @@ func TestRFC6749Error(t *testing.T) {
 		assert.EqualValues(t, orig.(errorsx.StackTracer).StackTrace(), wrap.StackTrace())
 	})
 
-	t.Run("case=wrap_self", func(t *testing.T) {
+	t.Run("WrapSelf", func(t *testing.T) {
 		wrap := new(RFC6749Error)
 		wrap.Wrap(wrap)
 
@@ -69,22 +69,22 @@ func TestErrorI18N(t *testing.T) {
 		},
 	})
 
-	t.Run("case=legacy", func(t *testing.T) {
+	t.Run("Legacy", func(t *testing.T) {
 		err := ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintf("HTTP method is '%s', expected 'POST'.", "GET")
 		assert.EqualValues(t, "El propietario del recurso o el servidor de autorización denegó la solicitud. El método HTTP es 'GET', esperado 'POST'.", err.GetDescription())
 	})
 
-	t.Run("case=unsupported_locale_legacy", func(t *testing.T) {
+	t.Run("UnsupportedLocaleLegacy", func(t *testing.T) {
 		err := ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintf("HTTP method is '%s', expected 'POST'.", "GET")
 		assert.EqualValues(t, "The resource owner or authorization server denied the request. HTTP method is 'GET', expected 'POST'.", err.GetDescription())
 	})
 
-	t.Run("case=simple", func(t *testing.T) {
+	t.Run("Simple", func(t *testing.T) {
 		err := ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 		assert.EqualValues(t, "El propietario del recurso o el servidor de autorización denegó la solicitud. El método HTTP es 'GET', esperado 'POST'.", err.GetDescription())
 	})
 
-	t.Run("case=unsupported_locale", func(t *testing.T) {
+	t.Run("UnsupportedLocale", func(t *testing.T) {
 		err := ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 		assert.EqualValues(t, "The resource owner or authorization server denied the request. HTTP method is 'GET', expected 'POST'.", err.GetDescription())
 	})

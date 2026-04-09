@@ -5,8 +5,6 @@ package oauth2
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -40,23 +38,22 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
 		},
 	}
-	for k, c := range []struct {
-		description string
-		mock        func()
-		req         *http.Request
-		expectErr   error
+	testCases := []struct {
+		name string
+		mock func(areq *mock.MockAccessRequester)
+		err  string
 	}{
 		{
-			description: "should fail because not responsible",
-			expectErr:   oauth2.ErrUnknownRequest,
-			mock: func() {
+			name: "ShouldFailNotResponsible",
+			err:  "The handler is not responsible for this request.",
+			mock: func(areq *mock.MockAccessRequester) {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{""})
 			},
 		},
 		{
-			description: "should fail because audience not valid",
-			expectErr:   oauth2.ErrInvalidRequest,
-			mock: func() {
+			name: "ShouldFailAudienceNotValid",
+			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
+			mock: func(areq *mock.MockAccessRequester) {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
 				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.authelia.com/not-api"}).Times(2)
@@ -68,9 +65,9 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			description: "should fail because scope not valid",
-			expectErr:   oauth2.ErrInvalidScope,
-			mock: func() {
+			name: "ShouldFailScopeNotValid",
+			err:  "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'bar'.",
+			mock: func(areq *mock.MockAccessRequester) {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
@@ -80,8 +77,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			description: "should pass",
-			mock: func() {
+			name: "ShouldPass",
+			mock: func(areq *mock.MockAccessRequester) {
 				areq.EXPECT().GetSession().Return(new(oauth2.DefaultSession))
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
@@ -93,12 +90,14 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetRequestForm().Return(url.Values{})
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.mock()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock(areq)
 			err := h.HandleTokenEndpointRequest(t.Context(), areq)
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -107,62 +106,65 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mock.NewMockClientCredentialsGrantStorage(ctrl)
-	chgen := mock.NewMockAccessTokenStrategy(ctrl)
-	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
-	aresp := oauth2.NewAccessResponse()
-	defer ctrl.Finish()
-
-	h := ClientCredentialsGrantHandler{
-		HandleHelper: &HandleHelper{
-			AccessTokenStorage:  store,
-			AccessTokenStrategy: chgen,
-			Config: &oauth2.Config{
-				AccessTokenLifespan: time.Hour,
-			},
-		},
-		Config: &oauth2.Config{
-			ScopeStrategy: oauth2.HierarchicScopeStrategy,
-		},
-	}
-	for k, c := range []struct {
-		description string
-		mock        func()
-		req         *http.Request
-		expectErr   error
+	testCases := []struct {
+		name string
+		mock func(areq *oauth2.AccessRequest, store *mock.MockClientCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy)
+		err  string
 	}{
 		{
-			description: "should fail because not responsible",
-			expectErr:   oauth2.ErrUnknownRequest,
-			mock: func() {
+			name: "ShouldFailNotResponsible",
+			err:  "The handler is not responsible for this request.",
+			mock: func(areq *oauth2.AccessRequest, store *mock.MockClientCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy) {
 				areq.GrantTypes = oauth2.Arguments{""}
 			},
 		},
 		{
-			description: "should fail because grant_type not allowed",
-			expectErr:   oauth2.ErrUnauthorizedClient,
-			mock: func() {
+			name: "ShouldFailGrantTypeNotAllowed",
+			err:  "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'.",
+			mock: func(areq *oauth2.AccessRequest, store *mock.MockClientCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeClientCredentials}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}}
 			},
 		},
 		{
-			description: "should pass",
-			mock: func() {
+			name: "ShouldPass",
+			mock: func(areq *oauth2.AccessRequest, store *mock.MockClientCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeClientCredentials}
 				areq.Session = &oauth2.DefaultSession{}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials}}
-				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return("tokenfoo.bar", "bar", nil)
-				store.EXPECT().CreateAccessTokenSession(t.Context(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+				chgen.EXPECT().GenerateAccessToken(gomock.Any(), areq).Return("tokenfoo.bar", "bar", nil)
+				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.mock()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockClientCredentialsGrantStorage(ctrl)
+			chgen := mock.NewMockAccessTokenStrategy(ctrl)
+			areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
+			aresp := oauth2.NewAccessResponse()
+
+			h := ClientCredentialsGrantHandler{
+				HandleHelper: &HandleHelper{
+					AccessTokenStorage:  store,
+					AccessTokenStrategy: chgen,
+					Config: &oauth2.Config{
+						AccessTokenLifespan: time.Hour,
+					},
+				},
+				Config: &oauth2.Config{
+					ScopeStrategy: oauth2.HierarchicScopeStrategy,
+				},
+			}
+
+			tc.mock(areq, store, chgen)
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}

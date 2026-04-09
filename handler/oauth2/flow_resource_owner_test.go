@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"fmt"
 	"net/url"
 	"testing"
 	"time"
@@ -21,80 +20,96 @@ import (
 )
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
-	defer ctrl.Finish()
-
-	areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
-	areq.Form = url.Values{}
-	for k, c := range []struct {
-		description string
-		setup       func(config *oauth2.Config)
-		expectErr   error
-		check       func(areq *oauth2.AccessRequest)
+	testCases := []struct {
+		name  string
+		setup func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config)
+		err   string
+		check func(t *testing.T, areq *oauth2.AccessRequest)
 	}{
 		{
-			description: "should fail because not responsible",
-			expectErr:   oauth2.ErrUnknownRequest,
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailNotResponsible",
+			err:  "The handler is not responsible for this request.",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{"123"}
 			},
 		},
 		{
-			description: "should fail because scope missing",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailScopeMissing",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{}}
 				areq.RequestedScope = []string{"foo-scope"}
 			},
-			expectErr: oauth2.ErrInvalidScope,
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'foo-scope'.",
 		},
 		{
-			description: "should fail because audience missing",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailAudienceMissing",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: oauth2.ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			description: "should fail because invalid grant_type specified",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailInvalidGrantTypeSpecified",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}, Scopes: []string{"foo-scope"}}
 			},
-			expectErr: oauth2.ErrUnauthorizedClient,
+			err: "The client is not authorized to request a token using this method. The client is not allowed to use authorization grant 'password'.",
 		},
 		{
-			description: "should fail because invalid credentials",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailInvalidCredentials",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.Form.Set(consts.FormParameterUsername, "peter")
 				areq.Form.Set(consts.FormParameterPassword, "pan")
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
-				store.EXPECT().Authenticate(t.Context(), "peter", "pan").Return(oauth2.ErrNotFound)
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(oauth2.ErrNotFound)
 			},
-			expectErr: oauth2.ErrInvalidGrant,
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to authenticate the provided username and password credentials. Could not find the requested resource(s).",
 		},
 		{
-			description: "should fail because error on lookup",
-			setup: func(config *oauth2.Config) {
-				store.EXPECT().Authenticate(t.Context(), "peter", "pan").Return(errors.New(""))
+			name: "ShouldFailErrorOnLookup",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
+
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(errors.New(""))
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "should pass",
-			setup: func(config *oauth2.Config) {
-				store.EXPECT().Authenticate(t.Context(), "peter", "pan").Return(nil)
+			name: "ShouldPass",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
+
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(nil)
 			},
-			check: func(areq *oauth2.AccessRequest) {
+			check: func(t *testing.T, areq *oauth2.AccessRequest) {
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+
+			areq := oauth2.NewAccessRequest(new(oauth2.DefaultSession))
+			areq.Form = url.Values{}
+
 			config := &oauth2.Config{
 				AccessTokenLifespan:      time.Hour,
 				RefreshTokenLifespan:     time.Hour,
@@ -109,15 +124,15 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				},
 				Config: config,
 			}
-			c.setup(config)
+			tc.setup(areq, store, config)
 			err := h.HandleTokenEndpointRequest(t.Context(), areq)
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
-				if c.check != nil {
-					c.check(areq)
+				if tc.check != nil {
+					tc.check(t, areq)
 				}
 			}
 		})
@@ -125,47 +140,36 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
-	chgen := mock.NewMockAccessTokenStrategy(ctrl)
-	rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
 	mockAT := "accesstoken.foo.bar"
 	mockRT := "refreshtoken.bar.foo"
-	defer ctrl.Finish()
 
-	var areq *oauth2.AccessRequest
-	var aresp *oauth2.AccessResponse
-	config := &oauth2.Config{}
-	var h ResourceOwnerPasswordCredentialsGrantHandler
-	h.Config = config
-
-	for k, c := range []struct {
-		description string
-		setup       func(*oauth2.Config)
-		expectErr   error
-		expect      func()
+	testCases := []struct {
+		name   string
+		setup  func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config)
+		err    string
+		expect func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
-			description: "should fail because not responsible",
-			expectErr:   oauth2.ErrUnknownRequest,
-			setup: func(config *oauth2.Config) {
+			name: "ShouldFailNotResponsible",
+			err:  "The handler is not responsible for this request.",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{""}
 			},
 		},
 		{
-			description: "should pass",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldPass",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(t.Context(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
-			expect: func() {
+			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "unexpected refresh token")
 			},
 		},
 		{
-			description: "should pass - offline scope",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldPassOfflineScope",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				areq.GrantScope(consts.ScopeOffline)
 				rtstr.EXPECT().GenerateRefreshToken(t.Context(), areq).Return(mockRT, "bar", nil)
@@ -173,13 +177,13 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(t.Context(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
-			expect: func() {
+			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
 			},
 		},
 		{
-			description: "should pass - refresh token without offline scope",
-			setup: func(config *oauth2.Config) {
+			name: "ShouldPassRefreshTokenWithoutOfflineScope",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
 				config.RefreshTokenScopes = []string{}
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
 				rtstr.EXPECT().GenerateRefreshToken(t.Context(), areq).Return(mockRT, "bar", nil)
@@ -187,20 +191,29 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return(mockAT, "bar", nil)
 				store.EXPECT().CreateAccessTokenSession(t.Context(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
-			expect: func() {
+			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
 				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			areq = oauth2.NewAccessRequest(nil)
-			aresp = oauth2.NewAccessResponse()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+			chgen := mock.NewMockAccessTokenStrategy(ctrl)
+			rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
+
+			areq := oauth2.NewAccessRequest(nil)
+			aresp := oauth2.NewAccessResponse()
 			areq.Session = &oauth2.DefaultSession{}
 			config := &oauth2.Config{
 				RefreshTokenScopes:  []string{consts.ScopeOffline},
 				AccessTokenLifespan: time.Hour,
 			}
-			h = ResourceOwnerPasswordCredentialsGrantHandler{
+			h := ResourceOwnerPasswordCredentialsGrantHandler{
 				ResourceOwnerPasswordCredentialsGrantStorage: store,
 				HandleHelper: &HandleHelper{
 					AccessTokenStorage:  store,
@@ -208,14 +221,14 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				RefreshTokenStrategy: rtstr, Config: config,
 			}
-			c.setup(config)
+			tc.setup(areq, store, chgen, rtstr, config)
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
-				require.NoError(t, err)
-				if c.expect != nil {
-					c.expect()
+				assert.NoError(t, err)
+				if tc.expect != nil {
+					tc.expect(t, aresp)
 				}
 			}
 		})

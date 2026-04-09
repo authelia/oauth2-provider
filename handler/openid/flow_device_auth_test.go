@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -19,48 +18,14 @@ import (
 )
 
 func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &oauth2.Config{
-		AccessTokenLifespan:   time.Minute * 24,
-		AuthorizeCodeLifespan: time.Minute * 24,
-		RFC8628CodeLifespan:   time.Minute * 24,
-	}
-
-	jwtStrategy := &jwt.DefaultStrategy{
-		Config: config,
-		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
-	}
-
-	j := &DefaultStrategy{
-		Strategy: jwtStrategy,
-		Config:   config,
-	}
-
-	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
-	tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
-
-	handler := &OpenIDConnectDeviceAuthorizeHandler{
-		OpenIDConnectRequestStorage:   oidcStore,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
-		CodeTokenEndpointHandler:      tokenHandler,
-		Config:                        config,
-		IDTokenHandleHelper: &IDTokenHandleHelper{
-			IDTokenStrategy: j,
-		},
-	}
-	req := oauth2.NewDeviceAuthorizeRequest()
-	resp := oauth2.NewRFC8628UserAuthorizeResponse()
-
-	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
+	testCases := []struct {
+		name  string
+		setup func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler)
+		err   string
 	}{
 		{
-			description: "Success",
-			setup: func() {
+			name: "ShouldPass",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
@@ -70,14 +35,14 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 			},
 		},
 		{
-			description: "Success - no openid scope",
-			setup: func() {
+			name: "ShouldPassNoOpenIDScope",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
 				req.GrantedScope = []string{"foobar"}
 			},
 		},
 		{
-			description: "Success - client does not support device code grant type",
-			setup: func() {
+			name: "ShouldPassClientDoesNotSupportDeviceCodeGrantType",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
 				req.GrantedScope = []string{consts.ScopeOpenID, "foobar"}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeImplicit)},
@@ -85,19 +50,19 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 			},
 		},
 		{
-			description: "Fail - request does not have device signature",
-			setup: func() {
+			name: "ShouldFailRequestDoesNotHaveDeviceSignature",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
 				req.GrantedScope = []string{consts.ScopeOpenID, "foobar"}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
 				}
 				req.SetDeviceCodeSignature("")
 			},
-			expectErr: oauth2.ErrMisconfiguration.WithDebug("The device code has not been issued yet, indicating a broken code configuration."),
+			err: "The request failed because of an internal error that is probably caused by misconfiguration. The device code has not been issued yet, indicating a broken code configuration.",
 		},
 		{
-			description: "Fail - failed to create OIDC session",
-			setup: func() {
+			name: "ShouldFailFailedToCreateOIDCSession",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
@@ -105,15 +70,51 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 				req.SetDeviceCodeSignature("foobar")
 				oidcStore.EXPECT().CreateOpenIDConnectSession(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("foobar"))
 			},
-			expectErr: oauth2.ErrServerError.WithDebug("foobar"),
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. foobar",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			config := &oauth2.Config{
+				AccessTokenLifespan:   time.Minute * 24,
+				AuthorizeCodeLifespan: time.Minute * 24,
+				RFC8628CodeLifespan:   time.Minute * 24,
+			}
+
+			jwtStrategy := &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+			}
+
+			j := &DefaultStrategy{
+				Strategy: jwtStrategy,
+				Config:   config,
+			}
+
+			oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
+			tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
+
+			handler := &OpenIDConnectDeviceAuthorizeHandler{
+				OpenIDConnectRequestStorage:   oidcStore,
+				OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
+				CodeTokenEndpointHandler:      tokenHandler,
+				Config:                        config,
+				IDTokenHandleHelper: &IDTokenHandleHelper{
+					IDTokenStrategy: j,
+				},
+			}
+			req := oauth2.NewDeviceAuthorizeRequest()
+			resp := oauth2.NewRFC8628UserAuthorizeResponse()
+
+			tc.setup(req, oidcStore, tokenHandler)
 			err := handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), req, resp)
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -122,51 +123,14 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 }
 
 func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &oauth2.Config{
-		AccessTokenLifespan:   time.Minute * 24,
-		AuthorizeCodeLifespan: time.Minute * 24,
-		RFC8628CodeLifespan:   time.Minute * 24,
-	}
-
-	jwtStrategy := &jwt.DefaultStrategy{
-		Config: config,
-		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
-	}
-
-	j := &DefaultStrategy{
-		Strategy: jwtStrategy,
-		Config:   config,
-	}
-
-	oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
-	tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
-
-	handler := &OpenIDConnectDeviceAuthorizeHandler{
-		OpenIDConnectRequestStorage:   oidcStore,
-		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
-		CodeTokenEndpointHandler:      tokenHandler,
-		Config:                        config,
-		IDTokenHandleHelper: &IDTokenHandleHelper{
-			IDTokenStrategy: j,
-		},
-	}
-	var (
-		req     *oauth2.AccessRequest
-		resp    *oauth2.AccessResponse
-		authReq *oauth2.AuthorizeRequest
-	)
-
-	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
+	testCases := []struct {
+		name  string
+		setup func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (req *oauth2.AccessRequest, resp *oauth2.AccessResponse)
+		err   string
 	}{
 		{
-			description: "Success",
-			setup: func() {
+			name: "ShouldPass",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
 				session := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "foobar",
@@ -175,7 +139,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 					RequestedAt: time.Now(),
 				}
 
-				req = oauth2.NewAccessRequest(nil)
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = session
@@ -183,98 +147,106 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
 
-				resp = oauth2.NewAccessResponse()
+				resp := oauth2.NewAccessResponse()
 
-				authReq = oauth2.NewAuthorizeRequest()
+				authReq := oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = session
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
 				oidcStore.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil)
+
+				return req, resp
 			},
 		},
 		{
-			description: "Failed - request has no device code grant type ",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailRequestHasNoDeviceCodeGrantType",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeAuthorizationCode)}
+				return req, oauth2.NewAccessResponse()
 			},
-			expectErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request.",
 		},
 		{
-			description: "Failed - no device code",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailNoDeviceCode",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("", errors.New(""))
+				return req, oauth2.NewAccessResponse()
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "Failed - get OIDC session ErrNoSessionFound",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailGetOIDCSessionErrNoSessionFound",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, ErrNoSessionFound)
+				return req, oauth2.NewAccessResponse()
 			},
-			expectErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request. Could not find the requested resource(s).",
 		},
 		{
-			description: "Failed - get OIDC session other error",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailGetOIDCSessionOtherError",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, errors.New(""))
+				return req, oauth2.NewAccessResponse()
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "Failed - auth request has no openid scope granted",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailAuthRequestHasNoOpenIDScopeGranted",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 
-				resp = oauth2.NewAccessResponse()
+				resp := oauth2.NewAccessResponse()
 
-				authReq = oauth2.NewAuthorizeRequest()
+				authReq := oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{"foobar"}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+				return req, resp
 			},
-			expectErr: oauth2.ErrMisconfiguration,
+			err: "The request failed because of an internal error that is probably caused by misconfiguration. An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration.",
 		},
 		{
-			description: "Failed - client has no device code grant type",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailClientHasNoDeviceCodeGrantType",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: []string{string(oauth2.GrantTypeAuthorizationCode)},
 				}
 
-				resp = oauth2.NewAccessResponse()
+				resp := oauth2.NewAccessResponse()
 
-				authReq = oauth2.NewAuthorizeRequest()
+				authReq := oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+				return req, resp
 			},
-			expectErr: oauth2.ErrUnauthorizedClient,
+			err: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'urn:ietf:params:oauth:grant-type:device_code'.",
 		},
 		{
-			description: "Failed - no session",
-			setup: func() {
-				req = oauth2.NewAccessRequest(nil)
+			name: "ShouldFailNoSession",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = nil
@@ -282,20 +254,21 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
 
-				resp = oauth2.NewAccessResponse()
+				resp := oauth2.NewAccessResponse()
 
-				authReq = oauth2.NewAuthorizeRequest()
+				authReq := oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = nil
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+				return req, resp
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the session must be of type 'openid.Session'.",
 		},
 		{
-			description: "Failed - ID Token Claim has no subject",
-			setup: func() {
+			name: "ShouldFailIDTokenClaimHasNoSubject",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
 				session := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: "",
@@ -304,7 +277,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 					RequestedAt: time.Now(),
 				}
 
-				req = oauth2.NewAccessRequest(nil)
+				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 				req.Session = session
@@ -312,24 +285,59 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode), string(oauth2.GrantTypeAuthorizationCode)},
 				}
 
-				resp = oauth2.NewAccessResponse()
+				resp := oauth2.NewAccessResponse()
 
-				authReq = oauth2.NewAuthorizeRequest()
+				authReq := oauth2.NewAuthorizeRequest()
 				authReq.GrantedScope = []string{consts.ScopeOpenID}
 				authReq.Session = session
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+				return req, resp
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because subject is an empty string.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			config := &oauth2.Config{
+				AccessTokenLifespan:   time.Minute * 24,
+				AuthorizeCodeLifespan: time.Minute * 24,
+				RFC8628CodeLifespan:   time.Minute * 24,
+			}
+
+			jwtStrategy := &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+			}
+
+			j := &DefaultStrategy{
+				Strategy: jwtStrategy,
+				Config:   config,
+			}
+
+			oidcStore := mock.NewMockOpenIDConnectRequestStorage(ctrl)
+			tokenHandler := mock.NewMockCodeTokenEndpointHandler(ctrl)
+
+			handler := &OpenIDConnectDeviceAuthorizeHandler{
+				OpenIDConnectRequestStorage:   oidcStore,
+				OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
+				CodeTokenEndpointHandler:      tokenHandler,
+				Config:                        config,
+				IDTokenHandleHelper: &IDTokenHandleHelper{
+					IDTokenStrategy: j,
+				},
+			}
+
+			req, resp := tc.setup(oidcStore, tokenHandler)
 			err := handler.PopulateTokenEndpointResponse(t.Context(), req, resp)
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}

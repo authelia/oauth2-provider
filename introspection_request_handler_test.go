@@ -5,7 +5,6 @@ package oauth2_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -26,14 +25,6 @@ import (
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	validator := mock.NewMockTokenIntrospector(ctrl)
-	defer ctrl.Finish()
-
-	ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
-
-	config := new(Config)
-	provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 	httpreq := &http.Request{
 		Method: "POST",
 		Header: http.Header{
@@ -43,15 +34,16 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			"token": []string{"introspect-token"},
 		},
 	}
-	for k, c := range []struct {
-		description string
-		setup       func()
+
+	testCases := []struct {
+		name        string
+		setup       func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher)
 		expectedTU  TokenUse
 		expectedATT string
 	}{
 		{
-			description: "introspecting access token",
-			setup: func() {
+			name: "ShouldIntrospectAccessToken",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
@@ -60,8 +52,8 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			expectedTU:  AccessToken,
 		},
 		{
-			description: "introspecting refresh token",
-			setup: func() {
+			name: "ShouldIntrospectRefreshToken",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(RefreshToken, nil)
@@ -69,13 +61,24 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			expectedATT: "",
 			expectedTU:  RefreshToken,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			validator := mock.NewMockTokenIntrospector(ctrl)
+			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
+
+			config := new(Config)
+			provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+
+			tc.setup(config, validator, ctx)
 			res, err := provider.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 			require.NoError(t, err)
-			assert.Equal(t, c.expectedATT, res.GetAccessTokenType())
-			assert.Equal(t, c.expectedTU, res.GetTokenUse())
+			assert.Equal(t, tc.expectedATT, res.GetAccessTokenType())
+			assert.Equal(t, tc.expectedTU, res.GetTokenUse())
 		})
 	}
 }
@@ -91,57 +94,32 @@ func TestIntrospectionResponse(t *testing.T) {
 }
 
 func TestNewIntrospectionRequest(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	validator := mock.NewMockTokenIntrospector(ctrl)
-	defer ctrl.Finish()
-
-	ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
-
-	config := new(Config)
-	f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
-	httpreq := &http.Request{
-		Method: "POST",
-		Header: http.Header{},
-		Form:   url.Values{},
-	}
 	newErr := errors.New("asdf")
 
-	for k, c := range []struct {
-		name      string
-		setup     func()
-		expectErr error
-		isActive  bool
+	testCases := []struct {
+		name     string
+		setup    func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request
+		err      string
+		isActive bool
 	}{
 		{
-			name: "should fail",
-			setup: func() {
+			name: "ShouldFailEmptyRequest",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				return &http.Request{
+					Method: "POST",
+					Header: http.Header{},
+					Form:   url.Values{},
+				}
 			},
-			expectErr: ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
 		{
-			name: "should fail",
-			setup: func() {
+			name: "ShouldFailIntrospectionError",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				httpreq = &http.Request{
-					Method: "POST",
-					Header: http.Header{
-						consts.HeaderAuthorization: []string{"bearer some-token"},
-					},
-					PostForm: url.Values{
-						"token": []string{"introspect-token"},
-					},
-				}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), newErr)
-			},
-			isActive:  false,
-			expectErr: ErrInactiveToken,
-		},
-		{
-			name: "should pass",
-			setup: func() {
-				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				httpreq = &http.Request{
+				return &http.Request{
 					Method: "POST",
 					Header: http.Header{
 						consts.HeaderAuthorization: []string{"bearer some-token"},
@@ -150,16 +128,34 @@ func TestNewIntrospectionRequest(t *testing.T) {
 						"token": []string{"introspect-token"},
 					},
 				}
+			},
+			isActive: false,
+			err:      "Token is inactive because it is malformed, expired or otherwise invalid. An introspection strategy indicated that the token is inactive. The error is unrecognizable asdf",
+		},
+		{
+			name: "ShouldPass",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				return &http.Request{
+					Method: "POST",
+					Header: http.Header{
+						consts.HeaderAuthorization: []string{"bearer some-token"},
+					},
+					PostForm: url.Values{
+						"token": []string{"introspect-token"},
+					},
+				}
 			},
 			isActive: true,
 		},
 		{
-			name: "should pass with basic auth if username and password encoded",
-			setup: func() {
+			name: "ShouldPassWithBasicAuthIfUsernameAndPasswordEncoded",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				httpreq = &http.Request{
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				return &http.Request{
 					Method: "POST",
 					Header: http.Header{
 						// Basic Authorization with username=encoded:client and password=encoded&password
@@ -169,15 +165,15 @@ func TestNewIntrospectionRequest(t *testing.T) {
 						"token": []string{"introspect-token"},
 					},
 				}
-				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 			},
 			isActive: true,
 		},
 		{
-			name: "should pass with basic auth if username and password not encoded",
-			setup: func() {
+			name: "ShouldPassWithBasicAuthIfUsernameAndPasswordNotEncoded",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				httpreq = &http.Request{
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				return &http.Request{
 					Method: "POST",
 					Header: http.Header{
 						// Basic Authorization with username=my-client and password=foobar
@@ -187,15 +183,15 @@ func TestNewIntrospectionRequest(t *testing.T) {
 						"token": []string{"introspect-token"},
 					},
 				}
-				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 			},
 			isActive: true,
 		},
 		{
-			name: "should pass with basic auth if username and password not encoded",
-			setup: func() {
+			name: "ShouldPassWithBasicAuthIfUsernameAndPasswordNotEncodedDuplicate",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				httpreq = &http.Request{
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				return &http.Request{
 					Method: "POST",
 					Header: http.Header{
 						// Basic Authorization with username=my-client and password=foobar
@@ -205,20 +201,30 @@ func TestNewIntrospectionRequest(t *testing.T) {
 						"token": []string{"introspect-token"},
 					},
 				}
-				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 			},
 			isActive: true,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			validator := mock.NewMockTokenIntrospector(ctrl)
+			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
+
+			config := new(Config)
+			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+
+			httpreq := tc.setup(config, validator, ctx)
 			res, err := f.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 
-			if c.expectErr != nil {
-				assert.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, c.isActive, res.IsActive())
+				assert.Equal(t, tc.isActive, res.IsActive())
 			}
 		})
 	}
@@ -232,22 +238,22 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 		expected    map[string]any
 	}{
 		{
-			"ShouldDecodeInactive",
-			&IntrospectionResponse{},
-			nil,
-			map[string]any{consts.ClaimActive: false},
+			name:        "ShouldDecodeInactive",
+			have:        &IntrospectionResponse{},
+			expectedaud: nil,
+			expected:    map[string]any{consts.ClaimActive: false},
 		},
 		{
-			"ShouldReturnActiveWithoutAccessRequester",
-			&IntrospectionResponse{
+			name: "ShouldReturnActiveWithoutAccessRequester",
+			have: &IntrospectionResponse{
 				Active: true,
 			},
-			nil,
-			map[string]any{consts.ClaimActive: true},
+			expectedaud: nil,
+			expected:    map[string]any{consts.ClaimActive: true},
 		},
 		{
-			"ShouldReturnActiveWithAccessRequester",
-			&IntrospectionResponse{
+			name: "ShouldReturnActiveWithAccessRequester",
+			have: &IntrospectionResponse{
 				Active: true,
 				AccessRequester: &AccessRequest{
 					Request: Request{
@@ -258,8 +264,8 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 					},
 				},
 			},
-			nil,
-			map[string]any{
+			expectedaud: nil,
+			expected: map[string]any{
 				consts.ClaimActive:           true,
 				consts.ClaimScope:            "openid profile",
 				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
@@ -268,8 +274,8 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 			},
 		},
 		{
-			"ShouldReturnActiveWithAccessRequesterAndSession",
-			&IntrospectionResponse{
+			name: "ShouldReturnActiveWithAccessRequesterAndSession",
+			have: &IntrospectionResponse{
 				Active: true,
 				AccessRequester: &AccessRequest{
 					Request: Request{
@@ -292,8 +298,8 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 					},
 				},
 			},
-			nil,
-			map[string]any{
+			expectedaud: nil,
+			expected: map[string]any{
 				consts.ClaimActive:           true,
 				consts.ClaimScope:            "openid profile",
 				consts.ClaimAudience:         []string{"https://example.com", "aclient"},
@@ -302,8 +308,8 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 			},
 		},
 		{
-			"ShouldReturnActiveWithAccessRequesterAndSessionWithIDTokenClaimsAndUsername",
-			&IntrospectionResponse{
+			name: "ShouldReturnActiveWithAccessRequesterAndSessionWithIDTokenClaimsAndUsername",
+			have: &IntrospectionResponse{
 				Client: &DefaultClient{
 					ID:       "rclient",
 					Audience: []string{"https://rs.example.com"},
@@ -331,8 +337,8 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 					},
 				},
 			},
-			[]string{"rclient"},
-			map[string]any{
+			expectedaud: []string{"rclient"},
+			expected: map[string]any{
 				consts.ClaimActive:           true,
 				consts.ClaimScope:            "openid profile",
 				consts.ClaimAudience:         []string{"https://example.com", "aclient"},

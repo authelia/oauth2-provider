@@ -25,41 +25,29 @@ func parseURL(uu string) *url.URL {
 
 func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 	requestURIPrefix := "urn:ietf:params:oauth:request_uri_diff:"
-	store := storage.NewMemoryStore()
-	handler := PushedAuthorizeHandler{
-		Storage: store,
-		Config: &oauth2.Config{
-			PushedAuthorizeContextLifespan:  30 * time.Minute,
-			PushedAuthorizeRequestURIPrefix: requestURIPrefix,
-			ScopeStrategy:                   oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:        oauth2.DefaultAudienceMatchingStrategy,
-		},
-	}
-	for _, c := range []struct {
-		handler     PushedAuthorizeHandler
-		areq        *oauth2.AuthorizeRequest
-		description string
-		expectErr   error
-		expect      func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse)
+
+	testCases := []struct {
+		name   string
+		areq   *oauth2.AuthorizeRequest
+		err    string
+		expect func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse)
 	}{
 		{
-			handler: handler,
+			name: "ShouldPassNotResponsibleForEmptyResponseType",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{""},
 				Request:       *oauth2.NewRequest(),
 			},
-			description: "should pass because not responsible for handling an empty response type",
 		},
 		{
-			handler: handler,
+			name: "ShouldPassNotResponsibleForInvalidResponseType",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"foo"},
 				Request:       *oauth2.NewRequest(),
 			},
-			description: "should pass because not responsible for handling an invalid response type",
 		},
 		{
-			handler: handler,
+			name: "ShouldFailRedirectURINotHTTPS",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"code"},
 				Request: oauth2.Request{
@@ -70,11 +58,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				},
 				RedirectURI: parseURL("http://asdf.com/cb"),
 			},
-			description: "should fail because redirect uri is not https",
-			expectErr:   oauth2.ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
 		},
 		{
-			handler: handler,
+			name: "ShouldFailAudienceMismatch",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"code"},
 				Request: oauth2.Request{
@@ -87,11 +74,10 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				},
 				RedirectURI: parseURL("https://asdf.com/cb"),
 			},
-			description: "should fail because audience doesn't match",
-			expectErr:   oauth2.ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			handler: handler,
+			name: "ShouldPass",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"code"},
 				Request: oauth2.Request{
@@ -110,7 +96,6 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				State:       "superstate",
 				RedirectURI: parseURL("https://asdf.de/cb"),
 			},
-			description: "should pass",
 			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
 				requestURI := aresp.RequestURI
 				assert.NotEmpty(t, requestURI)
@@ -118,7 +103,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			handler: handler,
+			name: "ShouldPassPARCWithLifespan",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"code"},
 				Request: oauth2.Request{
@@ -140,7 +125,6 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				State:       "superstate",
 				RedirectURI: parseURL("https://asdf.de/cb"),
 			},
-			description: "ShouldPassPARCWithLifespan",
 			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
 				requestURI := aresp.RequestURI
 				assert.NotEmpty(t, requestURI)
@@ -148,7 +132,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			handler: handler,
+			name: "ShouldPassPARCWithoutLifespan",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{"code"},
 				Request: oauth2.Request{
@@ -169,25 +153,37 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				State:       "superstate",
 				RedirectURI: parseURL("https://asdf.de/cb"),
 			},
-			description: "ShouldPassPARCWithoutLifespan",
 			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
 				requestURI := aresp.RequestURI
 				assert.NotEmpty(t, requestURI)
 				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
 			},
 		},
-	} {
-		t.Run("case="+c.description, func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			handler := PushedAuthorizeHandler{
+				Storage: store,
+				Config: &oauth2.Config{
+					PushedAuthorizeContextLifespan:  30 * time.Minute,
+					PushedAuthorizeRequestURIPrefix: requestURIPrefix,
+					ScopeStrategy:                   oauth2.HierarchicScopeStrategy,
+					AudienceMatchingStrategy:        oauth2.DefaultAudienceMatchingStrategy,
+				},
+			}
+
 			aresp := &oauth2.PushedAuthorizeResponse{}
-			err := c.handler.HandlePushedAuthorizeEndpointRequest(context.Background(), c.areq, aresp)
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			err := handler.HandlePushedAuthorizeEndpointRequest(context.Background(), tc.areq, aresp)
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			if c.expect != nil {
-				c.expect(t, c.areq, aresp)
+			if tc.expect != nil {
+				tc.expect(t, tc.areq, aresp)
 			}
 		})
 	}

@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,56 +14,69 @@ import (
 )
 
 func TestValidateResponseTypes(t *testing.T) {
-	provider := &Fosite{Config: new(Config)}
-	for k, tc := range []struct {
-		rt        string
-		art       []string
-		expectErr bool
+	testCases := []struct {
+		name string
+		rt   string
+		art  []string
+		err  string
 	}{
 		{
-			rt:        "code",
-			art:       []string{"token"},
-			expectErr: true,
+			name: "ShouldFailClientNotAllowedCode",
+			rt:   "code",
+			art:  []string{"token"},
+			err:  "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code'.",
 		},
 		{
-			rt:  "token",
-			art: []string{"token"},
+			name: "ShouldPassToken",
+			rt:   "token",
+			art:  []string{"token"},
 		},
 		{
-			rt:        "",
-			art:       []string{"token"},
-			expectErr: true,
+			name: "ShouldFailMissingResponseType",
+			rt:   "",
+			art:  []string{"token"},
+			err:  "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
 		},
 		{
-			rt:        "  ",
-			art:       []string{"token"},
-			expectErr: true,
+			name: "ShouldFailWhitespaceResponseType",
+			rt:   "  ",
+			art:  []string{"token"},
+			err:  "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
 		},
 		{
-			rt:        "disable",
-			art:       []string{"token"},
-			expectErr: true,
+			name: "ShouldFailDisabledResponseType",
+			rt:   "disable",
+			art:  []string{"token"},
+			err:  "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
 		},
 		{
-			rt:        "code token",
-			art:       []string{"token", "code"},
-			expectErr: true,
+			name: "ShouldFailClientNotAllowedCodeToken",
+			rt:   "code token",
+			art:  []string{"token", "code"},
+			err:  "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code token'.",
 		},
 		{
-			rt:  "code token",
-			art: []string{"token", "token code"},
+			name: "ShouldPassCodeTokenWithTokenCode",
+			rt:   "code token",
+			art:  []string{"token", "token code"},
 		},
 		{
-			rt:  "code token",
-			art: []string{"token", "code token"},
+			name: "ShouldPassCodeTokenWithCodeToken",
+			rt:   "code token",
+			art:  []string{"token", "code token"},
 		},
 		{
-			rt:        "code token",
-			art:       []string{"token", "code token id_token"},
-			expectErr: true,
+			name: "ShouldFailClientNotAllowedCodeTokenIDToken",
+			rt:   "code token",
+			art:  []string{"token", "code token id_token"},
+			err:  "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code token'.",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: new(Config)}
+
 			r := &http.Request{Form: url.Values{"response_type": {tc.rt}}}
 			if tc.rt == "disable" {
 				r = &http.Request{Form: url.Values{}}
@@ -73,8 +85,8 @@ func TestValidateResponseTypes(t *testing.T) {
 			ar.Client = &DefaultClient{ResponseTypes: tc.art}
 
 			err := provider.validateResponseTypes(r, ar)
-			if tc.expectErr {
-				require.Error(t, err)
+			if tc.err != "" {
+				require.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 				assert.EqualValues(t, RemoveEmpty(strings.Split(tc.rt, " ")), ar.GetResponseTypes())

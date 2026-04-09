@@ -81,49 +81,31 @@ func TestOpenIDConnectRefreshHandler_HandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T) {
-	config := &oauth2.Config{}
-
-	var j = &DefaultStrategy{
-		Strategy: &jwt.DefaultStrategy{
-			Config: config,
-			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
-		},
-		Config: &oauth2.Config{
-			MinParameterEntropy: oauth2.MinParameterEntropy,
-		},
-	}
-
-	h := &OpenIDConnectRefreshHandler{
-		IDTokenHandleHelper: &IDTokenHandleHelper{
-			IDTokenStrategy: j,
-		},
-		Config: config,
-	}
-	for _, c := range []struct {
-		areq        *oauth2.AccessRequest
-		expectedErr error
-		check       func(t *testing.T, aresp *oauth2.AccessResponse)
-		description string
+	testCases := []struct {
+		name  string
+		areq  *oauth2.AccessRequest
+		err   string
+		check func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
-			description: "should not pass because grant_type is wrong",
+			name: "ShouldFailGrantTypeIsWrong",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{"foo"},
 			},
-			expectedErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request.",
 		},
 		{
-			description: "should not pass because grant_type is right but scope is missing",
+			name: "ShouldFailGrantTypeIsRightButScopeIsMissing",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
 					GrantedScope: []string{"something"},
 				},
 			},
-			expectedErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request.",
 		},
 		{
-			description: "should pass",
+			name: "ShouldPass",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
@@ -154,7 +136,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 			},
 		},
 		{
-			description: "should pass",
+			name: "ShouldPassWithCustomLifespans",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
@@ -189,7 +171,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 			},
 		},
 		{
-			description: "should fail because missing subject claim",
+			name: "ShouldFailMissingSubjectClaim",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
@@ -204,10 +186,10 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			expectedErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because subject is an empty string.",
 		},
 		{
-			description: "should fail because missing session",
+			name: "ShouldFailMissingSession",
 			areq: &oauth2.AccessRequest{
 				GrantTypes: []string{consts.GrantTypeRefreshToken},
 				Request: oauth2.Request{
@@ -217,20 +199,41 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					},
 				},
 			},
-			expectedErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the session is not of type 'openid.Session' which is required.",
 		},
-	} {
-		t.Run("case="+c.description, func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{}
+
+			j := &DefaultStrategy{
+				Strategy: &jwt.DefaultStrategy{
+					Config: config,
+					Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+				},
+				Config: &oauth2.Config{
+					MinParameterEntropy: oauth2.MinParameterEntropy,
+				},
+			}
+
+			h := &OpenIDConnectRefreshHandler{
+				IDTokenHandleHelper: &IDTokenHandleHelper{
+					IDTokenStrategy: j,
+				},
+				Config: config,
+			}
+
 			aresp := oauth2.NewAccessResponse()
-			err := h.PopulateTokenEndpointResponse(t.Context(), c.areq, aresp)
-			if c.expectedErr != nil {
-				require.EqualError(t, err, c.expectedErr.Error(), "%v", err)
+			err := h.PopulateTokenEndpointResponse(t.Context(), tc.areq, aresp)
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err, "%v", err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			if c.check != nil {
-				c.check(t, aresp)
+			if tc.check != nil {
+				tc.check(t, aresp)
 			}
 		})
 	}

@@ -4,7 +4,6 @@
 package oauth2
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -27,20 +26,20 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	areq.Session = new(oauth2.DefaultSession)
 	h, store, chgen, aresp := makeAuthorizeImplicitGrantTypeHandler(ctrl)
 
-	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
+	testCases := []struct {
+		name  string
+		setup func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder)
+		err   string
 	}{
 		{
-			description: "should pass because not responsible for handling the response type",
-			setup: func() {
+			name: "ShouldPassNotResponsibleForResponseType",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.ResponseTypes = oauth2.Arguments{"a"}
 			},
 		},
 		{
-			description: "should fail because access token generation failed",
-			setup: func() {
+			name: "ShouldFailAccessTokenGenerationFailed",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.Client = &oauth2.DefaultClient{
 					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
@@ -48,11 +47,11 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 				}
 				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return("", "", errors.New(""))
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "should fail because scope invalid",
-			setup: func() {
+			name: "ShouldFailScopeInvalid",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.RequestedScope = oauth2.Arguments{"scope"}
 				areq.Client = &oauth2.DefaultClient{
@@ -60,11 +59,11 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
 			},
-			expectErr: oauth2.ErrInvalidScope,
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'scope'.",
 		},
 		{
-			description: "should fail because audience invalid",
-			setup: func() {
+			name: "ShouldFailAudienceInvalid",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
 				areq.RequestedScope = oauth2.Arguments{"scope"}
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/not-api"}
@@ -75,20 +74,20 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					Audience:      []string{"https://www.authelia.com/api"},
 				}
 			},
-			expectErr: oauth2.ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			description: "should fail because persistence failed",
-			setup: func() {
+			name: "ShouldFailPersistenceFailed",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.RequestedAudience = oauth2.Arguments{"https://www.authelia.com/api"}
 				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).AnyTimes().Return("access.ats", "ats", nil)
 				store.EXPECT().CreateAccessTokenSession(t.Context(), "ats", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "should pass",
-			setup: func() {
+			name: "ShouldPass",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.State = "state"
 				areq.GrantedScope = oauth2.Arguments{"scope"}
 
@@ -100,14 +99,15 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 				aresp.EXPECT().AddParameter(consts.FormParameterState, "state")
 				aresp.EXPECT().AddParameter(consts.FormParameterScope, "scope")
 			},
-			expectErr: nil,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(areq, store, chgen, aresp)
 			err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}

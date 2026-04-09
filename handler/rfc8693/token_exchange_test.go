@@ -98,14 +98,15 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 		Storage: store,
 	}
 
-	for _, c := range []struct {
-		handlers    []oauth2.TokenEndpointHandler
-		areq        *oauth2.AccessRequest
-		description string
-		expectErr   error
-		expect      func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse)
+	testCases := []struct {
+		name     string
+		handlers []oauth2.TokenEndpointHandler
+		areq     *oauth2.AccessRequest
+		err      string
+		expect   func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse)
 	}{
 		{
+			name:     "ShouldPassExchangeAccessTokenForAnotherAccessToken",
 			handlers: []oauth2.TokenEndpointHandler{genericTEHandler, accessTokenHandler},
 			areq: &oauth2.AccessRequest{
 				Request: oauth2.Request{
@@ -122,7 +123,6 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 					},
 				},
 			},
-			description: "should pass because a valid access token is exchanged for another access token",
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
@@ -132,6 +132,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			},
 		},
 		{
+			name:     "ShouldPassExchangeCustomJWTForAccessToken",
 			handlers: []oauth2.TokenEndpointHandler{genericTEHandler, accessTokenHandler, customJWTHandler},
 			areq: &oauth2.AccessRequest{
 				Request: oauth2.Request{
@@ -153,7 +154,6 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 					},
 				},
 			},
-			description: "should pass because a valid custom JWT is exchanged for access token",
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
@@ -162,30 +162,27 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 				assert.EqualValues(t, "peter_for_jwt", req.GetSession().GetSubject(), "Subject did not match the expected value")
 			},
 		},
-	} {
-		t.Run("case="+c.description, func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			aresp := oauth2.NewAccessResponse()
 			found := false
 			var err error
-			c.areq.Form.Set("grant_type", string(oauth2.GrantTypeTokenExchange))
-			c.areq.GrantTypes = oauth2.Arguments{"urn:ietf:params:oauth:grant-type:token-exchange"}
-			c.areq.Client = store.Clients["my-client"]
-			for _, loader := range c.handlers {
-				// Is the loader responsible for handling the request?
-				if !loader.CanHandleTokenEndpointRequest(ctx, c.areq) {
+			tc.areq.Form.Set("grant_type", string(oauth2.GrantTypeTokenExchange))
+			tc.areq.GrantTypes = oauth2.Arguments{"urn:ietf:params:oauth:grant-type:token-exchange"}
+			tc.areq.Client = store.Clients["my-client"]
+			for _, loader := range tc.handlers {
+				if !loader.CanHandleTokenEndpointRequest(ctx, tc.areq) {
 					continue
 				}
 
-				// The handler **is** responsible!
 				found = true
 
-				if err = loader.HandleTokenEndpointRequest(ctx, c.areq); err == nil {
+				if err = loader.HandleTokenEndpointRequest(ctx, tc.areq); err == nil {
 					continue
 				} else if errors.Is(err, oauth2.ErrUnknownRequest) {
-					// This is a duplicate because it should already have been handled by
-					// `loader.CanHandleTokenEndpointRequest(accessRequest)` but let's keep it for sanity.
-					//
 					err = nil
 					continue
 				} else if err != nil {
@@ -197,22 +194,15 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 				assert.Fail(t, "Unable to find a valid handler")
 			}
 
-			// now execute the response
 			if err == nil {
-				for _, loader := range c.handlers {
-					// Is the loader responsible for handling the request?
-					if !loader.CanHandleTokenEndpointRequest(ctx, c.areq) {
+				for _, loader := range tc.handlers {
+					if !loader.CanHandleTokenEndpointRequest(ctx, tc.areq) {
 						continue
 					}
 
-					// The handler **is** responsible!
-
-					if err = loader.PopulateTokenEndpointResponse(ctx, c.areq, aresp); err == nil {
+					if err = loader.PopulateTokenEndpointResponse(ctx, tc.areq, aresp); err == nil {
 						found = true
 					} else if errors.Is(err, oauth2.ErrUnknownRequest) {
-						// This is a duplicate because it should already have been handled by
-						// `loader.CanHandleTokenEndpointRequest(accessRequest)` but let's keep it for sanity.
-						//
 						err = nil
 						continue
 					} else if err != nil {
@@ -221,19 +211,14 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 				}
 			}
 
-			var rfcerr *oauth2.RFC6749Error
-			rfcerr, _ = err.(*oauth2.RFC6749Error)
-			if rfcerr == nil {
-				rfcerr = oauth2.ErrServerError
-			}
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error(), "Error received: %v, rfcerr=%s", err, rfcerr.GetDescription())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
-				require.NoError(t, err, "Error received: %v, rfcerr=%s", err, rfcerr.GetDescription())
+				require.NoError(t, err, "Error received: %v", err)
 			}
 
-			if c.expect != nil {
-				c.expect(t, c.areq, aresp)
+			if tc.expect != nil {
+				tc.expect(t, tc.areq, aresp)
 			}
 		})
 	}

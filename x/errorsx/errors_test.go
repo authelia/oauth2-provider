@@ -11,7 +11,7 @@ import (
 )
 
 func TestWithStack(t *testing.T) {
-	t.Run("case=wrap", func(t *testing.T) {
+	t.Run("Wrap", func(t *testing.T) {
 		orig := errors.New("hi")
 		wrap := WithStack(orig)
 

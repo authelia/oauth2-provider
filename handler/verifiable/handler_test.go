@@ -32,7 +32,7 @@ func TestHandler(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("case=correct scopes", func(t *testing.T) {
+	t.Run("CorrectScopes", func(t *testing.T) {
 		t.Parallel()
 		handler := newHandler(t)
 		ctrl := gomock.NewController(t)
@@ -50,7 +50,7 @@ func TestHandler(t *testing.T) {
 		assert.NoError(t, handler.PopulateTokenEndpointResponse(ctx, req, resp))
 	})
 
-	t.Run("case=incorrect scopes", func(t *testing.T) {
+	t.Run("IncorrectScopes", func(t *testing.T) {
 		t.Parallel()
 		handler := newHandler(t)
 		ctrl := gomock.NewController(t)

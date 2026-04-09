@@ -4,7 +4,6 @@
 package openid
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -30,48 +29,48 @@ func TestHandleTokenEndpointRequest(t *testing.T) {
 }
 
 func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
-	for k, c := range []struct {
-		description string
-		setup       func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
-		expectErr   error
-		check       func(t *testing.T, aresp *oauth2.AccessResponse)
+	testCases := []struct {
+		name  string
+		setup func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest)
+		err   string
+		check func(t *testing.T, aresp *oauth2.AccessResponse)
 	}{
 		{
-			description: "should fail because current request has invalid grant type",
+			name: "ShouldFailCurrentRequestHasInvalidGrantType",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{"some_other_grant_type"}
 			},
-			expectErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request.",
 		},
 		{
-			description: "should fail because storage lookup returns not found",
+			name: "ShouldFailStorageLookupReturnsNotFound",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(nil, ErrNoSessionFound)
 			},
-			expectErr: oauth2.ErrUnknownRequest,
+			err: "The handler is not responsible for this request. Could not find the requested resource(s).",
 		},
 		{
-			description: "should fail because storage lookup fails",
+			name: "ShouldFailStorageLookupFails",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(nil, errors.New(""))
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			description: "should fail because stored request is missing openid scope",
+			name: "ShouldFailStoredRequestIsMissingOpenIDScope",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(oauth2.NewAuthorizeRequest(), nil)
 			},
-			expectErr: oauth2.ErrMisconfiguration,
+			err: "The request failed because of an internal error that is probably caused by misconfiguration. An OpenID Connect 1.0 session was found but the 'openid' scope is missing, probably due to a broken code configuration.",
 		},
 		{
-			description: "should fail because current request's client does not have authorization_code grant type",
+			name: "ShouldFailCurrentRequestClientDoesNotHaveAuthorizationCodeGrantType",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"some_other_grant_type"},
@@ -82,10 +81,10 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: oauth2.ErrUnauthorizedClient,
+			err: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'authorization_code'.",
 		},
 		{
-			description: "should pass with custom client lifespans",
+			name: "ShouldPassWithCustomClientLifespans",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
 					DefaultClient: &oauth2.DefaultClient{
@@ -119,7 +118,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			description: "should pass",
+			name: "ShouldPass",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -150,7 +149,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			description: "should fail because stored request's session is missing subject claim",
+			name: "ShouldFailStoredRequestSessionIsMissingSubjectClaim",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
@@ -162,10 +161,10 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because subject is an empty string.",
 		},
 		{
-			description: "should fail because stored request is missing session",
+			name: "ShouldFailStoredRequestIsMissingSession",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
@@ -174,10 +173,10 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				storedReq.GrantScope(consts.ScopeOpenID)
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the session is not of type 'openid.Session' which is required.",
 		},
 		{
-			description: "should fail because storage returns error when deleting openid session",
+			name: "ShouldFailStorageReturnsErrorWhenDeletingOpenIDSession",
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{"authorization_code"},
@@ -193,13 +192,16 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				store.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(storedReq, nil)
 				store.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(errors.New("delete openid session err"))
 			},
-			expectErr: oauth2.ErrServerError,
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. delete openid session err",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 			defer ctrl.Finish()
+
+			store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 
 			session := &DefaultSession{
 				Claims: &jwt.IDTokenClaims{
@@ -232,16 +234,16 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				Config: &oauth2.Config{},
 			}
 
-			c.setup(store, areq)
+			tc.setup(store, areq)
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
 
-			if c.expectErr != nil {
-				require.EqualError(t, err, c.expectErr.Error())
+			if tc.err != "" {
+				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 			}
-			if c.check != nil {
-				c.check(t, aresp)
+			if tc.check != nil {
+				tc.check(t, aresp)
 			}
 		})
 	}

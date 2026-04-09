@@ -5,14 +5,12 @@ package oauth2_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
@@ -27,120 +25,110 @@ import (
 //     If a Response Type contains one of more space characters (%20), it is compared as a space-delimited list of
 //     values in which the order of values does not matter.
 func TestNewAuthorizeRequest(t *testing.T) {
-	var store *mock.MockStorage
-
 	redir, _ := url.Parse("https://foo.bar/cb")
 	specialCharRedir, _ := url.Parse("web+application://callback")
-	for k, c := range []struct {
-		desc          string
-		provider      *Fosite
-		r             *http.Request
-		query         url.Values
-		expectedError error
-		mock          func()
-		expect        *AuthorizeRequest
+
+	testCases := []struct {
+		name   string
+		config *Config
+		r      *http.Request
+		query  url.Values
+		err    string
+		mock   func(store *mock.MockStorage)
+		expect *AuthorizeRequest
 	}{
-		/* empty request */
 		{
-			desc:          "empty request fails",
-			provider:      &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
-			r:             &http.Request{},
-			expectedError: ErrInvalidClient,
-			mock: func() {
+			name:   "ShouldFailEmptyRequest",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			r:      &http.Request{},
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
 		},
-		/* invalid redirect uri */
 		{
-			desc:          "invalid redirect uri fails",
-			provider:      &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
-			query:         url.Values{consts.FormParameterClientID: []string{"invalid"}},
-			expectedError: ErrInvalidClient,
-			mock: func() {
+			name:   "ShouldFailInvalidRedirectURI",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			query:  url.Values{consts.FormParameterClientID: []string{"invalid"}},
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
 		},
-		/* invalid client */
 		{
-			desc:          "invalid client fails",
-			provider:      &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
-			query:         url.Values{consts.FormParameterClientID: []string{"https://foo.bar/cb"}},
-			expectedError: ErrInvalidClient,
-			mock: func() {
+			name:   "ShouldFailInvalidClient",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			query:  url.Values{consts.FormParameterClientID: []string{"https://foo.bar/cb"}},
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
 		},
-		/* redirect client mismatch */
 		{
-			desc:     "client and request redirects mismatch",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailClientAndRequestRedirectsMismatchMissing",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterClientID: []string{"1234"},
 			},
-			expectedError: ErrInvalidRequest,
-			mock: func() {
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}}, nil)
 			},
 		},
-		/* redirect client mismatch */
 		{
-			desc:     "client and request redirects mismatch",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailClientAndRequestRedirectsMismatchEmpty",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI: []string{""},
 				consts.FormParameterClientID:    []string{"1234"},
 			},
-			expectedError: ErrInvalidRequest,
-			mock: func() {
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}}, nil)
 			},
 		},
-		/* redirect client mismatch */
 		{
-			desc:     "client and request redirects mismatch",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailClientAndRequestRedirectsMismatchValue",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI: []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:    []string{"1234"},
 			},
-			expectedError: ErrInvalidRequest,
-			mock: func() {
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'https://foo.bar/cb'.",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}}, nil)
 			},
 		},
-		/* no state */
 		{
-			desc:     "no state",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailNoState",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 			},
-			expectedError: ErrInvalidState,
-			mock: func() {
+			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
 			},
 		},
-		/* short state */
 		{
-			desc:     "short state",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailShortState",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 				consts.FormParameterState:        {"short"},
 			},
-			expectedError: ErrInvalidState,
-			mock: func() {
+			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
 			},
 		},
-		/* fails because scope not given */
 		{
-			desc:     "should fail because client does not have scope baz",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailClientWithoutScopeBaz",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -148,15 +136,14 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterState:        {"strong-state"},
 				consts.FormParameterScope:        {"foo bar baz"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}}, nil)
 			},
-			expectedError: ErrInvalidScope,
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
-		/* fails because scope not given */
 		{
-			desc:     "should fail because client does not have scope baz",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailClientWithoutAudience",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -165,18 +152,17 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"},
 					Audience: []string{"https://cloud.authelia.com/api"},
 				}, nil)
 			},
-			expectedError: ErrInvalidRequest,
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
-		/* success case */
 		{
-			desc:     "should pass",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPass",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -185,7 +171,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -208,10 +194,41 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* repeated audience parameter */
 		{
-			desc:     "repeated audience parameter",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassNoState",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy, MinParameterEntropy: -1},
+			query: url.Values{
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterResponseType: {consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
+					RedirectURIs:  []string{"https://foo.bar/cb"},
+					Scopes:        []string{"foo", "bar"},
+					Audience:      []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+				}, nil)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
+				Request: Request{
+					Client: &DefaultClient{
+						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
+						Scopes:   []string{"foo", "bar"},
+						Audience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+					},
+					RequestedScope:    []string{"foo", "bar"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
+				},
+			},
+		},
+		{
+			name:   "ShouldPassRepeatedAudienceParameter",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -220,7 +237,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -243,10 +260,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* repeated audience parameter with tricky values */
 		{
-			desc:     "repeated audience parameter with tricky values",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: ExactAudienceMatchingStrategy}},
+			name:   "ShouldPassRepeatedAudienceParameterWithTrickyValues",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: ExactAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -255,7 +271,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"test value", ""},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -278,10 +294,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* redirect_uri with special character in protocol*/
 		{
-			desc:     "redirect_uri with special character",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassRedirectURIWithSpecialCharacter",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"web+application://callback"},
 				consts.FormParameterClientID:     {"1234"},
@@ -290,7 +305,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"web+application://callback"},
@@ -313,10 +328,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* audience with double spaces between values */
 		{
-			desc:     "audience with double spaces between values",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassAudienceWithDoubleSpacesBetweenValues",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -325,7 +339,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api  https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -348,10 +362,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* fails because unknown response_mode*/
 		{
-			desc:     "should fail because unknown response_mode",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailUnknownResponseMode",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -360,15 +373,14 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterResponseMode: {"unknown"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}}, nil)
 			},
-			expectedError: ErrUnsupportedResponseMode,
+			err: "The authorization server does not support obtaining a response using this response mode. Request with unsupported response_mode 'unknown'.",
 		},
-		/* fails because response_mode is requested but the OAuth 2.0 client doesn't support response mode */
 		{
-			desc:     "should fail because response_mode is requested but the OAuth 2.0 client doesn't support response mode",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailResponseModeRequestedButClientDoesNotSupportResponseMode",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -377,15 +389,14 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}}, nil)
 			},
-			expectedError: ErrUnsupportedResponseMode,
+			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '' does not the 'response_mode' type 'form_post', as it's not registered to support any.",
 		},
-		/* fails because requested response mode is not allowed */
 		{
-			desc:     "should fail because requested response mode is not allowed",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldFailRequestedResponseModeNotAllowed",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -394,7 +405,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -404,12 +415,11 @@ func TestNewAuthorizeRequest(t *testing.T) {
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
 				}, nil)
 			},
-			expectedError: ErrUnsupportedResponseMode,
+			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '' does not the 'response_mode' type 'form_post'.",
 		},
-		/* success with response mode */
 		{
-			desc:     "success with response mode",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassWithResponseModeFormPost",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -419,7 +429,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -449,10 +459,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* determine correct response mode if default */
 		{
-			desc:     "success with response mode",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassWithResponseModeQuery",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -461,7 +470,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -491,10 +500,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-		/* determine correct response mode if default */
 		{
-			desc:     "success with response mode",
-			provider: &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}},
+			name:   "ShouldPassWithResponseModeFragment",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -503,7 +511,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
-			mock: func() {
+			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
 					DefaultClient: &DefaultClient{
 						RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -533,29 +541,30 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				},
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			store = mock.NewMockStorage(ctrl)
+			store := mock.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 
-			c.mock()
-			if c.r == nil {
-				c.r = &http.Request{Header: http.Header{}}
-				if c.query != nil {
-					c.r.URL = &url.URL{RawQuery: c.query.Encode()}
+			tc.mock(store)
+			if tc.r == nil {
+				tc.r = &http.Request{Header: http.Header{}}
+				if tc.query != nil {
+					tc.r.URL = &url.URL{RawQuery: tc.query.Encode()}
 				}
 			}
 
-			c.provider.Store = store
-			ar, err := c.provider.NewAuthorizeRequest(context.Background(), c.r)
-			if c.expectedError != nil {
-				assert.EqualError(t, err, c.expectedError.Error())
-				// https://github.com/ory/hydra/issues/1642
-				AssertObjectKeysEqual(t, &AuthorizeRequest{State: c.query.Get(consts.FormParameterState)}, ar, "State")
+			provider := &Fosite{Store: store, Config: tc.config}
+			ar, err := provider.NewAuthorizeRequest(context.Background(), tc.r)
+			if tc.err != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
+				AssertObjectKeysEqual(t, &AuthorizeRequest{State: tc.query.Get(consts.FormParameterState)}, ar, "State")
 			} else {
-				require.NoError(t, err)
-				AssertObjectKeysEqual(t, c.expect, ar, "ResponseTypes", "RequestedAudience", "RequestedScope", "Client", "RedirectURI", "State")
+				assert.NoError(t, err)
+				AssertObjectKeysEqual(t, tc.expect, ar, "ResponseTypes", "RequestedAudience", "RequestedScope", "Client", "RedirectURI", "State")
 				assert.NotNil(t, ar.GetRequestedAt())
 			}
 		})

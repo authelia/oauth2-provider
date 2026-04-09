@@ -217,11 +217,12 @@ type Fosite struct {
 
 // GetMinParameterEntropy returns MinParameterEntropy if set. Defaults to oauth2.MinParameterEntropy.
 func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
-	if mp := f.Config.GetMinParameterEntropy(ctx); mp > 0 {
-		return mp
+	switch value := f.Config.GetMinParameterEntropy(ctx); {
+	case value == -1, value > 0:
+		return value
+	default:
+		return MinParameterEntropy
 	}
-
-	return MinParameterEntropy
 }
 
 var (

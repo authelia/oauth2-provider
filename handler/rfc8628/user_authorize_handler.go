@@ -2,7 +2,6 @@ package rfc8628
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -16,6 +15,7 @@ type UserAuthorizeHandler struct {
 	Strategy CodeStrategy
 	Config   interface {
 		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.ClockConfigProvider
 	}
 }
 
@@ -79,7 +79,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))
 	}
 
-	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || request.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+	if session.GetExpiresAt(oauth2.UserCode).Before(d.Config.GetClock(ctx).Now().UTC()) || request.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	}
 

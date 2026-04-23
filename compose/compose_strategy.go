@@ -28,6 +28,7 @@ type HMACSHAStrategyConfigurator interface {
 	oauth2.RotatedGlobalSecretsProvider
 	oauth2.HMACHashingProvider
 	oauth2.RFC9628DeviceAuthorizeConfigProvider
+	oauth2.ClockConfigProvider
 }
 
 func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCoreStrategy {

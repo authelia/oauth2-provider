@@ -30,6 +30,7 @@ type Handler struct {
 		oauth2.GetJWTMaxDurationProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ScopeStrategyProvider
+		oauth2.ClockConfigProvider
 	}
 
 	*hoauth2.HandleHelper
@@ -117,7 +118,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeJWTBearer, oauth2.AccessToken, c.HandleHelper.Config.GetAccessTokenLifespan(ctx))
-	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Round(time.Second))
+	session.SetExpiresAt(oauth2.AccessToken, c.Config.GetClock(ctx).Now().UTC().Add(atLifespan).Round(time.Second))
 	session.SetSubject(claims.Subject)
 
 	return nil
@@ -272,13 +273,13 @@ verify:
 		)
 	}
 
-	if claims.Expiry.Time().Before(time.Now()) {
+	if claims.Expiry.Time().Before(c.Config.GetClock(ctx).Now()) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The JWT provided in the 'assertion' request parameter is expired."),
 		)
 	}
 
-	if claims.NotBefore != nil && !claims.NotBefore.Time().Before(time.Now()) {
+	if claims.NotBefore != nil && !claims.NotBefore.Time().Before(c.Config.GetClock(ctx).Now()) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHintf(
 				"The JWT in 'assertion' request parameter contains an 'nbf' (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.",
@@ -297,7 +298,7 @@ verify:
 	if claims.IssuedAt != nil {
 		issuedDate = claims.IssuedAt.Time()
 	} else {
-		issuedDate = time.Now()
+		issuedDate = c.Config.GetClock(ctx).Now()
 	}
 	if claims.Expiry.Time().Sub(issuedDate) > c.Config.GetJWTMaxDuration(ctx) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.

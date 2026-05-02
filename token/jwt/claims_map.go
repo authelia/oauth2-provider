@@ -45,6 +45,27 @@ func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
 	return validString(iss, cmp, required)
 }
 
+func (m MapClaims) GetAuthorizedParty() (azp string, err error) {
+	return m.toString(ClaimAuthorizedParty)
+}
+
+func (m MapClaims) VerifyAuthorizedParty(cmp string, required bool) (ok bool) {
+	var (
+		azp string
+		err error
+	)
+
+	if azp, err = m.GetAuthorizedParty(); err != nil {
+		return false
+	}
+
+	if azp == "" {
+		return !required
+	}
+
+	return validString(azp, cmp, required)
+}
+
 // GetSubject returns the 'sub' claim.
 func (m MapClaims) GetSubject() (sub string, err error) {
 	return m.toString(ClaimSubject)
@@ -263,6 +284,13 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		if !m.VerifySubject(vopts.sub, true) {
 			vErr.Inner = errors.New("Token has invalid subject")
 			vErr.Errors |= ValidationErrorSubject
+		}
+	}
+
+	if len(vopts.azp) != 0 {
+		if m.VerifyAuthorizedParty(vopts.azp, false) {
+			vErr.Inner = errors.New("Token has invalid azp claim")
+			vErr.Errors |= ValidationErrorAuthorizedParty
 		}
 	}
 

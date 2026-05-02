@@ -63,7 +63,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/.",
 		},
 		{
-			name:    "ShouldFailAudienceMismatch",
+			name: "ShouldFailAudienceMismatch",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{
@@ -79,7 +79,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldPassRedirectURIHTTPConfidential",
+			name: "ShouldPassRedirectURIHTTPConfidential",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{
@@ -108,7 +108,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			},
 		},
 		{
-			name:    "ShouldPass",
+			name: "ShouldPass",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{

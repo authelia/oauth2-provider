@@ -13,6 +13,7 @@ type ClaimValidationOptions struct {
 	aud            []string
 	audAll         []string
 	sub            string
+	azp            string
 	expRequired    bool
 	iatRequired    bool
 	nbfRequired    bool
@@ -29,6 +30,12 @@ func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
 func ValidateIssuer(iss string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.iss = iss
+	}
+}
+
+func ValidateAuthorizedParty(azp string) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.azp = azp
 	}
 }
 

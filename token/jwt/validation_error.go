@@ -26,6 +26,7 @@ const (
 	ValidationErrorNotValidYet                                         // Claim NBF validation failed.
 	ValidationErrorIssuer                                              // Claim ISS validation failed.
 	ValidationErrorSubject                                             // Claim SUB validation failed.
+	ValidationErrorAuthorizedParty                                     // Claim SUB validation failed.
 	ValidationErrorClaimsInvalid                                       // Generic claims validation error.
 )
 

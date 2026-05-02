@@ -77,3 +77,103 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 		consts.ClaimNonce: idTokenClaims.Nonce,
 	}, idTokenClaims.ToMap())
 }
+
+func TestIDTokenClaimsFromMap(t *testing.T) {
+	expected := &IDTokenClaims{
+		JTI:                                 "foo-id",
+		Issuer:                              "authelia",
+		Subject:                             "peter",
+		Audience:                            []string{"tests"},
+		ExpirationTime:                      NewNumericDate(time.Now().Add(time.Hour)),
+		IssuedAt:                            Now(),
+		AuthTime:                            Now(),
+		Nonce:                               "nonce-value",
+		AuthenticationContextClassReference: "acr",
+		AuthenticationMethodsReferences:     []string{"amr"},
+		AuthorizedParty:                     "client-id",
+		AccessTokenHash:                     "foobar",
+		CodeHash:                            "barfoo",
+		StateHash:                           "boofar",
+		Extra: map[string]any{
+			"foo": "bar",
+			"baz": "bar",
+		},
+	}
+
+	m := map[string]any{
+		ClaimJWTID:                               expected.JTI,
+		ClaimIssuer:                              expected.Issuer,
+		ClaimSubject:                             expected.Subject,
+		ClaimAudience:                            expected.Audience,
+		ClaimExpirationTime:                      expected.ExpirationTime.Unix(),
+		ClaimIssuedAt:                            expected.IssuedAt.Unix(),
+		ClaimAuthenticationTime:                  expected.AuthTime.Unix(),
+		ClaimNonce:                               expected.Nonce,
+		ClaimAuthenticationContextClassReference: expected.AuthenticationContextClassReference,
+		ClaimAuthenticationMethodsReference:      expected.AuthenticationMethodsReferences,
+		ClaimAuthorizedParty:                     expected.AuthorizedParty,
+		ClaimAccessTokenHash:                     expected.AccessTokenHash,
+		ClaimCodeHash:                            expected.CodeHash,
+		ClaimStateHash:                           expected.StateHash,
+		"foo":                                    "bar",
+		"baz":                                    "bar",
+	}
+
+	var actual IDTokenClaims
+
+	actual.FromMap(m)
+	assert.Equal(t, expected, &actual)
+
+	var actualFromMapClaims IDTokenClaims
+
+	actualFromMapClaims.FromMapClaims(MapClaims(m))
+	assert.Equal(t, expected, &actualFromMapClaims)
+}
+
+func TestIDTokenClaimsRoundTrip(t *testing.T) {
+	original := &IDTokenClaims{
+		JTI:                                 "foo-id",
+		Issuer:                              "authelia",
+		Subject:                             "peter",
+		Audience:                            []string{"tests"},
+		ExpirationTime:                      NewNumericDate(time.Now().Add(time.Hour)),
+		IssuedAt:                            Now(),
+		AuthTime:                            Now(),
+		Nonce:                               "nonce-value",
+		AuthenticationContextClassReference: "acr",
+		AuthenticationMethodsReferences:     []string{"amr"},
+		AuthorizedParty:                     "client-id",
+		AccessTokenHash:                     "foobar",
+		CodeHash:                            "barfoo",
+		StateHash:                           "boofar",
+		Extra: map[string]any{
+			"foo": "bar",
+			"baz": "bar",
+		},
+	}
+
+	var roundTripped IDTokenClaims
+
+	roundTripped.FromMap(original.ToMap())
+	assert.Equal(t, original, &roundTripped)
+
+	originalMap := original.ToMap()
+	assert.Equal(t, originalMap, roundTripped.ToMap())
+}
+
+func TestIDTokenClaimsFromMapExtra(t *testing.T) {
+	m := map[string]any{
+		ClaimJWTID:   "foo-id",
+		ClaimSubject: "peter",
+		ClaimExtra: map[string]any{
+			"foo": "bar",
+		},
+	}
+
+	var actual IDTokenClaims
+
+	actual.FromMap(m)
+	assert.Equal(t, "foo-id", actual.JTI)
+	assert.Equal(t, "peter", actual.Subject)
+	assert.Equal(t, map[string]any{"foo": "bar"}, actual.Extra)
+}

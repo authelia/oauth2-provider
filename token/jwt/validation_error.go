@@ -57,3 +57,7 @@ func (e *ValidationError) valid() bool {
 func (e *ValidationError) Has(verr uint32) bool {
 	return (e.Errors & verr) != 0
 }
+
+func (e *ValidationError) Is(verr uint32) bool {
+	return e.Errors == verr
+}

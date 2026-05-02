@@ -959,9 +959,11 @@ func TestMapClaims_Valid(t *testing.T) {
 					errs |= err
 
 					assert.True(t, e.Has(err))
+					assert.Equal(t, len(tc.errs) == 1, e.Is(err))
 				}
 
 				assert.Equal(t, errs, e.Errors)
+				assert.True(t, e.Is(errs))
 			}
 		})
 	}

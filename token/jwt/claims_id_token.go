@@ -115,6 +115,13 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		}
 	}
 
+	if len(vopts.azp) != 0 {
+		if !validString(c.AuthorizedParty, vopts.azp, false) {
+			vErr.Inner = errors.New("Token has invalid azp claim")
+			vErr.Errors |= ValidationErrorAuthorizedParty
+		}
+	}
+
 	var aud ClaimStrings
 
 	if len(vopts.aud) != 0 {
@@ -332,6 +339,78 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 // ToMapClaims will return a jwt-go MapClaims representation
 func (c IDTokenClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
+}
+
+// FromMap will set the claims based on a mapping.
+//
+//nolint:gocyclo
+func (c *IDTokenClaims) FromMap(m map[string]any) {
+	c.Extra = make(map[string]any)
+	for k, v := range m {
+		switch k {
+		case ClaimJWTID:
+			if s, ok := v.(string); ok {
+				c.JTI = s
+			}
+		case ClaimIssuer:
+			if s, ok := v.(string); ok {
+				c.Issuer = s
+			}
+		case ClaimSubject:
+			if s, ok := v.(string); ok {
+				c.Subject = s
+			}
+		case ClaimAudience:
+			if aud, ok := StringSliceFromMap(v); ok {
+				c.Audience = aud
+			}
+		case ClaimExpirationTime:
+			c.ExpirationTime, _ = toNumericDate(v)
+		case ClaimIssuedAt:
+			c.IssuedAt, _ = toNumericDate(v)
+		case ClaimAuthenticationTime:
+			c.AuthTime, _ = toNumericDate(v)
+		case ClaimNonce:
+			if s, ok := v.(string); ok {
+				c.Nonce = s
+			}
+		case ClaimAuthenticationContextClassReference:
+			if s, ok := v.(string); ok {
+				c.AuthenticationContextClassReference = s
+			}
+		case ClaimAuthenticationMethodsReference:
+			if amr, ok := StringSliceFromMap(v); ok {
+				c.AuthenticationMethodsReferences = amr
+			}
+		case ClaimAuthorizedParty:
+			if s, ok := v.(string); ok {
+				c.AuthorizedParty = s
+			}
+		case ClaimAccessTokenHash:
+			if s, ok := v.(string); ok {
+				c.AccessTokenHash = s
+			}
+		case ClaimCodeHash:
+			if s, ok := v.(string); ok {
+				c.CodeHash = s
+			}
+		case ClaimStateHash:
+			if s, ok := v.(string); ok {
+				c.StateHash = s
+			}
+		case ClaimExtra:
+			if extra, ok := v.(map[string]any); ok {
+				c.Extra = extra
+			}
+		default:
+			c.Extra[k] = v
+		}
+	}
+}
+
+// FromMapClaims will populate claims from a jwt-go MapClaims representation
+func (c *IDTokenClaims) FromMapClaims(mc MapClaims) {
+	c.FromMap(mc)
 }
 
 // Add will add a key-value pair to the extra field

@@ -129,6 +129,34 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 			hasExp:   false,
 			hasExtra: true,
 		},
+		{
+			description: "should success for not expired refresh token",
+			setup: func() {
+				ires.Active = true
+				ires.TokenUse = RefreshToken
+				session := &DefaultSession{}
+				session.SetExpiresAt(ires.TokenUse, time.Now().Add(time.Hour*2))
+				ires.AccessRequester = NewAccessRequest(session)
+			},
+			active:   true,
+			hasExp:   true,
+			hasExtra: false,
+		},
+		{
+			description: "should not leak access token exp when introspecting refresh token",
+			setup: func() {
+				ires.Active = true
+				ires.TokenUse = RefreshToken
+				session := &DefaultSession{}
+				// Only the access token expiry is set, the refresh token has none.
+				// The introspection response must reflect the refresh token, not leak the access token expiry.
+				session.SetExpiresAt(AccessToken, time.Now().Add(time.Hour*2))
+				ires.AccessRequester = NewAccessRequest(session)
+			},
+			active:   true,
+			hasExp:   false,
+			hasExtra: false,
+		},
 	} {
 		t.Run(c.description, func(t *testing.T) {
 			c.setup()
@@ -168,6 +196,52 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 				assert.NotEqual(t, "invalid", params.Audience)
 				assert.NotEqual(t, "invalid", params.Username)
 			}
+		})
+	}
+}
+
+func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
+	provider := new(Fosite)
+
+	accessExpiry := time.Now().Add(time.Hour).Truncate(time.Second)
+	refreshExpiry := time.Now().Add(time.Hour * 24).Truncate(time.Second)
+
+	for _, c := range []struct {
+		description string
+		tokenUse    TokenUse
+		expected    int64
+	}{
+		{
+			description: "access token introspection returns access token expiry",
+			tokenUse:    AccessToken,
+			expected:    accessExpiry.Unix(),
+		},
+		{
+			description: "refresh token introspection returns refresh token expiry",
+			tokenUse:    RefreshToken,
+			expected:    refreshExpiry.Unix(),
+		},
+	} {
+		t.Run(c.description, func(t *testing.T) {
+			session := &DefaultSession{}
+			session.SetExpiresAt(AccessToken, accessExpiry)
+			session.SetExpiresAt(RefreshToken, refreshExpiry)
+
+			ires := &IntrospectionResponse{
+				Active:          true,
+				TokenUse:        c.tokenUse,
+				AccessRequester: NewAccessRequest(session),
+			}
+
+			rw := httptest.NewRecorder()
+			provider.WriteIntrospectionResponse(context.Background(), rw, ires)
+
+			var params struct {
+				Exp *int64 `json:"exp"`
+			}
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+			require.NotNil(t, params.Exp)
+			assert.Equal(t, c.expected, *params.Exp)
 		})
 	}
 }

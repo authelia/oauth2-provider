@@ -218,8 +218,8 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		}
 	}
 
-	if !r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).IsZero() {
-		response[jwt.ClaimExpirationTime] = r.GetAccessRequester().GetSession().GetExpiresAt(AccessToken).Unix()
+	if expires := r.GetAccessRequester().GetSession().GetExpiresAt(r.GetTokenUse()); !expires.IsZero() {
+		response[jwt.ClaimExpirationTime] = expires.Unix()
 	}
 	if r.GetAccessRequester().GetClient().GetID() != "" {
 		response[jwt.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()

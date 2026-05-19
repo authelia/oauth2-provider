@@ -13,17 +13,43 @@ import (
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestIDTokenAssert(t *testing.T) {
-	assert.NoError(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
-		ToMapClaims().Valid())
-	assert.Error(t, (&IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(-time.Hour))}).
-		ToMapClaims().Valid())
+func TestIDTokenClaims_Valid(t *testing.T) {
+	testCases := []struct {
+		name    string
+		claims  *IDTokenClaims
+		wantErr bool
+	}{
+		{
+			name:    "ShouldPassFutureExpiration",
+			claims:  &IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))},
+			wantErr: false,
+		},
+		{
+			name:    "ShouldFailPastExpiration",
+			claims:  &IDTokenClaims{ExpirationTime: NewNumericDate(time.Now().Add(-time.Hour))},
+			wantErr: true,
+		},
+	}
 
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.claims.ToMapClaims().Valid()
+
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIDTokenClaims_ToMapClaimsSetsID(t *testing.T) {
 	assert.NotEmpty(t, (new(IDTokenClaims)).ToMapClaims()[ClaimJWTID])
 }
 
-func TestIDTokenClaimsToMap(t *testing.T) {
-	idTokenClaims := &IDTokenClaims{
+func TestIDTokenClaims_ToMap(t *testing.T) {
+	base := &IDTokenClaims{
 		JTI:                                 "foo-id",
 		Subject:                             "peter",
 		IssuedAt:                            Now(),
@@ -41,44 +67,71 @@ func TestIDTokenClaimsToMap(t *testing.T) {
 			"baz": "bar",
 		},
 	}
-	assert.Equal(t, map[string]any{
-		ClaimJWTID:              idTokenClaims.JTI,
-		ClaimSubject:            idTokenClaims.Subject,
-		ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
-		ClaimIssuer:             idTokenClaims.Issuer,
-		ClaimAudience:           idTokenClaims.Audience,
-		ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
-		"foo":                   idTokenClaims.Extra["foo"],
-		"baz":                   idTokenClaims.Extra["baz"],
-		ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
-		ClaimCodeHash:           idTokenClaims.CodeHash,
-		ClaimStateHash:          idTokenClaims.StateHash,
-		ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
-		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
-		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
-	}, idTokenClaims.ToMap())
 
-	idTokenClaims.Nonce = "foobar"
-	assert.Equal(t, map[string]any{
-		consts.ClaimJWTID:              idTokenClaims.JTI,
-		consts.ClaimSubject:            idTokenClaims.Subject,
-		consts.ClaimIssuedAt:           idTokenClaims.IssuedAt.Unix(),
-		consts.ClaimIssuer:             idTokenClaims.Issuer,
-		consts.ClaimAudience:           idTokenClaims.Audience,
-		consts.ClaimExpirationTime:     idTokenClaims.ExpirationTime.Unix(),
-		"foo":                          idTokenClaims.Extra["foo"],
-		"baz":                          idTokenClaims.Extra["baz"],
-		consts.ClaimAccessTokenHash:    idTokenClaims.AccessTokenHash,
-		consts.ClaimCodeHash:           idTokenClaims.CodeHash,
-		consts.ClaimStateHash:          idTokenClaims.StateHash,
-		consts.ClaimAuthenticationTime: idTokenClaims.AuthTime.Unix(),
-		consts.ClaimAuthenticationContextClassReference: idTokenClaims.AuthenticationContextClassReference,
-		consts.ClaimAuthenticationMethodsReference:      idTokenClaims.AuthenticationMethodsReferences,
-		consts.ClaimNonce: idTokenClaims.Nonce,
-	}, idTokenClaims.ToMap())
+	testCases := []struct {
+		name     string
+		mutate   func(c *IDTokenClaims)
+		expected func(c *IDTokenClaims) map[string]any
+	}{
+		{
+			name:   "ShouldOmitNonceWhenEmpty",
+			mutate: func(c *IDTokenClaims) {},
+			expected: func(c *IDTokenClaims) map[string]any {
+				return map[string]any{
+					ClaimJWTID:              c.JTI,
+					ClaimSubject:            c.Subject,
+					ClaimIssuedAt:           c.IssuedAt.Unix(),
+					ClaimIssuer:             c.Issuer,
+					ClaimAudience:           c.Audience,
+					ClaimExpirationTime:     c.ExpirationTime.Unix(),
+					"foo":                   c.Extra["foo"],
+					"baz":                   c.Extra["baz"],
+					ClaimAccessTokenHash:    c.AccessTokenHash,
+					ClaimCodeHash:           c.CodeHash,
+					ClaimStateHash:          c.StateHash,
+					ClaimAuthenticationTime: c.AuthTime.Unix(),
+					consts.ClaimAuthenticationContextClassReference: c.AuthenticationContextClassReference,
+					consts.ClaimAuthenticationMethodsReference:      c.AuthenticationMethodsReferences,
+				}
+			},
+		},
+		{
+			name: "ShouldIncludeNonceWhenSet",
+			mutate: func(c *IDTokenClaims) {
+				c.Nonce = "foobar"
+			},
+			expected: func(c *IDTokenClaims) map[string]any {
+				return map[string]any{
+					consts.ClaimJWTID:              c.JTI,
+					consts.ClaimSubject:            c.Subject,
+					consts.ClaimIssuedAt:           c.IssuedAt.Unix(),
+					consts.ClaimIssuer:             c.Issuer,
+					consts.ClaimAudience:           c.Audience,
+					consts.ClaimExpirationTime:     c.ExpirationTime.Unix(),
+					"foo":                          c.Extra["foo"],
+					"baz":                          c.Extra["baz"],
+					consts.ClaimAccessTokenHash:    c.AccessTokenHash,
+					consts.ClaimCodeHash:           c.CodeHash,
+					consts.ClaimStateHash:          c.StateHash,
+					consts.ClaimAuthenticationTime: c.AuthTime.Unix(),
+					consts.ClaimAuthenticationContextClassReference: c.AuthenticationContextClassReference,
+					consts.ClaimAuthenticationMethodsReference:      c.AuthenticationMethodsReferences,
+					consts.ClaimNonce: c.Nonce,
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := *base
+			tc.mutate(&c)
+			assert.Equal(t, tc.expected(&c), c.ToMap())
+		})
+	}
 }
 
-func TestIDTokenClaimsFromMap(t *testing.T) {
+func TestIDTokenClaims_FromMap(t *testing.T) {
 	expected := &IDTokenClaims{
 		JTI:                                 "foo-id",
 		Issuer:                              "authelia",
@@ -119,18 +172,34 @@ func TestIDTokenClaimsFromMap(t *testing.T) {
 		"baz":                                    "bar",
 	}
 
-	var actual IDTokenClaims
+	testCases := []struct {
+		name string
+		fn   func(c *IDTokenClaims)
+	}{
+		{
+			name: "ShouldDecodeFromMap",
+			fn: func(c *IDTokenClaims) {
+				c.FromMap(m)
+			},
+		},
+		{
+			name: "ShouldDecodeFromMapClaims",
+			fn: func(c *IDTokenClaims) {
+				c.FromMapClaims(MapClaims(m))
+			},
+		},
+	}
 
-	actual.FromMap(m)
-	assert.Equal(t, expected, &actual)
-
-	var actualFromMapClaims IDTokenClaims
-
-	actualFromMapClaims.FromMapClaims(MapClaims(m))
-	assert.Equal(t, expected, &actualFromMapClaims)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var actual IDTokenClaims
+			tc.fn(&actual)
+			assert.Equal(t, expected, &actual)
+		})
+	}
 }
 
-func TestIDTokenClaimsRoundTrip(t *testing.T) {
+func TestIDTokenClaims_RoundTrip(t *testing.T) {
 	original := &IDTokenClaims{
 		JTI:                                 "foo-id",
 		Issuer:                              "authelia",
@@ -161,7 +230,7 @@ func TestIDTokenClaimsRoundTrip(t *testing.T) {
 	assert.Equal(t, originalMap, roundTripped.ToMap())
 }
 
-func TestIDTokenClaimsFromMapExtra(t *testing.T) {
+func TestIDTokenClaims_FromMapExtra(t *testing.T) {
 	m := map[string]any{
 		ClaimJWTID:   "foo-id",
 		ClaimSubject: "peter",

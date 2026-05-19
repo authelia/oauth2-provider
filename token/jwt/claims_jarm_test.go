@@ -34,27 +34,69 @@ var jarmClaimsMap = map[string]any{
 	"baz":               jwtClaims.Extra["baz"],
 }
 
-func TestJARMClaimAddGetString(t *testing.T) {
-	jarmClaims.Add("foo", "bar")
-	assert.Equal(t, "bar", jarmClaims.Get("foo"))
+func TestJARMClaims_AddGetString(t *testing.T) {
+	testCases := []struct {
+		name     string
+		key      string
+		value    string
+		expected string
+	}{
+		{
+			name:     "ShouldRoundTripValue",
+			key:      "foo",
+			value:    "bar",
+			expected: "bar",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jarmClaims.Add(tc.key, tc.value)
+			assert.Equal(t, tc.expected, jarmClaims.Get(tc.key))
+		})
+	}
 }
 
-func TestJARMClaimsToMapSetsID(t *testing.T) {
+func TestJARMClaims_ToMapSetsID(t *testing.T) {
 	assert.NotEmpty(t, (&JARMClaims{}).ToMap()[ClaimJWTID])
 }
 
-func TestJARMAssert(t *testing.T) {
-	assert.Nil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))}).
-		ToMapClaims().Valid())
-	assert.NotNil(t, (&JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(-2 * time.Hour))}).
-		ToMapClaims().Valid())
+func TestJARMClaims_Valid(t *testing.T) {
+	testCases := []struct {
+		name    string
+		claims  *JARMClaims
+		wantErr bool
+	}{
+		{
+			name:    "ShouldPassWithFutureExpiration",
+			claims:  &JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(time.Hour))},
+			wantErr: false,
+		},
+		{
+			name:    "ShouldFailWithPastExpiration",
+			claims:  &JARMClaims{ExpirationTime: NewNumericDate(time.Now().Add(-2 * time.Hour))},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.claims.ToMapClaims().Valid()
+
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestJARMtClaimsToMap(t *testing.T) {
+func TestJARMClaims_ToMap(t *testing.T) {
 	assert.Equal(t, jarmClaimsMap, jarmClaims.ToMap())
 }
 
-func TestJARMClaimsFromMap(t *testing.T) {
+func TestJARMClaims_FromMap(t *testing.T) {
 	var claims JARMClaims
 
 	claims.FromMap(jarmClaimsMap)

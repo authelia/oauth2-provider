@@ -13,6 +13,8 @@ import (
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
+const scopeEmailOffline = "email offline"
+
 var jwtClaims = &JWTClaims{
 	Subject:   "peter",
 	IssuedAt:  time.Now().UTC().Truncate(TimePrecision),
@@ -42,59 +44,129 @@ var jwtClaimsMap = map[string]any{
 	"baz":                 jwtClaims.Extra["baz"],
 }
 
-func TestClaimAddGetString(t *testing.T) {
-	jwtClaims.Add("foo", "bar")
-	assert.Equal(t, "bar", jwtClaims.Get("foo"))
+func TestJWTClaims_AddGetString(t *testing.T) {
+	testCases := []struct {
+		name     string
+		key      string
+		value    string
+		expected string
+	}{
+		{
+			name:     "ShouldRoundTripValue",
+			key:      "foo",
+			value:    "bar",
+			expected: "bar",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jwtClaims.Add(tc.key, tc.value)
+			assert.Equal(t, tc.expected, jwtClaims.Get(tc.key))
+		})
+	}
 }
 
-func TestClaimsToMapSetsID(t *testing.T) {
+func TestJWTClaims_ToMapSetsID(t *testing.T) {
 	assert.NotEmpty(t, (&JWTClaims{}).ToMap()[ClaimJWTID])
 }
 
-func TestAssert(t *testing.T) {
-	assert.Nil(t, (&JWTClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)}).
-		ToMapClaims().Valid())
-	assert.NotNil(t, (&JWTClaims{ExpiresAt: time.Now().UTC().Add(-2 * time.Hour)}).
-		ToMapClaims().Valid())
-	assert.NotNil(t, (&JWTClaims{NotBefore: time.Now().UTC().Add(time.Hour)}).
-		ToMapClaims().Valid())
-	assert.Nil(t, (&JWTClaims{NotBefore: time.Now().UTC().Add(-time.Hour)}).
-		ToMapClaims().Valid())
-	assert.Nil(t, (&JWTClaims{ExpiresAt: time.Now().UTC().Add(time.Hour),
-		NotBefore: time.Now().UTC().Add(-time.Hour)}).ToMapClaims().Valid())
+func TestJWTClaims_Valid(t *testing.T) {
+	testCases := []struct {
+		name    string
+		claims  *JWTClaims
+		wantErr bool
+	}{
+		{
+			name:    "ShouldPassWithFutureExpiration",
+			claims:  &JWTClaims{ExpiresAt: time.Now().UTC().Add(time.Hour)},
+			wantErr: false,
+		},
+		{
+			name:    "ShouldFailWithPastExpiration",
+			claims:  &JWTClaims{ExpiresAt: time.Now().UTC().Add(-2 * time.Hour)},
+			wantErr: true,
+		},
+		{
+			name:    "ShouldFailWithFutureNotBefore",
+			claims:  &JWTClaims{NotBefore: time.Now().UTC().Add(time.Hour)},
+			wantErr: true,
+		},
+		{
+			name:    "ShouldPassWithPastNotBefore",
+			claims:  &JWTClaims{NotBefore: time.Now().UTC().Add(-time.Hour)},
+			wantErr: false,
+		},
+		{
+			name: "ShouldPassWithExpAndNbf",
+			claims: &JWTClaims{
+				ExpiresAt: time.Now().UTC().Add(time.Hour),
+				NotBefore: time.Now().UTC().Add(-time.Hour),
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.claims.ToMapClaims().Valid()
+
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestClaimsToMap(t *testing.T) {
+func TestJWTClaims_ToMap(t *testing.T) {
 	assert.Equal(t, jwtClaimsMap, jwtClaims.ToMap())
 }
 
-func TestClaimsFromMap(t *testing.T) {
+func TestJWTClaims_FromMap(t *testing.T) {
 	var claims JWTClaims
 	claims.FromMap(jwtClaimsMap)
 	assert.Equal(t, jwtClaims, &claims)
 }
 
-func TestScopeFieldString(t *testing.T) {
-	jwtClaimsWithString := jwtClaims.WithScopeField(JWTScopeFieldString)
-	// Making a copy of jwtClaimsMap.
-	jwtClaimsMapWithString := jwtClaims.ToMap()
-	delete(jwtClaimsMapWithString, ClaimScopeNonStandard)
-	jwtClaimsMapWithString[ClaimScope] = scopeEmailOffline
-	assert.Equal(t, jwtClaimsMapWithString, map[string]any(jwtClaimsWithString.ToMapClaims()))
-	var claims JWTClaims
-	claims.FromMap(jwtClaimsMapWithString)
-	assert.Equal(t, jwtClaimsWithString, &claims)
-}
+func TestJWTClaims_WithScopeField(t *testing.T) {
+	testCases := []struct {
+		name     string
+		field    JWTScopeFieldEnum
+		mutate   func(m map[string]any)
+		original *JWTClaims
+	}{
+		{
+			name:  "ShouldEncodeAsString",
+			field: JWTScopeFieldString,
+			mutate: func(m map[string]any) {
+				delete(m, ClaimScopeNonStandard)
+				m[ClaimScope] = scopeEmailOffline
+			},
+			original: jwtClaims,
+		},
+		{
+			name:  "ShouldEncodeAsBoth",
+			field: JWTScopeFieldBoth,
+			mutate: func(m map[string]any) {
+				m[ClaimScope] = scopeEmailOffline
+			},
+			original: jwtClaims,
+		},
+	}
 
-func TestScopeFieldBoth(t *testing.T) {
-	jwtClaimsWithBoth := jwtClaims.WithScopeField(JWTScopeFieldBoth)
-	// Making a copy of jwtClaimsMap
-	jwtClaimsMapWithBoth := jwtClaims.ToMap()
-	jwtClaimsMapWithBoth[ClaimScope] = scopeEmailOffline
-	assert.Equal(t, jwtClaimsMapWithBoth, map[string]any(jwtClaimsWithBoth.ToMapClaims()))
-	var claims JWTClaims
-	claims.FromMap(jwtClaimsMapWithBoth)
-	assert.Equal(t, jwtClaimsWithBoth, &claims)
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			withField := tc.original.WithScopeField(tc.field)
+			expected := tc.original.ToMap()
+			tc.mutate(expected)
 
-const scopeEmailOffline = "email offline"
+			assert.Equal(t, expected, map[string]any(withField.ToMapClaims()))
+
+			var actual JWTClaims
+			actual.FromMap(expected)
+			assert.Equal(t, withField, &actual)
+		})
+	}
+}

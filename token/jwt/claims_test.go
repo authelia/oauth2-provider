@@ -11,20 +11,80 @@ import (
 )
 
 func TestToString(t *testing.T) {
-	assert.Equal(t, "foo", ToString("foo"))
-	assert.Equal(t, "foo", ToString([]string{"foo"}))
-	assert.Empty(t, ToString(1234))
-	assert.Empty(t, ToString(nil))
+	testCases := []struct {
+		name     string
+		have     any
+		expected string
+	}{
+		{
+			name:     "ShouldReturnStringFromString",
+			have:     "foo",
+			expected: "foo",
+		},
+		{
+			name:     "ShouldReturnFirstElementFromStringSlice",
+			have:     []string{"foo"},
+			expected: "foo",
+		},
+		{
+			name:     "ShouldReturnEmptyForInt",
+			have:     1234,
+			expected: "",
+		},
+		{
+			name:     "ShouldReturnEmptyForNil",
+			have:     nil,
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, ToString(tc.have))
+		})
+	}
 }
 
 func TestToTime(t *testing.T) {
-	assert.Equal(t, time.Time{}, ToTime(nil))
-	assert.Equal(t, time.Time{}, ToTime("1234"))
-
 	now := time.Now().UTC().Truncate(TimePrecision)
-	assert.Equal(t, now, ToTime(now))
-	assert.Equal(t, now, ToTime(now.Unix()))
-	assert.Equal(t, now, ToTime(float64(now.Unix())))
+
+	testCases := []struct {
+		name     string
+		have     any
+		expected time.Time
+	}{
+		{
+			name:     "ShouldReturnZeroFromNil",
+			have:     nil,
+			expected: time.Time{},
+		},
+		{
+			name:     "ShouldReturnZeroFromString",
+			have:     "1234",
+			expected: time.Time{},
+		},
+		{
+			name:     "ShouldReturnSameTime",
+			have:     now,
+			expected: now,
+		},
+		{
+			name:     "ShouldReturnFromUnixInt64",
+			have:     now.Unix(),
+			expected: now,
+		},
+		{
+			name:     "ShouldReturnFromUnixFloat64",
+			have:     float64(now.Unix()),
+			expected: now,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, ToTime(tc.have))
+		})
+	}
 }
 
 func TestFilter(t *testing.T) {
@@ -35,28 +95,28 @@ func TestFilter(t *testing.T) {
 		expected map[string]any
 	}{
 		{
-			"ShouldFilterNone",
-			map[string]any{"abc": 123},
-			[]string{},
-			map[string]any{"abc": 123},
+			name:     "ShouldFilterNone",
+			have:     map[string]any{"abc": 123},
+			filter:   []string{},
+			expected: map[string]any{"abc": 123},
 		},
 		{
-			"ShouldFilterNoneNil",
-			map[string]any{"abc": 123},
-			[]string{},
-			map[string]any{"abc": 123},
+			name:     "ShouldFilterNoneNil",
+			have:     map[string]any{"abc": 123},
+			filter:   []string{},
+			expected: map[string]any{"abc": 123},
 		},
 		{
-			"ShouldFilterAll",
-			map[string]any{"abc": 123, "example": 123},
-			[]string{"abc", "example"},
-			map[string]any{},
+			name:     "ShouldFilterAll",
+			have:     map[string]any{"abc": 123, "example": 123},
+			filter:   []string{"abc", "example"},
+			expected: map[string]any{},
 		},
 		{
-			"ShouldFilterSome",
-			map[string]any{"abc": 123, "example": 123},
-			[]string{"abc"},
-			map[string]any{"example": 123},
+			name:     "ShouldFilterSome",
+			have:     map[string]any{"abc": 123, "example": 123},
+			filter:   []string{"abc"},
+			expected: map[string]any{"example": 123},
 		},
 	}
 

@@ -8,7 +8,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -317,36 +316,56 @@ func TestDefaultStrategy_Decode_RejectNonCompactSerializedJWT(t *testing.T) {
 	testCases := []struct {
 		name     string
 		strategy Strategy
+		input    string
 	}{
 		{
-			name:     "RS256",
+			name:     "ShouldRejectEmptyOnRS256",
 			strategy: &DefaultStrategy{},
+			input:    "",
 		},
 		{
-			name:     "ES256",
+			name:     "ShouldRejectSpaceOnRS256",
 			strategy: &DefaultStrategy{},
+			input:    " ",
 		},
-	}
-
-	inputs := []struct {
-		name  string
-		value string
-	}{
-		{"Empty", ""},
-		{"Space", " "},
-		{"TwoParts", "foo.bar"},
-		{"TwoPartsEmptySecond", "foo."},
-		{"TwoPartsEmptyFirst", "foo."},
+		{
+			name:     "ShouldRejectTwoPartsOnRS256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.bar",
+		},
+		{
+			name:     "ShouldRejectTrailingDotOnRS256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.",
+		},
+		{
+			name:     "ShouldRejectEmptyOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "",
+		},
+		{
+			name:     "ShouldRejectSpaceOnES256",
+			strategy: &DefaultStrategy{},
+			input:    " ",
+		},
+		{
+			name:     "ShouldRejectTwoPartsOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.bar",
+		},
+		{
+			name:     "ShouldRejectTrailingDotOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.",
+		},
 	}
 
 	for _, tc := range testCases {
-		for _, input := range inputs {
-			t.Run(fmt.Sprintf("%s/%s", tc.name, input.name), func(t *testing.T) {
-				_, err := tc.strategy.Decode(t.Context(), input.value)
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.strategy.Decode(t.Context(), tc.input)
 
-				assert.EqualError(t, err, "Provided value does not appear to be a JWE or JWS compact serialized JWT")
-			})
-		}
+			assert.EqualError(t, err, "Provided value does not appear to be a JWE or JWS compact serialized JWT")
+		})
 	}
 }
 
@@ -542,49 +561,51 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 }
 
-func TestShouldDecodeEncrypedTokens(t *testing.T) {
+func TestDefaultStrategy_DecodeEncryptedTokens(t *testing.T) {
 	testCases := []struct {
 		name string
 		have string
 	}{
 		{
-			"ShouldDecodeRS256",
-			testCompactSerializedNestedJWEWithRSA,
+			name: "ShouldDecodeRS256",
+			have: testCompactSerializedNestedJWEWithRSA,
 		},
 		{
-			"ShouldDecodeES256",
-			testCompactSerializedNestedJWEWithECDSA,
+			name: "ShouldDecodeES256",
+			have: testCompactSerializedNestedJWEWithECDSA,
 		},
 	}
 
 	for _, tc := range testCases {
-		strategy := &DefaultStrategy{
-			Config: &testConfig{},
-			Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					testKeyEncRSA,
-					testKeyEncECDSA,
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &DefaultStrategy{
+				Config: &testConfig{},
+				Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{
+					Keys: []jose.JSONWebKey{
+						testKeyEncRSA,
+						testKeyEncECDSA,
+					},
+				}),
+			}
+
+			client := &testClient{
+				id: "test",
+				jwks: &jose.JSONWebKeySet{
+					Keys: []jose.JSONWebKey{
+						testKeyPublicSigRSA,
+						testKeyPublicSigECDSA,
+					},
 				},
-			}),
-		}
+				csigned: true,
+			}
 
-		client := &testClient{
-			id: "test",
-			jwks: &jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					testKeyPublicSigRSA,
-					testKeyPublicSigECDSA,
-				},
-			},
-			csigned: true,
-		}
+			token, err := strategy.Decode(context.Background(), tc.have, WithClient(client))
+			require.NoError(t, err)
+			require.NotNil(t, token)
 
-		token, err := strategy.Decode(context.Background(), tc.have, WithClient(client))
-		assert.NoError(t, err)
-		assert.NotNil(t, token)
-
-		assert.NoError(t, token.Valid())
-		assert.NoError(t, token.Claims.Valid(ValidateIssuer("example.com"), ValidateRequireIssuedAt(), ValidateRequireExpiresAt(), ValidateSubject("john")))
+			assert.NoError(t, token.Valid())
+			assert.NoError(t, token.Claims.Valid(ValidateIssuer("example.com"), ValidateRequireIssuedAt(), ValidateRequireExpiresAt(), ValidateSubject("john")))
+		})
 	}
 }
 
@@ -740,7 +761,7 @@ func init() {
 	}
 }
 
-func TestInit(t *testing.T) {
+func TestEncodeNestedCompactEncrypted(t *testing.T) {
 	claims := MapClaims{
 		"iss": "example.com",
 		"sub": "john",

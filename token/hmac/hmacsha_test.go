@@ -14,121 +14,337 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-func TestGenerateFailsWithShortCredentials(t *testing.T) {
-	cg := HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foo")}}
-	challenge, signature, err := cg.Generate(context.Background())
-	require.Error(t, err)
-	require.Empty(t, challenge)
-	require.Empty(t, signature)
-}
+const (
+	validSecret   = "1234567890123456789012345678901234567890"
+	otherSecret   = "abcdefgh90123456789012345678901234567890"
+	rotatedSecret = "0000000090123456789012345678901234567890"
+	shortSecret   = "abcdefgh90123456789012345678901"
+)
 
-func TestGenerate(t *testing.T) {
-	for _, c := range []struct {
+func TestHMACStrategyGenerate(t *testing.T) {
+	testCases := []struct {
+		name         string
 		globalSecret []byte
-		tokenEntropy int
+		entropy      int
+		err          string
 	}{
 		{
-			globalSecret: []byte("1234567890123456789012345678901234567890"),
-			tokenEntropy: 32,
+			name:         "ShouldFailWhenSecretTooShort",
+			globalSecret: []byte("foo"),
+			entropy:      32,
+			err:          "secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 3 byte",
 		},
 		{
-			globalSecret: []byte("1234567890123456789012345678901234567890"),
-			tokenEntropy: 64,
+			name:         "ShouldGenerateWith32ByteEntropy",
+			globalSecret: []byte(validSecret),
+			entropy:      32,
 		},
-	} {
-		config := &oauth2.Config{
-			GlobalSecret: c.globalSecret,
-			TokenEntropy: c.tokenEntropy,
-		}
-		cg := HMACStrategy{Config: config}
-
-		token, signature, err := cg.Generate(context.Background())
-		require.NoError(t, err)
-		require.NotEmpty(t, token)
-		require.NotEmpty(t, signature)
-		t.Logf("Token: %s\n Signature: %s", token, signature)
-
-		err = cg.Validate(context.Background(), token)
-		require.NoError(t, err)
-
-		validateSignature := cg.Signature(token)
-		assert.Equal(t, signature, validateSignature)
-
-		config.GlobalSecret = []byte("baz")
-		err = cg.Validate(context.Background(), token)
-		require.Error(t, err)
-	}
-}
-
-func TestValidateSignatureRejects(t *testing.T) {
-	var err error
-	cg := HMACStrategy{
-		Config: &oauth2.Config{GlobalSecret: []byte("1234567890123456789012345678901234567890")},
-	}
-	for _, c := range []string{
-		"",
-		" ",
-		"foo.bar",
-		"foo.",
-		".foo",
-	} {
-		err = cg.Validate(context.Background(), c)
-		assert.Error(t, err)
-	}
-}
-
-func TestValidateWithRotatedKey(t *testing.T) {
-	old := HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("1234567890123456789012345678901234567890")}}
-	now := HMACStrategy{Config: &oauth2.Config{
-		GlobalSecret: []byte("0000000090123456789012345678901234567890"),
-		RotatedGlobalSecrets: [][]byte{
-			[]byte("abcdefgh90123456789012345678901234567890"),
-			[]byte("1234567890123456789012345678901234567890"),
+		{
+			name:         "ShouldGenerateWith64ByteEntropy",
+			globalSecret: []byte(validSecret),
+			entropy:      64,
 		},
-	},
+		{
+			name:         "ShouldGenerateUsingDefaultEntropyWhenBelowMinimum",
+			globalSecret: []byte(validSecret),
+			entropy:      0,
+		},
 	}
 
-	token, _, err := old.Generate(context.Background())
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cg := HMACStrategy{Config: &oauth2.Config{
+				GlobalSecret: tc.globalSecret,
+				TokenEntropy: tc.entropy,
+			}}
 
-	require.EqualError(t, now.Validate(context.Background(), "thisisatoken.withaninvalidsignature"), oauth2.ErrTokenSignatureMismatch.Error())
-	require.NoError(t, now.Validate(context.Background(), token))
+			token, signature, err := cg.Generate(context.Background())
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Empty(t, token)
+				assert.Empty(t, signature)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, token)
+			assert.NotEmpty(t, signature)
+			assert.Equal(t, signature, cg.Signature(token), "Signature() must extract the same signature")
+
+			require.NoError(t, cg.Validate(context.Background(), token))
+		})
+	}
 }
 
-func TestValidateWithRotatedKeyInvalid(t *testing.T) {
-	old := HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("1234567890123456789012345678901234567890")}}
-	now := HMACStrategy{Config: &oauth2.Config{
-		GlobalSecret: []byte("0000000090123456789012345678901234567890"),
-		RotatedGlobalSecrets: [][]byte{
-			[]byte("abcdefgh90123456789012345678901"),
-			[]byte("1234567890123456789012345678901234567890"),
-		}},
+func TestHMACStrategyValidate(t *testing.T) {
+	testCases := []struct {
+		name   string
+		token  string
+		config *oauth2.Config
+		err    string
+	}{
+		{
+			name:   "ShouldFailEmptyToken",
+			token:  "",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
+		},
+		{
+			name:   "ShouldFailWhitespaceToken",
+			token:  " ",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
+		},
+		{
+			name:   "ShouldFailWhenSignatureDoesNotMatch",
+			token:  "foo.bar",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrTokenSignatureMismatch.Error(),
+		},
+		{
+			name:   "ShouldFailWhenTokenKeyIsInvalidBase64",
+			token:  "!!.MTIzNA",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    "illegal base64 data at input byte 0",
+		},
+		{
+			name:   "ShouldFailWhenTokenSignatureIsInvalidBase64",
+			token:  "MTIzNA.!!",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    "illegal base64 data at input byte 0",
+		},
+		{
+			name:   "ShouldFailTokenMissingSignature",
+			token:  "foo.",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
+		},
+		{
+			name:   "ShouldFailTokenMissingKey",
+			token:  ".foo",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
+		},
+		{
+			name:   "ShouldFailWhenAllConfiguredSecretsTooShort",
+			token:  "MTIzNA.NQQ",
+			config: &oauth2.Config{GlobalSecret: []byte("short")},
+			err:    "secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 5 byte",
+		},
+		{
+			name:   "ShouldFailWhenNoSecretConfigured",
+			token:  "MTIzNA.NQQ",
+			config: &oauth2.Config{},
+			err:    "a secret for signing HMAC-SHA512/256 is expected to be defined, but none were",
+		},
+		{
+			name:   "ShouldFailMismatchedSignatureWithValidSecret",
+			token:  "thisisatoken.withaninvalidsignature",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			err:    oauth2.ErrTokenSignatureMismatch.Error(),
+		},
 	}
 
-	token, _, err := old.Generate(context.Background())
-	require.NoError(t, err)
-
-	require.EqualError(t, now.Validate(context.Background(), token), "secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 31 byte")
-
-	require.EqualError(t, (&HMACStrategy{Config: &oauth2.Config{}}).Validate(context.Background(), token), "a secret for signing HMAC-SHA512/256 is expected to be defined, but none were")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cg := HMACStrategy{Config: tc.config}
+			actual := cg.Validate(context.Background(), tc.token)
+			require.Error(t, actual)
+			assert.EqualError(t, actual, tc.err)
+		})
+	}
 }
 
-func TestCustomHMAC(t *testing.T) {
-	def := HMACStrategy{Config: &oauth2.Config{
-		GlobalSecret: []byte("1234567890123456789012345678901234567890")},
-	}
-	sha512 := HMACStrategy{Config: &oauth2.Config{
-		GlobalSecret: []byte("1234567890123456789012345678901234567890"),
-		HMACHasher:   sha512.New,
-	},
+func TestHMACStrategyValidateRotatedSecrets(t *testing.T) {
+	testCases := []struct {
+		name   string
+		config *oauth2.Config
+		check  func(t *testing.T, current, signer *HMACStrategy)
+	}{
+		{
+			name: "ShouldValidateTokenFromRotatedSecret",
+			config: &oauth2.Config{
+				GlobalSecret: []byte(rotatedSecret),
+				RotatedGlobalSecrets: [][]byte{
+					[]byte(otherSecret),
+					[]byte(validSecret),
+				},
+			},
+			check: func(t *testing.T, current, signer *HMACStrategy) {
+				token, _, err := signer.Generate(context.Background())
+				require.NoError(t, err)
+				require.NoError(t, current.Validate(context.Background(), token))
+			},
+		},
+		{
+			name: "ShouldFailMismatchedSignatureWithRotatedKeys",
+			config: &oauth2.Config{
+				GlobalSecret: []byte(rotatedSecret),
+				RotatedGlobalSecrets: [][]byte{
+					[]byte(otherSecret),
+					[]byte(validSecret),
+				},
+			},
+			check: func(t *testing.T, current, _ *HMACStrategy) {
+				assert.EqualError(t,
+					current.Validate(context.Background(), "thisisatoken.withaninvalidsignature"),
+					oauth2.ErrTokenSignatureMismatch.Error(),
+				)
+			},
+		},
+		{
+			name: "ShouldFailWhenARotatedSecretIsTooShort",
+			config: &oauth2.Config{
+				GlobalSecret: []byte(rotatedSecret),
+				RotatedGlobalSecrets: [][]byte{
+					[]byte(shortSecret),
+					[]byte(validSecret),
+				},
+			},
+			check: func(t *testing.T, current, signer *HMACStrategy) {
+				token, _, err := signer.Generate(context.Background())
+				require.NoError(t, err)
+				assert.EqualError(t, current.Validate(context.Background(), token),
+					"secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 31 byte")
+			},
+		},
 	}
 
-	token, _, err := def.Generate(context.Background())
-	require.NoError(t, err)
-	require.EqualError(t, sha512.Validate(context.Background(), token), oauth2.ErrTokenSignatureMismatch.Error())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			current := &HMACStrategy{Config: tc.config}
+			signer := &HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte(validSecret)}}
+			tc.check(t, current, signer)
+		})
+	}
+}
 
-	token512, _, err := sha512.Generate(context.Background())
-	require.NoError(t, err)
-	require.NoError(t, sha512.Validate(context.Background(), token512))
-	require.EqualError(t, def.Validate(context.Background(), token512), oauth2.ErrTokenSignatureMismatch.Error())
+func TestHMACStrategyCustomHMAC(t *testing.T) {
+	testCases := []struct {
+		name  string
+		check func(t *testing.T, def, sha *HMACStrategy)
+	}{
+		{
+			name: "ShouldFailValidatingDefaultTokenWithCustomHasher",
+			check: func(t *testing.T, def, sha *HMACStrategy) {
+				token, _, err := def.Generate(context.Background())
+				require.NoError(t, err)
+				assert.EqualError(t, sha.Validate(context.Background(), token), oauth2.ErrTokenSignatureMismatch.Error())
+			},
+		},
+		{
+			name: "ShouldValidateCustomHashedTokenWithSameHasher",
+			check: func(t *testing.T, def, sha *HMACStrategy) {
+				token, _, err := sha.Generate(context.Background())
+				require.NoError(t, err)
+				require.NoError(t, sha.Validate(context.Background(), token))
+			},
+		},
+		{
+			name: "ShouldFailValidatingCustomTokenWithDefaultHasher",
+			check: func(t *testing.T, def, sha *HMACStrategy) {
+				token, _, err := sha.Generate(context.Background())
+				require.NoError(t, err)
+				assert.EqualError(t, def.Validate(context.Background(), token), oauth2.ErrTokenSignatureMismatch.Error())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			def := &HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte(validSecret)}}
+			sha := &HMACStrategy{Config: &oauth2.Config{
+				GlobalSecret: []byte(validSecret),
+				HMACHasher:   sha512.New,
+			}}
+			tc.check(t, def, sha)
+		})
+	}
+}
+
+func TestHMACStrategyGenerateHMACForString(t *testing.T) {
+	testCases := []struct {
+		name   string
+		config *oauth2.Config
+		text   string
+		err    string
+	}{
+		{
+			name:   "ShouldFailWhenSecretTooShort",
+			config: &oauth2.Config{GlobalSecret: []byte("foo")},
+			text:   "hello",
+			err:    "secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 3 byte",
+		},
+		{
+			name:   "ShouldHashShortText",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			text:   "hello",
+		},
+		{
+			name:   "ShouldHashEmptyText",
+			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
+			text:   "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cg := HMACStrategy{Config: tc.config}
+			actual, err := cg.GenerateHMACForString(context.Background(), tc.text)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Empty(t, actual)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, actual)
+
+			// Same input + secret must be deterministic.
+			again, err := cg.GenerateHMACForString(context.Background(), tc.text)
+			require.NoError(t, err)
+			assert.Equal(t, actual, again)
+		})
+	}
+}
+
+func TestHMACStrategySignature(t *testing.T) {
+	testCases := []struct {
+		name     string
+		token    string
+		expected string
+	}{
+		{
+			name:     "ShouldReturnSignaturePart",
+			token:    "key.signature",
+			expected: "signature",
+		},
+		{
+			name:     "ShouldReturnEmptyForUnformattedToken",
+			token:    "no-dot-here",
+			expected: "",
+		},
+		{
+			name:     "ShouldReturnEmptyForMultipleDots",
+			token:    "a.b.c",
+			expected: "",
+		},
+		{
+			name:     "ShouldReturnEmptyForEmptyToken",
+			token:    "",
+			expected: "",
+		},
+	}
+
+	cg := HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte(validSecret)}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, cg.Signature(tc.token))
+		})
+	}
 }

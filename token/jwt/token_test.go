@@ -704,6 +704,271 @@ func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
 	return pkey
 }
 
+func TestParse(t *testing.T) {
+	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
+	pubKey := parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
+	keyFunc := func(*Token) (any, error) { return pubKey, nil }
+
+	t.Run("ShouldParseValidToken", func(t *testing.T) {
+		raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
+
+		token, err := Parse(raw, keyFunc)
+		require.NoError(t, err)
+		require.NotNil(t, token)
+		assert.True(t, token.IsSignatureValid())
+	})
+
+	t.Run("ShouldErrorOnInvalidToken", func(t *testing.T) {
+		_, err := Parse("not-a-jwt", keyFunc)
+		require.Error(t, err)
+	})
+}
+
+func TestParseCustom(t *testing.T) {
+	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
+	pubKey := parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
+	keyFunc := func(*Token) (any, error) { return pubKey, nil }
+
+	t.Run("ShouldParseWithRS256Restricted", func(t *testing.T) {
+		raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
+
+		token, err := ParseCustom(raw, keyFunc, jose.RS256)
+		require.NoError(t, err)
+		assert.True(t, token.IsSignatureValid())
+	})
+
+	t.Run("ShouldErrorWhenAlgNotAllowed", func(t *testing.T) {
+		raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
+
+		_, err := ParseCustom(raw, keyFunc, jose.ES256)
+		require.Error(t, err)
+	})
+}
+
+func TestParseCustomWithClaims_KeyFuncValidationErrorWrapping(t *testing.T) {
+	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
+	raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
+
+	wantedVE := &ValidationError{Errors: ValidationErrorUnverifiable, text: "wrapped"}
+	keyFunc := func(*Token) (any, error) { return nil, wantedVE }
+
+	_, err := ParseWithClaims(raw, MapClaims{}, keyFunc)
+	require.Error(t, err)
+
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve)
+	assert.Equal(t, "wrapped", ve.text)
+}
+
+func TestParseCustomWithClaims_NilKeyFromKeyFunc(t *testing.T) {
+	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
+	raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
+
+	keyFunc := func(*Token) (any, error) { return nil, nil }
+
+	_, err := ParseWithClaims(raw, MapClaims{}, keyFunc)
+	require.Error(t, err)
+
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve)
+	assert.Equal(t, ValidationErrorSignatureInvalid, ve.Errors)
+}
+
+func TestToken_IsJWTProfileAccessToken(t *testing.T) {
+	testCases := []struct {
+		name     string
+		token    *Token
+		expected bool
+	}{
+		{
+			name:     "ShouldReturnFalseWhenTypIsMissing",
+			token:    &Token{Header: map[string]any{}},
+			expected: false,
+		},
+		{
+			name: "ShouldReturnTrueWhenTypIsAccessToken",
+			token: &Token{
+				Header: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+			},
+			expected: true,
+		},
+		{
+			name: "ShouldReturnFalseWhenTypIsJWT",
+			token: &Token{
+				Header: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeJWT},
+			},
+			expected: false,
+		},
+		{
+			name: "ShouldReturnTrueWithJWEContentTypeAccessToken",
+			token: &Token{
+				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeAccessToken},
+			},
+			expected: true,
+		},
+		{
+			name: "ShouldReturnFalseWhenJWEContentTypeIsNotAccessToken",
+			token: &Token{
+				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeJWT},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.token.IsJWTProfileAccessToken())
+		})
+	}
+}
+
+func TestIsUnsafeNoneMagicConstant(t *testing.T) {
+	t.Run("ShouldReturnTrueForRawConstant", func(t *testing.T) {
+		assert.True(t, isUnsafeNoneMagicConstant(UnsafeAllowNoneSignatureType))
+	})
+
+	t.Run("ShouldReturnTrueForJWKWithConstant", func(t *testing.T) {
+		jwk := jose.JSONWebKey{Key: UnsafeAllowNoneSignatureType}
+		assert.True(t, isUnsafeNoneMagicConstant(jwk))
+	})
+
+	t.Run("ShouldReturnTrueForJWKPointerWithConstant", func(t *testing.T) {
+		jwk := &jose.JSONWebKey{Key: UnsafeAllowNoneSignatureType}
+		assert.True(t, isUnsafeNoneMagicConstant(jwk))
+	})
+
+	t.Run("ShouldReturnFalseForJWKWithOtherKey", func(t *testing.T) {
+		jwk := jose.JSONWebKey{Key: []byte("not-none")}
+		assert.False(t, isUnsafeNoneMagicConstant(jwk))
+	})
+
+	t.Run("ShouldReturnFalseForNonJWKValue", func(t *testing.T) {
+		assert.False(t, isUnsafeNoneMagicConstant("string"))
+	})
+}
+
+func TestValidateTokenTypeValue(t *testing.T) {
+	testCases := []struct {
+		name     string
+		raw      any
+		values   []string
+		expected bool
+	}{
+		{
+			name:     "ShouldReturnFalseForNonString",
+			raw:      123,
+			values:   []string{JSONWebTokenTypeJWT},
+			expected: false,
+		},
+		{
+			name:     "ShouldMatchSameCase",
+			raw:      "JWT",
+			values:   []string{"JWT"},
+			expected: true,
+		},
+		{
+			name:     "ShouldMatchCaseInsensitive",
+			raw:      "jwt",
+			values:   []string{"JWT"},
+			expected: true,
+		},
+		{
+			name:     "ShouldMatchApplicationPrefix",
+			raw:      "application/jwt",
+			values:   []string{"JWT"},
+			expected: true,
+		},
+		{
+			name:     "ShouldReturnFalseOnNoMatch",
+			raw:      "other",
+			values:   []string{"JWT"},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, validateTokenTypeValue(tc.raw, tc.values...))
+		})
+	}
+}
+
+func TestToken_AssignJWE(t *testing.T) {
+	t.Run("ShouldNotAlterTokenWhenJWENil", func(t *testing.T) {
+		token := &Token{HeaderJWE: map[string]any{"existing": "value"}}
+		token.AssignJWE(nil)
+		assert.Equal(t, map[string]any{"existing": "value"}, token.HeaderJWE)
+	})
+
+	t.Run("ShouldPopulateFieldsFromJWEHeader", func(t *testing.T) {
+		jwe := &jose.JSONWebEncryption{
+			Header: jose.Header{
+				Algorithm: string(jose.RSA_OAEP_256),
+				KeyID:     "enc-kid",
+				ExtraHeaders: map[jose.HeaderKey]any{
+					JSONWebTokenHeaderEncryptionAlgorithm:  string(jose.A128CBC_HS256),
+					JSONWebTokenHeaderCompressionAlgorithm: string(jose.DEFLATE),
+					"custom":                               "value",
+				},
+			},
+		}
+
+		token := &Token{}
+		token.AssignJWE(jwe)
+
+		assert.Equal(t, "enc-kid", token.EncryptionKeyID)
+		assert.Equal(t, jose.KeyAlgorithm(jose.RSA_OAEP_256), token.KeyAlgorithm)
+		assert.Equal(t, jose.A128CBC_HS256, token.ContentEncryption)
+		assert.Equal(t, jose.DEFLATE, token.CompressionAlgorithm)
+		assert.Equal(t, "value", token.HeaderJWE["custom"])
+		assert.Equal(t, "enc-kid", token.HeaderJWE[JSONWebTokenHeaderKeyIdentifier])
+	})
+}
+
+func TestToken_CompactSignedString_ErrorPaths(t *testing.T) {
+	t.Run("ShouldErrorOnInvalidKeyForSigner", func(t *testing.T) {
+		token := NewWithClaims(jose.RS256, MapClaims{"foo": "bar"})
+		_, err := token.CompactSignedString("not-a-real-key")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error signing jwt")
+	})
+
+	t.Run("ShouldProduceUnsignedTokenForNoneMagicConstant", func(t *testing.T) {
+		token := NewWithClaims(SigningMethodNone, MapClaims{"foo": "bar"})
+		out, err := token.CompactSignedString(UnsafeAllowNoneSignatureType)
+		require.NoError(t, err)
+		assert.True(t, strings.HasSuffix(out, "."))
+	})
+}
+
+func TestToken_CompactSigned_ReturnsSignature(t *testing.T) {
+	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
+	token := NewWithClaims(jose.RS256, MapClaims{"foo": "bar"})
+
+	raw, sig, err := token.CompactSigned(signingKey)
+	require.NoError(t, err)
+	assert.NotEmpty(t, raw)
+	assert.NotEmpty(t, sig)
+
+	parts := strings.Split(raw, ".")
+	require.Len(t, parts, 3)
+	assert.Equal(t, parts[2], sig)
+}
+
+func TestToken_CompactSigned_PropagatesError(t *testing.T) {
+	token := NewWithClaims(jose.RS256, MapClaims{"foo": "bar"})
+	_, _, err := token.CompactSigned("not-a-real-key")
+	require.Error(t, err)
+}
+
+func TestToken_CompactEncrypted_PropagatesSigningError(t *testing.T) {
+	token := NewWithClaims(jose.RS256, MapClaims{"foo": "bar"})
+	_, _, err := token.CompactEncrypted("not-a-real-key", nil)
+	require.Error(t, err)
+}
+
 var (
 	defaultPubKeyPEM = []byte(`
 -----BEGIN PUBLIC KEY-----

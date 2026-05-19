@@ -1,3 +1,6 @@
+// Copyright © 2026 Authelia
+// SPDX-License-Identifier: Apache-2.0
+
 package oauth2_test
 
 import (
@@ -8,72 +11,144 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	handlers := []*mock.MockRFC8628UserAuthorizeEndpointHandler{mock.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)}
-	req := &http.Request{
-		Form: url.Values{
-			consts.FormParameterUserCode: {"A1B2C3D4"},
-		},
-	}
-	defer ctrl.Finish()
+	handlerErr := errors.New("handler failed")
 
-	ctx := context.Background()
-	oauth2 := &Fosite{Config: &Config{RFC8628UserAuthorizeEndpointHandlers: RFC8628UserAuthorizeEndpointHandlers{handlers[0]}}}
-	duo := &Fosite{Config: &Config{RFC8628UserAuthorizeEndpointHandlers: RFC8628UserAuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
-	fooErr := errors.New("foo")
-	for k, c := range []struct {
-		isErr     bool
-		mock      func()
-		expectErr error
+	testCases := []struct {
+		name     string
+		req      *http.Request
+		handlers int
+		mock     func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler)
+		expected string
 	}{
 		{
-			mock: func() {
+			name: "ShouldPassWithSingleHandler",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
+			},
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
 				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			isErr: false,
 		},
 		{
-			mock: func() {
-				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(fooErr)
+			name: "ShouldFailWhenHandlerReturnsError",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
 			},
-			isErr:     true,
-			expectErr: fooErr,
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
+				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(handlerErr)
+			},
+			expected: "handler failed",
 		},
 		{
-			mock: func() {
-				oauth2 = duo
-				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+			name: "ShouldFailWhenHandlerReturnsRFC6749Error",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
 			},
-			isErr: false,
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
+				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("User code is invalid.")))
+			},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. User code is invalid.",
 		},
 		{
-			mock: func() {
-				oauth2 = duo
-				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(fooErr)
+			name: "ShouldPassWithMultipleHandlers",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
 			},
-			isErr:     true,
-			expectErr: fooErr,
+			handlers: 2,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
+				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+			},
 		},
-	} {
-		c.mock()
-		resp, err := oauth2.NewRFC8628UserAuthorizeRequest(ctx, req)
-		assert.Equal(t, c.isErr, err != nil, "%d: %s", k, err)
-		if err != nil {
-			assert.Equal(t, c.expectErr, err, "%d: %s", k, err)
-			assert.Nil(t, resp, "%d", k)
-		} else {
-			assert.NotNil(t, resp, "%d", k)
-			assert.Equal(t, req.Form, resp.GetRequestForm())
-		}
+		{
+			name: "ShouldFailWhenSecondHandlerReturnsError",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
+			},
+			handlers: 2,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
+				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(handlerErr)
+			},
+			expected: "handler failed",
+		},
+		{
+			name: "ShouldContinueWhenHandlerReturnsErrUnknownRequest",
+			req: &http.Request{
+				Form: url.Values{
+					consts.FormParameterUserCode: {"A1B2C3D4"},
+				},
+			},
+			handlers: 2,
+			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {
+				handlers[0].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(errorsx.WithStack(ErrUnknownRequest))
+				handlers[1].EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+			},
+		},
+		{
+			name: "ShouldFailWhenParseFormErrors",
+			req: &http.Request{
+				URL: &url.URL{RawQuery: "%"},
+			},
+			handlers: 1,
+			mock:     func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. invalid URL escape '%'",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			handlers := make([]*mock.MockRFC8628UserAuthorizeEndpointHandler, tc.handlers)
+			endpointHandlers := make(RFC8628UserAuthorizeEndpointHandlers, tc.handlers)
+			for i := 0; i < tc.handlers; i++ {
+				handlers[i] = mock.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)
+				endpointHandlers[i] = handlers[i]
+			}
+
+			provider := &Fosite{Config: &Config{
+				RFC8628UserAuthorizeEndpointHandlers: endpointHandlers,
+			}}
+
+			tc.mock(handlers)
+
+			actual, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), tc.req)
+
+			if tc.expected != "" {
+				assert.Nil(t, actual)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.req.Form, actual.GetRequestForm())
+		})
 	}
 }

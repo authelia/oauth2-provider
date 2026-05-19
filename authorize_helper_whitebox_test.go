@@ -11,50 +11,73 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsLookbackAddress(t *testing.T) {
+func TestIsLoopbackAddress(t *testing.T) {
 	testCases := []struct {
 		name     string
 		have     string
 		expected bool
 	}{
 		{
-			"ShouldReturnTrueIPv4Loopback",
-			"http://127.0.0.1:1235",
-			true,
+			name:     "ShouldReturnTrueForIPv4LoopbackWithPort",
+			have:     "http://127.0.0.1:1235",
+			expected: true,
 		},
 		{
-			"ShouldReturnTrueIPv6Loopback",
-			"http://[::1]:1234",
-			true,
+			name:     "ShouldReturnTrueForIPv6LoopbackWithPort",
+			have:     "http://[::1]:1234",
+			expected: true,
 		},
 		{
-			"ShouldReturnFalse12700255",
-			"https://127.0.0.255",
-			true,
+			name:     "ShouldReturnTrueFor127DotZeroDotZeroDot255",
+			have:     "https://127.0.0.255",
+			expected: true,
 		},
 		{
-			"ShouldReturnTrue127.0.0.255",
-			"https://127.0.0.255",
-			true,
+			name:     "ShouldReturnFalseForInvalidFourthOctet",
+			have:     "https://127.0.0.11230",
+			expected: false,
 		},
 		{
-			"ShouldReturnFalseInvalidFourthOctet",
-			"https://127.0.0.11230",
-			false,
+			name:     "ShouldReturnFalseForNonDotSeparatedIPv4",
+			have:     "https://127x0x0x11230",
+			expected: false,
 		},
 		{
-			"ShouldReturnFalseInvalidIPv4",
-			"https://127x0x0x11230",
-			false,
+			name:     "ShouldReturnFalseForHostname",
+			have:     "https://example.com",
+			expected: false,
+		},
+		{
+			name:     "ShouldReturnFalseForNonLoopbackIPv4",
+			have:     "https://192.168.1.1",
+			expected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			have, err := url.Parse(tc.have)
-
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, isLoopbackAddress(have))
+
+			actual := isLoopbackAddress(have)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestIsLoopbackAddressNilURL(t *testing.T) {
+	testCases := []struct {
+		name string
+	}{
+		{
+			name: "ShouldReturnFalseForNilURL",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isLoopbackAddress(nil)
+			assert.False(t, actual)
 		})
 	}
 }

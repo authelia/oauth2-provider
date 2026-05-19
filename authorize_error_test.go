@@ -481,6 +481,115 @@ func TestWriteAuthorizeError(t *testing.T) {
 	}
 }
 
+func TestWriteAuthorizeErrorFallthrough(t *testing.T) {
+	testCases := []struct {
+		name   string
+		config *Config
+		setup  func(rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header)
+		check  func(t *testing.T, header http.Header)
+	}{
+		{
+			name:   "ShouldWriteJSONServerErrorWhenNoHandlerSupportsResponseModeAndNoStrategy",
+			config: &Config{},
+			setup: func(rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
+				req.EXPECT().GetResponseMode().Return(ResponseModeType("unknown-mode")).AnyTimes()
+				rw.EXPECT().Header().AnyTimes().Return(header)
+				rw.EXPECT().WriteHeader(http.StatusInternalServerError)
+				rw.EXPECT().Write(gomock.Any())
+			},
+			check: func(t *testing.T, header http.Header) {
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+				assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+				assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
+			},
+		},
+		{
+			name: "ShouldDelegateToConfiguredStrategyWhenNoHandlerSupportsResponseMode",
+			config: &Config{
+				AuthorizeErrorFieldResponseStrategy: &JSONAuthorizeErrorFieldResponseStrategy{},
+			},
+			setup: func(rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
+				req.EXPECT().GetResponseMode().Return(ResponseModeType("unknown-mode")).AnyTimes()
+				rw.EXPECT().Header().AnyTimes().Return(header)
+				rw.EXPECT().WriteHeader(http.StatusInternalServerError)
+				rw.EXPECT().Write(gomock.Any())
+			},
+			check: func(t *testing.T, header http.Header) {
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: tc.config}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			rw := mock.NewMockResponseWriter(ctrl)
+			req := mock.NewMockAuthorizeRequester(ctrl)
+
+			header := http.Header{}
+			tc.setup(rw, req, header)
+
+			provider.WriteAuthorizeError(context.Background(), rw, req, ErrInvalidRequest)
+
+			tc.check(t, header)
+		})
+	}
+}
+
+func TestJSONAuthorizeErrorFieldResponseStrategy(t *testing.T) {
+	testCases := []struct {
+		name     string
+		debug    bool
+		err      *RFC6749Error
+		expected int
+		check    func(t *testing.T, header http.Header)
+	}{
+		{
+			name:     "ShouldWriteInvalidRequestErrorAsJSON",
+			err:      ErrInvalidRequest,
+			expected: http.StatusBadRequest,
+			check: func(t *testing.T, header http.Header) {
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+			},
+		},
+		{
+			name:     "ShouldWriteServerErrorAsJSON",
+			err:      ErrServerError,
+			expected: http.StatusInternalServerError,
+			check: func(t *testing.T, header http.Header) {
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			rw := mock.NewMockResponseWriter(ctrl)
+			req := mock.NewMockAuthorizeRequester(ctrl)
+
+			header := http.Header{}
+			rw.EXPECT().Header().AnyTimes().Return(header)
+			rw.EXPECT().WriteHeader(tc.expected)
+			rw.EXPECT().Write(gomock.Any())
+
+			strategy := &JSONAuthorizeErrorFieldResponseStrategy{
+				Config: &Config{SendDebugMessagesToClients: tc.debug},
+			}
+
+			strategy.WriteErrorFieldResponse(context.Background(), rw, req, tc.err)
+
+			tc.check(t, header)
+		})
+	}
+}
+
 func copyUrl(u *url.URL) *url.URL {
 	u2, _ := url.Parse(u.String())
 	return u2

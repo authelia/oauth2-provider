@@ -11,6 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
@@ -558,15 +559,18 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			}
 
 			provider := &Fosite{Store: store, Config: tc.config}
-			ar, err := provider.NewAuthorizeRequest(context.Background(), tc.r)
+			actual, err := provider.NewAuthorizeRequest(context.Background(), tc.r)
+
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-				AssertObjectKeysEqual(t, &AuthorizeRequest{State: tc.query.Get(consts.FormParameterState)}, ar, "State")
-			} else {
-				assert.NoError(t, err)
-				AssertObjectKeysEqual(t, tc.expect, ar, "ResponseTypes", "RequestedAudience", "RequestedScope", "Client", "RedirectURI", "State")
-				assert.NotNil(t, ar.GetRequestedAt())
+				AssertObjectKeysEqual(t, &AuthorizeRequest{State: tc.query.Get(consts.FormParameterState)}, actual, "State")
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			AssertObjectKeysEqual(t, tc.expect, actual, "ResponseTypes", "RequestedAudience", "RequestedScope", "Client", "RedirectURI", "State")
+			assert.NotNil(t, actual.GetRequestedAt())
 		})
 	}
 }

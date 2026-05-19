@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -223,16 +225,18 @@ func TestNewAccessRequest(t *testing.T) {
 				config.TokenEndpointHandlers = tc.handlers(handler)
 			}
 
-			ar, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
+			actual, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
 
 			if tc.expectErr != nil {
 				assert.EqualError(t, err, tc.expectErr.Error())
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expectStrErr)
-			} else {
-				require.NoError(t, err)
-				AssertObjectKeysEqual(t, tc.expect(client), ar, "GrantTypes", "Client")
-				assert.NotNil(t, ar.GetRequestedAt())
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			AssertObjectKeysEqual(t, tc.expect(client), actual, "GrantTypes", "Client")
+			assert.NotNil(t, actual.GetRequestedAt())
 		})
 	}
 }
@@ -357,16 +361,92 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 				Method:   tc.method,
 			}
 			tc.mock(store, handler)
+
 			ctx := NewContext()
-			ar, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
+			actual, err := provider.NewAccessRequest(ctx, r, new(DefaultSession))
 
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-			} else {
-				require.NoError(t, err)
-				AssertObjectKeysEqual(t, tc.expect, ar, "GrantTypes", "Client")
-				assert.NotNil(t, ar.GetRequestedAt())
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			AssertObjectKeysEqual(t, tc.expect, actual, "GrantTypes", "Client")
+			assert.NotNil(t, actual.GetRequestedAt())
+		})
+	}
+}
+
+func TestNewAccessRequestEdgeCases(t *testing.T) {
+	testCases := []struct {
+		name     string
+		req      func() *http.Request
+		session  Session
+		expected string
+		strict   bool
+	}{
+		{
+			name: "ShouldFailMalformedMultipartBody",
+			req: func() *http.Request {
+				return &http.Request{
+					Method: http.MethodPost,
+					Header: http.Header{consts.HeaderContentType: {"multipart/form-data; boundary=foo"}},
+					Body:   io.NopCloser(strings.NewReader("not a real multipart body")),
+				}
+			},
+			session:  new(DefaultSession),
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. multipart: NextPart: EOF",
+		},
+		{
+			name: "ShouldFailWhenSessionIsNil",
+			req: func() *http.Request {
+				form := url.Values{consts.FormParameterGrantType: {"foo"}}
+				return &http.Request{
+					Method:   http.MethodPost,
+					Header:   http.Header{},
+					PostForm: form,
+					Form:     form,
+				}
+			},
+			session:  nil,
+			expected: "Session must not be nil",
+			strict:   true,
+		},
+		{
+			name: "ShouldFailWhenGrantTypeMissing",
+			req: func() *http.Request {
+				form := url.Values{consts.FormParameterClientID: {"bar"}}
+				return &http.Request{
+					Method:   http.MethodPost,
+					Header:   http.Header{},
+					PostForm: form,
+					Form:     form,
+				}
+			},
+			session:  new(DefaultSession),
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Request parameter 'grant_type' is missing",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{
+				Store: mock.NewMockStorage(gomock.NewController(t)),
+				Config: &Config{
+					AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
+				},
+			}
+
+			_, err := provider.NewAccessRequest(t.Context(), tc.req(), tc.session)
+
+			if tc.strict {
+				assert.EqualError(t, err, tc.expected)
+
+				return
+			}
+
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
@@ -467,15 +547,18 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				Method:   tc.method,
 			}
 			tc.mock(store, handlerWithClientAuth, handlerWithoutClientAuth)
-			ar, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
+
+			actual, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
 
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-			} else {
-				require.NoError(t, err)
-				AssertObjectKeysEqual(t, tc.expect, ar, "GrantTypes", "Client")
-				assert.NotNil(t, ar.GetRequestedAt())
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			AssertObjectKeysEqual(t, tc.expect, actual, "GrantTypes", "Client")
+			assert.NotNil(t, actual.GetRequestedAt())
 		})
 	}
 }

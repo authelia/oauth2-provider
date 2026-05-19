@@ -620,24 +620,27 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}
 
-			err = provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
+			actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
+
 			if tc.err != nil {
-				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, actual, tc.err.Error())
 				if tc.errString != "" {
-					assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.errString)
+					assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.errString)
 				}
 
 				if tc.errRegex != nil {
-					assert.Regexp(t, tc.errRegex, ErrorToDebugRFC6749Error(err).Error())
+					assert.Regexp(t, tc.errRegex, ErrorToDebugRFC6749Error(actual).Error())
 				}
-			} else {
-				assert.NoError(t, ErrorToDebugRFC6749Error(err))
 
-				assert.Equal(t, len(tc.expected), len(r.Form))
-				for k, v := range tc.expected {
-					assert.Contains(t, r.Form, k)
-					assert.EqualValues(t, v, r.Form[k], fmt.Sprintf("Parameter %s did not match", k))
-				}
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(actual))
+
+			assert.Equal(t, len(tc.expected), len(r.Form))
+			for k, v := range tc.expected {
+				assert.Contains(t, r.Form, k)
+				assert.EqualValues(t, v, r.Form[k], fmt.Sprintf("Parameter %s did not match", k))
 			}
 		})
 	}

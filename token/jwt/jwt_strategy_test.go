@@ -317,36 +317,56 @@ func TestDefaultStrategy_Decode_RejectNonCompactSerializedJWT(t *testing.T) {
 	testCases := []struct {
 		name     string
 		strategy Strategy
+		input    string
 	}{
 		{
-			name:     "RS256",
+			name:     "ShouldRejectEmptyOnRS256",
 			strategy: &DefaultStrategy{},
+			input:    "",
 		},
 		{
-			name:     "ES256",
+			name:     "ShouldRejectSpaceOnRS256",
 			strategy: &DefaultStrategy{},
+			input:    " ",
 		},
-	}
-
-	inputs := []struct {
-		name  string
-		value string
-	}{
-		{"Empty", ""},
-		{"Space", " "},
-		{"TwoParts", "foo.bar"},
-		{"TwoPartsEmptySecond", "foo."},
-		{"TwoPartsEmptyFirst", "foo."},
+		{
+			name:     "ShouldRejectTwoPartsOnRS256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.bar",
+		},
+		{
+			name:     "ShouldRejectTrailingDotOnRS256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.",
+		},
+		{
+			name:     "ShouldRejectEmptyOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "",
+		},
+		{
+			name:     "ShouldRejectSpaceOnES256",
+			strategy: &DefaultStrategy{},
+			input:    " ",
+		},
+		{
+			name:     "ShouldRejectTwoPartsOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.bar",
+		},
+		{
+			name:     "ShouldRejectTrailingDotOnES256",
+			strategy: &DefaultStrategy{},
+			input:    "foo.",
+		},
 	}
 
 	for _, tc := range testCases {
-		for _, input := range inputs {
-			t.Run(fmt.Sprintf("%s/%s", tc.name, input.name), func(t *testing.T) {
-				_, err := tc.strategy.Decode(t.Context(), input.value)
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.strategy.Decode(t.Context(), tc.input)
 
-				assert.EqualError(t, err, "Provided value does not appear to be a JWE or JWS compact serialized JWT")
-			})
-		}
+			assert.EqualError(t, err, "Provided value does not appear to be a JWE or JWS compact serialized JWT")
+		})
 	}
 }
 
@@ -542,49 +562,51 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 }
 
-func TestShouldDecodeEncrypedTokens(t *testing.T) {
+func TestDefaultStrategy_DecodeEncryptedTokens(t *testing.T) {
 	testCases := []struct {
 		name string
 		have string
 	}{
 		{
-			"ShouldDecodeRS256",
-			testCompactSerializedNestedJWEWithRSA,
+			name: "ShouldDecodeRS256",
+			have: testCompactSerializedNestedJWEWithRSA,
 		},
 		{
-			"ShouldDecodeES256",
-			testCompactSerializedNestedJWEWithECDSA,
+			name: "ShouldDecodeES256",
+			have: testCompactSerializedNestedJWEWithECDSA,
 		},
 	}
 
 	for _, tc := range testCases {
-		strategy := &DefaultStrategy{
-			Config: &testConfig{},
-			Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					testKeyEncRSA,
-					testKeyEncECDSA,
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &DefaultStrategy{
+				Config: &testConfig{},
+				Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{
+					Keys: []jose.JSONWebKey{
+						testKeyEncRSA,
+						testKeyEncECDSA,
+					},
+				}),
+			}
+
+			client := &testClient{
+				id: "test",
+				jwks: &jose.JSONWebKeySet{
+					Keys: []jose.JSONWebKey{
+						testKeyPublicSigRSA,
+						testKeyPublicSigECDSA,
+					},
 				},
-			}),
-		}
+				csigned: true,
+			}
 
-		client := &testClient{
-			id: "test",
-			jwks: &jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					testKeyPublicSigRSA,
-					testKeyPublicSigECDSA,
-				},
-			},
-			csigned: true,
-		}
+			token, err := strategy.Decode(context.Background(), tc.have, WithClient(client))
+			require.NoError(t, err)
+			require.NotNil(t, token)
 
-		token, err := strategy.Decode(context.Background(), tc.have, WithClient(client))
-		assert.NoError(t, err)
-		assert.NotNil(t, token)
-
-		assert.NoError(t, token.Valid())
-		assert.NoError(t, token.Claims.Valid(ValidateIssuer("example.com"), ValidateRequireIssuedAt(), ValidateRequireExpiresAt(), ValidateSubject("john")))
+			assert.NoError(t, token.Valid())
+			assert.NoError(t, token.Claims.Valid(ValidateIssuer("example.com"), ValidateRequireIssuedAt(), ValidateRequireExpiresAt(), ValidateSubject("john")))
+		})
 	}
 }
 
@@ -740,7 +762,156 @@ func init() {
 	}
 }
 
-func TestInit(t *testing.T) {
+func TestDefaultStrategy_Validate(t *testing.T) {
+	rsaKey := mustRSAKey(t, 2048)
+
+	issuerJWKS := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				Key:       rsaKey,
+				KeyID:     "validate-kid",
+				Use:       JSONWebTokenUseSignature,
+				Algorithm: string(jose.RS256),
+			},
+		},
+	}
+
+	strategy := &DefaultStrategy{
+		Config: &testConfig{},
+		Issuer: NewDefaultIssuerUnverifiedFromJWKS(issuerJWKS),
+	}
+
+	t.Run("ShouldErrorOnNilToken", func(t *testing.T) {
+		err := strategy.Validate(t.Context(), nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "token is nil")
+	})
+
+	t.Run("ShouldReturnNilWhenAlreadyValid", func(t *testing.T) {
+		token := &Token{valid: true}
+		assert.NoError(t, strategy.Validate(t.Context(), token))
+	})
+
+	t.Run("ShouldErrorWhenParsedTokenNil", func(t *testing.T) {
+		token := &Token{valid: false}
+		err := strategy.Validate(t.Context(), token)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "token is in an inconsistent state")
+	})
+
+	t.Run("ShouldErrorWhenOptionErrors", func(t *testing.T) {
+		token := &Token{valid: true}
+		failingOpt := func(opts *StrategyOpts) error { return fmt.Errorf("opt error") }
+		err := strategy.Validate(t.Context(), token, failingOpt)
+		assert.NoError(t, err, "valid token should short-circuit before applying opts")
+
+		token = &Token{}
+		err = strategy.Validate(t.Context(), token, failingOpt)
+		require.Error(t, err, "should error when applying options to a non-valid token")
+	})
+
+	t.Run("ShouldValidateSignedTokenWithAllowUnverifiedDeferred", func(t *testing.T) {
+		ctx := t.Context()
+		claims := MapClaims{"foo": "bar"}
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeJWT}}
+
+		tokenString, _, err := strategy.Encode(ctx, claims, WithHeaders(headers))
+		require.NoError(t, err)
+		require.NotEmpty(t, tokenString)
+
+		token, err := strategy.Decode(ctx, tokenString, WithAllowUnverified())
+		require.NoError(t, err)
+		require.NotNil(t, token)
+		require.False(t, token.valid, "Decode with WithAllowUnverified must defer validation")
+
+		require.NoError(t, strategy.Validate(ctx, token))
+		assert.True(t, token.valid)
+	})
+}
+
+func TestDefaultStrategy_Errors(t *testing.T) {
+	rsaKey := mustRSAKey(t, 2048)
+
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				Key:       rsaKey,
+				KeyID:     "default",
+				Use:       JSONWebTokenUseSignature,
+				Algorithm: string(jose.RS256),
+			},
+		},
+	}
+
+	strategy := &DefaultStrategy{
+		Config: &testConfig{},
+		Issuer: NewDefaultIssuerUnverifiedFromJWKS(jwks),
+	}
+
+	failingOpt := func(opts *StrategyOpts) error { return fmt.Errorf("opt failure") }
+
+	t.Run("EncodeShouldErrorOnFailingOption", func(t *testing.T) {
+		_, _, err := strategy.Encode(t.Context(), MapClaims{}, failingOpt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "opt failure")
+	})
+
+	t.Run("EncodeShouldErrorOnMissingIssuerKey", func(t *testing.T) {
+		emptyStrategy := &DefaultStrategy{
+			Config: &testConfig{},
+			Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{}),
+		}
+		_, _, err := emptyStrategy.Encode(t.Context(), MapClaims{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error occurred retrieving issuer jwk")
+	})
+
+	t.Run("DecryptShouldErrorOnFailingOption", func(t *testing.T) {
+		validJWE := "eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMTI4R0NNIn0.foo.iv.ct.tag"
+		_, _, _, err := strategy.Decrypt(t.Context(), validJWE, failingOpt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "opt failure")
+	})
+
+	t.Run("DecryptShouldReturnSignedJWTUnchanged", func(t *testing.T) {
+		ctx := t.Context()
+		claims := MapClaims{"foo": "bar"}
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeJWT}}
+
+		signed, _, err := strategy.Encode(ctx, claims, WithHeaders(headers))
+		require.NoError(t, err)
+
+		out, sig, jwe, err := strategy.Decrypt(ctx, signed)
+		require.NoError(t, err)
+		assert.Equal(t, signed, out)
+		assert.Empty(t, sig)
+		assert.Nil(t, jwe)
+	})
+
+	t.Run("DecryptShouldErrorOnMalformedToken", func(t *testing.T) {
+		_, _, _, err := strategy.Decrypt(t.Context(), "not-a-jwt")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Provided value does not appear to be a JWE or JWS compact serialized JWT")
+	})
+
+	t.Run("DecryptShouldErrorOnMalformedJWE", func(t *testing.T) {
+		_, _, _, err := strategy.Decrypt(t.Context(), "garbage.garbage.garbage.garbage.garbage")
+		require.Error(t, err)
+	})
+
+	t.Run("DecodeShouldErrorOnFailingOption", func(t *testing.T) {
+		_, err := strategy.Decode(t.Context(), "garbage.garbage.garbage", failingOpt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "opt failure")
+	})
+
+	t.Run("DecodeShouldErrorOnMalformedToken", func(t *testing.T) {
+		_, err := strategy.Decode(t.Context(), "not-a-jwt")
+		require.Error(t, err)
+	})
+}
+
+func TestEncodeNestedCompactEncrypted(t *testing.T) {
 	claims := MapClaims{
 		"iss": "example.com",
 		"sub": "john",

@@ -1,4 +1,4 @@
-// Copyright © 2023 Ory Corp
+// Copyright © 2026 Authelia
 // SPDX-License-Identifier: Apache-2.0
 
 package oauth2_test

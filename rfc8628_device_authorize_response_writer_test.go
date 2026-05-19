@@ -1,3 +1,6 @@
+// Copyright © 2026 Authelia
+// SPDX-License-Identifier: Apache-2.0
+
 package oauth2_test
 
 import (
@@ -6,67 +9,108 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func TestNewDeviceResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	handlers := []*mock.MockRFC8628DeviceAuthorizeEndpointHandler{mock.NewMockRFC8628DeviceAuthorizeEndpointHandler(ctrl)}
-	dar := mock.NewMockDeviceAuthorizeRequester(ctrl)
-	defer ctrl.Finish()
+func TestNewRFC862DeviceAuthorizeResponse(t *testing.T) {
+	handlerErr := errors.New("handler failed")
 
-	ctx := context.Background()
-	oauth2 := &Fosite{Config: &Config{RFC8628DeviceAuthorizeEndpointHandlers: RFC8628DeviceAuthorizeEndpointHandlers{handlers[0]}}}
-	duo := &Fosite{Config: &Config{RFC8628DeviceAuthorizeEndpointHandlers: RFC8628DeviceAuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
-	dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession))).AnyTimes()
-	fooErr := errors.New("foo")
-	for k, c := range []struct {
-		isErr     bool
-		mock      func()
-		expectErr error
+	testCases := []struct {
+		name     string
+		handlers int
+		mock     func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester)
+		expected string
 	}{
 		{
-			mock: func() {
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+			name:     "ShouldFailWhenHandlerReturnsError",
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(handlerErr)
 			},
-			isErr:     true,
-			expectErr: fooErr,
+			expected: "handler failed",
 		},
 		{
-			mock: func() {
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			name:     "ShouldFailWhenHandlerReturnsRFC6749Error",
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("Device authorize request was invalid.")))
 			},
-			isErr: false,
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Device authorize request was invalid.",
 		},
 		{
-			mock: func() {
-				oauth2 = duo
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			name:     "ShouldPassWithSingleHandler",
+			handlers: 1,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
 			},
-			isErr: false,
 		},
 		{
-			mock: func() {
-				oauth2 = duo
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+			name:     "ShouldPassWithMultipleHandlers",
+			handlers: 2,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
 			},
-			isErr:     true,
-			expectErr: fooErr,
 		},
-	} {
-		c.mock()
-		responder, err := oauth2.NewRFC862DeviceAuthorizeResponse(ctx, dar, new(DefaultSession))
-		assert.Equal(t, c.isErr, err != nil, "%d: %s", k, err)
-		if err != nil {
-			assert.Equal(t, c.expectErr, err, "%d: %s", k, err)
-			assert.Nil(t, responder, "%d", k)
-		} else {
-			assert.NotNil(t, responder, "%d", k)
-		}
+		{
+			name:     "ShouldFailWhenSecondHandlerReturnsError",
+			handlers: 2,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleRFC8628DeviceAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(handlerErr)
+			},
+			expected: "handler failed",
+		},
+		{
+			name:     "ShouldPassWithNoHandlers",
+			handlers: 0,
+			mock: func(handlers []*mock.MockRFC8628DeviceAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			dar := mock.NewMockDeviceAuthorizeRequester(ctrl)
+
+			handlers := make([]*mock.MockRFC8628DeviceAuthorizeEndpointHandler, tc.handlers)
+			endpointHandlers := make(RFC8628DeviceAuthorizeEndpointHandlers, tc.handlers)
+			for i := 0; i < tc.handlers; i++ {
+				handlers[i] = mock.NewMockRFC8628DeviceAuthorizeEndpointHandler(ctrl)
+				endpointHandlers[i] = handlers[i]
+			}
+
+			provider := &Fosite{Config: &Config{
+				RFC8628DeviceAuthorizeEndpointHandlers: endpointHandlers,
+			}}
+
+			tc.mock(handlers, dar)
+
+			actual, err := provider.NewRFC862DeviceAuthorizeResponse(context.Background(), dar, new(DefaultSession))
+
+			if tc.expected != "" {
+				assert.Nil(t, actual)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			require.NotNil(t, actual)
+		})
 	}
 }

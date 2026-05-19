@@ -9,86 +9,141 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestNewAuthorizeResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	handlers := []*mock.MockAuthorizeEndpointHandler{mock.NewMockAuthorizeEndpointHandler(ctrl)}
-	ar := mock.NewMockAuthorizeRequester(ctrl)
-	defer ctrl.Finish()
+	handlerErr := errors.New("handler failed")
 
-	ctx := context.Background()
-	provider := &Fosite{Config: &Config{AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handlers[0]}}}
-	duo := &Fosite{Config: &Config{AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handlers[0], handlers[0]}}}
-	ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession))).AnyTimes()
-	fooErr := errors.New("foo")
-	for k, c := range []struct {
-		isErr     bool
-		mock      func()
-		expectErr error
+	testCases := []struct {
+		name     string
+		handlers int
+		mock     func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester)
+		expected string
 	}{
 		{
-			mock: func() {
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+			name:     "ShouldFailWhenHandlerReturnsError",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
 			},
-			isErr:     true,
-			expectErr: fooErr,
+			expected: "handler failed",
 		},
 		{
-			mock: func() {
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			name:     "ShouldFailWhenHandlerReturnsRFC6749Error",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("Authorize endpoint request was invalid.")))
+			},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorize endpoint request was invalid.",
+		},
+		{
+			name:     "ShouldPassWithSingleHandler",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
 				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeDefault)
 			},
-			isErr: false,
 		},
 		{
-			mock: func() {
-				provider = duo
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			name:     "ShouldPassWithMultipleHandlers",
+			handlers: 2,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
 				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeDefault)
 			},
-			isErr: false,
 		},
 		{
-			mock: func() {
-				provider = duo
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(fooErr)
+			name:     "ShouldFailWhenSecondHandlerReturnsError",
+			handlers: 2,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
 			},
-			isErr:     true,
-			expectErr: fooErr,
+			expected: "handler failed",
 		},
 		{
-			mock: func() {
-				provider = duo
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			name:     "ShouldFailWhenNotAllResponseTypesHandled",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				ar.EXPECT().DidHandleAllResponseTypes().Return(false)
+			},
+			expected: "The authorization server does not support obtaining a token using this method.",
+		},
+		{
+			name:     "ShouldFailWhenInsecureQueryModeForFragmentDefault",
+			handlers: 2,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				handlers[1].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
 				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
 				ar.EXPECT().GetResponseMode().Return(ResponseModeQuery).Times(2)
-				ar.EXPECT().GetResponseTypes().Return([]string{"token", "code"})
+				ar.EXPECT().GetResponseTypes().Return(Arguments{"token", "code"})
 			},
-			isErr:     true,
-			expectErr: ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", ResponseModeQuery, Arguments{"token", "code"}),
+			expected: "The authorization server does not support obtaining a response using this response mode. Insecure response_mode 'query' for the response_type '[token code]'.",
 		},
-	} {
-		c.mock()
-		responder, err := provider.NewAuthorizeResponse(ctx, ar, new(DefaultSession))
-		assert.Equal(t, c.isErr, err != nil, "%d: %s", k, err)
-		if err != nil {
-			assert.Equal(t, c.expectErr, err, "%d: %s", k, err)
-			assert.Nil(t, responder, "%d", k)
-		} else {
-			assert.NotNil(t, responder, "%d", k)
-		}
+		{
+			name:     "ShouldPassWithNoHandlers",
+			handlers: 0,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
+				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
+				ar.EXPECT().GetResponseMode().Return(ResponseModeDefault)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ar := mock.NewMockAuthorizeRequester(ctrl)
+
+			handlers := make([]*mock.MockAuthorizeEndpointHandler, tc.handlers)
+			endpointHandlers := make(AuthorizeEndpointHandlers, tc.handlers)
+			for i := 0; i < tc.handlers; i++ {
+				handlers[i] = mock.NewMockAuthorizeEndpointHandler(ctrl)
+				endpointHandlers[i] = handlers[i]
+			}
+
+			provider := &Fosite{Config: &Config{
+				AuthorizeEndpointHandlers: endpointHandlers,
+			}}
+
+			tc.mock(handlers, ar)
+
+			actual, err := provider.NewAuthorizeResponse(context.Background(), ar, new(DefaultSession))
+
+			if tc.expected != "" {
+				assert.Nil(t, actual)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			require.NotNil(t, actual)
+		})
 	}
 }

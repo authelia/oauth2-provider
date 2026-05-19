@@ -4,254 +4,324 @@
 package oauth2
 
 import (
-	"fmt"
+	"net/url"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestDefaultAudienceMatchingStrategy(t *testing.T) {
-	for k, tc := range []struct {
-		h   []string
-		n   []string
-		err bool
+	testCases := []struct {
+		name     string
+		haystack []string
+		needle   []string
+		expected string
 	}{
 		{
-			h:   []string{},
-			n:   []string{},
-			err: false,
+			name:     "ShouldPassEmptyHaystackAndNeedle",
+			haystack: []string{},
+			needle:   []string{},
 		},
 		{
-			h:   []string{"http://foo/bar"},
-			n:   []string{},
-			err: false,
+			name:     "ShouldPassEmptyNeedle",
+			haystack: []string{"http://foo/bar"},
+			needle:   []string{},
 		},
 		{
-			h:   []string{},
-			n:   []string{"http://foo/bar"},
-			err: true,
+			name:     "ShouldFailEmptyHaystack",
+			haystack: []string{},
+			needle:   []string{"http://foo/bar"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users"},
-			err: false,
+			name:     "ShouldPassExactURL",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users/"},
-			err: false,
+			name:     "ShouldPassNeedleHasTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users/"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users/"},
-			n:   []string{"https://cloud.authelia.com/api/users/"},
-			err: false,
+			name:     "ShouldPassBothHaveTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users/"},
+			needle:   []string{"https://cloud.authelia.com/api/users/"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users/"},
-			n:   []string{"https://cloud.authelia.com/api/users"},
-			err: false,
+			name:     "ShouldPassHaystackHasTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users/"},
+			needle:   []string{"https://cloud.authelia.com/api/users"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users/1234"},
-			err: false,
+			name:     "ShouldPassNeedleIsSubpath",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users/1234"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234"},
-			err: false,
+			name:     "ShouldPassMultipleNeedlesUnderSingleHaystack",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/tenants"},
-			n:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234", "https://cloud.authelia.com/api/tenants"},
-			err: false,
+			name:     "ShouldPassMultipleNeedlesAcrossHaystacks",
+			haystack: []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/tenants"},
+			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234", "https://cloud.authelia.com/api/tenants"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users1234"},
-			err: true,
+			name:     "ShouldFailWhenPathHasExtraSuffix",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users1234"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"http://cloud.authelia.com/api/users"},
-			err: true,
+			name:     "ShouldFailWhenSchemeMismatches",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"http://cloud.authelia.com/api/users"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com:8000/api/users"},
-			err: true,
+			name:     "ShouldFailWhenPortMismatches",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com:8000/api/users"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com:8000/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.ory.xyz/api/users"},
-			err: true,
+			name:     "ShouldFailWhenHostMismatches",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.ory.xyz/api/users"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.ory.xyz/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar"},
-			err: false,
+			name:     "ShouldPassNonURIExactMatch",
+			haystack: []string{"foobar"},
+			needle:   []string{"foobar"},
 		},
 		{
-			h:   []string{"foo bar"},
-			n:   []string{"foo bar"},
-			err: false,
+			name:     "ShouldPassNonURIWithSpaceExactMatch",
+			haystack: []string{"foo bar"},
+			needle:   []string{"foo bar"},
 		},
 		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar"},
-			err: false,
+			name:     "ShouldPassNeedleSubsetOfHaystack",
+			haystack: []string{"zoo", "bar"},
+			needle:   []string{"zoo"},
 		},
 		{
-			h:   []string{"zoo", "bar"},
-			n:   []string{"zoo"},
-			err: false,
+			name:     "ShouldFailNeedleNotInHaystack",
+			haystack: []string{"zoo"},
+			needle:   []string{"zoo", "bar"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			h:   []string{"zoo"},
-			n:   []string{"zoo", "bar"},
-			err: true,
+			name:     "ShouldPassNonURITrailingSlashNeedle",
+			haystack: []string{"foobar"},
+			needle:   []string{"foobar/"},
 		},
 		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar/"},
-			err: false,
+			name:     "ShouldPassNonURITrailingSlashHaystack",
+			haystack: []string{"foobar/"},
+			needle:   []string{"foobar"},
 		},
 		{
-			h:   []string{"foobar/"},
-			n:   []string{"foobar"},
-			err: false,
+			name:     "ShouldFailNeedleIsUnparseableURL",
+			haystack: []string{"https://example.com/api"},
+			needle:   []string{"\x7f"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse requested audience ''. parse '\\x7f': net/url: invalid control character in URL",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			err := DefaultAudienceMatchingStrategy(tc.h, tc.n)
-			if tc.err {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
+		{
+			name:     "ShouldFailHaystackIsUnparseableURL",
+			haystack: []string{"\x7f"},
+			needle:   []string{"https://example.com/api"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse whitelisted audience ''. parse '\\x7f': net/url: invalid control character in URL",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := DefaultAudienceMatchingStrategy(tc.haystack, tc.needle)
+
+			if tc.expected != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(actual))
 		})
 	}
 }
 
 func TestExactAudienceMatchingStrategy(t *testing.T) {
-	for k, tc := range []struct {
-		h   []string
-		n   []string
-		err bool
+	testCases := []struct {
+		name     string
+		haystack []string
+		needle   []string
+		expected string
 	}{
 		{
-			h:   []string{},
-			n:   []string{},
-			err: false,
+			name:     "ShouldPassEmptyHaystackAndNeedle",
+			haystack: []string{},
+			needle:   []string{},
 		},
 		{
-			h:   []string{"http://foo/bar"},
-			n:   []string{},
-			err: false,
+			name:     "ShouldPassEmptyNeedle",
+			haystack: []string{"http://foo/bar"},
+			needle:   []string{},
 		},
 		{
-			h:   []string{},
-			n:   []string{"http://foo/bar"},
-			err: true,
+			name:     "ShouldFailEmptyHaystack",
+			haystack: []string{},
+			needle:   []string{"http://foo/bar"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users"},
-			err: false,
+			name:     "ShouldPassExactURL",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users/"},
-			err: true,
+			name:     "ShouldFailNeedleHasTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users/"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users/"},
-			n:   []string{"https://cloud.authelia.com/api/users/"},
-			err: false,
+			name:     "ShouldPassBothHaveTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users/"},
+			needle:   []string{"https://cloud.authelia.com/api/users/"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users/"},
-			n:   []string{"https://cloud.authelia.com/api/users"},
-			err: true,
+			name:     "ShouldFailHaystackHasTrailingSlash",
+			haystack: []string{"https://cloud.authelia.com/api/users/"},
+			needle:   []string{"https://cloud.authelia.com/api/users"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users/1234"},
-			err: true,
+			name:     "ShouldFailNeedleIsSubpath",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users/1234"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/1234' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234"},
-			err: true,
+			name:     "ShouldFailMultipleNeedlesOnePartialMatch",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/tenants"},
-			n:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234", "https://cloud.authelia.com/api/tenants"},
-			err: true,
+			name:     "ShouldFailMultipleNeedlesAcrossHaystacks",
+			haystack: []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/tenants"},
+			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234", "https://cloud.authelia.com/api/tenants"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com/api/users1234"},
-			err: true,
+			name:     "ShouldFailWhenPathHasExtraSuffix",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"https://cloud.authelia.com/api/users1234"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"http://cloud.authelia.com/api/users"},
-			err: true,
+			name:     "ShouldFailWhenSchemeMismatches",
+			haystack: []string{"https://cloud.authelia.com/api/users"},
+			needle:   []string{"http://cloud.authelia.com/api/users"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.authelia.com:8000/api/users"},
-			err: true,
+			name:     "ShouldPassNonURIExactMatch",
+			haystack: []string{"foobar"},
+			needle:   []string{"foobar"},
 		},
 		{
-			h:   []string{"https://cloud.authelia.com/api/users"},
-			n:   []string{"https://cloud.ory.xyz/api/users"},
-			err: true,
+			name:     "ShouldPassNonURIWithSpaceExactMatch",
+			haystack: []string{"foo bar"},
+			needle:   []string{"foo bar"},
 		},
 		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar"},
-			err: false,
+			name:     "ShouldPassNeedleSubsetOfHaystack",
+			haystack: []string{"zoo", "bar"},
+			needle:   []string{"zoo"},
 		},
 		{
-			h:   []string{"foo bar"},
-			n:   []string{"foo bar"},
-			err: false,
+			name:     "ShouldFailNeedleNotInHaystack",
+			haystack: []string{"zoo"},
+			needle:   []string{"zoo", "bar"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar"},
-			err: false,
+			name:     "ShouldFailNonURITrailingSlashNeedle",
+			haystack: []string{"foobar"},
+			needle:   []string{"foobar/"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'foobar/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
-			h:   []string{"zoo", "bar"},
-			n:   []string{"zoo"},
-			err: false,
+			name:     "ShouldFailNonURITrailingSlashHaystack",
+			haystack: []string{"foobar/"},
+			needle:   []string{"foobar"},
+			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'foobar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
-		{
-			h:   []string{"zoo"},
-			n:   []string{"zoo", "bar"},
-			err: true,
-		},
-		{
-			h:   []string{"foobar"},
-			n:   []string{"foobar/"},
-			err: true,
-		},
-		{
-			h:   []string{"foobar/"},
-			n:   []string{"foobar"},
-			err: true,
-		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			err := ExactAudienceMatchingStrategy(tc.h, tc.n)
-			if tc.err {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ExactAudienceMatchingStrategy(tc.haystack, tc.needle)
+
+			if tc.expected != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(actual))
+		})
+	}
+}
+
+func TestGetAudiences(t *testing.T) {
+	testCases := []struct {
+		name     string
+		form     url.Values
+		expected []string
+	}{
+		{
+			name:     "ShouldReturnEmptyForMissingAudienceParameter",
+			form:     url.Values{},
+			expected: []string{},
+		},
+		{
+			name:     "ShouldSplitSingleSpaceDelimitedAudience",
+			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com https://api.other.com"}},
+			expected: []string{"https://api.example.com", "https://api.other.com"},
+		},
+		{
+			name:     "ShouldReturnSingleAudience",
+			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com"}},
+			expected: []string{"https://api.example.com"},
+		},
+		{
+			name:     "ShouldReturnRepeatedAudiences",
+			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com", "https://api.other.com"}},
+			expected: []string{"https://api.example.com", "https://api.other.com"},
+		},
+		{
+			name:     "ShouldFilterEmptyEntriesFromRepeatedAudiences",
+			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com", "", "https://api.other.com"}},
+			expected: []string{"https://api.example.com", "https://api.other.com"},
+		},
+		{
+			name:     "ShouldFilterEmptyEntriesFromSpaceDelimitedAudience",
+			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com  https://api.other.com"}},
+			expected: []string{"https://api.example.com", "https://api.other.com"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetAudiences(tc.form)
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }

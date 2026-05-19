@@ -14,87 +14,198 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
 func TestWriteAccessError(t *testing.T) {
-	provider := &Fosite{Config: new(Config)}
-	header := http.Header{}
-	ctrl := gomock.NewController(t)
-	rw := mock.NewMockResponseWriter(ctrl)
-	defer ctrl.Finish()
-
-	rw.EXPECT().Header().AnyTimes().Return(header)
-	rw.EXPECT().WriteHeader(http.StatusBadRequest)
-	rw.EXPECT().Write(gomock.Any())
-
-	provider.WriteAccessError(t.Context(), rw, nil, ErrInvalidRequest)
-}
-
-func TestWriteAccessError_RFC6749(t *testing.T) {
 	testCases := []struct {
-		name               string
-		err                *RFC6749Error
-		code               string
-		debug              bool
-		expectDebugMessage string
-		includeExtraFields bool
+		name      string
+		err       error
+		requester AccessRequester
+		code      int
 	}{
-		{"ShouldReturnInvalidRequestWithDebugAndExtraFields", ErrInvalidRequest.WithDebug("some-debug"), "invalid_request", true, "some-debug", true},
-		{"ShouldReturnInvalidRequestWithDebugfAndExtraFields", ErrInvalidRequest.WithDebugf("some-debug-%d", 1234), "invalid_request", true, "some-debug-1234", true},
-		{"ShouldReturnInvalidRequestWithoutDebugWithExtraFields", ErrInvalidRequest.WithDebug("some-debug"), "invalid_request", false, "some-debug", true},
-		{"ShouldReturnInvalidClientWithoutDebugWithExtraFields", ErrInvalidClient.WithDebug("some-debug"), "invalid_client", false, "some-debug", true},
-		{"ShouldReturnInvalidGrantWithoutDebugWithExtraFields", ErrInvalidGrant.WithDebug("some-debug"), "invalid_grant", false, "some-debug", true},
-		{"ShouldReturnInvalidScopeWithoutDebugWithExtraFields", ErrInvalidScope.WithDebug("some-debug"), "invalid_scope", false, "some-debug", true},
-		{"ShouldReturnUnauthorizedClientWithoutDebugWithExtraFields", ErrUnauthorizedClient.WithDebug("some-debug"), "unauthorized_client", false, "some-debug", true},
-		{"ShouldReturnUnsupportedGrantTypeWithoutDebugWithExtraFields", ErrUnsupportedGrantType.WithDebug("some-debug"), "unsupported_grant_type", false, "some-debug", true},
-		{"ShouldReturnUnsupportedGrantTypeWithoutDebugWithoutExtraFields", ErrUnsupportedGrantType.WithDebug("some-debug"), "unsupported_grant_type", false, "some-debug", false},
-		{"ShouldReturnUnsupportedGrantTypeWithDebugWithoutExtraFields", ErrUnsupportedGrantType.WithDebug("some-debug"), "unsupported_grant_type", true, "some-debug", false},
+		{
+			name:      "ShouldWriteInvalidRequest",
+			err:       ErrInvalidRequest,
+			requester: nil,
+			code:      http.StatusBadRequest,
+		},
+		{
+			name:      "ShouldWriteServerError",
+			err:       ErrServerError,
+			requester: nil,
+			code:      http.StatusInternalServerError,
+		},
+		{
+			name: "ShouldUseRequesterForLocalization",
+			err:  ErrInvalidRequest,
+			requester: func() AccessRequester {
+				ar := NewAccessRequest(new(DefaultSession))
+				return ar
+			}(),
+			code: http.StatusBadRequest,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := new(Config)
-			provider := &Fosite{Config: config}
-			config.SendDebugMessagesToClients = tc.debug
-			config.UseLegacyErrorFormat = tc.includeExtraFields
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			header := http.Header{}
+			rw := mock.NewMockResponseWriter(ctrl)
+			rw.EXPECT().Header().AnyTimes().Return(header)
+			rw.EXPECT().WriteHeader(tc.code)
+			rw.EXPECT().Write(gomock.Any())
+
+			provider := &Fosite{Config: new(Config)}
+			provider.WriteAccessError(t.Context(), rw, tc.requester, tc.err)
+
+			assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+			assert.Equal(t, consts.CacheControlNoStore, header.Get(consts.HeaderCacheControl))
+			assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
+		})
+	}
+}
+
+func TestWriteAccessErrorRFC6749(t *testing.T) {
+	testCases := []struct {
+		name          string
+		err           *RFC6749Error
+		code          string
+		debug         bool
+		expectedDebug string
+		legacyFormat  bool
+	}{
+		{
+			name:          "ShouldReturnInvalidRequestWithDebugAndExtraFields",
+			err:           ErrInvalidRequest.WithDebug("some-debug"),
+			code:          "invalid_request",
+			debug:         true,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnInvalidRequestWithDebugfAndExtraFields",
+			err:           ErrInvalidRequest.WithDebugf("some-debug-%d", 1234),
+			code:          "invalid_request",
+			debug:         true,
+			expectedDebug: "some-debug-1234",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnInvalidRequestWithoutDebugWithExtraFields",
+			err:           ErrInvalidRequest.WithDebug("some-debug"),
+			code:          "invalid_request",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnInvalidClientWithoutDebugWithExtraFields",
+			err:           ErrInvalidClient.WithDebug("some-debug"),
+			code:          "invalid_client",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnInvalidGrantWithoutDebugWithExtraFields",
+			err:           ErrInvalidGrant.WithDebug("some-debug"),
+			code:          "invalid_grant",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnInvalidScopeWithoutDebugWithExtraFields",
+			err:           ErrInvalidScope.WithDebug("some-debug"),
+			code:          "invalid_scope",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnUnauthorizedClientWithoutDebugWithExtraFields",
+			err:           ErrUnauthorizedClient.WithDebug("some-debug"),
+			code:          "unauthorized_client",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnUnsupportedGrantTypeWithoutDebugWithExtraFields",
+			err:           ErrUnsupportedGrantType.WithDebug("some-debug"),
+			code:          "unsupported_grant_type",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  true,
+		},
+		{
+			name:          "ShouldReturnUnsupportedGrantTypeWithoutDebugWithoutExtraFields",
+			err:           ErrUnsupportedGrantType.WithDebug("some-debug"),
+			code:          "unsupported_grant_type",
+			debug:         false,
+			expectedDebug: "some-debug",
+			legacyFormat:  false,
+		},
+		{
+			name:          "ShouldReturnUnsupportedGrantTypeWithDebugWithoutExtraFields",
+			err:           ErrUnsupportedGrantType.WithDebug("some-debug"),
+			code:          "unsupported_grant_type",
+			debug:         true,
+			expectedDebug: "some-debug",
+			legacyFormat:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: &Config{
+				SendDebugMessagesToClients: tc.debug,
+				UseLegacyErrorFormat:       tc.legacyFormat,
+			}}
 
 			rw := httptest.NewRecorder()
 			provider.WriteAccessError(t.Context(), rw, nil, tc.err)
 
-			var params struct {
-				Error       string `json:"error"`             // specified by RFC, required
-				Description string `json:"error_description"` // specified by RFC, optional
+			var actual struct {
+				Error       string `json:"error"`
+				Description string `json:"error_description"`
 				Debug       string `json:"error_debug"`
 				Hint        string `json:"error_hint"`
 			}
 
 			require.NotNil(t, rw.Body)
-			err := json.NewDecoder(rw.Body).Decode(&params)
-			require.NoError(t, err)
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&actual))
 
-			assert.Equal(t, tc.code, params.Error)
-			if !tc.includeExtraFields {
-				assert.Empty(t, params.Debug)
-				assert.Empty(t, params.Hint)
-				assert.Contains(t, params.Description, tc.err.DescriptionField)
-				assert.Contains(t, params.Description, tc.err.HintField)
+			assert.Equal(t, tc.code, actual.Error)
+
+			if !tc.legacyFormat {
+				assert.Empty(t, actual.Debug)
+				assert.Empty(t, actual.Hint)
+				assert.Contains(t, actual.Description, tc.err.DescriptionField)
+				assert.Contains(t, actual.Description, tc.err.HintField)
 
 				if tc.debug {
-					assert.Contains(t, params.Description, tc.err.DebugField)
+					assert.Contains(t, actual.Description, tc.err.DebugField)
 				} else {
-					assert.NotContains(t, params.Description, tc.err.DebugField)
+					assert.NotContains(t, actual.Description, tc.err.DebugField)
 				}
-			} else {
-				assert.EqualValues(t, tc.err.DescriptionField, params.Description)
-				assert.EqualValues(t, tc.err.HintField, params.Hint)
 
-				if !tc.debug {
-					assert.Empty(t, params.Debug)
-				} else {
-					assert.EqualValues(t, tc.err.DebugField, params.Debug)
-				}
+				return
 			}
+
+			assert.EqualValues(t, tc.err.DescriptionField, actual.Description)
+			assert.EqualValues(t, tc.err.HintField, actual.Hint)
+
+			if !tc.debug {
+				assert.Empty(t, actual.Debug)
+				return
+			}
+
+			assert.EqualValues(t, tc.err.DebugField, actual.Debug)
 		})
 	}
 }

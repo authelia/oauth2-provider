@@ -50,128 +50,226 @@ func (r *failingTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errRoundTrip
 }
 
-func TestDefaultJWKSFetcherStrategy(t *testing.T) {
+func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 	ctx := context.Background()
-	var h http.HandlerFunc
-
 	s := NewDefaultJWKSFetcherStrategy()
-	t.Run("Fetching", func(t *testing.T) {
-		var set *jose.JSONWebKeySet
-		h = func(w http.ResponseWriter, r *http.Request) {
-			require.NoError(t, json.NewEncoder(w).Encode(set))
-		}
-		ts := httptest.NewServer(h)
-		defer ts.Close()
 
-		set = &jose.JSONWebKeySet{
-			Keys: []jose.JSONWebKey{
-				{
-					KeyID: "foo",
-					Use:   "sig",
-					Key:   &gen.MustRSAKey().PublicKey,
+	var set *jose.JSONWebKeySet
+	h := func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewEncoder(w).Encode(set))
+	}
+	ts := httptest.NewServer(http.HandlerFunc(h))
+	defer ts.Close()
+
+	testCases := []struct {
+		name        string
+		set         *jose.JSONWebKeySet
+		ignoreCache bool
+		expectKeyID string
+		missingKey  string
+	}{
+		{
+			name: "ShouldFetchAndReturnFooKey",
+			set: &jose.JSONWebKeySet{
+				Keys: []jose.JSONWebKey{
+					{
+						KeyID: "foo",
+						Use:   "sig",
+						Key:   &gen.MustRSAKey().PublicKey,
+					},
 				},
 			},
-		}
-
-		keys, err := s.Resolve(ctx, ts.URL, false)
-		require.NoError(t, err)
-		assert.True(t, len(keys.Key("foo")) == 1)
-
-		set = &jose.JSONWebKeySet{
-			Keys: []jose.JSONWebKey{
-				{
-					KeyID: "bar",
-					Use:   "sig",
-					Key:   &gen.MustRSAKey().PublicKey,
+			ignoreCache: false,
+			expectKeyID: "foo",
+		},
+		{
+			name: "ShouldReturnCachedFooKeyWhenRemoteChanges",
+			set: &jose.JSONWebKeySet{
+				Keys: []jose.JSONWebKey{
+					{
+						KeyID: "bar",
+						Use:   "sig",
+						Key:   &gen.MustRSAKey().PublicKey,
+					},
 				},
 			},
-		}
+			ignoreCache: false,
+			expectKeyID: "foo",
+			missingKey:  "bar",
+		},
+		{
+			name: "ShouldBypassCacheWithIgnoreCache",
+			set: &jose.JSONWebKeySet{
+				Keys: []jose.JSONWebKey{
+					{
+						KeyID: "bar",
+						Use:   "sig",
+						Key:   &gen.MustRSAKey().PublicKey,
+					},
+				},
+			},
+			ignoreCache: true,
+			expectKeyID: "bar",
+			missingKey:  "foo",
+		},
+	}
 
-		keys, err = s.Resolve(ctx, ts.URL, false)
-		require.NoError(t, err)
-		assert.Len(t, keys.Keys, 1, "%+v", keys)
-		assert.True(t, len(keys.Key("foo")) == 1)
-		assert.True(t, len(keys.Key("bar")) == 0)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			set = tc.set
 
-		keys, err = s.Resolve(ctx, ts.URL, true)
-		require.NoError(t, err)
-		assert.True(t, len(keys.Key("foo")) == 0)
-		assert.True(t, len(keys.Key("bar")) == 1)
-	})
+			actual, err := s.Resolve(ctx, ts.URL, tc.ignoreCache)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-	t.Run("JWKSFetcherWithCache", func(t *testing.T) {
-		ts := initServerWithKey(t)
+			assert.Len(t, actual.Key(tc.expectKeyID), 1)
+			if tc.missingKey != "" {
+				assert.Len(t, actual.Key(tc.missingKey), 0)
+			}
+		})
+	}
+}
 
-		cache, _ := ristretto.NewCache(&ristretto.Config{NumCounters: 10 * 1000, MaxCost: 1000, BufferItems: 64})
-		location := ts.URL
-		expected := &jose.JSONWebKeySet{}
-		require.True(t, cache.Set(defaultJWKSFetcherStrategyCachePrefix+location, expected, 1))
-		cache.Wait()
+func TestDefaultJWKSFetcherStrategyOptions(t *testing.T) {
+	testCases := []struct {
+		name  string
+		check func(t *testing.T)
+	}{
+		{
+			name: "ShouldUseProvidedCache",
+			check: func(t *testing.T) {
+				ts := initServerWithKey(t)
 
-		s := NewDefaultJWKSFetcherStrategy(JWKSFetcherWithCache(cache))
-		actual, err := s.Resolve(ctx, location, false)
-		require.NoError(t, err)
-		assert.Equal(t, expected, actual)
-	})
+				cache, _ := ristretto.NewCache(&ristretto.Config{NumCounters: 10 * 1000, MaxCost: 1000, BufferItems: 64})
+				expected := &jose.JSONWebKeySet{}
+				require.True(t, cache.Set(defaultJWKSFetcherStrategyCachePrefix+ts.URL, expected, 1))
+				cache.Wait()
 
-	t.Run("JWKSFetcherWithTTL", func(t *testing.T) {
-		ts := initServerWithKey(t)
+				s := NewDefaultJWKSFetcherStrategy(JWKSFetcherWithCache(cache))
 
-		s := NewDefaultJWKSFetcherStrategy(JKWKSFetcherWithDefaultTTL(time.Nanosecond))
-		_, err := s.Resolve(ctx, ts.URL, false)
-		require.NoError(t, err)
-		s.(*DefaultJWKSFetcherStrategy).cache.Wait()
+				actual, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, expected, actual)
+			},
+		},
+		{
+			name: "ShouldExpireCacheUsingProvidedTTL",
+			check: func(t *testing.T) {
+				ts := initServerWithKey(t)
 
-		_, ok := s.(*DefaultJWKSFetcherStrategy).cache.Get(defaultJWKSFetcherStrategyCachePrefix + ts.URL)
-		assert.Falsef(t, ok, "expected cache to be empty")
-	})
+				s := NewDefaultJWKSFetcherStrategy(JKWKSFetcherWithDefaultTTL(time.Nanosecond))
 
-	t.Run("JWKSFetcherWithHTTPClient", func(t *testing.T) {
-		rt := retryablehttp.NewClient()
-		rt.RetryMax = 0
-		rt.HTTPClient = &http.Client{Transport: new(failingTripper)}
-		s := NewDefaultJWKSFetcherStrategy(JWKSFetcherWithHTTPClient(rt))
-		_, err := s.Resolve(ctx, "https://google.com", false)
-		require.ErrorIs(t, err, errRoundTrip)
-	})
+				_, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-	t.Run("JWKSFetcherWithHTTPClientSource", func(t *testing.T) {
-		rt := retryablehttp.NewClient()
-		rt.RetryMax = 0
-		rt.HTTPClient = &http.Client{Transport: new(failingTripper)}
-		s := NewDefaultJWKSFetcherStrategy(
-			JWKSFetcherWithHTTPClient(retryablehttp.NewClient()),
-			JWKSFetcherWithHTTPClientSource(func(ctx context.Context) *retryablehttp.Client {
-				return rt
-			}))
-		_, err := s.Resolve(ctx, "https://www.google.com", false)
-		require.ErrorIs(t, err, errRoundTrip)
-	})
+				s.(*DefaultJWKSFetcherStrategy).cache.Wait()
 
-	t.Run("ErrorNetwork", func(t *testing.T) {
-		s := NewDefaultJWKSFetcherStrategy()
-		h = func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(400)
-		}
-		ts := httptest.NewServer(h)
-		defer ts.Close()
+				_, ok := s.(*DefaultJWKSFetcherStrategy).cache.Get(defaultJWKSFetcherStrategyCachePrefix + ts.URL)
+				assert.False(t, ok, "expected cache to be empty")
+			},
+		},
+		{
+			name: "ShouldUseProvidedHTTPClient",
+			check: func(t *testing.T) {
+				rt := retryablehttp.NewClient()
+				rt.RetryMax = 0
+				rt.HTTPClient = &http.Client{Transport: new(failingTripper)}
 
-		_, err := s.Resolve(context.Background(), ts.URL, true)
-		require.Error(t, err)
+				s := NewDefaultJWKSFetcherStrategy(JWKSFetcherWithHTTPClient(rt))
 
-		_, err = s.Resolve(context.Background(), "$%/19", true)
-		require.Error(t, err)
-	})
+				_, err := s.Resolve(context.Background(), "https://google.com", false)
+				require.ErrorIs(t, err, errRoundTrip)
+			},
+		},
+		{
+			name: "ShouldPreferHTTPClientSourceOverHTTPClient",
+			check: func(t *testing.T) {
+				rt := retryablehttp.NewClient()
+				rt.RetryMax = 0
+				rt.HTTPClient = &http.Client{Transport: new(failingTripper)}
 
-	t.Run("ErrorEncoding", func(t *testing.T) {
-		s := NewDefaultJWKSFetcherStrategy()
-		h = func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte("[]"))
-		}
-		ts := httptest.NewServer(h)
-		defer ts.Close()
+				s := NewDefaultJWKSFetcherStrategy(
+					JWKSFetcherWithHTTPClient(retryablehttp.NewClient()),
+					JWKSFetcherWithHTTPClientSource(func(ctx context.Context) *retryablehttp.Client {
+						return rt
+					}),
+				)
 
-		_, err := s.Resolve(context.Background(), ts.URL, true)
-		require.Error(t, err)
-	})
+				_, err := s.Resolve(context.Background(), "https://www.google.com", false)
+				require.ErrorIs(t, err, errRoundTrip)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.check)
+	}
+}
+
+func TestDefaultJWKSFetcherStrategyResolveErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func(t *testing.T) (location string)
+		expected string
+	}{
+		{
+			name: "ShouldFailWhenServerReturnsNon2xxStatus",
+			setup: func(t *testing.T) string {
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusBadRequest)
+				}))
+				t.Cleanup(ts.Close)
+				return ts.URL
+			},
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+		},
+		{
+			name: "ShouldFailWhenLocationIsInvalidURL",
+			setup: func(t *testing.T) string {
+				return "$%/19"
+			},
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+		},
+		{
+			name: "ShouldFailWhenResponseBodyIsNotValidJWKS",
+			setup: func(t *testing.T) string {
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					_, _ = w.Write([]byte("[]"))
+				}))
+				t.Cleanup(ts.Close)
+				return ts.URL
+			},
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewDefaultJWKSFetcherStrategy()
+			location := tc.setup(t)
+
+			actual, err := s.Resolve(context.Background(), location, true)
+			require.Error(t, err)
+			assert.Nil(t, actual)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.expected)
+		})
+	}
+}
+
+func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
+	testCases := []struct {
+		name string
+	}{
+		{
+			name: "ShouldReturnAfterCacheDrains",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewDefaultJWKSFetcherStrategy().(*DefaultJWKSFetcherStrategy)
+			assert.NotPanics(t, func() {
+				s.WaitForCache()
+			})
+		})
+	}
 }

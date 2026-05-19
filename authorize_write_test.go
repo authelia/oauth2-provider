@@ -204,6 +204,19 @@ func TestWriteAuthorizeResponse(t *testing.T) {
 				assert.Equal(t, consts.ContentTypeTextHTML, header.Get(consts.HeaderContentType))
 			},
 		},
+		{
+			name: "ShouldWriteServerErrorWhenNoHandlerSupportsResponseMode",
+			setup: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
+				requester.EXPECT().GetResponseMode().Return(ResponseModeType("unknown")).AnyTimes()
+
+				rw.EXPECT().Header().Return(header).AnyTimes()
+				rw.EXPECT().WriteHeader(http.StatusInternalServerError)
+				rw.EXPECT().Write(gomock.Any()).AnyTimes()
+			},
+			expect: func(t *testing.T, rw *mock.MockResponseWriter, requester *mock.MockAuthorizeRequester, responder *mock.MockAuthorizeResponder, header http.Header) {
+				assert.Equal(t, consts.ContentTypeApplicationJSON, header.Get(consts.HeaderContentType))
+			},
+		},
 	}
 
 	for _, tc := range testCases {

@@ -53,6 +53,13 @@ func TestNewAccessResponse(t *testing.T) {
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. An internal server occurred while trying to complete the request. Access token or token type not set by TokenEndpointHandlers.",
 		},
 		{
+			name: "ShouldContinueWhenHandlerReturnsErrUnknownRequest",
+			mock: func(handler *mock.MockTokenEndpointHandler) {
+				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Return(ErrUnknownRequest)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. An internal server occurred while trying to complete the request. Access token or token type not set by TokenEndpointHandlers.",
+		},
+		{
 			name: "ShouldPass",
 			mock: func(handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().PopulateTokenEndpointResponse(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(_ context.Context, _ AccessRequester, responder AccessResponder) {
@@ -84,14 +91,18 @@ func TestNewAccessResponse(t *testing.T) {
 			provider := &Fosite{Config: config}
 
 			tc.mock(handler)
-			ar, err := provider.NewAccessResponse(t.Context(), nil)
+
+			actual, err := provider.NewAccessResponse(t.Context(), nil)
 
 			if tc.err != "" {
+				assert.Nil(t, actual)
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, ar, tc.expect)
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expect, actual)
 		})
 	}
 }

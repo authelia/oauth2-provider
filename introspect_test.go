@@ -1,11 +1,13 @@
-// Copyright © 2023 Ory Corp
+// Copyright © 2026 Authelia
 // SPDX-License-Identifier: Apache-2.0
 
 package oauth2_test
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,31 +21,85 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
-func TestAccessTokenFromRequestNoToken(t *testing.T) {
-	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
+func TestAccessTokenFromRequest(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func() *http.Request
+		expected string
+	}{
+		{
+			name: "ShouldReturnEmptyWhenNoToken",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+				return req
+			},
+			expected: "",
+		},
+		{
+			name: "ShouldReturnTokenFromBearerHeader",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+				req.Header.Add(consts.HeaderAuthorization, "Bearer TokenFromHeader")
+				return req
+			},
+			expected: "TokenFromHeader",
+		},
+		{
+			name: "ShouldReturnTokenFromBearerHeaderCaseInsensitive",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+				req.Header.Add(consts.HeaderAuthorization, "bearer TokenFromHeader")
+				return req
+			},
+			expected: "TokenFromHeader",
+		},
+		{
+			name: "ShouldReturnTokenFromQueryParameter",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
+				return req
+			},
+			expected: "TokenFromQueryParam",
+		},
+		{
+			name: "ShouldFallThroughToFormWhenAuthorizationHeaderIsMalformed",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
+				req.Header.Add(consts.HeaderAuthorization, "Basic abc")
+				return req
+			},
+			expected: "TokenFromQueryParam",
+		},
+		{
+			name: "ShouldFallThroughToFormWhenAuthorizationHeaderHasSingleSegment",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
+				req.Header.Add(consts.HeaderAuthorization, "Bearer")
+				return req
+			},
+			expected: "TokenFromQueryParam",
+		},
+		{
+			name: "ShouldReturnEmptyWhenMultipartFormIsMalformed",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", io.NopCloser(strings.NewReader("not a real multipart body")))
+				req.Header.Set(consts.HeaderContentType, "multipart/form-data; boundary=foo")
+				return req
+			},
+			expected: "",
+		},
+	}
 
-	assert.Equal(t, AccessTokenFromRequest(req), "", "No token should produce an empty string")
-}
-
-func TestAccessTokenFromRequestHeader(t *testing.T) {
-	token := "TokenFromHeader"
-
-	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	req.Header.Add(consts.HeaderAuthorization, "Bearer "+token)
-
-	assert.Equal(t, AccessTokenFromRequest(req), token, "Token should be obtainable from header")
-}
-
-func TestAccessTokenFromRequestQuery(t *testing.T) {
-	token := "TokenFromQueryParam"
-
-	req, _ := http.NewRequest("GET", "http://example.com/test?access_token="+token, nil)
-
-	assert.Equal(t, AccessTokenFromRequest(req), token, "Token should be obtainable from access_token query parameter")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := AccessTokenFromRequest(tc.setup())
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
 }
 
 func TestIntrospect(t *testing.T) {
-	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	req.Header.Add(consts.HeaderAuthorization, "bearer some-token")
 
 	testCases := []struct {
@@ -55,9 +111,8 @@ func TestIntrospect(t *testing.T) {
 		{
 			name:   "ShouldFailNoIntrospectors",
 			scopes: []string{},
-			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
-			},
-			err: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+			setup:  func(config *Config, validator *mock.MockTokenIntrospector) {},
+			err:    "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
 		},
 		{
 			name:   "ShouldFailIntrospectorReturnsErrUnknownRequest",
@@ -78,6 +133,14 @@ func TestIntrospect(t *testing.T) {
 			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 		},
 		{
+			name: "ShouldFailIntrospectorReturnsGenericError",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), assertError("some generic error"))
+			},
+			err: "The error is unrecognizable some generic error",
+		},
+		{
 			name: "ShouldPass",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
@@ -96,6 +159,15 @@ func TestIntrospect(t *testing.T) {
 				}).Return(TokenUse(""), nil)
 			},
 		},
+		{
+			name: "ShouldPassWithMultipleHandlersIgnoringErrUnknownRequest",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector) {
+				other := mock.NewMockTokenIntrospector(gomock.NewController(t))
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{other, validator}
+				other.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
+				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -108,12 +180,20 @@ func TestIntrospect(t *testing.T) {
 			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
 
 			tc.setup(config, validator)
+
 			_, _, err := provider.IntrospectToken(t.Context(), AccessTokenFromRequest(req), AccessToken, nil, tc.scopes...)
+
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
 		})
 	}
 }
+
+type assertError string
+
+func (e assertError) Error() string { return string(e) }

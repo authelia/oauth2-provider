@@ -946,23 +946,25 @@ func TestAuthenticateClient(t *testing.T) {
 			store.Clients[client.GetID()] = client
 			provider.Store = store
 
-			c, _, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
+			actual, _, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
 
 			if len(tc.err) == 0 && tc.expectErr == nil && tc.errRegexp == nil {
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
-				assert.EqualValues(t, client, c)
-			} else {
-				if len(tc.err) != 0 {
-					assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-				}
+				assert.EqualValues(t, client, actual)
 
-				if tc.expectErr != nil {
-					assert.EqualError(t, err, tc.expectErr.Error())
-				}
+				return
+			}
 
-				if tc.errRegexp != nil {
-					require.Regexp(t, tc.errRegexp, ErrorToDebugRFC6749Error(err).Error())
-				}
+			if len(tc.err) != 0 {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
+			}
+
+			if tc.expectErr != nil {
+				assert.EqualError(t, err, tc.expectErr.Error())
+			}
+
+			if tc.errRegexp != nil {
+				require.Regexp(t, tc.errRegexp, ErrorToDebugRFC6749Error(err).Error())
 			}
 		})
 	}
@@ -1015,16 +1017,33 @@ func TestAuthenticateClientTwice(t *testing.T) {
 
 	formValues := url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {assertion}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer}}
 
-	c, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
-	require.NoError(t, ErrorToDebugRFC6749Error(err))
-	assert.Equal(t, client, c)
+	testCases := []struct {
+		name  string
+		check func(t *testing.T)
+	}{
+		{
+			name: "ShouldPassFirstAuthentication",
+			check: func(t *testing.T) {
+				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, client, actual)
+			},
+		},
+		{
+			name: "ShouldFailReplayedAuthenticationDueToJTIReuse",
+			check: func(t *testing.T) {
+				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.Error(t, err)
+				assert.EqualError(t, err, ErrJTIKnown.Error())
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
+				assert.Nil(t, actual)
+			},
+		},
+	}
 
-	// replay the request and expect it to fail
-	c, _, err = provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
-	require.Error(t, err)
-	assert.EqualError(t, err, ErrJTIKnown.Error())
-	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
-	assert.Nil(t, c)
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.check)
+	}
 }
 
 func mustGenerateClientAssertion(t *testing.T, claims jwt.MapClaims, alg jose.SignatureAlgorithm, typ, kid string, key any) string {

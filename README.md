@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Authelia
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## OAuth 2.0 Framework
 
 This library is the Authelia OAuth 2.0 Framework which is internally used to deliver OAuth 2.0 and OpenID Connect 1.0

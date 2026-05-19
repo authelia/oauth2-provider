@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/rw.go net/http ResponseWriter
 
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/introspector.go authelia.com/provider/oauth2 TokenIntrospector

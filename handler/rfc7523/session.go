@@ -1,4 +1,5 @@
-// Copyright © 2023 Ory Corp
+// SPDX-FileCopyrightText: 2026 Authelia
+//
 // SPDX-License-Identifier: Apache-2.0
 
 package rfc7523

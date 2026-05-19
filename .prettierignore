@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
 .github/ISSUE_TEMPLATE/BUG-REPORT.yml
 .github/ISSUE_TEMPLATE/DESIGN-DOC.yml
 .github/ISSUE_TEMPLATE/FEATURE-REQUEST.yml

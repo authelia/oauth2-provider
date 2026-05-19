@@ -119,7 +119,7 @@ func TestIntrospect(t *testing.T) {
 			scopes: []string{"foo"},
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
 			},
 			err: "The request could not be authorized. Unable to find a suitable validation strategy for the token, thus it is invalid.",
 		},
@@ -128,7 +128,7 @@ func TestIntrospect(t *testing.T) {
 			scopes: []string{"foo"},
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrInvalidClient)
 			},
 			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 		},
@@ -136,7 +136,7 @@ func TestIntrospect(t *testing.T) {
 			name: "ShouldFailIntrospectorReturnsGenericError",
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), assertError("some generic error"))
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), assertError("some generic error"))
 			},
 			err: "The error is unrecognizable some generic error",
 		},
@@ -144,7 +144,7 @@ func TestIntrospect(t *testing.T) {
 			name: "ShouldPass",
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) {
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) {
 					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
@@ -154,7 +154,7 @@ func TestIntrospect(t *testing.T) {
 			scopes: []string{"bar"},
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, requester AccessRequester, _ []string) {
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, _ TokenType, requester AccessRequester, _ []string) {
 					requester.(*AccessRequest).GrantedScope = []string{"bar"}
 				}).Return(TokenUse(""), nil)
 			},
@@ -164,8 +164,8 @@ func TestIntrospect(t *testing.T) {
 			setup: func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {
 				other := mock.NewMockTokenIntrospector(ctrl)
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{other, validator}
-				other.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
-				validator.EXPECT().IntrospectToken(t.Context(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
+				other.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
+				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
 			},
 		},
 	}

@@ -28,7 +28,7 @@ func AddLocalizerToErr(catalog i18n.MessageCatalog, err error, requester Request
 // message.
 // See - WriteIntrospectionError, for example.
 func AddLocalizerToErrWithLang(catalog i18n.MessageCatalog, lang language.Tag, err error) error {
-	var e RFC6749Error
+	var e *RFC6749Error
 	if errors.As(err, &e) {
 		return e.WithLocalizer(catalog, lang)
 	} else if errors.As(errorsx.Cause(err), &e) {

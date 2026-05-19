@@ -204,7 +204,10 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldOmitOptionalFieldsWhenZero",
+			// ToMap unconditionally writes every standard claim into the Extra map. Because
+			// map[string]any does not honor JSON's omitempty struct tag, zero-valued optional
+			// fields (interval, verification_uri_complete) are also emitted.
+			name: "ShouldEmitAllStandardClaimsIncludingZeroValuedOptionals",
 			setup: func() *DeviceAuthorizeResponse {
 				resp := &DeviceAuthorizeResponse{Header: http.Header{}, Extra: map[string]any{}}
 				resp.SetUserCode("USER")
@@ -214,10 +217,12 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				return resp
 			},
 			expected: map[string]any{
-				consts.DeviceCodeResponseDeviceCode:      "DEVICE",
-				consts.DeviceCodeResponseUserCode:        "USER",
-				consts.DeviceCodeResponseVerificationURI: "https://auth.example.com/device",
-				consts.DeviceCodeResponseExpiresIn:       float64(300),
+				consts.DeviceCodeResponseDeviceCode:              "DEVICE",
+				consts.DeviceCodeResponseUserCode:                "USER",
+				consts.DeviceCodeResponseVerificationURI:         "https://auth.example.com/device",
+				consts.DeviceCodeResponseVerificationURIComplete: "",
+				consts.DeviceCodeResponseExpiresIn:               float64(300),
+				consts.DeviceCodeResponseInterval:                float64(0),
 			},
 		},
 		{
@@ -236,11 +241,13 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				return resp
 			},
 			expected: map[string]any{
-				consts.DeviceCodeResponseDeviceCode:      "Y",
-				consts.DeviceCodeResponseUserCode:        "X",
-				consts.DeviceCodeResponseVerificationURI: "https://auth.example.com/device",
-				consts.DeviceCodeResponseExpiresIn:       float64(100),
-				"foo":                                    "bar",
+				consts.DeviceCodeResponseDeviceCode:              "Y",
+				consts.DeviceCodeResponseUserCode:                "X",
+				consts.DeviceCodeResponseVerificationURI:         "https://auth.example.com/device",
+				consts.DeviceCodeResponseVerificationURIComplete: "",
+				consts.DeviceCodeResponseExpiresIn:               float64(100),
+				consts.DeviceCodeResponseInterval:                float64(0),
+				"foo":                                            "bar",
 			},
 		},
 	}
@@ -258,6 +265,13 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 
 			for key, want := range tc.expected {
 				assert.Equal(t, want, actual[key], "key=%s", key)
+			}
+
+			// Assert no extra/forbidden keys are emitted.
+			for key := range actual {
+				if _, ok := tc.expected[key]; !ok {
+					assert.Failf(t, "unexpected key present", "key=%s value=%v", key, actual[key])
+				}
 			}
 		})
 	}

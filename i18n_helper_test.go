@@ -90,11 +90,10 @@ func TestErrorTranslation(t *testing.T) {
 func TestAddLocalizerToErrWithLang(t *testing.T) {
 	catalog := newTestCatalog()
 
-	// AddLocalizerToErrWithLang only matches errors whose dynamic type is the value-typed
-	// RFC6749Error. The package's exported errors are all *RFC6749Error pointers, so a
-	// value-type clone is required to exercise the localization path.
-	makeValueErr := func() RFC6749Error {
-		return *ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+	// AddLocalizerToErrWithLang matches errors whose dynamic type is *RFC6749Error,
+	// matching the pointer the package's WithHintIDOrDefaultf actually returns.
+	makeErr := func() *RFC6749Error {
+		return ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 	}
 
 	testCases := []struct {
@@ -105,32 +104,23 @@ func TestAddLocalizerToErrWithLang(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "ShouldLocalizeDirectRFC6749Error",
-			lang: language.Spanish,
-			err: func() error {
-				v := makeValueErr()
-				return v
-			}(),
+			name:     "ShouldLocalizeDirectRFC6749Error",
+			lang:     language.Spanish,
+			err:      makeErr(),
 			localize: true,
 			expected: expectedSpanish,
 		},
 		{
-			name: "ShouldLocalizeStackWrappedRFC6749Error",
-			lang: language.Spanish,
-			err: func() error {
-				v := makeValueErr()
-				return errors.WithStack(v)
-			}(),
+			name:     "ShouldLocalizeStackWrappedRFC6749Error",
+			lang:     language.Spanish,
+			err:      errors.WithStack(makeErr()),
 			localize: true,
 			expected: expectedSpanish,
 		},
 		{
-			name: "ShouldLocalizeCauseOnlyWrappedRFC6749Error",
-			lang: language.Spanish,
-			err: func() error {
-				v := makeValueErr()
-				return &causeOnlyError{cause: v}
-			}(),
+			name:     "ShouldLocalizeCauseOnlyWrappedRFC6749Error",
+			lang:     language.Spanish,
+			err:      &causeOnlyError{cause: makeErr()},
 			localize: true,
 			expected: expectedSpanish,
 		},
@@ -158,18 +148,16 @@ func TestAddLocalizerToErrWithLang(t *testing.T) {
 		})
 	}
 
-	t.Run("ShouldReturnPointerRFC6749ErrorUnchanged", func(t *testing.T) {
-		// AddLocalizerToErrWithLang's errors.As target is a value-typed RFC6749Error, so the
-		// pointer returned by the production-facing WithHintIDOrDefaultf does NOT match and
-		// the input is returned unchanged with no localization applied. This documents the
-		// real API usage pattern.
+	t.Run("ShouldLocalizePointerRFC6749Error", func(t *testing.T) {
+		// AddLocalizerToErrWithLang's errors.As target is *RFC6749Error, so the pointer
+		// returned by the production-facing WithHintIDOrDefaultf matches and a localized
+		// copy is returned. This documents the real API usage pattern.
 		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 
 		actual := AddLocalizerToErrWithLang(catalog, language.Spanish, input)
 		rfc, ok := actual.(*RFC6749Error)
 		require.True(t, ok, "expected *RFC6749Error, got %T", actual)
-		assert.Same(t, input, rfc, "expected same pointer back (no localization for pointer-typed inputs)")
-		assert.Equal(t, expectedEnglish, rfc.GetDescription())
+		assert.Equal(t, expectedSpanish, rfc.GetDescription())
 	})
 }
 
@@ -195,7 +183,7 @@ func TestAddLocalizerToErr(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := *ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+			err := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 			actual := AddLocalizerToErr(catalog, err, tc.requester)
 
 			rfc, ok := actual.(*RFC6749Error)
@@ -204,17 +192,16 @@ func TestAddLocalizerToErr(t *testing.T) {
 		})
 	}
 
-	t.Run("ShouldReturnPointerRFC6749ErrorUnchanged", func(t *testing.T) {
+	t.Run("ShouldLocalizePointerRFC6749Error", func(t *testing.T) {
 		// Mirrors the real production usage where callers pass the *RFC6749Error returned by
-		// WithHintIDOrDefaultf directly. The function returns the input unchanged with no
-		// localization applied (see TestAddLocalizerToErrWithLang for the underlying reason).
+		// WithHintIDOrDefaultf directly. The function localizes the input per the requester's
+		// language tag.
 		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
 
 		actual := AddLocalizerToErr(catalog, input, &Request{Lang: language.Spanish})
 		rfc, ok := actual.(*RFC6749Error)
 		require.True(t, ok, "expected *RFC6749Error, got %T", actual)
-		assert.Same(t, input, rfc)
-		assert.Equal(t, expectedEnglish, rfc.GetDescription())
+		assert.Equal(t, expectedSpanish, rfc.GetDescription())
 	})
 }
 

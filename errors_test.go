@@ -66,19 +66,16 @@ func TestRFC6749ErrorWrap(t *testing.T) {
 
 func TestRFC6749ErrorUnwrap(t *testing.T) {
 	testCases := []struct {
-		name     string
-		cause    error
-		expected error
+		name  string
+		cause error
 	}{
 		{
-			name:     "ShouldUnwrapNilWhenCauseUnset",
-			cause:    nil,
-			expected: nil,
+			name:  "ShouldUnwrapNilWhenCauseUnset",
+			cause: nil,
 		},
 		{
-			name:     "ShouldUnwrapWrappedCause",
-			cause:    errors.New("wrapped"),
-			expected: nil,
+			name:  "ShouldUnwrapWrappedCause",
+			cause: errors.New("wrapped"),
 		},
 	}
 
@@ -127,21 +124,24 @@ func TestRFC6749ErrorWithLegacyFormat(t *testing.T) {
 
 func TestRFC6749ErrorWithTrace(t *testing.T) {
 	testCases := []struct {
-		name  string
-		setup func(e *RFC6749Error)
-		err   error
+		name      string
+		setup     func(e *RFC6749Error)
+		err       error
+		sameCause bool
 	}{
 		{
-			name:  "ShouldWrapWithStackWhenCauseHasNone",
-			setup: func(e *RFC6749Error) {},
-			err:   errPlain("no stack"),
+			name:      "ShouldWrapWithStackWhenCauseHasNone",
+			setup:     func(e *RFC6749Error) {},
+			err:       errPlain("no stack"),
+			sameCause: false,
 		},
 		{
 			name: "ShouldNotDoubleWrapWhenCauseAlreadyHasStack",
 			setup: func(e *RFC6749Error) {
 				e.cause = errors.New("already has stack")
 			},
-			err: errors.New("another stacked error"),
+			err:       errors.New("another stacked error"),
+			sameCause: true,
 		},
 	}
 
@@ -152,6 +152,12 @@ func TestRFC6749ErrorWithTrace(t *testing.T) {
 
 			actual := e.WithTrace(tc.err)
 			require.NotNil(t, actual.cause)
+
+			if tc.sameCause {
+				// Cause already had a stack trace, so WithTrace must wrap the raw err
+				// directly without re-wrapping it in another stack-tracer.
+				require.Same(t, tc.err, actual.cause)
+			}
 		})
 	}
 }

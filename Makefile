@@ -12,9 +12,6 @@ generate: .bin/mockgen
 help:
 	@cat Makefile | grep '^[^ ]*:' | grep -v '^\.bin/' | grep -v '.SILENT:' | grep -v '^node_modules:' | grep -v help | sed 's/:.*#/#/' | column -s "#" -t
 
-licenses: .bin/licenses node_modules  # checks open-source licenses
-	.bin/licenses
-
 test:  # runs all tests
 	go test ./...
 

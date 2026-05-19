@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func initServerWithKey(t *testing.T) *httptest.Server {
@@ -51,80 +53,83 @@ func (r *failingTripper) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
-	ctx := context.Background()
-	s := NewDefaultJWKSFetcherStrategy()
-
-	var set *jose.JSONWebKeySet
-	h := func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewEncoder(w).Encode(set))
+	fooKeySet := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{{
+			KeyID: "foo",
+			Use:   "sig",
+			Key:   &gen.MustRSAKey().PublicKey,
+		}},
 	}
-	ts := httptest.NewServer(http.HandlerFunc(h))
-	defer ts.Close()
+	barKeySet := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{{
+			KeyID: "bar",
+			Use:   "sig",
+			Key:   &gen.MustRSAKey().PublicKey,
+		}},
+	}
 
 	testCases := []struct {
-		name        string
-		set         *jose.JSONWebKeySet
-		ignoreCache bool
-		expectKeyID string
-		missingKey  string
+		name  string
+		check func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet])
 	}{
 		{
 			name: "ShouldFetchAndReturnFooKey",
-			set: &jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					{
-						KeyID: "foo",
-						Use:   "sig",
-						Key:   &gen.MustRSAKey().PublicKey,
-					},
-				},
+			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
+				served.Store(fooKeySet)
+
+				actual, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				assert.Len(t, actual.Key("foo"), 1)
 			},
-			ignoreCache: false,
-			expectKeyID: "foo",
 		},
 		{
-			name: "ShouldReturnCachedFooKeyWhenRemoteChanges",
-			set: &jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					{
-						KeyID: "bar",
-						Use:   "sig",
-						Key:   &gen.MustRSAKey().PublicKey,
-					},
-				},
+			name: "ShouldReturnCachedKeySetWhenRemoteChanges",
+			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
+				// Seed the cache with the foo key set.
+				served.Store(fooKeySet)
+				_, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				s.(*DefaultJWKSFetcherStrategy).WaitForCache()
+
+				// Change the remote, then re-resolve without forcing a refresh.
+				served.Store(barKeySet)
+				actual, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				assert.Len(t, actual.Key("foo"), 1)
+				assert.Len(t, actual.Key("bar"), 0)
 			},
-			ignoreCache: false,
-			expectKeyID: "foo",
-			missingKey:  "bar",
 		},
 		{
 			name: "ShouldBypassCacheWithIgnoreCache",
-			set: &jose.JSONWebKeySet{
-				Keys: []jose.JSONWebKey{
-					{
-						KeyID: "bar",
-						Use:   "sig",
-						Key:   &gen.MustRSAKey().PublicKey,
-					},
-				},
+			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
+				// Seed the cache with the foo key set.
+				served.Store(fooKeySet)
+				_, err := s.Resolve(context.Background(), ts.URL, false)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				// Change the remote and force a refresh.
+				served.Store(barKeySet)
+				actual, err := s.Resolve(context.Background(), ts.URL, true)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				assert.Len(t, actual.Key("bar"), 1)
+				assert.Len(t, actual.Key("foo"), 0)
 			},
-			ignoreCache: true,
-			expectKeyID: "bar",
-			missingKey:  "foo",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			set = tc.set
+			served := &atomic.Pointer[jose.JSONWebKeySet]{}
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.NoError(t, json.NewEncoder(w).Encode(served.Load()))
+			}))
+			t.Cleanup(ts.Close)
 
-			actual, err := s.Resolve(ctx, ts.URL, tc.ignoreCache)
-			require.NoError(t, ErrorToDebugRFC6749Error(err))
-
-			assert.Len(t, actual.Key(tc.expectKeyID), 1)
-			if tc.missingKey != "" {
-				assert.Len(t, actual.Key(tc.missingKey), 0)
-			}
+			s := NewDefaultJWKSFetcherStrategy()
+			tc.check(t, s, ts, served)
 		})
 	}
 }

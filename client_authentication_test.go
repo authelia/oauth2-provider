@@ -971,51 +971,62 @@ func TestAuthenticateClient(t *testing.T) {
 }
 
 func TestAuthenticateClientTwice(t *testing.T) {
-	key := gen.MustRSAKey()
-	client := &DefaultJARClient{
-		DefaultClient: &DefaultClient{
-			ID:           "bar",
-			ClientSecret: testClientSecretFoo,
-		},
-		JSONWebKeys: &jose.JSONWebKeySet{
-			Keys: []jose.JSONWebKey{
-				{
-					KeyID:     "kid-foo",
-					Use:       consts.JSONWebTokenUseSignature,
-					Algorithm: "RS256",
-					Key:       &key.PublicKey,
+	// newFixture builds an independent provider, registered client, and form values for a
+	// subtest so that JTI state from a prior subtest does not leak across.
+	newFixture := func(t *testing.T) (provider *Fosite, registered *DefaultJARClient, formValues url.Values) {
+		key := gen.MustRSAKey()
+		registered = &DefaultJARClient{
+			DefaultClient: &DefaultClient{
+				ID:           "bar",
+				ClientSecret: testClientSecretFoo,
+			},
+			JSONWebKeys: &jose.JSONWebKeySet{
+				Keys: []jose.JSONWebKey{
+					{
+						KeyID:     "kid-foo",
+						Use:       consts.JSONWebTokenUseSignature,
+						Algorithm: "RS256",
+						Key:       &key.PublicKey,
+					},
 				},
 			},
-		},
-		TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+		}
+
+		store := storage.NewMemoryStore()
+		store.Clients[registered.ID] = registered
+
+		config := &Config{
+			JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+			AllowedJWTAssertionAudiences: []string{"token-url"},
+		}
+
+		config.JWTStrategy = &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		}
+
+		provider = &Fosite{
+			Store:  store,
+			Config: config,
+		}
+
+		assertion := mustGenerateClientAssertion(t, jwt.MapClaims{
+			consts.ClaimSubject:        "bar",
+			consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+			consts.ClaimIssuer:         "bar",
+			consts.ClaimJWTID:          "12345",
+			consts.ClaimAudience:       "token-url",
+		}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)
+
+		formValues = url.Values{
+			consts.FormParameterClientID:            {"bar"},
+			consts.FormParameterClientAssertion:     {assertion},
+			consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+		}
+
+		return provider, registered, formValues
 	}
-	store := storage.NewMemoryStore()
-	store.Clients[client.ID] = client
-
-	config := &Config{
-		JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-		AllowedJWTAssertionAudiences: []string{"token-url"},
-	}
-
-	config.JWTStrategy = &jwt.DefaultStrategy{
-		Config: config,
-		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
-	}
-
-	provider := &Fosite{
-		Store:  store,
-		Config: config,
-	}
-
-	assertion := mustGenerateClientAssertion(t, jwt.MapClaims{
-		consts.ClaimSubject:        "bar",
-		consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
-		consts.ClaimIssuer:         "bar",
-		consts.ClaimJWTID:          "12345",
-		consts.ClaimAudience:       "token-url",
-	}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)
-
-	formValues := url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {assertion}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer}}
 
 	testCases := []struct {
 		name  string
@@ -1024,14 +1035,23 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		{
 			name: "ShouldPassFirstAuthentication",
 			check: func(t *testing.T) {
+				provider, registered, formValues := newFixture(t)
+
 				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
-				assert.Equal(t, client, actual)
+				assert.Equal(t, registered, actual)
 			},
 		},
 		{
 			name: "ShouldFailReplayedAuthenticationDueToJTIReuse",
 			check: func(t *testing.T) {
+				provider, _, formValues := newFixture(t)
+
+				// Prime the JTI store with a successful authentication.
+				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				// Replay the same assertion and expect ErrJTIKnown.
 				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.Error(t, err)
 				assert.EqualError(t, err, ErrJTIKnown.Error())

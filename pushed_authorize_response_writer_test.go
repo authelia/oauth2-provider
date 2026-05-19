@@ -26,38 +26,45 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		mock     func(handler *mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester)
+		count    int
+		mock     func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester)
 		expected string
 	}{
 		{
-			name: "ShouldFailWhenHandlerReturnsError",
-			mock: func(handler *mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+			name:  "ShouldFailWhenHandlerReturnsError",
+			count: 1,
+			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
-				handler.EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
+				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
 			},
 			expected: "handler failed",
 		},
 		{
-			name: "ShouldFailWhenHandlerReturnsRFC6749Error",
-			mock: func(handler *mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+			name:  "ShouldFailWhenHandlerReturnsRFC6749Error",
+			count: 1,
+			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
-				handler.EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("PAR request was invalid.")))
+				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("PAR request was invalid.")))
 			},
 			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. PAR request was invalid.",
 		},
 		{
-			name: "ShouldStopAtFirstHandlerError",
-			mock: func(handler *mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+			name:  "ShouldStopAtFirstHandlerError",
+			count: 2,
+			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
-				handler.EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
+				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
+				// Second handler MUST NOT be invoked after the first returns an error.
+				handlers[1].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 			},
 			expected: "handler failed",
 		},
 		{
-			name: "ShouldPassWhenHandlerSucceeds",
-			mock: func(handler *mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+			name:  "ShouldPassWhenHandlerSucceeds",
+			count: 1,
+			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
-				handler.EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 			},
 		},
 	}
@@ -67,16 +74,22 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			handler := mock.NewMockPushedAuthorizeEndpointHandler(ctrl)
 			ar := mock.NewMockAuthorizeRequester(ctrl)
+
+			handlers := make([]*mock.MockPushedAuthorizeEndpointHandler, tc.count)
+			endpointHandlers := make(PushedAuthorizeEndpointHandlers, tc.count)
+			for i := 0; i < tc.count; i++ {
+				handlers[i] = mock.NewMockPushedAuthorizeEndpointHandler(ctrl)
+				endpointHandlers[i] = handlers[i]
+			}
 
 			provider := &Fosite{
 				Config: &Config{
-					PushedAuthorizeEndpointHandlers: PushedAuthorizeEndpointHandlers{handler},
+					PushedAuthorizeEndpointHandlers: endpointHandlers,
 				},
 			}
 
-			tc.mock(handler, ar)
+			tc.mock(handlers, ar)
 
 			responder, err := provider.NewPushedAuthorizeResponse(context.Background(), ar, new(DefaultSession))
 

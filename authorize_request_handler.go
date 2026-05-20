@@ -392,7 +392,6 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 
 	requestURI := r.Form.Get(consts.FormParameterRequestURI)
 	if requestURI == "" || !strings.HasPrefix(requestURI, configProvider.GetPushedAuthorizeRequestURIPrefix(ctx)) {
-		// nothing to do here
 		return false, nil
 	}
 
@@ -403,14 +402,12 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrServerError.WithHint(ErrorPARNotSupported).WithDebug(DebugPARStorageInvalid))
 	}
 
-	// hydrate the requester
 	var parRequest AuthorizeRequester
 	var err error
 	if parRequest, err = storage.GetPARSession(ctx, requestURI); err != nil {
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("Invalid PAR session").WithWrap(err).WithDebugError(err))
 	}
 
-	// hydrate the request object
 	request.Merge(parRequest)
 	request.RedirectURI = parRequest.GetRedirectURI()
 	request.ResponseTypes = parRequest.GetResponseTypes()
@@ -421,7 +418,12 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	// validate the clients match
+	session := parRequest.GetSession()
+
+	if session == nil || session.GetExpiresAt(PushedAuthorizeRequestContext).Before(time.Now()) {
+		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect."))
+	}
+
 	if clientID != request.GetClient().GetID() {
 		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'client_id' must match the one sent in the pushed authorization request."))
 	}

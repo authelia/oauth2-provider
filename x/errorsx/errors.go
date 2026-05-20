@@ -20,17 +20,14 @@ import (
 // be returned. If the error is nil, nil will be returned without further
 // investigation.
 func Cause(err error) error {
-	type causer interface {
-		Cause() error
-	}
-
 	for err != nil {
-		cause, ok := err.(causer)
+		cause, ok := err.(Causer)
 		if !ok || cause.Cause() == nil {
 			break
 		}
 		err = cause.Cause()
 	}
+
 	return err
 }
 
@@ -88,4 +85,8 @@ type IDCarrier interface {
 
 type StackTracer interface {
 	StackTrace() errors.StackTrace
+}
+
+type Causer interface {
+	Cause() error
 }

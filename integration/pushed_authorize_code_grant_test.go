@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,17 +42,18 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 	var state string
 
-	for k, c := range []struct {
-		description    string
+	testCases := []struct {
+		name           string
 		setup          func()
 		check          func(t *testing.T, r *http.Response)
+		tamperPAR      func(t *testing.T, requester oauth2.AuthorizeRequester)
 		params         map[string]string
 		authStatusCode int
 		parStatusCode  int
 	}{
 		{
-			description: "should fail because of audience",
-			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/not-api"},
+			name:   "ShouldNotPassWithInvalidAudience",
+			params: map[string]string{consts.FormParameterAudience: "https://www.authelia.com/not-api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = testState
@@ -60,8 +62,8 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			authStatusCode: http.StatusNotAcceptable,
 		},
 		{
-			description: "should fail because of scope",
-			params:      nil,
+			name:   "ShouldNotPassWithInvalidScope",
+			params: nil,
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.Scopes = []string{"not-exist"}
@@ -71,8 +73,8 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			authStatusCode: http.StatusNotAcceptable,
 		},
 		{
-			description: "should pass with proper audience",
-			params:      map[string]string{consts.FormParameterAudience: "https://www.authelia.com/api"},
+			name:   "ShouldPassWithValidAudience",
+			params: map[string]string{consts.FormParameterAudience: "https://www.authelia.com/api"},
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = testState
@@ -90,7 +92,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			authStatusCode: http.StatusOK,
 		},
 		{
-			description: "should pass",
+			name: "ShouldPass",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				state = testState
@@ -98,11 +100,38 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			parStatusCode:  http.StatusCreated,
 			authStatusCode: http.StatusOK,
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d/description=%s", k, c.description), func(t *testing.T) {
-			c.setup()
+		{
+			name: "ShouldNotPassWithExpiredPARSession",
+			setup: func() {
+				oauthClient = newOAuth2Client(ts)
+				state = testState
+			},
+			tamperPAR: func(t *testing.T, requester oauth2.AuthorizeRequester) {
+				require.NotNil(t, requester, "PAR session should exist in the store")
+				requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().Add(-time.Hour))
+			},
+			parStatusCode:  http.StatusCreated,
+			authStatusCode: http.StatusNotAcceptable,
+		},
+		{
+			name: "ShouldNotPassWithMissingPARSession",
+			setup: func() {
+				oauthClient = newOAuth2Client(ts)
+				state = testState
+			},
+			tamperPAR: func(t *testing.T, requester oauth2.AuthorizeRequester) {
+				require.NotNil(t, requester, "PAR session should exist in the store")
+				requester.SetSession(nil)
+			},
+			parStatusCode:  http.StatusCreated,
+			authStatusCode: http.StatusNotAcceptable,
+		},
+	}
 
-			// build request from the OAuth client
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+
 			data := url.Values{}
 			data.Set(consts.FormParameterClientID, oauthClient.ClientID)
 			data.Set(consts.FormParameterClientSecret, oauthClient.ClientSecret)
@@ -110,7 +139,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			data.Set(consts.FormParameterState, state)
 			data.Set(consts.FormParameterScope, strings.Join(oauthClient.Scopes, " "))
 			data.Set(consts.FormParameterRedirectURI, oauthClient.RedirectURL)
-			for k, v := range c.params {
+			for k, v := range tc.params {
 				data.Set(k, v)
 			}
 
@@ -122,7 +151,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 			require.NoError(t, err)
 
-			body, err := checkStatusAndGetBody(t, resp, c.parStatusCode)
+			body, err := checkStatusAndGetBody(t, resp, tc.parStatusCode)
 			require.NoError(t, err, "Unable to get body after PAR. Err=%v", err)
 
 			if resp.StatusCode != http.StatusCreated {
@@ -134,17 +163,18 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 			assert.NoError(t, err, "Error occurred when unamrshaling the body: %v", err)
 
-			// validate request_uri
 			requestURI, _ := m[consts.FormParameterRequestURI].(string)
 			assert.NotEmpty(t, requestURI, "request_uri is empty")
 			assert.Condition(t, func() bool {
 				return strings.HasPrefix(requestURI, consts.PrefixRequestURI)
 			}, "PAR Prefix is incorrect: %s", requestURI)
 
-			// validate expires_in
 			assert.EqualValues(t, 300, int(m[consts.AccessResponseExpiresIn].(float64)), "Invalid expires_in value=%v", m[consts.AccessResponseExpiresIn])
 
-			// call authorize
+			if tc.tamperPAR != nil {
+				tc.tamperPAR(t, store.PARSessions[requestURI])
+			}
+
 			data = url.Values{}
 			data.Set(consts.FormParameterClientID, oauthClient.ClientID)
 			data.Set(consts.FormParameterRequestURI, m[consts.FormParameterRequestURI].(string))
@@ -155,7 +185,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 			resp, err = http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			require.Equal(t, c.authStatusCode, resp.StatusCode)
+			require.Equal(t, tc.authStatusCode, resp.StatusCode)
 			if resp.StatusCode != http.StatusOK {
 				return
 			}
@@ -171,8 +201,8 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-			if c.check != nil {
-				c.check(t, resp)
+			if tc.check != nil {
+				tc.check(t, resp)
 			}
 		})
 	}

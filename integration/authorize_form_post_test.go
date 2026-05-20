@@ -253,7 +253,7 @@ func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 }
 
 func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) {
-	rw.Header().Add(consts.HeaderContentType, consts.ContentTypeTextHTML)
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeTextHTML)
 	responder.AddParameter("custom_param", "foo")
 	oauth2.DefaultFormPostResponseWriter(rw, oauth2.GetPostFormHTMLTemplate(ctx, new(oauth2.Config)), requester.GetRedirectURI().String(), responder.GetParameters())
 }

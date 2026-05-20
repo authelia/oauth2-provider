@@ -7,9 +7,12 @@ package integration_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 
-	"github.com/parnurzeal/gorequest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -68,41 +71,41 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 	require.NoError(t, err)
 
 	for k, c := range []struct {
-		prepare  func(*gorequest.SuperAgent) *gorequest.SuperAgent
+		prepare  func(r *http.Request)
 		isActive bool
 		scopes   string
 	}{
 		{
-			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret)
+			prepare: func(r *http.Request) {
+				r.SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret)
 			},
 			isActive: true,
 			scopes:   "",
 		},
 		{
-			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
+			prepare: func(r *http.Request) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: true,
 			scopes:   "oauth2",
 		},
 		{
-			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
+			prepare: func(r *http.Request) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: true,
 			scopes:   "",
 		},
 		{
-			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
+			prepare: func(r *http.Request) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
 			isActive: false,
 			scopes:   "foo",
 		},
 		{
-			prepare: func(s *gorequest.SuperAgent) *gorequest.SuperAgent {
-				return s.Set(consts.HeaderAuthorization, "bearer "+b.AccessToken)
+			prepare: func(r *http.Request) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer "+b.AccessToken)
 			},
 			isActive: false,
 			scopes:   "",
@@ -116,15 +119,27 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 				ExpiresAt float64 `json:"exp"`
 				IssuedAt  float64 `json:"iat"`
 			}{}
-			s := gorequest.New()
-			s = s.Post(ts.URL + "/introspect").
-				Type("form").
-				SendStruct(map[string]string{"token": b.AccessToken, "scope": c.scopes})
-			_, bytes, errs := c.prepare(s).End()
 
-			assert.Nil(t, json.Unmarshal([]byte(bytes), &res))
+			data := url.Values{
+				consts.FormParameterToken: {b.AccessToken},
+				consts.FormParameterScope: {c.scopes},
+			}
 
-			assert.Len(t, errs, 0)
+			req, err := http.NewRequest(http.MethodPost, ts.URL+"/introspect", strings.NewReader(data.Encode()))
+			require.NoError(t, err)
+
+			req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+			c.prepare(req)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+
+			require.NoError(t, json.Unmarshal(body, &res))
+
 			assert.Equal(t, c.isActive, res.Active)
 			if c.isActive {
 				assert.Equal(t, "oauth2", res.Scope)

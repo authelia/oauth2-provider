@@ -6,9 +6,10 @@ package integration_test
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 
-	"github.com/parnurzeal/gorequest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -36,23 +37,37 @@ func runRevokeTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
 	token, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
 
-	resp, _, errs := gorequest.New().Post(ts.URL+"/revoke").
-		SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret).
-		Type("form").
-		SendStruct(map[string]string{"token": "asdf"}).End()
-	require.Len(t, errs, 0)
-	assert.Equal(t, 200, resp.StatusCode)
+	data := url.Values{consts.FormParameterToken: {"asdf"}}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/revoke", strings.NewReader(data.Encode()))
+	require.NoError(t, err)
 
-	resp, _, errs = gorequest.New().Post(ts.URL+"/revoke").
-		SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret).
-		Type("form").
-		SendStruct(map[string]string{"token": token.AccessToken}).End()
-	require.Len(t, errs, 0)
-	assert.Equal(t, 200, resp.StatusCode)
+	req.SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret)
+	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 
-	hres, _, errs := gorequest.New().Get(ts.URL+"/info").
-		Set(consts.HeaderAuthorization, "bearer "+token.AccessToken).
-		End()
-	require.Len(t, errs, 0)
-	assert.Equal(t, http.StatusUnauthorized, hres.StatusCode)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	data = url.Values{consts.FormParameterToken: {token.AccessToken}}
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/revoke", strings.NewReader(data.Encode()))
+	require.NoError(t, err)
+
+	req.SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret)
+	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/info", nil)
+	require.NoError(t, err)
+
+	req.Header.Set(consts.HeaderAuthorization, "bearer "+token.AccessToken)
+
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }

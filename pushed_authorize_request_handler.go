@@ -16,7 +16,7 @@ import (
 
 const (
 	ErrorPARNotSupported           = "The OAuth 2.0 provider does not support Pushed Authorization Requests"
-	DebugPARStorageInvalid         = "'PARStorage' not implemented"
+	DebugPARStorageInvalid         = "The Pushed Authorization Request storage is not implemented"
 	DebugPARConfigMissing          = "'PushedAuthorizeRequestConfigProvider' not implemented"
 	DebugPARRequestsHandlerMissing = "'PushedAuthorizeRequestHandlersProvider' not implemented"
 )
@@ -49,19 +49,18 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	}
 	request.Client = client
 
-	// Reject the request if the "request_uri" authorization request
-	// parameter is provided.
+	// Reject the request if the "request_uri" authorization request parameter is provided.
 	if r.Form.Get(consts.FormParameterRequestURI) != "" {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("The request must not contain 'request_uri'."))
 	}
 
-	// For private_key_jwt or basic auth client authentication, "client_id" may not inside the form
-	// However this is required by NewAuthorizeRequest implementation
+	// For private_key_jwt or basic auth client authentication, "client_id" may not be inside the form.
+	// However this is required by NewAuthorizeRequest implementation.
 	if len(r.Form.Get(consts.ClaimClientIdentifier)) == 0 {
 		r.Form.Set(consts.ClaimClientIdentifier, client.GetID())
 	}
 
-	// Validate as if this is a new authorize request
+	// Validate as if this is a new authorize request.
 	fr, err := f.newAuthorizeRequest(ctx, r, true)
 	if err != nil {
 		return fr, err

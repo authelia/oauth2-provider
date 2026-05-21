@@ -383,45 +383,51 @@ func (f *Fosite) validateResponseMode(_ *http.Request, request *AuthorizeRequest
 	return nil
 }
 
-func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, request *AuthorizeRequest) (bool, error) {
-	configProvider, ok := f.Config.(PushedAuthorizeRequestConfigProvider)
-	if !ok {
-		// If the config provider is not implemented, PAR cannot be used.
+func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, request *AuthorizeRequest) (isPAR bool, err error) {
+	var (
+		config     PushedAuthorizeRequestConfigProvider
+		storage    PARStorage
+		requestURI string
+		ok         bool
+	)
+
+	if config, ok = f.Config.(PushedAuthorizeRequestConfigProvider); !ok {
 		return false, nil
 	}
 
-	requestURI := r.Form.Get(consts.FormParameterRequestURI)
-	if requestURI == "" || !strings.HasPrefix(requestURI, configProvider.GetPushedAuthorizeRequestURIPrefix(ctx)) {
+	if requestURI = r.Form.Get(consts.FormParameterRequestURI); requestURI == "" {
 		return false, nil
+	}
+
+	if !strings.HasPrefix(requestURI, config.GetPushedAuthorizeRequestURIPrefix(ctx)) {
+		return false, nil
+	}
+
+	if storage, ok = f.Store.(PARStorage); !ok {
+		return false, errorsx.WithStack(ErrServerError.WithHint(ErrorPARNotSupported).WithDebug(DebugPARStorageInvalid))
 	}
 
 	clientID := r.Form.Get(consts.FormParameterClientID)
 
-	storage, ok := f.Store.(PARStorage)
-	if !ok {
-		return false, errorsx.WithStack(ErrServerError.WithHint(ErrorPARNotSupported).WithDebug(DebugPARStorageInvalid))
+	var par AuthorizeRequester
+	if par, err = storage.GetPARSession(ctx, requestURI); err != nil {
+		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithWrap(err).WithDebugError(err))
 	}
 
-	var parRequest AuthorizeRequester
-	var err error
-	if parRequest, err = storage.GetPARSession(ctx, requestURI); err != nil {
-		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("Invalid PAR session").WithWrap(err).WithDebugError(err))
-	}
-
-	request.Merge(parRequest)
-	request.RedirectURI = parRequest.GetRedirectURI()
-	request.ResponseTypes = parRequest.GetResponseTypes()
-	request.State = parRequest.GetState()
-	request.ResponseMode = parRequest.GetResponseMode()
+	request.Merge(par)
+	request.RedirectURI = par.GetRedirectURI()
+	request.ResponseTypes = par.GetResponseTypes()
+	request.State = par.GetState()
+	request.ResponseMode = par.GetResponseMode()
 
 	if err = storage.DeletePARSession(ctx, requestURI); err != nil {
 		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	session := parRequest.GetSession()
+	session := par.GetSession()
 
 	if session == nil || session.GetExpiresAt(PushedAuthorizeRequestContext).Before(time.Now()) {
-		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect."))
+		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithDebug("The Pushed Authorization Request session is expired."))
 	}
 
 	if clientID != request.GetClient().GetID() {

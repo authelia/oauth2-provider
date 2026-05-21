@@ -17,6 +17,7 @@ ${MOCKGEN:-mockgen} -package mock -destination testing/mock/authorize_code_strat
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/id_token_strategy.go authelia.com/provider/oauth2/handler/openid OpenIDConnectTokenStrategy
 
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/storage.go authelia.com/provider/oauth2 Storage
+${MOCKGEN:-mockgen} -package mock -destination testing/mock/par_storage.go authelia.com/provider/oauth2 PARStorage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/transactional.go authelia.com/provider/oauth2/storage Transactional
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_storage.go authelia.com/provider/oauth2/handler/oauth2 CoreStorage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_device_auth_storage.go -mock_names Storage=MockRFC8628Storage authelia.com/provider/oauth2/handler/rfc8628 Storage

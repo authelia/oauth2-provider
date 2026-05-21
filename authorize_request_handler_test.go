@@ -598,6 +598,19 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
+			name:   "ShouldFailPARSessionNil",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:nil-session"},
+				consts.FormParameterClientID:   {"1234"},
+			},
+			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. OAuth 2.0 request could not be processed due to an authorization server configuration issue. The Pushed Authorization Request is nil.",
+			mock: func(store *mock.MockStorage) {},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:nil-session").Return(nil, nil)
+			},
+		},
+		{
 			name:   "ShouldFailPARSessionDeleteError",
 			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
 			query: url.Values{

@@ -412,6 +412,8 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	var par AuthorizeRequester
 	if par, err = storage.GetPARSession(ctx, requestURI); err != nil {
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithWrap(err).WithDebugError(err))
+	} else if par == nil {
+		return false, errorsx.WithStack(ErrServerError.WithHint("OAuth 2.0 request could not be processed due to an authorization server configuration issue.").WithDebug("The Pushed Authorization Request is nil."))
 	}
 
 	request.Merge(par)
@@ -424,9 +426,7 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	session := par.GetSession()
-
-	if session == nil || session.GetExpiresAt(PushedAuthorizeRequestContext).Before(time.Now()) {
+	if session := par.GetSession(); session == nil || session.GetExpiresAt(PushedAuthorizeRequestContext).Before(time.Now()) {
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithDebug("The Pushed Authorization Request session is expired."))
 	}
 
@@ -469,7 +469,6 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 
 		if isPAR {
-			// No need to continue.
 			return request, nil
 		}
 
@@ -552,7 +551,6 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.8
 	// The "state" parameter should not	be guessable
 	if len(request.State) < f.GetMinParameterEntropy(ctx) {
-		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
 		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
 	}
 

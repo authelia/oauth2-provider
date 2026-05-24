@@ -24,6 +24,7 @@ func TestIntrospectToken(t *testing.T) {
 		name     string
 		setup    func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester)
 		hint     oauth2.TokenType
+		scopes   []string
 		error    error
 		errorStr string
 		expected oauth2.TokenUse
@@ -170,6 +171,169 @@ func TestIntrospectToken(t *testing.T) {
 			},
 			expected: oauth2.AccessToken,
 		},
+		{
+			name: "ShouldFailBecauseAccessTokenSignatureEmpty",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return(""),
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return(""),
+				)
+			},
+			error:    oauth2.ErrRequestUnauthorized,
+			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+		},
+		{
+			name: "ShouldFailBecauseAccessTokenScopeNotGranted",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				config.ScopeStrategy = oauth2.ExactScopeStrategy
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(requester, nil),
+					strategy.
+						EXPECT().
+						ValidateAccessToken(gomock.Eq(t.Context()), gomock.Eq(requester), gomock.Eq("1234")).
+						Return(nil),
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetRefreshTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(nil, errors.New("Failed to lookup the Refresh Token Session.")),
+				)
+			},
+			scopes:   []string{"admin"},
+			error:    oauth2.ErrInvalidScope,
+			errorStr: "The requested scope is invalid, unknown, or malformed. The request scope 'admin' has not been granted or is not allowed to be requested.",
+		},
+		{
+			name: "ShouldFailBecauseRefreshTokenSignatureEmpty",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return(""),
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return(""),
+				)
+			},
+			hint:     oauth2.RefreshToken,
+			error:    oauth2.ErrRequestUnauthorized,
+			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+		},
+		{
+			name: "ShouldFailBecauseRefreshTokenValidationFails",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetRefreshTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(requester, nil),
+					strategy.
+						EXPECT().
+						ValidateRefreshToken(gomock.Eq(t.Context()), gomock.Eq(requester), gomock.Eq("1234")).
+						Return(errorsx.WithStack(oauth2.ErrTokenExpired)),
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(nil, errors.New("Failed to lookup the Access Token Session.")),
+				)
+			},
+			hint:     oauth2.RefreshToken,
+			error:    oauth2.ErrTokenExpired,
+			errorStr: "Token expired. The token expired.",
+		},
+		{
+			name: "ShouldFailBecauseRefreshTokenScopeNotGranted",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				config.ScopeStrategy = oauth2.ExactScopeStrategy
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetRefreshTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(requester, nil),
+					strategy.
+						EXPECT().
+						ValidateRefreshToken(gomock.Eq(t.Context()), gomock.Eq(requester), gomock.Eq("1234")).
+						Return(nil),
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(nil, errors.New("Failed to lookup the Access Token Session.")),
+				)
+			},
+			hint:     oauth2.RefreshToken,
+			scopes:   []string{"admin"},
+			error:    oauth2.ErrInvalidScope,
+			errorStr: "The requested scope is invalid, unknown, or malformed. The request scope 'admin' has not been granted or is not allowed to be requested.",
+		},
+		{
+			name: "ShouldPassRefreshToken",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetRefreshTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(requester, nil),
+					strategy.
+						EXPECT().
+						ValidateRefreshToken(gomock.Eq(t.Context()), gomock.Eq(requester), gomock.Eq("1234")).
+						Return(nil),
+				)
+			},
+			hint:     oauth2.RefreshToken,
+			expected: oauth2.RefreshToken,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -202,7 +366,7 @@ func TestIntrospectToken(t *testing.T) {
 				hint = oauth2.AccessToken
 			}
 
-			actual, err := validator.IntrospectToken(t.Context(), oauth2.AccessTokenFromRequest(r), hint, requester, []string{})
+			actual, err := validator.IntrospectToken(t.Context(), oauth2.AccessTokenFromRequest(r), hint, requester, tc.scopes)
 
 			if len(tc.errorStr) == 0 {
 				require.NoError(t, err)

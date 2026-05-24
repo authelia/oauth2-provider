@@ -79,6 +79,10 @@ func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, requester oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.AccessTokenSignature(ctx, token)
 
+	if len(signature) == 0 {
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(oauth2.ErrNotFound).WithDebugError(oauth2.ErrNotFound))
+	}
+
 	var original oauth2.Requester
 
 	if original, err = c.GetAccessTokenSession(ctx, signature, requester.GetSession()); err != nil {
@@ -100,6 +104,10 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 
 func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string, requester oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.RefreshTokenSignature(ctx, token)
+
+	if len(signature) == 0 {
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(oauth2.ErrNotFound).WithDebugError(oauth2.ErrNotFound))
+	}
 
 	var original oauth2.Requester
 

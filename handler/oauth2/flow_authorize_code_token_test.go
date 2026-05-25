@@ -470,6 +470,47 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			},
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code has already been used.",
 		},
+		{
+			// RFC 8707 Section 2.2: resources requested at the token endpoint MUST be a subset of
+			// those requested at the authorization endpoint. The current implementation enforces
+			// this by overriding the access request's requested audience with the authorize
+			// request's requested audience so the additional resources from the access request
+			// are silently dropped.
+			"ShouldNotAllowAccessRequestResourcesExceedingAuthorizationRequest",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form: url.Values{
+						consts.FormParameterRedirectURI: []string{"request-redir"},
+						consts.FormParameterResource:    []string{"https://api.example.com/users", "https://api.example.com/tenants"},
+					},
+					Session:           &oauth2.DefaultSession{},
+					RequestedAudience: oauth2.Arguments{"https://api.example.com/users", "https://api.example.com/tenants"},
+					RequestedAt:       time.Now().UTC(),
+				},
+			},
+			&oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}},
+					Form: url.Values{
+						consts.FormParameterRedirectURI: []string{"request-redir"},
+						consts.FormParameterResource:    []string{"https://api.example.com/users"},
+					},
+					Session:           &oauth2.DefaultSession{},
+					RequestedScope:    oauth2.Arguments{"a"},
+					RequestedAudience: oauth2.Arguments{"https://api.example.com/users"},
+					GrantedAudience:   oauth2.Arguments{"https://api.example.com/users"},
+					RequestedAt:       time.Now().UTC(),
+				},
+			},
+			nil,
+			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
+				assert.Equal(t, oauth2.Arguments{"https://api.example.com/users"}, r.GetRequestedAudience())
+				assert.NotContains(t, r.GetRequestedAudience(), "https://api.example.com/tenants")
+			},
+			"",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -517,6 +558,100 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			}
 		})
 	}
+}
+
+// TestAuthorizeCodeFlow_ResourceIndicatorSubset verifies the RFC 8707 Section 2.2 constraint
+// for the Authorization Code Grant: when the 'resource' parameter is present in both the
+// Authorization Request and Access (token) Request, the resources requested at the token
+// endpoint cannot exceed those granted in the Authorization Request. Specifically, after the
+// auth code flow runs:
+//   - The access request's RequestedAudience is replaced with the authorize request's
+//     RequestedAudience.
+//   - The access request's GrantedAudience contains only the authorize request's
+//     GrantedAudience — never the extra resources the client tried to add at the token
+//     endpoint.
+func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
+	const (
+		resourceUsers   = "https://api.example.com/users"
+		resourceTenants = "https://api.example.com/tenants"
+	)
+
+	store := storage.NewMemoryStore()
+	strategy := &hmacshaStrategy
+	config := &oauth2.Config{
+		ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+		AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+		AccessTokenLifespan:      time.Minute,
+		AuthorizeCodeLifespan:    time.Minute,
+	}
+
+	handler := AuthorizeExplicitGrantHandler{
+		CoreStorage:           store,
+		AuthorizeCodeStrategy: strategy,
+		AccessTokenStrategy:   strategy,
+		RefreshTokenStrategy:  strategy,
+		Config:                config,
+	}
+
+	code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+	require.NoError(t, err)
+
+	authorizeRequest := &oauth2.AuthorizeRequest{
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Audience:   []string{resourceUsers, resourceTenants},
+			},
+			Form: url.Values{
+				consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"},
+				consts.FormParameterResource:    []string{resourceUsers},
+			},
+			RequestedScope:    oauth2.Arguments{"foo"},
+			GrantedScope:      oauth2.Arguments{"foo"},
+			RequestedAudience: oauth2.Arguments{resourceUsers},
+			GrantedAudience:   oauth2.Arguments{resourceUsers},
+			Session:           &oauth2.DefaultSession{},
+			RequestedAt:       time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, authorizeRequest))
+
+	accessRequest := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Audience:   []string{resourceUsers, resourceTenants},
+			},
+			Form: url.Values{
+				consts.FormParameterAuthorizationCode: []string{code},
+				consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+				consts.FormParameterResource:          []string{resourceUsers, resourceTenants},
+			},
+			RequestedAudience: oauth2.Arguments{resourceUsers, resourceTenants},
+			Session:           &oauth2.DefaultSession{},
+			RequestedAt:       time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+	assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetRequestedAudience(),
+		"requested audience at token endpoint must be replaced with the authorize request's requested audience")
+	assert.NotContains(t, accessRequest.GetRequestedAudience(), resourceTenants,
+		"resources requested only at the token endpoint must not be added to the requested audience")
+
+	response := oauth2.NewAccessResponse()
+
+	require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+
+	assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetGrantedAudience(),
+		"granted audience must match the authorize request's granted audience")
+	assert.NotContains(t, accessRequest.GetGrantedAudience(), resourceTenants,
+		"resources requested only at the token endpoint must not be granted")
 }
 
 func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {

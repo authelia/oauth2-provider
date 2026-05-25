@@ -232,8 +232,8 @@ var (
 	}
 	ErrInvalidTarget = &RFC6749Error{
 		ErrorField:       errInvalidTargetName,
-		DescriptionField: "The authorization server is unwilling or unable to perform a token exchange for the target service.",
-		HintField:        "Check the requested resource or audience is permitted to be requested by the registered client.",
+		DescriptionField: "The requested resource is invalid, missing, unknown, or malformed.",
+		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
 )

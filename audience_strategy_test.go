@@ -35,7 +35,7 @@ func TestDefaultAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailEmptyHaystack",
 			haystack: []string{},
 			needle:   []string{"http://foo/bar"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldPassExactURL",
@@ -76,25 +76,25 @@ func TestDefaultAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailWhenPathHasExtraSuffix",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com/api/users1234"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldFailWhenSchemeMismatches",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"http://cloud.authelia.com/api/users"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldFailWhenPortMismatches",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com:8000/api/users"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com:8000/api/users' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com:8000/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldFailWhenHostMismatches",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.ory.xyz/api/users"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.ory.xyz/api/users' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.ory.xyz/api/users' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldPassNonURIExactMatch",
@@ -115,7 +115,7 @@ func TestDefaultAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailNeedleNotInHaystack",
 			haystack: []string{"zoo"},
 			needle:   []string{"zoo", "bar"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
 			name:     "ShouldPassNonURITrailingSlashNeedle",
@@ -131,13 +131,13 @@ func TestDefaultAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailNeedleIsUnparseableURL",
 			haystack: []string{"https://example.com/api"},
 			needle:   []string{"\x7f"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse requested audience ''. parse '\\x7f': net/url: invalid control character in URL",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Unable to parse requested audience '\x7f'.",
 		},
 		{
 			name:     "ShouldFailHaystackIsUnparseableURL",
 			haystack: []string{"\x7f"},
 			needle:   []string{"https://example.com/api"},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse whitelisted audience ''. parse '\\x7f': net/url: invalid control character in URL",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Unable to parse whitelisted audience '\x7f'.",
 		},
 	}
 
@@ -177,7 +177,7 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailEmptyHaystack",
 			haystack: []string{},
 			needle:   []string{"http://foo/bar"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'http://foo/bar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldPassExactURL",
@@ -188,7 +188,7 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailNeedleHasTrailingSlash",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com/api/users/"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldPassBothHaveTrailingSlash",
@@ -199,37 +199,37 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailHaystackHasTrailingSlash",
 			haystack: []string{"https://cloud.authelia.com/api/users/"},
 			needle:   []string{"https://cloud.authelia.com/api/users"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailNeedleIsSubpath",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com/api/users/1234"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/1234' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users/1234' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailMultipleNeedlesOnePartialMatch",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailMultipleNeedlesAcrossHaystacks",
 			haystack: []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/tenants"},
 			needle:   []string{"https://cloud.authelia.com/api/users", "https://cloud.authelia.com/api/users/", "https://cloud.authelia.com/api/users/1234", "https://cloud.authelia.com/api/tenants"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailWhenPathHasExtraSuffix",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"https://cloud.authelia.com/api/users1234"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api/users1234' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailWhenSchemeMismatches",
 			haystack: []string{"https://cloud.authelia.com/api/users"},
 			needle:   []string{"http://cloud.authelia.com/api/users"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'http://cloud.authelia.com/api/users' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldPassNonURIExactMatch",
@@ -250,19 +250,19 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 			name:     "ShouldFailNeedleNotInHaystack",
 			haystack: []string{"zoo"},
 			needle:   []string{"zoo", "bar"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'bar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailNonURITrailingSlashNeedle",
 			haystack: []string{"foobar"},
 			needle:   []string{"foobar/"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'foobar/' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'foobar/' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 		{
 			name:     "ShouldFailNonURITrailingSlashHaystack",
 			haystack: []string{"foobar/"},
 			needle:   []string{"foobar"},
-			expected: `The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Requested audience 'foobar' has not been whitelisted by the OAuth 2.0 Client.`,
+			expected: `The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'foobar' has not been whitelisted by the OAuth 2.0 Client.`,
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestGetAudiences(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := GetAudiences(tc.form)
+			actual := GetRequestedResources(tc.form)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}

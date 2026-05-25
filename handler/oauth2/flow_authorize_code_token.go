@@ -143,19 +143,20 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
-	authorizeRequest, err := c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession())
-	if err != nil {
+
+	var ar oauth2.Requester
+
+	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, requester, code); err != nil {
-		// This needs to happen after store retrieval for the session to be hydrated properly
+	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, requester, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
-	for _, scope := range authorizeRequest.GetGrantedScopes() {
+	for _, scope := range ar.GetGrantedScopes() {
 		requester.GrantScope(scope)
 	}
 
-	for _, audience := range authorizeRequest.GetGrantedAudience() {
+	for _, audience := range ar.GetGrantedAudience() {
 		requester.GrantAudience(audience)
 	}
 
@@ -165,7 +166,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	}
 
 	var refresh, refreshSignature string
-	if canIssueRefreshToken(ctx, c, authorizeRequest) {
+	if canIssueRefreshToken(ctx, c, ar) {
 		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -215,7 +216,6 @@ func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, r
 }
 
 func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "authorization_code"
+	// The 'grant_type' parameter is REQUIRED and the value MUST be set to 'authorization_code'.
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

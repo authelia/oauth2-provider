@@ -726,18 +726,27 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 
 		response := oauth2.NewAccessResponse()
 		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetGrantedAudience(),
+			"granted audience on the access token must be narrowed to the resources requested at the token endpoint")
+		assert.NotContains(t, accessRequest.GetGrantedAudience(), resourceTenants,
+			"narrowed resources must not include audiences the client did not request at the token endpoint")
 	})
 
-	t.Run("ShouldFallBackToAuthorizeRequestedAudienceWhenAccessRequestHasNone", func(t *testing.T) {
-		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers})
+	t.Run("ShouldFallBackToAuthorizeGrantedAudienceWhenAccessRequestHasNone", func(t *testing.T) {
+		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers, resourceTenants})
 		accessRequest := newAccessRequest(code, nil)
 		// Simulate the access request not including the resource parameter.
 		accessRequest.Form.Del(consts.FormParameterResource)
 		accessRequest.RequestedAudience = nil
 
 		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
-		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetRequestedAudience(),
-			"requested audience must fall back to the authorize request's requested audience when omitted at the token endpoint")
+		assert.Equal(t, oauth2.Arguments{resourceUsers, resourceTenants}, accessRequest.GetRequestedAudience(),
+			"requested audience must fall back to the authorize request's granted audience when omitted at the token endpoint")
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+		assert.Equal(t, oauth2.Arguments{resourceUsers, resourceTenants}, accessRequest.GetGrantedAudience(),
+			"granted audience must equal the authorize request's granted audience when the token endpoint omits the resource parameter")
 	})
 }
 

@@ -73,11 +73,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
 	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' (or 'audience')
-	// parameter, fall back to the audience requested at the authorize endpoint. Otherwise the
+	// parameter, fall back to the audience granted at the authorize endpoint. Otherwise the
 	// resources requested at the token endpoint MUST be a subset of those granted at the
 	// authorize endpoint.
 	if len(request.GetRequestedAudience()) == 0 {
-		request.SetRequestedAudience(authorizeRequest.GetRequestedAudience())
+		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
 	} else if err = c.Config.GetAudienceStrategy(ctx)(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
@@ -163,7 +163,10 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		requester.GrantScope(scope)
 	}
 
-	for _, audience := range ar.GetGrantedAudience() {
+	// Grant the audience requested at the token endpoint. HandleTokenEndpointRequest has
+	// already ensured this set is a subset of the authorize request's granted audience (or
+	// equal to it when no resource parameter was present at the token endpoint).
+	for _, audience := range requester.GetRequestedAudience() {
 		requester.GrantAudience(audience)
 	}
 

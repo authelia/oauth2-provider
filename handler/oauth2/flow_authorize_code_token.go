@@ -72,8 +72,15 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// Override scopes
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
-	// Override audiences
-	request.SetRequestedAudience(authorizeRequest.GetRequestedAudience())
+	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' (or 'audience')
+	// parameter, fall back to the audience requested at the authorize endpoint. Otherwise the
+	// resources requested at the token endpoint MUST be a subset of those granted at the
+	// authorize endpoint.
+	if len(request.GetRequestedAudience()) == 0 {
+		request.SetRequestedAudience(authorizeRequest.GetRequestedAudience())
+	} else if err = c.Config.GetAudienceStrategy(ctx)(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
 
 	// The authorization server MUST ensure that the authorization code was issued to the authenticated
 	// confidential client, or if the client is public, ensure that the

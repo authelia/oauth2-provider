@@ -517,8 +517,8 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
-	if err = ValidateResourceIndicators(r.PostForm); err != nil {
-		return nil, err
+	if err = ValidateResourceIndicators(r.Form); err != nil {
+		return request, err
 	}
 
 	if err = f.validateAudience(ctx, r, request); err != nil {

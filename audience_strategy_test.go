@@ -466,27 +466,32 @@ func TestValidateResourceIndicators(t *testing.T) {
 		{
 			name:     "ShouldFailRelativeResource",
 			form:     url.Values{consts.FormParameterResource: {"/api/users"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'resource' parameter must contain resource indicators that are absolute URIs but '/api/users' is not absolute.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that are absolute URIs but '/api/users' is not absolute.",
 		},
 		{
 			name:     "ShouldFailRelativeResourceWithoutScheme",
 			form:     url.Values{consts.FormParameterResource: {"api.example.com/users"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'resource' parameter must contain resource indicators that are absolute URIs but 'api.example.com/users' is not absolute.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that are absolute URIs but 'api.example.com/users' is not absolute.",
 		},
 		{
 			name:     "ShouldFailResourceWithFragment",
 			form:     url.Values{consts.FormParameterResource: {"https://api.example.com/users#section"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'resource' parameter must contain resource indicators that do not contain a fragment but 'https://api.example.com/users#section' contains a fragment.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that do not contain a fragment but 'https://api.example.com/users#section' contains a fragment.",
 		},
 		{
 			name:     "ShouldFailUnparseableResource",
 			form:     url.Values{consts.FormParameterResource: {"\x7f"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse resource indicator '\x7f' from the 'resource' parameter. parse '\\x7f': net/url: invalid control character in URL",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Unable to parse resource indicator '\x7f' from the 'resource' parameter.",
 		},
 		{
 			name:     "ShouldFailRelativeAmongstValidResources",
 			form:     url.Values{consts.FormParameterResource: {"https://api.example.com", "/relative"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'resource' parameter must contain resource indicators that are absolute URIs but '/relative' is not absolute.",
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that are absolute URIs but '/relative' is not absolute.",
+		},
+		{
+			name:     "ShouldReportAudienceParameterNameInHintWhenAudienceUsed",
+			form:     url.Values{consts.FormParameterAudience: {"/relative"}},
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'audience' parameter must contain resource indicators that are absolute URIs but '/relative' is not absolute.",
 		},
 	}
 

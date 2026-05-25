@@ -84,21 +84,26 @@ func ValidateResourceIndicators(form url.Values) (err error) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'resource' parameter is only allowed when the 'audience' parameter is not also present."))
 	}
 
+	paramName := consts.FormParameterResource
+	if !form.Has(consts.FormParameterResource) {
+		paramName = consts.FormParameterAudience
+	}
+
 	resources := GetRequestedResources(form)
 
 	for _, resource := range resources {
 		var uri *url.URL
 
 		if uri, err = url.Parse(resource); err != nil {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("Unable to parse resource indicator '%s' from the 'resource' parameter.", resource).WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Unable to parse resource indicator '%s' from the '%s' parameter.", resource, paramName).WithWrap(err))
 		}
 
 		if !uri.IsAbs() {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("The 'resource' parameter must contain resource indicators that are absolute URIs but '%s' is not absolute.", resource))
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The '%s' parameter must contain resource indicators that are absolute URIs but '%s' is not absolute.", paramName, resource))
 		}
 
 		if uri.Fragment != "" {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("The 'resource' parameter must contain resource indicators that do not contain a fragment but '%s' contains a fragment.", resource))
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The '%s' parameter must contain resource indicators that do not contain a fragment but '%s' contains a fragment.", paramName, resource))
 		}
 	}
 

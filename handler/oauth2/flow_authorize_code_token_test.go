@@ -76,8 +76,8 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse_HMAC(t *testing.T) {
 			setup: func(t *testing.T, r *oauth2.AccessRequest, config *oauth2.Config, strategy CoreStrategy, store CoreStorage) {
 				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), "bar", r))
 			},
-			err:    oauth2.ErrInvalidRequest,
-			errStr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. Token signature mismatch. Check that you provided a valid token in the right format.",
+			err:    oauth2.ErrInvalidGrant,
+			errStr: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Token signature mismatch. Check that you provided a valid token in the right format.",
 		},
 		{
 			name: "ShouldPassWithOfflineScopeAndRefreshToken",

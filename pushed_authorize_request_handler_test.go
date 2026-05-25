@@ -234,14 +234,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
 				consts.FormParameterState:        {"strong-state"},
 				consts.FormParameterScope:        {"foo bar"},
-				consts.FormParameterAudience:     {"test value", ""},
+				consts.FormParameterAudience:     {"https://test/value", ""},
 			},
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
-					Audience:      []string{"test value"},
+					Audience:      []string{"https://test/value"},
 					ClientSecret:  testClientSecret1234,
 				}, nil).MaxTimes(2)
 			},
@@ -253,11 +253,11 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					Client: &DefaultClient{
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:       []string{"foo", "bar"},
-						Audience:     []string{"test value"},
+						Audience:     []string{"https://test/value"},
 						ClientSecret: testClientSecret1234,
 					},
 					RequestedScope:    []string{"foo", "bar"},
-					RequestedAudience: []string{"test value"},
+					RequestedAudience: []string{"https://test/value"},
 				},
 			},
 		},

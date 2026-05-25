@@ -61,12 +61,13 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	}
 
 	requester.Form = r.PostForm
+
 	if session == nil {
 		return requester, errors.New("Session must not be nil")
 	}
 
-	if err = ValidateResourceIndicators(r.PostForm); err != nil {
-		return nil, err
+	if err = ValidateResourceIndicators(requester.Form); err != nil {
+		return requester, err
 	}
 
 	requester.SetRequestedScopes(RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " ")))

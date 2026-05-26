@@ -177,7 +177,7 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		With(
 			session.GetExpiresAt(tokenType),
 			requester.GetGrantedScopes(),
-			requester.GetGrantedAudience(),
+			oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource()),
 		).
 		WithDefaults(
 			time.Now().UTC(),

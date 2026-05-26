@@ -14,9 +14,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-type AudienceMatchingStrategy func(haystack []string, needle []string) error
+type AudienceMatchingStrategy func(haystack, needle []string) (err error)
 
-func DefaultAudienceMatchingStrategy(haystack []string, needle []string) error {
+// ResourceMatchingStrategy matches requested RFC 8707 resource indicators against the client's
+// allowed audience list. Defaults to DefaultAudienceMatchingStrategy (URL-based matching).
+type ResourceMatchingStrategy func(haystack, needle []string) (err error)
+
+func DefaultAudienceMatchingStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {
 		return nil
 	}
@@ -58,7 +62,7 @@ func DefaultAudienceMatchingStrategy(haystack []string, needle []string) error {
 // does matching with exact string comparison. It requires that all strings in "needle" are present in
 // "haystack". Use this strategy when your audience values are not URIs (e.g., you use client IDs for
 // audience and they are UUIDs or random strings).
-func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
+func ExactAudienceMatchingStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {
 		return nil
 	}
@@ -79,25 +83,14 @@ func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
 	return nil
 }
 
-// ValidateResourceIndicators validates resource and audience parameters ensuring they don't conflict and are properly formatted.
-// Returns an error if validation fails, such as when URIs are not absolute or contain a fragment.
+// ValidateResourceIndicators validates the 'resource' form parameter values as RFC 8707
+// resource indicators. Values from the 'audience' form parameter are not URI-validated here —
+// they are checked against the client's allowed audience list by the audience strategy.
 func ValidateResourceIndicators(form url.Values) (err error) {
-	hasResource := form.Has(consts.FormParameterResource)
-	hasAudience := form.Has(consts.FormParameterAudience)
-
-	if !hasResource && !hasAudience {
+	resources, ok := GetResourcesParameter(consts.FormParameterResource, form)
+	if !ok {
 		return nil
 	}
-
-	if hasResource && hasAudience {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'resource' parameter is only allowed when the 'audience' parameter is not also present."))
-	}
-
-	if hasAudience {
-		return nil
-	}
-
-	resources := GetRequestedResources(form)
 
 	for _, resource := range resources {
 		if err = ValidateResourceIndicatorURI(resource); err != nil {
@@ -147,39 +140,78 @@ func GetResourcesParameter(parameter string, form url.Values) (resources []strin
 	}
 }
 
-// GetRequestedResources allows audiences to be provided as repeated "audience" form parameter,
-// or as a space-delimited "audience" form parameter if it is not repeated.
-// RFC 8693 in section 2.1 specifies that multiple audience values should be multiple
-// query parameters, while RFC 6749 says that that request parameter must not be included
-// more than once (and thus why we use space-delimited value). This function tries to satisfy both.
-// If "audience" form parameter is repeated, we do not split the value by space.
-func GetRequestedResources(form url.Values) (audiences []string) {
-	var ok bool
-
-	if audiences, ok = GetResourcesParameter(consts.FormParameterResource, form); ok {
-		return audiences
-	}
-
-	if audiences, ok = GetResourcesParameter(consts.FormParameterAudience, form); ok {
-		return audiences
+// GetRequestedResources returns the values of the RFC 8707 'resource' form parameter.
+// Multiple resources can be expressed as repeated parameters or as a single space-delimited value.
+func GetRequestedResources(form url.Values) (resources []string) {
+	if values, ok := GetResourcesParameter(consts.FormParameterResource, form); ok {
+		return values
 	}
 
 	return []string{}
 }
 
+// GetRequestedAudiences returns the values of the 'audience' form parameter.
+// Multiple audiences can be expressed as repeated parameters or as a single space-delimited value.
+func GetRequestedAudiences(form url.Values) (audiences []string) {
+	if values, ok := GetResourcesParameter(consts.FormParameterAudience, form); ok {
+		return values
+	}
+
+	return []string{}
+}
+
+// JoinGrantedAudienceAndResource returns the concatenation of the granted audience and resource
+// indicator values, deduplicated, for use as the 'aud' claim in tokens and introspection responses.
+func JoinGrantedAudienceAndResource(audience, resource Arguments) Arguments {
+	if len(audience) == 0 && len(resource) == 0 {
+		return nil
+	}
+
+	merged := make(Arguments, 0, len(audience)+len(resource))
+	seen := make(map[string]struct{}, len(audience)+len(resource))
+
+	for _, v := range audience {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		merged = append(merged, v)
+	}
+
+	for _, v := range resource {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		merged = append(merged, v)
+	}
+
+	return merged
+}
+
 //nolint:unparam
 func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request Requester) error {
-	audience := GetRequestedResources(request.GetRequestForm())
+	form := request.GetRequestForm()
 
-	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) && !request.GetRequestForm().Has(consts.FormParameterResource) {
+	audience := GetRequestedAudiences(form)
+	resource := GetRequestedResources(form)
+
+	if len(audience) == 0 && len(resource) == 0 && !form.Has(consts.FormParameterAudience) && !form.Has(consts.FormParameterResource) {
 		if client, ok := request.GetClient().(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
 			audience = client.GetAudience()
 		}
-	} else if err := f.Config.GetAudienceStrategy(ctx)(request.GetClient().GetAudience(), audience); err != nil {
-		return err
+	} else {
+		if err := f.Config.GetAudienceStrategy(ctx)(request.GetClient().GetAudience(), audience); err != nil {
+			return err
+		}
+
+		if err := f.Config.GetResourceStrategy(ctx)(request.GetClient().GetAudience(), resource); err != nil {
+			return err
+		}
 	}
 
 	request.SetRequestedAudience(audience)
+	request.SetRequestedResource(resource)
 
 	return nil
 }

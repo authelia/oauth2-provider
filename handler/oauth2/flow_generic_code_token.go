@@ -111,11 +111,9 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		return errorsx.WithStack(err)
 	}
 
-	// Override scopes.
 	requester.SetRequestedScopes(deviceRequester.GetRequestedScopes())
-
-	// Override audiences.
 	requester.SetRequestedAudience(deviceRequester.GetRequestedAudience())
+	requester.SetRequestedResource(deviceRequester.GetRequestedResource())
 
 	// The authorization server MUST ensure that the authorization code was issued to the authenticated
 	// confidential client, or if the client is public, ensure that the
@@ -184,6 +182,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	for _, audience := range ar.GetGrantedAudience() {
 		requester.GrantAudience(audience)
+	}
+
+	for _, resource := range ar.GetGrantedResource() {
+		requester.GrantResource(resource)
 	}
 
 	var (

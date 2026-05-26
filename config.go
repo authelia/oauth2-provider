@@ -20,43 +20,49 @@ import (
 // AuthorizeCodeLifespanProvider returns the provider for configuring the authorization code lifespan.
 type AuthorizeCodeLifespanProvider interface {
 	// GetAuthorizeCodeLifespan returns the authorization code lifespan.
-	GetAuthorizeCodeLifespan(ctx context.Context) time.Duration
+	GetAuthorizeCodeLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 // RefreshTokenLifespanProvider returns the provider for configuring the refresh token lifespan.
 type RefreshTokenLifespanProvider interface {
 	// GetRefreshTokenLifespan returns the refresh token lifespan.
-	GetRefreshTokenLifespan(ctx context.Context) time.Duration
+	GetRefreshTokenLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 // AccessTokenLifespanProvider returns the provider for configuring the access token lifespan.
 type AccessTokenLifespanProvider interface {
 	// GetAccessTokenLifespan returns the access token lifespan.
-	GetAccessTokenLifespan(ctx context.Context) time.Duration
+	GetAccessTokenLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 // VerifiableCredentialsNonceLifespanProvider returns the provider for configuring the access token lifespan.
 type VerifiableCredentialsNonceLifespanProvider interface {
 	// GetVerifiableCredentialsNonceLifespan returns the nonce lifespan.
-	GetVerifiableCredentialsNonceLifespan(ctx context.Context) time.Duration
+	GetVerifiableCredentialsNonceLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 // IDTokenLifespanProvider returns the provider for configuring the ID token lifespan.
 type IDTokenLifespanProvider interface {
 	// GetIDTokenLifespan returns the ID token lifespan.
-	GetIDTokenLifespan(ctx context.Context) time.Duration
+	GetIDTokenLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 // ScopeStrategyProvider returns the provider for configuring the scope strategy.
 type ScopeStrategyProvider interface {
 	// GetScopeStrategy returns the scope strategy.
-	GetScopeStrategy(ctx context.Context) ScopeStrategy
+	GetScopeStrategy(ctx context.Context) (strategy ScopeStrategy)
 }
 
 // AudienceStrategyProvider returns the provider for configuring the audience strategy.
 type AudienceStrategyProvider interface {
 	// GetAudienceStrategy returns the audience strategy.
-	GetAudienceStrategy(ctx context.Context) AudienceMatchingStrategy
+	GetAudienceStrategy(ctx context.Context) (strategy AudienceMatchingStrategy)
+}
+
+// ResourceStrategyProvider returns the provider for configuring the RFC 8707 resource indicator strategy.
+type ResourceStrategyProvider interface {
+	// GetResourceStrategy returns the resource indicator matching strategy.
+	GetResourceStrategy(ctx context.Context) (strategy ResourceMatchingStrategy)
 }
 
 // ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
@@ -372,6 +378,12 @@ type RFC8693ConfigProvider interface {
 	GetRFC8693TokenTypes(ctx context.Context) (types map[string]RFC8693TokenType)
 
 	GetDefaultRFC8693RequestedTokenType(ctx context.Context) (tokenType string)
+
+	GetScopeStrategy(ctx context.Context) (strategy ScopeStrategy)
+
+	GetAudienceStrategy(ctx context.Context) (strategy AudienceMatchingStrategy)
+
+	GetResourceStrategy(ctx context.Context) (strategy ResourceMatchingStrategy)
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.

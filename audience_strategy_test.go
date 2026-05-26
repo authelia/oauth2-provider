@@ -281,44 +281,24 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 	}
 }
 
-func TestGetAudiences(t *testing.T) {
+func TestGetRequestedResources(t *testing.T) {
 	testCases := []struct {
 		name     string
 		form     url.Values
 		expected []string
 	}{
 		{
-			name:     "ShouldReturnEmptyForMissingAudienceParameter",
+			name:     "ShouldReturnEmptyForMissingParameters",
 			form:     url.Values{},
 			expected: []string{},
 		},
 		{
-			name:     "ShouldSplitSingleSpaceDelimitedAudience",
-			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com https://api.other.com"}},
-			expected: []string{"https://api.example.com", "https://api.other.com"},
-		},
-		{
-			name:     "ShouldReturnSingleAudience",
+			name:     "ShouldIgnoreAudienceParameter",
 			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com"}},
-			expected: []string{"https://api.example.com"},
+			expected: []string{},
 		},
 		{
-			name:     "ShouldReturnRepeatedAudiences",
-			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com", "https://api.other.com"}},
-			expected: []string{"https://api.example.com", "https://api.other.com"},
-		},
-		{
-			name:     "ShouldFilterEmptyEntriesFromRepeatedAudiences",
-			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com", "", "https://api.other.com"}},
-			expected: []string{"https://api.example.com", "https://api.other.com"},
-		},
-		{
-			name:     "ShouldFilterEmptyEntriesFromSpaceDelimitedAudience",
-			form:     url.Values{consts.FormParameterAudience: {"https://api.example.com  https://api.other.com"}},
-			expected: []string{"https://api.example.com", "https://api.other.com"},
-		},
-		{
-			name:     "ShouldReturnResourceWhenAudienceMissing",
+			name:     "ShouldReturnSingleResource",
 			form:     url.Values{consts.FormParameterResource: {"https://api.example.com"}},
 			expected: []string{"https://api.example.com"},
 		},
@@ -333,14 +313,9 @@ func TestGetAudiences(t *testing.T) {
 			expected: []string{"https://api.example.com", "https://api.other.com"},
 		},
 		{
-			name:     "ShouldPreferResourceOverAudienceWhenBothPresent",
+			name:     "ShouldReturnResourceWhenAudienceAlsoPresent",
 			form:     url.Values{consts.FormParameterResource: {"https://api.example.com"}, consts.FormParameterAudience: {"https://api.other.com"}},
 			expected: []string{"https://api.example.com"},
-		},
-		{
-			name:     "ShouldFallBackToAudienceWhenResourceIsAllEmpty",
-			form:     url.Values{consts.FormParameterResource: {""}, consts.FormParameterAudience: {"https://api.other.com"}},
-			expected: []string{"https://api.other.com"},
 		},
 		{
 			name:     "ShouldReturnEmptyWhenAllEmpty",
@@ -353,6 +328,98 @@ func TestGetAudiences(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := GetRequestedResources(tc.form)
 			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestGetRequestedAudiences(t *testing.T) {
+	testCases := []struct {
+		name     string
+		form     url.Values
+		expected []string
+	}{
+		{
+			name:     "ShouldReturnEmptyForMissingParameters",
+			form:     url.Values{},
+			expected: []string{},
+		},
+		{
+			name:     "ShouldIgnoreResourceParameter",
+			form:     url.Values{consts.FormParameterResource: {"https://api.example.com"}},
+			expected: []string{},
+		},
+		{
+			name:     "ShouldReturnSingleAudience",
+			form:     url.Values{consts.FormParameterAudience: {"foo"}},
+			expected: []string{"foo"},
+		},
+		{
+			name:     "ShouldReturnRepeatedAudiences",
+			form:     url.Values{consts.FormParameterAudience: {"foo", "bar"}},
+			expected: []string{"foo", "bar"},
+		},
+		{
+			name:     "ShouldSplitSpaceDelimitedAudience",
+			form:     url.Values{consts.FormParameterAudience: {"foo bar"}},
+			expected: []string{"foo", "bar"},
+		},
+		{
+			name:     "ShouldAllowNonURIAudienceValues",
+			form:     url.Values{consts.FormParameterAudience: {"my-service my-other-service"}},
+			expected: []string{"my-service", "my-other-service"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetRequestedAudiences(tc.form)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestJoinGrantedAudienceAndResource(t *testing.T) {
+	testCases := []struct {
+		name     string
+		audience Arguments
+		resource Arguments
+		expected Arguments
+	}{
+		{
+			name:     "ShouldReturnNilWhenBothEmpty",
+			audience: Arguments{},
+			resource: Arguments{},
+			expected: nil,
+		},
+		{
+			name:     "ShouldReturnAudienceWhenResourceEmpty",
+			audience: Arguments{"my-service"},
+			resource: Arguments{},
+			expected: Arguments{"my-service"},
+		},
+		{
+			name:     "ShouldReturnResourceWhenAudienceEmpty",
+			audience: Arguments{},
+			resource: Arguments{"https://api.example.com"},
+			expected: Arguments{"https://api.example.com"},
+		},
+		{
+			name:     "ShouldConcatenateBoth",
+			audience: Arguments{"my-service"},
+			resource: Arguments{"https://api.example.com"},
+			expected: Arguments{"my-service", "https://api.example.com"},
+		},
+		{
+			name:     "ShouldDeduplicateOverlappingValues",
+			audience: Arguments{"foo", "shared"},
+			resource: Arguments{"shared", "bar"},
+			expected: Arguments{"foo", "shared", "bar"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, JoinGrantedAudienceAndResource(tc.audience, tc.resource))
 		})
 	}
 }
@@ -459,9 +526,12 @@ func TestValidateResourceIndicators(t *testing.T) {
 			form: url.Values{consts.FormParameterResource: {""}},
 		},
 		{
-			name:     "ShouldFailBothResourceAndAudienceSet",
-			form:     url.Values{consts.FormParameterResource: {"https://api.example.com"}, consts.FormParameterAudience: {"https://api.other.com"}},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'resource' parameter is only allowed when the 'audience' parameter is not also present.",
+			name: "ShouldPassWhenBothResourceAndAudienceSet",
+			form: url.Values{consts.FormParameterResource: {"https://api.example.com"}, consts.FormParameterAudience: {"my-service"}},
+		},
+		{
+			name: "ShouldNotValidateAudienceValuesAsURIs",
+			form: url.Values{consts.FormParameterAudience: {"not a uri"}},
 		},
 		{
 			name:     "ShouldFailRelativeResource",

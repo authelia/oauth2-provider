@@ -19,10 +19,12 @@ import (
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
-	Config             oauth2.Configurator
+	Config oauth2.Configurator
+
 	Strategy           jwt.Strategy
 	IssueStrategy      openid.OpenIDConnectTokenStrategy
 	ValidationStrategy openid.TokenValidationStrategy
+	
 	Storage
 }
 
@@ -82,10 +84,9 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
+
 	if requestedTokenType == "" {
-		if config, ok := c.Config.(oauth2.RFC8693ConfigProvider); ok {
-			requestedTokenType = config.GetDefaultRFC8693RequestedTokenType(ctx)
-		}
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
 	if requestedTokenType != consts.TokenTypeRFC8693IDToken {

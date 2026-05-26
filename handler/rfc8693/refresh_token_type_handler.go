@@ -19,11 +19,16 @@ import (
 )
 
 type RefreshTokenTypeHandler struct {
-	Config               oauth2.RFC8693ConfigProvider
+	Config oauth2.RFC8693ConfigProvider
+
 	RefreshTokenLifespan time.Duration
-	RefreshTokenScopes   []string
-	hoauth2.CoreStrategy
+
+	RefreshTokenScopes []string
+
 	ScopeStrategy oauth2.ScopeStrategy
+
+	hoauth2.CoreStrategy
+
 	Storage
 }
 
@@ -140,8 +145,9 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2
 	}
 
 	// Scope check.
+	scopeStrategy := c.getScopeStrategy(ctx)
 	for _, scope := range requester.GetRequestedScopes() {
-		if !c.ScopeStrategy(or.GetGrantedScopes(), scope) {
+		if !scopeStrategy(or.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
 	}
@@ -151,7 +157,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2
 
 	claims[consts.ClaimClientIdentifier] = or.GetClient().GetID()
 	claims[consts.ClaimScope] = or.GetGrantedScopes()
-	claims[consts.ClaimAudience] = or.GetGrantedAudience()
+	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(or.GetGrantedAudience(), or.GetGrantedResource())
 
 	return or.GetSession(), claims, nil
 }
@@ -179,6 +185,15 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	response.SetScopes(request.GetGrantedScopes())
 
 	return nil
+}
+
+// getScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
+func (c *RefreshTokenTypeHandler) getScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+	if c.ScopeStrategy != nil {
+		return c.ScopeStrategy
+	}
+
+	return c.Config.GetScopeStrategy(ctx)
 }
 
 func (c *RefreshTokenTypeHandler) getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {

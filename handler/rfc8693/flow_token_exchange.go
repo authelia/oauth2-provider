@@ -16,9 +16,11 @@ import (
 
 // TokenExchangeGrantHandler is the grant handler for RFC8693
 type TokenExchangeGrantHandler struct {
-	Config                   oauth2.RFC8693ConfigProvider
+	Config oauth2.RFC8693ConfigProvider
+
 	ScopeStrategy            oauth2.ScopeStrategy
 	AudienceMatchingStrategy oauth2.AudienceMatchingStrategy
+	ResourceMatchingStrategy oauth2.ResourceMatchingStrategy
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -36,9 +38,9 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check whether client is allowed to use token exchange
-	if !client.GetGrantTypes().Has("urn:ietf:params:oauth:grant-type:token-exchange") {
+	if !client.GetGrantTypes().Has(consts.GrantTypeOAuthTokenExchange) {
 		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf(
-			"The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", "urn:ietf:params:oauth:grant-type:token-exchange"))
+			"The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthTokenExchange))
 	}
 
 	var (
@@ -148,18 +150,51 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested scope.
+	scopeStrategy := c.getScopeStrategy(ctx)
 	for _, scope := range request.GetRequestedScopes() {
-		if !c.ScopeStrategy(client.GetScopes(), scope) {
+		if !scopeStrategy(client.GetScopes(), scope) {
 			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
 	// Check the requested audience.
-	if err = c.AudienceMatchingStrategy(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = c.getAudienceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+	}
+
+	// Check the requested resource indicators (RFC 8707).
+	if err = c.getResourceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
 	return nil
+}
+
+// getScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) getScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+	if c.ScopeStrategy != nil {
+		return c.ScopeStrategy
+	}
+
+	return c.Config.GetScopeStrategy(ctx)
+}
+
+// getAudienceMatchingStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) getAudienceMatchingStrategy(ctx context.Context) oauth2.AudienceMatchingStrategy {
+	if c.AudienceMatchingStrategy != nil {
+		return c.AudienceMatchingStrategy
+	}
+
+	return c.Config.GetAudienceStrategy(ctx)
+}
+
+// getResourceMatchingStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) getResourceMatchingStrategy(ctx context.Context) oauth2.ResourceMatchingStrategy {
+	if c.ResourceMatchingStrategy != nil {
+		return c.ResourceMatchingStrategy
+	}
+
+	return c.Config.GetResourceStrategy(ctx)
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3

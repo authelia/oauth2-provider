@@ -57,7 +57,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			mock: func(areq *mock.MockAccessRequester) {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{})
-				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.authelia.com/not-api"}).Times(2)
+				areq.EXPECT().GetRequestedAudience().Return([]string{"https://www.authelia.com/not-api"})
+				areq.EXPECT().GetRequestedResource().Return([]string{})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Audience:   []string{"https://www.authelia.com/api"},
@@ -84,11 +85,12 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetRequestedAudience().Return([]string{})
+				areq.EXPECT().GetRequestedResource().Return([]string{})
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},
 				})
-				areq.EXPECT().GetRequestForm().Return(url.Values{})
+				areq.EXPECT().GetRequestForm().Return(url.Values{}).Times(2)
 			},
 		},
 	}

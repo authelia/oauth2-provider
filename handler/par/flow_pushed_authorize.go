@@ -60,6 +60,10 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
+	if err = c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
+		return err
+	}
+
 	var parc oauth2.PushedAuthorizationRequestClient
 
 	expiresIn := config.GetPushedAuthorizeContextLifespan(ctx)

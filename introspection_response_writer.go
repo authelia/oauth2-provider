@@ -234,8 +234,8 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
 		response[jwt.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
 	}
-	if len(r.GetAccessRequester().GetGrantedAudience()) > 0 {
-		response[jwt.ClaimAudience] = r.GetAccessRequester().GetGrantedAudience()
+	if aud := JoinGrantedAudienceAndResource(r.GetAccessRequester().GetGrantedAudience(), r.GetAccessRequester().GetGrantedResource()); len(aud) > 0 {
+		response[jwt.ClaimAudience] = aud
 	}
 	if r.GetAccessRequester().GetSession().GetUsername() != "" {
 		response[jwt.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()

@@ -27,6 +27,7 @@ type AuthorizeImplicitGrantTypeHandler struct {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 	}
 }
 
@@ -59,6 +60,10 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	}
 
 	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
 		return err
 	}
 

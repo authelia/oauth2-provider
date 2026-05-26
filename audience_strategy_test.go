@@ -488,11 +488,6 @@ func TestValidateResourceIndicators(t *testing.T) {
 			form:     url.Values{consts.FormParameterResource: {"https://api.example.com", "/relative"}},
 			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that are absolute URIs but '/relative' is not absolute.",
 		},
-		{
-			name:     "ShouldReportAudienceParameterNameInHintWhenAudienceUsed",
-			form:     url.Values{consts.FormParameterAudience: {"/relative"}},
-			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'audience' parameter must contain resource indicators that are absolute URIs but '/relative' is not absolute.",
-		},
 	}
 
 	for _, tc := range testCases {

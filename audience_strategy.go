@@ -79,32 +79,49 @@ func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
 	return nil
 }
 
+// ValidateResourceIndicators validates resource and audience parameters ensuring they don't conflict and are properly formatted.
+// Returns an error if validation fails, such as when URIs are not absolute or contain a fragment.
 func ValidateResourceIndicators(form url.Values) (err error) {
-	if form.Has(consts.FormParameterResource) && form.Has(consts.FormParameterAudience) {
+	hasResource := form.Has(consts.FormParameterResource)
+	hasAudience := form.Has(consts.FormParameterAudience)
+
+	if !hasResource && !hasAudience {
+		return nil
+	}
+
+	if hasResource && hasAudience {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'resource' parameter is only allowed when the 'audience' parameter is not also present."))
 	}
 
-	paramName := consts.FormParameterResource
-	if !form.Has(consts.FormParameterResource) {
-		paramName = consts.FormParameterAudience
+	if hasAudience {
+		return nil
 	}
 
 	resources := GetRequestedResources(form)
 
 	for _, resource := range resources {
-		var uri *url.URL
-
-		if uri, err = url.Parse(resource); err != nil {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Unable to parse resource indicator '%s' from the '%s' parameter.", resource, paramName).WithWrap(err))
+		if err = ValidateResourceIndicatorURI(resource); err != nil {
+			return err
 		}
+	}
 
-		if !uri.IsAbs() {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The '%s' parameter must contain resource indicators that are absolute URIs but '%s' is not absolute.", paramName, resource))
-		}
+	return nil
+}
 
-		if uri.Fragment != "" {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The '%s' parameter must contain resource indicators that do not contain a fragment but '%s' contains a fragment.", paramName, resource))
-		}
+// ValidateResourceIndicatorURI validates a single resource indicator URI.
+func ValidateResourceIndicatorURI(resource string) (err error) {
+	var uri *url.URL
+
+	if uri, err = url.Parse(resource); err != nil {
+		return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Unable to parse resource indicator '%s' from the 'resource' parameter.", resource).WithWrap(err))
+	}
+
+	if !uri.IsAbs() {
+		return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The 'resource' parameter must contain resource indicators that are absolute URIs but '%s' is not absolute.", resource))
+	}
+
+	if uri.Fragment != "" {
+		return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The 'resource' parameter must contain resource indicators that do not contain a fragment but '%s' contains a fragment.", resource))
 	}
 
 	return nil

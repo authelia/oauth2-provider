@@ -39,8 +39,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 
 	// Check whether client is allowed to use token exchange
 	if !client.GetGrantTypes().Has(consts.GrantTypeOAuthTokenExchange) {
-		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf(
-			"The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthTokenExchange))
+		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthTokenExchange))
 	}
 
 	var (
@@ -96,8 +95,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	if len(supportedSubjectTypes) > 0 && !supportedSubjectTypes.Has(subjectTokenType) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
-			"The OAuth 2.0 client is not allowed to use '%s' as '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not allowed to use '%s' as '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType))
 	}
 
 	var (
@@ -122,13 +120,11 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		}
 
 		if tt := configTypesSupported[actorTokenType]; tt == nil {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
-				"The '%s' token type is not supported as a '%s'.", actorTokenType, consts.FormParameterActorTokenType))
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", actorTokenType, consts.FormParameterActorTokenType))
 		}
 
 		if len(supportedActorTypes) > 0 && !supportedActorTypes.Has(actorTokenType) {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
-				"The OAuth 2.0 client is not allowed to use '%s' as '%s'.", actorTokenType, consts.FormParameterActorTokenType))
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not allowed to use '%s' as '%s'.", actorTokenType, consts.FormParameterActorTokenType))
 		}
 	} else if actorTokenType = form.Get(consts.FormParameterActorTokenType); actorTokenType != "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is not empty even though the '%s' is empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
@@ -141,8 +137,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	if tt := configTypesSupported[requestedTokenType]; tt == nil {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
-			"The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
 	if len(supportedRequestTypes) > 0 && !supportedRequestTypes.Has(requestedTokenType) {
@@ -150,7 +145,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested scope.
-	scopeStrategy := c.getScopeStrategy(ctx)
+	scopeStrategy := c.GetScopeStrategy(ctx)
 	for _, scope := range request.GetRequestedScopes() {
 		if !scopeStrategy(client.GetScopes(), scope) {
 			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
@@ -158,20 +153,30 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested audience.
-	if err = c.getAudienceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = c.GetAudienceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
 	// Check the requested resource indicators (RFC 8707).
-	if err = c.getResourceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = c.GetResourceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+	}
+
+	// Grant the validated audience and resource so the issued token's 'aud' claim reflects
+	// the exchange request's RFC 8693 audience and RFC 8707 resource parameters.
+	for _, audience := range request.GetRequestedAudience() {
+		request.GrantAudience(audience)
+	}
+
+	for _, resource := range request.GetRequestedResource() {
+		request.GrantResource(resource)
 	}
 
 	return nil
 }
 
-// getScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) getScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+// GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
 	if c.ScopeStrategy != nil {
 		return c.ScopeStrategy
 	}
@@ -179,8 +184,8 @@ func (c *TokenExchangeGrantHandler) getScopeStrategy(ctx context.Context) oauth2
 	return c.Config.GetScopeStrategy(ctx)
 }
 
-// getAudienceMatchingStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) getAudienceMatchingStrategy(ctx context.Context) oauth2.AudienceMatchingStrategy {
+// GetAudienceMatchingStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetAudienceMatchingStrategy(ctx context.Context) oauth2.AudienceMatchingStrategy {
 	if c.AudienceMatchingStrategy != nil {
 		return c.AudienceMatchingStrategy
 	}
@@ -188,8 +193,8 @@ func (c *TokenExchangeGrantHandler) getAudienceMatchingStrategy(ctx context.Cont
 	return c.Config.GetAudienceStrategy(ctx)
 }
 
-// getResourceMatchingStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) getResourceMatchingStrategy(ctx context.Context) oauth2.ResourceMatchingStrategy {
+// GetResourceMatchingStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetResourceMatchingStrategy(ctx context.Context) oauth2.ResourceMatchingStrategy {
 	if c.ResourceMatchingStrategy != nil {
 		return c.ResourceMatchingStrategy
 	}
@@ -216,8 +221,7 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 
 	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
 	if tt := configTypesSupported[requestedTokenType]; tt == nil {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf(
-			"The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
 	// chain `act` if necessary

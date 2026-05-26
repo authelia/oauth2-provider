@@ -43,7 +43,7 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 
 	if actorTokenType != nil && actorTokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT {
 		token := form.Get(consts.FormParameterActorToken)
-		if unpacked, err := c.validate(ctx, requester, actorTokenType, token); err != nil {
+		if unpacked, err := c.validate(ctx, requester, actorTokenType, token, tokenRoleActor); err != nil {
 			return err
 		} else {
 			session.SetActorToken(unpacked)
@@ -52,7 +52,7 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 
 	if subjectTokenType != nil && subjectTokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT {
 		token := form.Get(consts.FormParameterSubjectToken)
-		if unpacked, err := c.validate(ctx, requester, subjectTokenType, token); err != nil {
+		if unpacked, err := c.validate(ctx, requester, subjectTokenType, token, tokenRoleSubject); err != nil {
 			return err
 		} else {
 			session.SetSubjectToken(unpacked)
@@ -114,20 +114,16 @@ func (c *CustomJWTTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.Acc
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
 func (c *CustomJWTTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "password".
+	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, token string) (map[string]any, error) {
-	jwtType, _ := tokenType.(*JWTType)
-	if jwtType == nil {
-		return nil, errorsx.WithStack(
-			oauth2.ErrServerError.WithDebugf(
-				"Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
+func (c *CustomJWTTypeHandler) validate(ctx context.Context, requester oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, token string, role tokenRole) (map[string]any, error) {
+	jwtType, ok := tokenType.(*JWTType)
+	if !ok || jwtType == nil {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
 	}
 
-	// Parse the token
 	ftoken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, jwtType.ValidateFunc)
 	if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
@@ -137,6 +133,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 	if window == 0 {
 		window = 1 * time.Hour
 	}
+
 	claims := ftoken.Claims.ToMapClaims()
 
 	if issued, exists := claims[consts.ClaimIssuedAt]; exists {
@@ -145,15 +142,22 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, _ oauth2.AccessRequ
 		}
 	}
 
-	if _, exists := claims[consts.ClaimExpirationTime]; !exists { // Validate 'exp' is mandatory
+	if _, exists := claims[consts.ClaimExpirationTime]; !exists {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is missing."))
 	}
+
 	expiry := toInt64(claims[consts.ClaimExpirationTime])
 	if time.Now().Add(window).Before(time.Unix(expiry, 0)) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is too far in the future."))
 	}
 
-	if !claims.VerifyIssuer(jwtType.Issuer, true) {
+	iss, _ := claims[consts.ClaimIssuer].(string)
+	allowed := clientAllowedIssuers(requester.GetClient(), role)
+	if _, ok := ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
+		if len(allowed) > 0 {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
+		}
+
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
@@ -177,8 +181,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 	jwtType, _ := tokenType.(*JWTType)
 	if jwtType == nil {
 		return errorsx.WithStack(
-			oauth2.ErrServerError.WithDebugf(
-				"Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
+			oauth2.ErrServerError.WithDebugf("Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
 	}
 
 	session, ok := requester.GetSession().(openid.Session)
@@ -200,8 +203,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 		claims.Issuer = jwtType.Issuer
 	}
 
-	if len(requester.GetRequestedAudience()) > 0 {
-		claims.Audience = append(claims.Audience, requester.GetRequestedAudience()...)
+	if aud := oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource()); len(aud) > 0 {
+		claims.Audience = append(claims.Audience, aud...)
 	}
 
 	if len(claims.Audience) == 0 {

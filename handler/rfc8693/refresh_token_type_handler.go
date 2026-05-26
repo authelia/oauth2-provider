@@ -178,9 +178,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	}
 
 	response.SetAccessToken(refresh)
-	response.SetTokenType("N_A")
+	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.RefreshToken, c.RefreshTokenLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693RefreshToken)
 
 	return nil
 }

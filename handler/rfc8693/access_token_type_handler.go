@@ -217,6 +217,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	response.SetTokenType(oauth2.BearerAccessToken)
 	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.AccessToken, c.AccessTokenLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693AccessToken)
 
 	return nil
 }

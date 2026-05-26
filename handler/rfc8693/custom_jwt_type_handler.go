@@ -232,6 +232,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, requester oauth2.Acces
 	responder.SetAccessToken(token)
 	responder.SetTokenType(oauth2.RFC8693NAToken)
 	responder.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
+	responder.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
 
 	return nil
 }

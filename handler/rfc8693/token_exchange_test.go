@@ -130,6 +130,8 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			},
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
+				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
+					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
 				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
 
@@ -161,6 +163,8 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			},
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
+				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
+					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
 				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
 

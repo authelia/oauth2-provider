@@ -67,8 +67,8 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 		return err
 	}
 
-	// there is no need to check for https, because implicit flow does not require https
-	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
+	// There is no need to check for https, because implicit flow does not require https
+	// See; https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 
 	return c.IssueImplicitAccessToken(ctx, requester, responder)
 }
@@ -89,6 +89,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	if err = c.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, requester.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
+
 	responder.AddParameter(consts.AccessResponseAccessToken, token)
 	responder.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
 	responder.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)

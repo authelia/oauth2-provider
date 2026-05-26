@@ -81,7 +81,7 @@ func ExactAudienceMatchingStrategy(haystack []string, needle []string) error {
 
 // ValidateResourceIndicators validates resource and audience parameters ensuring they don't conflict and are properly formatted.
 // Returns an error if validation fails, such as when URIs are not absolute or contain a fragment.
-func ValidateResourceIndicators(form url.Values) (err error) {
+func ValidateResourceIndicators(form url.Values, allowLegacy bool) (err error) {
 	hasResource := form.Has(consts.FormParameterResource)
 	hasAudience := form.Has(consts.FormParameterAudience)
 
@@ -89,15 +89,15 @@ func ValidateResourceIndicators(form url.Values) (err error) {
 		return nil
 	}
 
-	if hasResource && hasAudience {
+	if hasResource && hasAudience && allowLegacy {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'resource' parameter is only allowed when the 'audience' parameter is not also present."))
 	}
 
-	if hasAudience {
+	if hasAudience && allowLegacy {
 		return nil
 	}
 
-	resources := GetRequestedResources(form)
+	resources := GetRequestedResources(form, allowLegacy)
 
 	for _, resource := range resources {
 		if err = ValidateResourceIndicatorURI(resource); err != nil {
@@ -153,25 +153,31 @@ func GetResourcesParameter(parameter string, form url.Values) (resources []strin
 // query parameters, while RFC 6749 says that that request parameter must not be included
 // more than once (and thus why we use space-delimited value). This function tries to satisfy both.
 // If "audience" form parameter is repeated, we do not split the value by space.
-func GetRequestedResources(form url.Values) (audiences []string) {
+func GetRequestedResources(form url.Values, allowLegacy bool) (audiences []string) {
 	var ok bool
 
 	if audiences, ok = GetResourcesParameter(consts.FormParameterResource, form); ok {
 		return audiences
 	}
 
-	if audiences, ok = GetResourcesParameter(consts.FormParameterAudience, form); ok {
-		return audiences
+	if allowLegacy {
+		if audiences, ok = GetResourcesParameter(consts.FormParameterAudience, form); ok {
+			return audiences
+		}
 	}
 
 	return []string{}
 }
 
+func HasRequestedResource(form url.Values, allowLegacy bool) bool {
+	return form.Has(consts.FormParameterResource) || (allowLegacy && form.Has(consts.FormParameterAudience))
+}
+
 //nolint:unparam
 func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request Requester) error {
-	audience := GetRequestedResources(request.GetRequestForm())
+	audience := GetRequestedResources(request.GetRequestForm(), f.Config.GetUseLegacyResourceIdentifierParameter(ctx))
 
-	if len(audience) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) && !request.GetRequestForm().Has(consts.FormParameterResource) {
+	if len(audience) == 0 && !HasRequestedResource(request.GetRequestForm(), f.Config.GetUseLegacyResourceIdentifierParameter(ctx)) {
 		if client, ok := request.GetClient().(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
 			audience = client.GetAudience()
 		}

@@ -128,6 +128,10 @@ type Config struct {
 	// should be used or not.
 	UseLegacyErrorFormat bool
 
+	// UseLegacyResourceIdentifierParameter controls whether the legacy resource identifier parameter 'audience'
+	// instead of the standard 'resource' parameter.
+	UseLegacyResourceIdentifierParameter bool
+
 	// GrantTypeJWTBearerCanSkipClientAuth indicates, if client authentication can be skipped, when using jwt as assertion.
 	GrantTypeJWTBearerCanSkipClientAuth bool
 
@@ -245,6 +249,10 @@ func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
 
 func (c *Config) GetUseLegacyErrorFormat(ctx context.Context) bool {
 	return c.UseLegacyErrorFormat
+}
+
+func (c *Config) GetUseLegacyResourceIdentifierParameter(ctx context.Context) bool {
+	return c.UseLegacyResourceIdentifierParameter
 }
 
 func (c *Config) GetRotatedGlobalSecrets(ctx context.Context) ([][]byte, error) {

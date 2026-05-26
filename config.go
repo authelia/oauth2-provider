@@ -400,6 +400,15 @@ type PushedAuthorizeRequestConfigProvider interface {
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
 }
 
+// AuthorizeErrorFieldResponseStrategyProvider returns the provider for configuring the authorize error field response
+// strategy.
 type AuthorizeErrorFieldResponseStrategyProvider interface {
 	GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy)
+}
+
+// UseLegacyResourceIdentifierProvider returns the provider for configuring whether to allow legacy resource identifiers.
+//
+// Deprecated: Do not use this flag anymore.
+type UseLegacyResourceIdentifierProvider interface {
+	GetUseLegacyResourceIdentifierParameter(ctx context.Context) bool
 }

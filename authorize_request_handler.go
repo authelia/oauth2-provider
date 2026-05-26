@@ -517,7 +517,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
-	if err = ValidateResourceIndicators(r.Form); err != nil {
+	if err = ValidateResourceIndicators(r.Form, f.Config.GetUseLegacyResourceIdentifierParameter(ctx)); err != nil {
 		return request, err
 	}
 

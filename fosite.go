@@ -201,6 +201,7 @@ type Configurator interface {
 	JWTStrategyProvider
 	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
+	UseLegacyResourceIdentifierProvider
 }
 
 func New(store Storage, config Configurator) *Fosite {

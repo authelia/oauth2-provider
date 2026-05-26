@@ -66,12 +66,12 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return requester, errors.New("Session must not be nil")
 	}
 
-	if err = ValidateResourceIndicators(requester.Form); err != nil {
+	if err = ValidateResourceIndicators(requester.Form, f.Config.GetUseLegacyResourceIdentifierParameter(ctx)); err != nil {
 		return requester, err
 	}
 
 	requester.SetRequestedScopes(RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " ")))
-	requester.SetRequestedAudience(GetRequestedResources(r.PostForm))
+	requester.SetRequestedAudience(GetRequestedResources(r.PostForm, f.Config.GetUseLegacyResourceIdentifierParameter(ctx)))
 
 	requester.GrantTypes = RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterGrantType), " "))
 

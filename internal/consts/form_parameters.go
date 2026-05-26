@@ -26,6 +26,7 @@ const (
 	FormParameterScope                                     = valueScope
 	FormParameterRegistration                              = "registration"
 	FormParameterAudience                                  = "audience"
+	FormParameterResource                                  = "resource"
 	FormParameterRefreshToken                              = valueRefreshToken
 	FormParameterIssuer                                    = valueIss
 	FormParameterToken                                     = "token"

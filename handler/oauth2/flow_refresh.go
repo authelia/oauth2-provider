@@ -114,8 +114,6 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		requester.SetRequestedAudience(orequest.GetGrantedAudience())
 	}
 
-	strategy := c.Config.GetScopeStrategy(ctx)
-
 	for _, scope := range requester.GetRequestedScopes() {
 		if !oscopes && !scopes.Has(scope) {
 			if client, ok := requester.GetClient().(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
@@ -128,7 +126,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The requested scope '%s' was not originally granted by the resource owner.", scope))
 		}
 
-		if !strategy(requester.GetClient().GetScopes(), scope) {
+		if !c.Config.GetScopeStrategy(ctx)(requester.GetClient().GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 
@@ -136,6 +134,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	}
 
 	if err = c.Config.GetAudienceStrategy(ctx)(requester.GetClient().GetAudience(), requester.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err = c.Config.GetAudienceStrategy(ctx)(orequest.GetGrantedAudience(), requester.GetRequestedAudience()); err != nil {
 		return err
 	}
 

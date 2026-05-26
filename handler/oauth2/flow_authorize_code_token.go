@@ -72,8 +72,15 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// Override scopes
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
-	// Override audiences
-	request.SetRequestedAudience(authorizeRequest.GetRequestedAudience())
+	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' (or 'audience')
+	// parameter, fall back to the audience granted at the authorize endpoint. Otherwise the
+	// resources requested at the token endpoint MUST be a subset of those granted at the
+	// authorize endpoint.
+	if len(request.GetRequestedAudience()) == 0 {
+		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
+	} else if err = c.Config.GetAudienceStrategy(ctx)(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
 
 	// The authorization server MUST ensure that the authorization code was issued to the authenticated
 	// confidential client, or if the client is public, ensure that the
@@ -143,19 +150,23 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
-	authorizeRequest, err := c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession())
-	if err != nil {
+
+	var ar oauth2.Requester
+
+	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, requester, code); err != nil {
-		// This needs to happen after store retrieval for the session to be hydrated properly
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
+	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, requester, code); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	}
 
-	for _, scope := range authorizeRequest.GetGrantedScopes() {
+	for _, scope := range ar.GetGrantedScopes() {
 		requester.GrantScope(scope)
 	}
 
-	for _, audience := range authorizeRequest.GetGrantedAudience() {
+	// Grant the audience requested at the token endpoint. HandleTokenEndpointRequest has
+	// already ensured this set is a subset of the authorize request's granted audience (or
+	// equal to it when no resource parameter was present at the token endpoint).
+	for _, audience := range requester.GetRequestedAudience() {
 		requester.GrantAudience(audience)
 	}
 
@@ -165,7 +176,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	}
 
 	var refresh, refreshSignature string
-	if canIssueRefreshToken(ctx, c, authorizeRequest) {
+	if canIssueRefreshToken(ctx, c, ar) {
 		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -215,7 +226,6 @@ func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, r
 }
 
 func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "authorization_code"
+	// The 'grant_type' parameter is REQUIRED and the value MUST be set to 'authorization_code'.
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

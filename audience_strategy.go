@@ -16,34 +16,18 @@ import (
 
 type AudienceMatchingStrategy func(haystack, needle []string) (err error)
 
-// ResourceMatchingStrategy matches requested RFC 8707 resource indicators against the client's
-// allowed audience list. Defaults to DefaultAudienceMatchingStrategy (URL-based matching).
-type ResourceMatchingStrategy func(haystack, needle []string) (err error)
 
+// DefaultAudienceMatchingStrategy matches requested audiences against the client's allowed audience list.
 func DefaultAudienceMatchingStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {
 		return nil
 	}
 
 	for _, n := range needle {
-		nu, err := url.Parse(n)
-		if err != nil {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Unable to parse requested audience '%s'.", n).WithWrap(err))
-		}
-
 		var found bool
-		for _, h := range haystack {
-			hu, err := url.Parse(h)
-			if err != nil {
-				return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Unable to parse whitelisted audience '%s'.", h).WithWrap(err))
-			}
 
-			allowedPath := strings.TrimRight(hu.Path, "/")
-			if nu.Scheme == hu.Scheme &&
-				nu.Host == hu.Host &&
-				(nu.Path == hu.Path ||
-					nu.Path == allowedPath ||
-					len(nu.Path) > len(allowedPath) && strings.TrimRight(nu.Path[:len(allowedPath)+1], "/")+"/" == allowedPath+"/") {
+		for _, h := range haystack {
+			if h == n {
 				found = true
 
 				break
@@ -56,6 +40,101 @@ func DefaultAudienceMatchingStrategy(haystack, needle []string) (err error) {
 	}
 
 	return nil
+}
+
+// ResourceMatchingStrategy matches requested RFC 8707 resource indicators against the client's
+// allowed audience list. Defaults to DefaultAudienceMatchingStrategy (URL-based matching).
+type ResourceMatchingStrategy func(haystack, needle []string) (err error)
+
+// DefaultResourceMatchingStrategy matches requested RFC 8707 resource indicators against the client's
+// allowed audience list.
+func DefaultResourceMatchingStrategy(haystack, needle []string) (err error) {
+	if len(needle) == 0 {
+		return nil
+	}
+
+	var nu, hu *url.URL
+
+	for _, n := range needle {
+		if nu, err = url.Parse(n); err != nil {
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested resource '%s' could not be parsed.", n).WithWrap(err))
+		}
+
+		var found bool
+		for _, h := range haystack {
+			if hu, err = url.Parse(h); err != nil {
+				continue
+			}
+
+			if IsMatchingResourceIndicator(hu, nu) {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested resource '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
+		}
+	}
+
+	return nil
+}
+
+// IsMatchingResourceIndicator returns true if needleURL is a subpath of haystackURL.
+func IsMatchingResourceIndicator(haystackURL, needleURL *url.URL) bool {
+	if needleURL.Scheme != haystackURL.Scheme || needleURL.Host != haystackURL.Host {
+		return false
+	}
+
+	return isPathOrSubpath(haystackURL.Path, needleURL.Path)
+}
+
+// isPathOrSubpath reports whether needlePath equals haystackPath or is a sub-path of it,
+// after normalizing trailing slashes. A sub-path must break on a path-segment boundary
+// so that '/users' does NOT match '/users123' but DOES match '/users/123'.
+//
+// Match — exact:
+//
+//	haystack=/api/users    needle=/api/users     ✓
+//
+// Match — trailing slash on either side:
+//
+//	haystack=/api/users/   needle=/api/users     ✓
+//	haystack=/api/users    needle=/api/users/    ✓
+//
+// Match — needle is a sub-path under the haystack:
+//
+//	haystack=/api/users    needle=/api/users/42  ✓
+//
+// No match — prefix without a segment boundary, or sibling path:
+//
+//	haystack=/api/users    needle=/api/users123  ✗
+//	haystack=/api/users    needle=/api/tenants   ✗
+func isPathOrSubpath(haystackPath, needlePath string) bool {
+	// 1. Exact equality, with whatever trailing slashes both sides happen to have.
+	if needlePath == haystackPath {
+		return true
+	}
+
+	// Strip any trailing '/' off the haystack so 'allowed' is the canonical form.
+	allowed := strings.TrimRight(haystackPath, "/")
+
+	// 2. Needle equals haystack-without-trailing-slash. Handles the case where the
+	//    haystack has a trailing slash but the needle does not.
+	if needlePath == allowed {
+		return true
+	}
+
+	// 3. Needle is strictly longer than the allowed haystack path AND the byte right
+	//    after the haystack prefix is a '/'. We check that boundary by taking
+	//    needle[:len(allowed)+1] and trimming a trailing '/' off — the result has to
+	//    equal `allowed`. (Equivalently: needle starts with allowed + "/".)
+	if len(needlePath) <= len(allowed) {
+		return false
+	}
+
+	return strings.TrimRight(needlePath[:len(allowed)+1], "/")+"/" == allowed+"/"
 }
 
 // ExactAudienceMatchingStrategy does not assume that audiences are URIs, but compares strings as-is and
@@ -72,6 +151,8 @@ func ExactAudienceMatchingStrategy(haystack, needle []string) (err error) {
 		for _, h := range haystack {
 			if n == h {
 				found = true
+
+				break
 			}
 		}
 

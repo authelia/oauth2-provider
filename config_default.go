@@ -437,7 +437,7 @@ func (c *Config) GetScopeStrategy(_ context.Context) ScopeStrategy {
 // (audience parameter values are matched against the client's allowed audience list via exact string equality).
 func (c *Config) GetAudienceStrategy(_ context.Context) AudienceMatchingStrategy {
 	if c.AudienceMatchingStrategy == nil {
-		c.AudienceMatchingStrategy = ExactAudienceMatchingStrategy
+		c.AudienceMatchingStrategy = DefaultAudienceMatchingStrategy
 	}
 
 	return c.AudienceMatchingStrategy
@@ -447,7 +447,7 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceMatchingStrategy
 // DefaultAudienceMatchingStrategy (URL-based matching against the client's allowed audience list).
 func (c *Config) GetResourceStrategy(_ context.Context) ResourceMatchingStrategy {
 	if c.ResourceMatchingStrategy == nil {
-		c.ResourceMatchingStrategy = ResourceMatchingStrategy(DefaultAudienceMatchingStrategy)
+		c.ResourceMatchingStrategy = DefaultAudienceMatchingStrategy
 	}
 
 	return c.ResourceMatchingStrategy

@@ -81,6 +81,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 		Config:                   config,
 		ScopeStrategy:            config.ScopeStrategy,
 		AudienceMatchingStrategy: config.AudienceMatchingStrategy,
+		ResourceMatchingStrategy: config.GetResourceStrategy(t.Context()),
 	}
 
 	accessTokenHandler := &AccessTokenTypeHandler{
@@ -129,6 +130,8 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			},
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
+				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
+					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
 				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
 
@@ -160,6 +163,8 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			},
 			expect: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				assert.NotEmpty(t, aresp.AccessToken, "Access token is empty; %+v", aresp)
+				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
+					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
 				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
 
@@ -175,7 +180,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			found := false
 			var err error
 			tc.areq.Form.Set("grant_type", string(oauth2.GrantTypeTokenExchange))
-			tc.areq.GrantTypes = oauth2.Arguments{"urn:ietf:params:oauth:grant-type:token-exchange"}
+			tc.areq.GrantTypes = oauth2.Arguments{consts.GrantTypeOAuthTokenExchange}
 			tc.areq.Client = store.Clients["my-client"]
 			for _, loader := range tc.handlers {
 				if !loader.CanHandleTokenEndpointRequest(ctx, tc.areq) {

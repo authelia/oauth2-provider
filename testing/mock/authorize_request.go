@@ -110,6 +110,20 @@ func (mr *MockAuthorizeRequesterMockRecorder) GetGrantedAudience() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGrantedAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).GetGrantedAudience))
 }
 
+// GetGrantedResource mocks base method.
+func (m *MockAuthorizeRequester) GetGrantedResource() oauth2.Arguments {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGrantedResource")
+	ret0, _ := ret[0].(oauth2.Arguments)
+	return ret0
+}
+
+// GetGrantedResource indicates an expected call of GetGrantedResource.
+func (mr *MockAuthorizeRequesterMockRecorder) GetGrantedResource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGrantedResource", reflect.TypeOf((*MockAuthorizeRequester)(nil).GetGrantedResource))
+}
+
 // GetGrantedScopes mocks base method.
 func (m *MockAuthorizeRequester) GetGrantedScopes() oauth2.Arguments {
 	m.ctrl.T.Helper()
@@ -194,6 +208,20 @@ func (mr *MockAuthorizeRequesterMockRecorder) GetRequestedAudience() *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRequestedAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).GetRequestedAudience))
 }
 
+// GetRequestedResource mocks base method.
+func (m *MockAuthorizeRequester) GetRequestedResource() oauth2.Arguments {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRequestedResource")
+	ret0, _ := ret[0].(oauth2.Arguments)
+	return ret0
+}
+
+// GetRequestedResource indicates an expected call of GetRequestedResource.
+func (mr *MockAuthorizeRequesterMockRecorder) GetRequestedResource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRequestedResource", reflect.TypeOf((*MockAuthorizeRequester)(nil).GetRequestedResource))
+}
+
 // GetRequestedScopes mocks base method.
 func (m *MockAuthorizeRequester) GetRequestedScopes() oauth2.Arguments {
 	m.ctrl.T.Helper()
@@ -274,6 +302,18 @@ func (m *MockAuthorizeRequester) GrantAudience(audience string) {
 func (mr *MockAuthorizeRequesterMockRecorder) GrantAudience(audience any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantAudience), audience)
+}
+
+// GrantResource mocks base method.
+func (m *MockAuthorizeRequester) GrantResource(resource string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "GrantResource", resource)
+}
+
+// GrantResource indicates an expected call of GrantResource.
+func (mr *MockAuthorizeRequesterMockRecorder) GrantResource(resource any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantResource", reflect.TypeOf((*MockAuthorizeRequester)(nil).GrantResource), resource)
 }
 
 // GrantScope mocks base method.
@@ -374,6 +414,18 @@ func (m *MockAuthorizeRequester) SetRequestedAudience(audience oauth2.Arguments)
 func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedAudience(audience any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedAudience", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedAudience), audience)
+}
+
+// SetRequestedResource mocks base method.
+func (m *MockAuthorizeRequester) SetRequestedResource(resource oauth2.Arguments) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetRequestedResource", resource)
+}
+
+// SetRequestedResource indicates an expected call of SetRequestedResource.
+func (mr *MockAuthorizeRequesterMockRecorder) SetRequestedResource(resource any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRequestedResource", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetRequestedResource), resource)
 }
 
 // SetRequestedScopes mocks base method.

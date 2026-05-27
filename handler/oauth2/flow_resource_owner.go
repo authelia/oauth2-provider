@@ -27,6 +27,7 @@ type ResourceOwnerPasswordCredentialsGrantHandler struct {
 	Config                                       interface {
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.AccessTokenLifespanProvider
@@ -55,6 +56,10 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	}
 
 	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 

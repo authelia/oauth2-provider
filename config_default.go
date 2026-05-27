@@ -79,8 +79,11 @@ type Config struct {
 	// ScopeStrategy sets the scope strategy that should be supported, for example oauth2.WildcardScopeStrategy.
 	ScopeStrategy ScopeStrategy
 
-	// AudienceMatchingStrategy sets the audience matching strategy that should be supported, defaults to oauth2.DefaultsAudienceMatchingStrategy.
+	// AudienceMatchingStrategy sets the audience matching strategy that should be supported, defaults to oauth2.ExactAudienceMatchingStrategy.
 	AudienceMatchingStrategy AudienceMatchingStrategy
+
+	// ResourceMatchingStrategy sets the RFC 8707 resource indicator matching strategy, defaults to oauth2.DefaultAudienceMatchingStrategy.
+	ResourceMatchingStrategy ResourceMatchingStrategy
 
 	ClientCredentialsFlowImplicitGrantRequested bool
 
@@ -430,13 +433,24 @@ func (c *Config) GetScopeStrategy(_ context.Context) ScopeStrategy {
 	return c.ScopeStrategy
 }
 
-// GetAudienceStrategy returns the scope strategy to be used. Defaults to glob scope strategy.
+// GetAudienceStrategy returns the audience matching strategy. Defaults to ExactAudienceMatchingStrategy
+// (audience parameter values are matched against the client's allowed audience list via exact string equality).
 func (c *Config) GetAudienceStrategy(_ context.Context) AudienceMatchingStrategy {
 	if c.AudienceMatchingStrategy == nil {
 		c.AudienceMatchingStrategy = DefaultAudienceMatchingStrategy
 	}
 
 	return c.AudienceMatchingStrategy
+}
+
+// GetResourceStrategy returns the RFC 8707 resource indicator matching strategy. Defaults to
+// DefaultAudienceMatchingStrategy (URL-based matching against the client's allowed audience list).
+func (c *Config) GetResourceStrategy(_ context.Context) ResourceMatchingStrategy {
+	if c.ResourceMatchingStrategy == nil {
+		c.ResourceMatchingStrategy = DefaultAudienceMatchingStrategy
+	}
+
+	return c.ResourceMatchingStrategy
 }
 
 func (c *Config) GetClientCredentialsFlowImplicitGrantRequested(_ context.Context) bool {

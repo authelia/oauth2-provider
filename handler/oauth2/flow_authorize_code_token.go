@@ -72,13 +72,19 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// Override scopes
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
-	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' (or 'audience')
-	// parameter, fall back to the audience granted at the authorize endpoint. Otherwise the
-	// resources requested at the token endpoint MUST be a subset of those granted at the
-	// authorize endpoint.
+	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' parameter, fall back
+	// to the resources granted at the authorize endpoint. Otherwise the resources requested at the
+	// token endpoint MUST be a subset of those granted at the authorize endpoint. The same rule
+	// is applied to the 'audience' parameter.
 	if len(request.GetRequestedAudience()) == 0 {
 		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
 	} else if err = c.Config.GetAudienceStrategy(ctx)(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if len(request.GetRequestedResource()) == 0 {
+		request.SetRequestedResource(authorizeRequest.GetGrantedResource())
+	} else if err = c.Config.GetResourceStrategy(ctx)(authorizeRequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
@@ -163,11 +169,15 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		requester.GrantScope(scope)
 	}
 
-	// Grant the audience requested at the token endpoint. HandleTokenEndpointRequest has
-	// already ensured this set is a subset of the authorize request's granted audience (or
-	// equal to it when no resource parameter was present at the token endpoint).
+	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest
+	// has already ensured these sets are subsets of the authorize request's granted values (or
+	// equal to them when the corresponding parameter was absent at the token endpoint).
 	for _, audience := range requester.GetRequestedAudience() {
 		requester.GrantAudience(audience)
+	}
+
+	for _, resource := range requester.GetRequestedResource() {
+		requester.GrantResource(resource)
 	}
 
 	access, accessSignature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, requester)

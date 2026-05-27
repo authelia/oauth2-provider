@@ -28,7 +28,7 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	// Validate that the actor or client is allowed to make this request
+	// Validate that the actor or client is allowed to make this request.
 	subjectTokenObject := session.GetSubjectToken()
 	if mayAct, _ := subjectTokenObject[consts.ClaimAuthorizedActor].(map[string]any); mayAct != nil {
 		actorTokenObject := session.GetActorToken()
@@ -61,7 +61,6 @@ func (c *ActorTokenValidationHandler) CanSkipClientAuth(ctx context.Context, req
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
 func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	// grant_type REQUIRED.
-	// Value MUST be set to "password".
+	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }

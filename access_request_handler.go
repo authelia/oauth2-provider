@@ -71,7 +71,8 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	}
 
 	requester.SetRequestedScopes(RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " ")))
-	requester.SetRequestedAudience(GetRequestedResources(r.PostForm))
+	requester.SetRequestedAudience(GetRequestedAudiences(r.PostForm))
+	requester.SetRequestedResource(GetRequestedResources(r.PostForm))
 
 	requester.GrantTypes = RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterGrantType), " "))
 

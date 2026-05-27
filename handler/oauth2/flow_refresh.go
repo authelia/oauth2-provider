@@ -28,6 +28,7 @@ type RefreshTokenGrantHandler struct {
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
 	}
 }
@@ -114,6 +115,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		requester.SetRequestedAudience(orequest.GetGrantedAudience())
 	}
 
+	if len(requester.GetRequestedResource()) == 0 {
+		requester.SetRequestedResource(orequest.GetGrantedResource())
+	}
+
 	for _, scope := range requester.GetRequestedScopes() {
 		if !oscopes && !scopes.Has(scope) {
 			if client, ok := requester.GetClient().(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
@@ -143,6 +148,18 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	for _, audience := range requester.GetRequestedAudience() {
 		requester.GrantAudience(audience)
+	}
+
+	if err = c.Config.GetResourceStrategy(ctx)(requester.GetClient().GetAudience(), requester.GetRequestedResource()); err != nil {
+		return err
+	}
+
+	if err = c.Config.GetResourceStrategy(ctx)(orequest.GetGrantedResource(), requester.GetRequestedResource()); err != nil {
+		return err
+	}
+
+	for _, resource := range requester.GetRequestedResource() {
+		requester.GrantResource(resource)
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))

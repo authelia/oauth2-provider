@@ -228,7 +228,7 @@ func (r *IntrospectionResponse) ToMap() (audience []string, introspection map[st
 			}
 		}
 
-		if aud = ar.GetGrantedAudience(); len(aud) > 0 {
+		if aud = JoinGrantedAudienceAndResource(ar.GetGrantedAudience(), ar.GetGrantedResource()); len(aud) > 0 {
 			introspection[consts.ClaimAudience] = []string(aud)
 		}
 	}

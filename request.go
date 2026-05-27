@@ -25,6 +25,8 @@ type Request struct {
 	Session           Session      `json:"session" gorethink:"session"`
 	RequestedAudience Arguments    `json:"requestedAudience"`
 	GrantedAudience   Arguments    `json:"grantedAudience"`
+	RequestedResource Arguments    `json:"requestedResource"`
+	GrantedResource   Arguments    `json:"grantedResource"`
 	Lang              language.Tag `json:"-"`
 }
 
@@ -34,6 +36,8 @@ func NewRequest() *Request {
 		RequestedScope:    Arguments{},
 		RequestedAudience: Arguments{},
 		GrantedAudience:   Arguments{},
+		RequestedResource: Arguments{},
+		GrantedResource:   Arguments{},
 		GrantedScope:      Arguments{},
 		Form:              url.Values{},
 		RequestedAt:       time.Now().UTC(),
@@ -73,6 +77,7 @@ func (a *Request) GetRequestedScopes() Arguments {
 
 func (a *Request) SetRequestedScopes(s Arguments) {
 	a.RequestedScope = nil
+
 	for _, scope := range s {
 		a.AppendRequestedScope(scope)
 	}
@@ -80,6 +85,7 @@ func (a *Request) SetRequestedScopes(s Arguments) {
 
 func (a *Request) SetRequestedAudience(s Arguments) {
 	a.RequestedAudience = nil
+
 	for _, scope := range s {
 		a.AppendRequestedAudience(scope)
 	}
@@ -91,6 +97,7 @@ func (a *Request) AppendRequestedScope(scope string) {
 			return
 		}
 	}
+
 	a.RequestedScope = append(a.RequestedScope, scope)
 }
 
@@ -100,6 +107,7 @@ func (a *Request) AppendRequestedAudience(audience string) {
 			return
 		}
 	}
+
 	a.RequestedAudience = append(a.RequestedAudience, audience)
 }
 
@@ -113,7 +121,44 @@ func (a *Request) GrantAudience(audience string) {
 			return
 		}
 	}
+
 	a.GrantedAudience = append(a.GrantedAudience, audience)
+}
+
+func (a *Request) SetRequestedResource(s Arguments) {
+	a.RequestedResource = nil
+
+	for _, resource := range s {
+		a.AppendRequestedResource(resource)
+	}
+}
+
+func (a *Request) AppendRequestedResource(resource string) {
+	for _, has := range a.RequestedResource {
+		if resource == has {
+			return
+		}
+	}
+
+	a.RequestedResource = append(a.RequestedResource, resource)
+}
+
+func (a *Request) GetRequestedResource() Arguments {
+	return a.RequestedResource
+}
+
+func (a *Request) GrantResource(resource string) {
+	for _, has := range a.GrantedResource {
+		if resource == has {
+			return
+		}
+	}
+
+	a.GrantedResource = append(a.GrantedResource, resource)
+}
+
+func (a *Request) GetGrantedResource() Arguments {
+	return a.GrantedResource
 }
 
 func (a *Request) GetGrantedScopes() Arguments {
@@ -145,6 +190,7 @@ func (a *Request) Merge(request Requester) {
 	for _, scope := range request.GetRequestedScopes() {
 		a.AppendRequestedScope(scope)
 	}
+
 	for _, scope := range request.GetGrantedScopes() {
 		a.GrantScope(scope)
 	}
@@ -152,8 +198,17 @@ func (a *Request) Merge(request Requester) {
 	for _, aud := range request.GetRequestedAudience() {
 		a.AppendRequestedAudience(aud)
 	}
+
 	for _, aud := range request.GetGrantedAudience() {
 		a.GrantAudience(aud)
+	}
+
+	for _, resource := range request.GetRequestedResource() {
+		a.AppendRequestedResource(resource)
+	}
+
+	for _, resource := range request.GetGrantedResource() {
+		a.GrantResource(resource)
 	}
 
 	a.ID = request.GetID()

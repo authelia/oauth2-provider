@@ -29,6 +29,7 @@ type AuthorizeExplicitGrantHandler struct {
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 		oauth2.RedirectSecureCheckerProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.OmitRedirectScopeParamProvider
@@ -70,6 +71,10 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 	}
 
 	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
 		return err
 	}
 

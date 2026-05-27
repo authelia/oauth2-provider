@@ -19,12 +19,17 @@ import (
 )
 
 type AccessTokenTypeHandler struct {
-	Config               oauth2.RFC8693ConfigProvider
+	Config oauth2.RFC8693ConfigProvider
+
 	AccessTokenLifespan  time.Duration
 	RefreshTokenLifespan time.Duration
-	RefreshTokenScopes   []string
-	hoauth2.CoreStrategy
+
+	RefreshTokenScopes []string
+
 	ScopeStrategy oauth2.ScopeStrategy
+
+	hoauth2.CoreStrategy
+
 	Storage
 }
 
@@ -124,8 +129,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 	)
 
 	if session, ok = requester.GetSession().(Session); !ok || session == nil {
-		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug(
-			"Failed to perform token exchange because the session is not of the right type."))
+		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
 	client := requester.GetClient()
@@ -154,14 +158,14 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 	if subjectTokenClient, ok = original.GetClient().(Client); ok {
 		allowed := subjectTokenClient.GetTokenExchangePermitted(client)
 		if !allowed {
-			return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHintf(
-				"The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
+			return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
 		}
 	}
 
 	// Validate the scopes.
+	scopeStrategy := c.GetScopeStrategy(ctx)
 	for _, scope := range requester.GetRequestedScopes() {
-		if !c.ScopeStrategy(original.GetGrantedScopes(), scope) {
+		if !scopeStrategy(original.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
 	}
@@ -171,7 +175,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 
 	claims[consts.ClaimClientIdentifier] = original.GetClient().GetID()
 	claims[consts.ClaimScope] = original.GetGrantedScopes()
-	claims[consts.ClaimAudience] = original.GetGrantedAudience()
+	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource())
 
 	return original.GetSession(), claims, nil
 }
@@ -211,8 +215,9 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.BearerAccessToken)
-	response.SetExpiresIn(c.getExpiresIn(request, oauth2.AccessToken, c.AccessTokenLifespan, time.Now().UTC()))
+	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.AccessToken, c.AccessTokenLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693AccessToken)
 
 	return nil
 }
@@ -231,7 +236,16 @@ func (c *AccessTokenTypeHandler) canIssueRefreshToken(request oauth2.Requester) 
 	return true
 }
 
-func (c *AccessTokenTypeHandler) getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
+// GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
+func (c *AccessTokenTypeHandler) GetScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+	if c.ScopeStrategy != nil {
+		return c.ScopeStrategy
+	}
+
+	return c.Config.GetScopeStrategy(ctx)
+}
+
+func (c *AccessTokenTypeHandler) GetExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan
 	}

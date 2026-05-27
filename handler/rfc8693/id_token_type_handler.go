@@ -19,10 +19,12 @@ import (
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
-	Config             oauth2.Configurator
+	Config oauth2.Configurator
+
 	Strategy           jwt.Strategy
 	IssueStrategy      openid.OpenIDConnectTokenStrategy
 	ValidationStrategy openid.TokenValidationStrategy
+
 	Storage
 }
 
@@ -46,7 +48,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 	if form.Get(consts.FormParameterActorTokenType) == consts.TokenTypeRFC8693IDToken {
 		token := form.Get(consts.FormParameterActorToken)
-		if unpacked, err := c.validate(ctx, request, token); err != nil {
+		if unpacked, err := c.validate(ctx, request, token, tokenRoleActor); err != nil {
 			return err
 		} else {
 			session.SetActorToken(unpacked)
@@ -55,7 +57,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 	if form.Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693IDToken {
 		token := form.Get(consts.FormParameterSubjectToken)
-		if unpacked, err := c.validate(ctx, request, token); err != nil {
+		if unpacked, err := c.validate(ctx, request, token, tokenRoleSubject); err != nil {
 			return err
 		} else {
 			// Get the subject and populate session
@@ -82,10 +84,9 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
+
 	if requestedTokenType == "" {
-		if config, ok := c.Config.(oauth2.RFC8693ConfigProvider); ok {
-			requestedTokenType = config.GetDefaultRFC8693RequestedTokenType(ctx)
-		}
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
 	if requestedTokenType != consts.TokenTypeRFC8693IDToken {
@@ -112,7 +113,7 @@ func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, 
 	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (map[string]any, error) {
+func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (map[string]any, error) {
 	claims, err := c.ValidationStrategy.ValidateIDToken(ctx, request, token)
 	if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the id_token").WithWrap(err).WithDebugError(err))
@@ -123,7 +124,13 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 		expectedIssuer = config.GetAccessTokenIssuer(ctx)
 	}
 
-	if !claims.VerifyIssuer(expectedIssuer, true) {
+	iss, _ := claims[consts.ClaimIssuer].(string)
+	allowed := clientAllowedIssuers(request.GetClient(), role)
+	if _, ok := ValidateIssuer(iss, expectedIssuer, allowed); !ok {
+		if len(allowed) > 0 {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
+		}
+
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", expectedIssuer))
 	}
 
@@ -137,8 +144,7 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	session, ok := request.GetSession().(openid.Session)
 	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug(
-			"Failed to generate ID Token because session must be of type 'openid.Session'."))
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because session must be of type 'openid.Session'."))
 	}
 
 	claims := session.IDTokenClaims()
@@ -152,7 +158,8 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 	}
 
 	response.SetAccessToken(token)
-	response.SetTokenType("N_A")
+	response.SetTokenType(oauth2.RFC8693NAToken)
+	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693IDToken)
 
 	return nil
 }

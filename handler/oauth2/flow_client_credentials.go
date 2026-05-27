@@ -18,6 +18,7 @@ type ClientCredentialsGrantHandler struct {
 	Config interface {
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 		oauth2.AccessTokenLifespanProvider
 		oauth2.ClientCredentialsImplicitProvider
 	}
@@ -57,13 +58,18 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	audience := requester.GetRequestedAudience()
+	resource := requester.GetRequestedResource()
 
-	if len(audience) == 0 && !requester.GetRequestForm().Has(consts.FormParameterAudience) {
+	if len(audience) == 0 && len(resource) == 0 && !requester.GetRequestForm().Has(consts.FormParameterAudience) && !requester.GetRequestForm().Has(consts.FormParameterResource) {
 		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
 			requester.SetRequestedAudience(ac.GetAudience())
 		}
 	} else {
-		if err = c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+		if err = c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), audience); err != nil {
+			return err
+		}
+
+		if err = c.Config.GetResourceStrategy(ctx)(client.GetAudience(), resource); err != nil {
 			return err
 		}
 	}
@@ -95,6 +101,12 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		if len(requester.GetGrantedAudience()) == 0 {
 			for _, audience := range requester.GetRequestedAudience() {
 				requester.GrantAudience(audience)
+			}
+		}
+
+		if len(requester.GetGrantedResource()) == 0 {
+			for _, resource := range requester.GetRequestedResource() {
+				requester.GrantResource(resource)
 			}
 		}
 	}

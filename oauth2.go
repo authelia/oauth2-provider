@@ -309,6 +309,18 @@ type Requester interface {
 	// GrantAudience marks a request's audience as granted.
 	GrantAudience(audience string)
 
+	// GetRequestedResource returns the requested resource indicators (RFC 8707) for this request.
+	GetRequestedResource() (resource Arguments)
+
+	// SetRequestedResource sets the requested resource indicators.
+	SetRequestedResource(resource Arguments)
+
+	// GetGrantedResource returns all granted resource indicators.
+	GetGrantedResource() (grantedResource Arguments)
+
+	// GrantResource marks a request's resource indicator as granted.
+	GrantResource(resource string)
+
 	// GetSession returns a pointer to the request's session or nil if none is set.
 	GetSession() (session Session)
 

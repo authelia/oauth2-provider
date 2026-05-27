@@ -16,7 +16,6 @@ import (
 
 type AudienceMatchingStrategy func(haystack, needle []string) (err error)
 
-
 // DefaultAudienceMatchingStrategy matches requested audiences against the client's allowed audience list.
 func DefaultAudienceMatchingStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {

@@ -42,6 +42,8 @@ In an effort to assist users who wish to use this library we aim to maintain the
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6584d3495422a97ef9aba92e762ffaebce010dd0)</sup>
     - [x] Original request id not set early enough
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6584d3495422a97ef9aba92e762ffaebce010dd0)</sup>
+    - [x] RFC7523 issued at is not validated
+          <sup>[commit](https://github.com/authelia/oauth2-provider/commit/7e88aedbf3a68d2cc99f5813dd472b75a0d20ad8)</sup>
   - PKCE Flow:
     - [x] Session generated needlessly
           <sup>[commit](https://github.com/authelia/oauth2-provider/commit/dbdadf5dee92d13683eeacaa198c28d6704ddb1c)</sup>
@@ -86,6 +88,9 @@ In an effort to assist users who wish to use this library we aim to maintain the
         support
   - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
   - [x] [RFC9101: OAuth 2.0 JWT-Secured Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9101)
+  - [x] [RFC8707: OAuth 2.0 Resource Indicators](https://www.rfc-editor.org/rfc/rfc8707.html)
+        <sup>[commit](https://github.com/authelia/oauth2-provider/commit/36bbd39b4618d70ecd7849d5313c12c412d29dd0)
+        [commit](https://github.com/authelia/oauth2-provider/commit/7a78d5fc376dfc4d0501bd17793290ca7c1c8deb)</sup>
   - [ ] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
         support
   - Response Mode Rework:
@@ -126,6 +131,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] `github.com/form3tech-oss/jwt-go`
   - [x] `github.com/dgrijalva/jwt-go`
   - [x] `github.com/golang-jwt/jwt`
+  - [x] `github.com/parnurzeal/gorequest`
 - Migration of the following dependencies:
   - [x] `github.com/go-jose/go-jose/v3` => `github.com/go-jose/go-jose/v4`
   - [x] `github.com/golang/mock` => `github.com/uber-go/mock`

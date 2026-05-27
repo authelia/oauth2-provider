@@ -14,7 +14,7 @@ import (
 // and registers an access token, refresh token and authorize code validator.
 func RFC7523AssertionGrantFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc7523.Handler{
-		Storage: storage.(rfc7523.RFC7523KeyStorage),
+		Storage: storage.(rfc7523.Storage),
 		HandleHelper: &hoauth2.HandleHelper{
 			AccessTokenStrategy: strategy.(hoauth2.AccessTokenStrategy),
 			AccessTokenStorage:  storage.(hoauth2.AccessTokenStorage),

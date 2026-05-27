@@ -48,6 +48,7 @@ func (a *Request) GetID() string {
 	if a.ID == "" {
 		a.ID = uuid.New().String()
 	}
+
 	return a.ID
 }
 

@@ -20,7 +20,7 @@ import (
 )
 
 type Handler struct {
-	Storage RFC7523KeyStorage
+	Storage Storage
 
 	Config interface {
 		oauth2.AccessTokenLifespanProvider
@@ -88,7 +88,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
-	scopes, err := c.Storage.GetPublicKeyScopes(ctx, claims.Issuer, claims.Subject, key.KeyID)
+	scopes, err := c.Storage.GetRFC7523PublicKeyScopes(ctx, claims.Issuer, claims.Subject, key.KeyID)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -100,7 +100,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	}
 
 	if claims.ID != "" {
-		if err = c.Storage.MarkJWTUsedForTime(ctx, claims.ID, claims.Expiry.Time()); err != nil {
+		if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
@@ -224,14 +224,14 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	keyNotFoundErr := oauth2.ErrInvalidGrant.WithHintf("No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.", unverifiedClaims.Issuer, unverifiedClaims.Subject)
 
 	if keyID != "" {
-		key, err := c.Storage.GetPublicKey(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject, keyID)
+		key, err := c.Storage.GetRFC7523PublicKey(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject, keyID)
 		if err != nil {
 			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
 		}
 		return key, nil
 	}
 
-	keys, err := c.Storage.GetPublicKeys(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject)
+	keys, err := c.Storage.GetRFC7523PublicKeys(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject)
 	if err != nil {
 		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
 	}
@@ -313,7 +313,7 @@ verify:
 	}
 
 	if claims.ID != "" {
-		used, err := c.Storage.IsJWTUsed(ctx, claims.ID)
+		used, err := c.Storage.IsRFC7523JWTUsed(ctx, claims.Issuer, claims.ID)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}

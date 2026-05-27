@@ -438,6 +438,116 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	)
 }
 
+// TestAssertionTypeHeaderAbsent — RFC 7519 §5.1 says the 'typ' header is RECOMMENDED but not
+// required. An assertion without a 'typ' header should still be accepted.
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderAbsent() {
+	ctx := context.Background()
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
+	pubKey := s.createJWK(s.privateKey.Public(), keyID)
+	cl := s.createStandardClaim()
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, ""))
+	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
+
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
+
+	s.NoError(err, "no error expected, an absent 'typ' header is allowed per RFC 7519 §5.1")
+}
+
+// TestAssertionTypeHeaderApplicationJWT — RFC 8725 §3.11 treats 'application/jwt' as equivalent
+// to 'JWT' (RFC 6838 media-type names are case-insensitive).
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderApplicationJWT() {
+	ctx := context.Background()
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
+	pubKey := s.createJWK(s.privateKey.Public(), keyID)
+	cl := s.createStandardClaim()
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "application/jwt"))
+	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
+
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
+
+	s.NoError(err, "no error expected, 'application/jwt' is equivalent to 'JWT'")
+}
+
+// TestAssertionTypeHeaderLowercaseJWT — RFC 6838 media-type names are case-insensitive.
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderLowercaseJWT() {
+	ctx := context.Background()
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
+	pubKey := s.createJWK(s.privateKey.Public(), keyID)
+	cl := s.createStandardClaim()
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "jwt"))
+	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.ID, cl.Expiry.Time()).Return(nil)
+
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
+
+	s.NoError(err, "no error expected, 'typ' header comparison is case-insensitive")
+}
+
+// TestAssertionTypeHeaderNonJWTRejected — RFC 8725 §3.11. A 'typ' that identifies a different
+// JWT profile (DPoP proof, secevent, etc.) MUST NOT be accepted as an authorization-grant
+// assertion. Defends against cross-profile substitution.
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderNonJWTRejected() {
+	ctx := context.Background()
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
+	cl := s.createStandardClaim()
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "dpop+jwt"))
+
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
+
+	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
+	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because 'typ' header is not 'JWT'")
+	s.Equal(
+		"The JWT in 'assertion' request parameter has an invalid 'typ' header value 'dpop+jwt'; expected 'JWT'.",
+		oauth2.ErrorToRFC6749Error(err).HintField,
+	)
+}
+
+// TestAssertionWithIssueDateInFuture — RFC 7519 §4.1.6 says 'iat' identifies the time at
+// which the JWT was issued, so any value at or after `now` is invalid. The handler's check
+// uses `!iat.Before(now)` (symmetric with the nbf check), rejecting both 'iat == now' and
+// 'iat > now'.
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateInFuture() {
+	// arrange
+	ctx := context.Background()
+	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	keyID := keyID
+	pubKey := s.createJWK(s.privateKey.Public(), keyID)
+	issuedAt := time.Now().Add(2 * time.Hour)
+	cl := s.createStandardClaim()
+	cl.IssuedAt = jwt.NewNumericDate(issuedAt)
+	cl.Expiry = jwt.NewNumericDate(issuedAt.Add(30 * time.Minute))
+	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
+	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
+	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+
+	// act
+	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
+
+	// assert
+	s.True(errors.Is(err, oauth2.ErrInvalidGrant))
+	s.EqualError(err, oauth2.ErrInvalidGrant.Error(), "expected error, because assertion 'iat' claim is in the future")
+	s.Equal(
+		fmt.Sprintf(
+			"The JWT in 'assertion' request parameter contains an 'iat' (issued at) claim, that identifies the time '%s' which is after the current time",
+			cl.IssuedAt.Time().Format(time.RFC3339),
+		),
+		oauth2.ErrorToRFC6749Error(err).HintField,
+	)
+}
+
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFarInPast() {
 	// arrange
 	ctx := context.Background()
@@ -756,8 +866,20 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestIsValidWhenClientA
 }
 
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createTestAssertion(cl jwt.Claims, keyID string) string {
+	return s.createTestAssertionWithType(cl, keyID, "JWT")
+}
+
+// createTestAssertionWithType signs the same way as createTestAssertion but lets the caller
+// choose the JOSE 'typ' header. Pass "" to omit the header entirely.
+func (s *AuthorizeJWTGrantRequestHandlerTestSuite) createTestAssertionWithType(cl jwt.Claims, keyID, typ string) string {
 	jwk := jose.JSONWebKey{Key: s.privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}
-	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jwk}, (&jose.SignerOptions{}).WithType("JWT"))
+
+	opts := &jose.SignerOptions{}
+	if typ != "" {
+		opts = opts.WithType(jose.ContentType(typ))
+	}
+
+	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jwk}, opts)
 	if err != nil {
 		s.FailNowf("failed to create test assertion", "failed to create signer: %s", err.Error())
 	}

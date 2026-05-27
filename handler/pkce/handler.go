@@ -43,8 +43,11 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, requester 
 		return err
 	}
 
-	// We don't need a session if it's not enforced and the PKCE parameters are not provided by the client.
-	if len(challenge) == 0 && len(method) == 0 {
+	if len(challenge) == 0 {
+		if len(method) != 0 {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client requested PKCE but no challenge was provided in the authorize request."))
+		}
+
 		return nil
 	}
 

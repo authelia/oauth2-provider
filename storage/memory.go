@@ -416,7 +416,7 @@ func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) e
 	return nil
 }
 
-func (s *MemoryStore) GetPublicKey(ctx context.Context, issuer string, subject string, keyId string) (*jose.JSONWebKey, error) {
+func (s *MemoryStore) GetRFC7523PublicKey(ctx context.Context, issuer string, subject string, keyId string) (*jose.JSONWebKey, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
 
@@ -431,7 +431,7 @@ func (s *MemoryStore) GetPublicKey(ctx context.Context, issuer string, subject s
 	return nil, oauth2.ErrNotFound
 }
 
-func (s *MemoryStore) GetPublicKeys(ctx context.Context, issuer string, subject string) (*jose.JSONWebKeySet, error) {
+func (s *MemoryStore) GetRFC7523PublicKeys(ctx context.Context, issuer string, subject string) (*jose.JSONWebKeySet, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
 
@@ -453,7 +453,7 @@ func (s *MemoryStore) GetPublicKeys(ctx context.Context, issuer string, subject 
 	return nil, oauth2.ErrNotFound
 }
 
-func (s *MemoryStore) GetPublicKeyScopes(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
+func (s *MemoryStore) GetRFC7523PublicKeyScopes(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
 
@@ -468,8 +468,8 @@ func (s *MemoryStore) GetPublicKeyScopes(ctx context.Context, issuer string, sub
 	return nil, oauth2.ErrNotFound
 }
 
-func (s *MemoryStore) IsJWTUsed(ctx context.Context, jti string) (bool, error) {
-	err := s.ClientAssertionJWTValid(ctx, jti)
+func (s *MemoryStore) IsRFC7523JWTUsed(ctx context.Context, issuer, jti string) (bool, error) {
+	err := s.ClientAssertionJWTValid(ctx, scopedJTI(issuer, jti))
 	if err != nil {
 		return true, nil
 	}
@@ -477,8 +477,15 @@ func (s *MemoryStore) IsJWTUsed(ctx context.Context, jti string) (bool, error) {
 	return false, nil
 }
 
-func (s *MemoryStore) MarkJWTUsedForTime(ctx context.Context, jti string, exp time.Time) error {
-	return s.SetClientAssertionJWT(ctx, jti, exp)
+func (s *MemoryStore) MarkRFC7523JWTUsedForTime(ctx context.Context, issuer, jti string, exp time.Time) error {
+	return s.SetClientAssertionJWT(ctx, scopedJTI(issuer, jti), exp)
+}
+
+// scopedJTI namespaces a JWT's 'jti' value by its issuer so that the shared
+// BlacklistedJTIs map enforces RFC 7519 §4.1.7 jti-uniqueness-per-issuer semantics
+// rather than treating jti as globally unique.
+func scopedJTI(issuer, jti string) string {
+	return issuer + "\x00" + jti
 }
 
 // CreatePARSession stores the pushed authorization request context. The requestURI is used to derive the key.

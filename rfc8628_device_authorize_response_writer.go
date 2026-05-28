@@ -10,6 +10,7 @@ import (
 
 func (f *Fosite) NewRFC862DeviceAuthorizeResponse(ctx context.Context, r DeviceAuthorizeRequester, session Session) (DeviceAuthorizeResponder, error) {
 	r.SetSession(session)
+
 	var resp = NewDeviceAuthorizeResponse()
 
 	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointHandlers(ctx) {

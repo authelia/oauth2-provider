@@ -22,7 +22,7 @@ const (
 )
 
 // NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
-func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error) {
+func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error) {
 	request := NewAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
@@ -30,16 +30,17 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'POST'.", r.Method))
 	}
 
-	if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
+
 	request.Form = r.Form
 	request.State = request.Form.Get(consts.FormParameterState)
 
-	// Authenticate the client in the same way as at the token endpoint
-	// (Section 2.3 of [RFC6749]).
-	client, _, err := f.AuthenticateClient(ctx, r, r.Form)
-	if err != nil {
+	var client Client
+
+	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
+	if client, _, err = f.AuthenticateClient(ctx, r, r.Form); err != nil {
 		var rfcerr *RFC6749Error
 		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
 			return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err))
@@ -47,6 +48,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 		return request, err
 	}
+
 	request.Client = client
 
 	// Reject the request if the "request_uri" authorization request parameter is provided.
@@ -60,15 +62,16 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		r.Form.Set(consts.ClaimClientIdentifier, client.GetID())
 	}
 
+	var frequest AuthorizeRequester
+
 	// Validate as if this is a new authorize request.
-	fr, err := f.newAuthorizeRequest(ctx, r, true)
-	if err != nil {
-		return fr, err
+	if frequest, err = f.newAuthorizeRequest(ctx, r, true); err != nil {
+		return frequest, err
 	}
 
-	if fr.GetRequestedScopes().Has(consts.ScopeOpenID) && r.Form.Get(consts.FormParameterRedirectURI) == "" {
-		return fr, errorsx.WithStack(ErrInvalidRequest.WithHint("Query parameter 'redirect_uri' is required when performing an OpenID Connect flow."))
+	if frequest.GetRequestedScopes().Has(consts.ScopeOpenID) && r.Form.Get(consts.FormParameterRedirectURI) == "" {
+		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Query parameter 'redirect_uri' is required when performing an OpenID Connect flow."))
 	}
 
-	return fr, nil
+	return frequest, nil
 }

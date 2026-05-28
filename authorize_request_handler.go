@@ -22,6 +22,133 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error) {
+	switch r.Method {
+	case http.MethodGet, http.MethodPost:
+		return f.newAuthorizeRequest(ctx, r, false)
+	default:
+		request := NewAuthorizeRequest()
+		request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
+
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'GET' or 'POST'.", r.Method))
+	}
+}
+
+// TODO: Refactor time permitting.
+//
+//nolint:gocyclo
+func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (requester AuthorizeRequester, err error) {
+	request := NewAuthorizeRequest()
+	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
+
+	ctx = context.WithValue(ctx, RequestContextKey, r)
+	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
+
+	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
+	}
+
+	request.Form = r.Form
+
+	request.State = request.Form.Get(consts.FormParameterState)
+
+	if !isPARRequest {
+		var isPAR bool
+
+		if isPAR, err = f.authorizeRequestFromPAR(ctx, r, request); err != nil {
+			return request, err
+		}
+
+		if isPAR {
+			return request, nil
+		}
+
+		if config, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && config.GetRequirePushedAuthorizationRequests(ctx) {
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebug("The Authorization Server policy requires Pushed Authorization Requests be used for all clients."))
+		}
+	}
+
+	var client Client
+
+	if client, err = f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID)); err != nil {
+		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
+	}
+
+	if !isPARRequest {
+		if parc, ok := client.(PushedAuthorizationRequestClient); ok && parc.GetRequirePushedAuthorizationRequests() {
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The registered OAuth 2.0 client with id '%s' is registered with a policy which requires Pushed Authorization Requests be used.", parc.GetID()))
+		}
+	}
+
+	request.Client = client
+
+	// Now that the base fields (state and client) are populated, we extract all the information
+	// from the request object or request object uri, if one is set.
+	//
+	// All other parse methods should come afterwards so that we ensure that the data is taken
+	// from the request_object if set.
+	if err = f.authorizeRequestParametersFromJAR(ctx, request, isPARRequest); err != nil {
+		return request, err
+	}
+
+	// The request context is now fully available and we can start processing the individual
+	// fields.
+	if err = f.ParseResponseMode(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if err = f.validateAuthorizeRedirectURI(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if err = f.validateScope(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if err = ValidateResourceIndicators(request.Form); err != nil {
+		return request, err
+	}
+
+	if err = f.validateAudience(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
+		return request, errorsx.WithStack(ErrRegistrationNotSupported)
+	}
+
+	if err = f.validateResponseTypes(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if err = f.validateResponseMode(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	// A fallback handler to set the default response mode in cases where we can not reach the Authorize Handlers
+	// but still need the e.g. correct error response mode.
+	if request.GetResponseMode() == ResponseModeDefault {
+		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) || request.ResponseTypes.ExactOne(consts.ResponseTypeNone) {
+			request.SetDefaultResponseMode(ResponseModeQuery)
+		} else {
+			// If the response type is not `code` it is an implicit/hybrid (fragment) response mode.
+			request.SetDefaultResponseMode(ResponseModeFragment)
+		}
+	}
+
+	// rfc6819 4.4.1.8.  Threat: CSRF Attack against redirect-uri
+	// The "state" parameter should be used to link the authorization
+	// request with the redirect URI used to deliver the access token (Section 5.3.5).
+	//
+	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.8
+	// The "state" parameter should not	be guessable
+	if len(request.State) < f.GetMinParameterEntropy(ctx) {
+		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
+	}
+
+	return request, nil
+}
+
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
@@ -256,21 +383,8 @@ func hintRequestObjectPrefix(openid bool) string {
 	return hintRequestObjectPrefixJAR
 }
 
-const (
-	hintRequestObjectClientCapabilities             = "%s parameter '%s' was used, but the OAuth 2.0 Client does not implement advanced authorization capabilities."
-	hintRequestObjectPrefixOpenID                   = "OpenID Connect 1.0"
-	hintRequestObjectPrefixJAR                      = "OAuth 2.0 JWT-Secured Authorization Request"
-	hintRequestObjectRequiredRequestSyntaxParameter = "%s parameter '%s' must be accompanied by the '%s' parameter in the request syntax."
-	hintRequestObjectFetchRequestURI                = "%s request failed to fetch request parameters from the provided 'request_uri'."
-	hintRequestObjectValidate                       = "%s request failed with an error attempting to validate the request object."
-	hintRequestObjectInvalidAuthorizationClaim      = "%s request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted."
-	debugRequestObjectValueMismatch                 = "The OAuth 2.0 client with id '%s' included a request object with a '%s' claim with a value of '%s' which is required to match the value '%s' in the parameter with the same name from the OAuth 2.0 request syntax."
-	debugRequestObjectValueTypeNotString            = "The OAuth 2.0 client with id '%s' included a request object with a '%s' claim with a value of '%v' which is required to match the value '%s' in the parameter with the same name from the OAuth 2.0 request syntax but instead of a string it had the %T type."
-	debugRequestObjectSignedAbsentClaim             = "The OAuth 2.0 client with id '%s' provided a request object that was signed but it did not include the '%s' claim which is required."
-)
-
-func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *AuthorizeRequest) (err error) {
-	raw := request.Form.Get(consts.FormParameterRedirectURI)
+func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request, request *AuthorizeRequest) (err error) {
+	raw := request.GetRequestForm().Get(consts.FormParameterRedirectURI)
 
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
 	//
@@ -279,7 +393,7 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
 	//
 	// Note: As per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
-	if len(raw) == 0 && request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+	if len(raw) == 0 && Arguments(RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterScope), " "))).Has(consts.ScopeOpenID) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
 	}
 
@@ -296,26 +410,25 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ *http.Request, request *Authoriz
 	return nil
 }
 
-//nolint:unparam
-func (f *Fosite) parseAuthorizeScope(_ *http.Request, request *AuthorizeRequest) error {
-	request.SetRequestedScopes(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " ")))
+func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Requester) error {
+	requested := RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterScope), " "))
 
-	return nil
-}
+	client := request.GetClient()
+	strategy := GetScopeStrategy(ctx, f.Config, client)
+	scopes := client.GetScopes()
 
-func (f *Fosite) validateAuthorizeScope(ctx context.Context, _ *http.Request, request *AuthorizeRequest) error {
-	strategy := GetScopeStrategy(ctx, f.Config, request.Client)
-
-	for _, permission := range request.GetRequestedScopes() {
-		if !strategy(request.Client.GetScopes(), permission) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", permission))
+	for _, scope := range requested {
+		if !strategy(scopes, scope) {
+			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
+	request.SetRequestedScopes(requested)
+
 	return nil
 }
 
-func (f *Fosite) validateResponseTypes(r *http.Request, request *AuthorizeRequest) error {
+func (f *Fosite) validateResponseTypes(_ context.Context, r *http.Request, request *AuthorizeRequest) error {
 	// https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	// Extension response types MAY contain a space-delimited (%x20) list of
 	// values, where the order of values does not matter (e.g., response
@@ -360,7 +473,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request
 	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode '%s'.", m))
 }
 
-func (f *Fosite) validateResponseMode(_ *http.Request, request *AuthorizeRequest) error {
+func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
 	if request.ResponseMode == ResponseModeDefault {
 		return nil
 	}
@@ -437,130 +550,6 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	}
 
 	return true, nil
-}
-
-func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error) {
-	return f.newAuthorizeRequest(ctx, r, false)
-}
-
-// TODO: Refactor time permitting.
-//
-//nolint:gocyclo
-func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPARRequest bool) (requester AuthorizeRequester, err error) {
-	request := NewAuthorizeRequest()
-	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
-
-	ctx = context.WithValue(ctx, RequestContextKey, r)
-	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
-
-	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
-		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
-	}
-
-	request.Form = r.Form
-
-	// Save state to the request to be returned in error conditions (https://github.com/ory/hydra/issues/1642)
-	request.State = request.Form.Get(consts.FormParameterState)
-
-	// Check if this is a continuation from a pushed authorization request
-	if !isPARRequest {
-		var isPAR bool
-
-		if isPAR, err = f.authorizeRequestFromPAR(ctx, r, request); err != nil {
-			return request, err
-		}
-
-		if isPAR {
-			return request, nil
-		}
-
-		if config, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && config.GetRequirePushedAuthorizationRequests(ctx) {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebug("The Authorization Server policy requires Pushed Authorization Requests be used for all clients."))
-		}
-	}
-
-	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID))
-	if err != nil {
-		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
-	}
-
-	if !isPARRequest {
-		if parc, ok := client.(PushedAuthorizationRequestClient); ok && parc.GetRequirePushedAuthorizationRequests() {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The registered OAuth 2.0 client with id '%s' is registered with a policy which requires Pushed Authorization Requests be used.", parc.GetID()))
-		}
-	}
-
-	request.Client = client
-
-	// Now that the base fields (state and client) are populated, we extract all the information
-	// from the request object or request object uri, if one is set.
-	//
-	// All other parse methods should come afterwards so that we ensure that the data is taken
-	// from the request_object if set.
-	if err = f.authorizeRequestParametersFromJAR(ctx, request, isPARRequest); err != nil {
-		return request, err
-	}
-
-	// The request context is now fully available and we can start processing the individual
-	// fields.
-	if err = f.ParseResponseMode(ctx, r, request); err != nil {
-		return request, err
-	}
-
-	if err = f.parseAuthorizeScope(r, request); err != nil {
-		return request, err
-	}
-
-	if err = f.validateAuthorizeRedirectURI(r, request); err != nil {
-		return request, err
-	}
-
-	if err = f.validateAuthorizeScope(ctx, r, request); err != nil {
-		return request, err
-	}
-
-	if err = ValidateResourceIndicators(r.Form); err != nil {
-		return request, err
-	}
-
-	if err = f.validateAudience(ctx, r, request); err != nil {
-		return request, err
-	}
-
-	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
-		return request, errorsx.WithStack(ErrRegistrationNotSupported)
-	}
-
-	if err = f.validateResponseTypes(r, request); err != nil {
-		return request, err
-	}
-
-	if err = f.validateResponseMode(r, request); err != nil {
-		return request, err
-	}
-
-	// A fallback handler to set the default response mode in cases where we can not reach the Authorize Handlers
-	// but still need the e.g. correct error response mode.
-	if request.GetResponseMode() == ResponseModeDefault {
-		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) || request.ResponseTypes.ExactOne(consts.ResponseTypeNone) {
-			request.SetDefaultResponseMode(ResponseModeQuery)
-		} else {
-			// If the response type is not `code` it is an implicit/hybrid (fragment) response mode.
-			request.SetDefaultResponseMode(ResponseModeFragment)
-		}
-	}
-
-	// rfc6819 4.4.1.8.  Threat: CSRF Attack against redirect-uri
-	// The "state" parameter should be used to link the authorization
-	// request with the redirect URI used to deliver the access token (Section 5.3.5).
-	//
-	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.8
-	// The "state" parameter should not	be guessable
-	if len(request.State) < f.GetMinParameterEntropy(ctx) {
-		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
-	}
-
-	return request, nil
 }
 
 //nolint:gocyclo

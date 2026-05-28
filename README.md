@@ -20,6 +20,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [ ] Ensure all tests and subtests are well named
   - [ ] Ensure all tests are simplified where possible
   - [ ] Restore/Implement conformance tests
+  - [ ] Fix all shadowed test vars
 - Rename interfaces and implementations:
   - [x] `OAuth2Provider` to `Provider`.
   - [ ] `Fosite` to `TBA`.
@@ -87,7 +88,15 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [ ] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
         support
   - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
+  - Claims:
+    - [ ] Standard Claims Parameter
+    - [ ] [OpenID Connect Advanced Syntax for Claims (ASC) 1.0](https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0-ID1.html)
   - [x] [RFC9101: OAuth 2.0 JWT-Secured Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9101)
+  - Sessions:
+    - [ ] [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)
+    - [ ] [OpenID Connect Frontchannel Logout 1.0](https://openid.net/specs/openid-connect-frontchannel-1_0.html)
+    - [ ] [OpenID Connect Backchannel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)
+    - [ ] [OpenID Connect RP Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)]
   - [x] [RFC8707: OAuth 2.0 Resource Indicators](https://www.rfc-editor.org/rfc/rfc8707.html)
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/36bbd39b4618d70ecd7849d5313c12c412d29dd0)
         [commit](https://github.com/authelia/oauth2-provider/commit/7a78d5fc376dfc4d0501bd17793290ca7c1c8deb)</sup>
@@ -110,9 +119,10 @@ In an effort to assist users who wish to use this library we aim to maintain the
     - [x] Client Secret Validation Interface
     - [x] JWE support for Client Authentication and Issuance
   - [x] Testing Package (mocks, etc)
-  - [ ] Clock Drift Support
+  - Time / Clock etc:
+    - [ ] Clock Configurator
+    - [ ] Clock Skew
   - [x] Key Management
-  - [ ] Injectable Clock Configurator
   - [x] Support `s_hash`
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/edbbbe9467c70a2578db4b9af4d6cd319f74886e)</sup>
 - Removal of the following dependencies:

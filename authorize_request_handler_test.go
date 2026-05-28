@@ -73,11 +73,25 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		{
 			name:   "ShouldFailEmptyRequest",
 			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
-			r:      &http.Request{},
+			r:      &http.Request{Method: http.MethodGet},
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, errors.New("foo"))
 			},
+		},
+		{
+			name:   "ShouldFailInvalidMethodPUT",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			r:      &http.Request{Method: http.MethodPut},
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'PUT', expected 'GET' or 'POST'.",
+			mock:   func(store *mock.MockStorage) {},
+		},
+		{
+			name:   "ShouldFailInvalidMethodDELETE",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			r:      &http.Request{Method: http.MethodDelete},
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'DELETE', expected 'GET' or 'POST'.",
+			mock:   func(store *mock.MockStorage) {},
 		},
 		{
 			name:   "ShouldFailInvalidRedirectURI",
@@ -688,7 +702,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 
 			tc.mock(store)
 			if tc.r == nil {
-				tc.r = &http.Request{Header: http.Header{}}
+				tc.r = &http.Request{Header: http.Header{}, Method: http.MethodGet}
 				if tc.query != nil {
 					tc.r.URL = &url.URL{RawQuery: tc.query.Encode()}
 				}

@@ -58,7 +58,6 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 			WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
 
-	// check last requested time
 	requestedAt := request.GetRequestedAt()
 	last := deviceAuthReq.GetLastChecked()
 	interval := c.Config.GetRFC8628TokenPollingInterval(ctx)

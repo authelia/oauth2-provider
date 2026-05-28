@@ -6,27 +6,36 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"strings"
 
 	"authelia.com/provider/oauth2/i18n"
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, req *http.Request) (r DeviceAuthorizeRequester, err error) {
+func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
-	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), req)
+	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
-	if err = req.ParseForm(); err != nil {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
+	if r.Method != http.MethodPost {
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'POST'.", r.Method))
 	}
 
-	request.Form = req.PostForm
+	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
+	}
 
-	client, err := f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID))
+	request.Form = r.PostForm
+
+	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
+	client, _, err := f.AuthenticateClient(ctx, r, r.Form)
 	if err != nil {
-		return nil, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
+		var rfcerr *RFC6749Error
+		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
+			return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err))
+		}
+
+		return request, err
 	}
 
 	request.Client = client
@@ -35,26 +44,17 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, req *http.
 		return nil, errorsx.WithStack(ErrInvalidGrant.WithHint("The requested OAuth 2.0 Client does not have the 'urn:ietf:params:oauth:grant-type:device_code' grant."))
 	}
 
-	if err = f.validateDeviceScope(ctx, req, request); err != nil {
-		return nil, err
+	if err = f.validateScope(ctx, r, request); err != nil {
+		return request, err
+	}
+
+	if err = ValidateResourceIndicators(request.Form); err != nil {
+		return request, err
+	}
+
+	if err = f.validateAudience(ctx, r, request); err != nil {
+		return request, err
 	}
 
 	return request, nil
-}
-
-func (f *Fosite) validateDeviceScope(ctx context.Context, _ *http.Request, request *DeviceAuthorizeRequest) error {
-	scope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
-
-	client := request.GetClient()
-	strategy := GetScopeStrategy(ctx, f.Config, client)
-
-	for _, permission := range scope {
-		if !strategy(request.Client.GetScopes(), permission) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", permission))
-		}
-	}
-
-	request.SetRequestedScopes(scope)
-
-	return nil
 }

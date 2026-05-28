@@ -99,7 +99,7 @@ func TestValidateResponseTypes(t *testing.T) {
 			ar := NewAuthorizeRequest()
 			ar.Client = &DefaultClient{ResponseTypes: tc.art}
 
-			actual := provider.validateResponseTypes(r, ar)
+			actual := provider.validateResponseTypes(t.Context(), r, ar)
 
 			if tc.expected != "" {
 				require.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)

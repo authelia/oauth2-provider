@@ -124,6 +124,8 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	return key.(*jose.JSONWebKeySet), nil
 }
 
+// WaitForCache blocks until the in-flight JWKS fetch (if any) has completed and the cache is consistent. It is intended
+// for use in tests that need deterministic cache state before asserting behavior.
 func (s *DefaultJWKSFetcherStrategy) WaitForCache() {
 	s.cache.Wait()
 }

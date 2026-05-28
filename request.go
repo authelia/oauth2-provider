@@ -30,6 +30,8 @@ type Request struct {
 	Lang              language.Tag `json:"-"`
 }
 
+// NewRequest returns a Request with its slice and map fields initialized, a default empty client, and RequestedAt set
+// to the current time in UTC.
 func NewRequest() *Request {
 	return &Request{
 		Client:            &DefaultClient{},
@@ -44,6 +46,7 @@ func NewRequest() *Request {
 	}
 }
 
+// GetID returns the request identifier, generating a new UUID on first access if one has not been assigned.
 func (a *Request) GetID() string {
 	if a.ID == "" {
 		a.ID = uuid.New().String()
@@ -52,30 +55,38 @@ func (a *Request) GetID() string {
 	return a.ID
 }
 
+// SetID assigns the request identifier. Callers should ensure the value is unique across requests for storage lookups.
 func (a *Request) SetID(id string) {
 	a.ID = id
 }
 
+// GetRequestForm returns the original HTTP form values associated with the request.
 func (a *Request) GetRequestForm() url.Values {
 	return a.Form
 }
 
+// GetRequestedAt returns the time at which the request was received.
 func (a *Request) GetRequestedAt() time.Time {
 	return a.RequestedAt
 }
 
+// SetRequestedAt overrides the time at which the request was received, typically used when restoring requests from
+// persistent storage.
 func (a *Request) SetRequestedAt(rat time.Time) {
 	a.RequestedAt = rat
 }
 
+// GetClient returns the OAuth 2.0 client associated with the request.
 func (a *Request) GetClient() Client {
 	return a.Client
 }
 
+// GetRequestedScopes returns the scopes asked for by the client.
 func (a *Request) GetRequestedScopes() Arguments {
 	return a.RequestedScope
 }
 
+// SetRequestedScopes replaces the requested scopes, de-duplicating entries.
 func (a *Request) SetRequestedScopes(s Arguments) {
 	a.RequestedScope = nil
 
@@ -84,6 +95,7 @@ func (a *Request) SetRequestedScopes(s Arguments) {
 	}
 }
 
+// SetRequestedAudience replaces the requested audience, de-duplicating entries.
 func (a *Request) SetRequestedAudience(s Arguments) {
 	a.RequestedAudience = nil
 
@@ -92,6 +104,7 @@ func (a *Request) SetRequestedAudience(s Arguments) {
 	}
 }
 
+// AppendRequestedScope adds the given scope to the requested scopes if it is not already present.
 func (a *Request) AppendRequestedScope(scope string) {
 	for _, has := range a.RequestedScope {
 		if scope == has {
@@ -102,6 +115,7 @@ func (a *Request) AppendRequestedScope(scope string) {
 	a.RequestedScope = append(a.RequestedScope, scope)
 }
 
+// AppendRequestedAudience adds the given audience value to the requested audiences if it is not already present.
 func (a *Request) AppendRequestedAudience(audience string) {
 	for _, has := range a.RequestedAudience {
 		if audience == has {
@@ -112,10 +126,12 @@ func (a *Request) AppendRequestedAudience(audience string) {
 	a.RequestedAudience = append(a.RequestedAudience, audience)
 }
 
+// GetRequestedAudience returns the audience values asked for by the client.
 func (a *Request) GetRequestedAudience() (audience Arguments) {
 	return a.RequestedAudience
 }
 
+// GrantAudience marks the given audience as granted to the client if it is not already present.
 func (a *Request) GrantAudience(audience string) {
 	for _, has := range a.GrantedAudience {
 		if audience == has {
@@ -126,6 +142,7 @@ func (a *Request) GrantAudience(audience string) {
 	a.GrantedAudience = append(a.GrantedAudience, audience)
 }
 
+// SetRequestedResource replaces the requested RFC 8707 resource indicators, de-duplicating entries.
 func (a *Request) SetRequestedResource(s Arguments) {
 	a.RequestedResource = nil
 
@@ -134,6 +151,7 @@ func (a *Request) SetRequestedResource(s Arguments) {
 	}
 }
 
+// AppendRequestedResource adds the given resource indicator if it is not already present.
 func (a *Request) AppendRequestedResource(resource string) {
 	for _, has := range a.RequestedResource {
 		if resource == has {
@@ -144,10 +162,12 @@ func (a *Request) AppendRequestedResource(resource string) {
 	a.RequestedResource = append(a.RequestedResource, resource)
 }
 
+// GetRequestedResource returns the RFC 8707 resource indicators asked for by the client.
 func (a *Request) GetRequestedResource() Arguments {
 	return a.RequestedResource
 }
 
+// GrantResource marks the given RFC 8707 resource indicator as granted if it is not already present.
 func (a *Request) GrantResource(resource string) {
 	for _, has := range a.GrantedResource {
 		if resource == has {
@@ -158,18 +178,22 @@ func (a *Request) GrantResource(resource string) {
 	a.GrantedResource = append(a.GrantedResource, resource)
 }
 
+// GetGrantedResource returns the RFC 8707 resource indicators that have been granted to the client.
 func (a *Request) GetGrantedResource() Arguments {
 	return a.GrantedResource
 }
 
+// GetGrantedScopes returns the scopes that have been granted to the client.
 func (a *Request) GetGrantedScopes() Arguments {
 	return a.GrantedScope
 }
 
+// GetGrantedAudience returns the audience values that have been granted to the client.
 func (a *Request) GetGrantedAudience() Arguments {
 	return a.GrantedAudience
 }
 
+// GrantScope marks the given scope as granted to the client if it is not already present.
 func (a *Request) GrantScope(scope string) {
 	for _, has := range a.GrantedScope {
 		if scope == has {
@@ -179,14 +203,18 @@ func (a *Request) GrantScope(scope string) {
 	a.GrantedScope = append(a.GrantedScope, scope)
 }
 
+// SetSession sets the session associated with the request.
 func (a *Request) SetSession(session Session) {
 	a.Session = session
 }
 
+// GetSession returns the session associated with the request, or nil if none has been set.
 func (a *Request) GetSession() Session {
 	return a.Session
 }
 
+// Merge copies the requested and granted scopes, audiences and resource indicators from the given Requester into this
+// request alongside its ID, RequestedAt timestamp, client, session, and form values.
 func (a *Request) Merge(request Requester) {
 	for _, scope := range request.GetRequestedScopes() {
 		a.AppendRequestedScope(scope)
@@ -229,6 +257,9 @@ var alwaysAllowedParameters = []string{
 	consts.FormParameterClientID,
 }
 
+// Sanitize returns a shallow copy of the request with its form values restricted to allowedParameters and a small set
+// of always-allowed parameters (grant_type, response_type, scope, client_id). It is used by handlers to scrub
+// credentials and other sensitive form fields before persisting the request to storage.
 func (a *Request) Sanitize(allowedParameters []string) Requester {
 	b := new(Request)
 	allowed := map[string]bool{}
@@ -254,6 +285,7 @@ func (a *Request) Sanitize(allowedParameters []string) Requester {
 	return b
 }
 
+// GetLang returns the language tag negotiated for the request, used to localize error descriptions.
 func (a *Request) GetLang() language.Tag {
 	return a.Lang
 }

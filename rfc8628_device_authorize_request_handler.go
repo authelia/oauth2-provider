@@ -13,6 +13,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewRFC862DeviceAuthorizeRequest parses and validates an RFC 8628 device authorization endpoint request. The HTTP
+// method must be POST as specified by section 3.1 of the RFC. The client is authenticated using the token endpoint
+// authentication method (section 3.1 also requires this), the client must hold the device_code grant type, and the
+// requested scopes, audience, and RFC 8707 resource indicators are validated against the client's registration.
 func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)

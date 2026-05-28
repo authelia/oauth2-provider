@@ -6,6 +6,8 @@ package oauth2
 
 import "context"
 
+// NewRFC8628UserAuthorizeResponse dispatches the user-facing device authorization request to each configured handler
+// to populate the response with the user's authorization decision and any extension parameters.
 func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error) {
 	requester.SetSession(session)
 	responder = NewRFC8628UserAuthorizeResponse()

@@ -19,6 +19,9 @@ type TokenIntrospector interface {
 	IntrospectToken(ctx context.Context, token string, tokenUseHint TokenUse, request AccessRequester, scopes []string) (tokenUse TokenUse, err error)
 }
 
+// AccessTokenFromRequest extracts a bearer access token from an HTTP request. Per RFC 6750 the token may be supplied in
+// the Authorization header (Bearer scheme) or as the 'access_token' form parameter. Returns the empty string if no
+// token can be located.
 func AccessTokenFromRequest(req *http.Request) string {
 	// According to https://datatracker.ietf.org/doc/html/rfc6750 you can pass tokens through:
 	// - Form-Encoded Body Parameter. Recommended, more likely to appear. e.g.: Authorization: Bearer mytoken123
@@ -39,6 +42,10 @@ func AccessTokenFromRequest(req *http.Request) string {
 	return split[1]
 }
 
+// IntrospectToken validates the provided opaque or structured token against each configured TokenIntrospector. It
+// returns the detected token use (access, refresh, etc.), the populated AccessRequester for downstream callers, or
+// ErrRequestUnauthorized if no introspector recognizes the token. The tokenUse argument is treated as a hint that
+// introspectors may use to short-circuit when the token type is known in advance.
 func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (TokenUse, AccessRequester, error) {
 	var found = false
 	var foundTokenUse TokenUse = ""

@@ -37,6 +37,9 @@ func IsValidRedirectURI(uri *url.URL) bool {
 	return true
 }
 
+// IsRedirectURISecure reports whether the given URI is acceptable for use as a redirect target. The check is permissive:
+// non-HTTP schemes and HTTP URIs that resolve to localhost are considered secure. Use IsRedirectURISecureStrict for
+// stricter handling that rejects custom-scheme URIs.
 func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
 	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
 }
@@ -48,6 +51,8 @@ func IsRedirectURISecureStrict(uri *url.URL) bool {
 	return uri.Scheme == consts.SchemeHTTPS || (uri.Scheme == consts.SchemeHTTP && IsLocalhost(uri))
 }
 
+// IsLocalhost reports whether the given URI's hostname is a localhost or loopback address. The check covers the literal
+// hostname "localhost", any subdomain of ".localhost", and IPv4/IPv6 loopback IP literals.
 func IsLocalhost(uri *url.URL) bool {
 	hostname := uri.Hostname()
 
@@ -161,6 +166,9 @@ type RedirectURICustomComparisonClient interface {
 	GetRedirectURIComparisonStrategy() URIComparisonStrategy
 }
 
+// GetClientRedirectURIComparisonStrategy returns the URIComparisonStrategy configured for the given client, falling
+// back to BestPracticeURIComparisonStrategy when the client does not implement RedirectURICustomComparisonClient or
+// returns a nil strategy.
 func GetClientRedirectURIComparisonStrategy(client Client) (strategy URIComparisonStrategy) {
 	if ucsClient, ok := client.(RedirectURICustomComparisonClient); ok {
 		strategy = ucsClient.GetRedirectURIComparisonStrategy()

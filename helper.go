@@ -29,6 +29,8 @@ func StringInSliceFold(needle string, haystack []string) bool {
 	return false
 }
 
+// RemoveEmpty returns a new slice containing the non-empty, whitespace-trimmed entries of args. It is commonly used to
+// normalize space-delimited OAuth 2.0 parameters such as 'scope', 'audience', and 'prompt'.
 func RemoveEmpty(args []string) (ret []string) {
 	for _, v := range args {
 		v = strings.TrimSpace(v)
@@ -55,6 +57,8 @@ func EscapeJSONString(str string) string {
 	return str
 }
 
+// DeviceAuthorizeStatusToString returns a human-readable label for the RFC 8628 device authorization status, or
+// "Invalid" for unknown values.
 func DeviceAuthorizeStatusToString(status DeviceAuthorizeStatus) string {
 	switch status {
 	case DeviceAuthorizeStatusApproved:

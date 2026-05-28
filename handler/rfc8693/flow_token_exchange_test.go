@@ -35,11 +35,16 @@ type rfc8693Client struct {
 	exchangePermitted   bool
 }
 
-func (c *rfc8693Client) GetSupportedSubjectTokenTypes() []string   { return c.subjectTokenTypes }
-func (c *rfc8693Client) GetSupportedActorTokenTypes() []string     { return c.actorTokenTypes }
-func (c *rfc8693Client) GetSupportedRequestTokenTypes() []string   { return c.requestedTokenTypes }
+func (c *rfc8693Client) GetSupportedSubjectTokenTypes() []string { return c.subjectTokenTypes }
+
+func (c *rfc8693Client) GetSupportedActorTokenTypes() []string { return c.actorTokenTypes }
+
+func (c *rfc8693Client) GetSupportedRequestTokenTypes() []string { return c.requestedTokenTypes }
+
 func (c *rfc8693Client) GetSupportedSubjectTokenIssuers() []string { return c.subjectTokenIssuers }
-func (c *rfc8693Client) GetSupportedActorTokenIssuers() []string   { return c.actorTokenIssuers }
+
+func (c *rfc8693Client) GetSupportedActorTokenIssuers() []string { return c.actorTokenIssuers }
+
 func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client) bool {
 	return c.exchangePermitted
 }

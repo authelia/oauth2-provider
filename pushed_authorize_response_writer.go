@@ -7,7 +7,6 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -43,27 +42,30 @@ func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, request Authori
 
 // WritePushedAuthorizeResponse writes the PAR response
 func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response PushedAuthorizeResponder) {
-	// Set custom headers, e.g. "X-MySuperCoolCustomHeader" or "X-DONT-CACHE-ME"...
-	wh := rw.Header()
-	rh := response.GetHeader()
-	for k := range rh {
-		wh.Set(k, rh.Get(k))
+	headers := response.GetHeader()
+	for header := range headers {
+		rw.Header().Set(header, headers.Get(header))
 	}
 
-	wh.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
-	wh.Set(consts.HeaderPragma, consts.PragmaNoCache)
-	wh.Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
-	js, err := json.Marshal(response.ToMap())
-	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+	var (
+		data []byte
+		err  error
+	)
+
+	if data, err = json.Marshal(response.ToMap()); err != nil {
+		f.writeFallbackJSONError(ctx, rw, err)
+
 		return
 	}
 
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	rw.WriteHeader(http.StatusCreated)
-	_, _ = rw.Write(js)
+	_, _ = rw.Write(data)
 }
 
 // WritePushedAuthorizeError writes the PAR error
@@ -72,21 +74,17 @@ func (f *Fosite) WritePushedAuthorizeError(ctx context.Context, rw http.Response
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
-	sendDebugMessagesToClient := f.Config.GetSendDebugMessagesToClients(ctx)
 	rfcerr := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).
-		WithExposeDebug(sendDebugMessagesToClient).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
+		WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
 
-	js, err := json.Marshal(rfcerr)
-	if err != nil {
-		if sendDebugMessagesToClient {
-			errorMessage := EscapeJSONString(err.Error())
-			http.Error(rw, fmt.Sprintf(`{"error":"server_error","error_description":"%s"}`, errorMessage), http.StatusInternalServerError)
-		} else {
-			http.Error(rw, `{"error":"server_error"}`, http.StatusInternalServerError)
-		}
+	var data []byte
+
+	if data, err = json.Marshal(rfcerr); err != nil {
+		f.writeFallbackJSONError(ctx, rw, err)
+
 		return
 	}
 
 	rw.WriteHeader(rfcerr.CodeField)
-	_, _ = rw.Write(js)
+	_, _ = rw.Write(data)
 }

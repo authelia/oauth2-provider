@@ -8,6 +8,8 @@ import (
 	"context"
 )
 
+// NewRFC862DeviceAuthorizeResponse dispatches the device authorization request to each configured RFC 8628 device
+// authorization endpoint handler to populate the device_code, user_code, verification URIs and polling interval.
 func (f *Fosite) NewRFC862DeviceAuthorizeResponse(ctx context.Context, r DeviceAuthorizeRequester, session Session) (DeviceAuthorizeResponder, error) {
 	r.SetSession(session)
 

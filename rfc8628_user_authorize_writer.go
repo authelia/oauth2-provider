@@ -7,50 +7,55 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func (f *Fosite) WriteRFC8628UserAuthorizeResponse(_ context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder) {
-	wh := rw.Header()
-	rh := responder.GetHeader()
-	for k := range rh {
-		wh.Set(k, rh.Get(k))
+// WriteRFC8628UserAuthorizeResponse writes a successful user-facing device authorization response as JSON with the
+// cache-control headers required by RFC 8628.
+func (f *Fosite) WriteRFC8628UserAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder) {
+	headers := responder.GetHeader()
+
+	for header := range headers {
+		rw.Header().Set(header, headers.Get(header))
 	}
 
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	js, err := json.Marshal(responder.ToMap())
-	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+	var (
+		data []byte
+		err  error
+	)
+
+	if data, err = json.Marshal(responder.ToMap()); err != nil {
+		f.writeFallbackJSONError(ctx, rw, err)
+
 		return
 	}
-	_, _ = rw.Write(js)
+
+	_, _ = rw.Write(data)
 }
 
+// WriteRFC8628UserAuthorizeError writes an error response for the user-facing device authorization endpoint as JSON.
+// Debug information is included only when the provider is configured to send debug messages to clients.
 func (f *Fosite) WriteRFC8628UserAuthorizeError(ctx context.Context, rw http.ResponseWriter, req DeviceAuthorizeRequester, err error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	sendDebugMessagesToClients := f.Config.GetSendDebugMessagesToClients(ctx)
-	rfcerr := ErrorToRFC6749Error(err).WithExposeDebug(sendDebugMessagesToClients).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(req))
+	rfcerr := ErrorToRFC6749Error(err).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(req))
 
-	js, err := json.Marshal(rfcerr)
-	if err != nil {
-		if f.Config.GetSendDebugMessagesToClients(ctx) {
-			errorMessage := EscapeJSONString(err.Error())
-			http.Error(rw, fmt.Sprintf(`{"error":"server_error","error_description":"%s"}`, errorMessage), http.StatusInternalServerError)
-		} else {
-			http.Error(rw, `{"error":"server_error"}`, http.StatusInternalServerError)
-		}
+	var data []byte
+
+	if data, err = json.Marshal(rfcerr); err != nil {
+		f.writeFallbackJSONError(ctx, rw, err)
+
 		return
 	}
 
 	rw.WriteHeader(rfcerr.CodeField)
-	_, _ = rw.Write(js)
+	_, _ = rw.Write(data)
 }

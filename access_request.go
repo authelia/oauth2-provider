@@ -11,6 +11,7 @@ type AccessRequest struct {
 	Request
 }
 
+// NewAccessRequest returns an empty AccessRequest seeded with the given session.
 func NewAccessRequest(session Session) *AccessRequest {
 	r := &AccessRequest{
 		GrantTypes:       Arguments{},
@@ -29,6 +30,9 @@ func (a *AccessRequest) SetGrantedScopes(scopes Arguments) {
 	a.GrantedScope = scopes
 }
 
+// SanitizeRestoreRefreshTokenOriginalRequester returns a sanitized Requester carrying the original refresh token
+// session's requested and granted scopes alongside the supplied requester's ID. It is used by refresh token handlers to
+// preserve the lineage between an issued refresh token and its preceding access request.
 func (a *AccessRequest) SanitizeRestoreRefreshTokenOriginalRequester(requester Requester) Requester {
 	r := a.Sanitize(nil).(*Request)
 

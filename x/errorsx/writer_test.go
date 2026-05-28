@@ -274,7 +274,10 @@ type rfc6750Error struct {
 	CodeField        int    `json:"-"`
 }
 
-func (e *rfc6750Error) Error() string          { return e.ErrorField }
+func (e *rfc6750Error) Error() string { return e.ErrorField }
+
 func (e *rfc6750Error) GetDescription() string { return e.DescriptionField }
-func (e *rfc6750Error) Reason() string         { return e.ReasonField }
-func (e *rfc6750Error) StatusCode() int        { return e.CodeField }
+
+func (e *rfc6750Error) Reason() string { return e.ReasonField }
+
+func (e *rfc6750Error) StatusCode() int { return e.CodeField }

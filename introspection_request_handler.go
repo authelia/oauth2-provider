@@ -168,6 +168,7 @@ type IntrospectionResponse struct {
 	Lang            language.Tag    `json:"-"`
 }
 
+// IsActive returns whether the introspected token is currently active per RFC 7662 section 2.2.
 func (r *IntrospectionResponse) IsActive() bool {
 	return r.Active
 }
@@ -177,18 +178,24 @@ func (r *IntrospectionResponse) GetClient() Client {
 	return r.Client
 }
 
+// GetAccessRequester returns the AccessRequester reconstituted from the introspected token, including its session,
+// client, scopes, and audience.
 func (r *IntrospectionResponse) GetAccessRequester() AccessRequester {
 	return r.AccessRequester
 }
 
+// GetTokenUse returns the kind of token that was introspected (access, refresh, etc.).
 func (r *IntrospectionResponse) GetTokenUse() TokenUse {
 	return r.TokenUse
 }
 
+// GetAccessTokenType returns the token_type value of the introspected token, where applicable.
 func (r *IntrospectionResponse) GetAccessTokenType() string {
 	return r.AccessTokenType
 }
 
+// ToMap returns the RFC 7662 introspection response as a map alongside the token's audience. When the token is inactive
+// or the receiver is nil, only the 'active' claim is populated.
 func (r *IntrospectionResponse) ToMap() (audience []string, introspection map[string]any) {
 	introspection = map[string]any{
 		consts.ClaimActive: false,

@@ -204,6 +204,8 @@ type Configurator interface {
 	ResourceStrategyProvider
 }
 
+// New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package
+// offers higher-level constructors that wire up the appropriate handlers and strategies.
 func New(store Storage, config Configurator) *Fosite {
 	return &Fosite{
 		Store:  store,

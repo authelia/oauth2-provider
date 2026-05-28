@@ -22,6 +22,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewAuthorizeRequest parses and validates an authorization endpoint request per RFC 6749 section 3.1 and OpenID
+// Connect 1.0. The HTTP method must be GET or POST as defined by the specification; any other method results in
+// ErrInvalidRequest. The returned AuthorizeRequester carries the parsed client, scopes, audience, redirect URI and
+// response type. Errors from this method should be sent to the client via WriteAuthorizeError.
 func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error) {
 	switch r.Method {
 	case http.MethodGet, http.MethodPost:
@@ -457,6 +461,9 @@ func (f *Fosite) validateResponseTypes(_ context.Context, r *http.Request, reque
 	return nil
 }
 
+// ParseResponseMode reads the 'response_mode' query parameter from r and, if a configured ResponseModeHandler supports
+// it, records it on the request. It returns ErrInsufficientEntropy if the form parameter has insufficient entropy and
+// ErrUnsupportedResponseMode for unrecognized values.
 func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
 	m := r.Form.Get(consts.FormParameterResponseMode)
 

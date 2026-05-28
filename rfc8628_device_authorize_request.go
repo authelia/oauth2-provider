@@ -29,6 +29,7 @@ type DeviceAuthorizeRequest struct {
 	LastChecked         time.Time
 }
 
+// NewDeviceAuthorizeRequest returns an empty DeviceAuthorizeRequest with its embedded Request initialized.
 func NewDeviceAuthorizeRequest() *DeviceAuthorizeRequest {
 	return &DeviceAuthorizeRequest{
 		Request: *NewRequest(),
@@ -55,22 +56,29 @@ func (d *DeviceAuthorizeRequest) GetUserCodeSignature() string {
 	return d.UserCodeSignature
 }
 
+// SetStatus records the user authorization status (new, approved, or denied) for the device flow.
 func (d *DeviceAuthorizeRequest) SetStatus(status DeviceAuthorizeStatus) {
 	d.Status = status
 }
 
+// GetStatus returns the user authorization status (new, approved, or denied) for the device flow.
 func (d *DeviceAuthorizeRequest) GetStatus() DeviceAuthorizeStatus {
 	return d.Status
 }
 
+// SetLastChecked records the time of the most recent token endpoint polling attempt for the request. The value is
+// normalized to UTC and is used by token endpoint handlers to enforce the polling interval.
 func (d *DeviceAuthorizeRequest) SetLastChecked(lastChecked time.Time) {
 	d.LastChecked = lastChecked.UTC()
 }
 
+// GetLastChecked returns the time of the most recent token endpoint polling attempt for the request.
 func (d *DeviceAuthorizeRequest) GetLastChecked() time.Time {
 	return d.LastChecked
 }
 
+// Merge copies the requester data into this request. When requester is a *DeviceAuthorizeRequest the status, code
+// signatures, and last-checked timestamp are also merged.
 func (d *DeviceAuthorizeRequest) Merge(requester Requester) {
 	d.Request.Merge(requester)
 

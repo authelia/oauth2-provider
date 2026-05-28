@@ -12,22 +12,29 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func (f *Fosite) WriteRFC862DeviceAuthorizeResponse(_ context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder DeviceAuthorizeResponder) {
-	// Set custom headers, e.g. "X-MySuperCoolCustomHeader" or "X-DONT-CACHE-ME"...
-	wh := rw.Header()
-	rh := responder.GetHeader()
-	for k := range rh {
-		wh.Set(k, rh.Get(k))
+// WriteRFC862DeviceAuthorizeResponse writes a successful RFC 8628 device authorization endpoint response as JSON with
+// the cache-control headers mandated by the specification. Any headers attached to the responder are copied to the
+// HTTP response.
+func (f *Fosite) WriteRFC862DeviceAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, _ DeviceAuthorizeRequester, responder DeviceAuthorizeResponder) {
+	headers := responder.GetHeader()
+	for header := range headers {
+		rw.Header().Set(header, headers.Get(header))
 	}
 
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	js, err := json.Marshal(responder.ToMap())
-	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+	var (
+		data []byte
+		err  error
+	)
+
+	if data, err = json.Marshal(responder.ToMap()); err != nil {
+		f.writeFallbackJSONError(ctx, rw, err)
+
 		return
 	}
-	_, _ = rw.Write(js)
+
+	_, _ = rw.Write(data)
 }

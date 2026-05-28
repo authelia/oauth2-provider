@@ -7,7 +7,6 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -174,12 +173,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponseJSON(
 	)
 
 	if data, err = json.Marshal(rfc); err != nil {
-		if h.Config.GetSendDebugMessagesToClients(ctx) {
-			errorMessage := EscapeJSONString(err.Error())
-			http.Error(rw, fmt.Sprintf(`{"error":"server_error","error_description":"%s"}`, errorMessage), http.StatusInternalServerError)
-		} else {
-			http.Error(rw, `{"error":"server_error"}`, http.StatusInternalServerError)
-		}
+		writeFallbackJSONError(ctx, h.Config, rw, err)
 
 		return
 	}
@@ -195,6 +189,8 @@ type RFC9207ResponseModeParameterHandler struct {
 	}
 }
 
+// ResponseModes returns the set of response modes the RFC 9207 issuer identification parameter handler applies to:
+// query, fragment, form_post, and the implicit default mode.
 func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes {
 	return ResponseModeTypes{
 		ResponseModeDefault,
@@ -204,6 +200,8 @@ func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes 
 	}
 }
 
+// WriteParameters injects the RFC 9207 'iss' parameter into the authorization response when an authorization server
+// identification issuer is configured.
 func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values) {
 	if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
 		parameters.Set(consts.FormParameterIssuer, issuer)
@@ -250,6 +248,7 @@ type ResponseModeParameterHandler interface {
 
 type ResponseModeTypes []ResponseModeType
 
+// Has reports whether the slice contains the given response mode.
 func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
 	for _, r := range rs {
 		if r == item {

@@ -8,6 +8,7 @@ import (
 	"context"
 )
 
+// NewContext returns a fresh background context suitable for use as the root context of an OAuth 2.0 request flow.
 func NewContext() context.Context {
 	return context.Background()
 }

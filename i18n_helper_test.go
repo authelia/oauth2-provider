@@ -251,4 +251,5 @@ type causeOnlyError struct {
 }
 
 func (e *causeOnlyError) Error() string { return "cause-only wrapper" }
-func (e *causeOnlyError) Cause() error  { return e.cause }
+
+func (e *causeOnlyError) Cause() error { return e.cause }

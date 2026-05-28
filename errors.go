@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"encoding/json"
 	stderr "errors"
 	"fmt"
@@ -85,7 +86,7 @@ var (
 	}
 	ErrServerError = &RFC6749Error{
 		ErrorField:       errServerErrorName,
-		DescriptionField: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+		DescriptionField: errServerErrorDescription,
 		CodeField:        http.StatusInternalServerError,
 	}
 	ErrTemporarilyUnavailable = &RFC6749Error{
@@ -278,6 +279,13 @@ const (
 	errDeviceExpiredTokenName       = "expired_token"
 	errSlowDownName                 = "slow_down"
 	errInvalidTargetName            = "invalid_target"
+
+	errServerErrorDescription = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request."
+)
+
+const (
+	errJSONFormat      = `{"error":"%s","error_description":"%s"}`
+	errJSONFormatDebug = `{"error":"%s","error_description":"%s","error_debug":"%s"}`
 )
 
 const (
@@ -321,6 +329,9 @@ var (
 	_ errorsx.DetailsCarrier    = new(RFC6749Error)
 )
 
+// ErrorToRFC6749Error returns the *RFC6749Error wrapped by err if one is present, otherwise it returns a synthetic
+// RFC6749Error with the 'unknown_error' code and a 500 status, preserving the original err as the cause and debug
+// message.
 func ErrorToRFC6749Error(err error) *RFC6749Error {
 	var e *RFC6749Error
 
@@ -350,25 +361,32 @@ func (e *RFC6749Error) StackTrace() (trace errors.StackTrace) {
 	return
 }
 
+// Unwrap returns the underlying cause of the error to support errors.Is and errors.As traversal.
 func (e RFC6749Error) Unwrap() error {
 	return e.cause
 }
 
+// Wrap records err as the underlying cause of the receiver in place. Use WithWrap to keep the receiver immutable.
 func (e *RFC6749Error) Wrap(err error) {
 	e.cause = err
 }
 
+// WithWrap returns a copy of the receiver with cause recorded as the underlying error.
 func (e RFC6749Error) WithWrap(cause error) *RFC6749Error {
 	e.cause = cause
 
 	return &e
 }
 
+// WithLegacyFormat returns a copy of the receiver configured to emit the legacy JSON error format (with separate
+// 'error_hint', 'error_debug' and 'status_code' fields) when set to true.
 func (e RFC6749Error) WithLegacyFormat(useLegacyFormat bool) *RFC6749Error {
 	e.useLegacyFormat = useLegacyFormat
 	return &e
 }
 
+// WithTrace attaches a stack trace for err to the error chain. If no stack tracer is present in the existing cause, the
+// error is wrapped with one before being recorded.
 func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
 	if st := errorsx.StackTracer(nil); !stderr.As(e.cause, &st) {
 		e.Wrap(errorsx.WithStack(err))
@@ -378,6 +396,8 @@ func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
 	return e
 }
 
+// Is reports whether err is equivalent to the receiver. Two RFC6749Errors are considered equal when their ErrorField
+// and CodeField match, supporting use with errors.Is.
 func (e RFC6749Error) Is(err error) bool {
 	switch te := err.(type) {
 	case RFC6749Error:
@@ -403,34 +423,43 @@ func (e RFC6749Error) IsEmpty() bool {
 	return e.ErrorField == "" && e.DescriptionField == "" && e.HintField == "" && e.DebugField == "" && e.CodeField == 0 && e.cause == nil
 }
 
+// Status returns the HTTP status text corresponding to CodeField.
 func (e *RFC6749Error) Status() string {
 	return http.StatusText(e.CodeField)
 }
 
+// Error implements the builtin error interface and returns the RFC 6749 error code (e.g. 'invalid_request').
 func (e RFC6749Error) Error() string {
 	return e.ErrorField
 }
 
+// RequestID satisfies the errorsx.RequestIDCarrier interface and always returns the empty string for RFC6749Errors.
 func (e *RFC6749Error) RequestID() string {
 	return ""
 }
 
+// Reason satisfies the errorsx.ReasonCarrier interface and returns the hint field as the human readable reason.
 func (e *RFC6749Error) Reason() string {
 	return e.HintField
 }
 
+// Details satisfies the errorsx.DetailsCarrier interface; RFC6749Errors carry no structured details so nil is returned.
 func (e *RFC6749Error) Details() map[string]any {
 	return nil
 }
 
+// StatusCode returns the HTTP status code associated with the error.
 func (e *RFC6749Error) StatusCode() int {
 	return e.CodeField
 }
 
+// Cause returns the underlying error that produced this one, equivalent to errors.Unwrap.
 func (e *RFC6749Error) Cause() error {
 	return e.cause
 }
 
+// WithHintf returns a copy of the receiver with the hint set to the formatted string. The first call also records the
+// unformatted hint as the translation ID so future calls to WithLocalizer can localize the message.
 func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 	err := *e
 	if err.hintIDField == "" {
@@ -442,6 +471,8 @@ func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 	return &err
 }
 
+// WithHint returns a copy of the receiver with the hint set to the supplied static string. The first call also records
+// the hint as the translation ID so future calls to WithLocalizer can localize the message.
 func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 	err := *e
 	if err.hintIDField == "" {
@@ -469,10 +500,14 @@ func (e *RFC6749Error) WithHintTranslationID(id string) *RFC6749Error {
 	return &err
 }
 
+// Debug returns the debug message attached to the error. The value is only ever exposed to clients when
+// WithExposeDebug(true) has been set on the error.
 func (e *RFC6749Error) Debug() string {
 	return e.DebugField
 }
 
+// WithDebug returns a copy of the receiver with the debug message set. Debug information is only ever sent to clients
+// when WithExposeDebug(true) is configured.
 func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 	err := *e
 	err.DebugField = debug
@@ -480,6 +515,8 @@ func (e *RFC6749Error) WithDebug(debug string) *RFC6749Error {
 	return &err
 }
 
+// WithDebugError returns a copy of the receiver whose debug message is derived from the given error's debug-rendered
+// description. The receiver is returned unchanged when debug is nil.
 func (e *RFC6749Error) WithDebugError(debug error) *RFC6749Error {
 	if debug == nil {
 		return e
@@ -488,16 +525,21 @@ func (e *RFC6749Error) WithDebugError(debug error) *RFC6749Error {
 	return e.WithDebug(ErrorToDebugRFC6749Error(debug).Error())
 }
 
+// WithDebugf returns a copy of the receiver with the debug message set to the formatted string.
 func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
 	return e.WithDebug(fmt.Sprintf(debug, args...))
 }
 
+// WithDescription returns a copy of the receiver with its top-level description overwritten. The description is the
+// human-readable text returned in the 'error_description' field of the response payload.
 func (e *RFC6749Error) WithDescription(description string) *RFC6749Error {
 	err := *e
 	err.DescriptionField = description
 	return &err
 }
 
+// WithLocalizer returns a copy of the receiver bound to the given message catalog and language tag so descriptions and
+// hints are translated when serialized.
 func (e *RFC6749Error) WithLocalizer(catalog i18n.MessageCatalog, lang language.Tag) *RFC6749Error {
 	err := *e
 	err.catalog = catalog
@@ -547,6 +589,8 @@ type RFC6749ErrorJson struct {
 	Debug       string `json:"error_debug,omitempty"`
 }
 
+// UnmarshalJSON decodes a JSON-encoded error response into the receiver, automatically enabling legacy formatting when
+// the payload contains the legacy 'error_hint' or 'error_debug' fields.
 func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
 	var data RFC6749ErrorJson
 
@@ -567,6 +611,9 @@ func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes the error using either the RFC 6749 short form ('error' and 'error_description') or the legacy
+// long form depending on the receiver's configured format. Debug information is only included when WithExposeDebug has
+// been set.
 func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 	if !e.useLegacyFormat {
 		return json.Marshal(&RFC6749ErrorJson{
@@ -589,6 +636,8 @@ func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// ToValues serializes the error into url.Values suitable for use as an authorize endpoint error response in either the
+// 'query' or 'fragment' response mode. Legacy-format errors produce additional 'error_hint' and 'error_debug' fields.
 func (e *RFC6749Error) ToValues() url.Values {
 	values := url.Values{}
 	values.Set("error", e.ErrorField)
@@ -616,6 +665,8 @@ func (e *RFC6749Error) computeHintField() {
 	e.HintField = i18n.GetMessageOrDefault(e.catalog, e.hintIDField, e.lang, e.HintField, e.hintArgs...)
 }
 
+// ErrorToRFC6749ErrorFallback behaves like ErrorToRFC6749Error but returns a copy of fallback (wrapping err) instead of
+// the generic 'unknown_error' when err is not already a known RFC6749Error.
 func ErrorToRFC6749ErrorFallback(err error, fallback *RFC6749Error) *RFC6749Error {
 	var e *RFC6749Error
 	if stderr.As(err, &e) {
@@ -650,4 +701,16 @@ type DebugRFC6749Error struct {
 // Error implements the builtin error interface and shows the error with its debug info and description.
 func (err *DebugRFC6749Error) Error() string {
 	return err.WithExposeDebug(true).GetDescription()
+}
+
+func (f *Fosite) writeFallbackJSONError(ctx context.Context, rw http.ResponseWriter, err error) {
+	writeFallbackJSONError(ctx, f.Config, rw, err)
+}
+
+func writeFallbackJSONError(ctx context.Context, config SendDebugMessagesToClientsProvider, rw http.ResponseWriter, err error) {
+	if config.GetSendDebugMessagesToClients(ctx) {
+		http.Error(rw, fmt.Sprintf(errJSONFormatDebug, errServerErrorName, errServerErrorDescription, EscapeJSONString(err.Error())), http.StatusInternalServerError)
+	} else {
+		http.Error(rw, fmt.Sprintf(errJSONFormat, errServerErrorName, errServerErrorDescription), http.StatusInternalServerError)
+	}
 }

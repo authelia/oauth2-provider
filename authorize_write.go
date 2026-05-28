@@ -9,6 +9,9 @@ import (
 	"net/http"
 )
 
+// WriteAuthorizeResponse writes a successful authorization endpoint response by dispatching to the configured
+// ResponseModeHandler that supports the request's response_mode. If no handler matches, an internal server error is
+// written instead.
 func (f *Fosite) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder) {
 	for _, handler := range f.Config.GetResponseModeHandlers(ctx) {
 		if handler.ResponseModes().Has(request.GetResponseMode()) {

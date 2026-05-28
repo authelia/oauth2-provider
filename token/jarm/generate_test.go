@@ -299,13 +299,19 @@ type stubClient struct {
 	public                 bool
 }
 
-func (c *stubClient) GetID() string                                  { return c.id }
-func (c *stubClient) IsPublic() bool                                 { return c.public }
-func (c *stubClient) GetAuthorizationSignedResponseKeyID() string    { return c.kid }
-func (c *stubClient) GetAuthorizationSignedResponseAlg() string      { return c.alg }
+func (c *stubClient) GetID() string { return c.id }
+
+func (c *stubClient) IsPublic() bool { return c.public }
+
+func (c *stubClient) GetAuthorizationSignedResponseKeyID() string { return c.kid }
+
+func (c *stubClient) GetAuthorizationSignedResponseAlg() string { return c.alg }
+
 func (c *stubClient) GetAuthorizationEncryptedResponseKeyID() string { return c.encKid }
-func (c *stubClient) GetAuthorizationEncryptedResponseAlg() string   { return c.encAlg }
-func (c *stubClient) GetAuthorizationEncryptedResponseEnc() string   { return c.encEnc }
+
+func (c *stubClient) GetAuthorizationEncryptedResponseAlg() string { return c.encAlg }
+
+func (c *stubClient) GetAuthorizationEncryptedResponseEnc() string { return c.encEnc }
 
 // stubStrategy captures the claims passed by Generate and returns a fixed token.
 type stubStrategy struct {
@@ -340,7 +346,8 @@ type openIDSession struct {
 	claims *jwt.IDTokenClaims
 }
 
-func (s *openIDSession) IDTokenHeaders() *jwt.Headers      { return &jwt.Headers{} }
+func (s *openIDSession) IDTokenHeaders() *jwt.Headers { return &jwt.Headers{} }
+
 func (s *openIDSession) IDTokenClaims() *jwt.IDTokenClaims { return s.claims }
 
 // jwtSessionContainer is a minimal JWTSessionContainer implementation.
@@ -348,5 +355,6 @@ type jwtSessionContainer struct {
 	claims *jwt.JWTClaims
 }
 
-func (s *jwtSessionContainer) GetJWTHeader() *jwt.Headers           { return &jwt.Headers{} }
+func (s *jwtSessionContainer) GetJWTHeader() *jwt.Headers { return &jwt.Headers{} }
+
 func (s *jwtSessionContainer) GetJWTClaims() jwt.JWTClaimsContainer { return s.claims }

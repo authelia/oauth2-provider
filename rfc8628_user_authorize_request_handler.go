@@ -13,6 +13,9 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewRFC8628UserAuthorizeRequest parses the user-facing device authorization request and dispatches it to each
+// configured RFC8628UserAuthorizeEndpointHandler. The returned DeviceAuthorizeRequester reflects the user's
+// authorization decision (approval, denial, or pending) as recorded by the handlers.
 func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, req *http.Request) (DeviceAuthorizeRequester, error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), req)

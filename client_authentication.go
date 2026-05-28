@@ -34,6 +34,9 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 	return f.AuthenticateClientWithAuthHandler(ctx, r, form, &TokenEndpointClientAuthHandler{})
 }
 
+// AuthenticateClientWithAuthHandler authenticates a client at the endpoint represented by handler using the configured
+// ClientAuthenticationStrategy, falling back to DefaultClientAuthenticationStrategy if none is configured. Use this in
+// preference to AuthenticateClient when the request is not destined for the token endpoint.
 func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.Request, form url.Values, handler EndpointClientAuthHandler) (client Client, method string, err error) {
 	var strategy ClientAuthenticationStrategy
 

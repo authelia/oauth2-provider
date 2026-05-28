@@ -7,12 +7,14 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// WriteAuthorizeError writes an error response for the authorization endpoint. The configured ResponseModeHandlers are
+// consulted first so the error can be delivered using the requested response_mode (query, fragment, form_post, etc.).
+// If no handler matches, the error is written as JSON to rw using the configured AuthorizeErrorFieldResponseStrategy.
 func (f *Fosite) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
@@ -45,12 +47,7 @@ func (f *Fosite) handleWriteAuthorizeErrorFieldResponseJSON(ctx context.Context,
 	)
 
 	if data, err = json.Marshal(rfc); err != nil {
-		if f.Config.GetSendDebugMessagesToClients(ctx) {
-			errorMessage := EscapeJSONString(err.Error())
-			http.Error(rw, fmt.Sprintf(`{"error":"server_error","error_description":"%s"}`, errorMessage), http.StatusInternalServerError)
-		} else {
-			http.Error(rw, `{"error":"server_error"}`, http.StatusInternalServerError)
-		}
+		f.writeFallbackJSONError(ctx, rw, err)
 
 		return
 	}
@@ -67,6 +64,8 @@ type JSONAuthorizeErrorFieldResponseStrategy struct {
 	Config SendDebugMessagesToClientsProvider
 }
 
+// WriteErrorFieldResponse serializes the given RFC 6749 error as a JSON body and writes it to rw using the error's
+// status code. This is the default strategy used by Fosite.WriteAuthorizeError when no response_mode handler matches.
 func (s *JSONAuthorizeErrorFieldResponseStrategy) WriteErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, rfc *RFC6749Error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
@@ -76,12 +75,7 @@ func (s *JSONAuthorizeErrorFieldResponseStrategy) WriteErrorFieldResponse(ctx co
 	)
 
 	if data, err = json.Marshal(rfc); err != nil {
-		if s.Config.GetSendDebugMessagesToClients(ctx) {
-			errorMessage := EscapeJSONString(err.Error())
-			http.Error(rw, fmt.Sprintf(`{"error":"server_error","error_description":"%s"}`, errorMessage), http.StatusInternalServerError)
-		} else {
-			http.Error(rw, `{"error":"server_error"}`, http.StatusInternalServerError)
-		}
+		writeFallbackJSONError(ctx, s.Config, rw, err)
 
 		return
 	}

@@ -165,7 +165,7 @@ func TestWriteRFC862DeviceAuthorizeResponseMarshalError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := &Fosite{Config: &Config{}}
+			provider := &Fosite{Config: &Config{SendDebugMessagesToClients: true}}
 			rw := httptest.NewRecorder()
 			ar := &DeviceAuthorizeRequest{}
 

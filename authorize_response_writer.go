@@ -12,6 +12,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewAuthorizeResponse dispatches the authorize request to each configured AuthorizeEndpointHandler to produce the
+// response parameters. Returns ErrUnsupportedResponseType when not every requested response_type was handled, or
+// ErrUnsupportedResponseMode if the negotiated response mode would expose tokens via the URL query for a flow that
+// defaults to fragment delivery.
 func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder AuthorizeResponder, err error) {
 	var response = &AuthorizeResponse{
 		Header:     http.Header{},

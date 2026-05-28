@@ -117,7 +117,7 @@ func TestWriteAccessResponseMarshalError(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			provider := &Fosite{Config: new(Config)}
+			provider := &Fosite{Config: &Config{SendDebugMessagesToClients: true}}
 			requester := mock.NewMockAccessRequester(ctrl)
 			responder := mock.NewMockAccessResponder(ctrl)
 

@@ -231,10 +231,10 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-				AccessTokenLifespan:      time.Minute,
-				RefreshTokenScopes:       []string{consts.ScopeOffline},
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan: time.Minute,
+				RefreshTokenScopes:  []string{consts.ScopeOffline},
 			}
 			h := hoauth2.GenericCodeTokenEndpointHandler{
 				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
@@ -274,10 +274,10 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 
 	store := storage.NewMemoryStore()
 	config := &oauth2.Config{
-		ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-		AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-		AccessTokenLifespan:      time.Minute,
-		RefreshTokenScopes:       []string{consts.ScopeOffline},
+		ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+		AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+		AccessTokenLifespan: time.Minute,
+		RefreshTokenScopes:  []string{consts.ScopeOffline},
 	}
 	h := hoauth2.GenericCodeTokenEndpointHandler{
 		CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
@@ -740,10 +740,10 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 						mockDeviceStore,
 					},
 					Config: &oauth2.Config{
-						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-						AccessTokenLifespan:      time.Minute,
-						RefreshTokenScopes:       []string{consts.ScopeOffline},
+						ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+						AccessTokenLifespan: time.Minute,
+						RefreshTokenScopes:  []string{consts.ScopeOffline},
 					},
 				},
 				CoreStorage: coreTransactionalStore{
@@ -753,9 +753,9 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				AccessTokenStrategy:  &strategy,
 				RefreshTokenStrategy: &strategy,
 				Config: &oauth2.Config{
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-					RFC8628CodeLifespan:      time.Minute,
+					ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+					RFC8628CodeLifespan: time.Minute,
 				},
 			}
 

@@ -110,7 +110,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mock.NewMockStorage(ctrl)
-			conf := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}}
+			conf := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
 
 			tc.mock(store)
 			r := tc.r

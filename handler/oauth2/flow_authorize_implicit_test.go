@@ -126,9 +126,9 @@ func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeIm
 		AccessTokenStorage:  store,
 		AccessTokenStrategy: chgen,
 		Config: &oauth2.Config{
-			AccessTokenLifespan:      time.Hour,
-			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+			AccessTokenLifespan: time.Hour,
+			ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:    oauth2.DefaultAudienceStrategy,
 		},
 	}
 

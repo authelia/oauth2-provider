@@ -29,8 +29,8 @@ type PushedAuthorizeHandler struct {
 
 // HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
 // is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
-// the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
-func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.PushedAuthorizeResponder) (err error) {
+// the pushed authorize request, he must return nil and NOT modify session nor response neither request.
+func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.PushedAuthorizeResponder) (err error) {
 	config, ok := c.Config.(oauth2.PushedAuthorizeRequestConfigProvider)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint(oauth2.ErrorPARNotSupported).WithDebug(oauth2.DebugPARConfigMissing))
@@ -41,26 +41,28 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint(oauth2.ErrorPARNotSupported).WithDebug(oauth2.DebugPARStorageInvalid))
 	}
 
-	if !requester.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
+	if !request.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
 		return nil
 	}
 
-	if !c.secureChecker(ctx, requester.GetRedirectURI()) {
+	if !c.secureChecker(ctx, request.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
-	client := requester.GetClient()
-	for _, scope := range requester.GetRequestedScopes() {
-		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
+	client := request.GetClient()
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	if err = c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err = c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
@@ -72,8 +74,8 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		expiresIn = parc.GetPushedAuthorizeContextLifespan()
 	}
 
-	if requester.GetSession() != nil {
-		requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))
+	if request.GetSession() != nil {
+		request.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))
 	}
 
 	stateKey, err := hmac.RandomBytes(defaultPARKeyLength)
@@ -83,12 +85,12 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 
 	requestURI := fmt.Sprintf("%s%s", config.GetPushedAuthorizeRequestURIPrefix(ctx), base64.RawURLEncoding.EncodeToString(stateKey))
 
-	if err = storage.CreatePARSession(ctx, requestURI, requester); err != nil {
+	if err = storage.CreatePARSession(ctx, requestURI, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("Unable to store the PAR session").WithWrap(err).WithDebugError(err))
 	}
 
-	responder.SetRequestURI(requestURI)
-	responder.SetExpiresIn(int(expiresIn.Seconds()))
+	response.SetRequestURI(requestURI)
+	response.SetExpiresIn(int(expiresIn.Seconds()))
 
 	return nil
 }

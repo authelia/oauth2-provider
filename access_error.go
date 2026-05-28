@@ -13,19 +13,19 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func (f *Fosite) WriteAccessError(ctx context.Context, rw http.ResponseWriter, req AccessRequester, err error) {
-	f.writeJsonError(ctx, rw, req, err)
+func (f *Fosite) WriteAccessError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {
+	f.writeJsonError(ctx, rw, request, err)
 }
 
-func (f *Fosite) writeJsonError(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, err error) {
+func (f *Fosite) writeJsonError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	rfc := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
 
-	if requester != nil {
-		rfc = rfc.WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(requester))
+	if request != nil {
+		rfc = rfc.WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
 	}
 
 	js, err := json.Marshal(rfc)

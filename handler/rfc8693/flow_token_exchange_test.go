@@ -48,8 +48,8 @@ func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client) bool {
 // supported token types include the standard RFC 8693 set.
 func newTokenExchangeHandler() *TokenExchangeGrantHandler {
 	config := &oauth2.Config{
-		ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-		AudienceMatchingStrategy: oauth2.ExactAudienceMatchingStrategy,
+		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+		AudienceStrategy: oauth2.ExactAudienceStrategy,
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693AccessToken:  &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},
@@ -59,10 +59,10 @@ func newTokenExchangeHandler() *TokenExchangeGrantHandler {
 	}
 
 	return &TokenExchangeGrantHandler{
-		Config:                   config,
-		ScopeStrategy:            config.ScopeStrategy,
-		AudienceMatchingStrategy: config.AudienceMatchingStrategy,
-		ResourceMatchingStrategy: config.GetResourceStrategy(context.Background()),
+		Config:           config,
+		ScopeStrategy:    config.ScopeStrategy,
+		AudienceStrategy: config.AudienceStrategy,
+		ResourceStrategy: config.GetResourceStrategy(context.Background()),
 	}
 }
 
@@ -381,8 +381,8 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 
 	mkConfig := func() *oauth2.Config {
 		return &oauth2.Config{
-			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: oauth2.ExactAudienceMatchingStrategy,
+			ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+			AudienceStrategy: oauth2.ExactAudienceStrategy,
 			RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 				consts.TokenTypeRFC8693AccessToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 				jwtType: &JWTType{
@@ -414,10 +414,10 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 		t.Helper()
 		cfg := mkConfig()
 		teHandler := &TokenExchangeGrantHandler{
-			Config:                   cfg,
-			ScopeStrategy:            cfg.ScopeStrategy,
-			AudienceMatchingStrategy: cfg.AudienceMatchingStrategy,
-			ResourceMatchingStrategy: cfg.GetResourceStrategy(context.Background()),
+			Config:           cfg,
+			ScopeStrategy:    cfg.ScopeStrategy,
+			AudienceStrategy: cfg.AudienceStrategy,
+			ResourceStrategy: cfg.GetResourceStrategy(context.Background()),
 		}
 		store := storage.NewExampleStore()
 		jwtHandler := &CustomJWTTypeHandler{
@@ -514,8 +514,8 @@ func TestValidateIssuer(t *testing.T) {
 // to the global Config strategies.
 func TestHandleTokenEndpointRequest_StrategyFallback(t *testing.T) {
 	config := &oauth2.Config{
-		ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-		AudienceMatchingStrategy: oauth2.ExactAudienceMatchingStrategy,
+		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+		AudienceStrategy: oauth2.ExactAudienceStrategy,
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693AccessToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 		},

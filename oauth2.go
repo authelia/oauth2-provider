@@ -79,7 +79,7 @@ type Provider interface {
 	//	 If an authorization request is missing the "response_type" parameter,
 	//	 or if the response type is not understood, the authorization server
 	//	 MUST return an error response as described in Section 4.1.2.1.
-	NewAuthorizeResponse(ctx context.Context, requester AuthorizeRequester, session Session) (responder AuthorizeResponder, err error)
+	NewAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder AuthorizeResponder, err error)
 
 	// WriteAuthorizeError returns the error codes to the redirection endpoint or shows the error to the user, if no valid
 	// redirect uri was given. Implements rfc6749#section-4.1.2.1
@@ -94,7 +94,7 @@ type Provider interface {
 	//   fragment component.
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1 (everything)
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
-	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
+	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
 
 	// WriteAuthorizeResponse persists the AuthorizeSession in the store and redirects the user agent to the provided
 	// redirect url or returns an error if storage failed.
@@ -108,7 +108,7 @@ type Provider interface {
 	//   authorization server during the client registration process or when
 	//   making the authorization request.
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
-	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder AuthorizeResponder)
+	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder)
 
 	// NewAccessRequest creates a new access request object and validates
 	// various parameters.
@@ -124,19 +124,19 @@ type Provider interface {
 	//
 	// The following specs must be considered in any implementation of this method:
 	// https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
-	NewAccessResponse(ctx context.Context, requester AccessRequester) (responder AccessResponder, err error)
+	NewAccessResponse(ctx context.Context, request AccessRequester) (responder AccessResponder, err error)
 
 	// WriteAccessError writes an access request error response.
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 (everything)
-	WriteAccessError(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, err error)
+	WriteAccessError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error)
 
 	// WriteAccessResponse writes the access response.
 	//
 	// The following specs must be considered in any implementation of this method:
 	// https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
-	WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, responder AccessResponder)
+	WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, request AccessRequester, response AccessResponder)
 
 	// NewRevocationRequest handles incoming token revocation requests and validates various parameters.
 	//
@@ -164,19 +164,19 @@ type Provider interface {
 
 	// WriteIntrospectionResponse responds with token metadata discovered by token introspection as defined in
 	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder)
+	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, response IntrospectionResponder)
 
 	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
 	NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error)
 
 	// NewPushedAuthorizeResponse executes the handlers and builds the response
-	NewPushedAuthorizeResponse(ctx context.Context, requester AuthorizeRequester, session Session) (responder PushedAuthorizeResponder, err error)
+	NewPushedAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder PushedAuthorizeResponder, err error)
 
 	// WritePushedAuthorizeResponse writes the PAR response
-	WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder PushedAuthorizeResponder)
+	WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, responder PushedAuthorizeResponder)
 
 	// WritePushedAuthorizeError writes the PAR error
-	WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
+	WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
 
 	// NewRFC862DeviceAuthorizeRequest validate the OAuth 2.0 Device Authorization Flow Request
 	//
@@ -195,7 +195,7 @@ type Provider interface {
 	// In response, the authorization server generates a unique device
 	// verification code and an end-user code that are valid for a limited
 	// time
-	NewRFC862DeviceAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceAuthorizeResponder, err error)
+	NewRFC862DeviceAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceAuthorizeResponder, err error)
 
 	// WriteRFC862DeviceAuthorizeResponse return to the user both codes and
 	// some configuration information in a JSON formatted manner
@@ -204,7 +204,7 @@ type Provider interface {
 	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.2 (everything MUST be implemented)
 	// Response is a HTTP response body using the
 	// "application/json" format [RFC8259] with a 200 (OK) status code.
-	WriteRFC862DeviceAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester DeviceAuthorizeRequester, responder DeviceAuthorizeResponder)
+	WriteRFC862DeviceAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder)
 
 	// WriteRFC8628UserAuthorizeResponse returns the device grant user verification result in a JSON formatted manner.
 	//
@@ -212,7 +212,7 @@ type Provider interface {
 	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
 	// Response is a HTTP response body using the
 	// "application/json" format [RFC8259] with a 200 (OK) status code.
-	WriteRFC8628UserAuthorizeResponse(cxt context.Context, rw http.ResponseWriter, requester DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder)
+	WriteRFC8628UserAuthorizeResponse(cxt context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder)
 
 	// WriteRFC8628UserAuthorizeError returns the device grant user verification error in a JSON formatted manner.
 	//
@@ -220,7 +220,7 @@ type Provider interface {
 	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
 	// Response is a HTTP response body using the
 	// "application/json" format [RFC8259] with a 200 (OK) status code.
-	WriteRFC8628UserAuthorizeError(_ context.Context, rw http.ResponseWriter, requester DeviceAuthorizeRequester, err error)
+	WriteRFC8628UserAuthorizeError(_ context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, err error)
 
 	// NewRFC8628UserAuthorizeRequest validate the OAuth 2.0 Device Authorization Flow - User interaction Request
 	//
@@ -239,7 +239,7 @@ type Provider interface {
 	// In response, the authorization server generates a unique device
 	// verification code and an end-user code that are valid for a limited
 	// time
-	NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
+	NewRFC8628UserAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

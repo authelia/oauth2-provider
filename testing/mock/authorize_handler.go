@@ -42,15 +42,15 @@ func (m *MockAuthorizeEndpointHandler) EXPECT() *MockAuthorizeEndpointHandlerMoc
 }
 
 // HandleAuthorizeEndpointRequest mocks base method.
-func (m *MockAuthorizeEndpointHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
+func (m *MockAuthorizeEndpointHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleAuthorizeEndpointRequest", ctx, requester, responder)
+	ret := m.ctrl.Call(m, "HandleAuthorizeEndpointRequest", ctx, request, response)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleAuthorizeEndpointRequest indicates an expected call of HandleAuthorizeEndpointRequest.
-func (mr *MockAuthorizeEndpointHandlerMockRecorder) HandleAuthorizeEndpointRequest(ctx, requester, responder any) *gomock.Call {
+func (mr *MockAuthorizeEndpointHandlerMockRecorder) HandleAuthorizeEndpointRequest(ctx, request, response any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAuthorizeEndpointRequest", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).HandleAuthorizeEndpointRequest), ctx, requester, responder)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAuthorizeEndpointRequest", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).HandleAuthorizeEndpointRequest), ctx, request, response)
 }

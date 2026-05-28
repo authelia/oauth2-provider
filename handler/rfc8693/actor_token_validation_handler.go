@@ -50,17 +50,17 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *ActorTokenValidationHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, responder oauth2.AccessResponder) error {
+func (c *ActorTokenValidationHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	return nil
 }
 
 // CanSkipClientAuth indicates if client auth can be skipped
-func (c *ActorTokenValidationHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *ActorTokenValidationHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
-func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }

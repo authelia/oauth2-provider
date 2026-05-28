@@ -31,8 +31,8 @@ type DeviceAuthorizeHandler struct {
 // Device Authorization Request and Device Authorization Response as defined in RFC8638 Section 3.1 and Section 3.2.
 //
 // See: https://tools.ietf.org/html/rfc8628#section-3.1 and https://tools.ietf.org/html/rfc8628#section-3.2
-func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, dar oauth2.DeviceAuthorizeRequester, resp oauth2.DeviceAuthorizeResponder) (err error) {
-	session := dar.GetSession()
+func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester, response oauth2.DeviceAuthorizeResponder) (err error) {
+	session := request.GetSession()
 
 	var (
 		deviceCode, userCode                   string
@@ -47,16 +47,16 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	dar.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+	request.SetStatus(oauth2.DeviceAuthorizeStatusNew)
 
-	dar.SetDeviceCodeSignature(deviceCodeSignature)
-	dar.SetUserCodeSignature(userCodeSignature)
+	request.SetDeviceCodeSignature(deviceCodeSignature)
+	request.SetUserCodeSignature(userCodeSignature)
 
 	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 
-	if err = d.Storage.CreateDeviceCodeSession(ctx, deviceCodeSignature, dar); err != nil {
+	if err = d.Storage.CreateDeviceCodeSession(ctx, deviceCodeSignature, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -74,12 +74,12 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 
 	uri.RawQuery = query.Encode()
 
-	resp.SetDeviceCode(deviceCode)
-	resp.SetUserCode(userCode)
-	resp.SetVerificationURI(raw)
-	resp.SetVerificationURIComplete(uri.String())
-	resp.SetExpiresIn(int64(time.Until(expireAt).Seconds()))
-	resp.SetInterval(int(d.Config.GetRFC8628TokenPollingInterval(ctx).Seconds()))
+	response.SetDeviceCode(deviceCode)
+	response.SetUserCode(userCode)
+	response.SetVerificationURI(raw)
+	response.SetVerificationURIComplete(uri.String())
+	response.SetExpiresIn(int64(time.Until(expireAt).Seconds()))
+	response.SetInterval(int(d.Config.GetRFC8628TokenPollingInterval(ctx).Seconds()))
 
 	return nil
 }

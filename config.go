@@ -56,13 +56,13 @@ type ScopeStrategyProvider interface {
 // AudienceStrategyProvider returns the provider for configuring the audience strategy.
 type AudienceStrategyProvider interface {
 	// GetAudienceStrategy returns the audience strategy.
-	GetAudienceStrategy(ctx context.Context) (strategy AudienceMatchingStrategy)
+	GetAudienceStrategy(ctx context.Context) (strategy AudienceStrategy)
 }
 
 // ResourceStrategyProvider returns the provider for configuring the RFC 8707 resource indicator strategy.
 type ResourceStrategyProvider interface {
 	// GetResourceStrategy returns the resource indicator matching strategy.
-	GetResourceStrategy(ctx context.Context) (strategy ResourceMatchingStrategy)
+	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
 // ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
@@ -381,9 +381,9 @@ type RFC8693ConfigProvider interface {
 
 	GetScopeStrategy(ctx context.Context) (strategy ScopeStrategy)
 
-	GetAudienceStrategy(ctx context.Context) (strategy AudienceMatchingStrategy)
+	GetAudienceStrategy(ctx context.Context) (strategy AudienceStrategy)
 
-	GetResourceStrategy(ctx context.Context) (strategy ResourceMatchingStrategy)
+	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.

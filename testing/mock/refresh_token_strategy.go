@@ -42,9 +42,9 @@ func (m *MockRefreshTokenStrategy) EXPECT() *MockRefreshTokenStrategyMockRecorde
 }
 
 // GenerateRefreshToken mocks base method.
-func (m *MockRefreshTokenStrategy) GenerateRefreshToken(ctx context.Context, requester oauth2.Requester) (string, string, error) {
+func (m *MockRefreshTokenStrategy) GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateRefreshToken", ctx, requester)
+	ret := m.ctrl.Call(m, "GenerateRefreshToken", ctx, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -52,9 +52,9 @@ func (m *MockRefreshTokenStrategy) GenerateRefreshToken(ctx context.Context, req
 }
 
 // GenerateRefreshToken indicates an expected call of GenerateRefreshToken.
-func (mr *MockRefreshTokenStrategyMockRecorder) GenerateRefreshToken(ctx, requester any) *gomock.Call {
+func (mr *MockRefreshTokenStrategyMockRecorder) GenerateRefreshToken(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).GenerateRefreshToken), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).GenerateRefreshToken), ctx, request)
 }
 
 // IsOpaqueRefreshToken mocks base method.
@@ -86,15 +86,15 @@ func (mr *MockRefreshTokenStrategyMockRecorder) RefreshTokenSignature(ctx, token
 }
 
 // ValidateRefreshToken mocks base method.
-func (m *MockRefreshTokenStrategy) ValidateRefreshToken(ctx context.Context, requester oauth2.Requester, token string) error {
+func (m *MockRefreshTokenStrategy) ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateRefreshToken", ctx, requester, token)
+	ret := m.ctrl.Call(m, "ValidateRefreshToken", ctx, request, token)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateRefreshToken indicates an expected call of ValidateRefreshToken.
-func (mr *MockRefreshTokenStrategyMockRecorder) ValidateRefreshToken(ctx, requester, token any) *gomock.Call {
+func (mr *MockRefreshTokenStrategyMockRecorder) ValidateRefreshToken(ctx, request, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).ValidateRefreshToken), ctx, requester, token)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRefreshToken", reflect.TypeOf((*MockRefreshTokenStrategy)(nil).ValidateRefreshToken), ctx, request, token)
 }

@@ -43,7 +43,7 @@ func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, token
 	return s.HMACCoreStrategy.AccessTokenSignature(ctx, tokenString)
 }
 
-func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error) {
+func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error) {
 	var (
 		client oauth2.JWTProfileClient
 		ok     bool
@@ -51,23 +51,23 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 
 	enforce := s.Config.GetEnforceJWTProfileAccessTokens(ctx)
 
-	if client, ok = requester.GetClient().(oauth2.JWTProfileClient); ok && (enforce || client.GetEnableJWTProfileOAuthAccessTokens()) {
-		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, client)
+	if client, ok = request.GetClient().(oauth2.JWTProfileClient); ok && (enforce || client.GetEnableJWTProfileOAuthAccessTokens()) {
+		return s.GenerateJWT(ctx, oauth2.AccessToken, request, client)
 	} else if enforce {
-		return s.GenerateJWT(ctx, oauth2.AccessToken, requester, nil)
+		return s.GenerateJWT(ctx, oauth2.AccessToken, request, nil)
 	}
 
-	return s.HMACCoreStrategy.GenerateAccessToken(ctx, requester)
+	return s.HMACCoreStrategy.GenerateAccessToken(ctx, request)
 }
 
-func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, requester oauth2.Requester, tokenString string) (err error) {
+func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
-		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(requester.GetClient()), tokenString)
+		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(request.GetClient()), tokenString)
 
 		return
 	}
 
-	return s.HMACCoreStrategy.ValidateAccessToken(ctx, requester, tokenString)
+	return s.HMACCoreStrategy.ValidateAccessToken(ctx, request, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, tokenString string) bool {
@@ -78,12 +78,12 @@ func (s *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, toke
 	return s.HMACCoreStrategy.RefreshTokenSignature(ctx, tokenString)
 }
 
-func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
-	return s.HMACCoreStrategy.GenerateRefreshToken(ctx, req)
+func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateRefreshToken(ctx, request)
 }
 
-func (s *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, req oauth2.Requester, tokenString string) (err error) {
-	return s.HMACCoreStrategy.ValidateRefreshToken(ctx, req, tokenString)
+func (s *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRefreshToken(ctx, request, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
@@ -94,12 +94,12 @@ func (s *JWTProfileCoreStrategy) IsOpaqueAuthorizeCode(ctx context.Context, toke
 	return s.HMACCoreStrategy.IsOpaqueAuthorizeCode(ctx, tokenString)
 }
 
-func (s *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, req oauth2.Requester) (tokenString string, signature string, err error) {
-	return s.HMACCoreStrategy.GenerateAuthorizeCode(ctx, req)
+func (s *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateAuthorizeCode(ctx, request)
 }
 
-func (s *JWTProfileCoreStrategy) ValidateAuthorizeCode(ctx context.Context, req oauth2.Requester, tokenString string) error {
-	return s.HMACCoreStrategy.ValidateAuthorizeCode(ctx, req, tokenString)
+func (s *JWTProfileCoreStrategy) ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, tokenString string) error {
+	return s.HMACCoreStrategy.ValidateAuthorizeCode(ctx, request, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
@@ -110,8 +110,8 @@ func (s *JWTProfileCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (t
 	return s.HMACCoreStrategy.GenerateRFC8628UserCode(ctx)
 }
 
-func (s *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
-	return s.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, r, tokenString)
+func (s *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, request, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) IsOpaqueRFC8628DeviceCode(ctx context.Context, tokenString string) bool {
@@ -126,8 +126,8 @@ func (s *JWTProfileCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) 
 	return s.HMACCoreStrategy.GenerateRFC8628DeviceCode(ctx)
 }
 
-func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
-	return s.HMACCoreStrategy.ValidateRFC8628DeviceCode(ctx, r, tokenString)
+func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateRFC8628DeviceCode(ctx, request, tokenString)
 }
 
 func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (jwt bool, signature string) {
@@ -144,7 +144,7 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 	return true, parts[2]
 }
 
-func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, requester oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
+func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, request oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
 	var (
 		session JWTSessionContainer
 		ok      bool
@@ -152,8 +152,8 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		header  *jwt.Headers
 	)
 
-	if session, ok = requester.GetSession().(JWTSessionContainer); !ok {
-		return "", "", errors.Errorf("Session must be of type JWTSessionContainer but got type: %T", requester.GetSession())
+	if session, ok = request.GetSession().(JWTSessionContainer); !ok {
+		return "", "", errors.Errorf("Session must be of type JWTSessionContainer but got type: %T", request.GetSession())
 	}
 
 	if claims = session.GetJWTClaims(); claims == nil {
@@ -176,8 +176,8 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		Sanitize().
 		With(
 			session.GetExpiresAt(tokenType),
-			requester.GetGrantedScopes(),
-			oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource()),
+			request.GetGrantedScopes(),
+			oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource()),
 		).
 		WithDefaults(
 			time.Now().UTC(),

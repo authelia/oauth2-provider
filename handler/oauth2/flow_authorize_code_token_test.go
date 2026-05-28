@@ -204,10 +204,10 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse_HMAC(t *testing.T) {
 			store := storage.NewMemoryStore()
 			strategy := &hmacshaStrategy
 			config := &oauth2.Config{
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-				AccessTokenLifespan:      time.Minute,
-				RefreshTokenScopes:       []string{consts.ScopeOffline},
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan: time.Minute,
+				RefreshTokenScopes:  []string{consts.ScopeOffline},
 			}
 
 			handler := AuthorizeExplicitGrantHandler{
@@ -589,9 +589,9 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				AuthorizeCodeStrategy:  strategy,
 				TokenRevocationStorage: s,
 				Config: &oauth2.Config{
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-					AuthorizeCodeLifespan:    time.Minute,
+					ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+					AuthorizeCodeLifespan: time.Minute,
 				},
 			}
 
@@ -645,10 +645,10 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 		store := storage.NewMemoryStore()
 		strategy := &hmacshaStrategy
 		config := &oauth2.Config{
-			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-			AccessTokenLifespan:      time.Minute,
-			AuthorizeCodeLifespan:    time.Minute,
+			ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+			AccessTokenLifespan:   time.Minute,
+			AuthorizeCodeLifespan: time.Minute,
 		}
 
 		handler := AuthorizeExplicitGrantHandler{
@@ -968,9 +968,9 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 				RefreshTokenStrategy:  &strategy,
 				AuthorizeCodeStrategy: &strategy,
 				Config: &oauth2.Config{
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-					AuthorizeCodeLifespan:    time.Minute,
+					ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+					AuthorizeCodeLifespan: time.Minute,
 				},
 			}
 

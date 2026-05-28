@@ -83,7 +83,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
+func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -104,7 +104,7 @@ func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Conte
 		return nil
 	}
 
-	if err = c.issue(ctx, request, responder); err != nil {
+	if err = c.issue(ctx, request, response); err != nil {
 		return err
 	}
 
@@ -112,31 +112,31 @@ func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Conte
 }
 
 // CanSkipClientAuth indicates if client auth can be skipped.
-func (c *AccessTokenTypeHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *AccessTokenTypeHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
-func (c *AccessTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+func (c *AccessTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.AccessRequester, token string) (s oauth2.Session, claims map[string]any, err error) {
+func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (s oauth2.Session, claims map[string]any, err error) {
 	var (
 		original oauth2.Requester
 		session  Session
 		ok       bool
 	)
 
-	if session, ok = requester.GetSession().(Session); !ok || session == nil {
+	if session, ok = request.GetSession().(Session); !ok || session == nil {
 		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	client := requester.GetClient()
+	client := request.GetClient()
 
 	signature := c.AccessTokenSignature(ctx, token)
 
-	if original, err = c.GetAccessTokenSession(ctx, signature, requester.GetSession()); err != nil {
+	if original, err = c.GetAccessTokenSession(ctx, signature, request.GetSession()); err != nil {
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	} else if err = c.ValidateAccessToken(ctx, original, token); err != nil {
 		return nil, nil, err
@@ -164,7 +164,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 
 	// Validate the scopes.
 	scopeStrategy := c.GetScopeStrategy(ctx)
-	for _, scope := range requester.GetRequestedScopes() {
+	for _, scope := range request.GetRequestedScopes() {
 		if !scopeStrategy(original.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
@@ -175,7 +175,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, requester oauth2.
 
 	claims[consts.ClaimClientIdentifier] = original.GetClient().GetID()
 	claims[consts.ClaimScope] = original.GetGrantedScopes()
-	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource())
+	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
 	return original.GetSession(), claims, nil
 }

@@ -14,18 +14,18 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func (c *OpenIDConnectExplicitHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *OpenIDConnectExplicitHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
-func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
+	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 
-	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, code, requester)
+	authorize, err := c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, code, request)
 	if errors.Is(err, ErrNoSessionFound) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
 	} else if err != nil {
@@ -36,7 +36,7 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect 1.0 session was found but the 'openid' scope is missing, probably due to a broken code configuration."))
 	}
 
-	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'authorization_code'."))
 	}
 
@@ -54,7 +54,7 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
+	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, request, response)
 
 	// The response type `id_token` is only required when performing the implicit or hybrid flow, see:
 	// https://openid.net/specs/openid-connect-registration-1_0.html
@@ -63,15 +63,15 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	// 	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
 	// }
 
-	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 
-	return c.IssueExplicitIDToken(ctx, lifespan, authorize, responder)
+	return c.IssueExplicitIDToken(ctx, lifespan, authorize, response)
 }
 
-func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
+func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

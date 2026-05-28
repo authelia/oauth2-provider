@@ -54,8 +54,8 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleTokenEndpointRequest(_ conte
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
-func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
@@ -66,11 +66,11 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		ok        bool
 	)
 
-	if signature, err = c.DeviceCodeSignature(ctx, requester.GetRequestForm().Get(consts.FormParameterDeviceCode)); err != nil {
+	if signature, err = c.DeviceCodeSignature(ctx, request.GetRequestForm().Get(consts.FormParameterDeviceCode)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if ar, err = c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, requester); errors.Is(err, ErrNoSessionFound) {
+	if ar, err = c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, request); errors.Is(err, ErrNoSessionFound) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -80,7 +80,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration."))
 	}
 
-	if !requester.GetClient().GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) {
+	if !request.GetClient().GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'urn:ietf:params:oauth:grant-type:device_code'."))
 	}
 
@@ -98,19 +98,19 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, requester, responder)
+	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, request, response)
 
-	lifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeDeviceCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeDeviceCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 
-	return c.IssueExplicitIDToken(ctx, lifespan, ar, responder)
+	return c.IssueExplicitIDToken(ctx, lifespan, ar, response)
 }
 
 func (c *OpenIDConnectDeviceAuthorizeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *OpenIDConnectDeviceAuthorizeHandler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) (handle bool) {
-	return requester.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode))
+func (c *OpenIDConnectDeviceAuthorizeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
+	return request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode))
 }
 
 var (

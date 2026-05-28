@@ -38,24 +38,24 @@ var oidcParameters = []string{
 	consts.FormParameterNonce,
 }
 
-func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) (err error) {
-	if !(requester.GetGrantedScopes().Has(consts.ScopeOpenID) && requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
+func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
 	}
 
-	if len(responder.GetCode()) == 0 {
+	if len(response.GetCode()) == 0 {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The authorization code has not been issued yet, indicating a broken code configuration."))
 	}
 
-	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, requester); err != nil {
+	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
 		return err
 	}
 
-	if _, err = c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, requester); err != nil {
+	if _, err = c.OpenIDConnectRequestValidator.ValidatePrompt(ctx, request); err != nil {
 		return err
 	}
 
-	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, responder.GetCode(), requester.Sanitize(oidcParameters)); err != nil {
+	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, response.GetCode(), request.Sanitize(oidcParameters)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

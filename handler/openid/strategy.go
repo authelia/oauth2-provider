@@ -13,7 +13,7 @@ import (
 )
 
 type OpenIDConnectTokenStrategy interface {
-	GenerateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error)
+	GenerateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (token string, err error)
 }
 
 type OpenIDConnectBackChannelLogoutTokenStrategy interface {
@@ -21,5 +21,5 @@ type OpenIDConnectBackChannelLogoutTokenStrategy interface {
 }
 
 type TokenValidationStrategy interface {
-	ValidateIDToken(ctx context.Context, requester oauth2.Requester, token string) (jwt.MapClaims, error)
+	ValidateIDToken(ctx context.Context, request oauth2.Requester, token string) (jwt.MapClaims, error)
 }

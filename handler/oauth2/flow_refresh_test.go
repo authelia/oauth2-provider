@@ -402,11 +402,11 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{
-				AccessTokenLifespan:      time.Hour,
-				RefreshTokenLifespan:     time.Hour,
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-				RefreshTokenScopes:       []string{consts.ScopeOffline},
+				AccessTokenLifespan:  time.Hour,
+				RefreshTokenLifespan: time.Hour,
+				ScopeStrategy:        oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:     oauth2.DefaultAudienceStrategy,
+				RefreshTokenScopes:   []string{consts.ScopeOffline},
 			}
 			handler := &RefreshTokenGrantHandler{
 				TokenRevocationStorage: store,
@@ -505,9 +505,9 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 				AccessTokenStrategy:  &hmacshaStrategy,
 				RefreshTokenStrategy: &hmacshaStrategy,
 				Config: &oauth2.Config{
-					AccessTokenLifespan:      time.Hour,
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+					AccessTokenLifespan: time.Hour,
+					ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:    oauth2.DefaultAudienceStrategy,
 				},
 			}
 
@@ -571,9 +571,9 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{
-				AccessTokenLifespan:      time.Hour,
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+				AccessTokenLifespan: time.Hour,
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
 			}
 			h := RefreshTokenGrantHandler{
 				TokenRevocationStorage: store,
@@ -1148,9 +1148,9 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				AccessTokenStrategy:  &hmacshaStrategy,
 				RefreshTokenStrategy: &hmacshaStrategy,
 				Config: &oauth2.Config{
-					AccessTokenLifespan:      time.Hour,
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+					AccessTokenLifespan: time.Hour,
+					ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:    oauth2.DefaultAudienceStrategy,
 				},
 			}
 

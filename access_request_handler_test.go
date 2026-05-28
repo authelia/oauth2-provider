@@ -208,7 +208,7 @@ func TestNewAccessRequest(t *testing.T) {
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
 			client := &DefaultClient{}
-			config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+			config := &Config{AudienceStrategy: DefaultAudienceStrategy}
 			provider := &Fosite{Store: store, Config: config}
 
 			r := &http.Request{
@@ -346,7 +346,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 			handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-			config := &Config{AudienceMatchingStrategy: DefaultAudienceMatchingStrategy}
+			config := &Config{AudienceStrategy: DefaultAudienceStrategy}
 			provider := &Fosite{Store: store, Config: config}
 
 			handlers := tc.handlers
@@ -435,7 +435,7 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 			provider := &Fosite{
 				Store: mock.NewMockStorage(gomock.NewController(t)),
 				Config: &Config{
-					AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
+					AudienceStrategy: DefaultAudienceStrategy,
 				},
 			}
 
@@ -536,8 +536,8 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			handlerWithoutClientAuth.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
 			config := &Config{
-				AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
-				TokenEndpointHandlers:    TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
+				AudienceStrategy:      DefaultAudienceStrategy,
+				TokenEndpointHandlers: TokenEndpointHandlers{handlerWithoutClientAuth, handlerWithClientAuth},
 			}
 			provider := &Fosite{Store: store, Config: config}
 

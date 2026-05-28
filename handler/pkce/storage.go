@@ -12,6 +12,6 @@ import (
 
 type Storage interface {
 	GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
-	CreatePKCERequestSession(ctx context.Context, signature string, requester oauth2.Requester) error
+	CreatePKCERequestSession(ctx context.Context, signature string, request oauth2.Requester) error
 	DeletePKCERequestSession(ctx context.Context, signature string) error
 }

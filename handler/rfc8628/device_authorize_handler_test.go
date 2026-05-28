@@ -41,7 +41,7 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 			AccessTokenLifespan:         time.Hour,
 			RefreshTokenLifespan:        time.Hour,
 			ScopeStrategy:               oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:    oauth2.DefaultAudienceMatchingStrategy,
+			AudienceStrategy:            oauth2.DefaultAudienceStrategy,
 			RefreshTokenScopes:          []string{consts.ScopeOffline},
 		},
 	}

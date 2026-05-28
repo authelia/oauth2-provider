@@ -18,9 +18,9 @@ import (
 type TokenExchangeGrantHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
-	ScopeStrategy            oauth2.ScopeStrategy
-	AudienceMatchingStrategy oauth2.AudienceMatchingStrategy
-	ResourceMatchingStrategy oauth2.ResourceMatchingStrategy
+	ScopeStrategy    oauth2.ScopeStrategy
+	AudienceStrategy oauth2.AudienceStrategy
+	ResourceStrategy oauth2.ResourceStrategy
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -145,7 +145,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested scope.
-	scopeStrategy := c.GetScopeStrategy(ctx)
+	scopeStrategy := c.GetScopeStrategy(ctx, client)
 	for _, scope := range request.GetRequestedScopes() {
 		if !scopeStrategy(client.GetScopes(), scope) {
 			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
@@ -153,12 +153,12 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested audience.
-	if err = c.GetAudienceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = c.GetAudienceStrategy(ctx, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
 	// Check the requested resource indicators (RFC 8707).
-	if err = c.GetResourceMatchingStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = c.GetResourceStrategy(ctx, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
@@ -176,34 +176,70 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 }
 
 // GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) GetScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+func (c *TokenExchangeGrantHandler) GetScopeStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.ScopeStrategy) {
+	if client != nil {
+		if p, ok := client.(oauth2.ScopeStrategyProvider); ok {
+			if strategy = p.GetScopeStrategy(ctx); strategy != nil {
+				return strategy
+			}
+		}
+	}
+
 	if c.ScopeStrategy != nil {
 		return c.ScopeStrategy
 	}
 
-	return c.Config.GetScopeStrategy(ctx)
-}
-
-// GetAudienceMatchingStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) GetAudienceMatchingStrategy(ctx context.Context) oauth2.AudienceMatchingStrategy {
-	if c.AudienceMatchingStrategy != nil {
-		return c.AudienceMatchingStrategy
+	if strategy = c.Config.GetScopeStrategy(ctx); strategy != nil {
+		return strategy
 	}
 
-	return c.Config.GetAudienceStrategy(ctx)
+	return oauth2.ExactScopeStrategy
 }
 
-// GetResourceMatchingStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) GetResourceMatchingStrategy(ctx context.Context) oauth2.ResourceMatchingStrategy {
-	if c.ResourceMatchingStrategy != nil {
-		return c.ResourceMatchingStrategy
+// GetAudienceStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetAudienceStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.AudienceStrategy) {
+	if client != nil {
+		if p, ok := client.(oauth2.AudienceStrategyProvider); ok {
+			if strategy = p.GetAudienceStrategy(ctx); strategy != nil {
+				return strategy
+			}
+		}
 	}
 
-	return c.Config.GetResourceStrategy(ctx)
+	if c.AudienceStrategy != nil {
+		return c.AudienceStrategy
+	}
+
+	if strategy = c.Config.GetAudienceStrategy(ctx); strategy != nil {
+		return strategy
+	}
+
+	return oauth2.DefaultAudienceStrategy
+}
+
+// GetResourceStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.ResourceStrategy) {
+	if client != nil {
+		if p, ok := client.(oauth2.ResourceStrategyProvider); ok {
+			if strategy = p.GetResourceStrategy(ctx); strategy != nil {
+				return strategy
+			}
+		}
+	}
+
+	if c.ResourceStrategy != nil {
+		return c.ResourceStrategy
+	}
+
+	if strategy = c.Config.GetResourceStrategy(ctx); strategy != nil {
+		return strategy
+	}
+
+	return oauth2.DefaultResourceStrategy
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, responder oauth2.AccessResponder) error {
+func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -238,12 +274,12 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 }
 
 // CanSkipClientAuth indicates if client auth can be skipped
-func (c *TokenExchangeGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *TokenExchangeGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
-func (c *TokenExchangeGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *TokenExchangeGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }

@@ -35,45 +35,45 @@ func (h *DefaultResponseModeHandler) ResponseModes() ResponseModeTypes {
 }
 
 // WriteAuthorizeResponse writes authorization responses.
-func (h *DefaultResponseModeHandler) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder AuthorizeResponder) {
+func (h *DefaultResponseModeHandler) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder) {
 	header := rw.Header()
 
 	header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	header.Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	rheader := responder.GetHeader()
+	rheader := response.GetHeader()
 
 	for k := range rheader {
 		header.Set(k, rheader.Get(k))
 	}
 
-	h.handleWriteAuthorizeResponse(ctx, rw, requester, responder.GetParameters())
+	h.handleWriteAuthorizeResponse(ctx, rw, request, response.GetParameters())
 }
 
 // WriteAuthorizeError writes authorization errors.
-func (h *DefaultResponseModeHandler) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, e error) {
+func (h *DefaultResponseModeHandler) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, e error) {
 	rfc := ErrorToRFC6749Error(e).
 		WithLegacyFormat(h.Config.GetUseLegacyErrorFormat(ctx)).
 		WithExposeDebug(h.Config.GetSendDebugMessagesToClients(ctx)).
-		WithLocalizer(h.Config.GetMessageCatalog(ctx), getLangFromRequester(requester))
+		WithLocalizer(h.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
 
-	if !requester.IsRedirectURIValid() {
-		h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, rfc)
+	if !request.IsRedirectURIValid() {
+		h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, rfc)
 
 		return
 	}
 
 	parameters := rfc.ToValues()
 
-	if state := requester.GetState(); len(state) != 0 {
+	if state := request.GetState(); len(state) != 0 {
 		parameters.Set(consts.FormParameterState, state)
 	}
 
-	h.handleWriteAuthorizeResponse(ctx, rw, requester, parameters)
+	h.handleWriteAuthorizeResponse(ctx, rw, request, parameters)
 }
 
-func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, parameters url.Values) {
-	redirectURI := requester.GetRedirectURI()
+func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, parameters url.Values) {
+	redirectURI := request.GetRedirectURI()
 	redirectURI.Fragment = ""
 
 	var (
@@ -82,10 +82,10 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 		location string
 	)
 
-	rm := requester.GetResponseMode()
+	rm := request.GetResponseMode()
 
 	if rm == ResponseModeJWT {
-		if requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+		if request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 			rm = ResponseModeQueryJWT
 		} else {
 			rm = ResponseModeFragmentJWT
@@ -94,14 +94,14 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 	for _, handler := range h.Config.GetResponseModeParameterHandlers(ctx) {
 		if handler.ResponseModes().Has(rm) {
-			handler.WriteParameters(ctx, requester, parameters)
+			handler.WriteParameters(ctx, request, parameters)
 		}
 	}
 
 	switch rm {
 	case ResponseModeFormPost, ResponseModeFormPostJWT:
-		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
+		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -117,8 +117,8 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 			}
 		}
 
-		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
+		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -127,8 +127,8 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 		location = redirectURI.String()
 	case ResponseModeFragment, ResponseModeFragmentJWT:
-		if form, err = h.EncodeResponseForm(ctx, rm, requester, parameters); err != nil {
-			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, requester, ErrServerError.WithWrap(err).WithDebugError(err))
+		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
 		}
@@ -141,25 +141,25 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 }
 
 // EncodeResponseForm encodes the response form if necessary.
-func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm ResponseModeType, requester AuthorizeRequester, parameters url.Values) (form url.Values, err error) {
+func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm ResponseModeType, request AuthorizeRequester, parameters url.Values) (form url.Values, err error) {
 	switch rm {
 	case ResponseModeFormPostJWT, ResponseModeQueryJWT, ResponseModeFragmentJWT:
-		client := requester.GetClient()
+		client := request.GetClient()
 
 		jclient, ok := client.(JARMClient)
 		if !ok {
 			return nil, errorsx.WithStack(ErrServerError.WithDebug("The client is not capable of handling the JWT-Secured Authorization Response Mode."))
 		}
 
-		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, requester.GetSession(), parameters))
+		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, request.GetSession(), parameters))
 	default:
 		return parameters, nil
 	}
 }
 
-func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, rfc *RFC6749Error) {
+func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, rfc *RFC6749Error) {
 	if strategy := h.Config.GetAuthorizeErrorFieldResponseStrategy(ctx); strategy != nil {
-		strategy.WriteErrorFieldResponse(ctx, rw, requester, rfc)
+		strategy.WriteErrorFieldResponse(ctx, rw, request, rfc)
 	} else {
 		h.handleWriteAuthorizeErrorFieldResponseJSON(ctx, rw, rfc)
 	}
@@ -204,7 +204,7 @@ func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes 
 	}
 }
 
-func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, requester AuthorizeRequester, parameters url.Values) {
+func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values) {
 	if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
 		parameters.Set(consts.FormParameterIssuer, issuer)
 	}
@@ -225,14 +225,14 @@ type ResponseModeHandler interface {
 	// The following headers are expected to be set by implementations of this interface:
 	// header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	// header.Set(consts.HeaderPragma, consts.PragmaNoCache)
-	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, responder AuthorizeResponder)
+	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder)
 
 	// WriteAuthorizeError writes error responses
 	//
 	// The following headers are expected to be set by implementations of this interface:
 	// header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	// header.Set(consts.HeaderPragma, consts.PragmaNoCache)
-	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester AuthorizeRequester, err error)
+	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
 }
 
 type ResponseModeParameterHandler interface {
@@ -245,7 +245,7 @@ type ResponseModeParameterHandler interface {
 	ResponseModes() ResponseModeTypes
 
 	// WriteParameters is handed the parameters just before handing of to the response writer.
-	WriteParameters(ctx context.Context, requester AuthorizeRequester, parameters url.Values)
+	WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values)
 }
 
 type ResponseModeTypes []ResponseModeType

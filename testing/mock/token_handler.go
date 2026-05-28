@@ -42,57 +42,57 @@ func (m *MockTokenEndpointHandler) EXPECT() *MockTokenEndpointHandlerMockRecorde
 }
 
 // CanHandleTokenEndpointRequest mocks base method.
-func (m *MockTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (m *MockTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CanHandleTokenEndpointRequest", ctx, requester)
+	ret := m.ctrl.Call(m, "CanHandleTokenEndpointRequest", ctx, request)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // CanHandleTokenEndpointRequest indicates an expected call of CanHandleTokenEndpointRequest.
-func (mr *MockTokenEndpointHandlerMockRecorder) CanHandleTokenEndpointRequest(ctx, requester any) *gomock.Call {
+func (mr *MockTokenEndpointHandlerMockRecorder) CanHandleTokenEndpointRequest(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanHandleTokenEndpointRequest", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CanHandleTokenEndpointRequest), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanHandleTokenEndpointRequest", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CanHandleTokenEndpointRequest), ctx, request)
 }
 
 // CanSkipClientAuth mocks base method.
-func (m *MockTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (m *MockTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CanSkipClientAuth", ctx, requester)
+	ret := m.ctrl.Call(m, "CanSkipClientAuth", ctx, request)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // CanSkipClientAuth indicates an expected call of CanSkipClientAuth.
-func (mr *MockTokenEndpointHandlerMockRecorder) CanSkipClientAuth(ctx, requester any) *gomock.Call {
+func (mr *MockTokenEndpointHandlerMockRecorder) CanSkipClientAuth(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanSkipClientAuth", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CanSkipClientAuth), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanSkipClientAuth", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CanSkipClientAuth), ctx, request)
 }
 
 // HandleTokenEndpointRequest mocks base method.
-func (m *MockTokenEndpointHandler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) error {
+func (m *MockTokenEndpointHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleTokenEndpointRequest", ctx, requester)
+	ret := m.ctrl.Call(m, "HandleTokenEndpointRequest", ctx, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleTokenEndpointRequest indicates an expected call of HandleTokenEndpointRequest.
-func (mr *MockTokenEndpointHandlerMockRecorder) HandleTokenEndpointRequest(ctx, requester any) *gomock.Call {
+func (mr *MockTokenEndpointHandlerMockRecorder) HandleTokenEndpointRequest(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleTokenEndpointRequest", reflect.TypeOf((*MockTokenEndpointHandler)(nil).HandleTokenEndpointRequest), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleTokenEndpointRequest", reflect.TypeOf((*MockTokenEndpointHandler)(nil).HandleTokenEndpointRequest), ctx, request)
 }
 
 // PopulateTokenEndpointResponse mocks base method.
-func (m *MockTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
+func (m *MockTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PopulateTokenEndpointResponse", ctx, requester, responder)
+	ret := m.ctrl.Call(m, "PopulateTokenEndpointResponse", ctx, request, response)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PopulateTokenEndpointResponse indicates an expected call of PopulateTokenEndpointResponse.
-func (mr *MockTokenEndpointHandlerMockRecorder) PopulateTokenEndpointResponse(ctx, requester, responder any) *gomock.Call {
+func (mr *MockTokenEndpointHandlerMockRecorder) PopulateTokenEndpointResponse(ctx, request, response any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateTokenEndpointResponse", reflect.TypeOf((*MockTokenEndpointHandler)(nil).PopulateTokenEndpointResponse), ctx, requester, responder)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateTokenEndpointResponse", reflect.TypeOf((*MockTokenEndpointHandler)(nil).PopulateTokenEndpointResponse), ctx, request, response)
 }

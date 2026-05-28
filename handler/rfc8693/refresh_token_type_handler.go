@@ -71,17 +71,17 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	session, _ := requester.GetSession().(Session)
+	session, _ := request.GetSession().(Session)
 	if session == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	form := requester.GetRequestForm()
+	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
@@ -91,7 +91,7 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 		return nil
 	}
 
-	if err := c.issue(ctx, requester, responder); err != nil {
+	if err := c.issue(ctx, request, response); err != nil {
 		return err
 	}
 
@@ -104,23 +104,23 @@ func (c *RefreshTokenTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.
 }
 
 // CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
-func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2.AccessRequester, token string) (s oauth2.Session, claims map[string]any, err error) {
-	session, _ := requester.GetSession().(Session)
+func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (s oauth2.Session, claims map[string]any, err error) {
+	session, _ := request.GetSession().(Session)
 	if session == nil {
 		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	client := requester.GetClient()
+	client := request.GetClient()
 
 	signature := c.RefreshTokenSignature(ctx, token)
 
 	var or oauth2.Requester
 
-	if or, err = c.GetRefreshTokenSession(ctx, signature, requester.GetSession()); err != nil {
+	if or, err = c.GetRefreshTokenSession(ctx, signature, request.GetSession()); err != nil {
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	} else if err = c.ValidateRefreshToken(ctx, or, token); err != nil {
 		return nil, nil, err
@@ -144,7 +144,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2
 
 	// Scope check.
 	scopeStrategy := c.GetScopeStrategy(ctx)
-	for _, scope := range requester.GetRequestedScopes() {
+	for _, scope := range request.GetRequestedScopes() {
 		if !scopeStrategy(or.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
@@ -155,12 +155,12 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, requester oauth2
 
 	claims[consts.ClaimClientIdentifier] = or.GetClient().GetID()
 	claims[consts.ClaimScope] = or.GetGrantedScopes()
-	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource())
+	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
 	return or.GetSession(), claims, nil
 }
 
-func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
 	refresh, refreshSignature, err := c.GenerateRefreshToken(ctx, request)
 	if err != nil {

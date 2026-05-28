@@ -39,7 +39,7 @@ var (
 )
 
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.2
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -49,17 +49,19 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	}
 
 	client := request.GetClient()
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
+
 	for _, scope := range request.GetRequestedScopes() {
-		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
+		if !strategy(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
@@ -88,29 +90,29 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 }
 
 // PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.3
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	var refresh, refreshSignature string
-	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || requester.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
+	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || request.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
 		var err error
-		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
+		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
+		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
-	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	if err := c.IssueAccessToken(ctx, atLifespan, requester, responder); err != nil {
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	if err := c.IssueAccessToken(ctx, atLifespan, request, response); err != nil {
 		return err
 	}
 
 	if refresh != "" {
-		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
+		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	return nil
@@ -120,8 +122,8 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanSkipClientAuth(ctx con
 	return false
 }
 
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "password".
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeResourceOwnerPasswordCredentials)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeResourceOwnerPasswordCredentials)
 }

@@ -72,7 +72,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 	}{
 		{
 			name:   "ShouldFailEmptyRequest",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			r:      &http.Request{},
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
 			mock: func(store *mock.MockStorage) {
@@ -81,7 +81,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailInvalidRedirectURI",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query:  url.Values{consts.FormParameterClientID: []string{"invalid"}},
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
 			mock: func(store *mock.MockStorage) {
@@ -90,7 +90,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailInvalidClient",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query:  url.Values{consts.FormParameterClientID: []string{"https://foo.bar/cb"}},
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. foo",
 			mock: func(store *mock.MockStorage) {
@@ -99,7 +99,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailClientAndRequestRedirectsMismatchMissing",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterClientID: []string{"1234"},
 			},
@@ -110,7 +110,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailClientAndRequestRedirectsMismatchEmpty",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI: []string{""},
 				consts.FormParameterClientID:    []string{"1234"},
@@ -122,7 +122,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailClientAndRequestRedirectsMismatchValue",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI: []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:    []string{"1234"},
@@ -134,7 +134,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailNoState",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
@@ -147,7 +147,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailShortState",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
@@ -161,7 +161,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailClientWithoutScopeBaz",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -176,7 +176,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailClientWithoutAudience",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -195,7 +195,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPass",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -229,7 +229,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassNoState",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy, MinParameterEntropy: -1},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy, MinParameterEntropy: -1},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -261,7 +261,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassRepeatedAudienceParameter",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -295,7 +295,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassRepeatedAudienceParameterWithTrickyValues",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: ExactAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: ExactAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -329,7 +329,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassRedirectURIWithSpecialCharacter",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"web+application://callback"},
 				consts.FormParameterClientID:     {"1234"},
@@ -363,7 +363,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassAudienceWithDoubleSpacesBetweenValues",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -397,7 +397,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailUnknownResponseMode",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -413,7 +413,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailResponseModeRequestedButClientDoesNotSupportResponseMode",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -429,7 +429,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailRequestedResponseModeNotAllowed",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -452,7 +452,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassWithResponseModeFormPost",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -494,7 +494,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassWithResponseModeQuery",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -535,7 +535,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassWithResponseModeFragment",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
 				consts.FormParameterClientID:     {"1234"},
@@ -576,7 +576,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARStorageNotImplemented",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:storage-unsupported"},
 				consts.FormParameterClientID:   {"1234"},
@@ -586,7 +586,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARRequestURINotFound",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:not-found"},
 				consts.FormParameterClientID:   {"1234"},
@@ -599,7 +599,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARSessionNil",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:nil-session"},
 				consts.FormParameterClientID:   {"1234"},
@@ -612,7 +612,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARSessionDeleteError",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:delete-error"},
 				consts.FormParameterClientID:   {"1234"},
@@ -627,7 +627,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARSessionExpired",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:expired"},
 				consts.FormParameterClientID:   {"1234"},
@@ -642,7 +642,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldFailPARClientMismatch",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:client-mismatch"},
 				consts.FormParameterClientID:   {"1234"},
@@ -657,7 +657,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		},
 		{
 			name:   "ShouldPassPAR",
-			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceMatchingStrategy: DefaultAudienceMatchingStrategy},
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
 				consts.FormParameterClientID:   {"1234"},

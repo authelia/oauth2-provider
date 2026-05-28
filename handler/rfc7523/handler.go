@@ -136,13 +136,13 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	return c.IssueAccessToken(ctx, atLifespan, request, response)
 }
 
-func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return c.Config.GetGrantTypeJWTBearerCanSkipClientAuth(ctx)
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The 'grant_type' parameter is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:jwt-bearer".
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTBearer)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTBearer)
 }
 
 func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequester) error {
@@ -330,8 +330,8 @@ type extendedSession interface {
 	oauth2.Session
 }
 
-func (c *Handler) getSessionFromRequest(requester oauth2.AccessRequester) (extendedSession, error) {
-	session := requester.GetSession()
+func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extendedSession, error) {
+	session := request.GetSession()
 	if jwtSession, ok := session.(extendedSession); !ok {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithHintf("Session must be of type *rfc7523.Session but got type: %T", session))
 	} else {

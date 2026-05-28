@@ -139,12 +139,12 @@ type DefaultStrategy struct {
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error) {
+func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (token string, err error) {
 	if lifespan == 0 {
 		lifespan = defaultExpiryTime
 	}
 
-	session, ok := requester.GetSession().(Session)
+	session, ok := request.GetSession().(Session)
 	if !ok {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session is not of type 'openid.Session' which is required"))
 	}
@@ -154,12 +154,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}
 
-	jwtClient := jwt.NewIDTokenClient(requester.GetClient())
+	jwtClient := jwt.NewIDTokenClient(request.GetClient())
 
-	if requester.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
+	if request.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
 		var maxAge int64
 
-		if maxAge, err = strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64); err != nil {
+		if maxAge, err = strconv.ParseInt(request.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64); err != nil {
 			maxAge = 0
 		}
 
@@ -181,7 +181,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			}
 		}
 
-		prompt := requester.GetRequestForm().Get(consts.FormParameterPrompt)
+		prompt := request.GetRequestForm().Get(consts.FormParameterPrompt)
 		if prompt != "" {
 			if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in ID Token claims."))
@@ -203,11 +203,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 		// If acr_values was requested but no acr value was provided in the ID token, fall back to level 0 which means least
 		// confidence in authentication.
-		if requester.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues) != "" && claims.AuthenticationContextClassReference == "" {
+		if request.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues) != "" && claims.AuthenticationContextClassReference == "" {
 			claims.AuthenticationContextClassReference = "0"
 		}
 
-		if tokenHintString := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
+		if tokenHintString := request.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
 			var tokenHint *jwt.Token
 
 			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
@@ -246,7 +246,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	// OPTIONAL. String value used to associate a Client session with an ID Token, and to mitigate replay attacks.
-	if nonce := requester.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
+	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 	} else if len(nonce) > 0 && len(nonce) < h.Config.GetMinParameterEntropy(ctx) {
 		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
 		return "", errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))
@@ -254,7 +254,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		claims.Nonce = nonce
 	}
 
-	claims.Audience = stringslice.Unique(append(claims.Audience, requester.GetClient().GetID()))
+	claims.Audience = stringslice.Unique(append(claims.Audience, request.GetClient().GetID()))
 	claims.IssuedAt = jwt.Now()
 
 	token, _, err = h.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))

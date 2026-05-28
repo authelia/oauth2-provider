@@ -49,9 +49,9 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 	}
 
 	config := &oauth2.Config{
-		ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-		AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-		GlobalSecret:             []byte("some-secret-thats-random-some-secret-thats-random-"),
+		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+		AudienceStrategy: oauth2.DefaultAudienceStrategy,
+		GlobalSecret:     []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693AccessToken: &DefaultTokenType{
 				Name: consts.TokenTypeRFC8693AccessToken,
@@ -78,10 +78,10 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 	}
 
 	genericTEHandler := &TokenExchangeGrantHandler{
-		Config:                   config,
-		ScopeStrategy:            config.ScopeStrategy,
-		AudienceMatchingStrategy: config.AudienceMatchingStrategy,
-		ResourceMatchingStrategy: config.GetResourceStrategy(t.Context()),
+		Config:           config,
+		ScopeStrategy:    config.ScopeStrategy,
+		AudienceStrategy: config.AudienceStrategy,
+		ResourceStrategy: config.GetResourceStrategy(t.Context()),
 	}
 
 	accessTokenHandler := &AccessTokenTypeHandler{

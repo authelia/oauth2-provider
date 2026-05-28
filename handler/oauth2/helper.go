@@ -22,21 +22,21 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	var token, signature string
 
-	if token, signature, err = h.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
+	if token, signature, err = h.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
 		return err
 	}
 
-	if err = h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, requester.Sanitize([]string{})); err != nil {
+	if err = h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
 		return err
 	}
 
-	responder.SetAccessToken(token)
-	responder.SetTokenType(oauth2.BearerAccessToken)
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
-	responder.SetScopes(requester.GetGrantedScopes())
+	response.SetAccessToken(token)
+	response.SetTokenType(oauth2.BearerAccessToken)
+	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
+	response.SetScopes(request.GetGrantedScopes())
 
 	return nil
 }

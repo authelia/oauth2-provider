@@ -72,7 +72,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 // PopulateTokenEndpointResponse implements RFC8693 Section 2.2 and the oauth2.TokenEndpointHandler.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2
-func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, responder oauth2.AccessResponder) error {
+func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -93,7 +93,7 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 		return nil
 	}
 
-	if err := c.issue(ctx, request, responder); err != nil {
+	if err = c.issue(ctx, request, response); err != nil {
 		return err
 	}
 
@@ -101,7 +101,7 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 }
 
 // CanSkipClientAuth indicates if client auth can be skipped, which is not possible for RFC8693.
-func (c *IDTokenTypeHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *IDTokenTypeHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
@@ -109,8 +109,8 @@ func (c *IDTokenTypeHandler) CanSkipClientAuth(ctx context.Context, requester oa
 // 'grant_type' is exactly and only 'urn:ietf:params:oauth:grant-type:token-exchange'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
-func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
 func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (map[string]any, error) {

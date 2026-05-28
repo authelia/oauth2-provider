@@ -242,9 +242,9 @@ func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "should pass but no scope in redirect uri",
 			handler: &NoneResponseTypeHandler{
 				Config: &oauth2.Config{
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-					OmitRedirectScopeParam:   true,
+					ScopeStrategy:          oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:       oauth2.DefaultAudienceStrategy,
+					OmitRedirectScopeParam: true,
 				},
 			},
 			requester: &oauth2.AuthorizeRequest{
@@ -282,8 +282,8 @@ func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 			if tc.handler == nil {
 				handler = &NoneResponseTypeHandler{
 					Config: &oauth2.Config{
-						ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-						AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+						ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+						AudienceStrategy: oauth2.DefaultAudienceStrategy,
 					},
 				}
 			} else {

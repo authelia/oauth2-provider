@@ -64,6 +64,6 @@ func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) boo
 	return false
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, requester oauth2.AccessRequester) bool {
-	return requester.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
+func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
+	return request.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
 }

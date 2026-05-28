@@ -112,10 +112,10 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			areq.Form = url.Values{}
 
 			config := &oauth2.Config{
-				AccessTokenLifespan:      time.Hour,
-				RefreshTokenLifespan:     time.Hour,
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+				AccessTokenLifespan:  time.Hour,
+				RefreshTokenLifespan: time.Hour,
+				ScopeStrategy:        oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:     oauth2.DefaultAudienceStrategy,
 			}
 			h := ResourceOwnerPasswordCredentialsGrantHandler{
 				ResourceOwnerPasswordCredentialsGrantStorage: store,

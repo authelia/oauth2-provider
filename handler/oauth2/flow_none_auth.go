@@ -30,39 +30,41 @@ var (
 	_ oauth2.AuthorizeEndpointHandler = (*NoneResponseTypeHandler)(nil)
 )
 
-func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
-	if !requester.GetResponseTypes().ExactOne(consts.ResponseTypeNone) {
+func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeNone) {
 		return nil
 	}
 
-	requester.SetDefaultResponseMode(oauth2.ResponseModeQuery)
+	request.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
-	if !c.GetRedirectSecureChecker(ctx)(ctx, requester.GetRedirectURI()) {
+	if !c.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
-	client := requester.GetClient()
-	for _, scope := range requester.GetRequestedScopes() {
-		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
+	client := request.GetClient()
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
-	responder.AddParameter(consts.FormParameterState, requester.GetState())
+	response.AddParameter(consts.FormParameterState, request.GetState())
 
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
-		responder.AddParameter(consts.FormParameterScope, strings.Join(requester.GetGrantedScopes(), " "))
+		response.AddParameter(consts.FormParameterScope, strings.Join(request.GetGrantedScopes(), " "))
 	}
 
-	requester.SetResponseTypeHandled(consts.ResponseTypeNone)
+	request.SetResponseTypeHandled(consts.ResponseTypeNone)
 
 	return nil
 }

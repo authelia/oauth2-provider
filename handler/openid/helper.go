@@ -22,11 +22,11 @@ type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }
 
-func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (sum string) {
+func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (sum string) {
 	var err error
 
-	token := responder.GetAccessToken()
-	if session, ok := requester.GetSession().(Session); ok {
+	token := response.GetAccessToken()
+	if session, ok := request.GetSession().(Session); ok {
 		if sum, err = i.ComputeHash(ctx, session, token); err != nil {
 			// The Digest function Write always returns nil for err, the panic should never happen.
 			panic(err)
@@ -48,34 +48,34 @@ func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, requester 
 	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2])
 }
 
-func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (token string, err error) {
-	if token, err = i.IDTokenStrategy.GenerateIDToken(ctx, lifespan, requester); err != nil {
+func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (token string, err error) {
+	if token, err = i.IDTokenStrategy.GenerateIDToken(ctx, lifespan, request); err != nil {
 		return "", err
 	}
 
 	return token, nil
 }
 
-func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester, responder oauth2.AuthorizeResponder) (err error) {
+func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester, response oauth2.AuthorizeResponder) (err error) {
 	var token string
 
-	if token, err = i.generateIDToken(ctx, lifespan, requester); err != nil {
+	if token, err = i.generateIDToken(ctx, lifespan, request); err != nil {
 		return err
 	}
 
-	responder.AddParameter(consts.AccessResponseIDToken, token)
+	response.AddParameter(consts.AccessResponseIDToken, token)
 
 	return nil
 }
 
-func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester, responder oauth2.AccessResponder) (err error) {
+func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester, response oauth2.AccessResponder) (err error) {
 	var token string
 
-	if token, err = i.generateIDToken(ctx, lifespan, requester); err != nil {
+	if token, err = i.generateIDToken(ctx, lifespan, request); err != nil {
 		return err
 	}
 
-	responder.SetExtra(consts.AccessResponseIDToken, token)
+	response.SetExtra(consts.AccessResponseIDToken, token)
 
 	return nil
 }

@@ -19,7 +19,7 @@ import (
 
 // HandleTokenEndpointRequest implements
 // * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything)
-func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(errorsx.WithStack(oauth2.ErrUnknownRequest))
 	}
@@ -78,13 +78,13 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// is applied to the 'audience' parameter.
 	if len(request.GetRequestedAudience()) == 0 {
 		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
-	} else if err = c.Config.GetAudienceStrategy(ctx)(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+	} else if err = oauth2.GetAudienceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
 	if len(request.GetRequestedResource()) == 0 {
 		request.SetRequestedResource(authorizeRequest.GetGrantedResource())
-	} else if err = c.Config.GetResourceStrategy(ctx)(authorizeRequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+	} else if err = oauth2.GetResourceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
@@ -149,45 +149,45 @@ func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler,
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
+	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 
 	var ar oauth2.Requester
 
-	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, requester.GetSession()); err != nil {
+	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, requester, code); err != nil {
+	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, request, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	}
 
 	for _, scope := range ar.GetGrantedScopes() {
-		requester.GrantScope(scope)
+		request.GrantScope(scope)
 	}
 
 	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest
 	// has already ensured these sets are subsets of the authorize request's granted values (or
 	// equal to them when the corresponding parameter was absent at the token endpoint).
-	for _, audience := range requester.GetRequestedAudience() {
-		requester.GrantAudience(audience)
+	for _, audience := range request.GetRequestedAudience() {
+		request.GrantAudience(audience)
 	}
 
-	for _, resource := range requester.GetRequestedResource() {
-		requester.GrantResource(resource)
+	for _, resource := range request.GetRequestedResource() {
+		request.GrantResource(resource)
 	}
 
-	access, accessSignature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, requester)
+	access, accessSignature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, request)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	var refresh, refreshSignature string
 	if canIssueRefreshToken(ctx, c, ar) {
-		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester)
+		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request)
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
@@ -207,21 +207,21 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	if err = c.CoreStorage.InvalidateAuthorizeCodeSession(ctx, signature); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, requester.Sanitize([]string{})); err != nil {
+	} else if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
+		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
-	responder.SetAccessToken(access)
-	responder.SetTokenType(oauth2.BearerAccessToken)
-	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
-	responder.SetScopes(requester.GetGrantedScopes())
+	response.SetAccessToken(access)
+	response.SetTokenType(oauth2.BearerAccessToken)
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
+	response.SetScopes(request.GetGrantedScopes())
 	if refresh != "" {
-		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
+		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	if err = storage.MaybeCommitTx(ctx, c.CoreStorage); err != nil {
@@ -231,11 +231,11 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	return nil
 }
 
-func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The 'grant_type' parameter is REQUIRED and the value MUST be set to 'authorization_code'.
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

@@ -140,9 +140,9 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 		{
 			name: "ShouldPassButNoScopeInRedirectURI",
 			config: &oauth2.Config{
-				ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-				AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-				OmitRedirectScopeParam:   true,
+				ScopeStrategy:          oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:       oauth2.DefaultAudienceStrategy,
+				OmitRedirectScopeParam: true,
 			},
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
@@ -180,8 +180,8 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			config := tc.config
 			if config == nil {
 				config = &oauth2.Config{
-					AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
-					ScopeStrategy:            oauth2.HierarchicScopeStrategy,
+					AudienceStrategy: oauth2.DefaultAudienceStrategy,
+					ScopeStrategy:    oauth2.HierarchicScopeStrategy,
 				}
 			}
 			handler := AuthorizeExplicitGrantHandler{

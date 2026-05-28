@@ -20,26 +20,26 @@ type AuthorizeEndpointHandler interface {
 	//   authorization code as described by Section 4.1.1, "token" for
 	//   requesting an access token (implicit grant) as described by
 	//   Section 4.2.1, or a registered extension value as described by Section 8.4.
-	HandleAuthorizeEndpointRequest(ctx context.Context, requester AuthorizeRequester, responder AuthorizeResponder) error
+	HandleAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response AuthorizeResponder) error
 }
 
 type TokenEndpointHandler interface {
 	// PopulateTokenEndpointResponse is responsible for setting return values and should only be executed if
 	// the handler's HandleTokenEndpointRequest did not return ErrUnknownRequest.
-	PopulateTokenEndpointResponse(ctx context.Context, requester AccessRequester, responder AccessResponder) error
+	PopulateTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) error
 
 	// HandleTokenEndpointRequest handles an authorize request. If the handler is not responsible for handling
 	// the request, this method should return ErrUnknownRequest and otherwise handle the request.
-	HandleTokenEndpointRequest(ctx context.Context, requester AccessRequester) error
+	HandleTokenEndpointRequest(ctx context.Context, request AccessRequester) error
 
 	// CanSkipClientAuth indicates if client authentication can be skipped. By default it MUST be false, unless you are
 	// implementing extension grant type, which allows unauthenticated client. CanSkipClientAuth must be called
 	// before HandleTokenEndpointRequest to decide, if AccessRequester will contain authenticated client.
-	CanSkipClientAuth(ctx context.Context, requester AccessRequester) bool
+	CanSkipClientAuth(ctx context.Context, request AccessRequester) bool
 
 	// CanHandleTokenEndpointRequest indicates, if TokenEndpointHandler can handle this request or not. If true,
 	// HandleTokenEndpointRequest can be called.
-	CanHandleTokenEndpointRequest(ctx context.Context, requester AccessRequester) bool
+	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) bool
 }
 
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.
@@ -65,7 +65,7 @@ type PushedAuthorizeEndpointHandler interface {
 	// HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
 	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
 	// the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
-	HandlePushedAuthorizeEndpointRequest(ctx context.Context, requester AuthorizeRequester, responder PushedAuthorizeResponder) error
+	HandlePushedAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response PushedAuthorizeResponder) error
 }
 
 type RFC8628DeviceAuthorizeEndpointHandler interface {
@@ -75,7 +75,7 @@ type RFC8628DeviceAuthorizeEndpointHandler interface {
 	//
 	// The following spec is a good example of what HandleDeviceAuthorizeRequest should do.
 	// * https://tools.ietf.org/html/rfc8628#section-3.2
-	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, requester DeviceAuthorizeRequester, responder DeviceAuthorizeResponder) error
+	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder) error
 }
 
 type RFC8628UserAuthorizeEndpointHandler interface {
@@ -88,5 +88,5 @@ type RFC8628UserAuthorizeEndpointHandler interface {
 	// PopulateRFC8628UserAuthorizeEndpointResponse populates the response object as an outcome of user authorization during
 	// the device authorization grant flow.
 	//
-	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, requester DeviceAuthorizeRequester, responder DeviceUserAuthorizeResponder) error
+	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder) error
 }

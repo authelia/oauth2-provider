@@ -25,7 +25,7 @@ type TokenRevocationHandler struct {
 
 // RevokeToken implements https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // The token type hint indicates which token type check should be performed first.
-func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) error {
+func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) (err error) {
 	var handlers []RevocationTokenLookupFunc
 
 	switch tokenType {
@@ -39,14 +39,13 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 
 	//nolint:prealloc
 	var (
-		requester oauth2.Requester
-		tt        oauth2.TokenType
-		err       error
-		errs      []error
+		request oauth2.Requester
+		tt      oauth2.TokenType
+		errs    []error
 	)
 
 	for _, handler := range handlers {
-		if requester, tt, err = handler(ctx, token); err == nil {
+		if request, tt, err = handler(ctx, token); err == nil {
 			break
 		}
 
@@ -57,11 +56,11 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 		return r.handleErrors(errs)
 	}
 
-	if requester.GetClient().GetID() != client.GetID() {
+	if request.GetClient().GetID() != client.GetID() {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient)
 	}
 
-	id := requester.GetID()
+	id := request.GetID()
 
 	errs = []error{}
 
@@ -78,7 +77,7 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 	return r.handleErrors(errs)
 }
 
-type RevocationTokenLookupFunc func(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error)
+type RevocationTokenLookupFunc func(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error)
 
 func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Context, client oauth2.Client) bool {
 	var (
@@ -97,20 +96,20 @@ func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Co
 	return r.Config.GetRevokeRefreshTokensExplicit(ctx)
 }
 
-func (r *TokenRevocationHandler) handleGetRefreshTokenRequester(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error) {
+func (r *TokenRevocationHandler) handleGetRefreshTokenRequester(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error) {
 	signature := r.RefreshTokenStrategy.RefreshTokenSignature(ctx, token)
 
-	requester, err = r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil)
+	request, err = r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil)
 
-	return requester, consts.TokenTypeRefreshToken, err
+	return request, consts.TokenTypeRefreshToken, err
 }
 
-func (r *TokenRevocationHandler) handleGetAccessTokenRequester(ctx context.Context, token string) (requester oauth2.Requester, tokenType oauth2.TokenType, err error) {
+func (r *TokenRevocationHandler) handleGetAccessTokenRequester(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error) {
 	signature := r.AccessTokenStrategy.AccessTokenSignature(ctx, token)
 
-	requester, err = r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil)
+	request, err = r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil)
 
-	return requester, consts.TokenTypeAccessToken, err
+	return request, consts.TokenTypeAccessToken, err
 }
 
 func (r *TokenRevocationHandler) handleErrors(errs []error) (err error) {

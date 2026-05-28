@@ -42,18 +42,18 @@ var (
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) error {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if !requester.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'refresh_token'."))
 	}
 
-	refresh := requester.GetRequestForm().Get(consts.FormParameterRefreshToken)
+	refresh := request.GetRequestForm().Get(consts.FormParameterRefreshToken)
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, refresh)
-	orequest, err := c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, requester.GetSession())
+	orequest, err := c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, request.GetSession())
 
 	switch {
 	case err == nil:
@@ -82,12 +82,12 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		return errorsx.WithStack(oauth2.ErrScopeNotGranted.WithHint(hint))
 	}
 
-	if orequest.GetClient().GetID() != requester.GetClient().GetID() {
+	if orequest.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."))
 	}
 
-	requester.SetID(orequest.GetID())
-	requester.SetSession(orequest.GetSession().Clone())
+	request.SetID(orequest.GetID())
+	request.SetSession(orequest.GetSession().Clone())
 
 	/*
 			There are two key points in the following spec section this addresses:
@@ -106,22 +106,25 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	oscopes := false
 
 	// Addresses point 1 of the text in RFC6749 Section 6.
-	if len(requester.GetRequestedScopes()) == 0 {
-		requester.SetRequestedScopes(scopes)
+	if len(request.GetRequestedScopes()) == 0 {
+		request.SetRequestedScopes(scopes)
 		oscopes = true
 	}
 
-	if len(requester.GetRequestedAudience()) == 0 {
-		requester.SetRequestedAudience(orequest.GetGrantedAudience())
+	if len(request.GetRequestedAudience()) == 0 {
+		request.SetRequestedAudience(orequest.GetGrantedAudience())
 	}
 
-	if len(requester.GetRequestedResource()) == 0 {
-		requester.SetRequestedResource(orequest.GetGrantedResource())
+	if len(request.GetRequestedResource()) == 0 {
+		request.SetRequestedResource(orequest.GetGrantedResource())
 	}
 
-	for _, scope := range requester.GetRequestedScopes() {
+	client := request.GetClient()
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
+
+	for _, scope := range request.GetRequestedScopes() {
 		if !oscopes && !scopes.Has(scope) {
-			if client, ok := requester.GetClient().(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
+			if client, ok := client.(oauth2.RefreshFlowScopeClient); ok && client.GetRefreshFlowIgnoreOriginalGrantedScopes(ctx) {
 				// Skips addressing point 2 of the text in RFC6749 Section 6 and instead just prevents the scope
 				// requested from being granted.
 				continue
@@ -131,51 +134,51 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The requested scope '%s' was not originally granted by the resource owner.", scope))
 		}
 
-		if !c.Config.GetScopeStrategy(ctx)(requester.GetClient().GetScopes(), scope) {
+		if !strategy(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 
-		requester.GrantScope(scope)
+		request.GrantScope(scope)
 	}
 
-	if err = c.Config.GetAudienceStrategy(ctx)(requester.GetClient().GetAudience(), requester.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err = c.Config.GetAudienceStrategy(ctx)(orequest.GetGrantedAudience(), requester.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(orequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	for _, audience := range requester.GetRequestedAudience() {
-		requester.GrantAudience(audience)
+	for _, audience := range request.GetRequestedAudience() {
+		request.GrantAudience(audience)
 	}
 
-	if err = c.Config.GetResourceStrategy(ctx)(requester.GetClient().GetAudience(), requester.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
-	if err = c.Config.GetResourceStrategy(ctx)(orequest.GetGrantedResource(), requester.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(orequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
-	for _, resource := range requester.GetRequestedResource() {
-		requester.GrantResource(resource)
+	for _, resource := range request.GetRequestedResource() {
+		request.GrantResource(resource)
 	}
 
-	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
-	rtLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
+	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 	if rtLifespan > -1 {
-		requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil
 }
 
 // PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-6
-func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
@@ -184,15 +187,15 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		accessSignature, refreshSignature string
 	)
 
-	if accessToken, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
+	if accessToken, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester); err != nil {
+	if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, requester.GetRequestForm().Get(consts.FormParameterRefreshToken))
+	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -202,31 +205,31 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
 	}()
 
-	var orequester oauth2.Requester
+	var orequest oauth2.Requester
 
-	if orequester, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
+	if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
 		return err
 	}
 
-	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, orequester.GetID()); err != nil {
+	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, orequest.GetID()); err != nil {
 		return err
 	}
 
-	if err = c.TokenRevocationStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, orequester.GetID(), signature); err != nil {
+	if err = c.TokenRevocationStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, orequest.GetID(), signature); err != nil {
 		return err
 	}
 
-	srequester := requester.Sanitize(nil)
-	srequester.SetID(orequester.GetID())
+	srequester := request.Sanitize(nil)
+	srequester.SetID(orequest.GetID())
 
 	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, srequester); err != nil {
 		return err
 	}
 
-	if rtrequester, ok := requester.(oauth2.RefreshTokenAccessRequester); ok {
-		srtrequester := rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequester)
+	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
+		srtrequester := rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
 
-		srtrequester.SetSession(requester.GetSession().Clone())
+		srtrequester.SetSession(request.GetSession().Clone())
 
 		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, srtrequester); err != nil {
 			return err
@@ -237,11 +240,11 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		}
 	}
 
-	responder.SetAccessToken(accessToken)
-	responder.SetTokenType(oauth2.BearerAccessToken)
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
-	responder.SetScopes(requester.GetGrantedScopes())
-	responder.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
+	response.SetAccessToken(accessToken)
+	response.SetTokenType(oauth2.BearerAccessToken)
+	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
+	response.SetScopes(request.GetGrantedScopes())
+	response.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
 
 	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
 		return err
@@ -259,7 +262,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 //	legitimate client is trying to access, in case of such an access
 //	attempt the valid refresh token and the access authorization
 //	associated with it are both revoked.
-func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, req oauth2.Requester) (err error) {
+func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -271,11 +274,11 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, 
 	if err = c.TokenRevocationStorage.DeleteRefreshTokenSession(ctx, signature); err != nil {
 		return err
 	} else if err = c.TokenRevocationStorage.RevokeRefreshToken(
-		ctx, req.GetID(),
+		ctx, request.GetID(),
 	); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err
 	} else if err = c.TokenRevocationStorage.RevokeAccessToken(
-		ctx, req.GetID(),
+		ctx, request.GetID(),
 	); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err
 	}
@@ -313,12 +316,12 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx co
 	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebugError(storageErr))
 }
 
-func (c *RefreshTokenGrantHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *RefreshTokenGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
-func (c *RefreshTokenGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
+func (c *RefreshTokenGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "refresh_token".
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }

@@ -70,9 +70,9 @@ func (mr *MockCoreStrategyMockRecorder) AuthorizeCodeSignature(ctx, token any) *
 }
 
 // GenerateAccessToken mocks base method.
-func (m *MockCoreStrategy) GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (string, string, error) {
+func (m *MockCoreStrategy) GenerateAccessToken(ctx context.Context, request oauth2.Requester) (string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateAccessToken", ctx, requester)
+	ret := m.ctrl.Call(m, "GenerateAccessToken", ctx, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -80,15 +80,15 @@ func (m *MockCoreStrategy) GenerateAccessToken(ctx context.Context, requester oa
 }
 
 // GenerateAccessToken indicates an expected call of GenerateAccessToken.
-func (mr *MockCoreStrategyMockRecorder) GenerateAccessToken(ctx, requester any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) GenerateAccessToken(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAccessToken", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateAccessToken), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAccessToken", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateAccessToken), ctx, request)
 }
 
 // GenerateAuthorizeCode mocks base method.
-func (m *MockCoreStrategy) GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (string, string, error) {
+func (m *MockCoreStrategy) GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateAuthorizeCode", ctx, requester)
+	ret := m.ctrl.Call(m, "GenerateAuthorizeCode", ctx, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -96,9 +96,9 @@ func (m *MockCoreStrategy) GenerateAuthorizeCode(ctx context.Context, requester 
 }
 
 // GenerateAuthorizeCode indicates an expected call of GenerateAuthorizeCode.
-func (mr *MockCoreStrategyMockRecorder) GenerateAuthorizeCode(ctx, requester any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) GenerateAuthorizeCode(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthorizeCode", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateAuthorizeCode), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthorizeCode", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateAuthorizeCode), ctx, request)
 }
 
 // GenerateRFC8628DeviceCode mocks base method.
@@ -134,9 +134,9 @@ func (mr *MockCoreStrategyMockRecorder) GenerateRFC8628UserCode(ctx any) *gomock
 }
 
 // GenerateRefreshToken mocks base method.
-func (m *MockCoreStrategy) GenerateRefreshToken(ctx context.Context, requester oauth2.Requester) (string, string, error) {
+func (m *MockCoreStrategy) GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateRefreshToken", ctx, requester)
+	ret := m.ctrl.Call(m, "GenerateRefreshToken", ctx, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -144,9 +144,9 @@ func (m *MockCoreStrategy) GenerateRefreshToken(ctx context.Context, requester o
 }
 
 // GenerateRefreshToken indicates an expected call of GenerateRefreshToken.
-func (mr *MockCoreStrategyMockRecorder) GenerateRefreshToken(ctx, requester any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) GenerateRefreshToken(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateRefreshToken), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).GenerateRefreshToken), ctx, request)
 }
 
 // IsOpaqueAccessToken mocks base method.
@@ -250,31 +250,31 @@ func (mr *MockCoreStrategyMockRecorder) RefreshTokenSignature(ctx, token any) *g
 }
 
 // ValidateAccessToken mocks base method.
-func (m *MockCoreStrategy) ValidateAccessToken(ctx context.Context, requester oauth2.Requester, token string) error {
+func (m *MockCoreStrategy) ValidateAccessToken(ctx context.Context, request oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAccessToken", ctx, requester, token)
+	ret := m.ctrl.Call(m, "ValidateAccessToken", ctx, request, token)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAccessToken indicates an expected call of ValidateAccessToken.
-func (mr *MockCoreStrategyMockRecorder) ValidateAccessToken(ctx, requester, token any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) ValidateAccessToken(ctx, request, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAccessToken", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateAccessToken), ctx, requester, token)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAccessToken", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateAccessToken), ctx, request, token)
 }
 
 // ValidateAuthorizeCode mocks base method.
-func (m *MockCoreStrategy) ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) error {
+func (m *MockCoreStrategy) ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAuthorizeCode", ctx, requester, token)
+	ret := m.ctrl.Call(m, "ValidateAuthorizeCode", ctx, request, token)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAuthorizeCode indicates an expected call of ValidateAuthorizeCode.
-func (mr *MockCoreStrategyMockRecorder) ValidateAuthorizeCode(ctx, requester, token any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) ValidateAuthorizeCode(ctx, request, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAuthorizeCode", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateAuthorizeCode), ctx, requester, token)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAuthorizeCode", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateAuthorizeCode), ctx, request, token)
 }
 
 // ValidateRFC8628DeviceCode mocks base method.
@@ -306,15 +306,15 @@ func (mr *MockCoreStrategyMockRecorder) ValidateRFC8628UserCode(ctx, r, code any
 }
 
 // ValidateRefreshToken mocks base method.
-func (m *MockCoreStrategy) ValidateRefreshToken(ctx context.Context, requester oauth2.Requester, token string) error {
+func (m *MockCoreStrategy) ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateRefreshToken", ctx, requester, token)
+	ret := m.ctrl.Call(m, "ValidateRefreshToken", ctx, request, token)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateRefreshToken indicates an expected call of ValidateRefreshToken.
-func (mr *MockCoreStrategyMockRecorder) ValidateRefreshToken(ctx, requester, token any) *gomock.Call {
+func (mr *MockCoreStrategyMockRecorder) ValidateRefreshToken(ctx, request, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateRefreshToken), ctx, requester, token)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRefreshToken", reflect.TypeOf((*MockCoreStrategy)(nil).ValidateRefreshToken), ctx, request, token)
 }

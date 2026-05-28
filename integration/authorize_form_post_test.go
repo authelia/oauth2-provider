@@ -252,10 +252,10 @@ func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 	return oauth2.ResponseModeTypes{"decorated_form_post"}
 }
 
-func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) {
+func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeTextHTML)
-	responder.AddParameter("custom_param", "foo")
-	oauth2.DefaultFormPostResponseWriter(rw, oauth2.GetPostFormHTMLTemplate(ctx, new(oauth2.Config)), requester.GetRedirectURI().String(), responder.GetParameters())
+	response.AddParameter("custom_param", "foo")
+	oauth2.DefaultFormPostResponseWriter(rw, oauth2.GetPostFormHTMLTemplate(ctx, new(oauth2.Config)), requester.GetRedirectURI().String(), response.GetParameters())
 }
 
 func (m *DecoratedFormPostResponse) WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, requester oauth2.AuthorizeRequester, err error) {

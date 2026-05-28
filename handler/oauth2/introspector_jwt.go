@@ -27,7 +27,7 @@ type StatelessJWTValidator struct {
 	}
 }
 
-func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, requester oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
+func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	// This context value allows skipping the StatelessJWTValidator and continuing to the next.
 	if val := ctx.Value(ContextKeySkipStatelessIntrospection); val != nil {
 		if skip, ok := val.(bool); ok && skip {
@@ -41,7 +41,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	var token *jwt.Token
 
-	if token, err = validateJWT(ctx, v.StatelessJWTStrategy, jwt.NewStatelessJWTProfileIntrospectionClient(requester.GetClient()), tokenString); err != nil {
+	if token, err = validateJWT(ctx, v.StatelessJWTStrategy, jwt.NewStatelessJWTProfileIntrospectionClient(request.GetClient()), tokenString); err != nil {
 		return "", err
 	}
 
@@ -51,11 +51,11 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	r := AccessTokenJWTToRequest(token)
 
-	if err = matchScopes(v.Config.GetScopeStrategy(ctx), r.GetGrantedScopes(), scopes); err != nil {
+	if err = matchScopes(oauth2.GetScopeStrategy(ctx, v.Config, r.GetClient()), r.GetGrantedScopes(), scopes); err != nil {
 		return oauth2.AccessToken, err
 	}
 
-	requester.Merge(r)
+	request.Merge(r)
 
 	return oauth2.AccessToken, nil
 }

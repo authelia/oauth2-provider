@@ -44,10 +44,10 @@ type AccessTokenStrategy interface {
 	AccessTokenSignature(ctx context.Context, token string) (signature string)
 
 	// GenerateAccessToken generates a new Access Token.
-	GenerateAccessToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	GenerateAccessToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
 	// ValidateAccessToken validates the provided Access Token.
-	ValidateAccessToken(ctx context.Context, requester oauth2.Requester, token string) (err error)
+	ValidateAccessToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
 type RefreshTokenStrategy interface {
@@ -60,10 +60,10 @@ type RefreshTokenStrategy interface {
 	RefreshTokenSignature(ctx context.Context, token string) (signature string)
 
 	// GenerateRefreshToken generates a new Refresh Token.
-	GenerateRefreshToken(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
 	// ValidateRefreshToken validates the provided Refresh Token.
-	ValidateRefreshToken(ctx context.Context, requester oauth2.Requester, token string) (err error)
+	ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
 type AuthorizeCodeStrategy interface {
@@ -76,10 +76,10 @@ type AuthorizeCodeStrategy interface {
 	AuthorizeCodeSignature(ctx context.Context, token string) (signature string)
 
 	// GenerateAuthorizeCode generates a new Authorize Code.
-	GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (token string, signature string, err error)
+	GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
 	// ValidateAuthorizeCode validates the provided Authorize Code.
-	ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) (err error)
+	ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
 type DeviceCodeStrategy interface {

@@ -154,15 +154,15 @@ func NewExampleStore() *MemoryStore {
 	}
 }
 
-func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCode string, requester oauth2.Requester) error {
+func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCode string, request oauth2.Requester) error {
 	s.idSessionsMutex.Lock()
 	defer s.idSessionsMutex.Unlock()
 
-	s.IDSessions[authorizeCode] = requester
+	s.IDSessions[authorizeCode] = request
 	return nil
 }
 
-func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode string, requester oauth2.Requester) (oauth2.Requester, error) {
+func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode string, request oauth2.Requester) (oauth2.Requester, error) {
 	s.idSessionsMutex.RLock()
 	defer s.idSessionsMutex.RUnlock()
 
@@ -523,7 +523,7 @@ func (s *MemoryStore) SetTokenExchangeCustomJWT(ctx context.Context, jti string,
 // GetSubjectForTokenExchange computes the session subject and is used for token types where there is no way
 // to know the subject value. For some token types, such as access and refresh tokens, the subject is well-defined
 // and this function is not called.
-func (s *MemoryStore) GetSubjectForTokenExchange(ctx context.Context, requester oauth2.Requester, subjectToken map[string]any) (string, error) {
+func (s *MemoryStore) GetSubjectForTokenExchange(ctx context.Context, request oauth2.Requester, subjectToken map[string]any) (string, error) {
 	sub, _ := subjectToken["subject"].(string)
 	if sub == "" {
 		return "", oauth2.ErrInvalidRequest.WithHint("No subject found.")
@@ -567,7 +567,7 @@ func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string
 	return rel, nil
 }
 
-func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (requester oauth2.DeviceAuthorizeRequester, err error) {
+func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
 	s.deviceCodesMutex.RLock()
 	defer s.deviceCodesMutex.RUnlock()
 

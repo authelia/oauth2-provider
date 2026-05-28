@@ -12,11 +12,11 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, requester AccessRequester, responder AccessResponder) {
+func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter, request AccessRequester, response AccessResponder) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
-	js, err := json.Marshal(responder.ToMap())
+	js, err := json.Marshal(response.ToMap())
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return

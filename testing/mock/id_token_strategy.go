@@ -43,16 +43,16 @@ func (m *MockOpenIDConnectTokenStrategy) EXPECT() *MockOpenIDConnectTokenStrateg
 }
 
 // GenerateIDToken mocks base method.
-func (m *MockOpenIDConnectTokenStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, requester oauth2.Requester) (string, error) {
+func (m *MockOpenIDConnectTokenStrategy) GenerateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateIDToken", ctx, lifespan, requester)
+	ret := m.ctrl.Call(m, "GenerateIDToken", ctx, lifespan, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GenerateIDToken indicates an expected call of GenerateIDToken.
-func (mr *MockOpenIDConnectTokenStrategyMockRecorder) GenerateIDToken(ctx, lifespan, requester any) *gomock.Call {
+func (mr *MockOpenIDConnectTokenStrategyMockRecorder) GenerateIDToken(ctx, lifespan, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIDToken", reflect.TypeOf((*MockOpenIDConnectTokenStrategy)(nil).GenerateIDToken), ctx, lifespan, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIDToken", reflect.TypeOf((*MockOpenIDConnectTokenStrategy)(nil).GenerateIDToken), ctx, lifespan, request)
 }

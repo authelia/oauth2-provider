@@ -18,13 +18,13 @@ import (
 )
 
 type CodeTokenEndpointHandler interface {
-	ValidateGrantTypes(ctx context.Context, requester oauth2.AccessRequester) (err error)
-	ValidateCodeAndSession(ctx context.Context, requester oauth2.AccessRequester, authorizeRequester oauth2.Requester, code string) (err error)
-	GetCodeAndSession(ctx context.Context, requester oauth2.AccessRequester) (code string, signature string, r oauth2.Requester, err error)
-	UpdateLastChecked(ctx context.Context, requester oauth2.AccessRequester, authorizeRequester oauth2.Requester) (err error)
-	InvalidateSession(ctx context.Context, signature string, requester oauth2.Requester) error
-	CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool
-	CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool
+	ValidateGrantTypes(ctx context.Context, request oauth2.AccessRequester) (err error)
+	ValidateCodeAndSession(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) (err error)
+	GetCodeAndSession(ctx context.Context, request oauth2.AccessRequester) (code string, signature string, r oauth2.Requester, err error)
+	UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) (err error)
+	InvalidateSession(ctx context.Context, signature string, request oauth2.Requester) error
+	CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool
+	CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool
 	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 }
 
@@ -47,12 +47,12 @@ var _ oauth2.TokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
 // HandleTokenEndpointRequest handles verifying the access request.
 //
 //nolint:gocyclo
-func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(errorsx.WithStack(oauth2.ErrUnknownRequest))
 	}
 
-	if err = c.ValidateGrantTypes(ctx, requester); err != nil {
+	if err = c.ValidateGrantTypes(ctx, request); err != nil {
 		return err
 	}
 
@@ -61,7 +61,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		deviceRequester oauth2.Requester
 	)
 
-	if code, _, deviceRequester, err = c.GetCodeAndSession(ctx, requester); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
+	if code, _, deviceRequester, err = c.GetCodeAndSession(ctx, request); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
 		if deviceRequester == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
@@ -103,22 +103,22 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	// Update last checked if there is error validating / processing the request.
 	defer func() {
 		if err != nil && deviceRequester != nil {
-			_ = c.UpdateLastChecked(ctx, requester, deviceRequester)
+			_ = c.UpdateLastChecked(ctx, request, deviceRequester)
 		}
 	}()
 
-	if err = c.ValidateCodeAndSession(ctx, requester, deviceRequester, code); err != nil {
+	if err = c.ValidateCodeAndSession(ctx, request, deviceRequester, code); err != nil {
 		return errorsx.WithStack(err)
 	}
 
-	requester.SetRequestedScopes(deviceRequester.GetRequestedScopes())
-	requester.SetRequestedAudience(deviceRequester.GetRequestedAudience())
-	requester.SetRequestedResource(deviceRequester.GetRequestedResource())
+	request.SetRequestedScopes(deviceRequester.GetRequestedScopes())
+	request.SetRequestedAudience(deviceRequester.GetRequestedAudience())
+	request.SetRequestedResource(deviceRequester.GetRequestedResource())
 
 	// The authorization server MUST ensure that the authorization code was issued to the authenticated
 	// confidential client, or if the client is public, ensure that the
 	// code was issued to "client_id" in the request,
-	if deviceRequester.GetClient().GetID() != requester.GetClient().GetID() {
+	if deviceRequester.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
 
@@ -127,7 +127,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	// request as described in Section 4.1.1, and if included ensure that
 	// their values are identical.
 	forcedRedirectURI := deviceRequester.GetRequestForm().Get(consts.FormParameterRedirectURI)
-	if forcedRedirectURI != "" && forcedRedirectURI != requester.GetRequestForm().Get(consts.FormParameterRedirectURI) {
+	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
 	}
 
@@ -136,25 +136,25 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	// credentials (or assigned other authentication requirements), the
 	// client MUST authenticate with the authorization server as described
 	// in Section 3.2.1.
-	requester.SetSession(deviceRequester.GetSession())
-	requester.SetID(deviceRequester.GetID())
+	request.SetSession(deviceRequester.GetSession())
+	request.SetID(deviceRequester.GetID())
 
 	gt := oauth2.GrantTypeAuthorizationCode
 
-	if requester.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
 		gt = oauth2.GrantTypeDeviceCode
 	}
 
 	var lifespan time.Duration
 
-	lifespan = oauth2.GetEffectiveLifespan(requester.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	requester.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 
-	lifespan = oauth2.GetEffectiveLifespan(requester.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
+	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
 	if lifespan > -1 {
-		requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 	}
 
 	return nil
@@ -163,29 +163,29 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 // PopulateTokenEndpointResponse handles populating the access response.
 //
 //nolint:gocyclo
-func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	code, signature, ar, err := c.GetCodeAndSession(ctx, requester)
+	code, signature, ar, err := c.GetCodeAndSession(ctx, request)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if err = c.ValidateCodeAndSession(ctx, requester, ar, code); err != nil {
+	} else if err = c.ValidateCodeAndSession(ctx, request, ar, code); err != nil {
 		// This needs to happen after store retrieval for the session to be hydrated properly
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
 	for _, scope := range ar.GetGrantedScopes() {
-		requester.GrantScope(scope)
+		request.GrantScope(scope)
 	}
 
 	for _, audience := range ar.GetGrantedAudience() {
-		requester.GrantAudience(audience)
+		request.GrantAudience(audience)
 	}
 
 	for _, resource := range ar.GetGrantedResource() {
-		requester.GrantResource(resource)
+		request.GrantResource(resource)
 	}
 
 	var (
@@ -193,12 +193,12 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		refresh, refreshSignature string
 	)
 
-	if access, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, requester); err != nil {
+	if access, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	if c.canIssueRefreshToken(ctx, ar) {
-		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, requester); err != nil {
+		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
@@ -219,22 +219,22 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, requester.Sanitize([]string{})); err != nil {
+	if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, requester.Sanitize([]string{})); err != nil {
+		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
-	responder.SetAccessToken(access)
-	responder.SetTokenType(oauth2.BearerAccessToken)
-	atLifespan := oauth2.GetEffectiveLifespan(requester.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	responder.SetExpiresIn(getExpiresIn(requester, oauth2.AccessToken, atLifespan, time.Now().UTC()))
-	responder.SetScopes(requester.GetGrantedScopes())
+	response.SetAccessToken(access)
+	response.SetTokenType(oauth2.BearerAccessToken)
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
+	response.SetScopes(request.GetGrantedScopes())
 
 	if refresh != "" {
-		responder.SetExtra(consts.AccessResponseRefreshToken, refresh)
+		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}
 
 	if err = storage.MaybeCommitTx(ctx, c.CoreStorage); err != nil {
@@ -260,12 +260,12 @@ func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Conte
 	return true
 }
 
-func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return c.CodeTokenEndpointHandler.CanSkipClientAuth(ctx, requester)
+func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+	return c.CodeTokenEndpointHandler.CanSkipClientAuth(ctx, request)
 }
 
-func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) bool {
-	return c.CodeTokenEndpointHandler.CanHandleTokenEndpointRequest(ctx, requester)
+func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+	return c.CodeTokenEndpointHandler.CanHandleTokenEndpointRequest(ctx, request)
 }
 
 var (

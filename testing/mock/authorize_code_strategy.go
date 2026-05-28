@@ -56,9 +56,9 @@ func (mr *MockAuthorizeCodeStrategyMockRecorder) AuthorizeCodeSignature(ctx, tok
 }
 
 // GenerateAuthorizeCode mocks base method.
-func (m *MockAuthorizeCodeStrategy) GenerateAuthorizeCode(ctx context.Context, requester oauth2.Requester) (string, string, error) {
+func (m *MockAuthorizeCodeStrategy) GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (string, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateAuthorizeCode", ctx, requester)
+	ret := m.ctrl.Call(m, "GenerateAuthorizeCode", ctx, request)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -66,9 +66,9 @@ func (m *MockAuthorizeCodeStrategy) GenerateAuthorizeCode(ctx context.Context, r
 }
 
 // GenerateAuthorizeCode indicates an expected call of GenerateAuthorizeCode.
-func (mr *MockAuthorizeCodeStrategyMockRecorder) GenerateAuthorizeCode(ctx, requester any) *gomock.Call {
+func (mr *MockAuthorizeCodeStrategyMockRecorder) GenerateAuthorizeCode(ctx, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).GenerateAuthorizeCode), ctx, requester)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).GenerateAuthorizeCode), ctx, request)
 }
 
 // IsOpaqueAuthorizeCode mocks base method.
@@ -86,15 +86,15 @@ func (mr *MockAuthorizeCodeStrategyMockRecorder) IsOpaqueAuthorizeCode(ctx, toke
 }
 
 // ValidateAuthorizeCode mocks base method.
-func (m *MockAuthorizeCodeStrategy) ValidateAuthorizeCode(ctx context.Context, requester oauth2.Requester, token string) error {
+func (m *MockAuthorizeCodeStrategy) ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, token string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAuthorizeCode", ctx, requester, token)
+	ret := m.ctrl.Call(m, "ValidateAuthorizeCode", ctx, request, token)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAuthorizeCode indicates an expected call of ValidateAuthorizeCode.
-func (mr *MockAuthorizeCodeStrategyMockRecorder) ValidateAuthorizeCode(ctx, requester, token any) *gomock.Call {
+func (mr *MockAuthorizeCodeStrategyMockRecorder) ValidateAuthorizeCode(ctx, request, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).ValidateAuthorizeCode), ctx, requester, token)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAuthorizeCode", reflect.TypeOf((*MockAuthorizeCodeStrategy)(nil).ValidateAuthorizeCode), ctx, request, token)
 }

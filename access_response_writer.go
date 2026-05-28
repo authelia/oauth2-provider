@@ -12,17 +12,17 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-func (f *Fosite) NewAccessResponse(ctx context.Context, requester AccessRequester) (AccessResponder, error) {
+func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester) (AccessResponder, error) {
 	var err error
 	var tk TokenEndpointHandler
 
 	response := NewAccessResponse()
 
-	ctx = context.WithValue(ctx, AccessRequestContextKey, requester)
+	ctx = context.WithValue(ctx, AccessRequestContextKey, request)
 	ctx = context.WithValue(ctx, AccessResponseContextKey, response)
 
 	for _, tk = range f.Config.GetTokenEndpointHandlers(ctx) {
-		if err = tk.PopulateTokenEndpointResponse(ctx, requester, response); err == nil {
+		if err = tk.PopulateTokenEndpointResponse(ctx, request, response); err == nil {
 			// do nothing
 		} else if errors.Is(err, ErrUnknownRequest) {
 			// do nothing
@@ -35,7 +35,7 @@ func (f *Fosite) NewAccessResponse(ctx context.Context, requester AccessRequeste
 		return nil, errorsx.WithStack(ErrServerError.
 			WithHint("An internal server occurred while trying to complete the request.").
 			WithDebug("Access token or token type not set by TokenEndpointHandlers.").
-			WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(requester)))
+			WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request)))
 	}
 
 	return response, nil

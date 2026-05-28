@@ -75,7 +75,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 		Storage: s.mockStore,
 		Config: &oauth2.Config{
 			ScopeStrategy:                        oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:             oauth2.DefaultAudienceMatchingStrategy,
+			AudienceStrategy:                     oauth2.DefaultAudienceStrategy,
 			AllowedJWTAssertionAudiences:         []string{"https://www.example.com/token"},
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,
@@ -974,7 +974,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 		Storage: s.mockStore,
 		Config: &oauth2.Config{
 			ScopeStrategy:                        oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy:             oauth2.DefaultAudienceMatchingStrategy,
+			AudienceStrategy:                     oauth2.DefaultAudienceStrategy,
 			AllowedJWTAssertionAudiences:         []string{"https://www.example.com/token"},
 			GrantTypeJWTBearerCanSkipClientAuth:  false,
 			GrantTypeJWTBearerIDOptional:         false,

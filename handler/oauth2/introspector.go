@@ -24,13 +24,13 @@ type CoreValidator struct {
 	Config coreValidatorConfigProvider
 }
 
-func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, requester oauth2.AccessRequester, scopes []string) (tokenUse oauth2.TokenUse, err error) {
+func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (tokenUse oauth2.TokenUse, err error) {
 	if len(token) == 0 {
 		return "", oauth2.ErrRequestUnauthorized.WithDebugf("The request either had a malformed Authorization header or didn't include a bearer token.")
 	}
 
 	if c.Config.GetDisableRefreshTokenValidation(ctx) {
-		if err = c.introspectAccessToken(ctx, token, requester, scopes); err != nil {
+		if err = c.introspectAccessToken(ctx, token, request, scopes); err != nil {
 			return "", err
 		}
 
@@ -38,9 +38,9 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 	}
 
 	if tokenUseHint == oauth2.RefreshToken {
-		if err = c.introspectRefreshToken(ctx, token, requester, scopes); err == nil {
+		if err = c.introspectRefreshToken(ctx, token, request, scopes); err == nil {
 			return oauth2.RefreshToken, nil
-		} else if err := c.introspectAccessToken(ctx, token, requester, scopes); err == nil {
+		} else if err := c.introspectAccessToken(ctx, token, request, scopes); err == nil {
 			// The shadowing here is intentional, we should always return the Refresh Token Error as the token cannot be
 			// introspected, and the provided hint was that the token should be an Refresh Token. By shadowing we leave the
 			// original error from introspectRefreshToken intact.
@@ -50,9 +50,9 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 		return "", err
 	}
 
-	if err = c.introspectAccessToken(ctx, token, requester, scopes); err == nil {
+	if err = c.introspectAccessToken(ctx, token, request, scopes); err == nil {
 		return oauth2.AccessToken, nil
-	} else if err := c.introspectRefreshToken(ctx, token, requester, scopes); err == nil {
+	} else if err := c.introspectRefreshToken(ctx, token, request, scopes); err == nil {
 		// The shadowing here is intentional, we should always return the Access Token Error as the token cannot be
 		// introspected, and the provided hint was that the token should be an Access Token. By shadowing we leave the
 		// original error from introspectAccessToken intact.
@@ -76,7 +76,7 @@ func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 	return nil
 }
 
-func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, requester oauth2.AccessRequester, scopes []string) (err error) {
+func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, request oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.AccessTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
@@ -85,7 +85,7 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 
 	var original oauth2.Requester
 
-	if original, err = c.GetAccessTokenSession(ctx, signature, requester.GetSession()); err != nil {
+	if original, err = c.GetAccessTokenSession(ctx, signature, request.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
 	}
 
@@ -93,16 +93,16 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 		return err
 	}
 
-	if err = matchScopes(c.Config.GetScopeStrategy(ctx), original.GetGrantedScopes(), scopes); err != nil {
+	if err = matchScopes(oauth2.GetScopeStrategy(ctx, c.Config, original.GetClient()), original.GetGrantedScopes(), scopes); err != nil {
 		return err
 	}
 
-	requester.Merge(original)
+	request.Merge(original)
 
 	return nil
 }
 
-func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string, requester oauth2.AccessRequester, scopes []string) (err error) {
+func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string, request oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.RefreshTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
@@ -111,7 +111,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 
 	var original oauth2.Requester
 
-	if original, err = c.GetRefreshTokenSession(ctx, signature, requester.GetSession()); err != nil {
+	if original, err = c.GetRefreshTokenSession(ctx, signature, request.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
 	}
 
@@ -119,11 +119,11 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 		return err
 	}
 
-	if err = matchScopes(c.Config.GetScopeStrategy(ctx), original.GetGrantedScopes(), scopes); err != nil {
+	if err = matchScopes(oauth2.GetScopeStrategy(ctx, c.Config, original.GetClient()), original.GetGrantedScopes(), scopes); err != nil {
 		return err
 	}
 
-	requester.Merge(original)
+	request.Merge(original)
 
 	return nil
 }

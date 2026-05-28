@@ -29,15 +29,15 @@ type Handler struct {
 	}
 }
 
-func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) (err error) {
-	// This let's us define multiple response types, for example the OpenID Connect 1.0 `id_token`.
-	if !requester.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
+func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+	if !request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
-	challenge := requester.GetRequestForm().Get(consts.FormParameterCodeChallenge)
-	method := requester.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
-	client := requester.GetClient()
+	challenge := request.GetRequestForm().Get(consts.FormParameterCodeChallenge)
+	method := request.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
+
+	client := request.GetClient()
 
 	if err = c.validate(ctx, challenge, method, client); err != nil {
 		return err
@@ -48,7 +48,7 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, requester 
 		return nil
 	}
 
-	code := responder.GetCode()
+	code := response.GetCode()
 
 	if len(code) == 0 {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The PKCE handler must be loaded after the authorize code handler."))
@@ -56,11 +56,11 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, requester 
 
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 
-	if err = c.Storage.CreatePKCERequestSession(ctx, signature, requester.Sanitize([]string{
+	if err = c.Storage.CreatePKCERequestSession(ctx, signature, request.Sanitize([]string{
 		consts.FormParameterCodeChallenge,
 		consts.FormParameterCodeChallengeMethod,
 	})); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting create PKCE request session: %w.", err)))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting create PKCE request session: %s.", err.Error()))
 	}
 
 	return nil
@@ -95,8 +95,7 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 				WithDebug("The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients."))
 		}
 	default:
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.
-			WithHintf("Authorization was requested with 'code_challenge_method' value '%s', but the authorization server doesn't know how to handle this method, try 'S256' instead.", method))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Authorization was requested with 'code_challenge_method' value '%s', but the authorization server doesn't know how to handle this method, try 'S256' instead.", method))
 	}
 
 	if pkce, ok := client.(oauth2.ProofKeyCodeExchangeClient); ok {
@@ -120,8 +119,8 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) (err error) {
-	if !c.CanHandleTokenEndpointRequest(ctx, requester) {
+func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
@@ -131,19 +130,19 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oaut
 	// The "code_challenge_method" is bound to the Authorization Code when
 	// the Authorization Code is issued.  That is the method that the token
 	// endpoint MUST use to verify the "code_verifier".
-	verifier := requester.GetRequestForm().Get(consts.FormParameterCodeVerifier)
+	verifier := request.GetRequestForm().Get(consts.FormParameterCodeVerifier)
 
 	nv := len(verifier)
 
-	code := requester.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
+	code := request.GetRequestForm().Get(consts.FormParameterAuthorizationCode)
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 
 	var requesterPKCE oauth2.Requester
 
-	if requesterPKCE, err = c.Storage.GetPKCERequestSession(ctx, signature, requester.GetSession()); err != nil {
+	if requesterPKCE, err = c.Storage.GetPKCERequestSession(ctx, signature, request.GetSession()); err != nil {
 		if errors.Is(err, oauth2.ErrNotFound) {
 			if nv == 0 {
-				return c.validateNoPKCE(ctx, consts.FormParameterCodeVerifier, requester.GetClient())
+				return c.validateNoPKCE(ctx, consts.FormParameterCodeVerifier, request.GetClient())
 			}
 
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request.").WithWrap(err).WithDebugError(err))
@@ -159,7 +158,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oaut
 	challenge := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallenge)
 	method := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
 
-	if err = c.validate(ctx, challenge, method, requester.GetClient()); err != nil {
+	if err = c.validate(ctx, challenge, method, request.GetClient()); err != nil {
 		return err
 	}
 
@@ -182,17 +181,13 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oaut
 	// Validation
 	switch {
 	case nv < 43:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The PKCE code verifier must be at least 43 characters."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be at least 43 characters."))
 	case nv > 128:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The PKCE code verifier must be no more than 128 characters."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be no more than 128 characters."))
 	case nc == 0:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
 	case verifierWrongFormat.MatchString(verifier):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.
-			WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
 	}
 
 	// Upon receipt of the request at the token endpoint, the server
@@ -225,31 +220,29 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, requester oaut
 		base64.RawURLEncoding.Strict().Encode(expected, sum[:])
 
 		if subtle.ConstantTimeCompare(expected, []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.
-				WithHint("The PKCE code challenge did not match the code verifier."))
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
 		}
 	case consts.PKCEChallengeMethodPlain:
 		fallthrough
 	default:
 		if subtle.ConstantTimeCompare([]byte(verifier), []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.
-				WithHint("The PKCE code challenge did not match the code verifier."))
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
 		}
 	}
 
 	return nil
 }
 
-func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, requester oauth2.AccessRequester, responder oauth2.AccessResponder) (err error) {
+func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	return nil
 }
 
-func (c *Handler) CanSkipClientAuth(ctx context.Context, requester oauth2.AccessRequester) (skip bool) {
+func (c *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, requester oauth2.AccessRequester) (handle bool) {
-	return requester.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
+func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }
 
 func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client oauth2.Client) (err error) {

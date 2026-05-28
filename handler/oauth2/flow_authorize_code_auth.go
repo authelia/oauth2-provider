@@ -50,56 +50,58 @@ func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Con
 	return oauth2.IsRedirectURISecure
 }
 
-func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
+func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
 	// This let's us define multiple response types, for example open id connect's id_token
-	if !requester.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
-	requester.SetDefaultResponseMode(oauth2.ResponseModeQuery)
+	request.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
-	client := requester.GetClient()
+	client := request.GetClient()
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
-	if client.IsPublic() && !c.GetRedirectSecureChecker(ctx)(ctx, requester.GetRedirectURI()) {
+	if client.IsPublic() && !c.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 	}
 
-	for _, scope := range requester.GetRequestedScopes() {
-		if !c.Config.GetScopeStrategy(ctx)(client.GetScopes(), scope) {
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
 			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
-	if err := c.Config.GetAudienceStrategy(ctx)(client.GetAudience(), requester.GetRequestedAudience()); err != nil {
+	if err := oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err := c.Config.GetResourceStrategy(ctx)(client.GetAudience(), requester.GetRequestedResource()); err != nil {
+	if err := oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
-	return c.IssueAuthorizeCode(ctx, requester, responder)
+	return c.IssueAuthorizeCode(ctx, request, response)
 }
 
-func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, requester oauth2.AuthorizeRequester, responder oauth2.AuthorizeResponder) error {
-	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, requester)
+func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, request)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	requester.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
+	request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
 
-	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, requester.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
+	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	responder.AddParameter(consts.FormParameterAuthorizationCode, code)
-	responder.AddParameter(consts.FormParameterState, requester.GetState())
+	response.AddParameter(consts.FormParameterAuthorizationCode, code)
+	response.AddParameter(consts.FormParameterState, request.GetState())
+
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
-		responder.AddParameter(consts.FormParameterScope, strings.Join(requester.GetGrantedScopes(), " "))
+		response.AddParameter(consts.FormParameterScope, strings.Join(request.GetGrantedScopes(), " "))
 	}
 
-	requester.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
+	request.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
 	return nil
 }

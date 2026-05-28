@@ -562,8 +562,8 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 
 			store := mock.NewMockStorage(ctrl)
 			config := &Config{
-				ScopeStrategy:            ExactScopeStrategy,
-				AudienceMatchingStrategy: DefaultAudienceMatchingStrategy,
+				ScopeStrategy:    ExactScopeStrategy,
+				AudienceStrategy: DefaultAudienceStrategy,
 			}
 			provider := &Fosite{
 				Store:  store,

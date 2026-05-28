@@ -43,7 +43,7 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnec
 	}
 }
 
-func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context, requester oauth2.AuthorizeRequester) (err error) {
+func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
 	//
 	// Authorization Code Flow - https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
@@ -51,7 +51,7 @@ func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context
 	// Hybrid Flow - https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthRequest
 	//
 	// Note: as per the Hybrid Flow documentation the Hybrid Flow has the same requirements as the Authorization Code Flow.
-	if requester.GetRedirectURI() == nil || len(requester.GetRequestForm().Get(consts.FormParameterRedirectURI)) == 0 {
+	if request.GetRedirectURI() == nil || len(request.GetRequestForm().Get(consts.FormParameterRedirectURI)) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
 	}
 
@@ -63,11 +63,11 @@ func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requester oauth2.AuthorizeRequester) (session Session, err error) {
+func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, request oauth2.AuthorizeRequester) (session Session, err error) {
 	// Specification Note: prompt is case-sensitive.
-	requiredPrompt := oauth2.RemoveEmpty(strings.Split(requester.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	if requester.GetClient().IsPublic() {
+	if request.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
 		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
 		//
@@ -88,7 +88,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 
 		checker := v.Config.GetRedirectSecureChecker(ctx)
 		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-			if !checker(ctx, requester.GetRedirectURI()) {
+			if !checker(ctx, request.GetRedirectURI()) {
 				return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested."))
 			}
 		}
@@ -108,12 +108,12 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
-	maxAge, err := strconv.ParseInt(requester.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
+	maxAge, err := strconv.ParseInt(request.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
 	if err != nil {
 		maxAge = 0
 	}
 
-	session, ok := requester.GetSession().(Session)
+	session, ok := request.GetSession().(Session)
 	if !ok {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required."))
 	}
@@ -158,14 +158,14 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 	}
 
-	idTokenHint := requester.GetRequestForm().Get(consts.FormParameterIDTokenHint)
+	idTokenHint := request.GetRequestForm().Get(consts.FormParameterIDTokenHint)
 	if idTokenHint == "" {
 		return session, nil
 	}
 
 	var tokenHint *jwt.Token
 
-	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(requester.GetClient()))
+	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(request.GetClient()))
 
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {

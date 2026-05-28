@@ -171,7 +171,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 					PushedAuthorizeContextLifespan:  30 * time.Minute,
 					PushedAuthorizeRequestURIPrefix: requestURIPrefix,
 					ScopeStrategy:                   oauth2.HierarchicScopeStrategy,
-					AudienceMatchingStrategy:        oauth2.DefaultAudienceMatchingStrategy,
+					AudienceStrategy:                oauth2.DefaultAudienceStrategy,
 				},
 			}
 

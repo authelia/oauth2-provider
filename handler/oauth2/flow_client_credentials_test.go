@@ -35,8 +35,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		Config: &oauth2.Config{
-			ScopeStrategy:            oauth2.HierarchicScopeStrategy,
-			AudienceMatchingStrategy: oauth2.DefaultAudienceMatchingStrategy,
+			ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+			AudienceStrategy: oauth2.DefaultAudienceStrategy,
 		},
 	}
 	testCases := []struct {

@@ -141,8 +141,11 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	gt := oauth2.GrantTypeAuthorizationCode
 
-	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+	switch {
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)):
 		gt = oauth2.GrantTypeDeviceCode
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeOpenIDCIBA)):
+		gt = oauth2.GrantTypeOpenIDCIBA
 	}
 
 	var lifespan time.Duration

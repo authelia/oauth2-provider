@@ -218,6 +218,17 @@ type Config struct {
 	// RFC8628UserAuthorizeEndpointHandlers is a list of handlers that are called before the device grant user interaction endpoint is served.
 	RFC8628UserAuthorizeEndpointHandlers RFC8628UserAuthorizeEndpointHandlers
 
+	// OpenIDCIBAEndpointHandlers is a list of handlers that are called before the OpenID Connect CIBA backchannel
+	// authentication endpoint is served.
+	OpenIDCIBAEndpointHandlers OpenIDCIBAEndpointHandlers
+
+	// OpenIDCIBALifespan sets how long an auth_req_id is valid for, defaults to ten minutes.
+	OpenIDCIBALifespan time.Duration
+
+	// OpenIDCIBAPollingInterval sets the minimum interval, in seconds, that clients should observe when polling the
+	// token endpoint for a CIBA auth_req_id. Defaults to five seconds.
+	OpenIDCIBAPollingInterval time.Duration
+
 	// GlobalSecret is the global secret used to sign and verify signatures.
 	GlobalSecret []byte
 
@@ -280,6 +291,30 @@ func (c *Config) GetRFC8628DeviceAuthorizeEndpointHandlers(_ context.Context) RF
 
 func (c *Config) GetRFC8628UserAuthorizeEndpointHandlers(_ context.Context) RFC8628UserAuthorizeEndpointHandlers {
 	return c.RFC8628UserAuthorizeEndpointHandlers
+}
+
+// GetOpenIDCIBAEndpointHandlers returns the configured handlers for the OpenID Connect CIBA backchannel authentication
+// endpoint.
+func (c *Config) GetOpenIDCIBAEndpointHandlers(_ context.Context) OpenIDCIBAEndpointHandlers {
+	return c.OpenIDCIBAEndpointHandlers
+}
+
+// GetOpenIDCIBALifespan returns the lifespan of an auth_req_id, defaulting to ten minutes when unset.
+func (c *Config) GetOpenIDCIBALifespan(_ context.Context) time.Duration {
+	if c.OpenIDCIBALifespan == 0 {
+		return time.Minute * 10
+	}
+
+	return c.OpenIDCIBALifespan
+}
+
+// GetOpenIDCIBAPollingInterval returns the minimum polling interval for CIBA, defaulting to five seconds when unset.
+func (c *Config) GetOpenIDCIBAPollingInterval(_ context.Context) time.Duration {
+	if c.OpenIDCIBAPollingInterval == 0 {
+		return time.Second * 5
+	}
+
+	return c.OpenIDCIBAPollingInterval
 }
 
 func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {

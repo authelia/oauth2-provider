@@ -186,7 +186,7 @@ type Provider interface {
 	// omitted from the request.  The authorization server MUST ignore
 	// unrecognized request parameters.  Request and response parameters
 	// MUST NOT be included more than once.
-	NewRFC862DeviceAuthorizeRequest(ctx context.Context, req *http.Request) (requester DeviceAuthorizeRequester, err error)
+	NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error)
 
 	// NewRFC862DeviceAuthorizeResponse persists the DeviceCodeSession and UserCodeSession in the store
 	//
@@ -230,7 +230,7 @@ type Provider interface {
 	// omitted from the request. The authorization server MUST ignore
 	// unrecognized request parameters. Request and response parameters
 	// MUST NOT be included more than once.
-	NewRFC8628UserAuthorizeRequest(ctx context.Context, req *http.Request) (requester DeviceAuthorizeRequester, err error)
+	NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error)
 
 	// NewRFC8628UserAuthorizeResponse persists the DeviceCodeSession and UserCodeSession in the store
 	//

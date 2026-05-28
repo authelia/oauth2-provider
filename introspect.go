@@ -22,21 +22,21 @@ type TokenIntrospector interface {
 // AccessTokenFromRequest extracts a bearer access token from an HTTP request. Per RFC 6750 the token may be supplied in
 // the Authorization header (Bearer scheme) or as the 'access_token' form parameter. Returns the empty string if no
 // token can be located.
-func AccessTokenFromRequest(req *http.Request) string {
+func AccessTokenFromRequest(r *http.Request) string {
 	// According to https://datatracker.ietf.org/doc/html/rfc6750 you can pass tokens through:
 	// - Form-Encoded Body Parameter. Recommended, more likely to appear. e.g.: Authorization: Bearer mytoken123
 	// - URI Query Parameter e.g. access_token=mytoken123
 
-	auth := req.Header.Get(consts.HeaderAuthorization)
+	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
 	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token
 		// Empty string returned if there's no such parameter
-		if err := req.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+		if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
 			return ""
 		}
 
-		return req.Form.Get(consts.FormParameterAccessToken)
+		return r.Form.Get(consts.FormParameterAccessToken)
 	}
 
 	return split[1]

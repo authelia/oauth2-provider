@@ -22,10 +22,11 @@ type TokenType string
 type GrantType string
 
 const (
-	AccessToken  TokenType = consts.TokenTypeAccessToken
-	RefreshToken TokenType = consts.TokenTypeRefreshToken
-	DeviceCode   TokenType = consts.CodeDevice
-	UserCode     TokenType = consts.CodeUser
+	AccessToken       TokenType = consts.TokenTypeAccessToken
+	RefreshToken      TokenType = consts.TokenTypeRefreshToken
+	DeviceCode        TokenType = consts.CodeDevice
+	UserCode          TokenType = consts.CodeUser
+	CIBAAuthRequestID TokenType = "ciba_auth_req_id"
 
 	// PushedAuthorizeRequestContext represents the PAR context object
 	PushedAuthorizeRequestContext TokenType = "par_context"
@@ -41,6 +42,7 @@ const (
 	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer
 	GrantTypeDeviceCode        GrantType = consts.GrantTypeOAuthDeviceCode
 	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
+	GrantTypeOpenIDCIBA        GrantType = consts.GrantTypeOpenIDCIBA
 
 	BearerAccessToken string = "bearer"
 	RFC8693NAToken    string = "N_A"
@@ -240,6 +242,26 @@ type Provider interface {
 	// verification code and an end-user code that are valid for a limited
 	// time
 	NewRFC8628UserAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
+
+	// NewOpenIDCIBARequest validates an OpenID Connect Client Initiated Backchannel Authentication (CIBA) request.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#auth_request
+	NewOpenIDCIBARequest(ctx context.Context, r *http.Request) (requester CIBARequester, err error)
+
+	// NewOpenIDCIBAResponse dispatches the CIBA request to each configured endpoint handler to issue an auth_req_id and
+	// to persist the request for subsequent polling at the token endpoint.
+	//
+	// * https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_authentication_request_acknowdlegment
+	NewOpenIDCIBAResponse(ctx context.Context, request CIBARequester, session Session) (responder CIBAResponder, err error)
+
+	// WriteOpenIDCIBAResponse writes a successful OpenID Connect CIBA backchannel authentication response as JSON per
+	// Section 7.3 of the specification.
+	WriteOpenIDCIBAResponse(ctx context.Context, rw http.ResponseWriter, request CIBARequester, response CIBAResponder)
+
+	// WriteOpenIDCIBAError writes an OpenID Connect CIBA backchannel authentication error response as JSON per Section
+	// 13 of the specification.
+	WriteOpenIDCIBAError(ctx context.Context, rw http.ResponseWriter, request CIBARequester, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,
@@ -528,6 +550,66 @@ type DeviceAuthorizeResponder interface {
 	GetExtra(key string) (extra any)
 
 	// ToMap converts the response to a map.
+	ToMap() (values map[string]any)
+}
+
+// CIBARequester is the OpenID Connect CIBA backchannel authentication endpoint's request context.
+type CIBARequester interface {
+	// SetAuthRequestIDSignature records the storage signature of the auth_req_id issued for the request.
+	SetAuthRequestIDSignature(signature string)
+
+	// GetAuthRequestIDSignature returns the storage signature of the auth_req_id issued for the request.
+	GetAuthRequestIDSignature() (signature string)
+
+	// SetStatus records the user authorization status (new, approved, or denied) for the CIBA flow.
+	SetStatus(status CIBAStatus)
+
+	// GetStatus returns the user authorization status for the CIBA flow.
+	GetStatus() (status CIBAStatus)
+
+	// SetLastChecked records the time of the most recent token endpoint polling attempt for the request.
+	SetLastChecked(lastChecked time.Time)
+
+	// GetLastChecked returns the time of the most recent token endpoint polling attempt for the request.
+	GetLastChecked() (lastChecked time.Time)
+
+	Requester
+}
+
+// CIBAResponder is the response context for the OpenID Connect CIBA backchannel authentication endpoint per Section 7.3
+// of the specification.
+type CIBAResponder interface {
+	// GetAuthRequestID returns the auth_req_id value returned to the client.
+	GetAuthRequestID() (id string)
+
+	// SetAuthRequestID records the auth_req_id value returned to the client.
+	SetAuthRequestID(id string)
+
+	// GetExpiresIn returns the lifetime, in seconds, of the auth_req_id.
+	GetExpiresIn() (expires int64)
+
+	// SetExpiresIn records the lifetime, in seconds, of the auth_req_id.
+	SetExpiresIn(seconds int64)
+
+	// GetInterval returns the minimum polling interval, in seconds.
+	GetInterval() (interval int)
+
+	// SetInterval records the minimum polling interval, in seconds.
+	SetInterval(seconds int)
+
+	// GetHeader returns the response HTTP headers that will be written to the client.
+	GetHeader() (header http.Header)
+
+	// AddHeader appends a value to the named response header.
+	AddHeader(key, value string)
+
+	// SetExtra sets an extension parameter on the response.
+	SetExtra(key string, value any)
+
+	// GetExtra returns the value of an extension parameter previously stored via SetExtra.
+	GetExtra(key string) (extra any)
+
+	// ToMap returns the complete CIBA response payload as a map.
 	ToMap() (values map[string]any)
 }
 

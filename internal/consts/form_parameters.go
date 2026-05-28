@@ -50,4 +50,10 @@ const (
 	FormParameterActorToken                                = "actor_token"
 	FormParameterDeviceCode                                = valueDeviceCode
 	FormParameterUserCode                                  = valueUserCode
+	FormParameterClientNotificationToken                   = "client_notification_token"
+	FormParameterLoginHintToken                            = "login_hint_token"
+	FormParameterLoginHint                                 = "login_hint"
+	FormParameterBindingMessage                            = "binding_message"
+	FormParameterRequestedExpiry                           = "requested_expiry"
+	FormParameterAuthReqID                                 = "auth_req_id"
 )

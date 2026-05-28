@@ -137,6 +137,21 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 	*a = append(*a, h)
 }
 
+// OpenIDCIBAEndpointHandlers is a list of OpenIDCIBAEndpointHandler used by the OpenID Connect CIBA backchannel
+// authentication endpoint.
+type OpenIDCIBAEndpointHandlers []OpenIDCIBAEndpointHandler
+
+// Append adds an OpenIDCIBAEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *OpenIDCIBAEndpointHandlers) Append(h OpenIDCIBAEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
 type Configurator interface {
 	IDTokenIssuerProvider
 	IDTokenLifespanProvider
@@ -196,6 +211,8 @@ type Configurator interface {
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	RFC9628DeviceAuthorizeConfigProvider
+	OpenIDCIBAEndpointHandlersProvider
+	OpenIDCIBAConfigProvider
 	IntrospectionIssuerProvider
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider

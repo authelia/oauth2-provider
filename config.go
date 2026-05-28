@@ -373,6 +373,24 @@ type RFC8628UserAuthorizeEndpointHandlersProvider interface {
 	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) (handlers RFC8628UserAuthorizeEndpointHandlers)
 }
 
+// OpenIDCIBAEndpointHandlersProvider returns the provider for setting up the OpenID Connect CIBA backchannel
+// authentication endpoint handlers.
+type OpenIDCIBAEndpointHandlersProvider interface {
+	// GetOpenIDCIBAEndpointHandlers returns the handlers registered for the CIBA backchannel authentication endpoint.
+	GetOpenIDCIBAEndpointHandlers(ctx context.Context) (handlers OpenIDCIBAEndpointHandlers)
+}
+
+// OpenIDCIBAConfigProvider returns the provider for configuring the OpenID Connect CIBA backchannel authentication
+// response per Section 7.3 of the specification.
+type OpenIDCIBAConfigProvider interface {
+	// GetOpenIDCIBALifespan returns the lifespan of an auth_req_id.
+	GetOpenIDCIBALifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetOpenIDCIBAPollingInterval returns the minimum polling interval clients must observe when polling the token
+	// endpoint for an auth_req_id.
+	GetOpenIDCIBAPollingInterval(ctx context.Context) (interval time.Duration)
+}
+
 // RFC8693ConfigProvider is the configuration provider for RFC8693 Token Exchange.
 type RFC8693ConfigProvider interface {
 	GetRFC8693TokenTypes(ctx context.Context) (types map[string]RFC8693TokenType)

@@ -90,3 +90,11 @@ type RFC8628UserAuthorizeEndpointHandler interface {
 	//
 	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder) error
 }
+
+// OpenIDCIBAEndpointHandler handles requests to the OpenID Connect CIBA backchannel authentication endpoint. If the
+// handler is not responsible for the request it must return nil without mutating the response.
+//
+// See https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html.
+type OpenIDCIBAEndpointHandler interface {
+	HandleOpenIDCIBAEndpointRequest(ctx context.Context, request CIBARequester, response CIBAResponder) error
+}

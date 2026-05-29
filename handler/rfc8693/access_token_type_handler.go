@@ -151,21 +151,21 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 
 	// Prevent clients from exchanging their own tokens.
 	if client.GetID() == subjectTokenClientID {
-		return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
+		return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
 	}
 
 	// Check if the client is allowed to exchange this token.
 	if subjectTokenClient, ok = original.GetClient().(Client); ok {
 		allowed := subjectTokenClient.GetTokenExchangePermitted(client)
 		if !allowed {
-			return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
+			return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
 		}
 	}
 
-	// Validate the scopes.
-	scopeStrategy := c.GetScopeStrategy(ctx)
+	strategy := c.GetScopeStrategy(ctx, client)
+
 	for _, scope := range request.GetRequestedScopes() {
-		if !scopeStrategy(original.GetGrantedScopes(), scope) {
+		if !strategy(original.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
 	}
@@ -237,7 +237,15 @@ func (c *AccessTokenTypeHandler) canIssueRefreshToken(request oauth2.Requester) 
 }
 
 // GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
-func (c *AccessTokenTypeHandler) GetScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+func (c *AccessTokenTypeHandler) GetScopeStrategy(ctx context.Context, client oauth2.Client) oauth2.ScopeStrategy {
+	if client != nil {
+		if p, ok := client.(oauth2.ScopeStrategyProvider); ok {
+			if strategy := p.GetScopeStrategy(ctx); strategy != nil {
+				return strategy
+			}
+		}
+	}
+
 	if c.ScopeStrategy != nil {
 		return c.ScopeStrategy
 	}

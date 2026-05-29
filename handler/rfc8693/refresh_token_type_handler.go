@@ -6,6 +6,7 @@ package rfc8693
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -33,45 +34,59 @@ type RefreshTokenTypeHandler struct {
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
-func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	session, _ := request.GetSession().(Session)
-	if session == nil {
+	var (
+		session Session
+		ok      bool
+	)
+
+	if session, ok = request.GetSession().(Session); !ok || session == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
 	form := request.GetRequestForm()
+
 	if form.Get(consts.FormParameterSubjectTokenType) != consts.TokenTypeRFC8693RefreshToken && form.Get(consts.FormParameterActorTokenType) != consts.TokenTypeRFC8693RefreshToken {
 		return nil
 	}
 
 	if form.Get(consts.FormParameterActorTokenType) == consts.TokenTypeRFC8693RefreshToken {
+		var unpacked map[string]any
+
 		token := form.Get(consts.FormParameterActorToken)
-		if _, unpacked, err := c.validate(ctx, request, token); err != nil {
+
+		if _, unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
-		} else {
-			session.SetActorToken(unpacked)
 		}
+
+		session.SetActorToken(unpacked)
 	}
 
 	if form.Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken {
+		var (
+			subjectTokenSession oauth2.Session
+			unpacked            map[string]any
+		)
+
 		token := form.Get(consts.FormParameterSubjectToken)
-		if subjectTokenSession, unpacked, err := c.validate(ctx, request, token); err != nil {
+
+		if subjectTokenSession, unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
-		} else {
-			session.SetSubjectToken(unpacked)
-			session.SetSubject(subjectTokenSession.GetSubject())
 		}
+
+		session.SetSubjectToken(unpacked)
+		session.SetSubject(subjectTokenSession.GetSubject())
 	}
 
 	return nil
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -91,7 +106,7 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 		return nil
 	}
 
-	if err := c.issue(ctx, request, response); err != nil {
+	if err = c.issue(ctx, request, response); err != nil {
 		return err
 	}
 
@@ -131,21 +146,21 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	// Prevent clients from exchanging their own tokens.
 	if client.GetID() == tokenClientID {
 		return nil, nil, errors.WithStack(
-			oauth2.ErrRequestForbidden.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
+			oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
 	}
 
 	// Check if the client is allowed to exchange this token.
 	if subjectTokenClient, ok := or.GetClient().(Client); ok {
 		allowed := subjectTokenClient.GetTokenExchangePermitted(client)
 		if !allowed {
-			return nil, nil, errors.WithStack(oauth2.ErrRequestForbidden.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", tokenClientID))
+			return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", tokenClientID))
 		}
 	}
 
-	// Scope check.
-	scopeStrategy := c.GetScopeStrategy(ctx)
+	strategy := c.GetScopeStrategy(ctx, client)
+
 	for _, scope := range request.GetRequestedScopes() {
-		if !scopeStrategy(or.GetGrantedScopes(), scope) {
+		if !strategy(or.GetGrantedScopes(), scope) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
 	}
@@ -161,14 +176,27 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	// Apply the same refresh-token gating that AccessTokenTypeHandler.canIssueRefreshToken applies, but as an error
+	// rather than a silent skip: when a client EXPLICITLY requests a refresh token via 'requested_token_type', the
+	// AS must refuse with the spec-appropriate code if policy disallows it rather than silently downgrading.
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
+		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not registered for the '%s' grant type and so cannot be issued a refresh token via token exchange.", consts.GrantTypeRefreshToken))
+	}
+
+	if len(c.RefreshTokenScopes) > 0 && !request.GetGrantedScopes().HasOneOf(c.RefreshTokenScopes...) {
+		return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The token exchange request was not granted any of the scopes (%s) required by the authorization server to issue a refresh token.", strings.Join(c.RefreshTokenScopes, ", ")))
+	}
+
 	request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
-	refresh, refreshSignature, err := c.GenerateRefreshToken(ctx, request)
-	if err != nil {
+
+	var token, signature string
+
+	if token, signature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 	}
 
-	if refreshSignature != "" {
-		if err = c.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
+	if signature != "" {
+		if err = c.CreateRefreshTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.Storage); rollBackTxnErr != nil {
 				err = rollBackTxnErr
 			}
@@ -177,7 +205,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		}
 	}
 
-	response.SetAccessToken(refresh)
+	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.RefreshToken, c.RefreshTokenLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
@@ -187,7 +215,15 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 }
 
 // GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.
-func (c *RefreshTokenTypeHandler) GetScopeStrategy(ctx context.Context) oauth2.ScopeStrategy {
+func (c *RefreshTokenTypeHandler) GetScopeStrategy(ctx context.Context, client oauth2.Client) oauth2.ScopeStrategy {
+	if client != nil {
+		if p, ok := client.(oauth2.ScopeStrategyProvider); ok {
+			if strategy := p.GetScopeStrategy(ctx); strategy != nil {
+				return strategy
+			}
+		}
+	}
+
 	if c.ScopeStrategy != nil {
 		return c.ScopeStrategy
 	}
@@ -199,5 +235,6 @@ func (c *RefreshTokenTypeHandler) GetExpiresIn(r oauth2.Requester, key oauth2.To
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan
 	}
+
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
 }

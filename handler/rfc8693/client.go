@@ -31,3 +31,18 @@ type Client interface {
 	// to perform the exchange
 	GetTokenExchangePermitted(client oauth2.Client) (allowed bool)
 }
+
+// ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.
+// When the request supplies an actor_token but the subject_token carries no 'may_act' (§4.4) claim authorizing
+// delegation, the authorization server has no in-token signal that the actor is permitted to act on behalf of the
+// subject. By default such requests are rejected with invalid_grant; a client may opt into externally-gated
+// authorization by implementing this interface and returning true from GetAllowActorTokenWithoutMayAct.
+//
+// See https://datatracker.ietf.org/doc/html/rfc8693#section-4.4.
+type ActorTokenPolicyClient interface {
+	// GetAllowActorTokenWithoutMayAct reports whether the client may perform delegation with an actor_token on
+	// subject tokens that do not include a 'may_act' claim. Set to true only when an out-of-band authorization
+	// mechanism (e.g. a policy database or external IGA system) verifies that the actor is permitted to act on
+	// behalf of the subject.
+	GetAllowActorTokenWithoutMayAct() (allow bool)
+}

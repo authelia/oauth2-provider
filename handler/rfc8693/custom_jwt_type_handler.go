@@ -31,8 +31,12 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	session, _ := request.GetSession().(Session)
-	if session == nil {
+	var (
+		session Session
+		ok      bool
+	)
+
+	if session, ok = request.GetSession().(Session); !ok || session == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
@@ -42,30 +46,36 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 	subjectTokenType := tokenTypes[form.Get(consts.FormParameterSubjectTokenType)]
 
 	if actorTokenType != nil && actorTokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT {
+		var unpacked map[string]any
+
 		token := form.Get(consts.FormParameterActorToken)
-		if unpacked, err := c.validate(ctx, request, actorTokenType, token, tokenRoleActor); err != nil {
+
+		if unpacked, err = c.validate(ctx, request, actorTokenType, token, tokenRoleActor); err != nil {
 			return err
-		} else {
-			session.SetActorToken(unpacked)
 		}
+
+		session.SetActorToken(unpacked)
 	}
 
 	if subjectTokenType != nil && subjectTokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT {
+		var unpacked map[string]any
+
 		token := form.Get(consts.FormParameterSubjectToken)
-		if unpacked, err := c.validate(ctx, request, subjectTokenType, token, tokenRoleSubject); err != nil {
+
+		if unpacked, err = c.validate(ctx, request, subjectTokenType, token, tokenRoleSubject); err != nil {
 			return err
-		} else {
-			session.SetSubjectToken(unpacked)
-
-			var subject string
-
-			// Get the subject and populate session.
-			if subject, err = c.GetSubjectForTokenExchange(ctx, request, unpacked); err != nil {
-				return err
-			} else {
-				session.SetSubject(subject)
-			}
 		}
+
+		session.SetSubjectToken(unpacked)
+
+		var subject string
+
+		// Get the subject and populate session.
+		if subject, err = c.GetSubjectForTokenExchange(ctx, request, unpacked); err != nil {
+			return err
+		}
+
+		session.SetSubject(subject)
 	}
 
 	return nil
@@ -100,7 +110,7 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return nil
 	}
 
-	if err := c.issue(ctx, request, tokenType, response); err != nil {
+	if err = c.issue(ctx, request, tokenType, response); err != nil {
 		return err
 	}
 
@@ -153,7 +163,8 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
 	allowed := clientAllowedIssuers(request.GetClient(), role)
-	if _, ok := ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
+
+	if _, ok = ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
 		if len(allowed) > 0 {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
 		}
@@ -192,7 +203,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	claims := session.IDTokenClaims()
 
 	if claims.Subject == "" {
-		claims.Subject = request.GetClient().GetID()
+		return errorsx.WithStack(oauth2.ErrServerError.
+			WithDebug("Failed to generate the JSON Web Token because the session subject is empty. The token exchange handler chain must populate the subject from the subject_token before the custom JWT handler runs."))
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
@@ -203,18 +215,17 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.Issuer = jwtType.Issuer
 	}
 
-	if aud := oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource()); len(aud) > 0 {
-		claims.Audience = append(claims.Audience, aud...)
-	}
-
-	if len(claims.Audience) == 0 {
-		aud := jwtType.Audience
-
-		if len(aud) == 0 {
-			aud = append(aud, request.GetClient().GetID())
-		}
-
-		claims.Audience = append(claims.Audience, aud...)
+	// The issued JWT's audience MUST reflect THIS exchange's audience/resource parameters per RFC 8693 §2.1, not
+	// any audience that happened to be on the session from a prior OIDC flow. Replace rather than append.
+	switch {
+	case len(request.GetGrantedAudience()) > 0 || len(request.GetGrantedResource()) > 0:
+		claims.Audience = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
+	case len(jwtType.Audience) > 0:
+		claims.Audience = append([]string(nil), jwtType.Audience...)
+	default:
+		return errorsx.WithStack(oauth2.ErrInvalidTarget.
+			WithHint("Unable to determine the audience for the issued JSON Web Token.").
+			WithDebugf("The token exchange request did not include an 'audience' or 'resource' parameter and the JSON Web Token type '%s' has no default audience configured.", jwtType.GetName(ctx)))
 	}
 
 	if claims.JTI == "" {
@@ -232,6 +243,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
+	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
 
 	return nil

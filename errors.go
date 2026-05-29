@@ -289,6 +289,7 @@ const (
 )
 
 const (
+	hintClientCredentialsInvalid                    = "The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect."
 	hintRequestObjectClientCapabilities             = "%s parameter '%s' was used, but the OAuth 2.0 Client does not implement advanced authorization capabilities."
 	hintRequestObjectPrefixOpenID                   = "OpenID Connect 1.0"
 	hintRequestObjectPrefixJAR                      = "OAuth 2.0 JWT-Secured Authorization Request"

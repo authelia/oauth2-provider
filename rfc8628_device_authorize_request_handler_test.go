@@ -30,7 +30,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 	}{
 		{
 			name: "ShouldFailEmptyRequest",
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client could not be authenticated. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
 			mock: func(store *mock.MockStorage) {},
 		},
 		{

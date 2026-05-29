@@ -89,9 +89,10 @@ func TestAuthenticateClient(t *testing.T) {
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "foo"}, TokenEndpointAuthMethod: "client_secret_basic"}
 			},
-			form: url.Values{},
-			r:    new(http.Request),
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			form:      url.Values{},
+			r:         new(http.Request),
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseClientDoesNotExist",
@@ -171,6 +172,16 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
+		},
+		{
+			name: "ShouldFailWhenBasicAndPostClientIDsDiffer",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "abc", ClientSecret: testClientSecretComplex}, TokenEndpointAuthMethod: "client_secret_post"}
+			},
+			form:      url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
+			r:         &http.Request{Header: clientBasicAuthHeader("xyz", "")},
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The 'client_id' in the request body did not match the 'client_id' supplied via the HTTP Basic Authorization header. The HTTP Basic Authorization header specified the 'client_id' value 'xyz' but the request body specified the 'client_id' value 'abc'. Per RFC 6749 Section 2.3 a client MUST NOT use more than one authentication method.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseAuthMethodIsNotNone",
@@ -285,7 +296,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -295,7 +306,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -305,7 +316,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The basic scheme value was not separated by a colon.",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The basic scheme value was not separated by a colon.",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -315,8 +326,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"NotBasic " + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header had an unknown scheme. The scheme 'NotBasic' is not known for client authentication.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client credentials from the HTTP authorization header had an unknown scheme. The scheme 'NotBasic' is not known for client authentication.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseHeaderIsNotEncoded",
@@ -325,7 +336,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + "foo:bar"}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. Error occurred performing a base64 decode: illegal base64 data at input byte 3.",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. Error occurred performing a base64 decode: illegal base64 data at input byte 3.",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -335,7 +346,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic" + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The header value is either missing a scheme, value, or the separator between them.",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The header value is either missing a scheme, value, or the separator between them.",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -345,7 +356,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("\x19foo", "bar")},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP request had an invalid character.",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP request had an invalid character.",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -355,7 +366,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "\x19bar")},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data. The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP request had an invalid character.",
+			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP request had an invalid character.",
 			expectErr: ErrInvalidRequest,
 		},
 		{
@@ -385,8 +396,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterClientAssertionType: {"foobar"}},
 			r:         new(http.Request),
-			expectErr: ErrInvalidRequest,
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unknown client_assertion_type 'foobar'.",
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unknown client_assertion_type 'foobar'.",
 		},
 		{
 			name: "ShouldPassWithProperRSAAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest",

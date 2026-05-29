@@ -43,7 +43,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 
 	idBasic, secretBasic, hasBasic, err = getClientCredentialsSecretBasic(r)
 	if err != nil {
-		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials in the HTTP authorization header could not be parsed. Either the scheme was missing, the scheme was invalid, or the value had malformed data.").WithWrap(err).WithDebugError(err))
+		return nil, "", err
 	}
 
 	id, secret, hasPost = s.getClientCredentialsSecretPost(form)
@@ -104,7 +104,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	case 0:
 		// The 0 case means no authentication information at all exists even if the client is a public client. This
 		// likely only occurs on requests where the client_id is not known.
-		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("Client Authentication failed with no known authentication method."))
+		return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint("Client Authentication failed with no known authentication method."))
 	case 1:
 		// Proper authentication has occurred.
 		break
@@ -153,7 +153,7 @@ func NewClientAssertion(ctx context.Context, strategy jwt.Strategy, store Client
 			return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("The request parameter 'client_assertion' must be set when using 'client_assertion_type' of '%s'.", consts.ClientAssertionTypeJWTBearer))
 		}
 	default:
-		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidRequest.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidClient.WithHintf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
 	if token, err = strategy.Decode(ctx, assertion, jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
@@ -256,7 +256,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 	)
 
 	if c, ok = client.(AuthenticationMethodClient); !ok {
-		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
+		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 	}
 
 	if method, _, _, token, err = s.doAuthenticateAssertionParseAssertionJWTBearer(ctx, c, assertion, handler); err != nil {
@@ -273,10 +273,13 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 
 	claims.FromMapClaims(token.Claims.ToMapClaims())
 
+	issOK := subtle.ConstantTimeCompare([]byte(claims.Issuer), clientID) == 1
+	subOK := subtle.ConstantTimeCompare([]byte(claims.Subject), clientID) == 1
+
 	switch {
-	case subtle.ConstantTimeCompare([]byte(claims.Issuer), clientID) == 0:
+	case !issOK:
 		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
-	case subtle.ConstantTimeCompare([]byte(claims.Subject), clientID) == 0:
+	case !subOK:
 		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client."))
 	case claims.JTI == "":
 		return "", errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion had invalid claims.").WithDebug("Claim 'jti' from 'client_assertion' must be set but is not."))

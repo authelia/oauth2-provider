@@ -93,16 +93,16 @@ func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok boo
 	scheme, value, ok := strings.Cut(auth, " ")
 
 	if !ok {
-		return "", "", false, errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials from the HTTP authorization header could not be parsed.").WithWrap(err).WithDebug("The header value is either missing a scheme, value, or the separator between them."))
+		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebug("The header value is either missing a scheme, value, or the separator between them."))
 	}
 
 	if !strings.EqualFold(scheme, "Basic") {
-		return "", "", false, errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials from the HTTP authorization header had an unknown scheme.").WithDebugf("The scheme '%s' is not known for client authentication.", scheme))
+		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The scheme '%s' is not known for client authentication.", scheme))
 	}
 
 	c, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {
-		return "", "", false, errorsx.WithStack(ErrInvalidRequest.WithHint("The client credentials from the HTTP authorization header could not be parsed.").WithWrap(err).WithDebugf("Error occurred performing a base64 decode: %+v.", err))
+		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint("The client credentials from the HTTP authorization header could not be parsed.").WithWrap(err).WithDebugf("Error occurred performing a base64 decode: %+v.", err))
 	}
 
 	cs := string(c)
@@ -138,6 +138,12 @@ func getClientCredentialsClientAssertion(form url.Values) (assertion, assertionT
 }
 
 func getClientCredentialsClientIDValid(post, header string, assertion *ClientAssertion) (id string, err error) {
+	if len(post) != 0 && len(header) != 0 && post != header {
+		return "", errorsx.WithStack(ErrInvalidClient.
+			WithHint("The 'client_id' in the request body did not match the 'client_id' supplied via the HTTP Basic Authorization header.").
+			WithDebugf("The HTTP Basic Authorization header specified the 'client_id' value '%s' but the request body specified the 'client_id' value '%s'. Per RFC 6749 Section 2.3 a client MUST NOT use more than one authentication method.", header, post))
+	}
+
 	if len(post) != 0 {
 		id = post
 	} else if len(header) != 0 {
@@ -149,7 +155,7 @@ func getClientCredentialsClientIDValid(post, header string, assertion *ClientAss
 			return assertion.ID, nil
 		}
 
-		return id, errorsx.WithStack(ErrInvalidRequest.WithHint("Client Credentials missing or malformed.").WithDebug("The Client ID was missing from the request but it is required when there is no client assertion."))
+		return id, errorsx.WithStack(ErrInvalidClient.WithHint("Client Credentials missing or malformed.").WithDebug("The Client ID was missing from the request but it is required when there is no client assertion."))
 	}
 
 	if !RegexSpecificationVSCHAR.MatchString(id) {

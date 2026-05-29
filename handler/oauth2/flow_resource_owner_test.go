@@ -68,7 +68,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				areq.Form.Set(consts.FormParameterPassword, "pan")
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(oauth2.ErrNotFound)
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", oauth2.ErrNotFound)
 			},
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to authenticate the provided username and password credentials. Could not find the requested resource(s).",
 		},
@@ -80,7 +80,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				areq.Form.Set(consts.FormParameterPassword, "pan")
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(errors.New(""))
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", errors.New(""))
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
@@ -92,11 +92,52 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				areq.Form.Set(consts.FormParameterPassword, "pan")
 				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
 
-				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return(nil)
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", nil)
 			},
 			check: func(t *testing.T, areq *oauth2.AccessRequest) {
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.AccessToken))
 				assert.Equal(t, time.Now().Add(time.Hour).UTC().Truncate(jwt.TimePrecision), areq.GetSession().GetExpiresAt(oauth2.RefreshToken))
+			},
+		},
+		{
+			// Coverage for the new behavior: when the session implements ResourceOwnerSession, the subject
+			// returned by Authenticate MUST be set on the session via SetSubject so it surfaces in the issued
+			// access token's 'sub' claim. oauth2.DefaultSession satisfies ResourceOwnerSession via its embedded
+			// SetSubject method, so the default request session is sufficient to exercise this path.
+			name: "ShouldSetSubjectOnSessionFromAuthenticate",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
+
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("peter-subject-id", nil)
+			},
+			check: func(t *testing.T, areq *oauth2.AccessRequest) {
+				assert.Equal(t, "peter-subject-id", areq.GetSession().GetSubject(),
+					"Authenticate's returned subject must propagate to the session so the issued access token carries it as the 'sub' claim")
+			},
+		},
+		{
+			// Coverage for the resilience branch: when the session does NOT implement ResourceOwnerSession,
+			// the handler must skip the SetSubject call rather than panic. nonResourceOwnerSession satisfies
+			// oauth2.Session but intentionally omits SetSubject(string), so the type assertion to
+			// ResourceOwnerSession fails and the handler's `if session, ok := ...` branch is exercised.
+			name: "ShouldNotPanicWhenSessionLacksResourceOwnerSession",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}, Audience: []string{"https://www.authelia.com/api"}}
+				areq.Session = &nonResourceOwnerSession{}
+
+				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("peter-subject-id", nil)
+			},
+			check: func(t *testing.T, areq *oauth2.AccessRequest) {
+				// The session intentionally has no SetSubject — the assertion is just that the handler did
+				// not panic and completed successfully.
+				_, ok := areq.GetSession().(ResourceOwnerSession)
+				assert.False(t, ok, "test guard: this case requires a session that does NOT implement ResourceOwnerSession")
 			},
 		},
 	}
@@ -235,3 +276,25 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 		})
 	}
 }
+
+// nonResourceOwnerSession is an oauth2.Session implementation that intentionally omits SetSubject(string), so it
+// does NOT satisfy ResourceOwnerSession. Used to exercise the handler's "skip subject propagation" branch.
+type nonResourceOwnerSession struct {
+	expiresAt map[oauth2.TokenType]time.Time
+}
+
+func (s *nonResourceOwnerSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
+	if s.expiresAt == nil {
+		s.expiresAt = map[oauth2.TokenType]time.Time{}
+	}
+
+	s.expiresAt[key] = exp
+}
+
+func (s *nonResourceOwnerSession) GetExpiresAt(key oauth2.TokenType) time.Time {
+	return s.expiresAt[key]
+}
+
+func (s *nonResourceOwnerSession) GetUsername() string   { return "" }
+func (s *nonResourceOwnerSession) GetSubject() string    { return "" }
+func (s *nonResourceOwnerSession) Clone() oauth2.Session { return &nonResourceOwnerSession{} }

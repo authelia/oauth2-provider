@@ -42,11 +42,12 @@ func (m *MockResourceOwnerPasswordCredentialsGrantStorage) EXPECT() *MockResourc
 }
 
 // Authenticate mocks base method.
-func (m *MockResourceOwnerPasswordCredentialsGrantStorage) Authenticate(ctx context.Context, name, secret string) error {
+func (m *MockResourceOwnerPasswordCredentialsGrantStorage) Authenticate(ctx context.Context, name, secret string) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Authenticate", ctx, name, secret)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Authenticate indicates an expected call of Authenticate.

@@ -12,7 +12,7 @@ type ResourceOwnerPasswordCredentialsGrantStorage interface {
 	AccessTokenStorage
 	RefreshTokenStorage
 
-	Authenticate(ctx context.Context, name string, secret string) (err error)
+	Authenticate(ctx context.Context, name string, secret string) (subject string, err error)
 }
 
 type ResourceOwnerSession interface {

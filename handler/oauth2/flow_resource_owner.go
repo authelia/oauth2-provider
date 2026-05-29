@@ -69,7 +69,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	password := request.GetRequestForm().Get(consts.FormParameterPassword)
 	if username == "" || password == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Username or password are missing from the POST body."))
-	} else if err := c.ResourceOwnerPasswordCredentialsGrantStorage.Authenticate(ctx, username, password); errors.Is(err, oauth2.ErrNotFound) {
+	} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.Authenticate(ctx, username, password); errors.Is(err, oauth2.ErrNotFound) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to authenticate the provided username and password credentials.").WithWrap(err).WithDebugError(err))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

@@ -9,7 +9,12 @@ import (
 )
 
 type ResourceOwnerPasswordCredentialsGrantStorage interface {
-	Authenticate(ctx context.Context, name string, secret string) error
 	AccessTokenStorage
 	RefreshTokenStorage
+
+	Authenticate(ctx context.Context, name string, secret string) (err error)
+}
+
+type ResourceOwnerSession interface {
+	SetSubject(subject string)
 }

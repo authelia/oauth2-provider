@@ -750,6 +750,147 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 	})
 }
 
+// TestAuthorizeCodeFlow_ResourceParameterSubset exercises the per-request 'resource' (RFC 8707) handling at the
+// token endpoint, separate from the 'audience' check covered by TestAuthorizeCodeFlow_ResourceIndicatorSubset.
+//
+// Per RFC 8707 §2.2 and the new check in flow_authorize_code_token.go HandleTokenEndpointRequest:
+//
+//   - When the token request omits 'resource', it inherits the resources granted at the authorize endpoint.
+//   - When the token request includes 'resource', the supplied values MUST be a subset of those granted at the
+//     authorize endpoint; a superset is rejected with invalid_target.
+func TestAuthorizeCodeFlow_ResourceParameterSubset(t *testing.T) {
+	const (
+		resourceUsers   = "https://api.example.com/users"
+		resourceTenants = "https://api.example.com/tenants"
+	)
+
+	newHandlerAndAuthCode := func(t *testing.T, grantedResource oauth2.Arguments) (AuthorizeExplicitGrantHandler, string) {
+		t.Helper()
+
+		store := storage.NewMemoryStore()
+		strategy := &hmacshaStrategy
+		config := &oauth2.Config{
+			ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+			ResourceStrategy:      oauth2.DefaultResourceStrategy,
+			AccessTokenLifespan:   time.Minute,
+			AuthorizeCodeLifespan: time.Minute,
+		}
+
+		handler := AuthorizeExplicitGrantHandler{
+			CoreStorage:           store,
+			AuthorizeCodeStrategy: strategy,
+			AccessTokenStrategy:   strategy,
+			RefreshTokenStrategy:  strategy,
+			Config:                config,
+		}
+
+		code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+		require.NoError(t, err)
+
+		require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, &oauth2.AuthorizeRequest{
+			Request: oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					Audience:   []string{resourceUsers, resourceTenants},
+				},
+				Form: url.Values{
+					consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"},
+					consts.FormParameterResource:    grantedResource,
+				},
+				RequestedScope:    oauth2.Arguments{"foo"},
+				GrantedScope:      oauth2.Arguments{"foo"},
+				RequestedResource: grantedResource,
+				GrantedResource:   grantedResource,
+				Session:           &oauth2.DefaultSession{},
+				RequestedAt:       time.Now().UTC(),
+			},
+		}))
+
+		return handler, code
+	}
+
+	newAccessRequest := func(code string, resources []string) *oauth2.AccessRequest {
+		req := &oauth2.AccessRequest{
+			GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			Request: oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					Audience:   []string{resourceUsers, resourceTenants},
+				},
+				Form: url.Values{
+					consts.FormParameterAuthorizationCode: []string{code},
+					consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+				},
+				Session:     &oauth2.DefaultSession{},
+				RequestedAt: time.Now().UTC(),
+			},
+		}
+
+		if resources != nil {
+			req.Form[consts.FormParameterResource] = resources
+			req.RequestedResource = oauth2.Arguments(resources)
+		}
+
+		return req
+	}
+
+	t.Run("ShouldFailWhenAccessRequestResourceExceedsAuthorizeGranted", func(t *testing.T) {
+		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers})
+		accessRequest := newAccessRequest(code, []string{resourceUsers, resourceTenants})
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		require.Error(t, err)
+		require.ErrorIs(t, err, oauth2.ErrInvalidTarget,
+			"RFC 8707 §2.2: token-endpoint resource MUST be a subset of authorize-endpoint granted resources")
+	})
+
+	t.Run("ShouldPreserveAccessRequestResourceWhenSubsetOfAuthorizeGranted", func(t *testing.T) {
+		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers, resourceTenants})
+		accessRequest := newAccessRequest(code, []string{resourceUsers})
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetRequestedResource(),
+			"requested resource at token endpoint must be preserved when it is a subset of the authorize request's granted resources")
+		assert.NotContains(t, accessRequest.GetRequestedResource(), resourceTenants)
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetGrantedResource(),
+			"granted resource on the access token must be narrowed to the resources requested at the token endpoint")
+		assert.NotContains(t, accessRequest.GetGrantedResource(), resourceTenants,
+			"narrowed resources must not include those the client did not request at the token endpoint")
+	})
+
+	t.Run("ShouldFallBackToAuthorizeGrantedResourceWhenAccessRequestHasNone", func(t *testing.T) {
+		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers, resourceTenants})
+		accessRequest := newAccessRequest(code, nil)
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+		assert.Equal(t, oauth2.Arguments{resourceUsers, resourceTenants}, accessRequest.GetRequestedResource(),
+			"RFC 8707 §2.2: when 'resource' is omitted at the token endpoint, fall back to the authorize request's granted resources")
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+		assert.Equal(t, oauth2.Arguments{resourceUsers, resourceTenants}, accessRequest.GetGrantedResource(),
+			"granted resource must equal the authorize request's granted resource when the token endpoint omits the resource parameter")
+	})
+
+	t.Run("ShouldAcceptExactMatch", func(t *testing.T) {
+		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers, resourceTenants})
+		accessRequest := newAccessRequest(code, []string{resourceUsers, resourceTenants})
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest),
+			"a token-endpoint resource that exactly matches the authorize-granted set must be accepted")
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+		assert.Equal(t, oauth2.Arguments{resourceUsers, resourceTenants}, accessRequest.GetGrantedResource())
+	})
+}
+
 func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	strategy := hmacshaStrategy
 	request := &oauth2.AccessRequest{

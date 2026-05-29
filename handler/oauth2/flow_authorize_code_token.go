@@ -133,14 +133,17 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler, request oauth2.Requester) bool {
 	scope := c.Config.GetRefreshTokenScopes(ctx)
+
 	// Require one of the refresh token scopes, if set.
 	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
 		return false
 	}
+
 	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return false
 	}
+
 	return true
 }
 
@@ -180,23 +183,24 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		request.GrantResource(resource)
 	}
 
-	access, accessSignature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, request)
-	if err != nil {
+	var access, accessSignature string
+
+	if access, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	var refresh, refreshSignature string
+
 	if canIssueRefreshToken(ctx, c, ar) {
-		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request)
-		if err != nil {
+		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
-	ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage)
-	if err != nil {
+	if ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
+
 	defer func() {
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
@@ -205,7 +209,9 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		}
 	}()
 
-	if err = c.CoreStorage.InvalidateAuthorizeCodeSession(ctx, signature); err != nil {
+	if err = c.CoreStorage.InvalidateAuthorizeCodeSession(ctx, signature); errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The authorization code has already been exchanged.").WithWrap(err))
+	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -215,11 +221,13 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		}
 	}
 
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+
 	response.SetAccessToken(access)
 	response.SetTokenType(oauth2.BearerAccessToken)
-	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+
 	if refresh != "" {
 		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/google/uuid"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
@@ -370,18 +371,20 @@ func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature str
 	return nil
 }
 
-func (s *MemoryStore) Authenticate(_ context.Context, name string, secret string) error {
+func (s *MemoryStore) Authenticate(ctx context.Context, name string, secret string) (string, error) {
 	s.usersMutex.RLock()
 	defer s.usersMutex.RUnlock()
 
 	rel, ok := s.Users[name]
 	if !ok {
-		return oauth2.ErrNotFound
+		return "", oauth2.ErrNotFound
 	}
+
 	if rel.Password != secret {
-		return oauth2.ErrNotFound.WithDebug("Invalid credentials.")
+		return "", oauth2.ErrNotFound.WithDebug("Invalid credentials.")
 	}
-	return nil
+
+	return uuid.New().String(), nil
 }
 
 func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) error {

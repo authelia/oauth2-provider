@@ -50,7 +50,7 @@ func TestMemoryStore_Authenticate(t *testing.T) {
 				usersMutex: sync.RWMutex{},
 			}
 
-			err := s.Authenticate(tc.args.in0, tc.args.name, tc.args.secret)
+			_, err := s.Authenticate(tc.args.in0, tc.args.name, tc.args.secret)
 
 			if len(tc.err) == 0 {
 				assert.NoError(t, err)

@@ -61,9 +61,9 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 
 		if _, claims, err = c.validate(ctx, request, token); err != nil {
 			return err
-		} else {
-			session.SetActorToken(claims)
 		}
+
+		session.SetActorToken(claims)
 	}
 
 	if form.Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693AccessToken {
@@ -73,10 +73,10 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 
 		if subjectTokenSession, claims, err = c.validate(ctx, request, token); err != nil {
 			return err
-		} else {
-			session.SetSubjectToken(claims)
-			session.SetSubject(subjectTokenSession.GetSubject())
 		}
+
+		session.SetSubjectToken(claims)
+		session.SetSubject(subjectTokenSession.GetSubject())
 	}
 
 	return nil
@@ -154,10 +154,11 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
 	}
 
-	// Check if the client is allowed to exchange this token.
+	// Check if the client is allowed to exchange this token, gated by the requested_token_type so the policy can
+	// distinguish "may exchange to X" from "may exchange to Y".
 	if subjectTokenClient, ok = original.GetClient().(Client); ok {
-		allowed := subjectTokenClient.GetTokenExchangePermitted(client)
-		if !allowed {
+		requestedType := resolveRequestedTokenType(ctx, request, c.Config)
+		if !subjectTokenClient.GetTokenExchangePermitted(client, requestedType) {
 			return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
 		}
 	}

@@ -25,7 +25,7 @@ type ActorTokenValidationHandler struct{}
 //   - may_act present (with or without actor_token) → the actor (or the client itself, when no actor_token is
 //     supplied) MUST match every constraint in may_act.
 //   - actor_token present but no may_act → the subject token carries no in-token authorization for delegation.
-//     The request is rejected with invalid_grant unless the client implements ActorTokenPolicyClient and opts
+//     The request is rejected with invalid_grant unless the client implements Client and opts
 //     into externally-gated authorization via GetAllowActorTokenWithoutMayAct.
 //
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.4.
@@ -77,9 +77,9 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 	default:
 		// actor_token supplied without may_act on the subject token. Reject unless the client has explicitly opted
 		// into externally-gated authorization.
-		var policy ActorTokenPolicyClient
+		var x Client
 
-		if policy, ok = client.(ActorTokenPolicyClient); ok && policy.GetAllowActorTokenWithoutMayAct() {
+		if x, ok = client.(Client); ok && x.GetAllowActorTokenWithoutMayAct() {
 			return nil
 		}
 

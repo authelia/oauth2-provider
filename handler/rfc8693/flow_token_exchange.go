@@ -319,6 +319,21 @@ func buildActClaim(session Session) map[string]any {
 	return act
 }
 
+// resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved
+// 'requested_token_type' parameter. When 'requested_token_type' is absent on the request the configured default is
+// substituted (matching the resolution logic in the token-type handlers' PopulateTokenEndpointResponse). Returns
+// nil when the requested type is not registered — callers SHOULD treat that as a server-side configuration error;
+// in practice TokenExchangeGrantHandler.HandleTokenEndpointRequest already rejects requests with unknown
+// requested_token_type values, so this returns nil only when called outside the normal handler ordering.
+func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
+	id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
+	if id == "" {
+		id = config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	return config.GetRFC8693TokenTypes(ctx)[id]
+}
+
 // copyClaimMap returns a deep copy of the supplied claim map so the caller can mutate or store the result without
 // disturbing the source map (e.g. the subject_token snapshot persisted on the session). Nested maps are recursively
 // copied; other values are copied by reference since claim values are expected to be immutable JSON scalars or slices.

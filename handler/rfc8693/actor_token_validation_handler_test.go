@@ -147,10 +147,7 @@ func TestActorTokenValidationHandler_RejectsActorTokenWithoutMayAct(t *testing.T
 func TestActorTokenValidationHandler_AllowsActorTokenWithoutMayActWhenPolicyOptsIn(t *testing.T) {
 	h := &ActorTokenValidationHandler{}
 
-	client := &actorPolicyClient{
-		rfc8693Client: &rfc8693Client{DefaultClient: newConfidentialClient()},
-		allow:         true,
-	}
+	client := &rfc8693Client{DefaultClient: newConfidentialClient(), allow: true}
 
 	req := newActorValidationRequest(t, client,
 		map[string]any{consts.ClaimSubject: "alice"},
@@ -163,10 +160,7 @@ func TestActorTokenValidationHandler_AllowsActorTokenWithoutMayActWhenPolicyOpts
 func TestActorTokenValidationHandler_RejectsWhenPolicyClientReturnsFalse(t *testing.T) {
 	h := &ActorTokenValidationHandler{}
 
-	client := &actorPolicyClient{
-		rfc8693Client: &rfc8693Client{DefaultClient: newConfidentialClient()},
-		allow:         false,
-	}
+	client := &rfc8693Client{DefaultClient: newConfidentialClient(), allow: false}
 
 	req := newActorValidationRequest(t, client,
 		map[string]any{consts.ClaimSubject: "alice"},
@@ -181,17 +175,6 @@ func TestActorTokenValidationHandler_RejectsWhenPolicyClientReturnsFalse(t *test
 // =============================================================================
 // Test helpers
 // =============================================================================
-
-// actorPolicyClient is a Client that opts into delegation without may_act, matching the
-// ActorTokenPolicyClient interface so the validation handler skips the in-token authorization
-// requirement in favor of an externally-gated policy.
-type actorPolicyClient struct {
-	*rfc8693Client
-
-	allow bool
-}
-
-func (c *actorPolicyClient) GetAllowActorTokenWithoutMayAct() bool { return c.allow }
 
 func newActorValidationRequest(t *testing.T, client oauth2.Client, subject, actor map[string]any) *oauth2.AccessRequest {
 	t.Helper()

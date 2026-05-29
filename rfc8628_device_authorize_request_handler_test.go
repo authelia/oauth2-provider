@@ -30,7 +30,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 	}{
 		{
 			name: "ShouldFailEmptyRequest",
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 			mock: func(store *mock.MockStorage) {},
 		},
 		{
@@ -58,7 +58,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 					consts.FormParameterScope:    {"foo bar"},
 				},
 			},
-			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). foo",
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. foo",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(nil, errors.New("foo"))
 			},
@@ -79,7 +79,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 					Scopes:     []string{"foo", "bar"},
 				}, nil)
 			},
-			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'none_endpoint_auth_method' method 'token', however the OAuth 2.0 client registration does not allow this method. The registered client with id '1234' is configured with a confidential client type but only client registrations with a public client type can use this 'token_endpoint_auth_method'.",
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The 'token_endpoint_auth_method' method 'none' was determined to be used, but the registered client with id '1234' is configured with a confidential client type but only client registrations with a public client type can use this 'token_endpoint_auth_method'.",
 		},
 		{
 			name: "ShouldFailConfidentialClientWrongSecretBasic",

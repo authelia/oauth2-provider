@@ -79,7 +79,7 @@ func TestNewAccessRequest(t *testing.T) {
 				consts.FormParameterGrantType: {"foo"},
 			},
 			expectErr:    ErrInvalidClient,
-			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
+			expectStrErr: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect.",
 			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(nil, errors.New(""))
 			},
@@ -516,7 +516,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method: "POST",
-			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 		},
 	}
 

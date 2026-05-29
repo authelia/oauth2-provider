@@ -91,7 +91,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         new(http.Request),
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 			expectErr: ErrInvalidClient,
 		},
 		{
@@ -101,7 +101,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"bar"}},
 			r:    new(http.Request),
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Could not find the requested resource(s).",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Could not find the requested resource(s).",
 		},
 		{
 			name: "ShouldPassBecauseClientIsPublicAndAuthenticationRequirementsAreMet",
@@ -134,7 +134,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{},
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'none', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic', but the method 'none' was determined to be used. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 		},
 		{
 			name: "ShouldPassWithClientCredentialsContainingSpecialCharacters",
@@ -151,7 +151,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
 			name: "ShouldFailWithMultipleAuthenticationMethodsClientMethodPost",
@@ -160,7 +160,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
 			name: "ShouldPassWithMultipleAuthenticationMethods",
@@ -180,7 +180,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:         &http.Request{Header: clientBasicAuthHeader("xyz", "")},
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The 'client_id' in the request body did not match the 'client_id' supplied via the HTTP Basic Authorization header. The HTTP Basic Authorization header specified the 'client_id' value 'xyz' but the request body specified the 'client_id' value 'abc'. Per RFC 6749 Section 2.3 a client MUST NOT use more than one authentication method.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The HTTP Basic Authorization header specified the 'client_id' value 'xyz' but the request body specified the 'client_id' value 'abc'. Per RFC 6749 Section 2.3 a client MUST NOT use more than one authentication method.",
 			expectErr: ErrInvalidClient,
 		},
 		{
@@ -190,7 +190,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{consts.FormParameterClientID: {"foo"}},
 			r:         new(http.Request),
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'none', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The registered client with id 'foo' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic', but the method 'none' was determined to be used. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'none' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 			expectErr: ErrInvalidClient,
 		},
 		{
@@ -242,7 +242,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "bar")},
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'client_secret_basic', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'foo' has no 'client_secret' however this is required to process the particular request.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request was determined to be using 'token_endpoint_auth_method' method 'client_secret_basic', however the registered client with id 'foo' has no 'client_secret' which is required to process this method.",
 			expectErr: ErrInvalidClient,
 		},
 		{
@@ -296,8 +296,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("%%%%%%:foo"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client id in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseClientSecretIsNotValid",
@@ -306,8 +306,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:%%%%%%%"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'. invalid URL escape '%%%'",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client secret in the HTTP authorization header could not be decoded from 'application/x-www-form-urlencoded'.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseBasicValueIsNotValid",
@@ -316,8 +316,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The basic scheme value was not separated by a colon.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The basic scheme value was not separated by a colon.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseSchemeIsNotValid",
@@ -326,7 +326,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"NotBasic " + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client credentials from the HTTP authorization header had an unknown scheme. The scheme 'NotBasic' is not known for client authentication.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The scheme 'NotBasic' is not known for client authentication.",
 			expectErr: ErrInvalidClient,
 		},
 		{
@@ -336,8 +336,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + "foo:bar"}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. Error occurred performing a base64 decode: illegal base64 data at input byte 3.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Error occurred performing a base64 decode: illegal base64 data at input byte 3.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseAuthorizationHeaderIsNotValid",
@@ -346,8 +346,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {"Basic" + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client credentials from the HTTP authorization header could not be parsed. The header value is either missing a scheme, value, or the separator between them.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The header value is either missing a scheme, value, or the separator between them.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseNonVSCHARClientID",
@@ -356,8 +356,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("\x19foo", "bar")},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client id in the HTTP request had an invalid character.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client id in the HTTP request had an invalid character.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseNonVSCHARClientSecret",
@@ -366,8 +366,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{},
 			r:         &http.Request{Header: clientBasicAuthHeader("foo", "\x19bar")},
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client secret in the HTTP request had an invalid character.",
-			expectErr: ErrInvalidRequest,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client secret in the HTTP request had an invalid character.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseClientIsConfidentialAndIdDoesNotExistInHeader",
@@ -377,7 +377,7 @@ func TestAuthenticateClient(t *testing.T) {
 			form:      url.Values{},
 			r:         &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Could not find the requested resource(s).",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Could not find the requested resource(s).",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionButClientAssertionIsMissing",
@@ -386,8 +386,8 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form:      url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
-			expectErr: ErrInvalidRequest,
-			err:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request parameter 'client_assertion' must be set when using 'client_assertion_type' of 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'.",
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request parameter 'client_assertion' must be set when using 'client_assertion_type' of 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionTypeIsUnknown",
@@ -397,7 +397,7 @@ func TestAuthenticateClient(t *testing.T) {
 			form:      url.Values{consts.FormParameterClientID: {"foo"}, consts.FormParameterClientAssertionType: {"foobar"}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Unknown client_assertion_type 'foobar'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Unknown client_assertion_type 'foobar'.",
 		},
 		{
 			name: "ShouldPassWithProperRSAAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest",
@@ -456,7 +456,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'ES256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'RS256'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'ES256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'RS256'.",
 		},
 		{
 			name: "ShouldFailBecauseWrongJSONWebKeyHeaderTypeValue",
@@ -477,7 +477,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'typ' header value 'client-authentication+jwt' or 'JWT' but the client assertion was signed with the 'typ' header value 'at+jwt'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'typ' header value 'client-authentication+jwt' or 'JWT' but the client assertion was signed with the 'typ' header value 'at+jwt'.",
 		},
 		{
 			name: "ShouldFailBecauseMalformedAssertionUsed",
@@ -487,7 +487,7 @@ func TestAuthenticateClient(t *testing.T) {
 			form:      url.Values{consts.FormParameterClientAssertion: {"bad.assertion"}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer}},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client provided a client assertion which could not be decoded or validated. OAuth 2.0 client provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.",
 		},
 		{
 			name: "ShouldFailBecauseExpired",
@@ -508,7 +508,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was expired\. The client assertion expired at \d+\.$`),
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect\. OAuth 2\.0 client with id 'bar' provided a client assertion that was expired\. The client assertion expired at \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseNotBefore",
@@ -530,7 +530,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseIssuedInFuture",
@@ -552,7 +552,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion was issued at \d+\.$`),
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion was issued at \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseNoKeys",
@@ -573,7 +573,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' provided a client assertion that was not able to be verified. Error occurred retrieving the JSON Web Key. No JWKs have been registered for the client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' provided a client assertion that was not able to be verified. Error occurred retrieving the JSON Web Key. No JWKs have been registered for the client.",
 		},
 		{
 			name: "ShouldFailBecauseNotBeforeAlternative",
@@ -595,7 +595,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. OAuth 2\.0 client with id 'bar' provided a client assertion which could not be decoded or validated\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
+			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion is not valid before \d+\.$`),
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretJwt",
@@ -616,7 +616,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_jwt'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_jwt'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_jwt'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_jwt'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButNone",
@@ -637,7 +637,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'none'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'none'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'none'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'none'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretPost",
@@ -658,7 +658,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_post'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_post'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_post'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_post'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButClientSecretBasic",
@@ -679,7 +679,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the OAuth 2.0 client registration does not allow this method. The registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_basic'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request was determined to be using 'token_endpoint_auth_method' method 'private_key_jwt', however the registered client with id 'bar' is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'. Either the Authorization Server client registration will need to have the 'token_endpoint_auth_method' updated to 'private_key_jwt' or the Relying Party will need to be configured to use 'client_secret_basic'.",
 		},
 		{
 			name: "ShouldFailBecauseTokenAuthMethodIsNotPrivateKeyJwtButFoobar",
@@ -740,7 +740,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' provided a client assertion that has an invalid audience. The client assertion was expected to have an 'aud' claim which matches one of the values 'token-url' but the 'aud' claim had the values 'token-url-1', 'token-url-2'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' provided a client assertion that has an invalid audience. The client assertion was expected to have an 'aud' claim which matches one of the values 'token-url' but the 'aud' claim had the values 'token-url-1', 'token-url-2'.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsAreSetWithinTheClient",
@@ -815,7 +815,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). OAuth 2.0 client with id 'bar' provided a client assertion which could not be decoded or validated. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'RS256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'none'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'RS256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'none'.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsURIIsSet",
@@ -857,7 +857,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion had invalid claims. Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionIssDoesNotMatchClient",
@@ -879,7 +879,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion had invalid claims. Claim 'iss' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionJTIClaimIsNotSet",
@@ -900,7 +900,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The client assertion had invalid claims. Claim 'jti' from 'client_assertion' must be set but is not.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion had invalid claims. Claim 'jti' from 'client_assertion' must be set but is not.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionAudIsNotSet",
@@ -1063,11 +1063,11 @@ func TestAuthenticateClientTwice(t *testing.T) {
 				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-				// Replay the same assertion and expect ErrJTIKnown.
+				// Replay the same assertion and expect ErrInvalidClient with the jti-replay debug.
 				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.Error(t, err)
-				assert.EqualError(t, err, ErrJTIKnown.Error())
-				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The jti was already used. Claim 'jti' from 'client_assertion' MUST only be used once. The jti was already used.")
+				assert.EqualError(t, err, ErrInvalidClient.Error())
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Claim 'jti' from 'client_assertion' MUST only be used once.")
 				assert.Nil(t, actual)
 			},
 		},

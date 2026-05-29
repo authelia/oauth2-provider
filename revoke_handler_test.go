@@ -68,7 +68,7 @@ func TestNewRevocationRequest(t *testing.T) {
 				consts.FormParameterToken: {"foo"},
 			},
 			mock: func(store *mock.MockStorage, handler *mock.MockRevocationHandler, client *DefaultClient) {},
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). Client Credentials missing or malformed. The Client ID was missing from the request but it is required when there is no client assertion.",
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 		},
 		{
 			name: "ShouldFailWhenClientLookupFails",
@@ -82,7 +82,7 @@ func TestNewRevocationRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage, handler *mock.MockRevocationHandler, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(nil, errors.New(""))
 			},
-			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect.",
 		},
 		{
 			name: "ShouldFailWhenClientSecretInvalid",

@@ -90,7 +90,8 @@ func WildcardScopeStrategy(matchers []string, needle string) bool {
 		}
 
 		var noteq bool
-		for k, c := range strings.Split(matcher, ".") {
+
+		for k, c := range matcherParts {
 			if k == len(matcherParts)-1 && len(matcherParts) != len(needleParts) {
 				if c != "*" {
 					noteq = true

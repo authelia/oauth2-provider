@@ -272,8 +272,15 @@ func (s *MemoryStore) InvalidateAuthorizeCodeSession(ctx context.Context, code s
 	if !ok {
 		return oauth2.ErrNotFound
 	}
+
+	if !rel.active {
+		return oauth2.ErrInvalidatedAuthorizeCode
+	}
+
 	rel.active = false
+
 	s.AuthorizeCodes[code] = rel
+
 	return nil
 }
 

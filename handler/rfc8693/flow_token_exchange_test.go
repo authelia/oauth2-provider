@@ -33,6 +33,7 @@ type rfc8693Client struct {
 	subjectTokenIssuers []string
 	actorTokenIssuers   []string
 	exchangePermitted   bool
+	allow               bool
 }
 
 func (c *rfc8693Client) GetSupportedSubjectTokenTypes() []string { return c.subjectTokenTypes }
@@ -45,8 +46,12 @@ func (c *rfc8693Client) GetSupportedSubjectTokenIssuers() []string { return c.su
 
 func (c *rfc8693Client) GetSupportedActorTokenIssuers() []string { return c.actorTokenIssuers }
 
-func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client) bool {
+func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client, _ oauth2.RFC8693TokenType) bool {
 	return c.exchangePermitted
+}
+
+func (c *rfc8693Client) GetAllowActorTokenWithoutMayAct() (allow bool) {
+	return c.allow
 }
 
 // newTokenExchangeHandler builds a TokenExchangeGrantHandler against a Config whose

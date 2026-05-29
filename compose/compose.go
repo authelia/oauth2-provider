@@ -96,6 +96,13 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OAuth2ResourceOwnerPasswordCredentialsFactory,
 		RFC7523AssertionGrantFactory,
 
+		RFC8693TokenExchangeGrantFactory,
+		RFC8693AccessTokenTypeFactory,
+		RFC8693RefreshTokenTypeFactory,
+		RFC8693IDTokenTypeFactory,
+		RFC8693CustomJWTTypeFactory,
+		RFC8693ActorTokenValidationFactory,
+
 		OpenIDConnectExplicitFactory,
 		OpenIDConnectImplicitFactory,
 		OpenIDConnectHybridFactory,

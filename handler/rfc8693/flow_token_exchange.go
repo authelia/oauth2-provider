@@ -238,8 +238,19 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 	return oauth2.DefaultResourceStrategy
 }
 
-// PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3
-func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+// PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3.
+//
+// When the token exchange request includes an 'actor_token' (delegation), this handler is responsible for setting the
+// 'act' claim on the issued token's session per RFC 8693 Section 4.1. Pure impersonation (no actor_token) leaves the
+// session unchanged so the issued token represents the subject acting alone.
+//
+// IMPORTANT ordering note: this handler MUST be registered BEFORE the token-type handlers (AccessTokenTypeHandler,
+// RefreshTokenTypeHandler, IDTokenTypeHandler, CustomJWTTypeHandler) in the TokenEndpointHandlers slice. The token
+// type handlers' PopulateTokenEndpointResponse implementations issue the token by serializing the session, so the
+// 'act' claim must be on the session before they run.
+//
+// See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
+func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -260,17 +271,90 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
-	// chain `act` if necessary
-	subjectTokenObject := session.GetSubjectToken()
-	if mayAct, _ := subjectTokenObject[consts.ClaimAuthorizedActor].(map[string]any); mayAct != nil {
-		if subjectActor, _ := subjectTokenObject[consts.ClaimActor].(map[string]any); subjectActor != nil {
-			mayAct[consts.ClaimActor] = subjectActor
-		}
-
-		session.SetAct(mayAct)
+	if act := buildActClaim(session); act != nil {
+		session.SetClaimActor(act)
 	}
 
 	return nil
+}
+
+// buildActClaim derives the RFC 8693 §4.1 'act' claim for the issued token from the session populated by the upstream
+// token-type handlers. It returns nil when no actor_token was supplied (i.e. impersonation, where no 'act' claim is
+// required).
+//
+// The actor's identity is taken from the actor_token's identifying claims ('sub' and, when present, 'client_id'). If
+// the subject_token already carried an 'act' claim, that prior actor is nested under the new 'act' to express the
+// chain of delegation per §4.1: "the outermost act claim represents the current actor while nested act claims
+// represent prior actors".
+//
+// The function does not mutate any of the input maps; the returned map is a fresh allocation safe for the caller to
+// store on the session.
+func buildActClaim(session Session) map[string]any {
+	actorToken := session.GetActorToken()
+	if actorToken == nil {
+		return nil
+	}
+
+	act := map[string]any{}
+
+	if sub, ok := actorToken[consts.ClaimSubject].(string); ok && sub != "" {
+		act[consts.ClaimSubject] = sub
+	}
+
+	if clientID, ok := actorToken[consts.ClaimClientIdentifier].(string); ok && clientID != "" {
+		act[consts.ClaimClientIdentifier] = clientID
+	}
+
+	subjectToken := session.GetSubjectToken()
+	if subjectToken != nil {
+		if existing, ok := subjectToken[consts.ClaimActor].(map[string]any); ok && len(existing) > 0 {
+			act[consts.ClaimActor] = copyClaimMap(existing)
+		}
+	}
+
+	if len(act) == 0 {
+		return nil
+	}
+
+	return act
+}
+
+// resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved
+// 'requested_token_type' parameter. When 'requested_token_type' is absent on the request the configured default is
+// substituted (matching the resolution logic in the token-type handlers' PopulateTokenEndpointResponse). Returns
+// nil when the requested type is not registered — callers SHOULD treat that as a server-side configuration error;
+// in practice TokenExchangeGrantHandler.HandleTokenEndpointRequest already rejects requests with unknown
+// requested_token_type values, so this returns nil only when called outside the normal handler ordering.
+func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
+	id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
+	if id == "" {
+		id = config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	return config.GetRFC8693TokenTypes(ctx)[id]
+}
+
+// copyClaimMap returns a deep copy of the supplied claim map so the caller can mutate or store the result without
+// disturbing the source map (e.g. the subject_token snapshot persisted on the session). Nested maps are recursively
+// copied; other values are copied by reference since claim values are expected to be immutable JSON scalars or slices.
+func copyClaimMap(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+
+	dst := make(map[string]any, len(src))
+
+	for k, v := range src {
+		if nested, ok := v.(map[string]any); ok {
+			dst[k] = copyClaimMap(nested)
+
+			continue
+		}
+
+		dst[k] = v
+	}
+
+	return dst
 }
 
 // CanSkipClientAuth indicates if client auth can be skipped

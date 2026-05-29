@@ -40,12 +40,6 @@ var (
 		DescriptionField: "The handler is not responsible for this request.",
 		CodeField:        http.StatusBadRequest,
 	}
-	ErrRequestForbidden = &RFC6749Error{
-		ErrorField:       errRequestForbiddenName,
-		DescriptionField: "The request is not allowed.",
-		HintField:        "You are not allowed to perform this action.",
-		CodeField:        http.StatusForbidden,
-	}
 	ErrInvalidRequest = &RFC6749Error{
 		ErrorField:       errInvalidRequestName,
 		DescriptionField: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.",
@@ -246,7 +240,6 @@ const (
 	errInteractionRequiredName     = "interaction_required"
 	errLoginRequiredName           = "login_required"
 	errRequestUnauthorizedName     = "request_unauthorized"
-	errRequestForbiddenName        = "request_forbidden"
 	errInvalidRequestName          = "invalid_request"
 	errUnauthorizedClientName      = "unauthorized_client"
 	errAccessDeniedName            = "access_denied"

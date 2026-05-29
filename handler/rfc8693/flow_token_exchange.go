@@ -267,7 +267,7 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 			mayAct[consts.ClaimActor] = subjectActor
 		}
 
-		session.SetAct(mayAct)
+		session.SetClaimActor(mayAct)
 	}
 
 	return nil

@@ -22,7 +22,7 @@ type Session interface {
 
 	GetSubjectToken() map[string]any
 
-	SetAct(act map[string]any)
+	SetClaimActor(act map[string]any)
 
 	AccessTokenClaimsMap() map[string]any
 }
@@ -51,7 +51,7 @@ func (s *DefaultSession) GetSubjectToken() map[string]any {
 	return s.SubjectToken
 }
 
-func (s *DefaultSession) SetAct(act map[string]any) {
+func (s *DefaultSession) SetClaimActor(act map[string]any) {
 	s.Extra[consts.ClaimActor] = act
 }
 

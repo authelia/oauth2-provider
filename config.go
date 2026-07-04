@@ -356,8 +356,12 @@ type RFC9628DeviceAuthorizeConfigProvider interface {
 	// GetRFC8628CodeLifespan returns the device and user code lifespan.
 	GetRFC8628CodeLifespan(ctx context.Context) (lifespan time.Duration)
 
+	// GetRFC8628UserVerificationURL returns the end-user verification URL returned to the device as the
+	// 'verification_uri' where the user enters their user code to authorize the device.
 	GetRFC8628UserVerificationURL(ctx context.Context) (url string)
 
+	// GetRFC8628TokenPollingInterval returns the minimum interval the device should wait between polling the token
+	// endpoint, returned to the device as the 'interval' value.
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
@@ -375,14 +379,21 @@ type RFC8628UserAuthorizeEndpointHandlersProvider interface {
 
 // RFC8693ConfigProvider is the configuration provider for RFC8693 Token Exchange.
 type RFC8693ConfigProvider interface {
+	// GetRFC8693TokenTypes returns the supported token types for Token Exchange keyed by their token type identifier
+	// (i.e. the 'subject_token_type', 'actor_token_type', and 'requested_token_type' URN values).
 	GetRFC8693TokenTypes(ctx context.Context) (types map[string]RFC8693TokenType)
 
+	// GetDefaultRFC8693RequestedTokenType returns the token type identifier used as the 'requested_token_type' when the
+	// Token Exchange request does not explicitly specify one.
 	GetDefaultRFC8693RequestedTokenType(ctx context.Context) (tokenType string)
 
+	// GetScopeStrategy returns the scope strategy used to validate scopes during Token Exchange.
 	GetScopeStrategy(ctx context.Context) (strategy ScopeStrategy)
 
+	// GetAudienceStrategy returns the audience strategy used to validate audiences during Token Exchange.
 	GetAudienceStrategy(ctx context.Context) (strategy AudienceStrategy)
 
+	// GetResourceStrategy returns the RFC 8707 resource indicator strategy used during Token Exchange.
 	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
@@ -397,7 +408,7 @@ type UseLegacyErrorFormatProvider interface {
 }
 
 // PushedAuthorizeRequestConfigProvider is the configuration provider for pushed
-// authorization request.
+// authorization requests.
 type PushedAuthorizeRequestConfigProvider interface {
 	// GetPushedAuthorizeRequestURIPrefix is the request URI prefix. This is
 	// usually 'urn:ietf:params:oauth:request_uri:'.
@@ -412,6 +423,35 @@ type PushedAuthorizeRequestConfigProvider interface {
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
 }
 
+// AuthorizeErrorFieldResponseStrategyProvider returns the provider for the strategy used to write authorization
+// endpoint errors that cannot be delivered via a response_mode handler.
 type AuthorizeErrorFieldResponseStrategyProvider interface {
+	// GetAuthorizeErrorFieldResponseStrategy returns the AuthorizeErrorFieldResponseStrategy used to write authorization
+	// endpoint errors directly to the response writer when no response_mode handler matches, such as when the user
+	// cannot be safely redirected back to the client.
 	GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy)
+}
+
+// TokenEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the token
+// endpoint.
+type TokenEndpointClientAuthStrategyProvider interface {
+	// GetTokenEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
+	// token endpoint. This endpoint permits public clients to authenticate using the 'none' method.
+	GetTokenEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
+}
+
+// IntrospectionEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at
+// the introspection endpoint.
+type IntrospectionEndpointClientAuthStrategyProvider interface {
+	// GetIntrospectionEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at
+	// the introspection endpoint. This endpoint does not permit public clients to authenticate using the 'none' method.
+	GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
+}
+
+// RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
+// revocation endpoint.
+type RevocationEndpointClientAuthStrategyProvider interface {
+	// GetRevocationEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
+	// revocation endpoint. This endpoint permits public clients to authenticate using the 'none' method.
+	GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
 }

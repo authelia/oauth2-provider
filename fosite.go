@@ -202,6 +202,9 @@ type Configurator interface {
 	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
 	ResourceStrategyProvider
+	TokenEndpointClientAuthStrategyProvider
+	RevocationEndpointClientAuthStrategyProvider
+	IntrospectionEndpointClientAuthStrategyProvider
 }
 
 // New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package

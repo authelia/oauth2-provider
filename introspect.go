@@ -29,6 +29,7 @@ func AccessTokenFromRequest(r *http.Request) string {
 
 	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
+
 	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token
 		// Empty string returned if there's no such parameter

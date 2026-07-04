@@ -659,6 +659,18 @@ func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (st
 	return c.AuthorizeErrorFieldResponseStrategy
 }
 
+func (c *Config) GetTokenEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
+	return &TokenEndpointClientAuthStrategy{}
+}
+
+func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
+	return &IntrospectionEndpointClientAuthStrategy{}
+}
+
+func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
+	return &RevocationEndpointClientAuthStrategy{}
+}
+
 var (
 	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
@@ -711,4 +723,7 @@ var (
 	_ IntrospectionIssuerProvider                     = (*Config)(nil)
 	_ IntrospectionJWTResponseStrategyProvider        = (*Config)(nil)
 	_ AuthorizeErrorFieldResponseStrategyProvider     = (*Config)(nil)
+	_ TokenEndpointClientAuthStrategyProvider         = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthStrategyProvider = (*Config)(nil)
+	_ RevocationEndpointClientAuthStrategyProvider    = (*Config)(nil)
 )

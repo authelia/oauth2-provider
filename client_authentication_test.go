@@ -76,6 +76,7 @@ func TestAuthenticateClient(t *testing.T) {
 	testCases := []struct {
 		name          string
 		client        func(ts *httptest.Server) Client
+		strategy      EndpointClientAuthStrategy
 		assertionType string
 		assertion     string
 		r             *http.Request
@@ -126,6 +127,26 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{},
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
+		},
+		{
+			name:     "ShouldPassBecauseRevocationEndpointPermitsPublicClients",
+			strategy: &RevocationEndpointClientAuthStrategy{},
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, RevocationEndpointAuthMethod: "none"}
+			},
+			form: url.Values{consts.FormParameterClientID: {"foo"}},
+			r:    new(http.Request),
+		},
+		{
+			name:     "ShouldFailBecauseIntrospectionEndpointForbidsPublicClients",
+			strategy: &IntrospectionEndpointClientAuthStrategy{},
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "foo", Public: true}, IntrospectionEndpointAuthMethod: "none"}
+			},
+			form:      url.Values{consts.FormParameterClientID: {"foo"}},
+			r:         new(http.Request),
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The 'introspection_endpoint_auth_method' method 'none' was determined to be used, but the introspection endpoint does not permit clients to authenticate using this method.",
+			expectErr: ErrInvalidClient,
 		},
 		{
 			name: "ShouldFailBecauseClientRequiresBasicAuthAndClientSecretIsEmptyInBasicAuthHeader",
@@ -958,7 +979,12 @@ func TestAuthenticateClient(t *testing.T) {
 			store.Clients[client.GetID()] = client
 			provider.Store = store
 
-			actual, _, err := provider.AuthenticateClient(context.Background(), tc.r, tc.form)
+			strategy := tc.strategy
+			if strategy == nil {
+				strategy = config.GetTokenEndpointClientAuthStrategy(context.Background())
+			}
+
+			actual, _, err := provider.AuthenticateClientWithAuthHandler(context.Background(), tc.r, tc.form, strategy)
 
 			if len(tc.err) == 0 && tc.expectErr == nil && tc.errRegexp == nil {
 				require.NoError(t, ErrorToDebugRFC6749Error(err))

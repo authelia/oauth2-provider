@@ -33,14 +33,22 @@ type Session interface {
 	Clone() Session
 }
 
-// DefaultSession is a default implementation of the session interface.
+// DefaultSession is a default implementation of the Session interface.
 type DefaultSession struct {
+	// ExpiresAt maps each token type to its expiration time.
 	ExpiresAt map[TokenType]time.Time `json:"expires_at"`
-	Username  string                  `json:"username"`
-	Subject   string                  `json:"subject"`
-	Extra     map[string]any          `json:"extra"`
+
+	// Username is the subject's username. It is optional and only used during token introspection.
+	Username string `json:"username"`
+
+	// Subject is the subject's identifier. It is optional and only used during token introspection.
+	Subject string `json:"subject"`
+
+	// Extra holds arbitrary additional claims associated with the session.
+	Extra map[string]any `json:"extra"`
 }
 
+// SetExpiresAt sets the expiration time of the token identified by key.
 func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[TokenType]time.Time)
@@ -48,6 +56,7 @@ func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
 	s.ExpiresAt[key] = exp
 }
 
+// GetExpiresAt returns the expiration time of the token identified by key, or the zero time if it is not set.
 func (s *DefaultSession) GetExpiresAt(key TokenType) time.Time {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[TokenType]time.Time)
@@ -56,6 +65,7 @@ func (s *DefaultSession) GetExpiresAt(key TokenType) time.Time {
 	return s.ExpiresAt[key]
 }
 
+// GetUsername returns the username, or an empty string if it is not set.
 func (s *DefaultSession) GetUsername() string {
 	if s == nil {
 		return ""
@@ -63,10 +73,12 @@ func (s *DefaultSession) GetUsername() string {
 	return s.Username
 }
 
+// SetSubject sets the subject's identifier.
 func (s *DefaultSession) SetSubject(subject string) {
 	s.Subject = subject
 }
 
+// GetSubject returns the subject, or an empty string if it is not set.
 func (s *DefaultSession) GetSubject() string {
 	if s == nil {
 		return ""
@@ -75,6 +87,7 @@ func (s *DefaultSession) GetSubject() string {
 	return s.Subject
 }
 
+// Clone returns a deep copy of the session, or nil if the receiver is nil.
 func (s *DefaultSession) Clone() Session {
 	if s == nil {
 		return nil

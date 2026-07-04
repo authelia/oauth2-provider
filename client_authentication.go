@@ -314,7 +314,7 @@ func (s *TokenEndpointClientAuthStrategy) AllowAuthMethodAny() bool {
 	return false
 }
 
-// AllowPublicClients returns true as the token endpoint permits public clients to authenticate using the 'none' method.
+// AllowMethodNone returns true as the token endpoint permits clients to authenticate using the 'none' method.
 func (s *TokenEndpointClientAuthStrategy) AllowMethodNone() bool {
 	return true
 }
@@ -366,7 +366,7 @@ func (s *IntrospectionEndpointClientAuthStrategy) AllowAuthMethodAny() bool {
 	return true
 }
 
-// AllowPublicClients returns false as the introspection endpoint does not permit public clients to authenticate using
+// AllowMethodNone returns false as the introspection endpoint does not permit clients to authenticate using
 // the 'none' method.
 func (s *IntrospectionEndpointClientAuthStrategy) AllowMethodNone() bool {
 	return false
@@ -418,7 +418,7 @@ func (s *RevocationEndpointClientAuthStrategy) AllowAuthMethodAny() bool {
 	return true
 }
 
-// AllowPublicClients returns true as the revocation endpoint permits public clients to authenticate using the 'none'
+// AllowMethodNone returns true as the revocation endpoint permits public clients to authenticate using the 'none'
 // method.
 func (s *RevocationEndpointClientAuthStrategy) AllowMethodNone() bool {
 	return true

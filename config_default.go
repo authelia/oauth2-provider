@@ -146,6 +146,18 @@ type Config struct {
 	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests
 	ClientAuthenticationStrategy ClientAuthenticationStrategy
 
+	// TokenEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the token
+	// endpoint. Defaults to a TokenEndpointClientAuthStrategy.
+	TokenEndpointClientAuthStrategy EndpointClientAuthStrategy
+
+	// IntrospectionEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at
+	// the introspection endpoint. Defaults to an IntrospectionEndpointClientAuthStrategy.
+	IntrospectionEndpointClientAuthStrategy EndpointClientAuthStrategy
+
+	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
+	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
+	RevocationEndpointClientAuthStrategy EndpointClientAuthStrategy
+
 	// AuthorizeErrorFieldResponseStrategy handles authorize error responses when the user can't be redirected in a
 	// normal way for example when the redirect uri is invalid or for any other reason, just writing the fields in some
 	// way to the response. By default this happens as a JSON document but this may also be a redirect to a internal
@@ -660,15 +672,27 @@ func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (st
 }
 
 func (c *Config) GetTokenEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	return &TokenEndpointClientAuthStrategy{}
+	if c.TokenEndpointClientAuthStrategy == nil {
+		c.TokenEndpointClientAuthStrategy = &TokenEndpointClientAuthStrategy{}
+	}
+
+	return c.TokenEndpointClientAuthStrategy
 }
 
 func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	return &IntrospectionEndpointClientAuthStrategy{}
+	if c.IntrospectionEndpointClientAuthStrategy == nil {
+		c.IntrospectionEndpointClientAuthStrategy = &IntrospectionEndpointClientAuthStrategy{}
+	}
+
+	return c.IntrospectionEndpointClientAuthStrategy
 }
 
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	return &RevocationEndpointClientAuthStrategy{}
+	if c.RevocationEndpointClientAuthStrategy == nil {
+		c.RevocationEndpointClientAuthStrategy = &RevocationEndpointClientAuthStrategy{}
+	}
+
+	return c.RevocationEndpointClientAuthStrategy
 }
 
 var (

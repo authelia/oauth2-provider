@@ -216,7 +216,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			c.setup(t)
 
 			var intro = func(token string, p any) {
-				req, err := http.NewRequest("POST", ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
+				req, err := http.NewRequest(http.MethodPost, ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
 				require.NoError(t, err)
 				req.SetBasicAuth("refresh-client", "foobar")
 				req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)

@@ -557,7 +557,7 @@ func TestRFC6749ErrorUnmarshalJSON(t *testing.T) {
 
 func TestRFC6749ErrorUnmarshalJSONInvalid(t *testing.T) {
 	// Passing a JSON array invokes UnmarshalJSON (the bytes are syntactically valid JSON) but
-	// the inner Unmarshal into RFC6749ErrorJson fails because an array cannot decode into a
+	// the inner Unmarshal into oauth2.RFC6749ErrorJSON fails because an array cannot decode into a
 	// struct.
 	actual := &RFC6749Error{}
 	err := actual.UnmarshalJSON([]byte(`[1, 2, 3]`))
@@ -765,28 +765,28 @@ func TestErrorI18N(t *testing.T) {
 		{
 			name: "ShouldLocalizeWithHintf",
 			setup: func() *RFC6749Error {
-				return ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintf("HTTP method is '%s', expected 'POST'.", "GET")
+				return ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintf("HTTP method is '%s', expected 'POST'.", http.MethodGet)
 			},
 			expected: "El propietario del recurso o el servidor de autorización denegó la solicitud. El método HTTP es 'GET', esperado 'POST'.",
 		},
 		{
 			name: "ShouldFallBackForUnsupportedLocaleWithHintf",
 			setup: func() *RFC6749Error {
-				return ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintf("HTTP method is '%s', expected 'POST'.", "GET")
+				return ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintf("HTTP method is '%s', expected 'POST'.", http.MethodGet)
 			},
 			expected: "The resource owner or authorization server denied the request. HTTP method is 'GET', expected 'POST'.",
 		},
 		{
 			name: "ShouldLocalizeWithHintIDOrDefaultf",
 			setup: func() *RFC6749Error {
-				return ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+				return ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 			},
 			expected: "El propietario del recurso o el servidor de autorización denegó la solicitud. El método HTTP es 'GET', esperado 'POST'.",
 		},
 		{
 			name: "ShouldFallBackForUnsupportedLocaleWithHintIDOrDefaultf",
 			setup: func() *RFC6749Error {
-				return ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+				return ErrAccessDenied.WithLocalizer(catalog, language.Afrikaans).WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 			},
 			expected: "The resource owner or authorization server denied the request. HTTP method is 'GET', expected 'POST'.",
 		},

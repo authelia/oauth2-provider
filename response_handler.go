@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jarm"
@@ -250,12 +251,7 @@ type ResponseModeTypes []ResponseModeType
 
 // Has reports whether the slice contains the given response mode.
 func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
-	for _, r := range rs {
-		if r == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(rs, item)
 }
 
 type ResponseModeHandlerConfigurator interface {

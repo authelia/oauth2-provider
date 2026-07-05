@@ -587,15 +587,18 @@ func ParseURLFragment(fragment string) url.Values {
 		return r
 	}
 
-	kvs := strings.Split(fragment, "&")
-	for _, kv := range kvs {
+	kvs := strings.SplitSeq(fragment, "&")
+
+	for kv := range kvs {
 		kva := strings.Split(kv, "=")
+
 		if len(kva) != 2 {
 			continue
 		}
 
 		r.Add(kva[0], kva[1])
 	}
+
 	return r
 }
 

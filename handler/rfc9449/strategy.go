@@ -78,19 +78,16 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		}
 	}
 
+	// Check-and-mark the proof 'jti' as used in a single atomic step so concurrent requests presenting the same proof
+	// cannot both pass the replay check. The marker is kept until the end of the proof's own 'iat' acceptance window
+	// (iat+skew), not now+skew: a proof presented before its iat (client clock ahead, within skew) stays iat-acceptable
+	// until iat+skew, so expiring the marker at now+skew < iat+skew would reopen a replay window for the remainder.
 	var used bool
 
-	if used, err = s.Store.IsDPoPProofUsed(ctx, parsed.ID); err != nil {
+	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if used {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof has already been used."))
-	}
-
-	// Keep the replay marker until the end of the proof's own 'iat' acceptance window (iat+skew), not now+skew. A proof
-	// presented before its iat (client clock ahead, within skew) stays iat-acceptable until iat+skew; expiring the
-	// marker at now+skew < iat+skew would reopen a replay window for the remainder of that window.
-	if err = s.Store.SetDPoPProofUsed(ctx, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return parsed, nil

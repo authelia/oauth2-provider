@@ -588,8 +588,8 @@ func (e *RFC6749Error) GetDescription() string {
 	return strings.ReplaceAll(description, "\"", "'")
 }
 
-// RFC6749ErrorJson is a helper struct for JSON encoding/decoding of RFC6749Error.
-type RFC6749ErrorJson struct {
+// RFC6749ErrorJSON is a helper struct for JSON encoding/decoding of RFC6749Error.
+type RFC6749ErrorJSON struct {
 	Name        string `json:"error"`
 	Description string `json:"error_description"`
 	Hint        string `json:"error_hint,omitempty"`
@@ -600,7 +600,7 @@ type RFC6749ErrorJson struct {
 // UnmarshalJSON decodes a JSON-encoded error response into the receiver, automatically enabling legacy formatting when
 // the payload contains the legacy 'error_hint' or 'error_debug' fields.
 func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
-	var data RFC6749ErrorJson
+	var data RFC6749ErrorJSON
 
 	if err := json.Unmarshal(b, &data); err != nil {
 		return err
@@ -624,7 +624,7 @@ func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
 // been set.
 func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 	if !e.useLegacyFormat {
-		return json.Marshal(&RFC6749ErrorJson{
+		return json.Marshal(&RFC6749ErrorJSON{
 			Name:        e.ErrorField,
 			Description: e.GetDescription(),
 		})
@@ -635,7 +635,7 @@ func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 		debug = e.DebugField
 	}
 
-	return json.Marshal(&RFC6749ErrorJson{
+	return json.Marshal(&RFC6749ErrorJSON{
 		Name:        e.ErrorField,
 		Description: e.DescriptionField,
 		Hint:        e.HintField,

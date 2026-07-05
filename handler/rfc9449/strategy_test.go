@@ -2,6 +2,7 @@ package rfc9449
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type testStrategyConfig struct {
@@ -34,28 +36,28 @@ func TestStrategyValidateProofChecksMethodURL(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
 
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "j1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "j1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
-	_, err = s.ValidateDPoPProof(context.Background(), "GET", "https://as.example.com/token", raw, false)
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodGet, "https://as.example.com/token", raw, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
 func TestStrategyValidateProofReplay(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "replay-1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "replay-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
-	_, err = s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
@@ -64,11 +66,11 @@ func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 	key := newTestProofKey(t)
 
 	iat := time.Now().Add(30 * time.Second)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "future-iat", "htm": "POST", "htu": "https://as.example.com/token", "iat": iat.Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "future-iat", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: iat.Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
 	exp, ok := store.DPoPProofJTIs["future-iat"]
@@ -92,11 +94,11 @@ func TestStrategyNonceLifecycle(t *testing.T) {
 func TestStrategyRequireNonce(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "nn-1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "nn-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, true)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, true)
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
 
@@ -104,11 +106,11 @@ func TestStrategyValidateProofRejectsHTUMismatch(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
 
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "htu-1", "htm": "POST", "htu": "https://as.example.com/other", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "htu-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/other", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
@@ -116,16 +118,16 @@ func TestStrategyValidateProofRejectsIATOutsideWindow(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
 
-	rawPast := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "iat-past", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Add(-time.Hour).Unix(),
+	rawPast := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "iat-past", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(-time.Hour).Unix(),
 	})
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", rawPast, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", rawPast, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 
-	rawFuture := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "iat-future", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Add(time.Hour).Unix(),
+	rawFuture := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "iat-future", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(time.Hour).Unix(),
 	})
-	_, err = s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", rawFuture, false)
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", rawFuture, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
@@ -133,11 +135,11 @@ func TestStrategyValidateProofAcceptsDefaultPortEquivalence(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
 
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "port-1", "htm": "POST", "htu": "https://as.example.com:443/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "port-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com:443/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	assert.NoError(t, err)
 }
 

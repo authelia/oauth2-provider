@@ -141,33 +141,6 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 	return false
 }
 
-func singleDPoPHeader(r *http.Request) (header string, err error) {
-	if len(r.Header.Values(consts.HeaderDPoP)) > 1 {
-		return "", errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request contains more than one DPoP proof but only one is allowed."))
-	}
-
-	return r.Header.Get(consts.HeaderDPoP), nil
-}
-
-func requestURL(r *http.Request) string {
-	scheme := "https"
-
-	if r.TLS == nil {
-		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
-			scheme = proto
-		} else {
-			scheme = "http"
-		}
-	}
-
-	host := r.Host
-	if host == "" {
-		host = r.URL.Host
-	}
-
-	return scheme + "://" + host + r.URL.Path
-}
-
 var (
 	_ oauth2.TokenEndpointHandler     = (*Handler)(nil)
 	_ oauth2.AuthorizeEndpointHandler = (*Handler)(nil)

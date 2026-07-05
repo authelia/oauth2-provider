@@ -39,7 +39,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		{
 			name: "ShouldFailEmptyRequest",
 			r: &http.Request{
-				Method: "POST",
+				Method: http.MethodPost,
 			},
 			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 			mock: func(store *mock.MockStorage) {},
@@ -577,7 +577,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			if r == nil {
 				r = &http.Request{
 					Header: http.Header{},
-					Method: "POST",
+					Method: http.MethodPost,
 				}
 				if tc.query != nil {
 					r.URL = &url.URL{RawQuery: tc.query.Encode()}

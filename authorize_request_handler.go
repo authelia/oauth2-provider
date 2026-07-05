@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -490,15 +491,7 @@ func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, reques
 		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s', as it's not registered to support any.", request.GetClient().GetID(), request.ResponseMode))
 	}
 
-	var found bool
-	for _, t := range client.GetResponseModes() {
-		if request.ResponseMode == t {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if !slices.Contains(client.GetResponseModes(), request.ResponseMode) {
 		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
 	}
 

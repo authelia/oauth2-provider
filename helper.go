@@ -6,17 +6,13 @@ package oauth2
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
 // StringInSlice returns true if needle exists in haystack
 func StringInSlice(needle string, haystack []string) bool {
-	for _, b := range haystack {
-		if b == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 // StringInSliceFold returns true if needle exists in haystack (case-insensitive).
@@ -48,12 +44,15 @@ func RemoveEmpty(args []string) (ret []string) {
 func EscapeJSONString(str string) string {
 	// Escape reverse solidus.
 	str = strings.ReplaceAll(str, `\`, `\\`)
+
 	// Escape control characters.
-	for r := rune(0); r < ' '; r++ {
+	for r := range ' ' {
 		str = strings.ReplaceAll(str, string(r), fmt.Sprintf(`\u%04x`, r))
 	}
+
 	// Escape quotation mark.
 	str = strings.ReplaceAll(str, `"`, `\"`)
+
 	return str
 }
 

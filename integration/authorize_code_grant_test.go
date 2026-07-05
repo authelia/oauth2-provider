@@ -166,7 +166,7 @@ func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	require.NoError(t, err)
 	require.NotEmpty(t, token.AccessToken)
 
-	req, err := http.NewRequest("GET", ts.URL+"/info", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/info", nil)
 	require.NoError(t, err)
 	req.Header.Set(consts.HeaderAuthorization, "Bearer "+token.AccessToken)
 

@@ -27,3 +27,13 @@ func TestDPoPFactory(t *testing.T) {
 	var _ oauth2.TokenEndpointHandler = h.(*rfc9449.Handler)
 	var _ oauth2.AuthorizeEndpointHandler = h.(*rfc9449.Handler)
 }
+
+func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {
+	config := &oauth2.Config{DPoPEnabled: true}
+
+	assert.Panics(t, func() {
+		DPoPFactory(config, struct{}{}, nil)
+	})
+
+	assert.Nil(t, config.DPoPStrategy)
+}

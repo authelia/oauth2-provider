@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type testHandlerConfig struct {
@@ -49,10 +50,8 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 
 	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
 
-	// The handler reconstructs htu from scheme+host+path; a synthesized request has no r.TLS, so signal https via the
-	// forwarded-proto header to match an https 'htu' claim.
-	if u.Scheme == "https" {
-		r.Header.Set("X-Forwarded-Proto", "https")
+	if u.Scheme == consts.SchemeHTTPS {
+		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
 	}
 
 	if proof != "" {
@@ -65,15 +64,15 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 func TestHandlerBindsProof(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 	key := newTestProofKey(t)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "h1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "h1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
 	session := &oauth2.DefaultSession{}
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP("POST", "https://as.example.com/token", raw)
+	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
 	require.NoError(t, h.HandleTokenEndpointRequest(ctx, request))
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
 }
@@ -81,8 +80,8 @@ func TestHandlerBindsProof(t *testing.T) {
 func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 	key := newTestProofKey(t)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "multi-1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "multi-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
 	u, _ := url.Parse("https://as.example.com/token")
@@ -158,8 +157,8 @@ func TestHandlerAuthorizeNoDPoPJKTLeavesSessionUnchanged(t *testing.T) {
 func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 	key := newTestProofKey(t)
-	raw := signProof(t, key, "dpop+jwt", map[string]any{
-		"jti": "h2", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "h2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
 	// Session already bound to a different thumbprint (as if restored from a refresh token).
@@ -249,4 +248,49 @@ func TestHandlerAuthorizeRecordsDPoPJKTOnlyForCodeFlow(t *testing.T) {
 
 	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse()))
 	assert.Empty(t, session.GetDPoPJWKThumbprint())
+}
+
+func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
+	h, _, _ := newTestHandler(false)
+	key := newTestProofKey(t)
+
+	session := &oauth2.DefaultSession{}
+	request := oauth2.NewAccessRequest(session)
+	request.Client = &oauth2.DefaultClient{DPoPBoundAccessTokens: true}
+
+	raw1 := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "e2e-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+	ctx1 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw1)
+
+	require.NoError(t, h.HandleTokenEndpointRequest(ctx1, request))
+	jkt := session.GetDPoPJWKThumbprint()
+	require.NotEmpty(t, jkt)
+
+	refreshSession := &oauth2.DefaultSession{}
+	refreshSession.SetDPoPJWKThumbprint(jkt)
+	refreshRequest := oauth2.NewAccessRequest(refreshSession)
+	refreshRequest.Client = &oauth2.DefaultClient{DPoPBoundAccessTokens: true}
+
+	raw2 := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "e2e-2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+	ctx2 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw2)
+
+	require.NoError(t, h.HandleTokenEndpointRequest(ctx2, refreshRequest))
+	assert.Equal(t, jkt, refreshSession.GetDPoPJWKThumbprint())
+
+	otherKey := newTestProofKey(t)
+	otherSession := &oauth2.DefaultSession{}
+	otherSession.SetDPoPJWKThumbprint(jkt)
+	otherRequest := oauth2.NewAccessRequest(otherSession)
+	otherRequest.Client = &oauth2.DefaultClient{DPoPBoundAccessTokens: true}
+
+	raw3 := signProof(t, otherKey, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "e2e-3", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+	ctx3 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw3)
+
+	err := h.HandleTokenEndpointRequest(ctx3, otherRequest)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }

@@ -102,8 +102,8 @@ func (d *DeviceAuthorizeResponse) AddHeader(key, value string) {
 	d.Header.Add(key, value)
 }
 
-// FromJson decodes a JSON-encoded device authorization response from r into the receiver.
-func (d *DeviceAuthorizeResponse) FromJson(r io.Reader) error {
+// FromJSON decodes a JSON-encoded device authorization response from r into the receiver.
+func (d *DeviceAuthorizeResponse) FromJSON(r io.Reader) error {
 	return json.NewDecoder(r).Decode(&d)
 }
 

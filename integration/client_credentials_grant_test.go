@@ -35,7 +35,7 @@ func TestClientCredentialsFlow(t *testing.T) {
 }
 
 func introspect(t *testing.T, ts *httptest.Server, token string, p any, username, password string) {
-	req, err := http.NewRequest("POST", ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
 	require.NoError(t, err)
 	req.SetBasicAuth(username, password)
 	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)

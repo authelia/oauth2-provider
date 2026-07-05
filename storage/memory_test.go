@@ -67,19 +67,20 @@ func TestMemoryStoreDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 
-	used, err := s.IsDPoPProofUsed(ctx, "jti-1")
+	// First use of a jti reports unused and records it.
+	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
-	require.NoError(t, s.SetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute)))
-
-	used, err = s.IsDPoPProofUsed(ctx, "jti-1")
+	// A second use of the same, still-valid jti reports used.
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.True(t, used)
 
-	// Expired jti is treated as unused.
-	require.NoError(t, s.SetDPoPProofUsed(ctx, "jti-2", time.Now().Add(-time.Minute)))
-	used, err = s.IsDPoPProofUsed(ctx, "jti-2")
+	// A jti whose recorded marker has expired is treated as unused (and re-recorded).
+	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", time.Now().Add(-time.Minute))
+	require.NoError(t, err)
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 

@@ -11,11 +11,10 @@ import (
 
 // DPoPReplayStorage provides replay protection for DPoP proof JWTs keyed by their 'jti' claim.
 type DPoPReplayStorage interface {
-	// SetDPoPProofUsed records a proof 'jti' as used until exp.
-	SetDPoPProofUsed(ctx context.Context, jti string, exp time.Time) (err error)
-
-	// IsDPoPProofUsed reports whether a proof 'jti' has already been used (and not yet expired).
-	IsDPoPProofUsed(ctx context.Context, jti string) (used bool, err error)
+	// CheckAndSetDPoPProofUsed atomically reports whether a proof 'jti' has already been used (and not yet expired)
+	// and, when it has not, records it as used until exp. The check and the store MUST happen within a single critical
+	// section so that concurrent requests presenting the same 'jti' cannot both observe it as unused.
+	CheckAndSetDPoPProofUsed(ctx context.Context, jti string, exp time.Time) (used bool, err error)
 }
 
 // DPoPNonceStorage persists server-provided DPoP nonces.

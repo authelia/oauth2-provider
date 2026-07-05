@@ -617,25 +617,17 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	return nil
 }
 
-func (s *MemoryStore) SetDPoPProofUsed(_ context.Context, jti string, exp time.Time) error {
+func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti string, exp time.Time) (bool, error) {
 	s.dpopProofJTIsMutex.Lock()
 	defer s.dpopProofJTIsMutex.Unlock()
 
-	s.DPoPProofJTIs[jti] = exp
-
-	return nil
-}
-
-func (s *MemoryStore) IsDPoPProofUsed(_ context.Context, jti string) (bool, error) {
-	s.dpopProofJTIsMutex.RLock()
-	defer s.dpopProofJTIsMutex.RUnlock()
-
-	exp, ok := s.DPoPProofJTIs[jti]
-	if !ok {
-		return false, nil
+	if existing, ok := s.DPoPProofJTIs[jti]; ok && existing.After(time.Now()) {
+		return true, nil
 	}
 
-	return exp.After(time.Now()), nil
+	s.DPoPProofJTIs[jti] = exp
+
+	return false, nil
 }
 
 func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.Time) error {

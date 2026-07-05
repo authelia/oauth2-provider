@@ -513,3 +513,26 @@ func TestTagOptions_Contains(t *testing.T) {
 	empty := tagOptionsJSON("")
 	assert.False(t, empty.Contains("anything"))
 }
+
+func TestThumbprintJWK(t *testing.T) {
+	// RFC 7638 Section 3.1 worked example.
+	const rfc7638JWK = `{
+		"kty":"RSA",
+		"n":"0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw",
+		"e":"AQAB",
+		"alg":"RS256",
+		"kid":"2011-04-29"
+	}`
+
+	key := &jose.JSONWebKey{}
+	require.NoError(t, key.UnmarshalJSON([]byte(rfc7638JWK)))
+
+	jkt, err := ThumbprintJWK(key)
+	require.NoError(t, err)
+	assert.Equal(t, "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", jkt)
+}
+
+func TestThumbprintJWKNil(t *testing.T) {
+	_, err := ThumbprintJWK(nil)
+	assert.Error(t, err)
+}

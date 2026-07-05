@@ -71,6 +71,11 @@ const (
 	ClaimActor                               = consts.ClaimActor
 	ClaimEvents                              = consts.ClaimEvents
 	ClaimEventBackChannelLogout              = consts.ClaimEventBackChannelLogout
+	ClaimConfirmation                        = consts.ClaimConfirmation
+	ClaimConfirmationJWKThumbprint           = consts.ClaimConfirmationJWKThumbprint
+	ClaimHTTPMethod                          = consts.ClaimHTTPMethod
+	ClaimHTTPURI                             = consts.ClaimHTTPURI
+	ClaimDPoPAccessTokenHash                 = consts.ClaimDPoPAccessTokenHash
 )
 
 const (
@@ -116,6 +121,11 @@ const (
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9701.html#section-5
 	JSONWebTokenTypeTokenIntrospection = consts.JSONWebTokenTypeTokenIntrospection
+
+	// JSONWebTokenTypeDPoP represents the JWT type value for a DPoP proof JWT.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-4.2
+	JSONWebTokenTypeDPoP = consts.JSONWebTokenTypeDPoP
 )
 
 const (

@@ -38,6 +38,11 @@ const (
 	ClaimAuthorizedActor                     = "may_act"
 	ClaimActor                               = "act"
 	ClaimEvents                              = "events"
+	ClaimConfirmation                        = "cnf"
+	ClaimConfirmationJWKThumbprint           = "jkt"
+	ClaimHTTPMethod                          = "htm"
+	ClaimHTTPURI                             = "htu"
+	ClaimDPoPAccessTokenHash                 = "ath"
 )
 
 const (

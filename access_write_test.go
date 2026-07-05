@@ -15,7 +15,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -130,4 +132,73 @@ func TestWriteAccessResponseMarshalError(t *testing.T) {
 			assert.Contains(t, rw.Body.String(), tc.contains)
 		})
 	}
+}
+
+func TestWriteAccessResponseRotatesDPoPNonce(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint("some-thumbprint")
+
+	requester := mock.NewMockAccessRequester(ctrl)
+	requester.EXPECT().GetSession().AnyTimes().Return(session)
+
+	responder := mock.NewMockAccessResponder(ctrl)
+	responder.EXPECT().ToMap().Return(map[string]any{})
+
+	rw := httptest.NewRecorder()
+	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
+
+	assert.NotEmpty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+}
+
+func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenSessionNotBound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+
+	requester := mock.NewMockAccessRequester(ctrl)
+	requester.EXPECT().GetSession().AnyTimes().Return(&DefaultSession{})
+
+	responder := mock.NewMockAccessResponder(ctrl)
+	responder.EXPECT().ToMap().Return(map[string]any{})
+
+	rw := httptest.NewRecorder()
+	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
+
+	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+}
+
+func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: false, DPoPStrategy: strategy}}
+
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint("some-thumbprint")
+
+	requester := mock.NewMockAccessRequester(ctrl)
+	requester.EXPECT().GetSession().AnyTimes().Return(session)
+
+	responder := mock.NewMockAccessResponder(ctrl)
+	responder.EXPECT().ToMap().Return(map[string]any{})
+
+	rw := httptest.NewRecorder()
+	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
+
+	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
 }

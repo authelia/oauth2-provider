@@ -114,5 +114,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 
 		OAuth2PKCEFactory,
 		PushedAuthorizeHandlerFactory,
+
+		DPoPFactory,
 	)
 }

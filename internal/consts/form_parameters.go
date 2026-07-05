@@ -50,4 +50,5 @@ const (
 	FormParameterActorToken                                = "actor_token"
 	FormParameterDeviceCode                                = valueDeviceCode
 	FormParameterUserCode                                  = valueUserCode
+	FormParameterDPoPJKT                                   = "dpop_jkt"
 )

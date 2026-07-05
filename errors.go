@@ -141,6 +141,18 @@ var (
 		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInvalidDPoPProof = &RFC6749Error{
+		ErrorField:       errInvalidDPoPProofName,
+		DescriptionField: "The DPoP proof is missing or invalid.",
+		HintField:        "The request was made with an invalid, malformed, expired, or missing DPoP proof JWT.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrUseDPoPNonce = &RFC6749Error{
+		ErrorField:       errUseDPoPNonceName,
+		DescriptionField: "Authorization server requires nonce in DPoP proof.",
+		HintField:        "Retry the request including a 'nonce' claim in the DPoP proof using the value from the most recent 'DPoP-Nonce' response header.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrTokenExpired = &RFC6749Error{
 		ErrorField:       errTokenExpiredName,
 		DescriptionField: "Token expired.",
@@ -272,6 +284,8 @@ const (
 	errDeviceExpiredTokenName       = "expired_token"
 	errSlowDownName                 = "slow_down"
 	errInvalidTargetName            = "invalid_target"
+	errInvalidDPoPProofName         = "invalid_dpop_proof"
+	errUseDPoPNonceName             = "use_dpop_nonce"
 
 	errServerErrorDescription = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request."
 )

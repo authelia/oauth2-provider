@@ -280,6 +280,62 @@ func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
 }
 
+func TestGenerateJWTIncludesCnf(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	t.Run("ShouldIncludeCnfWhenDPoPBound", func(t *testing.T) {
+		r := jwtValidCase(oauth2.AccessToken)
+
+		dpopSession, ok := r.GetSession().(oauth2.DPoPBoundSession)
+		require.True(t, ok)
+		dpopSession.SetDPoPJWKThumbprint("test-jkt")
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3, "%s - %v", token, parts)
+
+		rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+		cnf, ok := payload[jwt.ClaimConfirmation].(map[string]any)
+		require.True(t, ok, "expected cnf claim to be present and a map, got %#v", payload[jwt.ClaimConfirmation])
+		assert.Equal(t, "test-jkt", cnf[jwt.ClaimConfirmationJWKThumbprint])
+	})
+
+	t.Run("ShouldNotIncludeCnfWhenNotDPoPBound", func(t *testing.T) {
+		r := jwtValidCase(oauth2.AccessToken)
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3, "%s - %v", token, parts)
+
+		rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+		assert.NotContains(t, payload, jwt.ClaimConfirmation)
+	})
+}
+
 func TestSplitN(t *testing.T) {
 	value1 := "a.b.c"
 

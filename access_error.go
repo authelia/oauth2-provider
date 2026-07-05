@@ -16,7 +16,23 @@ import (
 // JSON with cache-control headers set to 'no-store' and 'no-cache' as required by the specification. When request is
 // non-nil its language preference is used to localize the error description.
 func (f *Fosite) WriteAccessError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {
+	f.writeDPoPNonceOnChallenge(ctx, rw, err)
 	f.writeJsonError(ctx, rw, request, err)
+}
+
+func (f *Fosite) writeDPoPNonceOnChallenge(ctx context.Context, rw http.ResponseWriter, err error) {
+	if ErrorToRFC6749Error(err).ErrorField != errUseDPoPNonceName {
+		return
+	}
+
+	strategy := f.Config.GetDPoPStrategy(ctx)
+	if strategy == nil {
+		return
+	}
+
+	if nonce, nonceErr := strategy.NewDPoPNonce(ctx); nonceErr == nil {
+		rw.Header().Set(consts.HeaderDPoPNonce, nonce)
+	}
 }
 
 func (f *Fosite) writeJsonError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {

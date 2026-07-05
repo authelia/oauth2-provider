@@ -18,6 +18,8 @@ func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
+	f.writeDPoPNonceOnSuccess(ctx, rw, request)
+
 	var (
 		data []byte
 		err  error
@@ -33,4 +35,24 @@ func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter
 
 	rw.WriteHeader(http.StatusOK)
 	_, _ = rw.Write(data)
+}
+
+func (f *Fosite) writeDPoPNonceOnSuccess(ctx context.Context, rw http.ResponseWriter, request AccessRequester) {
+	if !f.Config.GetDPoPEnabled(ctx) {
+		return
+	}
+
+	strategy := f.Config.GetDPoPStrategy(ctx)
+	if strategy == nil {
+		return
+	}
+
+	dpop, ok := request.GetSession().(DPoPBoundSession)
+	if !ok || dpop.GetDPoPJWKThumbprint() == "" {
+		return
+	}
+
+	if nonce, nonceErr := strategy.NewDPoPNonce(ctx); nonceErr == nil {
+		rw.Header().Set(consts.HeaderDPoPNonce, nonce)
+	}
 }

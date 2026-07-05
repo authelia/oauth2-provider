@@ -370,6 +370,15 @@ type JWTProfileClient interface {
 	Client
 }
 
+// DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
+type DPoPClient interface {
+	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is
+	// required for this client.
+	GetEnableDPoPBoundAccessTokens() (enable bool)
+
+	Client
+}
+
 // ClientCredentialsFlowRequestedScopeImplicitClient is a client which can allow implicit scopes in the client credentials flow.
 type ClientCredentialsFlowRequestedScopeImplicitClient interface {
 	// GetClientCredentialsFlowRequestedScopeImplicit is indicative of if a client will implicitly request all scopes it
@@ -446,15 +455,16 @@ type JWTSecuredAuthorizationRequestJWTValidationOptionsClient interface {
 
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
-	ID                   string         `json:"id"`
-	ClientSecret         ClientSecret   `json:"-"`
-	RotatedClientSecrets []ClientSecret `json:"-"`
-	RedirectURIs         []string       `json:"redirect_uris"`
-	GrantTypes           []string       `json:"grant_types"`
-	ResponseTypes        []string       `json:"response_types"`
-	Scopes               []string       `json:"scopes"`
-	Audience             []string       `json:"audience"`
-	Public               bool           `json:"public"`
+	ID                    string         `json:"id"`
+	ClientSecret          ClientSecret   `json:"-"`
+	RotatedClientSecrets  []ClientSecret `json:"-"`
+	RedirectURIs          []string       `json:"redirect_uris"`
+	GrantTypes            []string       `json:"grant_types"`
+	ResponseTypes         []string       `json:"response_types"`
+	Scopes                []string       `json:"scopes"`
+	Audience              []string       `json:"audience"`
+	Public                bool           `json:"public"`
+	DPoPBoundAccessTokens bool           `json:"dpop_bound_access_tokens"`
 }
 
 type DefaultJARClient struct {
@@ -492,6 +502,10 @@ func (c *DefaultClient) IsPublic() bool {
 
 func (c *DefaultClient) GetAudience() Arguments {
 	return c.Audience
+}
+
+func (c *DefaultClient) GetEnableDPoPBoundAccessTokens() bool {
+	return c.DPoPBoundAccessTokens
 }
 
 func (c *DefaultClient) GetRedirectURIs() []string {

@@ -12,6 +12,8 @@ const (
 	HeaderLocation        = "Location"
 	HeaderAcceptLanguage  = "Accept-Language"
 	HeaderWWWAuthenticate = "WWW-Authenticate"
+	HeaderDPoP            = "DPoP"
+	HeaderDPoPNonce       = "DPoP-Nonce"
 )
 
 const (

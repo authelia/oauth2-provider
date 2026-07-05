@@ -43,7 +43,9 @@ const (
 	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
 
 	BearerAccessToken string = "bearer"
-	RFC8693NAToken    string = "N_A"
+	// DPoPAccessToken is the RFC 9449 token_type value for access tokens bound to a DPoP proof-of-possession key.
+	DPoPAccessToken string = "DPoP"
+	RFC8693NAToken  string = "N_A"
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.

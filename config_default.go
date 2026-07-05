@@ -252,6 +252,27 @@ type Config struct {
 	RFC8693TokenTypes map[string]RFC8693TokenType
 
 	DefaultRequestedTokenType string
+
+	// DPoPEnabled enables RFC 9449 DPoP handling.
+	DPoPEnabled bool
+
+	// DPoPEnforce requires DPoP for all clients regardless of client metadata.
+	DPoPEnforce bool
+
+	// DPoPAllowedJWSAlgorithms is the permitted asymmetric DPoP proof signing algorithms.
+	DPoPAllowedJWSAlgorithms []string
+
+	// DPoPClockSkew is the permitted 'iat' leeway for DPoP proofs. Defaults to five minutes.
+	DPoPClockSkew time.Duration
+
+	// DPoPNonceRequired requires a server nonce in DPoP proofs.
+	DPoPNonceRequired bool
+
+	// DPoPNonceLifespan is the lifespan of issued DPoP server nonces. Defaults to one hour.
+	DPoPNonceLifespan time.Duration
+
+	// DPoPStrategy is the configured DPoP strategy.
+	DPoPStrategy DPoPStrategy
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -695,6 +716,46 @@ func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (s
 	return c.RevocationEndpointClientAuthStrategy
 }
 
+func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
+	return c.DPoPEnabled
+}
+
+func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {
+	return c.DPoPEnforce
+}
+
+func (c *Config) GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string) {
+	if len(c.DPoPAllowedJWSAlgorithms) == 0 {
+		return []string{"ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "RS256", "RS384", "RS512", "EdDSA"}
+	}
+
+	return c.DPoPAllowedJWSAlgorithms
+}
+
+func (c *Config) GetDPoPClockSkew(ctx context.Context) (skew time.Duration) {
+	if c.DPoPClockSkew <= 0 {
+		return time.Minute * 5
+	}
+
+	return c.DPoPClockSkew
+}
+
+func (c *Config) GetDPoPNonceRequired(ctx context.Context) (required bool) {
+	return c.DPoPNonceRequired
+}
+
+func (c *Config) GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration) {
+	if c.DPoPNonceLifespan <= 0 {
+		return time.Hour
+	}
+
+	return c.DPoPNonceLifespan
+}
+
+func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
+	return c.DPoPStrategy
+}
+
 var (
 	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
@@ -750,4 +811,5 @@ var (
 	_ TokenEndpointClientAuthStrategyProvider         = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthStrategyProvider = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider    = (*Config)(nil)
+	_ DPoPConfigProvider                              = (*Config)(nil)
 )

@@ -8,8 +8,10 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
 )
@@ -59,4 +61,34 @@ func TestMemoryStore_Authenticate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMemoryStoreDPoP(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+
+	used, err := s.IsDPoPProofUsed(ctx, "jti-1")
+	require.NoError(t, err)
+	assert.False(t, used)
+
+	require.NoError(t, s.SetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute)))
+
+	used, err = s.IsDPoPProofUsed(ctx, "jti-1")
+	require.NoError(t, err)
+	assert.True(t, used)
+
+	// Expired jti is treated as unused.
+	require.NoError(t, s.SetDPoPProofUsed(ctx, "jti-2", time.Now().Add(-time.Minute)))
+	used, err = s.IsDPoPProofUsed(ctx, "jti-2")
+	require.NoError(t, err)
+	assert.False(t, used)
+
+	valid, err := s.IsDPoPNonceValid(ctx, "n-1")
+	require.NoError(t, err)
+	assert.False(t, valid)
+
+	require.NoError(t, s.CreateDPoPNonce(ctx, "n-1", time.Now().Add(time.Minute)))
+	valid, err = s.IsDPoPNonceValid(ctx, "n-1")
+	require.NoError(t, err)
+	assert.True(t, valid)
 }

@@ -455,3 +455,27 @@ type RevocationEndpointClientAuthStrategyProvider interface {
 	// revocation endpoint. This endpoint permits public clients to authenticate using the 'none' method.
 	GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
 }
+
+// DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
+type DPoPConfigProvider interface {
+	// GetDPoPEnabled returns true if DPoP handling is enabled.
+	GetDPoPEnabled(ctx context.Context) (enabled bool)
+
+	// GetDPoPEnforce returns true if DPoP is required for all clients regardless of client metadata.
+	GetDPoPEnforce(ctx context.Context) (enforce bool)
+
+	// GetDPoPAllowedJWSAlgorithms returns the permitted asymmetric DPoP proof signing algorithms.
+	GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string)
+
+	// GetDPoPClockSkew returns the permitted 'iat' leeway for DPoP proofs.
+	GetDPoPClockSkew(ctx context.Context) (skew time.Duration)
+
+	// GetDPoPNonceRequired returns true if a server nonce is required in DPoP proofs.
+	GetDPoPNonceRequired(ctx context.Context) (required bool)
+
+	// GetDPoPNonceLifespan returns the lifespan of issued DPoP server nonces.
+	GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
+	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
+}

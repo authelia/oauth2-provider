@@ -25,12 +25,15 @@ type JWTSessionContainer interface {
 
 // JWTSession Container for the JWT session.
 type JWTSession struct {
-	JWTClaims *jwt.JWTClaims
-	JWTHeader *jwt.Headers
-	ExpiresAt map[oauth2.TokenType]time.Time
-	Username  string
-	Subject   string
+	JWTClaims     *jwt.JWTClaims
+	JWTHeader     *jwt.Headers
+	ExpiresAt     map[oauth2.TokenType]time.Time
+	Username      string
+	Subject       string
+	JWKThumbprint string
 }
+
+var _ oauth2.DPoPBoundSession = (*JWTSession)(nil)
 
 func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 	if j.JWTClaims == nil {
@@ -88,6 +91,18 @@ func (j *JWTSession) GetSubject() string {
 	}
 
 	return j.Subject
+}
+
+func (j *JWTSession) SetDPoPJWKThumbprint(jkt string) {
+	j.JWKThumbprint = jkt
+}
+
+func (j *JWTSession) GetDPoPJWKThumbprint() string {
+	if j == nil {
+		return ""
+	}
+
+	return j.JWKThumbprint
 }
 
 func (j *JWTSession) Clone() oauth2.Session {

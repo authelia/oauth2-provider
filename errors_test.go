@@ -800,6 +800,14 @@ func TestErrorI18N(t *testing.T) {
 	}
 }
 
+func TestDPoPErrors(t *testing.T) {
+	assert.Equal(t, "invalid_dpop_proof", ErrInvalidDPoPProof.ErrorField)
+	assert.Equal(t, http.StatusBadRequest, ErrInvalidDPoPProof.CodeField)
+
+	assert.Equal(t, "use_dpop_nonce", ErrUseDPoPNonce.ErrorField)
+	assert.Equal(t, http.StatusBadRequest, ErrUseDPoPNonce.CodeField)
+}
+
 // errPlain is a simple error type used to exercise paths that depend on the absence of
 // stack traces or other carrier interfaces.
 type errPlain string

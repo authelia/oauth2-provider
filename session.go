@@ -46,6 +46,9 @@ type DefaultSession struct {
 
 	// Extra holds arbitrary additional claims associated with the session.
 	Extra map[string]any `json:"extra"`
+
+	// JWKThumbprint is the RFC 7638 JWK Thumbprint (jkt) this session's tokens are DPoP bound to, if any.
+	JWKThumbprint string `json:"jwk_thumbprint,omitempty"`
 }
 
 // SetExpiresAt sets the expiration time of the token identified by key.
@@ -115,4 +118,18 @@ func (s *DefaultSession) GetExtraClaims() map[string]any {
 	}
 
 	return s.Extra
+}
+
+// SetDPoPJWKThumbprint implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetDPoPJWKThumbprint(jkt string) {
+	s.JWKThumbprint = jkt
+}
+
+// GetDPoPJWKThumbprint implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetDPoPJWKThumbprint() string {
+	if s == nil {
+		return ""
+	}
+
+	return s.JWKThumbprint
 }

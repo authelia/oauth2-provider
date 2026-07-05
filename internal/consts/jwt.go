@@ -47,6 +47,11 @@ const (
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9701.html#section-5
 	JSONWebTokenTypeTokenIntrospection = "token-introspection+jwt"
+
+	// JSONWebTokenTypeDPoP represents the JWT type value for a DPoP proof JWT.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-4.2
+	JSONWebTokenTypeDPoP = "dpop+jwt"
 )
 
 const (

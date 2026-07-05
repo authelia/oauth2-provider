@@ -62,13 +62,13 @@ func (d *RFC8628UserAuthorizeResponse) SetStatus(status string) {
 	d.Status = status
 }
 
-// ToJson encodes the response as JSON and writes it to rw.
-func (d *RFC8628UserAuthorizeResponse) ToJson(rw io.Writer) error {
+// ToJSON encodes the response as JSON and writes it to rw.
+func (d *RFC8628UserAuthorizeResponse) ToJSON(rw io.Writer) error {
 	return json.NewEncoder(rw).Encode(&d)
 }
 
-// FromJson decodes a JSON-encoded response from r into the receiver.
-func (d *RFC8628UserAuthorizeResponse) FromJson(r io.Reader) error {
+// FromJSON decodes a JSON-encoded response from r into the receiver.
+func (d *RFC8628UserAuthorizeResponse) FromJSON(r io.Reader) error {
 	return json.NewDecoder(r).Decode(&d)
 }
 

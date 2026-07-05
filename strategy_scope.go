@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -67,13 +68,7 @@ func HierarchicScopeStrategy(haystack []string, needle string) bool {
 // ExactScopeStrategy is a ScopeStrategy that requires a granted scope to match the requested scope exactly. No
 // hierarchical or wildcard expansion is performed.
 func ExactScopeStrategy(haystack []string, needle string) bool {
-	for _, this := range haystack {
-		if needle == this {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 // WildcardScopeStrategy is a ScopeStrategy that matches dot-delimited scopes where each granted segment may be the

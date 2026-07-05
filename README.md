@@ -85,7 +85,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/add3cbecb9d35e2b7c29426cf5d898c9b1599e3b)</sup>
   - [ ] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
         support
-  - [ ] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
+  - [x] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
         support
   - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
   - Claims:

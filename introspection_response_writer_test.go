@@ -482,6 +482,65 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 				assert.NotContains(t, params, consts.ClaimIssuedAt)
 			},
 		},
+		{
+			name: "ShouldPopulateCnfWhenDPoPBound",
+			setup: func() *IntrospectionResponse {
+				session := &DefaultSession{Subject: "user-123"}
+				session.SetDPoPJWKThumbprint("test-jkt")
+
+				ar := NewAccessRequest(session)
+				ar.Client = &DefaultClient{ID: "client-id"}
+
+				return &IntrospectionResponse{
+					Active:          true,
+					TokenUse:        AccessToken,
+					AccessRequester: ar,
+				}
+			},
+			check: func(t *testing.T, params map[string]any) {
+				assert.Equal(t, true, params[consts.ClaimActive])
+				cnf, ok := params[jwt.ClaimConfirmation].(map[string]any)
+				require.True(t, ok, "expected cnf claim to be present and a map, got %#v", params[jwt.ClaimConfirmation])
+				assert.Equal(t, "test-jkt", cnf[jwt.ClaimConfirmationJWKThumbprint])
+			},
+		},
+		{
+			name: "ShouldNotPopulateCnfWhenNotDPoPBound",
+			setup: func() *IntrospectionResponse {
+				ar := NewAccessRequest(&DefaultSession{Subject: "user-123"})
+				ar.Client = &DefaultClient{ID: "client-id"}
+
+				return &IntrospectionResponse{
+					Active:          true,
+					TokenUse:        AccessToken,
+					AccessRequester: ar,
+				}
+			},
+			check: func(t *testing.T, params map[string]any) {
+				assert.Equal(t, true, params[consts.ClaimActive])
+				assert.NotContains(t, params, jwt.ClaimConfirmation)
+			},
+		},
+		{
+			name: "ShouldNotAllowExtraClaimsToForgeCnf",
+			setup: func() *IntrospectionResponse {
+				session := &DefaultSession{Subject: "user-123"}
+				session.GetExtraClaims()[jwt.ClaimConfirmation] = map[string]any{jwt.ClaimConfirmationJWKThumbprint: "forged-jkt"}
+
+				ar := NewAccessRequest(session)
+				ar.Client = &DefaultClient{ID: "client-id"}
+
+				return &IntrospectionResponse{
+					Active:          true,
+					TokenUse:        AccessToken,
+					AccessRequester: ar,
+				}
+			},
+			check: func(t *testing.T, params map[string]any) {
+				assert.Equal(t, true, params[consts.ClaimActive])
+				assert.NotContains(t, params, jwt.ClaimConfirmation)
+			},
+		},
 	}
 
 	for _, tc := range testCases {

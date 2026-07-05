@@ -46,7 +46,7 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 
 	// Inactive token errors should never written out as an error.
 	if !errors.Is(err, ErrInactiveToken) && (errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrRequestUnauthorized)) {
-		f.writeJsonError(ctx, rw, nil, err)
+		f.writeErrorJSON(ctx, rw, nil, err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername:
+			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation:
 				continue
 			default:
 				response[name] = value
@@ -233,6 +233,13 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
 		response[jwt.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
+	}
+	if dpop, ok := r.GetAccessRequester().GetSession().(DPoPBoundSession); ok {
+		if jkt := dpop.GetDPoPJWKThumbprint(); jkt != "" {
+			response[jwt.ClaimConfirmation] = map[string]any{
+				jwt.ClaimConfirmationJWKThumbprint: jkt,
+			}
+		}
 	}
 	if aud := JoinGrantedAudienceAndResource(r.GetAccessRequester().GetGrantedAudience(), r.GetAccessRequester().GetGrantedResource()); len(aud) > 0 {
 		response[jwt.ClaimAudience] = aud

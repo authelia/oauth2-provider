@@ -28,14 +28,14 @@ func TestGetMessage(t *testing.T) {
 			name:     "ShouldTranslateToSpanish",
 			id:       "badRequestMethod",
 			tag:      language.Spanish,
-			args:     []any{"GET"},
+			args:     []any{http.MethodGet},
 			expected: "El método HTTP es 'GET', esperado 'POST'.",
 		},
 		{
 			name:     "ShouldTranslateToEnglish",
 			id:       "badRequestMethod",
 			tag:      language.English,
-			args:     []any{"GET"},
+			args:     []any{http.MethodGet},
 			expected: "HTTP method is 'GET', expected 'POST'.",
 		},
 		{

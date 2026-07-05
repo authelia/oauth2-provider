@@ -41,3 +41,12 @@ func TestDefaultResponseModeClient_GetResponseMode(t *testing.T) {
 	rc := &DefaultResponseModeClient{ResponseModes: []ResponseModeType{ResponseModeFragment}}
 	assert.Equal(t, []ResponseModeType{ResponseModeFragment}, rc.GetResponseModes())
 }
+
+func TestDefaultClientDPoP(t *testing.T) {
+	c := &DefaultClient{DPoPBoundAccessTokens: true}
+
+	var dc DPoPClient = c
+	assert.True(t, dc.GetEnableDPoPBoundAccessTokens())
+
+	assert.False(t, (&DefaultClient{}).GetEnableDPoPBoundAccessTokens())
+}

@@ -38,13 +38,16 @@ type Session interface {
 
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
-	Claims      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
-	Headers     *jwt.Headers                   `json:"headers,omitempty"`
-	ExpiresAt   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
-	Username    string                         `json:"username,omitempty"`
-	Subject     string                         `json:"subject,omitempty"`
-	RequestedAt time.Time                      `json:"requested_at"`
+	Claims        *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
+	Headers       *jwt.Headers                   `json:"headers,omitempty"`
+	ExpiresAt     map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
+	Username      string                         `json:"username,omitempty"`
+	Subject       string                         `json:"subject,omitempty"`
+	JWKThumbprint string                         `json:"jwk_thumbprint,omitempty"`
+	RequestedAt   time.Time                      `json:"requested_at"`
 }
+
+var _ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
 
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
@@ -106,6 +109,18 @@ func (s *DefaultSession) GetSubject() string {
 	}
 
 	return s.Subject
+}
+
+func (s *DefaultSession) SetDPoPJWKThumbprint(jkt string) {
+	s.JWKThumbprint = jkt
+}
+
+func (s *DefaultSession) GetDPoPJWKThumbprint() string {
+	if s == nil {
+		return ""
+	}
+
+	return s.JWKThumbprint
 }
 
 func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {

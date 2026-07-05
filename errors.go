@@ -141,6 +141,18 @@ var (
 		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInvalidDPoPProof = &RFC6749Error{
+		ErrorField:       errInvalidDPoPProofName,
+		DescriptionField: "The DPoP proof is missing or invalid.",
+		HintField:        "The request was made with an invalid, malformed, expired, or missing DPoP proof JWT.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrUseDPoPNonce = &RFC6749Error{
+		ErrorField:       errUseDPoPNonceName,
+		DescriptionField: "Authorization server requires nonce in DPoP proof.",
+		HintField:        "Retry the request including a 'nonce' claim in the DPoP proof using the value from the most recent 'DPoP-Nonce' response header.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrTokenExpired = &RFC6749Error{
 		ErrorField:       errTokenExpiredName,
 		DescriptionField: "Token expired.",
@@ -272,6 +284,8 @@ const (
 	errDeviceExpiredTokenName       = "expired_token"
 	errSlowDownName                 = "slow_down"
 	errInvalidTargetName            = "invalid_target"
+	errInvalidDPoPProofName         = "invalid_dpop_proof"
+	errUseDPoPNonceName             = "use_dpop_nonce"
 
 	errServerErrorDescription = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request."
 )
@@ -574,8 +588,8 @@ func (e *RFC6749Error) GetDescription() string {
 	return strings.ReplaceAll(description, "\"", "'")
 }
 
-// RFC6749ErrorJson is a helper struct for JSON encoding/decoding of RFC6749Error.
-type RFC6749ErrorJson struct {
+// RFC6749ErrorJSON is a helper struct for JSON encoding/decoding of RFC6749Error.
+type RFC6749ErrorJSON struct {
 	Name        string `json:"error"`
 	Description string `json:"error_description"`
 	Hint        string `json:"error_hint,omitempty"`
@@ -586,7 +600,7 @@ type RFC6749ErrorJson struct {
 // UnmarshalJSON decodes a JSON-encoded error response into the receiver, automatically enabling legacy formatting when
 // the payload contains the legacy 'error_hint' or 'error_debug' fields.
 func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
-	var data RFC6749ErrorJson
+	var data RFC6749ErrorJSON
 
 	if err := json.Unmarshal(b, &data); err != nil {
 		return err
@@ -610,7 +624,7 @@ func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
 // been set.
 func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 	if !e.useLegacyFormat {
-		return json.Marshal(&RFC6749ErrorJson{
+		return json.Marshal(&RFC6749ErrorJSON{
 			Name:        e.ErrorField,
 			Description: e.GetDescription(),
 		})
@@ -621,7 +635,7 @@ func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 		debug = e.DebugField
 	}
 
-	return json.Marshal(&RFC6749ErrorJson{
+	return json.Marshal(&RFC6749ErrorJSON{
 		Name:        e.ErrorField,
 		Description: e.DescriptionField,
 		Hint:        e.HintField,

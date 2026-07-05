@@ -15,7 +15,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -209,4 +211,43 @@ func TestWriteAccessErrorRFC6749(t *testing.T) {
 			assert.EqualValues(t, tc.err.DebugField, actual.Debug)
 		})
 	}
+}
+
+func TestWriteAccessErrorEmitsDPoPNonce(t *testing.T) {
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+
+	rw := httptest.NewRecorder()
+	requester := NewAccessRequest(&DefaultSession{})
+
+	provider.WriteAccessError(t.Context(), rw, requester, ErrUseDPoPNonce)
+
+	assert.NotEmpty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+}
+
+func TestWriteAccessErrorDoesNotEmitDPoPNonceForOtherErrors(t *testing.T) {
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+
+	rw := httptest.NewRecorder()
+	requester := NewAccessRequest(&DefaultSession{})
+
+	provider.WriteAccessError(t.Context(), rw, requester, ErrInvalidRequest)
+
+	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+}
+
+func TestWriteAccessErrorDoesNotEmitDPoPNonceWithoutStrategy(t *testing.T) {
+	provider := &Fosite{Config: new(Config)}
+
+	rw := httptest.NewRecorder()
+	requester := NewAccessRequest(&DefaultSession{})
+
+	provider.WriteAccessError(t.Context(), rw, requester, ErrUseDPoPNonce)
+
+	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
 }

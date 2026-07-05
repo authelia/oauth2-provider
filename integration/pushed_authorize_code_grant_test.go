@@ -143,7 +143,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 				data.Set(k, v)
 			}
 
-			req, err := http.NewRequest("POST", ts.URL+"/par", strings.NewReader(data.Encode()))
+			req, err := http.NewRequest(http.MethodPost, ts.URL+"/par", strings.NewReader(data.Encode()))
 			require.NoError(t, err)
 
 			req.Header.Add(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
@@ -178,7 +178,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			data = url.Values{}
 			data.Set(consts.FormParameterClientID, oauthClient.ClientID)
 			data.Set(consts.FormParameterRequestURI, m[consts.FormParameterRequestURI].(string))
-			req, err = http.NewRequest("POST", ts.URL+"/auth", strings.NewReader(data.Encode()))
+			req, err = http.NewRequest(http.MethodPost, ts.URL+"/auth", strings.NewReader(data.Encode()))
 			require.NoError(t, err)
 
 			req.Header.Add(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)

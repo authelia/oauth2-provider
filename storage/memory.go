@@ -55,6 +55,8 @@ type MemoryStore struct {
 	// Public keys to check signature in auth grant jwt assertion.
 	IssuerPublicKeys map[string]IssuerPublicKeys
 	PARSessions      map[string]oauth2.AuthorizeRequester
+	DPoPProofJTIs    map[string]time.Time
+	DPoPNonces       map[string]time.Time
 
 	clientsMutex                sync.RWMutex
 	authorizeCodesMutex         sync.RWMutex
@@ -69,6 +71,8 @@ type MemoryStore struct {
 	refreshTokenRequestIDsMutex sync.RWMutex
 	issuerPublicKeysMutex       sync.RWMutex
 	parSessionsMutex            sync.RWMutex
+	dpopProofJTIsMutex          sync.RWMutex
+	dpopNoncesMutex             sync.RWMutex
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -87,6 +91,8 @@ func NewMemoryStore() *MemoryStore {
 		BlacklistedJTIs:        make(map[string]time.Time),
 		IssuerPublicKeys:       make(map[string]IssuerPublicKeys),
 		PARSessions:            make(map[string]oauth2.AuthorizeRequester),
+		DPoPProofJTIs:          make(map[string]time.Time),
+		DPoPNonces:             make(map[string]time.Time),
 	}
 }
 
@@ -609,4 +615,38 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	delete(s.UserCodes, rel.GetUserCodeSignature())
 
 	return nil
+}
+
+func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti string, exp time.Time) (bool, error) {
+	s.dpopProofJTIsMutex.Lock()
+	defer s.dpopProofJTIsMutex.Unlock()
+
+	if existing, ok := s.DPoPProofJTIs[jti]; ok && existing.After(time.Now()) {
+		return true, nil
+	}
+
+	s.DPoPProofJTIs[jti] = exp
+
+	return false, nil
+}
+
+func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.Time) error {
+	s.dpopNoncesMutex.Lock()
+	defer s.dpopNoncesMutex.Unlock()
+
+	s.DPoPNonces[nonce] = exp
+
+	return nil
+}
+
+func (s *MemoryStore) IsDPoPNonceValid(_ context.Context, nonce string) (bool, error) {
+	s.dpopNoncesMutex.RLock()
+	defer s.dpopNoncesMutex.RUnlock()
+
+	exp, ok := s.DPoPNonces[nonce]
+	if !ok {
+		return false, nil
+	}
+
+	return exp.After(time.Now()), nil
 }

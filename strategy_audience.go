@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -46,17 +47,7 @@ func DefaultAudienceStrategy(haystack, needle []string) (err error) {
 	}
 
 	for _, n := range needle {
-		var found bool
-
-		for _, h := range haystack {
-			if h == n {
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
+		if !slices.Contains(haystack, n) {
 			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested audience '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
 		}
 	}
@@ -74,16 +65,7 @@ func ExactAudienceStrategy(haystack, needle []string) (err error) {
 	}
 
 	for _, n := range needle {
-		var found bool
-		for _, h := range haystack {
-			if n == h {
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
+		if !slices.Contains(haystack, n) {
 			return errorsx.WithStack(ErrInvalidTarget.WithDebugf(`Requested audience "%s" has not been whitelisted by the OAuth 2.0 Client.`, n))
 		}
 	}

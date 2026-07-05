@@ -502,7 +502,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderNonJWT
 	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 	keyID := keyID
 	cl := s.createStandardClaim()
-	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "dpop+jwt"))
+	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, consts.JSONWebTokenTypeDPoP))
 
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 

@@ -205,6 +205,7 @@ type Configurator interface {
 	TokenEndpointClientAuthStrategyProvider
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
+	DPoPConfigProvider
 }
 
 // New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package

@@ -130,7 +130,7 @@ func TestWriteRFC862DeviceAuthorizeResponse(t *testing.T) {
 			assert.Equal(t, tc.headers, rw.Header())
 
 			actual := DeviceAuthorizeResponse{Extra: map[string]any{}}
-			require.NoError(t, actual.FromJson(rw.Body))
+			require.NoError(t, actual.FromJSON(rw.Body))
 
 			assert.Equal(t, resp.GetUserCode(), actual.UserCode)
 			assert.Equal(t, resp.GetDeviceCode(), actual.DeviceCode)

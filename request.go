@@ -5,7 +5,9 @@
 package oauth2
 
 import (
+	"maps"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,10 +108,8 @@ func (a *Request) SetRequestedAudience(s Arguments) {
 
 // AppendRequestedScope adds the given scope to the requested scopes if it is not already present.
 func (a *Request) AppendRequestedScope(scope string) {
-	for _, has := range a.RequestedScope {
-		if scope == has {
-			return
-		}
+	if slices.Contains(a.RequestedScope, scope) {
+		return
 	}
 
 	a.RequestedScope = append(a.RequestedScope, scope)
@@ -117,10 +117,8 @@ func (a *Request) AppendRequestedScope(scope string) {
 
 // AppendRequestedAudience adds the given audience value to the requested audiences if it is not already present.
 func (a *Request) AppendRequestedAudience(audience string) {
-	for _, has := range a.RequestedAudience {
-		if audience == has {
-			return
-		}
+	if slices.Contains(a.RequestedAudience, audience) {
+		return
 	}
 
 	a.RequestedAudience = append(a.RequestedAudience, audience)
@@ -133,10 +131,8 @@ func (a *Request) GetRequestedAudience() (audience Arguments) {
 
 // GrantAudience marks the given audience as granted to the client if it is not already present.
 func (a *Request) GrantAudience(audience string) {
-	for _, has := range a.GrantedAudience {
-		if audience == has {
-			return
-		}
+	if slices.Contains(a.GrantedAudience, audience) {
+		return
 	}
 
 	a.GrantedAudience = append(a.GrantedAudience, audience)
@@ -153,10 +149,8 @@ func (a *Request) SetRequestedResource(s Arguments) {
 
 // AppendRequestedResource adds the given resource indicator if it is not already present.
 func (a *Request) AppendRequestedResource(resource string) {
-	for _, has := range a.RequestedResource {
-		if resource == has {
-			return
-		}
+	if slices.Contains(a.RequestedResource, resource) {
+		return
 	}
 
 	a.RequestedResource = append(a.RequestedResource, resource)
@@ -169,10 +163,8 @@ func (a *Request) GetRequestedResource() Arguments {
 
 // GrantResource marks the given RFC 8707 resource indicator as granted if it is not already present.
 func (a *Request) GrantResource(resource string) {
-	for _, has := range a.GrantedResource {
-		if resource == has {
-			return
-		}
+	if slices.Contains(a.GrantedResource, resource) {
+		return
 	}
 
 	a.GrantedResource = append(a.GrantedResource, resource)
@@ -195,10 +187,8 @@ func (a *Request) GetGrantedAudience() Arguments {
 
 // GrantScope marks the given scope as granted to the client if it is not already present.
 func (a *Request) GrantScope(scope string) {
-	for _, has := range a.GrantedScope {
-		if scope == has {
-			return
-		}
+	if slices.Contains(a.GrantedScope, scope) {
+		return
 	}
 	a.GrantedScope = append(a.GrantedScope, scope)
 }
@@ -245,9 +235,7 @@ func (a *Request) Merge(request Requester) {
 	a.Client = request.GetClient()
 	a.Session = request.GetSession()
 
-	for k, v := range request.GetRequestForm() {
-		a.Form[k] = v
-	}
+	maps.Copy(a.Form, request.GetRequestForm())
 }
 
 var alwaysAllowedParameters = []string{

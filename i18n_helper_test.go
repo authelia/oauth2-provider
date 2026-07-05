@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -77,7 +78,7 @@ func TestErrorTranslation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+			err := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 
 			if tc.lang != language.Und {
 				err = err.WithLocalizer(catalog, tc.lang)
@@ -94,7 +95,7 @@ func TestAddLocalizerToErrWithLang(t *testing.T) {
 	// AddLocalizerToErrWithLang matches errors whose dynamic type is *RFC6749Error,
 	// matching the pointer the package's WithHintIDOrDefaultf actually returns.
 	makeErr := func() *RFC6749Error {
-		return ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+		return ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 	}
 
 	testCases := []struct {
@@ -153,7 +154,7 @@ func TestAddLocalizerToErrWithLang(t *testing.T) {
 		// AddLocalizerToErrWithLang's errors.As target is *RFC6749Error, so the pointer
 		// returned by the production-facing WithHintIDOrDefaultf matches and a localized
 		// copy is returned. This documents the real API usage pattern.
-		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 
 		actual := AddLocalizerToErrWithLang(catalog, language.Spanish, input)
 		rfc, ok := actual.(*RFC6749Error)
@@ -184,7 +185,7 @@ func TestAddLocalizerToErr(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+			err := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 			actual := AddLocalizerToErr(catalog, err, tc.requester)
 
 			rfc, ok := actual.(*RFC6749Error)
@@ -197,7 +198,7 @@ func TestAddLocalizerToErr(t *testing.T) {
 		// Mirrors the real production usage where callers pass the *RFC6749Error returned by
 		// WithHintIDOrDefaultf directly. The function localizes the input per the requester's
 		// language tag.
-		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", "GET")
+		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 
 		actual := AddLocalizerToErr(catalog, input, &Request{Lang: language.Spanish})
 		rfc, ok := actual.(*RFC6749Error)

@@ -42,12 +42,12 @@ func TestNewAccessRequest(t *testing.T) {
 			expectErr:    ErrInvalidRequest,
 			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 			form:         url.Values{},
-			method:       "POST",
+			method:       http.MethodPost,
 		},
 		{
 			name:   "ShouldReturnInvalidRequestWhenOnlyGrantType",
 			header: http.Header{},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterClientID:  {"bar"},
 				consts.FormParameterGrantType: {"foo"},
@@ -61,7 +61,7 @@ func TestNewAccessRequest(t *testing.T) {
 		{
 			name:   "ShouldReturnInvalidRequestWhenEmptyClientID",
 			header: http.Header{},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 				consts.FormParameterClientID:  {""},
@@ -74,7 +74,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -92,7 +92,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
-			method: "GET",
+			method: http.MethodGet,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -104,7 +104,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -124,7 +124,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "foo")},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -145,7 +145,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "foo")},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -172,7 +172,7 @@ func TestNewAccessRequest(t *testing.T) {
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "")},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 			},
@@ -262,7 +262,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
 		{
@@ -273,7 +273,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 			},
-			method:   "POST",
+			method:   http.MethodPost,
 			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 			handlers: TokenEndpointHandlers{},
 		},
@@ -290,7 +290,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(nil, errors.New("no client")).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			expect: &AccessRequest{
 				GrantTypes: Arguments{"foo"},
 				Request: Request{
@@ -306,7 +306,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			expect: &AccessRequest{
 				GrantTypes: Arguments{"foo"},
 				Request: Request{
@@ -326,7 +326,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(anotherClient, nil).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			expect: &AccessRequest{
 				GrantTypes: Arguments{"foo"},
 				Request: Request{
@@ -479,7 +479,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				client.ClientSecret = testClientSecretFoo
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
@@ -497,7 +497,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 				handlerWithClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			expect: &AccessRequest{
 				GrantTypes: Arguments{"foo"},
 				Request: Request{
@@ -515,7 +515,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			method: "POST",
+			method: http.MethodPost,
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
 		},
 	}
@@ -566,7 +566,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 
 //nolint:unparam
 func basicAuth(username, password string) string {
-	return prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
+	return prefixSchemeBasic + base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "%s:%s", username, password))
 }
 
 const (

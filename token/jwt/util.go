@@ -10,6 +10,7 @@ import (
 	"crypto/aes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"fmt"
 	"hash"
 	"reflect"
@@ -553,4 +554,20 @@ func isEmptyValue(v reflect.Value) bool {
 	default:
 		return false
 	}
+}
+
+// ThumbprintJWK computes the RFC 7638 JWK SHA-256 Thumbprint of the given key and returns it as a base64url
+// (no padding) string, suitable for use as the RFC 9449 DPoP 'jkt' confirmation value.
+func ThumbprintJWK(key *jose.JSONWebKey) (jkt string, err error) {
+	if key == nil {
+		return "", errors.New("jwk must not be nil")
+	}
+
+	var sum []byte
+
+	if sum, err = key.Thumbprint(crypto.SHA256); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(sum), nil
 }

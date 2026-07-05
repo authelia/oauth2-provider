@@ -27,7 +27,7 @@ import (
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
 	httpreq := &http.Request{
-		Method: "POST",
+		Method: http.MethodPost,
 		Header: http.Header{
 			consts.HeaderAuthorization: []string{"bearer some-token"},
 		},
@@ -107,7 +107,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			name: "ShouldFailEmptyRequest",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{},
 					Form:   url.Values{},
 				}
@@ -121,7 +121,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), newErr)
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{
 						consts.HeaderAuthorization: []string{"bearer some-token"},
 					},
@@ -140,7 +140,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{
 						consts.HeaderAuthorization: []string{"bearer some-token"},
 					},
@@ -157,7 +157,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{
 						// Basic Authorization with username=encoded:client and password=encoded&password
 						consts.HeaderAuthorization: []string{"Basic ZW5jb2RlZCUzQWNsaWVudDplbmNvZGVkJTI2cGFzc3dvcmQ="},
@@ -175,7 +175,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{
 						// Basic Authorization with username=my-client and password=foobar
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
@@ -193,7 +193,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
 				return &http.Request{
-					Method: "POST",
+					Method: http.MethodPost,
 					Header: http.Header{
 						// Basic Authorization with username=my-client and password=foobar
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},

@@ -21,6 +21,10 @@ func (f *Fosite) WriteAccessError(ctx context.Context, rw http.ResponseWriter, r
 }
 
 func (f *Fosite) writeDPoPNonceOnChallenge(ctx context.Context, rw http.ResponseWriter, err error) {
+	if !f.Config.GetDPoPEnabled(ctx) {
+		return
+	}
+
 	if ErrorToRFC6749Error(err).ErrorField != errUseDPoPNonceName {
 		return
 	}

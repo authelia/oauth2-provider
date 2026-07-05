@@ -60,6 +60,25 @@ func TestStrategyValidateProofReplay(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
+func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
+	s, store := newTestStrategy()
+	key := newTestProofKey(t)
+
+	iat := time.Now().Add(30 * time.Second)
+	raw := signProof(t, key, "dpop+jwt", map[string]any{
+		"jti": "future-iat", "htm": "POST", "htu": "https://as.example.com/token", "iat": iat.Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
+	require.NoError(t, err)
+
+	exp, ok := store.DPoPProofJTIs["future-iat"]
+	require.True(t, ok, "expected the proof jti to be recorded as used")
+
+	wantMin := time.Unix(iat.Unix(), 0).Add(time.Minute)
+	assert.Falsef(t, exp.Before(wantMin), "replay marker expiry %s is before the end of the iat acceptance window %s", exp, wantMin)
+}
+
 func TestStrategyNonceLifecycle(t *testing.T) {
 	s, _ := newTestStrategy()
 

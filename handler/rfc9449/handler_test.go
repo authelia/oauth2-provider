@@ -78,6 +78,32 @@ func TestHandlerBindsProof(t *testing.T) {
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
 }
 
+func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
+	h, _, _ := newTestHandler(false)
+	key := newTestProofKey(t)
+	raw := signProof(t, key, "dpop+jwt", map[string]any{
+		"jti": "multi-1", "htm": "POST", "htu": "https://as.example.com/token", "iat": time.Now().Unix(),
+	})
+
+	u, _ := url.Parse("https://as.example.com/token")
+	r := &http.Request{Method: "POST", Header: http.Header{}, URL: u, Host: u.Host}
+	r.Header.Set("X-Forwarded-Proto", "https")
+	// Two DPoP proofs in one request must be rejected outright per RFC 9449 4.3 step 1, even when both are otherwise
+	// valid, so a second smuggled proof can never be silently ignored.
+	r.Header.Add(consts.HeaderDPoP, raw)
+	r.Header.Add(consts.HeaderDPoP, raw)
+
+	ctx := context.WithValue(context.Background(), oauth2.RequestContextKey, r)
+
+	session := &oauth2.DefaultSession{}
+	request := oauth2.NewAccessRequest(session)
+	request.Client = &oauth2.DefaultClient{}
+
+	err := h.HandleTokenEndpointRequest(ctx, request)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	assert.Empty(t, session.GetDPoPJWKThumbprint())
+}
+
 func TestHandlerRequiredButMissing(t *testing.T) {
 	h, _, _ := newTestHandler(true)
 

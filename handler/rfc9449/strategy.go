@@ -85,7 +85,10 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof has already been used."))
 	}
 
-	if err = s.Store.SetDPoPProofUsed(ctx, parsed.ID, now.Add(skew)); err != nil {
+	// Keep the replay marker until the end of the proof's own 'iat' acceptance window (iat+skew), not now+skew. A proof
+	// presented before its iat (client clock ahead, within skew) stays iat-acceptable until iat+skew; expiring the
+	// marker at now+skew < iat+skew would reopen a replay window for the remainder of that window.
+	if err = s.Store.SetDPoPProofUsed(ctx, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

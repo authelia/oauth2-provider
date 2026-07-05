@@ -61,6 +61,11 @@ func (h *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
+	// RFC 9449 4.3 step 1: there must not be more than one DPoP header field.
+	if len(r.Header.Values(consts.HeaderDPoP)) > 1 {
+		return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request contains more than one DPoP proof but only one is allowed."))
+	}
+
 	header := r.Header.Get(consts.HeaderDPoP)
 
 	session, _ := request.GetSession().(oauth2.DPoPBoundSession)

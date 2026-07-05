@@ -141,8 +141,6 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 	return false
 }
 
-// singleDPoPHeader enforces RFC 9449 4.3 step 1 (there must not be more than one DPoP header field) and returns the
-// single header value, or the empty string when absent. It errors only when more than one DPoP header is present.
 func singleDPoPHeader(r *http.Request) (header string, err error) {
 	if len(r.Header.Values(consts.HeaderDPoP)) > 1 {
 		return "", errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request contains more than one DPoP proof but only one is allowed."))
@@ -151,7 +149,6 @@ func singleDPoPHeader(r *http.Request) (header string, err error) {
 	return r.Header.Get(consts.HeaderDPoP), nil
 }
 
-// requestURL reconstructs the request target URI (htu) from the request, discarding query and fragment.
 func requestURL(r *http.Request) string {
 	scheme := "https"
 

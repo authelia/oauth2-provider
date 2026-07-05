@@ -86,10 +86,9 @@ func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
 	})
 
 	u, _ := url.Parse("https://as.example.com/token")
-	r := &http.Request{Method: "POST", Header: http.Header{}, URL: u, Host: u.Host}
-	r.Header.Set("X-Forwarded-Proto", "https")
-	// Two DPoP proofs in one request must be rejected outright per RFC 9449 4.3 step 1, even when both are otherwise
-	// valid, so a second smuggled proof can never be silently ignored.
+	r := &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: u, Host: u.Host}
+
+	r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
 	r.Header.Add(consts.HeaderDPoP, raw)
 	r.Header.Add(consts.HeaderDPoP, raw)
 
@@ -111,7 +110,7 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP("POST", "https://as.example.com/token", "")
+	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
 	err := h.HandleTokenEndpointRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
@@ -169,7 +168,7 @@ func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP("POST", "https://as.example.com/token", raw)
+	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
 	err := h.HandleTokenEndpointRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
@@ -197,10 +196,7 @@ func TestHandlerReturnsUnknownRequestWhenUnbound(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	// No DPoP header, not required, and the session carries no existing binding: the handler must not claim the
-	// request via a nil return, otherwise a bogus/unknown grant type would be masked as "found" by the token
-	// dispatch loop.
-	ctx := ctxWithDPoP("POST", "https://as.example.com/token", "")
+	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
 	err := h.HandleTokenEndpointRequest(ctx, request)
 	assert.True(t, errors.Is(err, oauth2.ErrUnknownRequest))
 }

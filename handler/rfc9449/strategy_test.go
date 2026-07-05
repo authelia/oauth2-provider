@@ -41,7 +41,6 @@ func TestStrategyValidateProofChecksMethodURL(t *testing.T) {
 	_, err := s.ValidateDPoPProof(context.Background(), "POST", "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
-	// Method mismatch.
 	_, err = s.ValidateDPoPProof(context.Background(), "GET", "https://as.example.com/token", raw, false)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }

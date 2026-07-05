@@ -196,9 +196,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				})
 				return newResourceRequest("POST", resourceURL, "some-other-token", proof)
 			},
-			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
-			// DPoP scheme was used, but the presented token does not match the introspected access token.
+			wantErr:   oauth2.ErrInvalidDPoPProof,
+			wantHint:  "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
 			wantDebug: "dpop scheme used: true, token matches: false",
 		},
 		{

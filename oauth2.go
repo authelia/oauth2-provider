@@ -42,10 +42,14 @@ const (
 	GrantTypeDeviceCode        GrantType = consts.GrantTypeOAuthDeviceCode
 	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
 
+	// BearerAccessToken is the standard OAuth 2.0 Token type.
 	BearerAccessToken string = "bearer"
+
 	// DPoPAccessToken is the RFC 9449 token_type value for access tokens bound to a DPoP proof-of-possession key.
 	DPoPAccessToken string = "DPoP"
-	RFC8693NAToken  string = "N_A"
+
+	// RFC8693NAToken is the N/A token.
+	RFC8693NAToken string = "N_A"
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.

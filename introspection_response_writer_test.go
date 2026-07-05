@@ -524,8 +524,6 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 		{
 			name: "ShouldNotAllowExtraClaimsToForgeCnf",
 			setup: func() *IntrospectionResponse {
-				// A session that is not DPoP-bound but happens to carry an extra claim literally named "cnf" must
-				// not be able to smuggle an unvalidated confirmation claim into the introspection response.
 				session := &DefaultSession{Subject: "user-123"}
 				session.GetExtraClaims()[jwt.ClaimConfirmation] = map[string]any{jwt.ClaimConfirmationJWKThumbprint: "forged-jkt"}
 

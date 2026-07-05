@@ -12,6 +12,7 @@ const (
 	HeaderLocation        = "Location"
 	HeaderAcceptLanguage  = "Accept-Language"
 	HeaderWWWAuthenticate = "WWW-Authenticate"
+	HeaderXForwardedProto = "X-Forwarded-Proto"
 	HeaderDPoP            = "DPoP"
 	HeaderDPoPNonce       = "DPoP-Nonce"
 )

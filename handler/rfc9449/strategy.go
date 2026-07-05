@@ -15,6 +15,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -136,8 +137,6 @@ func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context) []jose.Signatur
 	return algs
 }
 
-// normalizeHTU parses a URI and returns scheme://host/path with scheme and host lowercased, default ports removed, and
-// the query and fragment discarded, per RFC 9449 htu comparison.
 func normalizeHTU(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -150,7 +149,7 @@ func normalizeHTU(raw string) (string, error) {
 	u.Scheme = strings.ToLower(u.Scheme)
 	host := strings.ToLower(u.Host)
 
-	if (u.Scheme == "https" && strings.HasSuffix(host, ":443")) || (u.Scheme == "http" && strings.HasSuffix(host, ":80")) {
+	if (u.Scheme == consts.SchemeHTTPS && strings.HasSuffix(host, ":443")) || (u.Scheme == consts.SchemeHTTP && strings.HasSuffix(host, ":80")) {
 		host = host[:strings.LastIndex(host, ":")]
 	}
 

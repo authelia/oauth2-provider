@@ -8,14 +8,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -35,8 +33,6 @@ type DefaultStrategy struct {
 func NewDefaultStrategy(config StrategyConfig, store Storage) *DefaultStrategy {
 	return &DefaultStrategy{Config: config, Store: store}
 }
-
-var _ oauth2.DPoPStrategy = (*DefaultStrategy)(nil)
 
 func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, requestURL, proof string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
 	if parsed, err = ParseProof(proof, s.allowedAlgorithms(ctx)); err != nil {
@@ -134,23 +130,4 @@ func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context) []jose.Signatur
 	return algs
 }
 
-func normalizeHTU(raw string) (string, error) {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-
-	u.RawQuery = ""
-	u.Fragment = ""
-	u.ForceQuery = false
-	u.Scheme = strings.ToLower(u.Scheme)
-	host := strings.ToLower(u.Host)
-
-	if (u.Scheme == consts.SchemeHTTPS && strings.HasSuffix(host, ":443")) || (u.Scheme == consts.SchemeHTTP && strings.HasSuffix(host, ":80")) {
-		host = host[:strings.LastIndex(host, ":")]
-	}
-
-	u.Host = host
-
-	return u.String(), nil
-}
+var _ oauth2.DPoPStrategy = (*DefaultStrategy)(nil)

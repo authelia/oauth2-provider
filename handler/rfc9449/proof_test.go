@@ -22,80 +22,108 @@ import (
 	ijwt "authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestParseProofValid(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
-		ijwt.ClaimJWTID:      "id-1",
-		ijwt.ClaimHTTPMethod: http.MethodPost,
-		ijwt.ClaimHTTPURI:    "https://as.example.com/token",
-		ijwt.ClaimIssuedAt:   1000,
-	})
+func TestParseProof(t *testing.T) {
+	testCases := []struct {
+		name    string
+		raw     func(t *testing.T, key *jose.JSONWebKey) string
+		algs    []jose.SignatureAlgorithm
+		wantErr error
+		check   func(t *testing.T, proof *oauth2.DPoPProof)
+	}{
+		{
+			name: "Valid",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID:      "id-1",
+					ijwt.ClaimHTTPMethod: http.MethodPost,
+					ijwt.ClaimHTTPURI:    "https://as.example.com/token",
+					ijwt.ClaimIssuedAt:   1000,
+				})
+			},
+			check: func(t *testing.T, proof *oauth2.DPoPProof) {
+				assert.Equal(t, "id-1", proof.ID)
+				assert.Equal(t, http.MethodPost, proof.Method)
+				assert.Equal(t, "https://as.example.com/token", proof.URL)
+				assert.NotEmpty(t, proof.Thumbprint)
+			},
+		},
+		{
+			name: "RejectsWrongType",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeJWT, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "RejectsBadSignature",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
 
-	proof, err := ParseProof(raw, testAlgs)
-	require.NoError(t, err)
+				parts := strings.Split(raw, ".")
+				require.Len(t, parts, 3)
 
-	assert.Equal(t, "id-1", proof.ID)
-	assert.Equal(t, http.MethodPost, proof.Method)
-	assert.Equal(t, "https://as.example.com/token", proof.URL)
-	assert.NotEmpty(t, proof.Thumbprint)
-}
+				sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+				require.NoError(t, err)
+				require.NotEmpty(t, sig)
 
-func TestParseProofRejectsWrongType(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeJWT, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+				sig[0] ^= 0xFF
 
-	_, err := ParseProof(raw, testAlgs)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-}
+				return parts[0] + "." + parts[1] + "." + base64.RawURLEncoding.EncodeToString(sig)
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "RejectsMissingJTI",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "RejectsDisallowedAlg",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+			algs:    []jose.SignatureAlgorithm{jose.RS256},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "RejectsJSONSerialization",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID: "json-1", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as.example.com/token", ijwt.ClaimIssuedAt: 1,
+				})
 
-func TestParseProofRejectsBadSignature(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+				parts := strings.Split(raw, ".")
+				require.Len(t, parts, 3)
 
-	parts := strings.Split(raw, ".")
-	require.Len(t, parts, 3)
+				return `{"protected":"` + parts[0] + `","payload":"` + parts[1] + `","signature":"` + parts[2] + `"}`
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+	}
 
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
-	require.NoError(t, err)
-	require.NotEmpty(t, sig)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := newTestProofKey(t)
 
-	sig[0] ^= 0xFF
+			algs := testAlgs
+			if tc.algs != nil {
+				algs = tc.algs
+			}
 
-	tampered := parts[0] + "." + parts[1] + "." + base64.RawURLEncoding.EncodeToString(sig)
+			proof, err := ParseProof(tc.raw(t, key), algs)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
 
-	_, err = ParseProof(tampered, testAlgs)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-}
-
-func TestParseProofRejectsMissingJTI(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
-
-	_, err := ParseProof(raw, testAlgs)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-}
-
-func TestParseProofRejectsDisallowedAlg(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
-
-	_, err := ParseProof(raw, []jose.SignatureAlgorithm{jose.RS256})
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-}
-
-func TestParseProofRejectsJSONSerialization(t *testing.T) {
-	key := newTestProofKey(t)
-	raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
-		ijwt.ClaimJWTID: "json-1", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as.example.com/token", ijwt.ClaimIssuedAt: 1,
-	})
-
-	parts := strings.Split(raw, ".")
-	require.Len(t, parts, 3)
-
-	json := `{"protected":"` + parts[0] + `","payload":"` + parts[1] + `","signature":"` + parts[2] + `"}`
-
-	_, err := ParseProof(json, testAlgs)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			require.NoError(t, err)
+			if tc.check != nil {
+				tc.check(t, proof)
+			}
+		})
+	}
 }
 
 var testAlgs = []jose.SignatureAlgorithm{jose.ES256}

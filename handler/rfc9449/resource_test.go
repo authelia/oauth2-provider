@@ -98,43 +98,6 @@ func TestAccessTokenFromRequest(t *testing.T) {
 	}
 }
 
-func athClaim(token string) string {
-	sum := sha256.Sum256([]byte(token))
-
-	return base64.RawURLEncoding.EncodeToString(sum[:])
-}
-
-func thumbprint(t *testing.T, key *jose.JSONWebKey) string {
-	t.Helper()
-
-	jkt, err := jwt.ThumbprintJWK(key)
-	require.NoError(t, err)
-
-	return jkt
-}
-
-func newResourceRequest(method, rawURL, token, proof string) *http.Request {
-	u, _ := url.Parse(rawURL)
-
-	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
-
-	if u.Scheme == consts.SchemeHTTPS {
-		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
-	}
-
-	if token != "" {
-		r.Header.Set(consts.HeaderAuthorization, "DPoP "+token)
-	}
-
-	if proof != "" {
-		r.Header.Add(consts.HeaderDPoP, proof)
-	}
-
-	return r
-}
-
-const resourceURL = "https://rs.example.com/userinfo"
-
 func TestValidateResourceAccessHappyPath(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
@@ -291,3 +254,40 @@ func TestValidateResourceAccessRequiresNonce(t *testing.T) {
 	_, err := s.ValidateResourceAccess(context.Background(), r, token, thumbprint(t, key), true)
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
+
+func athClaim(token string) string {
+	sum := sha256.Sum256([]byte(token))
+
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func thumbprint(t *testing.T, key *jose.JSONWebKey) string {
+	t.Helper()
+
+	jkt, err := jwt.ThumbprintJWK(key)
+	require.NoError(t, err)
+
+	return jkt
+}
+
+func newResourceRequest(method, rawURL, token, proof string) *http.Request {
+	u, _ := url.Parse(rawURL)
+
+	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
+
+	if u.Scheme == consts.SchemeHTTPS {
+		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
+	}
+
+	if token != "" {
+		r.Header.Set(consts.HeaderAuthorization, "DPoP "+token)
+	}
+
+	if proof != "" {
+		r.Header.Add(consts.HeaderDPoP, proof)
+	}
+
+	return r
+}
+
+const resourceURL = "https://rs.example.com/userinfo"

@@ -21,46 +21,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-type testHandlerConfig struct {
-	testStrategyConfig
-	enabled, enforce, nonceRequired bool
-	strategy                        oauth2.DPoPStrategy
-}
-
-func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool                 { return c.enabled }
-func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool                 { return c.enforce }
-func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool           { return c.nonceRequired }
-func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
-
-func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
-	store := storage.NewMemoryStore()
-	cfg := &testHandlerConfig{
-		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute},
-		enabled:            true,
-		enforce:            enforce,
-	}
-	strategy := NewDefaultStrategy(cfg, store)
-	cfg.strategy = strategy
-
-	return &Handler{Config: cfg, Strategy: strategy}, store, cfg
-}
-
-func ctxWithDPoP(method, rawURL, proof string) context.Context {
-	u, _ := url.Parse(rawURL)
-
-	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
-
-	if u.Scheme == consts.SchemeHTTPS {
-		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
-	}
-
-	if proof != "" {
-		r.Header.Set(consts.HeaderDPoP, proof)
-	}
-
-	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
-}
-
 func TestHandlerBindsProof(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 	key := newTestProofKey(t)
@@ -114,44 +74,79 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
-func TestHandlerAuthorizeRecordsDPoPJKT(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+func TestHandlerAuthorize(t *testing.T) {
+	testCases := []struct {
+		name          string
+		enabled       bool
+		session       oauth2.Session
+		jkt           string
+		responseTypes oauth2.Arguments
+		wantErr       error
+		wantJKT       string
+	}{
+		{
+			name:          "RecordsDPoPJKT",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           "authz-jkt",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+			wantJKT:       "authz-jkt",
+		},
+		{
+			name:    "DisabledLeavesSessionUnchanged",
+			enabled: false,
+			session: &oauth2.DefaultSession{},
+			jkt:     "authz-jkt",
+		},
+		{
+			name:    "NoDPoPJKTLeavesSessionUnchanged",
+			enabled: true,
+			session: &oauth2.DefaultSession{},
+		},
+		{
+			name:          "RecordsDPoPJKTOnlyForCodeFlow",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           "authz-jkt",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+		},
+		{
+			name:          "NonDPoPSessionReturnsServerError",
+			enabled:       true,
+			session:       nonDPoPSession{},
+			jkt:           "authz-jkt",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+			wantErr:       oauth2.ErrServerError,
+		},
+	}
 
-	session := &oauth2.DefaultSession{}
-	ar := oauth2.NewAuthorizeRequest()
-	ar.Client = &oauth2.DefaultClient{}
-	ar.Session = session
-	ar.Form.Set(consts.FormParameterDPoPJKT, "authz-jkt")
-	ar.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, cfg := newTestHandler(false)
+			cfg.enabled = tc.enabled
 
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse()))
-	assert.Equal(t, "authz-jkt", session.GetDPoPJWKThumbprint())
-}
+			ar := oauth2.NewAuthorizeRequest()
+			ar.Client = &oauth2.DefaultClient{}
+			ar.Session = tc.session
 
-func TestHandlerAuthorizeDisabledLeavesSessionUnchanged(t *testing.T) {
-	h, _, cfg := newTestHandler(false)
-	cfg.enabled = false
+			if tc.jkt != "" {
+				ar.Form.Set(consts.FormParameterDPoPJKT, tc.jkt)
+			}
 
-	session := &oauth2.DefaultSession{}
-	ar := oauth2.NewAuthorizeRequest()
-	ar.Client = &oauth2.DefaultClient{}
-	ar.Session = session
-	ar.Form.Set(consts.FormParameterDPoPJKT, "authz-jkt")
+			if tc.responseTypes != nil {
+				ar.ResponseTypes = tc.responseTypes
+			}
 
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse()))
-	assert.Empty(t, session.GetDPoPJWKThumbprint())
-}
+			err := h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse())
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
 
-func TestHandlerAuthorizeNoDPoPJKTLeavesSessionUnchanged(t *testing.T) {
-	h, _, _ := newTestHandler(false)
-
-	session := &oauth2.DefaultSession{}
-	ar := oauth2.NewAuthorizeRequest()
-	ar.Client = &oauth2.DefaultClient{}
-	ar.Session = session
-
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse()))
-	assert.Empty(t, session.GetDPoPJWKThumbprint())
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantJKT, tc.session.(*oauth2.DefaultSession).GetDPoPJWKThumbprint())
+		})
+	}
 }
 
 func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
@@ -161,7 +156,6 @@ func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 		jwt.ClaimJWTID: "h2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
 
-	// Session already bound to a different thumbprint (as if restored from a refresh token).
 	session := &oauth2.DefaultSession{}
 	session.SetDPoPJWKThumbprint("some-other-thumbprint")
 	request := oauth2.NewAccessRequest(session)
@@ -200,28 +194,6 @@ func TestHandlerReturnsUnknownRequestWhenUnbound(t *testing.T) {
 	assert.True(t, errors.Is(err, oauth2.ErrUnknownRequest))
 }
 
-// nonDPoPSession implements only oauth2.Session, not oauth2.DPoPBoundSession.
-type nonDPoPSession struct{}
-
-func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
-func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time  { return time.Time{} }
-func (nonDPoPSession) GetUsername() string                      { return "" }
-func (nonDPoPSession) GetSubject() string                       { return "" }
-func (nonDPoPSession) Clone() oauth2.Session                    { return nonDPoPSession{} }
-
-func TestHandlerAuthorizeNonDPoPSessionReturnsServerError(t *testing.T) {
-	h, _, _ := newTestHandler(false)
-
-	ar := oauth2.NewAuthorizeRequest()
-	ar.Client = &oauth2.DefaultClient{}
-	ar.Session = nonDPoPSession{}
-	ar.Form.Set(consts.FormParameterDPoPJKT, "authz-jkt")
-	ar.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
-
-	err := h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse())
-	assert.ErrorIs(t, err, oauth2.ErrServerError)
-}
-
 func TestHandlerPopulateTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 
@@ -234,20 +206,6 @@ func TestHandlerPopulateTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
 
 	require.NoError(t, h.PopulateTokenEndpointResponse(context.Background(), request, response))
 	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
-}
-
-func TestHandlerAuthorizeRecordsDPoPJKTOnlyForCodeFlow(t *testing.T) {
-	h, _, _ := newTestHandler(false)
-
-	session := &oauth2.DefaultSession{}
-	ar := oauth2.NewAuthorizeRequest()
-	ar.Client = &oauth2.DefaultClient{}
-	ar.Session = session
-	ar.Form.Set(consts.FormParameterDPoPJKT, "authz-jkt")
-	ar.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
-
-	require.NoError(t, h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse()))
-	assert.Empty(t, session.GetDPoPJWKThumbprint())
 }
 
 func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
@@ -294,3 +252,52 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	err := h.HandleTokenEndpointRequest(ctx3, otherRequest)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
+
+type testHandlerConfig struct {
+	testStrategyConfig
+	enabled, enforce, nonceRequired bool
+	strategy                        oauth2.DPoPStrategy
+}
+
+func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool                 { return c.enabled }
+func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool                 { return c.enforce }
+func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool           { return c.nonceRequired }
+func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
+
+func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
+	store := storage.NewMemoryStore()
+	cfg := &testHandlerConfig{
+		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute},
+		enabled:            true,
+		enforce:            enforce,
+	}
+	strategy := NewDefaultStrategy(cfg, store)
+	cfg.strategy = strategy
+
+	return &Handler{Config: cfg, Strategy: strategy}, store, cfg
+}
+
+func ctxWithDPoP(method, rawURL, proof string) context.Context {
+	u, _ := url.Parse(rawURL)
+
+	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
+
+	if u.Scheme == consts.SchemeHTTPS {
+		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)
+	}
+
+	if proof != "" {
+		r.Header.Set(consts.HeaderDPoP, proof)
+	}
+
+	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
+}
+
+// nonDPoPSession implements only oauth2.Session, not oauth2.DPoPBoundSession.
+type nonDPoPSession struct{}
+
+func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
+func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time  { return time.Time{} }
+func (nonDPoPSession) GetUsername() string                      { return "" }
+func (nonDPoPSession) GetSubject() string                       { return "" }
+func (nonDPoPSession) Clone() oauth2.Session                    { return nonDPoPSession{} }

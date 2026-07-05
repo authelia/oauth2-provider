@@ -32,7 +32,7 @@ func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
 	return NewDefaultStrategy(cfg, store), store
 }
 
-func TestStrategyValidateProofChecksMethodURL(t *testing.T) {
+func TestStrategyValidateProofAcceptsMatchingMethodURL(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
 
@@ -42,9 +42,6 @@ func TestStrategyValidateProofChecksMethodURL(t *testing.T) {
 
 	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
-
-	_, err = s.ValidateDPoPProof(context.Background(), http.MethodGet, "https://as.example.com/token", raw, false)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
 func TestStrategyValidateProofReplay(t *testing.T) {
@@ -102,33 +99,62 @@ func TestStrategyRequireNonce(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
 
-func TestStrategyValidateProofRejectsHTUMismatch(t *testing.T) {
-	s, _ := newTestStrategy()
-	key := newTestProofKey(t)
+func TestStrategyValidateProofRejects(t *testing.T) {
+	testCases := []struct {
+		name   string
+		method string
+		url    string
+		htm    string
+		htu    string
+		iat    int64
+	}{
+		{
+			name:   "MethodMismatch",
+			method: http.MethodGet,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/token",
+			iat:    time.Now().Unix(),
+		},
+		{
+			name:   "HTUMismatch",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/other",
+			iat:    time.Now().Unix(),
+		},
+		{
+			name:   "IATInPast",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/token",
+			iat:    time.Now().Add(-time.Hour).Unix(),
+		},
+		{
+			name:   "IATInFuture",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/token",
+			iat:    time.Now().Add(time.Hour).Unix(),
+		},
+	}
 
-	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
-		jwt.ClaimJWTID: "htu-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/other", jwt.ClaimIssuedAt: time.Now().Unix(),
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := newTestStrategy()
+			key := newTestProofKey(t)
 
-	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-}
+			raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: tc.name, jwt.ClaimHTTPMethod: tc.htm, jwt.ClaimHTTPURI: tc.htu, jwt.ClaimIssuedAt: tc.iat,
+			})
 
-func TestStrategyValidateProofRejectsIATOutsideWindow(t *testing.T) {
-	s, _ := newTestStrategy()
-	key := newTestProofKey(t)
-
-	rawPast := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
-		jwt.ClaimJWTID: "iat-past", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(-time.Hour).Unix(),
-	})
-	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", rawPast, false)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-
-	rawFuture := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
-		jwt.ClaimJWTID: "iat-future", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(time.Hour).Unix(),
-	})
-	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", rawFuture, false)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			_, err := s.ValidateDPoPProof(context.Background(), tc.method, tc.url, raw, false)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+		})
+	}
 }
 
 func TestStrategyValidateProofAcceptsDefaultPortEquivalence(t *testing.T) {

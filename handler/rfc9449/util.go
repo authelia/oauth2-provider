@@ -2,6 +2,8 @@ package rfc9449
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -37,4 +39,25 @@ func requestURL(r *http.Request) string {
 	}
 
 	return scheme + "://" + host + r.URL.Path
+}
+
+func normalizeHTU(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.ForceQuery = false
+	u.Scheme = strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Host)
+
+	if (u.Scheme == consts.SchemeHTTPS && strings.HasSuffix(host, ":443")) || (u.Scheme == consts.SchemeHTTP && strings.HasSuffix(host, ":80")) {
+		host = host[:strings.LastIndex(host, ":")]
+	}
+
+	u.Host = host
+
+	return u.String(), nil
 }

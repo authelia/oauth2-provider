@@ -43,7 +43,7 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
 	}
 
-	client, _, err := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, &RevocationEndpointClientAuthHandler{})
+	client, _, err := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetRevocationEndpointClientAuthStrategy(ctx))
 	if err != nil {
 		return err
 	}

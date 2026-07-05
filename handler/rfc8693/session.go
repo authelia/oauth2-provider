@@ -10,21 +10,30 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// Session is required to support token exchange
+// Session is implemented by sessions that support RFC 8693 OAuth 2.0 Token Exchange. It exposes the subject and actor
+// tokens involved in the exchange and the claims derived from them.
 type Session interface {
 	// SetSubject sets the session's subject.
 	SetSubject(subject string)
 
+	// SetActorToken stores the claims of the actor token, i.e. the token representing the party acting on behalf of
+	// the subject in a delegation flow.
 	SetActorToken(token map[string]any)
 
+	// GetActorToken returns the previously stored actor token claims, or nil if none were set.
 	GetActorToken() map[string]any
 
+	// SetSubjectToken stores the claims of the subject token, i.e. the token representing the party on whose behalf
+	// the request is being made.
 	SetSubjectToken(token map[string]any)
 
+	// GetSubjectToken returns the previously stored subject token claims, or nil if none were set.
 	GetSubjectToken() map[string]any
 
+	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow.
 	SetClaimActor(act map[string]any)
 
+	// AccessTokenClaimsMap returns the claims to include in the exchanged access token.
 	AccessTokenClaimsMap() map[string]any
 }
 

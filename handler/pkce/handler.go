@@ -154,10 +154,6 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting get PKCE request session: %w.", err)))
 	}
 
-	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
-	}
-
 	challenge := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallenge)
 	method := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
 
@@ -172,6 +168,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	nc := len(challenge)
 
 	if !c.Config.GetEnforcePKCE(ctx) && nc == 0 && nv == 0 {
+		if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
+		}
+
 		return nil
 	}
 
@@ -188,6 +188,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	case nv > 128:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be no more than 128 characters."))
 	case nc == 0:
+		if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
+		}
+
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
 	case verifierWrongFormat.MatchString(verifier):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
@@ -231,6 +235,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		if subtle.ConstantTimeCompare([]byte(verifier), []byte(challenge)) == 0 {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
 		}
+	}
+
+	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
 	}
 
 	return nil

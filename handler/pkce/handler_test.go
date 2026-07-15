@@ -548,18 +548,24 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 					Session: &oauth2.DefaultSession{},
 					Form: url.Values{
 						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
-						consts.FormParameterCodeVerifier:      []string{"abc123"},
+						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abc"},
 					},
 				},
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
-				config.EnforcePKCE = true
+				config.EnablePKCEPlainChallengeMethod = true
 				gomock.InOrder(
 					store.
 						EXPECT().
 						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
-						Return(&oauth2.Request{}, nil),
+						Return(&oauth2.Request{
+							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
+							Form: url.Values{
+								consts.FormParameterCodeChallenge:       []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abc"},
+								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+							},
+						}, nil),
 					store.
 						EXPECT().
 						DeletePKCERequestSession(t.Context(), "sig").
@@ -590,10 +596,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						EXPECT().
 						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -650,10 +652,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -681,10 +679,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: true, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -712,10 +706,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -743,10 +733,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -774,10 +760,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -805,10 +787,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -836,10 +814,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,
@@ -867,10 +841,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,
@@ -933,10 +903,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,
@@ -967,10 +933,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallenge: []string{"example"},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -1002,17 +964,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
 			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'plain', but the authorization server policy does not allow method 'plain' and requires method 'S256'. The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients.",
 		},
 		{
-			"ShouldFailMethodPlainExplicit",
+			"ShouldFailMethodNoneExplicit",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 				Request: oauth2.Request{
@@ -1037,10 +995,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{"nope"},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -1072,17 +1026,13 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
 			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S256', but the authorization server policy does not allow method 'S256' and requires method 'plain'. The registered client with id 'test' is configured in a way that enforces the use of 'code_challenge_method' with a value of 'plain' but the authorization request included method 'S256'.",
 		},
 		{
-			"ShouldFailMethodS256ClientRequiresPlain",
+			"ShouldFailMethodS256ClientRequiresNone",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 				Request: oauth2.Request{
@@ -1107,10 +1057,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidRequest,
@@ -1213,10 +1159,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallenge: []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,
@@ -1249,10 +1191,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,

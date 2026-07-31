@@ -295,6 +295,8 @@ func (s *nonResourceOwnerSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	return s.expiresAt[key]
 }
 
-func (s *nonResourceOwnerSession) GetUsername() string   { return "" }
-func (s *nonResourceOwnerSession) GetSubject() string    { return "" }
+func (s *nonResourceOwnerSession) GetUsername() string { return "" }
+
+func (s *nonResourceOwnerSession) GetSubject() string { return "" }
+
 func (s *nonResourceOwnerSession) Clone() oauth2.Session { return &nonResourceOwnerSession{} }

@@ -6,8 +6,10 @@ package rfc9449
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -80,6 +82,26 @@ func TestParseProof(t *testing.T) {
 			wantErr: oauth2.ErrInvalidDPoPProof,
 		},
 		{
+			name: "RejectsOversizedJTI",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID: strings.Repeat("j", JTIMaxLength+1), ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1,
+				})
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "AcceptsMaximumLengthJTI",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID: strings.Repeat("j", JTIMaxLength), ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1,
+				})
+			},
+			check: func(t *testing.T, proof *oauth2.DPoPProof) {
+				assert.Len(t, proof.ID, JTIMaxLength)
+			},
+		},
+		{
 			name: "RejectsDisallowedAlg",
 			raw: func(t *testing.T, key *jose.JSONWebKey) string {
 				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
@@ -150,4 +172,75 @@ func signProof(t *testing.T, key *jose.JSONWebKey, typ string, claims map[string
 	require.NoError(t, err)
 
 	return raw
+}
+
+func TestParseProofRSAKeySize(t *testing.T) {
+	testCases := []struct {
+		name    string
+		bits    int
+		wantErr bool
+	}{
+		{"ShouldRejectBelowTheMinimum", 1024, true},
+		{"ShouldAcceptTheMinimum", RSAMinimumKeySize, false},
+		{"ShouldAcceptAboveTheMinimum", 3072, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			priv, err := rsa.GenerateKey(rand.Reader, tc.bits)
+			require.NoError(t, err)
+
+			key := &jose.JSONWebKey{Key: priv, Algorithm: string(jose.RS256), KeyID: "rsa"}
+
+			raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+				ijwt.ClaimJWTID:      "rsa-1",
+				ijwt.ClaimHTTPMethod: http.MethodPost,
+				ijwt.ClaimHTTPURI:    "https://as.example.com/token",
+				ijwt.ClaimIssuedAt:   1000,
+			})
+
+			proof, err := ParseProof(raw, []jose.SignatureAlgorithm{jose.RS256})
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+				assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "RSA key but keys of at least")
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, proof.Thumbprint)
+		})
+	}
+}
+
+func TestParseProofAcceptsEllipticAndEdDSAKeys(t *testing.T) {
+	t.Run("ES256", func(t *testing.T) {
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		key := &jose.JSONWebKey{Key: priv, Algorithm: string(jose.ES256)}
+
+		raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+			ijwt.ClaimJWTID: "ec-1", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as.example.com/token", ijwt.ClaimIssuedAt: 1000,
+		})
+
+		_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+	})
+
+	t.Run("EdDSA", func(t *testing.T) {
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		key := &jose.JSONWebKey{Key: priv, Algorithm: string(jose.EdDSA)}
+
+		raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+			ijwt.ClaimJWTID: "ed-1", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as.example.com/token", ijwt.ClaimIssuedAt: 1000,
+		})
+
+		_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.EdDSA})
+		require.NoError(t, err)
+	})
 }

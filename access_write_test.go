@@ -141,7 +141,7 @@ func TestWriteAccessResponseRotatesDPoPNonce(t *testing.T) {
 	store := storage.NewMemoryStore()
 	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
 
-	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPNonceRequired: true, DPoPStrategy: strategy}}
 
 	session := &DefaultSession{}
 	session.SetDPoPJWKThumbprint("some-thumbprint")
@@ -165,7 +165,7 @@ func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenSessionNotBound(t *testing
 	store := storage.NewMemoryStore()
 	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
 
-	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPNonceRequired: true, DPoPStrategy: strategy}}
 
 	requester := mock.NewMockAccessRequester(ctrl)
 	requester.EXPECT().GetSession().AnyTimes().Return(&DefaultSession{})
@@ -186,7 +186,7 @@ func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenDisabled(t *testing.T) {
 	store := storage.NewMemoryStore()
 	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
 
-	provider := &Fosite{Config: &Config{DPoPEnabled: false, DPoPStrategy: strategy}}
+	provider := &Fosite{Config: &Config{DPoPEnabled: false, DPoPNonceRequired: true, DPoPStrategy: strategy}}
 
 	session := &DefaultSession{}
 	session.SetDPoPJWKThumbprint("some-thumbprint")
@@ -201,4 +201,29 @@ func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenDisabled(t *testing.T) {
 	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
 
 	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+}
+
+func TestWriteAccessResponseDoesNotRotateDPoPNonceWhenNotRequired(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := storage.NewMemoryStore()
+	strategy := rfc9449.NewDefaultStrategy(&Config{DPoPEnabled: true}, store)
+
+	provider := &Fosite{Config: &Config{DPoPEnabled: true, DPoPNonceRequired: false, DPoPStrategy: strategy}}
+
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint("some-thumbprint")
+
+	requester := mock.NewMockAccessRequester(ctrl)
+	requester.EXPECT().GetSession().AnyTimes().Return(session)
+
+	responder := mock.NewMockAccessResponder(ctrl)
+	responder.EXPECT().ToMap().Return(map[string]any{})
+
+	rw := httptest.NewRecorder()
+	provider.WriteAccessResponse(t.Context(), rw, requester, responder)
+
+	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+	assert.Empty(t, store.DPoPNonces, "a nonce was persisted for a client that will never be asked for one")
 }

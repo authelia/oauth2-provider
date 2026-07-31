@@ -37,8 +37,15 @@ func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter
 	_, _ = rw.Write(data)
 }
 
+// writeDPoPNonceOnSuccess supplies the client with a fresh nonce to carry into its next DPoP proof, sparing it the
+// 'use_dpop_nonce' round trip it would otherwise need to obtain one.
+//
+// That is only of use when nonces are required. Issuing one otherwise persists a record per token issued, each held
+// for the nonce lifespan, which no proof will ever be checked against because ValidateDPoPProof only inspects the
+// 'nonce' claim when a nonce is required. It also keeps the server's behaviour aligned with RFC 9449 Section 4.3 step
+// 10, which conditions validating the claim on the server having provided a nonce in the first place.
 func (f *Fosite) writeDPoPNonceOnSuccess(ctx context.Context, rw http.ResponseWriter, request AccessRequester) {
-	if !f.Config.GetDPoPEnabled(ctx) {
+	if !f.Config.GetDPoPEnabled(ctx) || !f.Config.GetDPoPNonceRequired(ctx) {
 		return
 	}
 

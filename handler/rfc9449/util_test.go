@@ -118,6 +118,27 @@ func TestRequestURL(t *testing.T) {
 			rawURL: "https://as.example.com/token?access_token=secret",
 			want:   "https://as.example.com/token",
 		},
+		{
+			name:   "PreservesEncodedQueryDelimiter",
+			tls:    true,
+			host:   "as.example.com",
+			rawURL: "https://as.example.com/token%3Fx=1",
+			want:   "https://as.example.com/token%3Fx=1",
+		},
+		{
+			name:   "PreservesEncodedFragmentDelimiter",
+			tls:    true,
+			host:   "as.example.com",
+			rawURL: "https://as.example.com/token%23frag",
+			want:   "https://as.example.com/token%23frag",
+		},
+		{
+			name:   "PreservesEncodedSpace",
+			tls:    true,
+			host:   "as.example.com",
+			rawURL: "https://as.example.com/to%20ken",
+			want:   "https://as.example.com/to%20ken",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -188,8 +209,63 @@ func TestNormalizeHTU(t *testing.T) {
 			want: "https://as.example.com/token",
 		},
 		{
+			name: "RemovesParentDotSegments",
+			raw:  "https://as.example.com/token/../admin",
+			want: "https://as.example.com/admin",
+		},
+		{
+			name: "RemovesCurrentDotSegments",
+			raw:  "https://as.example.com/./token",
+			want: "https://as.example.com/token",
+		},
+		{
+			name: "RemovesPercentEncodedDotSegments",
+			raw:  "https://as.example.com/token/%2E%2E/admin",
+			want: "https://as.example.com/admin",
+		},
+		{
+			name: "PreservesEmptySegments",
+			raw:  "https://as.example.com/a//token",
+			want: "https://as.example.com/a//token",
+		},
+		{
+			name: "PreservesTrailingSlash",
+			raw:  "https://as.example.com/token/",
+			want: "https://as.example.com/token/",
+		},
+		{
+			name: "DecodesUnreservedPercentEncoding",
+			raw:  "https://as.example.com/%7Etoken",
+			want: "https://as.example.com/~token",
+		},
+		{
+			name: "UppercasesPercentEncoding",
+			raw:  "https://as.example.com/a%2fb",
+			want: "https://as.example.com/a%2Fb",
+		},
+		{
+			name: "PreservesEncodedSlash",
+			raw:  "https://as.example.com/a%2Fb",
+			want: "https://as.example.com/a%2Fb",
+		},
+		{
+			name: "AddsRootPathWhenEmpty",
+			raw:  "https://as.example.com",
+			want: "https://as.example.com/",
+		},
+		{
 			name:    "ParseError",
 			raw:     "http://[::1",
+			wantErr: true,
+		},
+		{
+			name:    "RejectsRelativeURI",
+			raw:     "/token",
+			wantErr: true,
+		},
+		{
+			name:    "RejectsMissingHost",
+			raw:     "https:///token",
 			wantErr: true,
 		},
 	}
@@ -204,6 +280,56 @@ func TestNormalizeHTU(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestRemoveDotSegments(t *testing.T) {
+	testCases := []struct {
+		path string
+		want string
+	}{
+		{path: "/a/b/c/./../../g", want: "/a/g"},
+		{path: "/a/b/c/../../../g", want: "/g"},
+		{path: "/../a", want: "/a"},
+		{path: "/a/..", want: "/"},
+		{path: "/a/../..", want: "/"},
+		{path: "/a/b/", want: "/a/b/"},
+		{path: "/a/b/.", want: "/a/b/"},
+		{path: "/a/b/..", want: "/a/"},
+		{path: "/", want: "/"},
+		{path: "//a", want: "//a"},
+		{path: "/a//", want: "/a//"},
+		{path: "/.", want: "/"},
+		{path: "/..", want: "/"},
+		{path: "", want: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.path, func(t *testing.T) {
+			assert.Equal(t, tc.want, removeDotSegments(tc.path))
+		})
+	}
+}
+
+func TestNormalizePercentEncoding(t *testing.T) {
+	testCases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "Unchanged", path: "/token", want: "/token"},
+		{name: "DecodesUnreserved", path: "/%7E%61%2D%2E%5F", want: "/~a-._"},
+		{name: "UppercasesReserved", path: "/a%2fb%3fc", want: "/a%2Fb%3Fc"},
+		{name: "KeepsReservedEncoded", path: "/a%2Fb", want: "/a%2Fb"},
+		{name: "IgnoresTruncatedTriplet", path: "/a%2", want: "/a%2"},
+		{name: "IgnoresNonHexTriplet", path: "/a%zzb", want: "/a%zzb"},
+		{name: "Empty", path: "", want: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, normalizePercentEncoding(tc.path))
 		})
 	}
 }

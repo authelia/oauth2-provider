@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +34,8 @@ func TestHandlerBindsProof(t *testing.T) {
 	request.Client = &oauth2.DefaultClient{}
 
 	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
-	require.NoError(t, h.HandleTokenEndpointRequest(ctx, request))
+
+	assert.ErrorIs(t, h.HandleTokenEndpointRequest(ctx, request), oauth2.ErrUnknownRequest)
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
 }
 
@@ -74,6 +76,10 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
+// testAuthorizeJKT is a well-formed 'dpop_jkt', being 43 characters of base64url which decode to a SHA-256 sized
+// digest. The parameter is validated, so a placeholder will not do.
+const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
+
 func TestHandlerAuthorize(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -88,15 +94,15 @@ func TestHandlerAuthorize(t *testing.T) {
 			name:          "RecordsDPoPJKT",
 			enabled:       true,
 			session:       &oauth2.DefaultSession{},
-			jkt:           "authz-jkt",
+			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
-			wantJKT:       "authz-jkt",
+			wantJKT:       testAuthorizeJKT,
 		},
 		{
 			name:    "DisabledLeavesSessionUnchanged",
 			enabled: false,
 			session: &oauth2.DefaultSession{},
-			jkt:     "authz-jkt",
+			jkt:     testAuthorizeJKT,
 		},
 		{
 			name:    "NoDPoPJKTLeavesSessionUnchanged",
@@ -107,23 +113,73 @@ func TestHandlerAuthorize(t *testing.T) {
 			name:          "RecordsDPoPJKTOnlyForCodeFlow",
 			enabled:       true,
 			session:       &oauth2.DefaultSession{},
-			jkt:           "authz-jkt",
+			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+		},
+		{
+			name:          "RecordsDPoPJKTForCodeIDTokenHybridFlow",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           testAuthorizeJKT,
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+			wantJKT:       testAuthorizeJKT,
+		},
+		{
+			name:          "SkipsHybridFlowIssuingAnAccessTokenDirectly",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           testAuthorizeJKT,
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 		},
 		{
 			name:          "NonDPoPSessionReturnsServerError",
 			enabled:       true,
 			session:       nonDPoPSession{},
-			jkt:           "authz-jkt",
+			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 			wantErr:       oauth2.ErrServerError,
+		},
+		{
+			name:          "RejectsMalformedDPoPJKT",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           "not-a-thumbprint",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+			wantErr:       oauth2.ErrInvalidRequest,
+		},
+		{
+			name:          "RejectsOverlongDPoPJKT",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           strings.Repeat("A", 4096),
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+			wantErr:       oauth2.ErrInvalidRequest,
+		},
+		{
+			name:          "RejectsDPoPJKTOutsideTheBase64URLAlphabet",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfS+",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+			wantErr:       oauth2.ErrInvalidRequest,
+		},
+		{
+			// A malformed value is rejected even for a flow whose binding would be skipped anyway.
+			name:          "RejectsMalformedDPoPJKTForSkippedFlow",
+			enabled:       true,
+			session:       &oauth2.DefaultSession{},
+			jkt:           "not-a-thumbprint",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+			wantErr:       oauth2.ErrInvalidRequest,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h, _, cfg := newTestHandler(false)
+			_, _, cfg := newTestHandler(false)
 			cfg.enabled = tc.enabled
+
+			h := &AuthorizeHandler{Config: cfg}
 
 			ar := oauth2.NewAuthorizeRequest()
 			ar.Client = &oauth2.DefaultClient{}
@@ -182,6 +238,19 @@ func TestHandlerCanHandleTokenEndpointRequestGatedByEnabled(t *testing.T) {
 	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
 }
 
+func TestHandlerCanHandleTokenEndpointRequestGatedByAGrantHandler(t *testing.T) {
+	h, _, cfg := newTestHandler(false)
+	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+	assert.True(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+
+	cfg.handlers = oauth2.TokenEndpointHandlers{&stubGrantHandler{handles: false}}
+	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+
+	cfg.handlers = oauth2.TokenEndpointHandlers{h, &Handler{Config: cfg, Strategy: cfg.strategy}}
+	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+}
+
 func TestHandlerReturnsUnknownRequestWhenUnbound(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 
@@ -221,7 +290,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	})
 	ctx1 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw1)
 
-	require.NoError(t, h.HandleTokenEndpointRequest(ctx1, request))
+	require.ErrorIs(t, h.HandleTokenEndpointRequest(ctx1, request), oauth2.ErrUnknownRequest)
 	jkt := session.GetDPoPJWKThumbprint()
 	require.NotEmpty(t, jkt)
 
@@ -235,7 +304,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	})
 	ctx2 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw2)
 
-	require.NoError(t, h.HandleTokenEndpointRequest(ctx2, refreshRequest))
+	require.ErrorIs(t, h.HandleTokenEndpointRequest(ctx2, refreshRequest), oauth2.ErrUnknownRequest)
 	assert.Equal(t, jkt, refreshSession.GetDPoPJWKThumbprint())
 
 	otherKey := newTestProofKey(t)
@@ -257,12 +326,40 @@ type testHandlerConfig struct {
 	testStrategyConfig
 	enabled, enforce, nonceRequired bool
 	strategy                        oauth2.DPoPStrategy
+	handlers                        oauth2.TokenEndpointHandlers
 }
 
-func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool                 { return c.enabled }
-func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool                 { return c.enforce }
-func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool           { return c.nonceRequired }
+func (c *testHandlerConfig) GetTokenEndpointHandlers(context.Context) oauth2.TokenEndpointHandlers {
+	return c.handlers
+}
+
+func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool { return c.enabled }
+
+func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool { return c.enforce }
+
+func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool { return c.nonceRequired }
+
 func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
+
+type stubGrantHandler struct {
+	handles bool
+}
+
+func (s *stubGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+	return nil
+}
+
+func (s *stubGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+	return nil
+}
+
+func (s *stubGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+	return false
+}
+
+func (s *stubGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+	return s.handles
+}
 
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
@@ -270,6 +367,7 @@ func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerC
 		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute},
 		enabled:            true,
 		enforce:            enforce,
+		handlers:           oauth2.TokenEndpointHandlers{&stubGrantHandler{handles: true}},
 	}
 	strategy := NewDefaultStrategy(cfg, store)
 	cfg.strategy = strategy
@@ -293,11 +391,14 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
 }
 
-// nonDPoPSession implements only oauth2.Session, not oauth2.DPoPBoundSession.
 type nonDPoPSession struct{}
 
 func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
-func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time  { return time.Time{} }
-func (nonDPoPSession) GetUsername() string                      { return "" }
-func (nonDPoPSession) GetSubject() string                       { return "" }
-func (nonDPoPSession) Clone() oauth2.Session                    { return nonDPoPSession{} }
+
+func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time { return time.Time{} }
+
+func (nonDPoPSession) GetUsername() string { return "" }
+
+func (nonDPoPSession) GetSubject() string { return "" }
+
+func (nonDPoPSession) Clone() oauth2.Session { return nonDPoPSession{} }

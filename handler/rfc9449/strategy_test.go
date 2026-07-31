@@ -2,7 +2,9 @@ package rfc9449
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -22,8 +24,10 @@ type testStrategyConfig struct {
 }
 
 func (c *testStrategyConfig) GetDPoPAllowedJWSAlgorithms(context.Context) []string { return c.algs }
-func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration       { return c.skew }
-func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration   { return c.nonceExp }
+
+func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration { return c.skew }
+
+func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration { return c.nonceExp }
 
 func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
 	store := storage.NewMemoryStore()
@@ -58,6 +62,39 @@ func TestStrategyValidateProofReplay(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
+func TestStrategyValidateProofReplayIsScopedToTheProofKey(t *testing.T) {
+	s, _ := newTestStrategy()
+
+	claims := map[string]any{
+		jwt.ClaimJWTID: "shared-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	}
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, claims), false)
+	require.NoError(t, err)
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, claims), false)
+	require.NoError(t, err)
+}
+
+func TestStrategyValidateProofReplayIsScopedToTheTargetURI(t *testing.T) {
+	s, _ := newTestStrategy()
+	key := newTestProofKey(t)
+
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "per-uri-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+	require.NoError(t, err)
+
+	raw = signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "per-uri-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/introspect", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/introspect", raw, false)
+	require.NoError(t, err)
+}
+
 func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 	s, store := newTestStrategy()
 	key := newTestProofKey(t)
@@ -67,10 +104,10 @@ func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 		jwt.ClaimJWTID: "future-iat", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: iat.Unix(),
 	})
 
-	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+	proof, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
-	exp, ok := store.DPoPProofJTIs["future-iat"]
+	exp, ok := store.DPoPProofJTIs[storage.DPoPProofMarker{Thumbprint: proof.Thumbprint, URL: "https://as.example.com/token", JTI: "future-iat"}]
 	require.True(t, ok, "expected the proof jti to be recorded as used")
 
 	wantMin := time.Unix(iat.Unix(), 0).Add(time.Minute)
@@ -117,11 +154,43 @@ func TestStrategyValidateProofRejects(t *testing.T) {
 			iat:    time.Now().Unix(),
 		},
 		{
+			name:   "MethodCaseMismatch",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    "post",
+			htu:    "https://as.example.com/token",
+			iat:    time.Now().Unix(),
+		},
+		{
 			name:   "HTUMismatch",
 			method: http.MethodPost,
 			url:    "https://as.example.com/token",
 			htm:    http.MethodPost,
 			htu:    "https://as.example.com/other",
+			iat:    time.Now().Unix(),
+		},
+		{
+			name:   "HTUEncodedSlashNotConflated",
+			method: http.MethodPost,
+			url:    "https://as.example.com/a/b",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/a%2Fb",
+			iat:    time.Now().Unix(),
+		},
+		{
+			name:   "HTURelative",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "/token",
+			iat:    time.Now().Unix(),
+		},
+		{
+			name:   "HTUDotSegmentsResolveElsewhere",
+			method: http.MethodPost,
+			url:    "https://as.example.com/token",
+			htm:    http.MethodPost,
+			htu:    "https://as.example.com/token/../admin",
 			iat:    time.Now().Unix(),
 		},
 		{
@@ -167,6 +236,86 @@ func TestStrategyValidateProofAcceptsDefaultPortEquivalence(t *testing.T) {
 
 	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	assert.NoError(t, err)
+}
+
+func TestStrategyValidateProofAcceptsNormalizedEquivalence(t *testing.T) {
+	testCases := []struct {
+		name string
+		url  string
+		htu  string
+	}{
+		{
+			name: "UppercaseSchemeAndHost",
+			url:  "https://as.example.com/token",
+			htu:  "HTTPS://AS.EXAMPLE.COM/token",
+		},
+		{
+			name: "UnreservedPercentEncoding",
+			url:  "https://as.example.com/~token",
+			htu:  "https://as.example.com/%7Etoken",
+		},
+		{
+			name: "PercentEncodingCase",
+			url:  "https://as.example.com/a%2Fb",
+			htu:  "https://as.example.com/a%2fb",
+		},
+		{
+			name: "DotSegments",
+			url:  "https://as.example.com/token",
+			htu:  "https://as.example.com/admin/../token",
+		},
+		{
+			name: "EmptyPath",
+			url:  "https://as.example.com/",
+			htu:  "https://as.example.com",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := newTestStrategy()
+
+			raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: tc.name, jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: tc.htu, jwt.ClaimIssuedAt: time.Now().Unix(),
+			})
+
+			_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, tc.url, raw, false)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestStrategyValidateProofAgainstReconstructedRequestURI(t *testing.T) {
+	newRequest := func(t *testing.T, target string) *http.Request {
+		u, err := url.Parse(target)
+		require.NoError(t, err)
+
+		return &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: u, Host: "as.example.com", TLS: &tls.ConnectionState{}}
+	}
+
+	t.Run("Matches", func(t *testing.T) {
+		s, _ := newTestStrategy()
+		r := newRequest(t, "https://as.example.com/token")
+
+		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "req-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		_, err := s.ValidateDPoPProof(context.Background(), r.Method, requestURL(r), raw, false)
+		assert.NoError(t, err)
+	})
+
+	t.Run("RejectsEncodedDelimiterSmuggledIntoThePath", func(t *testing.T) {
+		s, _ := newTestStrategy()
+		r := newRequest(t, "https://as.example.com/token%3Fx=1")
+
+		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "req-2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		_, err := s.ValidateDPoPProof(context.Background(), r.Method, requestURL(r), raw, false)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
 }
 
 var _ = jose.ES256

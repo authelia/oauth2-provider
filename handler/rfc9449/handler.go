@@ -9,46 +9,17 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// Handler implements RFC 9449 DPoP at the token and authorize endpoints.
+// Handler implements RFC 9449 DPoP at the token endpoint. The authorize endpoint is handled by AuthorizeHandler, which
+// MUST be registered ahead of the handlers that issue an authorization code; see its documentation for why.
 type Handler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider
+		oauth2.TokenEndpointHandlersProvider
 	}
 	Strategy oauth2.DPoPStrategy
-}
-
-// HandleAuthorizeEndpointRequest records the 'dpop_jkt' authorize-request parameter onto the session so the
-// authorization code becomes bound to the client's DPoP proof-of-possession key. The bound thumbprint is later
-// enforced by HandleTokenEndpointRequest against the DPoP proof presented at the token endpoint.
-func (h *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
-	if !h.Config.GetDPoPEnabled(ctx) {
-		return nil
-	}
-
-	jkt := request.GetRequestForm().Get(consts.FormParameterDPoPJKT)
-	if jkt == "" {
-		return nil
-	}
-
-	// Only record the binding for flows that issue an authorization code; an implicit-only flow never presents a
-	// code at the token endpoint, so it would never pass through HandleTokenEndpointRequest's proof check and would
-	// otherwise end up with an unenforceable cnf.jkt on its (directly issued) token.
-	if !request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
-		return nil
-	}
-
-	session, ok := request.GetSession().(oauth2.DPoPBoundSession)
-	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support DPoP binding."))
-	}
-
-	session.SetDPoPJWKThumbprint(jkt)
-
-	return nil
 }
 
 func (h *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
@@ -98,7 +69,11 @@ func (h *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	session.SetDPoPJWKThumbprint(proof.Thumbprint)
 
-	return nil
+	// DPoP augments a grant, it never satisfies one. Returning nil here would mark the access request as handled in
+	// oauth2.(*Fosite).NewAccessRequest, which combined with CanSkipClientAuth would let an unauthenticated caller
+	// pass off a 'grant_type' no grant handler implements as a valid request. The binding recorded above is retained
+	// because it was written to the session, not to the return value.
+	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
 func (h *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
@@ -124,9 +99,27 @@ func (h *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRe
 }
 
 func (h *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
-	// DPoP augments all token-endpoint grants rather than owning one, but must not participate at all when disabled,
-	// otherwise a nil HandleTokenEndpointRequest return would mask an unknown/bogus grant type as "found".
-	return h.Config.GetDPoPEnabled(ctx)
+	if !h.Config.GetDPoPEnabled(ctx) {
+		return false
+	}
+
+	// DPoP augments all token-endpoint grants rather than owning one, so it participates only when some grant handler
+	// will actually process the request. Without this, a caller presenting any self-signed proof alongside a
+	// 'grant_type' nothing implements would reach ValidateDPoPProof, and since CanSkipClientAuth waives client
+	// authentication for this handler, that caller need not be authenticated at all. Validating the proof records a
+	// replay marker, so it would hand an anonymous caller a write into the replay store on every request.
+	for _, handler := range h.Config.GetTokenEndpointHandlers(ctx) {
+		// Skip every DPoP handler, not just this instance, so a duplicate registration cannot recurse.
+		if _, ok := handler.(*Handler); ok {
+			continue
+		}
+
+		if handler.CanHandleTokenEndpointRequest(ctx, request) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {
@@ -142,6 +135,5 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 }
 
 var (
-	_ oauth2.TokenEndpointHandler     = (*Handler)(nil)
-	_ oauth2.AuthorizeEndpointHandler = (*Handler)(nil)
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
 )

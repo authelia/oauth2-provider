@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"strings"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -39,7 +38,9 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		return nil, err
 	}
 
-	if !strings.EqualFold(parsed.Method, method) {
+	// RFC 9449 4.3 step 8: the 'htm' claim must match the request method. The comparison is exact because RFC 9110
+	// Section 9.1 defines the method token as case-sensitive.
+	if parsed.Method != method {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'htm' claim '%s' does not match the request method '%s'.", parsed.Method, method))
 	}
 
@@ -74,13 +75,15 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		}
 	}
 
-	// Check-and-mark the proof 'jti' as used in a single atomic step so concurrent requests presenting the same proof
-	// cannot both pass the replay check. The marker is kept until the end of the proof's own 'iat' acceptance window
+	// Check-and-mark the proof as used in a single atomic step so concurrent requests presenting the same proof cannot
+	// both pass the replay check. The marker is kept until the end of the proof's own 'iat' acceptance window
 	// (iat+skew), not now+skew: a proof presented before its iat (client clock ahead, within skew) stays iat-acceptable
-	// until iat+skew, so expiring the marker at now+skew < iat+skew would reopen a replay window for the remainder.
+	// until iat+skew, so expiring the marker at now+skew < iat+skew would reopen a replay window for the remainder. It
+	// is recorded against the proof key and the normalized target URI rather than the 'jti' alone, as that is the
+	// context a 'jti' is required to be unique in, see DPoPReplayStorage.
 	var used bool
 
-	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
+	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.Thumbprint, expected, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if used {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof has already been used."))

@@ -6,8 +6,64 @@ package oauth2
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"net/http"
 	"time"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
+
+// DPoPJWKThumbprintLength is the length of a well-formed 'dpop_jkt' value, being the number of characters a 32 byte
+// SHA-256 digest occupies when base64url encoded without padding.
+const DPoPJWKThumbprintLength = 43
+
+// IsValidDPoPJWKThumbprint reports whether jkt is a well-formed RFC 9449 Section 10.1 'dpop_jkt' value, which that
+// section defines as the RFC 7638 JWK Thumbprint of the proof-of-possession public key computed with SHA-256, the same
+// value used for 'jkt' in the 'cnf' claim. Only the encoding can be checked, as the thumbprint of a key the client has
+// not yet presented cannot be recomputed.
+//
+// The client supplies this value directly, so it is validated before being recorded against a grant. An unchecked
+// value is stored verbatim for the lifetime of the authorization code and can be of any length, and while a malformed
+// one only ever fails to match a proof, there is no reason to carry it that far.
+func IsValidDPoPJWKThumbprint(jkt string) bool {
+	if len(jkt) != DPoPJWKThumbprintLength {
+		return false
+	}
+
+	// Decoding covers the base64url alphabet as well as the length, as no other input of this length decodes to a
+	// SHA-256 sized digest.
+	decoded, err := base64.RawURLEncoding.DecodeString(jkt)
+
+	return err == nil && len(decoded) == sha256.Size
+}
+
+// RequestURL reconstructs the RFC 9449 target URI ('htu') from the request, discarding query and fragment. When the
+// request did not arrive over TLS directly it falls back to the X-Forwarded-Proto header to determine the scheme;
+// deployments MUST therefore ensure that header is set (and any client-supplied value stripped) by a trusted edge
+// proxy, otherwise a client could influence the reconstructed htu scheme.
+//
+// The path is taken in its escaped form. The decoded (*url.URL).Path would silently turn a percent-encoded delimiter
+// in the request target into a real one, so a request to '/token%3Fx=1' would reconstruct as '/token?x=1' and compare
+// equal to a proof bound to '/token' once the query is discarded.
+func RequestURL(r *http.Request) string {
+	scheme := consts.SchemeHTTPS
+
+	if r.TLS == nil {
+		if proto := r.Header.Get(consts.HeaderXForwardedProto); proto != "" {
+			scheme = proto
+		} else {
+			scheme = consts.SchemeHTTP
+		}
+	}
+
+	host := r.Host
+	if host == "" {
+		host = r.URL.Host
+	}
+
+	return scheme + "://" + host + r.URL.EscapedPath()
+}
 
 // DPoPProof is the validated result of a RFC 9449 DPoP proof JWT.
 type DPoPProof struct {

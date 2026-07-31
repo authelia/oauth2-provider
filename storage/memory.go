@@ -38,25 +38,32 @@ type PublicKeyScopes struct {
 	Scopes []string
 }
 
+// DPoPProofMarker identifies a used DPoP proof for replay detection. RFC 9449 requires a 'jti' to be unique only
+// within the context it is presented in, so the marker is the proof key thumbprint, the normalized target URI, and
+// the 'jti' together rather than the 'jti' alone. See rfc9449.DPoPReplayStorage.
+type DPoPProofMarker struct {
+	Thumbprint string
+	URL        string
+	JTI        string
+}
+
 type MemoryStore struct {
-	Clients         map[string]oauth2.Client
-	AuthorizeCodes  map[string]StoreAuthorizeCode
-	IDSessions      map[string]oauth2.Requester
-	AccessTokens    map[string]oauth2.Requester
-	RefreshTokens   map[string]StoreRefreshToken
-	DeviceCodes     map[string]oauth2.Requester
-	UserCodes       map[string]oauth2.Requester
-	PKCES           map[string]oauth2.Requester
-	Users           map[string]MemoryUserRelation
-	BlacklistedJTIs map[string]time.Time
-	// In-memory request ID to token signatures
+	Clients                map[string]oauth2.Client
+	AuthorizeCodes         map[string]StoreAuthorizeCode
+	IDSessions             map[string]oauth2.Requester
+	AccessTokens           map[string]oauth2.Requester
+	RefreshTokens          map[string]StoreRefreshToken
+	DeviceCodes            map[string]oauth2.Requester
+	UserCodes              map[string]oauth2.Requester
+	PKCES                  map[string]oauth2.Requester
+	Users                  map[string]MemoryUserRelation
+	BlacklistedJTIs        map[string]time.Time
 	AccessTokenRequestIDs  map[string]string
 	RefreshTokenRequestIDs map[string]string
-	// Public keys to check signature in auth grant jwt assertion.
-	IssuerPublicKeys map[string]IssuerPublicKeys
-	PARSessions      map[string]oauth2.AuthorizeRequester
-	DPoPProofJTIs    map[string]time.Time
-	DPoPNonces       map[string]time.Time
+	IssuerPublicKeys       map[string]IssuerPublicKeys
+	PARSessions            map[string]oauth2.AuthorizeRequester
+	DPoPProofJTIs          map[DPoPProofMarker]time.Time
+	DPoPNonces             map[string]time.Time
 
 	clientsMutex                sync.RWMutex
 	authorizeCodesMutex         sync.RWMutex
@@ -91,7 +98,7 @@ func NewMemoryStore() *MemoryStore {
 		BlacklistedJTIs:        make(map[string]time.Time),
 		IssuerPublicKeys:       make(map[string]IssuerPublicKeys),
 		PARSessions:            make(map[string]oauth2.AuthorizeRequester),
-		DPoPProofJTIs:          make(map[string]time.Time),
+		DPoPProofJTIs:          make(map[DPoPProofMarker]time.Time),
 		DPoPNonces:             make(map[string]time.Time),
 	}
 }
@@ -158,6 +165,8 @@ func NewExampleStore() *MemoryStore {
 		RefreshTokenRequestIDs: map[string]string{},
 		IssuerPublicKeys:       map[string]IssuerPublicKeys{},
 		PARSessions:            map[string]oauth2.AuthorizeRequester{},
+		DPoPProofJTIs:          map[DPoPProofMarker]time.Time{},
+		DPoPNonces:             map[string]time.Time{},
 	}
 }
 
@@ -617,15 +626,24 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	return nil
 }
 
-func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti string, exp time.Time) (bool, error) {
+func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, thumbprint, htu, jti string, exp time.Time) (bool, error) {
 	s.dpopProofJTIsMutex.Lock()
 	defer s.dpopProofJTIsMutex.Unlock()
 
-	if existing, ok := s.DPoPProofJTIs[jti]; ok && existing.After(time.Now()) {
+	marker := DPoPProofMarker{Thumbprint: thumbprint, URL: htu, JTI: jti}
+
+	if existing, ok := s.DPoPProofJTIs[marker]; ok && existing.After(time.Now()) {
 		return true, nil
 	}
 
-	s.DPoPProofJTIs[jti] = exp
+	// delete expired markers
+	for m, e := range s.DPoPProofJTIs {
+		if e.Before(time.Now()) {
+			delete(s.DPoPProofJTIs, m)
+		}
+	}
+
+	s.DPoPProofJTIs[marker] = exp
 
 	return false, nil
 }
@@ -633,6 +651,13 @@ func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti string, ex
 func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.Time) error {
 	s.dpopNoncesMutex.Lock()
 	defer s.dpopNoncesMutex.Unlock()
+
+	// delete expired nonces
+	for n, e := range s.DPoPNonces {
+		if e.Before(time.Now()) {
+			delete(s.DPoPNonces, n)
+		}
+	}
 
 	s.DPoPNonces[nonce] = exp
 

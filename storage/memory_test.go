@@ -67,20 +67,31 @@ func TestMemoryStoreDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 
-	// First use of a jti reports unused and records it.
-	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute))
+	const htu, other = "https://as.example.com/token", "https://as.example.com/introspect"
+
+	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-1", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
-	// A second use of the same, still-valid jti reports used.
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", time.Now().Add(time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-1", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.True(t, used)
 
-	// A jti whose recorded marker has expired is treated as unused (and re-recorded).
-	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", time.Now().Add(-time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-2", htu, "jti-1", time.Now().Add(time.Minute))
 	require.NoError(t, err)
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", time.Now().Add(time.Minute))
+	assert.False(t, used)
+
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-2", htu, "jti-1", time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	assert.True(t, used)
+
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", other, "jti-1", time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	assert.False(t, used)
+
+	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-2", time.Now().Add(-time.Minute))
+	require.NoError(t, err)
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-2", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
@@ -90,6 +101,40 @@ func TestMemoryStoreDPoP(t *testing.T) {
 
 	require.NoError(t, s.CreateDPoPNonce(ctx, "n-1", time.Now().Add(time.Minute)))
 	valid, err = s.IsDPoPNonceValid(ctx, "n-1")
+	require.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+
+	require.NoError(t, s.CreateDPoPNonce(ctx, "expired", time.Now().Add(-time.Minute)))
+	require.NoError(t, s.CreateDPoPNonce(ctx, "live", time.Now().Add(time.Minute)))
+
+	assert.NotContains(t, s.DPoPNonces, "expired")
+	assert.Contains(t, s.DPoPNonces, "live")
+
+	_, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "expired", time.Now().Add(-time.Minute))
+	require.NoError(t, err)
+	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "live", time.Now().Add(time.Minute))
+	require.NoError(t, err)
+
+	assert.NotContains(t, s.DPoPProofJTIs, DPoPProofMarker{Thumbprint: "jkt-1", URL: "https://as.example.com/token", JTI: "expired"})
+	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{Thumbprint: "jkt-1", URL: "https://as.example.com/token", JTI: "live"})
+}
+
+func TestExampleStoreSupportsDPoP(t *testing.T) {
+	ctx := context.Background()
+	s := NewExampleStore()
+
+	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "jti-1", time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	assert.False(t, used)
+
+	require.NoError(t, s.CreateDPoPNonce(ctx, "n-1", time.Now().Add(time.Minute)))
+
+	valid, err := s.IsDPoPNonceValid(ctx, "n-1")
 	require.NoError(t, err)
 	assert.True(t, valid)
 }

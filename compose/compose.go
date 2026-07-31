@@ -84,6 +84,8 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
 			Strategy:                   strategy,
 		},
+		DPoPAuthorizeFactory,
+
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,
 		OAuth2AuthorizeNoneFactory,

@@ -438,7 +438,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	)
 }
 
-// TestAssertionTypeHeaderAbsent — RFC 7519 §5.1 says the 'typ' header is RECOMMENDED but not
+// TestAssertionTypeHeaderAbsent handles RFC 7519 §5.1 says the 'typ' header is RECOMMENDED but not
 // required. An assertion without a 'typ' header should still be accepted.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderAbsent() {
 	ctx := context.Background()
@@ -457,7 +457,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderAbsent
 	s.NoError(err, "no error expected, an absent 'typ' header is allowed per RFC 7519 §5.1")
 }
 
-// TestAssertionTypeHeaderApplicationJWT — RFC 8725 §3.11 treats 'application/jwt' as equivalent
+// TestAssertionTypeHeaderApplicationJWT handles RFC 8725 §3.11 treats 'application/jwt' as equivalent
 // to 'JWT' (RFC 6838 media-type names are case-insensitive).
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderApplicationJWT() {
 	ctx := context.Background()
@@ -476,7 +476,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderApplic
 	s.NoError(err, "no error expected, 'application/jwt' is equivalent to 'JWT'")
 }
 
-// TestAssertionTypeHeaderLowercaseJWT — RFC 6838 media-type names are case-insensitive.
+// TestAssertionTypeHeaderLowercaseJWT tests RFC 6838 media-type names are case-insensitive.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderLowercaseJWT() {
 	ctx := context.Background()
 	s.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
@@ -494,7 +494,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderLowerc
 	s.NoError(err, "no error expected, 'typ' header comparison is case-insensitive")
 }
 
-// TestAssertionTypeHeaderNonJWTRejected — RFC 8725 §3.11. A 'typ' that identifies a different
+// TestAssertionTypeHeaderNonJWTRejected tests RFC 8725 §3.11. A 'typ' that identifies a different
 // JWT profile (DPoP proof, secevent, etc.) MUST NOT be accepted as an authorization-grant
 // assertion. Defends against cross-profile substitution.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderNonJWTRejected() {
@@ -514,7 +514,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderNonJWT
 	)
 }
 
-// TestAssertionWithIssueDateInFuture — RFC 7519 §4.1.6 says 'iat' identifies the time at
+// TestAssertionWithIssueDateInFuture tests RFC 7519 §4.1.6 says 'iat' identifies the time at
 // which the JWT was issued, so any value at or after `now` is invalid. The handler's check
 // uses `!iat.Before(now)` (symmetric with the nbf check), rejecting both 'iat == now' and
 // 'iat > now'.

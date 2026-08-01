@@ -20,7 +20,7 @@ import (
 //
 //   - This strategy enforces JWS/JWE structural validation, signature verification, signature algorithm enforcement,
 //     and the time-based claims ('exp', 'nbf', 'iat') performed by jwt.Strategy.Decode when a client is supplied.
-//   - Application-specific claim checks — most notably 'iss' (issuer) and 'aud' (audience) — are intentionally
+//   - Application-specific claim checks, most notably 'iss' (issuer) and 'aud' (audience), are intentionally
 //     LEFT TO THE CALLER. RFC 8693 ID tokens may originate from federated identity providers, so the AS-specific
 //     issuer/audience policy lives one layer up (e.g. rfc8693.IDTokenTypeHandler.validate enforces 'iss' against
 //     the configured issuer and the client's per-role issuer allow-list).

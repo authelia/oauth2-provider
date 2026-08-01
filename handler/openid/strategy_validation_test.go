@@ -33,7 +33,6 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 		MinParameterEntropy: 8,
 	}
 
-	// Single jwt.Strategy backing both issuance and validation — same key everywhere.
 	jwtStrategy := &jwt.DefaultStrategy{
 		Config: cfg,
 		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
@@ -72,9 +71,6 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 	assert.NotNil(t, claims[jwt.ClaimIssuedAt], "iat claim must be present per JWT BCP")
 }
 
-// TestDefaultIDTokenValidationStrategy_RejectsTamperedToken proves the validation strategy actually verifies the
-// signature: a token whose payload byte is flipped after signing must be rejected, not accepted with the modified
-// claims.
 func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 	cfg := &oauth2.Config{
 		IDTokenIssuer:       "https://issuer.example/",
@@ -102,11 +98,9 @@ func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 	token, err := issueStrategy.GenerateIDToken(t.Context(), cfg.IDTokenLifespan, req)
 	require.NoError(t, err)
 
-	// Tamper: flip a single character in the payload segment (between the two dots).
 	tampered := []byte(token)
 	for i, b := range tampered {
 		if b == '.' {
-			// Move past the header dot and flip a payload character.
 			if i+5 < len(tampered) {
 				tampered[i+5] ^= 0x01
 			}
@@ -119,10 +113,6 @@ func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 	require.Error(t, err, "validation must reject a token whose body has been altered after signing")
 }
 
-// TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey proves the validator's trust anchor is the
-// jwt.Strategy's Issuer key, not the bare token signature. A token signed by a different (but otherwise valid) key
-// MUST be rejected — the validator must not accept any well-formed JWT that happens to have a valid signature
-// under some unrelated key.
 func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *testing.T) {
 	cfg := &oauth2.Config{
 		IDTokenIssuer:       "https://issuer.example/",
@@ -130,8 +120,6 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 		MinParameterEntropy: 8,
 	}
 
-	// Issuance strategy uses an UNRELATED key. The validator below uses the package-level `key` — distinct from
-	// the one signing the token.
 	wrongKey := gen.MustRSAKey()
 
 	issuingJWT := &jwt.DefaultStrategy{
@@ -140,7 +128,6 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 	}
 	issueStrategy := &DefaultStrategy{Strategy: issuingJWT, Config: cfg}
 
-	// Validator pinned to the package-level `key`.
 	validatingJWT := &jwt.DefaultStrategy{
 		Config: cfg,
 		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
@@ -157,7 +144,7 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 	req.Client = &oauth2.DefaultClient{ID: "test-client"}
 
 	token, err := issueStrategy.GenerateIDToken(t.Context(), cfg.IDTokenLifespan, req)
-	require.NoError(t, err, "issuance with the wrong key must succeed — the failure must surface at validation, not issuance")
+	require.NoError(t, err, "issuance with the wrong key must succeed; the failure must surface at validation, not issuance")
 	require.NotEmpty(t, token)
 
 	_, err = validationStrategy.ValidateIDToken(t.Context(), req, token)

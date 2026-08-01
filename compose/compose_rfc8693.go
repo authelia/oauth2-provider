@@ -34,7 +34,7 @@ import (
 // Putting the two together produces the canonical order:
 //
 //	1. RFC8693TokenExchangeGrantFactory       (grant + act-claim writer; FIRST)
-//	2. RFC8693AccessTokenTypeFactory          (token-type handlers; any order among themselves —
+//	2. RFC8693AccessTokenTypeFactory          (token-type handlers; any order among themselves;
 //	3. RFC8693RefreshTokenTypeFactory          they're mutually exclusive at issuance because each handler's
 //	4. RFC8693IDTokenTypeFactory               CanHandleTokenEndpointRequest filters by requested_token_type)
 //	5. RFC8693CustomJWTTypeFactory

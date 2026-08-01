@@ -226,8 +226,6 @@ func TestHandleTokenEndpointRequest_ActorTokenPair(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_ClientTokenTypeRestrictions exercises the rfc8693.Client
-// interface — clients may restrict the subject/actor/requested token types they accept.
 func TestHandleTokenEndpointRequest_ClientTokenTypeRestrictions(t *testing.T) {
 	handler := newTokenExchangeHandler()
 
@@ -532,7 +530,6 @@ func TestHandleTokenEndpointRequest_StrategyFallback(t *testing.T) {
 		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
 	}
 
-	// All strategy fields left nil — handler must read from Config.
 	handler := &TokenExchangeGrantHandler{Config: config}
 
 	client := newConfidentialClient()

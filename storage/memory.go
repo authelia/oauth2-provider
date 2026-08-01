@@ -38,13 +38,19 @@ type PublicKeyScopes struct {
 	Scopes []string
 }
 
-// DPoPProofMarker identifies a used DPoP proof for replay detection. RFC 9449 requires a 'jti' to be unique only
-// within the context it is presented in, so the marker is the proof key thumbprint, the normalized target URI, and
-// the 'jti' together rather than the 'jti' alone. See rfc9449.DPoPReplayStorage.
+// DPoPProofMarker identifies a used DPoP proof for replay detection. It follows the RFC 9449 Section 11.1
+// recommendation to store the 'jti' "in the context of the target URI", taking that context to be the endpoint the
+// proof is bound to: the method as well as the normalized target URI, since RFC 9449 Section 4.3 binds a proof to both
+// and the two together are what identifies an endpoint.
+//
+// rfc9449.DPoPReplayStorage passes the proof key thumbprint and nonce as well, and documents why an implementation may
+// prefer to include them: keying without the thumbprint leaves the 'jti' namespace shared by every client, so one
+// client emitting weak 'jti' values denies service to every other client that happens to pick the same value. A
+// deployment for which that matters should key on those fields too rather than use this store.
 type DPoPProofMarker struct {
-	Thumbprint string
-	URL        string
-	JTI        string
+	JTI    string
+	Method string
+	URL    string
 }
 
 type MemoryStore struct {
@@ -626,11 +632,13 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	return nil
 }
 
-func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, thumbprint, htu, jti string, exp time.Time) (bool, error) {
+// CheckAndSetDPoPProofUsed implements rfc9449.DPoPReplayStorage. The jkt and nonce arguments are deliberately unused:
+// this store keys on the endpoint the proof is bound to. See DPoPProofMarker for the trade-off that implies.
+func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti, _, _, htm, htu string, exp time.Time) (bool, error) {
 	s.dpopProofJTIsMutex.Lock()
 	defer s.dpopProofJTIsMutex.Unlock()
 
-	marker := DPoPProofMarker{Thumbprint: thumbprint, URL: htu, JTI: jti}
+	marker := DPoPProofMarker{JTI: jti, Method: htm, URL: htu}
 
 	if existing, ok := s.DPoPProofJTIs[marker]; ok && existing.After(time.Now()) {
 		return true, nil

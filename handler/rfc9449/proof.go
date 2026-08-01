@@ -23,6 +23,12 @@ import (
 // least 96 bits of pseudorandom data or a version 4 UUID, both of which are far shorter than this bound.
 const JTIMaxLength = 255
 
+// NonceMaxLength is the longest accepted 'nonce' claim, bounded for the same reason as JTIMaxLength: a DPoPReplayStorage
+// that keys on the nonce retains it alongside the 'jti' for the proof's 'iat' acceptance window, so an unbounded value
+// would let a client exhaust its memory. The bound cannot reject a legitimate value, as a nonce is minted by the server
+// (DefaultStrategy.NewDPoPNonce issues 43 characters) and one that was not is rejected by the nonce check regardless.
+const NonceMaxLength = 255
+
 // RSAMinimumKeySize is the smallest accepted modulus for an RSA DPoP proof key. RFC 7518 Sections 3.3 and 3.5 require
 // a key of at least 2048 bits for the RS* and PS* algorithms, and nothing in the JOSE layer enforces it: a signature
 // from a weak key verifies perfectly well, so without this check a token could be bound to a key that offers no real
@@ -71,6 +77,7 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 	}
 
 	claims := map[string]any{}
+
 	if err = json.Unmarshal(payload, &claims); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof claims could not be parsed.").WithWrap(err))
 	}
@@ -99,7 +106,11 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 	}
 
 	parsed.IssuedAt = time.Unix(int64(iat), 0).UTC()
-	parsed.Nonce, _ = claims[consts.ClaimNonce].(string)
+
+	if parsed.Nonce, _ = claims[consts.ClaimNonce].(string); len(parsed.Nonce) > NonceMaxLength {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'nonce' claim must not be longer than %d characters.", NonceMaxLength))
+	}
+
 	parsed.AccessTokenHash, _ = claims[consts.ClaimDPoPAccessTokenHash].(string)
 
 	if parsed.Thumbprint, err = jwt.ThumbprintJWK(jwk); err != nil {

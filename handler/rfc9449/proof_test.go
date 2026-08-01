@@ -102,6 +102,28 @@ func TestParseProof(t *testing.T) {
 			},
 		},
 		{
+			name: "RejectsOversizedNonce",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID: "nonce-long", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1,
+					ijwt.ClaimNonce: strings.Repeat("n", NonceMaxLength+1),
+				})
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
+			name: "AcceptsMaximumLengthNonce",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+					ijwt.ClaimJWTID: "nonce-max", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1,
+					ijwt.ClaimNonce: strings.Repeat("n", NonceMaxLength),
+				})
+			},
+			check: func(t *testing.T, proof *oauth2.DPoPProof) {
+				assert.Len(t, proof.Nonce, NonceMaxLength)
+			},
+		},
+		{
 			name: "RejectsDisallowedAlg",
 			raw: func(t *testing.T, key *jose.JSONWebKey) string {
 				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})

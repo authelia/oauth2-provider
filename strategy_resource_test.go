@@ -151,28 +151,22 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 		needle   string
 		match    bool
 	}{
-		// Scheme / host equality
 		{name: "ShouldMatchExactURLNoPath", haystack: "https://api.example.com", needle: "https://api.example.com", match: true},
 		{name: "ShouldNotMatchSchemeMismatch", haystack: "https://api.example.com/api", needle: "http://api.example.com/api", match: false},
 		{name: "ShouldNotMatchHostMismatch", haystack: "https://api.example.com/api", needle: "https://other.example.com/api", match: false},
 		{name: "ShouldNotMatchPortMismatch", haystack: "https://api.example.com/api", needle: "https://api.example.com:8443/api", match: false},
 		{name: "ShouldNotMatchHostnameCaseSensitivity",
-			// url.Parse normalizes scheme to lowercase but preserves host case. This
-			// asserts current behavior; if host normalization changes, update.
 			haystack: "https://API.example.com/api", needle: "https://api.example.com/api", match: false,
 		},
 		{name: "ShouldMatchSchemeCaseInsensitivity",
-			// url.Parse normalizes scheme to lowercase, so HTTPS and https are equivalent.
 			haystack: "HTTPS://api.example.com/api", needle: "https://api.example.com/api", match: true,
 		},
 
-		// Path equality and trailing slash
 		{name: "ShouldMatchExactPath", haystack: "https://api.example.com/users", needle: "https://api.example.com/users", match: true},
 		{name: "ShouldMatchNeedleHasTrailingSlash", haystack: "https://api.example.com/users", needle: "https://api.example.com/users/", match: true},
 		{name: "ShouldMatchHaystackHasTrailingSlash", haystack: "https://api.example.com/users/", needle: "https://api.example.com/users", match: true},
 		{name: "ShouldMatchBothHaveTrailingSlash", haystack: "https://api.example.com/users/", needle: "https://api.example.com/users/", match: true},
 
-		// Subpath rule
 		{name: "ShouldMatchSingleSegmentSubpath", haystack: "https://api.example.com/users", needle: "https://api.example.com/users/123", match: true},
 		{name: "ShouldMatchMultiSegmentSubpath", haystack: "https://api.example.com/users", needle: "https://api.example.com/users/123/posts/456", match: true},
 		{name: "ShouldNotMatchPathPrefixWithoutSegmentBoundary", haystack: "https://api.example.com/users", needle: "https://api.example.com/users123", match: false},
@@ -180,23 +174,19 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 		{name: "ShouldNotMatchSiblingSegment", haystack: "https://api.example.com/users", needle: "https://api.example.com/tenants", match: false},
 		{name: "ShouldNotMatchAncestorPath", haystack: "https://api.example.com/api/users", needle: "https://api.example.com/api", match: false},
 
-		// Root and empty paths (current behavior — see notes below the table)
 		{name: "ShouldMatchEmptyHaystackPathExactRoot",
 			haystack: "https://api.example.com", needle: "https://api.example.com/", match: true,
 		},
 		{name: "ShouldMatchEmptyHaystackPathAnySubpath",
-			// PERMISSIVE behavior: a haystack with no path grants any subpath under the same scheme+host.
 			haystack: "https://api.example.com", needle: "https://api.example.com/anything", match: true,
 		},
 		{name: "ShouldMatchRootHaystackAnySubpath",
-			// `/` is normalized to empty allowedPath, so `/` matches everything under scheme+host.
 			haystack: "https://api.example.com/", needle: "https://api.example.com/anything/here", match: true,
 		},
 		{name: "ShouldMatchEmptyNeedleAndEmptyHaystack",
 			haystack: "https://api.example.com", needle: "https://api.example.com", match: true,
 		},
 
-		// Query and fragment are ignored when matching paths
 		{name: "ShouldMatchIgnoringNeedleQueryString",
 			haystack: "https://api.example.com/users", needle: "https://api.example.com/users?token=foo", match: true,
 		},
@@ -204,21 +194,15 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 			haystack: "https://api.example.com/users", needle: "https://api.example.com/users#frag", match: true,
 		},
 
-		// Userinfo is part of url.URL.User, not Host — ignored in matching.
 		{name: "ShouldMatchIgnoringUserinfo",
 			haystack: "https://api.example.com/users", needle: "https://alice:secret@api.example.com/users", match: true,
 		},
 
-		// Case-sensitive path comparison
 		{name: "ShouldNotMatchPathCaseDifference",
 			haystack: "https://api.example.com/Users", needle: "https://api.example.com/users", match: false,
 		},
 
-		// Repeated slashes in needle path
 		{name: "ShouldNotMatchDoubleSlashedSubpath",
-			// "//1234" is not a valid subpath separator-wise; the prefix check
-			// looks at allowedPath+"/" so this still matches because the prefix
-			// up to allowedPath+"/" equals allowedPath+"/".
 			haystack: "https://api.example.com/users", needle: "https://api.example.com/users//1234", match: true,
 		},
 	}

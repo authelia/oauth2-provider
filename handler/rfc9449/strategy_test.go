@@ -62,7 +62,12 @@ func TestStrategyValidateProofReplay(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
-func TestStrategyValidateProofReplayIsScopedToTheProofKey(t *testing.T) {
+// TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheProofKey pins the consequence of the reference store
+// keying on (jti, htu) alone, as RFC 9449 Section 11.1 describes: the 'jti' namespace is shared by every client, so a
+// second client presenting the same 'jti' at the same endpoint is refused even though its proof is signed by a
+// different key and is not a replay. A deployment serving mutually distrusting clients should key on the thumbprint
+// too; DPoPReplayStorage passes it for that purpose.
+func TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheProofKey(t *testing.T) {
 	s, _ := newTestStrategy()
 
 	claims := map[string]any{
@@ -73,7 +78,7 @@ func TestStrategyValidateProofReplayIsScopedToTheProofKey(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, claims), false)
-	require.NoError(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
 func TestStrategyValidateProofReplayIsScopedToTheTargetURI(t *testing.T) {
@@ -95,6 +100,59 @@ func TestStrategyValidateProofReplayIsScopedToTheTargetURI(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestStrategyValidateProofReplayIsScopedToTheMethod(t *testing.T) {
+	s, _ := newTestStrategy()
+	key := newTestProofKey(t)
+
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "per-method-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+	require.NoError(t, err)
+
+	raw = signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "per-method-1", jwt.ClaimHTTPMethod: http.MethodGet, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodGet, "https://as.example.com/token", raw, false)
+	require.NoError(t, err)
+}
+
+// TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheNonce pins that the nonce does not open a new replay
+// slot in the reference store either. The practical consequence is that a client answering a DPoP-Nonce challenge must
+// mint a fresh 'jti' along with the new nonce; re-signing with the same 'jti' is refused as a replay.
+func TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheNonce(t *testing.T) {
+	s, _ := newTestStrategy()
+	key := newTestProofKey(t)
+
+	first, err := s.NewDPoPNonce(context.Background())
+	require.NoError(t, err)
+
+	second, err := s.NewDPoPNonce(context.Background())
+	require.NoError(t, err)
+
+	claims := func(nonce string) map[string]any {
+		return map[string]any{
+			jwt.ClaimJWTID: "per-nonce-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token",
+			jwt.ClaimIssuedAt: time.Now().Unix(), jwt.ClaimNonce: nonce,
+		}
+	}
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, key, jwt.JSONWebTokenTypeDPoP, claims(first)), true)
+	require.NoError(t, err)
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, key, jwt.JSONWebTokenTypeDPoP, claims(second)), true)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+
+	// A fresh 'jti' against that same nonce is accepted, so the challenge remains answerable.
+	fresh := claims(second)
+	fresh[jwt.ClaimJWTID] = "per-nonce-2"
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, key, jwt.JSONWebTokenTypeDPoP, fresh), true)
+	require.NoError(t, err)
+}
+
 func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 	s, store := newTestStrategy()
 	key := newTestProofKey(t)
@@ -104,10 +162,10 @@ func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 		jwt.ClaimJWTID: "future-iat", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: iat.Unix(),
 	})
 
-	proof, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 	require.NoError(t, err)
 
-	exp, ok := store.DPoPProofJTIs[storage.DPoPProofMarker{Thumbprint: proof.Thumbprint, URL: "https://as.example.com/token", JTI: "future-iat"}]
+	exp, ok := store.DPoPProofJTIs[storage.DPoPProofMarker{JTI: "future-iat", Method: http.MethodPost, URL: "https://as.example.com/token"}]
 	require.True(t, ok, "expected the proof jti to be recorded as used")
 
 	wantMin := time.Unix(iat.Unix(), 0).Add(time.Minute)

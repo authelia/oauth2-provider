@@ -134,8 +134,6 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("peter-subject-id", nil)
 			},
 			check: func(t *testing.T, areq *oauth2.AccessRequest) {
-				// The session intentionally has no SetSubject — the assertion is just that the handler did
-				// not panic and completed successfully.
 				_, ok := areq.GetSession().(ResourceOwnerSession)
 				assert.False(t, ok, "test guard: this case requires a session that does NOT implement ResourceOwnerSession")
 			},

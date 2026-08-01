@@ -104,10 +104,6 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all clients.",
 		},
 		{
-			// Covers handler.go:46-49 — a client that sends 'code_challenge_method' without
-			// 'code_challenge' has signalled PKCE intent (RFC 7636 §4.3) but omitted the proof
-			// to verify it. Even with no enforcement policy in effect (the validate() call above
-			// returns nil), this partial PKCE request is rejected with 'invalid_request'.
 			"ShouldFailMethodWithoutChallenge",
 			&oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},

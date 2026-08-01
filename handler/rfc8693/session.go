@@ -65,9 +65,9 @@ func (s *DefaultSession) GetSubjectToken() map[string]any {
 //
 // The claim is written to two places so it propagates through both opaque and JWT token issuance paths:
 //
-//   - s.Extra — surfaces in DefaultSession.AccessTokenClaimsMap and therefore in introspection responses for
+//   - s.Extra surfaces in DefaultSession.AccessTokenClaimsMap and therefore in introspection responses for
 //     opaque access tokens stored verbatim.
-//   - s.DefaultSession.Claims.Extra — flattened into the JWT body by jwt.IDTokenClaims.ToMap, so the 'act' claim
+//   - s.DefaultSession.Claims.Extra flattened into the JWT body by jwt.IDTokenClaims.ToMap, so the 'act' claim
 //     is included in issued ID tokens and custom JWTs.
 func (s *DefaultSession) SetClaimActor(act map[string]any) {
 	s.Extra[consts.ClaimActor] = act

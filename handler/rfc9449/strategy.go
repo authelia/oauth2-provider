@@ -79,11 +79,13 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	// both pass the replay check. The marker is kept until the end of the proof's own 'iat' acceptance window
 	// (iat+skew), not now+skew: a proof presented before its iat (client clock ahead, within skew) stays iat-acceptable
 	// until iat+skew, so expiring the marker at now+skew < iat+skew would reopen a replay window for the remainder. It
-	// is recorded against the proof key and the normalized target URI rather than the 'jti' alone, as that is the
-	// context a 'jti' is required to be unique in, see DPoPReplayStorage.
+	// is recorded against the proof key together with the method, normalized target URI and nonce the proof commits to
+	// rather than the 'jti' alone, as that is the context a 'jti' is required to be unique in, see DPoPReplayStorage.
+	// The normalized 'htu' is passed rather than the raw claim so two spellings of the same target URI cannot be made
+	// to occupy separate replay slots.
 	var used bool
 
-	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.Thumbprint, expected, parsed.ID, parsed.IssuedAt.Add(skew)); err != nil {
+	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.Thumbprint, parsed.Nonce, parsed.Method, expected, parsed.IssuedAt.Add(skew)); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if used {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof has already been used."))

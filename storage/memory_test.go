@@ -69,29 +69,41 @@ func TestMemoryStoreDPoP(t *testing.T) {
 
 	const htu, other = "https://as.example.com/token", "https://as.example.com/introspect"
 
-	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-1", time.Now().Add(time.Minute))
+	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "POST", htu, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-1", time.Now().Add(time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "POST", htu, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.True(t, used)
 
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-2", htu, "jti-1", time.Now().Add(time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "POST", other, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-2", htu, "jti-1", time.Now().Add(time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "POST", other, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.True(t, used)
 
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", other, "jti-1", time.Now().Add(time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "GET", htu, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
-	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-2", time.Now().Add(-time.Minute))
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "GET", htu, time.Now().Add(time.Minute))
 	require.NoError(t, err)
-	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", htu, "jti-2", time.Now().Add(time.Minute))
+	assert.True(t, used)
+
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-2", "", "POST", htu, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	assert.True(t, used)
+
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "nonce-1", "POST", htu, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	assert.True(t, used)
+
+	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", "jkt-1", "", "POST", htu, time.Now().Add(-time.Minute))
+	require.NoError(t, err)
+	used, err = s.CheckAndSetDPoPProofUsed(ctx, "jti-2", "jkt-1", "", "POST", htu, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 
@@ -115,20 +127,20 @@ func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
 	assert.NotContains(t, s.DPoPNonces, "expired")
 	assert.Contains(t, s.DPoPNonces, "live")
 
-	_, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "expired", time.Now().Add(-time.Minute))
+	_, err := s.CheckAndSetDPoPProofUsed(ctx, "expired", "jkt-1", "n-1", "POST", "https://as.example.com/token", time.Now().Add(-time.Minute))
 	require.NoError(t, err)
-	_, err = s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "live", time.Now().Add(time.Minute))
+	_, err = s.CheckAndSetDPoPProofUsed(ctx, "live", "jkt-1", "n-1", "POST", "https://as.example.com/token", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 
-	assert.NotContains(t, s.DPoPProofJTIs, DPoPProofMarker{Thumbprint: "jkt-1", URL: "https://as.example.com/token", JTI: "expired"})
-	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{Thumbprint: "jkt-1", URL: "https://as.example.com/token", JTI: "live"})
+	assert.NotContains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "expired", Method: "POST", URL: "https://as.example.com/token"})
+	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "live", Method: "POST", URL: "https://as.example.com/token"})
 }
 
 func TestExampleStoreSupportsDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewExampleStore()
 
-	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jkt-1", "https://as.example.com/token", "jti-1", time.Now().Add(time.Minute))
+	used, err := s.CheckAndSetDPoPProofUsed(ctx, "jti-1", "jkt-1", "", "POST", "https://as.example.com/token", time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	assert.False(t, used)
 

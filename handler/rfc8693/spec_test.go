@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package rfc8693_test — spec compliance test suite.
+// Package rfc8693_test is a spec compliance test suite.
 //
 // These tests are written to map directly to numbered sections of RFC 8693 (OAuth 2.0 Token Exchange) so that the
 // behavior the implementation guarantees can be read out against the spec. Each test name carries the relevant §
@@ -34,7 +34,7 @@ import (
 )
 
 // =============================================================================
-// §4.1 — "act" (Actor) Claim
+// §4.1 - "act" (Actor) Claim
 //
 // The act claim MUST identify the actor when delegation occurs; nested act
 // claims express a chain of delegation, outermost = most recent actor.
@@ -123,7 +123,7 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 
 	require.NoError(t, runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil)))
 
-	// The original subject-token act must be unchanged — building the new act must deep-copy nested maps so it
+	// The original subject-token act must be unchanged; building the new act must deep-copy nested maps so it
 	// can be mutated/serialized without disturbing the subject_token snapshot.
 	assert.Equal(t, map[string]any{consts.ClaimSubject: "carol"}, priorAct,
 		"buildActClaim must not mutate the subject_token's act map (deep-copy required)")
@@ -232,7 +232,7 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 }
 
 // =============================================================================
-// §2.2 — Successful Response
+// §2.2 - Successful Response
 //
 // REQUIRED:  access_token, issued_token_type, token_type
 // REQUIRED conditionally:  scope (when issued differs from requested)
@@ -285,7 +285,7 @@ func TestSpec_2_2_ResponseShape_CustomJWT(t *testing.T) {
 }
 
 // =============================================================================
-// §2.4 — Error Response (uses RFC 6749 §5.2 codes)
+// §2.4 - Error Response (uses RFC 6749 §5.2 codes)
 //
 // The error response uses invalid_grant for grant problems and invalid_target
 // for unresolvable audience/resource per RFC 8707 §2.
@@ -331,7 +331,7 @@ func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
 
 // RefreshTokenTypeHandler must refuse to issue a refresh token if the requesting client is not registered for the
 // refresh_token grant. AccessTokenTypeHandler silently skips refresh-token issuance in this case; when the client
-// EXPLICITLY requests a refresh token via 'requested_token_type', silent downgrade is wrong — refuse with
+// EXPLICITLY requests a refresh token via 'requested_token_type', silent downgrade is wrong; refuse with
 // unauthorized_client per RFC 6749 §5.2.
 func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *testing.T) {
 	cfg := newSpecConfig(t)
@@ -395,7 +395,6 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 		Request: oauth2.Request{
 			ID:     uuid.New().String(),
 			Client: newConfidentialClientWithRefresh(),
-			// No granted scopes — RefreshTokenScopes requirement not satisfied.
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
@@ -421,7 +420,7 @@ func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 
 	cjt := &CustomJWTTypeHandler{Config: cfg, Strategy: jwtStrategy, Storage: store}
 
-	// Session intentionally has no subject populated — simulates a misconfigured upstream where the subject_token
+	// Session intentionally has no subject populated - simulates a misconfigured upstream where the subject_token
 	// resolution didn't write the subject onto the session.
 	session := &DefaultSession{
 		DefaultSession: &openid.DefaultSession{Claims: &jwt.IDTokenClaims{}, Headers: &jwt.Headers{}},
@@ -454,11 +453,10 @@ func TestSpec_2_4_Errors_CustomJWTUndeterminableAudienceReturnsInvalidTarget(t *
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
 
-	// Replace the registered JWT type with one that has NO default audience.
 	cfg.RFC8693TokenTypes["urn:spec:jwt"] = &JWTType{
 		Name:           "urn:spec:jwt",
 		Issuer:         "https://as.example.com",
-		JWTIssueConfig: JWTIssueConfig{Expiry: 5 * time.Minute}, // <— no Audience
+		JWTIssueConfig: JWTIssueConfig{Expiry: 5 * time.Minute}, // no Audience
 		JWTValidationConfig: JWTValidationConfig{
 			ValidateFunc: jwt.Keyfunc(func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }),
 		},
@@ -528,7 +526,7 @@ func TestSpec_2_1_Errors_ClientWithoutGrantReturnsUnauthorizedClient(t *testing.
 	noGrantClient := &oauth2.DefaultClient{
 		ID:           "no-grant-client",
 		ClientSecret: oauth2.NewPlainTextClientSecret("secret"),
-		GrantTypes:   []string{consts.GrantTypeAuthorizationCode}, // <— missing token-exchange
+		GrantTypes:   []string{consts.GrantTypeAuthorizationCode}, // missing token-exchange
 		Scopes:       []string{"openid"},
 	}
 
@@ -642,6 +640,7 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		AudienceStrategy: cfg.AudienceStrategy,
 		ResourceStrategy: cfg.GetResourceStrategy(context.Background()),
 	}
+
 	access := &AccessTokenTypeHandler{
 		Config:               cfg,
 		AccessTokenLifespan:  5 * time.Minute,
@@ -650,6 +649,7 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		ScopeStrategy:        cfg.ScopeStrategy,
 		Storage:              store,
 	}
+
 	refresh := &RefreshTokenTypeHandler{
 		Config:               cfg,
 		RefreshTokenLifespan: 5 * time.Minute,
@@ -657,14 +657,14 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		ScopeStrategy:        cfg.ScopeStrategy,
 		Storage:              store,
 	}
+
 	idt := &IDTokenTypeHandler{
 		Config:        cfg,
 		Strategy:      jwtStrategy,
 		IssueStrategy: &openid.DefaultStrategy{Strategy: jwtStrategy, Config: cfg},
-		// ValidationStrategy is nil — this test exchanges access_token → id_token, so the validate() path
-		// (which only runs for id_token-typed inputs) is not exercised.
-		Storage: store,
+		Storage:       store,
 	}
+
 	cjt := &CustomJWTTypeHandler{
 		Config:   cfg,
 		Strategy: jwtStrategy,
@@ -714,8 +714,6 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 	return resp
 }
 
-// newConfidentialClientWithRefresh returns a confidential client that is allowed both the token-exchange and the
-// refresh_token grant types — used in tests that exercise refresh-token-issuance gating.
 func newConfidentialClientWithRefresh() *oauth2.DefaultClient {
 	return &oauth2.DefaultClient{
 		ID:           "exchange-refresh-client",

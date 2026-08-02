@@ -286,6 +286,8 @@ func toNumericDate(v any) (date *NumericDate, err error) {
 	switch value := v.(type) {
 	case nil:
 		return nil, nil
+	case *NumericDate:
+		return value, nil
 	case float64:
 		if value == 0 {
 			return nil, nil

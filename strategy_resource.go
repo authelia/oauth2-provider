@@ -89,7 +89,7 @@ func GetRequestedResources(form url.Values) (resources []string) {
 }
 
 // ValidateResourceIndicators validates the 'resource' form parameter values as RFC 8707
-// resource indicators. Values from the 'audience' form parameter are not URI-validated here —
+// resource indicators. Values from the 'audience' form parameter are not URI-validated here;
 // they are checked against the client's allowed audience list by the audience strategy.
 func ValidateResourceIndicators(form url.Values) (err error) {
 	resources, ok := GetResourcesParameter(consts.FormParameterResource, form)

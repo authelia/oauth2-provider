@@ -259,7 +259,7 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 
 	vErr := new(ValidationError)
 
-	if !m.VerifyExpirationTime(now, vopts.expRequired) {
+	if !vopts.expIgnored && !m.VerifyExpirationTime(now, vopts.expRequired) {
 		vErr.Inner = errors.New("Token is expired")
 		vErr.Errors |= ValidationErrorExpired
 	}

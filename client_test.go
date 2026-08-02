@@ -50,3 +50,19 @@ func TestDefaultClientDPoP(t *testing.T) {
 
 	assert.False(t, (&DefaultClient{}).GetEnableDPoPBoundAccessTokens())
 }
+
+func TestDefaultRPInitiatedLogoutClient(t *testing.T) {
+	client := &DefaultRPInitiatedLogoutClient{
+		DefaultClient:          &DefaultClient{ID: "test-client"},
+		PostLogoutRedirectURIs: []string{"https://rp.example/logged-out"},
+	}
+
+	assert.Equal(t, "test-client", client.GetID(), "must delegate to the embedded DefaultClient")
+	assert.Equal(t, []string{"https://rp.example/logged-out"}, client.GetPostLogoutRedirectURIs())
+
+	var rp RPInitiatedLogoutClient = client
+	assert.NotNil(t, rp)
+
+	_, ok := any(&DefaultClient{}).(RPInitiatedLogoutClient)
+	assert.False(t, ok, "DefaultClient must not satisfy RPInitiatedLogoutClient")
+}

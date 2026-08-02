@@ -190,6 +190,7 @@ type Configurator interface {
 	FormPostHTMLTemplateProvider
 	FormPostResponseProvider
 	AllowedJWTAssertionAudiencesProvider
+	AllowedIntrospectionAudiencesProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
 	TokenIntrospectionHandlersProvider

@@ -121,6 +121,11 @@ type Config struct {
 	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
 	AllowedJWTAssertionAudiences []string
 
+	// AllowedIntrospectionAudiences is a list of audiences permitted for an Access Token used to authenticate a request
+	// to the introspection endpoint. When set, such an Access Token MUST have at least one of these values within its
+	// granted audience or granted RFC 8707 resource indicators. Defaults to empty which does not restrict the audience.
+	AllowedIntrospectionAudiences []string
+
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
 	JWKSFetcherStrategy jwt.JWKSFetcherStrategy
@@ -352,6 +357,10 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 
 func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 	return c.AllowedJWTAssertionAudiences
+}
+
+func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {
+	return c.AllowedIntrospectionAudiences
 }
 
 func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template {
@@ -861,6 +870,7 @@ var (
 	_ FormPostHTMLTemplateProvider                    = (*Config)(nil)
 	_ FormPostResponseProvider                        = (*Config)(nil)
 	_ AllowedJWTAssertionAudiencesProvider            = (*Config)(nil)
+	_ AllowedIntrospectionAudiencesProvider           = (*Config)(nil)
 	_ HTTPClientProvider                              = (*Config)(nil)
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)

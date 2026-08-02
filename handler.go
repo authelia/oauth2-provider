@@ -90,3 +90,22 @@ type RFC8628UserAuthorizeEndpointHandler interface {
 	//
 	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder) error
 }
+
+// RFC7591ClientRegistrationEndpointHandler is the interface that handles the client registration endpoint.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-3 and
+// https://openid.net/specs/openid-connect-registration-1_0.html#ClientRegistration.
+type RFC7591ClientRegistrationEndpointHandler interface {
+	// HandleRFC7591ClientRegistrationEndpointRequest handles a client registration endpoint request. If the handler
+	// is not responsible for the request it must return nil and modify neither the requester nor the responder.
+	HandleRFC7591ClientRegistrationEndpointRequest(ctx context.Context, requester ClientRegistrationRequester, responder ClientRegistrationResponder) (err error)
+}
+
+// RFC7592ClientConfigurationEndpointHandler is the interface that handles the client configuration endpoint.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7592#section-2.
+type RFC7592ClientConfigurationEndpointHandler interface {
+	// HandleRFC7592ClientConfigurationEndpointRequest handles a read, update, or delete request at the client
+	// configuration endpoint, dispatching on the requester's method.
+	HandleRFC7592ClientConfigurationEndpointRequest(ctx context.Context, requester ClientConfigurationRequester, responder ClientConfigurationResponder) (err error)
+}

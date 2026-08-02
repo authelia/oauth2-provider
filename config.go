@@ -365,6 +365,57 @@ type RFC9628DeviceAuthorizeConfigProvider interface {
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
+// RFC7591ClientRegistrationTokenLifespanProvider returns the providers for configuring the lifespans of the two
+// client registration access tokens.
+type RFC7591ClientRegistrationTokenLifespanProvider interface {
+	// GetRFC7591ClientRegistrationCreateTokenLifespan returns the lifespan of a token permitting the holder to
+	// register new clients.
+	GetRFC7591ClientRegistrationCreateTokenLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetRFC7591ClientRegistrationManageTokenLifespan returns the lifespan of a token permitting the holder to
+	// manage one registered client. A zero duration means the token does not expire, which is the usual case for
+	// RFC 7592 registration access tokens.
+	GetRFC7591ClientRegistrationManageTokenLifespan(ctx context.Context) (lifespan time.Duration)
+}
+
+// RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
+// Dynamic Client Registration 1.0.
+type RFC7591ClientRegistrationConfigProvider interface {
+	RFC7591ClientRegistrationTokenLifespanProvider
+
+	// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint. It is
+	// used to build 'registration_client_uri' values and to audience initial access tokens.
+	GetRFC7591ClientRegistrationEndpointURL(ctx context.Context) (endpoint string)
+
+	// GetRFC7591ClientSecretLifespan returns the lifespan used to derive 'client_secret_expires_at'. A zero
+	// duration indicates the secret does not expire.
+	GetRFC7591ClientSecretLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetRFC7591ClientRegistrationStrategy returns the strategy used to construct and patch clients.
+	GetRFC7591ClientRegistrationStrategy(ctx context.Context) (strategy ClientRegistrationStrategy)
+
+	// GetRFC7591ClientRegistrationEndpointAuthStrategy returns the strategy used to authenticate requests at the
+	// client registration and client configuration endpoints.
+	GetRFC7591ClientRegistrationEndpointAuthStrategy(ctx context.Context) (strategy ClientRegistrationEndpointAuthStrategy)
+
+	// GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
+	GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator)
+}
+
+// RFC7591ClientRegistrationEndpointHandlersProvider returns the provider for configuring the client registration
+// endpoint handlers.
+type RFC7591ClientRegistrationEndpointHandlersProvider interface {
+	// GetRFC7591ClientRegistrationEndpointHandlers returns the handlers.
+	GetRFC7591ClientRegistrationEndpointHandlers(ctx context.Context) (handlers RFC7591ClientRegistrationEndpointHandlers)
+}
+
+// RFC7592ClientConfigurationEndpointHandlersProvider returns the provider for configuring the client configuration
+// endpoint handlers.
+type RFC7592ClientConfigurationEndpointHandlersProvider interface {
+	// GetRFC7592ClientConfigurationEndpointHandlers returns the handlers.
+	GetRFC7592ClientConfigurationEndpointHandlers(ctx context.Context) (handlers RFC7592ClientConfigurationEndpointHandlers)
+}
+
 // RFC8628DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
 type RFC8628DeviceAuthorizeEndpointHandlersProvider interface {
 	// GetRFC8628DeviceAuthorizeEndpointHandlers returns the handlers.

@@ -172,6 +172,61 @@ func TestIntrospectToken(t *testing.T) {
 			expected: oauth2.AccessToken,
 		},
 		{
+			name: "ShouldPassAccessTokenWithNonRegistrationSession",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				original := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(original, nil),
+					strategy.
+						EXPECT().
+						ValidateAccessToken(gomock.Eq(t.Context()), gomock.Eq(original), gomock.Eq("1234")).
+						Return(nil),
+				)
+			},
+			expected: oauth2.AccessToken,
+		},
+		{
+			// A client registration token (RFC 7591 / RFC 7592) is an ordinary access token in ordinary access token
+			// storage, so nothing but its session distinguishes it here. It must not be introspectable, and above all
+			// must not authenticate its holder as its client at the introspection endpoint - see
+			// Fosite.handleNewIntrospectionRequestClientAuthentication, which does exactly that with whatever token
+			// introspects successfully out of the Authorization header. ValidateAccessToken is deliberately not
+			// expected: the rejection happens before it.
+			name: "ShouldFailBecauseAccessTokenSessionIsAClientRegistrationSession",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				original := oauth2.NewAccessRequest(&testClientRegistrationSession{DefaultSession: &oauth2.DefaultSession{}})
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(original, nil),
+					strategy.
+						EXPECT().
+						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return(""),
+				)
+			},
+			error:    oauth2.ErrRequestUnauthorized,
+			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. The token is a client registration token which may only be presented at the client registration and client configuration endpoints.",
+		},
+		{
 			name: "ShouldFailBecauseAccessTokenSignatureEmpty",
 			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
@@ -379,4 +434,15 @@ func TestIntrospectToken(t *testing.T) {
 			}
 		})
 	}
+}
+
+// testClientRegistrationSession stands in for handler/rfc7591.DefaultSession, which cannot be used here because
+// handler/rfc7591 imports this package. handler/rfc7591 carries the end-to-end proof that a real registration token
+// is rejected by CoreValidator; this only needs the discriminating behaviour.
+type testClientRegistrationSession struct {
+	*oauth2.DefaultSession
+}
+
+func (s *testClientRegistrationSession) IsClientRegistration() (is bool) {
+	return true
 }

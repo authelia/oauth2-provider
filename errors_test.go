@@ -813,3 +813,25 @@ func TestDPoPErrors(t *testing.T) {
 type errPlain string
 
 func (e errPlain) Error() string { return string(e) }
+
+func TestClientRegistrationErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *RFC6749Error
+		expected string
+		code     int
+	}{
+		{"ShouldHaveInvalidClientMetadata", ErrInvalidClientMetadata, "invalid_client_metadata", http.StatusBadRequest},
+		{"ShouldHaveInvalidRedirectURI", ErrInvalidRedirectURI, "invalid_redirect_uri", http.StatusBadRequest},
+		{"ShouldHaveInvalidSoftwareStatement", ErrInvalidSoftwareStatement, "invalid_software_statement", http.StatusBadRequest},
+		{"ShouldHaveUnapprovedSoftwareStatement", ErrUnapprovedSoftwareStatement, "unapproved_software_statement", http.StatusBadRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.have.ErrorField)
+			assert.Equal(t, tc.code, tc.have.CodeField)
+			assert.NotEmpty(t, tc.have.DescriptionField)
+		})
+	}
+}

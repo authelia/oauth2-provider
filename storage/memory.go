@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type MemoryUserRelation struct {
@@ -213,6 +214,47 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 		return nil, oauth2.ErrNotFound
 	}
 	return cl, nil
+}
+
+func (s *MemoryStore) CreateClient(_ context.Context, client oauth2.Client) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	id := client.GetID()
+
+	if _, ok := s.Clients[id]; ok {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("Client with id '%s' already exists.", id))
+	}
+
+	s.Clients[id] = client
+
+	return nil
+}
+
+func (s *MemoryStore) UpdateClient(_ context.Context, id string, client oauth2.Client) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	if _, ok := s.Clients[id]; !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound.WithHintf("No client with id '%s' was found.", id))
+	}
+
+	s.Clients[id] = client
+
+	return nil
+}
+
+func (s *MemoryStore) DeleteClient(_ context.Context, id string) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	if _, ok := s.Clients[id]; !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound.WithHintf("No client with id '%s' was found.", id))
+	}
+
+	delete(s.Clients, id)
+
+	return nil
 }
 
 func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.ClientLifespanConfig) error {

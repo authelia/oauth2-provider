@@ -136,6 +136,39 @@ func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
 	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "live", Method: "POST", URL: "https://as.example.com/token"})
 }
 
+func TestMemoryStoreClientRegistrationManager(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	client := &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid"}}
+
+	require.NoError(t, store.CreateClient(ctx, client))
+
+	// Creating the same id twice must fail.
+	require.Error(t, store.CreateClient(ctx, client))
+
+	got, err := store.GetClient(ctx, "new-client")
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.Arguments{"openid"}, got.GetScopes())
+
+	require.NoError(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid", "profile"}}))
+
+	got, err = store.GetClient(ctx, "new-client")
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes())
+
+	// Updating an unknown id must fail.
+	require.Error(t, store.UpdateClient(ctx, "missing", client))
+
+	require.NoError(t, store.DeleteClient(ctx, "new-client"))
+
+	_, err = store.GetClient(ctx, "new-client")
+	require.Error(t, err)
+
+	// Deleting an unknown id must fail.
+	require.Error(t, store.DeleteClient(ctx, "new-client"))
+}
+
 func TestExampleStoreSupportsDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewExampleStore()

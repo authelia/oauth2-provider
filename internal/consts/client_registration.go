@@ -1,0 +1,60 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package consts
+
+// Client registration response parameters.
+//
+// See https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 and
+// https://datatracker.ietf.org/doc/html/rfc7592#section-3.
+const (
+	ClientRegistrationResponseClientID                = "client_id"
+	ClientRegistrationResponseClientSecret            = "client_secret" //nolint:gosec // This is a parameter name, not a credential.
+	ClientRegistrationResponseClientIDIssuedAt        = "client_id_issued_at"
+	ClientRegistrationResponseClientSecretExpiresAt   = "client_secret_expires_at" //nolint:gosec // This is a parameter name, not a credential.
+	ClientRegistrationResponseRegistrationAccessToken = "registration_access_token"
+	ClientRegistrationResponseRegistrationClientURI   = "registration_client_uri"
+)
+
+// Client metadata parameters validated by name.
+//
+// See https://datatracker.ietf.org/doc/html/rfc7591#section-2 and
+// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata.
+const (
+	ClientMetadataRedirectURIs                 = "redirect_uris"
+	ClientMetadataGrantTypes                   = "grant_types"
+	ClientMetadataResponseTypes                = "response_types"
+	ClientMetadataScope                        = valueScope
+	ClientMetadataJSONWebKeys                  = "jwks"
+	ClientMetadataJSONWebKeysURI               = "jwks_uri"
+	ClientMetadataApplicationType              = "application_type"
+	ClientMetadataSectorIdentifierURI          = "sector_identifier_uri"
+	ClientMetadataSubjectType                  = "subject_type"
+	ClientMetadataInitiateLoginURI             = "initiate_login_uri"
+	ClientMetadataSoftwareStatement            = "software_statement"
+	ClientMetadataTokenEndpointAuthAlg         = "token_endpoint_auth_signing_alg"
+	ClientMetadataIDTokenSignedResponseAlg     = "id_token_signed_response_alg"
+	ClientMetadataIDTokenEncryptedResponseAlg  = "id_token_encrypted_response_alg"
+	ClientMetadataIDTokenEncryptedResponseEnc  = "id_token_encrypted_response_enc"
+	ClientMetadataUserinfoSignedResponseAlg    = "userinfo_signed_response_alg"
+	ClientMetadataUserinfoEncryptedResponseAlg = "userinfo_encrypted_response_alg"
+	ClientMetadataUserinfoEncryptedResponseEnc = "userinfo_encrypted_response_enc"
+	ClientMetadataRequestObjectSigningAlg      = "request_object_signing_alg"
+	ClientMetadataRequestObjectEncryptionAlg   = "request_object_encryption_alg"
+	ClientMetadataRequestObjectEncryptionEnc   = "request_object_encryption_enc"
+)
+
+// Client metadata 'application_type' values.
+//
+// See https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata.
+const (
+	ApplicationTypeWeb    = "web"
+	ApplicationTypeNative = "native"
+)
+
+// Client metadata 'subject_type' values.
+const (
+	SubjectTypePublic   = "public"
+	SubjectTypePairwise = "pairwise"
+)

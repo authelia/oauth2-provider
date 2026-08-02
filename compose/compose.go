@@ -60,6 +60,12 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
 			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)
 		}
+		if rh, ok := res.(oauth2.RFC7591ClientRegistrationEndpointHandler); ok {
+			config.RFC7591ClientRegistrationEndpointHandlers.Append(rh)
+		}
+		if ch, ok := res.(oauth2.RFC7592ClientConfigurationEndpointHandler); ok {
+			config.RFC7592ClientConfigurationEndpointHandlers.Append(ch)
+		}
 	}
 
 	return f
@@ -116,6 +122,9 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 
 		OAuth2PKCEFactory,
 		PushedAuthorizeHandlerFactory,
+
+		RFC7591ClientRegistrationFactory,
+		RFC7592ClientConfigurationFactory,
 
 		DPoPFactory,
 	)

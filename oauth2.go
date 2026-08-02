@@ -247,6 +247,59 @@ type Provider interface {
 	// verification code and an end-user code that are valid for a limited
 	// time
 	NewRFC8628UserAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
+
+	// NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.1 (everything MUST be implemented)
+	NewRFC7591ClientRegistrationRequest(ctx context.Context, r *http.Request) (requester ClientRegistrationRequester, err error)
+
+	// NewRFC7591ClientRegistrationResponse executes the configured client registration endpoint handlers and builds
+	// the response.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented)
+	NewRFC7591ClientRegistrationResponse(ctx context.Context, requester ClientRegistrationRequester) (responder ClientRegistrationResponder, err error)
+
+	// WriteRFC7591ClientRegistrationResponse writes the client registration response with a 201 (Created) status.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented)
+	WriteRFC7591ClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, responder ClientRegistrationResponder)
+
+	// WriteRFC7591ClientRegistrationError writes a client registration endpoint error response.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2 (everything MUST be implemented)
+	WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, err error)
+
+	// NewRFC7592ClientConfigurationRequest validates the request and produces a ClientConfigurationRequester.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented)
+	NewRFC7592ClientConfigurationRequest(ctx context.Context, r *http.Request) (requester ClientConfigurationRequester, err error)
+
+	// NewRFC7592ClientConfigurationResponse executes the configured client configuration endpoint handlers and
+	// builds the response.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented)
+	NewRFC7592ClientConfigurationResponse(ctx context.Context, requester ClientConfigurationRequester) (responder ClientConfigurationResponder, err error)
+
+	// WriteRFC7592ClientConfigurationResponse writes the client configuration response. A 204 (No Content) status,
+	// written for a successful DELETE, carries no body.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2.3 (everything MUST be implemented)
+	WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, responder ClientConfigurationResponder)
+
+	// WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response, mapping to the
+	// status codes described in RFC 7592 Section 3: 401 (with a 'WWW-Authenticate: Bearer' header) for a missing or
+	// invalid registration access token, 404 for an unknown client_id, and 405 for an unsupported method.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented)
+	WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

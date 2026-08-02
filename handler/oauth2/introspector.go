@@ -62,6 +62,20 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 	return "", err
 }
 
+// isClientRegistrationSession reports whether a session backs an RFC 7591 / RFC 7592 client registration access
+// token. Those tokens are ordinary access tokens living in ordinary access token storage, so nothing else
+// distinguishes them here, and a token minted purely to onboard clients must never double as a bearer credential
+// authenticating its holder as that client at the introspection endpoint (see
+// Fosite.handleNewIntrospectionRequestClientAuthentication), nor as an introspectable or exchangeable token.
+//
+// The behaviour is expressed as a local one-method interface rather than by asserting to handler/rfc7591.Session
+// because handler/rfc7591 imports this package; *rfc7591.DefaultSession satisfies it.
+func isClientRegistrationSession(session oauth2.Session) (is bool) {
+	registration, ok := session.(interface{ IsClientRegistration() bool })
+
+	return ok && registration.IsClientRegistration()
+}
+
 func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 	for _, scope := range scopes {
 		if scope == "" {
@@ -87,6 +101,10 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 
 	if original, err = c.GetAccessTokenSession(ctx, signature, request.GetSession()); err != nil {
 		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
+	}
+
+	if isClientRegistrationSession(original.GetSession()) {
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The token is a client registration token which may only be presented at the client registration and client configuration endpoints."))
 	}
 
 	if err = c.ValidateAccessToken(ctx, original, token); err != nil {

@@ -17,8 +17,8 @@ import (
 )
 
 // NewHMACCoreStrategy creates a new HMACCoreStrategy with the potential to include the prefix format. The prefix must
-// include a single '%s' for the purpose of adding the token part (ac, at, and rt; for the Authorize Code, Access
-// Token, and Refresh Token; respectively.
+// include a single '%s' for the purpose of adding the token part (ac, dc, at, and rt; for the Authorize Code, Device
+// Code, Access Token, and Refresh Token; respectively).
 func NewHMACCoreStrategy(config HMACCoreStrategyConfigurator, prefix string) (strategy *HMACCoreStrategy) {
 	if len(prefix) == 0 || strings.Count(prefix, "%s") != 1 {
 		return &HMACCoreStrategy{

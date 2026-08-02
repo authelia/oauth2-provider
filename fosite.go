@@ -165,6 +165,34 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 	*a = append(*a, h)
 }
 
+// RFC7591ClientRegistrationEndpointHandlers is a list of RFC7591ClientRegistrationEndpointHandler
+type RFC7591ClientRegistrationEndpointHandlers []RFC7591ClientRegistrationEndpointHandler
+
+// Append adds an RFC7591ClientRegistrationEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *RFC7591ClientRegistrationEndpointHandlers) Append(h RFC7591ClientRegistrationEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// RFC7592ClientConfigurationEndpointHandlers is a list of RFC7592ClientConfigurationEndpointHandler
+type RFC7592ClientConfigurationEndpointHandlers []RFC7592ClientConfigurationEndpointHandler
+
+// Append adds an RFC7592ClientConfigurationEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *RFC7592ClientConfigurationEndpointHandlers) Append(h RFC7592ClientConfigurationEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
 // Configurator is the full configuration surface a Provider requires.
 type Configurator interface {
 	IDTokenIssuerProvider
@@ -244,6 +272,9 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthStrategyProvider
 	DPoPConfigProvider
 	MTLSConfigProvider
+	RFC7591ClientRegistrationConfigProvider
+	RFC7591ClientRegistrationEndpointHandlersProvider
+	RFC7592ClientConfigurationEndpointHandlersProvider
 }
 
 // New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package

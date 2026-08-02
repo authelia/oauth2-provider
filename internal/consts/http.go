@@ -25,6 +25,13 @@ const (
 )
 
 const (
+	// MediaTypeApplicationJSON is the bare "application/json" media type, without a charset parameter. It is used to
+	// validate an incoming request's Content-Type header via mime.ParseMediaType, which strips any parameters before
+	// comparison.
+	MediaTypeApplicationJSON = "application/json"
+)
+
+const (
 	PragmaNoCache       = "no-cache"
 	CacheControlNoStore = "no-store"
 )
@@ -32,4 +39,11 @@ const (
 const (
 	SchemeHTTP  = "http"
 	SchemeHTTPS = "https"
+)
+
+const (
+	// AuthSchemeBearer is the HTTP authentication scheme name used in the 'WWW-Authenticate' response header, per
+	// RFC 6750 Section 3. It is distinct from BearerAccessToken (the lowercase 'token_type' value used elsewhere in
+	// OAuth 2.0 responses): the scheme name in a challenge is conventionally capitalized.
+	AuthSchemeBearer = "Bearer"
 )

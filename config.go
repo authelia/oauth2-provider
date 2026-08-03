@@ -348,6 +348,15 @@ type AllowedJWTAssertionAudiencesProvider interface {
 	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
 }
 
+// AllowedIntrospectionAudiencesProvider is a provider used in contexts where the permitted audiences for an Access
+// Token used to authenticate a request to the introspection endpoint is required to validate a request.
+type AllowedIntrospectionAudiencesProvider interface {
+	// GetAllowedIntrospectionAudiences returns the permitted audience list for introspection authentication. An empty
+	// list indicates the audience of an Access Token used to authenticate a request to the introspection endpoint is
+	// not restricted.
+	GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string)
+}
+
 // AuthorizeEndpointHandlersProvider returns the provider for configuring the authorize endpoint handlers.
 type AuthorizeEndpointHandlersProvider interface {
 	// GetAuthorizeEndpointHandlers returns the authorize endpoint handlers.

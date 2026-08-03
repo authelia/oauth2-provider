@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -151,12 +152,45 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 			return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHintf("HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
 		}
 
+		if err = f.handleNewIntrospectionRequestAudience(ctx, ar); err != nil {
+			return nil, err
+		}
+
 		client = ar.GetClient()
 	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetIntrospectionEndpointClientAuthStrategy(ctx)); err != nil {
 		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
 	}
 
 	return client, nil
+}
+
+// handleNewIntrospectionRequestAudience validates the audience of the Access Token used to authenticate a request to
+// the introspection endpoint against the audiences permitted by the AllowedIntrospectionAudiencesProvider. The granted
+// audience and the granted RFC 8707 resource indicators are both considered, and the token must carry at least one of
+// the permitted values. A token with no audience at all is therefore rejected. When no audiences are configured the
+// endpoint does not restrict which Access Tokens may be used to authenticate.
+func (f *Fosite) handleNewIntrospectionRequestAudience(ctx context.Context, ar AccessRequester) (err error) {
+	allowed := f.Config.GetAllowedIntrospectionAudiences(ctx)
+
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	audience := JoinGrantedAudienceAndResource(ar.GetGrantedAudience(), ar.GetGrantedResource())
+
+	for _, aud := range audience {
+		if slices.Contains(allowed, aud) {
+			return nil
+		}
+	}
+
+	outer := ErrRequestUnauthorized.WithHint("The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint.")
+
+	if len(audience) == 0 {
+		return errorsx.WithStack(outer.WithDebugf("The Access Token used to authenticate the request was expected to have an audience which matches one of the values '%s' but it does not have an audience.", strings.Join(allowed, "', '")))
+	}
+
+	return errorsx.WithStack(outer.WithDebugf("The Access Token used to authenticate the request was expected to have an audience which matches one of the values '%s' but the audience had the values '%s'.", strings.Join(allowed, "', '"), strings.Join(audience, "', '")))
 }
 
 type IntrospectionResponse struct {

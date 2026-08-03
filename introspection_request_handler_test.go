@@ -7,6 +7,7 @@ package oauth2_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -227,6 +228,152 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tc.isActive, res.IsActive())
 			}
+		})
+	}
+}
+
+func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
+	testCases := []struct {
+		name     string
+		allowed  []string
+		audience []string
+		resource []string
+		err      string
+	}{
+		{
+			name:     "ShouldPassWithoutConfiguredAudiencesGivenNoTokenAudience",
+			allowed:  nil,
+			audience: nil,
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithoutConfiguredAudiencesGivenTokenAudience",
+			allowed:  nil,
+			audience: []string{"https://app.example.com"},
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithEmptyConfiguredAudiences",
+			allowed:  []string{},
+			audience: []string{"https://app.example.com"},
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithMatchingAudience",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{"https://introspection.example.com"},
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithMatchingResource",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: nil,
+			resource: []string{"https://introspection.example.com"},
+		},
+		{
+			name:     "ShouldPassWithOneMatchingAudienceOfSeveral",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{"https://app.example.com", "https://introspection.example.com"},
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithOneMatchingConfiguredAudienceOfSeveral",
+			allowed:  []string{"https://other.example.com", "https://introspection.example.com"},
+			audience: []string{"https://introspection.example.com"},
+			resource: nil,
+		},
+		{
+			name:     "ShouldFailWithoutTokenAudience",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: nil,
+			resource: nil,
+			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but it does not have an audience.",
+		},
+		{
+			name:     "ShouldFailWithMismatchedAudience",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{"https://app.example.com"},
+			resource: []string{"https://api.example.com"},
+			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but the audience had the values 'https://app.example.com', 'https://api.example.com'.",
+		},
+		{
+			name:     "ShouldFailWithPartiallyMatchingAudiencePrefix",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{"https://introspection.example.com.evil.com"},
+			resource: nil,
+			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but the audience had the values 'https://introspection.example.com.evil.com'.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			validator := mock.NewMockTokenIntrospector(ctrl)
+			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
+
+			config := &Config{AllowedIntrospectionAudiences: tc.allowed}
+
+			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+
+			config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+			validator.EXPECT().
+				IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
+					for _, aud := range tc.audience {
+						requester.GrantAudience(aud)
+					}
+
+					for _, resource := range tc.resource {
+						requester.GrantResource(resource)
+					}
+
+					return AccessToken, nil
+				})
+
+			// The introspected token is only reached when the authenticating token passes the audience check.
+			validator.EXPECT().
+				IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(AccessToken, nil).
+				AnyTimes()
+
+			httpreq := &http.Request{
+				Method: http.MethodPost,
+				Header: http.Header{
+					consts.HeaderAuthorization: []string{"bearer some-token"},
+				},
+				PostForm: url.Values{
+					"token": []string{"introspect-token"},
+				},
+			}
+
+			res, err := f.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.True(t, res.IsActive())
+
+				return
+			}
+
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
+			assert.False(t, res.IsActive())
+
+			require.True(t, errors.Is(err, ErrRequestUnauthorized))
+
+			rfc := ErrorToRFC6749Error(err)
+
+			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+
+			// The failure must be written out as an error rather than masked as an inactive token response.
+			rw := httptest.NewRecorder()
+
+			f.WriteIntrospectionError(t.Context(), rw, err)
+
+			assert.Equal(t, http.StatusUnauthorized, rw.Code)
+			assert.JSONEq(t, `{"error":"request_unauthorized","error_description":"The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint."}`, rw.Body.String())
 		})
 	}
 }

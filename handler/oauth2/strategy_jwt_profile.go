@@ -190,13 +190,9 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	mapClaims := claims.ToMapClaims()
 
-	if dpop, ok := request.GetSession().(oauth2.DPoPBoundSession); ok {
-		if jkt := dpop.GetDPoPJWKThumbprint(); jkt != "" {
-			mapClaims[jwt.ClaimConfirmation] = map[string]any{
-				jwt.ClaimConfirmationJWKThumbprint: jkt,
-			}
-		}
-	}
+	// The claims above include the session's extra claims, which may carry a 'cnf' of their own. This rebuilds the
+	// claim from the session so the token asserts only the bindings the server actually established.
+	oauth2.ApplyConfirmation(mapClaims, request.GetSession())
 
 	return s.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }

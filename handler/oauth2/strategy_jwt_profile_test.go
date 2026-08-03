@@ -334,6 +334,78 @@ func TestGenerateJWTIncludesCnf(t *testing.T) {
 
 		assert.NotContains(t, payload, jwt.ClaimConfirmation)
 	})
+
+	// The session's extra claims are merged into the token's claims, so a 'cnf.jkt' placed there must not be able to
+	// assert a binding no DPoP proof was ever checked against.
+	t.Run("ShouldNotAllowExtraClaimsToForgeCnfWhenNotDPoPBound", func(t *testing.T) {
+		r := jwtValidCase(oauth2.AccessToken)
+		r.GetSession().(*JWTSession).JWTClaims.Extra[jwt.ClaimConfirmation] = map[string]any{
+			jwt.ClaimConfirmationJWKThumbprint: "forged-jkt",
+		}
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3, "%s - %v", token, parts)
+
+		rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+		assert.NotContains(t, payload, jwt.ClaimConfirmation)
+	})
+
+	t.Run("ShouldNotAllowExtraClaimsToForgeCnfWhenDPoPBound", func(t *testing.T) {
+		r := jwtValidCase(oauth2.AccessToken)
+		r.GetSession().(*JWTSession).JWTClaims.Extra[jwt.ClaimConfirmation] = map[string]any{
+			jwt.ClaimConfirmationJWKThumbprint: "forged-jkt",
+		}
+		r.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint("test-jkt")
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3, "%s - %v", token, parts)
+
+		rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+		cnf, ok := payload[jwt.ClaimConfirmation].(map[string]any)
+		require.True(t, ok, "expected cnf claim to be present and a map, got %#v", payload[jwt.ClaimConfirmation])
+		assert.Equal(t, "test-jkt", cnf[jwt.ClaimConfirmationJWKThumbprint])
+	})
+
+	t.Run("ShouldNotAllowExtraClaimsToSupplyOtherConfirmationMethods", func(t *testing.T) {
+		r := jwtValidCase(oauth2.AccessToken)
+		r.GetSession().(*JWTSession).JWTClaims.Extra[jwt.ClaimConfirmation] = map[string]any{
+			jwt.ClaimConfirmationX509SHA256Thumbprint: "forged-x5t",
+		}
+		r.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint("test-jkt")
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parts := strings.Split(token, ".")
+		require.Len(t, parts, 3, "%s - %v", token, parts)
+
+		rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+		cnf, ok := payload[jwt.ClaimConfirmation].(map[string]any)
+		require.True(t, ok, "expected cnf claim to be present and a map, got %#v", payload[jwt.ClaimConfirmation])
+		assert.Equal(t, "test-jkt", cnf[jwt.ClaimConfirmationJWKThumbprint])
+		assert.NotContains(t, cnf, jwt.ClaimConfirmationX509SHA256Thumbprint)
+	})
 }
 
 func TestSplitN(t *testing.T) {

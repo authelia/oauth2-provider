@@ -234,13 +234,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
 		response[jwt.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
 	}
-	if dpop, ok := r.GetAccessRequester().GetSession().(DPoPBoundSession); ok {
-		if jkt := dpop.GetDPoPJWKThumbprint(); jkt != "" {
-			response[jwt.ClaimConfirmation] = map[string]any{
-				jwt.ClaimConfirmationJWKThumbprint: jkt,
-			}
-		}
-	}
+	ApplyConfirmation(response, r.GetAccessRequester().GetSession())
 	if aud := JoinGrantedAudienceAndResource(r.GetAccessRequester().GetGrantedAudience(), r.GetAccessRequester().GetGrantedResource()); len(aud) > 0 {
 		response[jwt.ClaimAudience] = aud
 	}

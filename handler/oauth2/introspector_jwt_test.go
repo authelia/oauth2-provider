@@ -150,6 +150,60 @@ func TestIntrospectJWT(t *testing.T) {
 	}
 }
 
+func TestIntrospectJWTRecoversDPoPBinding(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
+		},
+		Config: config,
+	}
+
+	validator := &StatelessJWTValidator{
+		StatelessJWTStrategy: strategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		jkt      string
+		expected string
+	}{
+		{"ShouldRecoverBindingWhenDPoPBound", "test-jkt", "test-jkt"},
+		{"ShouldReportUnboundWhenNotDPoPBound", "", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := jwtValidCase(oauth2.AccessToken)
+
+			if tc.jkt != "" {
+				r.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(tc.jkt)
+			}
+
+			tokenString, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			require.NoError(t, err)
+
+			areq := oauth2.NewAccessRequest(nil)
+
+			_, err = validator.IntrospectToken(t.Context(), tokenString, oauth2.AccessToken, areq, []string{})
+			require.NoError(t, err)
+
+			bound, ok := areq.GetSession().(oauth2.DPoPBoundSession)
+			require.True(t, ok, "expected the merged session to support DPoP binding, got %T", areq.GetSession())
+			assert.Equal(t, tc.expected, bound.GetDPoPJWKThumbprint())
+		})
+	}
+}
+
 func BenchmarkIntrospectJWT(b *testing.B) {
 	config := &oauth2.Config{}
 

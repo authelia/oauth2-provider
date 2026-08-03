@@ -165,6 +165,15 @@ type UserInfoClient interface {
 //
 // See: https://www.rfc-editor.org/rfc/rfc9101
 type JARClient interface {
+	// GetRequireSignedRequestObject is equivalent to the 'require_signed_request_object' client metadata value which
+	// indicates where authorization request needs to be protected as a Request Object and provided through either the
+	// 'request' or 'request_uri' parameter. When true a request which does not include one of these parameters MUST be
+	// rejected, and the Request Object MUST be signed; i.e. a 'request_object_signing_alg' value of 'none' is not
+	// sufficient to satisfy this requirement.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-9.3
+	GetRequireSignedRequestObject() (require bool)
+
 	// GetRequestObjectSigningKeyID returns the specific key identifier used to satisfy JWS requirements of the request
 	// object specifications. If unspecified the other available parameters will be utilized to select an appropriate
 	// key.
@@ -488,6 +497,7 @@ type DefaultJARClient struct {
 	RevocationEndpointAuthMethod                     string              `json:"revocation_endpoint_auth_method"`
 	PushedAuthorizationRequestEndpointAuthMethod     string              `json:"pushed_authorization_request_endpoint_auth_method"`
 	RequestURIs                                      []string            `json:"request_uris"`
+	RequireSignedRequestObject                       bool                `json:"require_signed_request_object"`
 	RequestObjectSigningKeyID                        string              `json:"request_object_signing_kid"`
 	RequestObjectSigningAlg                          string              `json:"request_object_signing_alg"`
 	RequestObjectEncryptionKeyID                     string              `json:"request_object_encryption_kid"`
@@ -609,6 +619,10 @@ func (c *DefaultJARClient) GetRevocationEndpointAuthSigningAlg() string {
 
 func (c *DefaultJARClient) GetPushedAuthorizationRequestEndpointAuthSigningAlg() (alg string) {
 	return c.PushedAuthorizationRequestEndpointAuthSigningAlg
+}
+
+func (c *DefaultJARClient) GetRequireSignedRequestObject() bool {
+	return c.RequireSignedRequestObject
 }
 
 func (c *DefaultJARClient) GetRequestObjectSigningKeyID() string {

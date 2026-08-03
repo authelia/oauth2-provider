@@ -253,6 +253,16 @@ type Config struct {
 	// RequirePushedAuthorizationRequests requires pushed authorization request for /authorize
 	RequirePushedAuthorizationRequests bool
 
+	// RequireSignedRequestObject requires all authorization requests be protected as a signed Request Object provided
+	// by either the 'request' or 'request_uri' parameter. This is equivalent to the 'require_signed_request_object'
+	// authorization server metadata value.
+	RequireSignedRequestObject bool
+
+	// RequireSignedRequestObjectSkipPushedAuthorizationRequests skips the signed Request Object requirement for
+	// requests made directly to the Pushed Authorization Request endpoint. This applies to the requirement from both
+	// the authorization server and client metadata values.
+	RequireSignedRequestObjectSkipPushedAuthorizationRequests bool
+
 	RFC8693TokenTypes map[string]RFC8693TokenType
 
 	DefaultRequestedTokenType string
@@ -665,11 +675,24 @@ func (c *Config) GetPushedAuthorizeContextLifespan(ctx context.Context) time.Dur
 	return c.PushedAuthorizeContextLifespan
 }
 
-// EnforcePushedAuthorize indicates if PAR is enforced. In this mode, a client
+// GetRequirePushedAuthorizationRequests indicates if PAR is enforced. In this mode, a client
 // cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 // must contain the PAR request_uri.
 func (c *Config) GetRequirePushedAuthorizationRequests(ctx context.Context) bool {
 	return c.RequirePushedAuthorizationRequests
+}
+
+// GetRequireSignedRequestObject indicates if JWT-Secured Authorization Requests are enforced. In this mode, a client
+// cannot pass authorization parameters via the OAuth 2.0 request syntax alone; the request must be protected as a
+// signed Request Object provided by either the 'request' or 'request_uri' parameter.
+func (c *Config) GetRequireSignedRequestObject(ctx context.Context) bool {
+	return c.RequireSignedRequestObject
+}
+
+// GetRequireSignedRequestObjectSkipPushedAuthorizationRequests indicates if the signed Request Object requirement is
+// skipped for requests made directly to the Pushed Authorization Request endpoint.
+func (c *Config) GetRequireSignedRequestObjectSkipPushedAuthorizationRequests(ctx context.Context) bool {
+	return c.RequireSignedRequestObjectSkipPushedAuthorizationRequests
 }
 
 func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {

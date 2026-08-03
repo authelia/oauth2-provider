@@ -430,6 +430,26 @@ type PushedAuthorizeRequestConfigProvider interface {
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
 }
 
+// JWTSecuredAuthorizationRequestConfigProvider is the configuration provider for JWT-Secured Authorization
+// Requests (JAR).
+//
+// See: https://www.rfc-editor.org/rfc/rfc9101#section-9.2
+type JWTSecuredAuthorizationRequestConfigProvider interface {
+	// GetRequireSignedRequestObject is equivalent to the 'require_signed_request_object' authorization server metadata
+	// value which indicates if the use of JWT-Secured Authorization Requests is globally required. In this mode a
+	// client cannot pass authorization parameters via the OAuth 2.0 request syntax alone; the request must be
+	// protected as a signed Request Object provided by either the 'request' or 'request_uri' parameter.
+	GetRequireSignedRequestObject(ctx context.Context) (require bool)
+
+	// GetRequireSignedRequestObjectSkipPushedAuthorizationRequests indicates if the requirement enforced by
+	// GetRequireSignedRequestObject, or by the client metadata value of the same name, is skipped for requests made
+	// directly to the Pushed Authorization Request endpoint. A Pushed Authorization Request is submitted via an
+	// authenticated back-channel request which provides similar integrity guarantees to a Request Object, so some
+	// deployments may consider it a sufficient substitute. This does not affect requests made to the authorization
+	// endpoint.
+	GetRequireSignedRequestObjectSkipPushedAuthorizationRequests(ctx context.Context) (skip bool)
+}
+
 // AuthorizeErrorFieldResponseStrategyProvider returns the provider for the strategy used to write authorization
 // endpoint errors that cannot be delivered via a response_mode handler.
 type AuthorizeErrorFieldResponseStrategyProvider interface {

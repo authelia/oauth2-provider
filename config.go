@@ -109,6 +109,28 @@ type IDTokenValidationStrategyProvider interface {
 	GetIDTokenValidationStrategy(ctx context.Context) (strategy TokenValidationStrategy)
 }
 
+// BackChannelLogoutTokenStrategyProvider returns the provider for configuring the Back-Channel Logout token
+// strategy, which generates the Logout Tokens delivered to Relying Parties.
+type BackChannelLogoutTokenStrategyProvider interface {
+	// GetBackChannelLogoutTokenStrategy returns the Back-Channel Logout token strategy. Has no default and may
+	// be nil.
+	GetBackChannelLogoutTokenStrategy(ctx context.Context) (strategy BackChannelLogoutTokenStrategy)
+}
+
+// BackChannelLogoutLifespanProvider returns the provider for configuring the Logout Token lifespan.
+type BackChannelLogoutLifespanProvider interface {
+	// GetBackChannelLogoutLifespan returns the Logout Token lifespan. Defaults to 5 minutes.
+	GetBackChannelLogoutLifespan(ctx context.Context) (lifespan time.Duration)
+}
+
+// BackChannelLogoutConcurrencyProvider returns the provider for configuring how many Back-Channel Logout
+// requests are delivered concurrently.
+type BackChannelLogoutConcurrencyProvider interface {
+	// GetBackChannelLogoutConcurrency returns the maximum number of Back-Channel Logout requests delivered
+	// concurrently. Defaults to 10.
+	GetBackChannelLogoutConcurrency(ctx context.Context) (n int)
+}
+
 // IntrospectionIssuerProvider returns the provider for configuring the Introspection issuer.
 type IntrospectionIssuerProvider interface {
 	// GetIntrospectionIssuer returns the Introspection token issuer.

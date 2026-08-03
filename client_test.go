@@ -66,3 +66,26 @@ func TestDefaultRPInitiatedLogoutClient(t *testing.T) {
 	_, ok := any(&DefaultClient{}).(RPInitiatedLogoutClient)
 	assert.False(t, ok, "DefaultClient must not satisfy RPInitiatedLogoutClient")
 }
+
+func TestDefaultBackChannelLogoutClient(t *testing.T) {
+	client := &DefaultBackChannelLogoutClient{
+		DefaultClient:                    &DefaultClient{ID: "rp-1"},
+		BackChannelLogoutURI:             "https://rp.example/backchannel-logout",
+		BackChannelLogoutSessionRequired: true,
+	}
+
+	assert.Equal(t, "rp-1", client.GetID())
+	assert.Equal(t, "https://rp.example/backchannel-logout", client.GetBackChannelLogoutURI())
+	assert.True(t, client.GetBackChannelLogoutSessionRequired())
+
+	var iface BackChannelLogoutClient = client
+
+	assert.Equal(t, "https://rp.example/backchannel-logout", iface.GetBackChannelLogoutURI())
+}
+
+func TestDefaultBackChannelLogoutClientDefaults(t *testing.T) {
+	client := &DefaultBackChannelLogoutClient{DefaultClient: &DefaultClient{ID: "rp-2"}}
+
+	assert.Equal(t, "", client.GetBackChannelLogoutURI())
+	assert.False(t, client.GetBackChannelLogoutSessionRequired())
+}

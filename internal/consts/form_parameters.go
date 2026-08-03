@@ -45,6 +45,7 @@ const (
 	FormParameterLogoutHint                                = "logout_hint"
 	FormParameterPostLogoutRedirectURI                     = "post_logout_redirect_uri"
 	FormParameterUILocales                                 = "ui_locales"
+	FormParameterLogoutToken                               = "logout_token"
 	FormParameterRequestedTokenType                        = "requested_token_type"
 	FormParameterIssuedTokenType                           = "issued_token_type" //nolint:gosec // This is a credential type, not a credential.
 	FormParameterSubjectTokenType                          = "subject_token_type"

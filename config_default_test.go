@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -27,4 +28,32 @@ type testTokenValidationStrategy struct{}
 
 func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
 	return nil, nil
+}
+
+func TestConfigBackChannelLogoutDefaults(t *testing.T) {
+	config := &Config{}
+
+	assert.Nil(t, config.GetBackChannelLogoutTokenStrategy(t.Context()))
+	assert.Equal(t, time.Minute*5, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, 10, config.GetBackChannelLogoutConcurrency(t.Context()))
+}
+
+func TestConfigBackChannelLogoutOverrides(t *testing.T) {
+	config := &Config{
+		BackChannelLogoutLifespan:    time.Minute * 2,
+		BackChannelLogoutConcurrency: 3,
+	}
+
+	assert.Equal(t, time.Minute*2, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, 3, config.GetBackChannelLogoutConcurrency(t.Context()))
+}
+
+func TestConfigBackChannelLogoutNonPositiveFallsBackToDefaults(t *testing.T) {
+	config := &Config{
+		BackChannelLogoutLifespan:    -time.Second,
+		BackChannelLogoutConcurrency: -1,
+	}
+
+	assert.Equal(t, time.Minute*5, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, 10, config.GetBackChannelLogoutConcurrency(t.Context()))
 }

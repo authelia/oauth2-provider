@@ -354,6 +354,25 @@ type RPInitiatedLogoutClient interface {
 	GetPostLogoutRedirectURIs() (uris []string)
 }
 
+// BackChannelLogoutClient is a Client which has registered a back-channel logout URI for OpenID Connect
+// Back-Channel Logout.
+//
+// As with post_logout_redirect_uris, this library does not validate the registered backchannel_logout_uri's
+// scheme, host, or exposure to SSRF; validating it at registration time is the integrator's responsibility.
+//
+// See: https://openid.net/specs/openid-connect-backchannel-1_0.html
+type BackChannelLogoutClient interface {
+	Client
+
+	// GetBackChannelLogoutURI returns the client's registered back-channel logout URI. A client with none
+	// registered does not participate in back-channel logout.
+	GetBackChannelLogoutURI() (uri string)
+
+	// GetBackChannelLogoutSessionRequired returns true when the client requires the 'sid' claim in the Logout
+	// Token. When it does and no session identifier is available the client is not notified.
+	GetBackChannelLogoutSessionRequired() (required bool)
+}
+
 // JWTProfileClient represents a client with can handle RFC9068 responses; i.e. the JWT Profile for OAuth 2.0 Access
 // Tokens.
 type JWTProfileClient interface {
@@ -489,7 +508,6 @@ type DefaultClient struct {
 }
 
 type DefaultJARClient struct {
-	*DefaultClient
 	JSONWebKeysURI                                   string              `json:"jwks_uri"`
 	JSONWebKeys                                      *jose.JSONWebKeySet `json:"jwks"`
 	TokenEndpointAuthMethod                          string              `json:"token_endpoint_auth_method"`
@@ -507,16 +525,27 @@ type DefaultJARClient struct {
 	IntrospectionEndpointAuthSigningAlg              string              `json:"introspection_endpoint_auth_signing_alg"`
 	RevocationEndpointAuthSigningAlg                 string              `json:"revocation_endpoint_auth_signing_alg"`
 	PushedAuthorizationRequestEndpointAuthSigningAlg string              `json:"pushed_authorization_request_endpoint_auth_signing_alg"`
+
+	*DefaultClient
 }
 
 type DefaultResponseModeClient struct {
-	*DefaultClient
 	ResponseModes []ResponseModeType `json:"response_modes"`
+
+	*DefaultClient
 }
 
 type DefaultRPInitiatedLogoutClient struct {
-	*DefaultClient
 	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
+
+	*DefaultClient
+}
+
+type DefaultBackChannelLogoutClient struct {
+	BackChannelLogoutURI             string `json:"backchannel_logout_uri"`
+	BackChannelLogoutSessionRequired bool   `json:"backchannel_logout_session_required"`
+
+	*DefaultClient
 }
 
 func (c *DefaultClient) GetID() string {
@@ -673,9 +702,18 @@ func (c *DefaultRPInitiatedLogoutClient) GetPostLogoutRedirectURIs() (uris []str
 	return c.PostLogoutRedirectURIs
 }
 
+func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutURI() (uri string) {
+	return c.BackChannelLogoutURI
+}
+
+func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutSessionRequired() (required bool) {
+	return c.BackChannelLogoutSessionRequired
+}
+
 var (
 	_ Client                  = (*DefaultClient)(nil)
 	_ ResponseModeClient      = (*DefaultResponseModeClient)(nil)
 	_ JARClient               = (*DefaultJARClient)(nil)
 	_ RPInitiatedLogoutClient = (*DefaultRPInitiatedLogoutClient)(nil)
+	_ BackChannelLogoutClient = (*DefaultBackChannelLogoutClient)(nil)
 )

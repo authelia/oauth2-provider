@@ -167,8 +167,18 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		nrequest, nrequestURI int
 	)
 
+	// The 'require_signed_request_object' authorization server and client metadata values indicate the authorization
+	// request must be protected as a Request Object provided by either the 'request' or 'request_uri' parameter.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-9.2 and https://www.rfc-editor.org/rfc/rfc9101#section-9.3
+	required := f.requireSignedRequestObject(ctx, request.Client, isPARRequest)
+
 	switch nrequest, nrequestURI = len(request.Form.Get(consts.FormParameterRequest)), len(request.Form.Get(consts.FormParameterRequestURI)); {
 	case nrequest+nrequestURI == 0:
+		if required {
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequired, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but neither the 'request' nor 'request_uri' parameter was included in the request.", request.GetClient().GetID()))
+		}
+
 		return nil
 	case nrequest > 0 && nrequestURI > 0:
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameters 'request' and 'request_uri' were both used, but only one may be used in any given request.", hintRequestObjectPrefix(openid)))
@@ -206,7 +216,12 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	switch alg = client.GetRequestObjectSigningAlg(); alg {
 	case consts.JSONWebTokenAlgNone:
-		break
+		// A client explicitly registered with a 'request_object_signing_alg' of 'none' can only ever produce an
+		// unsigned request object as the registered value is strictly enforced by the header validation below, so this
+		// requirement can never be satisfied by such a client.
+		if required {
+			return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredSigned, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but the client is registered with a 'request_object_signing_alg' value of 'none'.", request.GetClient().GetID()))
+		}
 	case "":
 		algAny = true
 	case consts.JSONWebTokenAlgHMACSHA256, consts.JSONWebTokenAlgHMACSHA384, consts.JSONWebTokenAlgHMACSHA512:
@@ -378,6 +393,30 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 
 	return nil
+}
+
+// requireSignedRequestObject determines if the 'require_signed_request_object' policy applies to this request. It
+// applies when either the authorization server metadata value of the same name is set, or when the individual client
+// is registered with the client metadata value of the same name. The policy is skipped for requests made directly to
+// the Pushed Authorization Request endpoint if the authorization server is configured to do so.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9101#section-9.2 and https://www.rfc-editor.org/rfc/rfc9101#section-9.3
+func (f *Fosite) requireSignedRequestObject(ctx context.Context, client Client, isPARRequest bool) (require bool) {
+	config, hasConfig := f.Config.(JWTSecuredAuthorizationRequestConfigProvider)
+
+	if isPARRequest && hasConfig && config.GetRequireSignedRequestObjectSkipPushedAuthorizationRequests(ctx) {
+		return false
+	}
+
+	if hasConfig && config.GetRequireSignedRequestObject(ctx) {
+		return true
+	}
+
+	if jarc, ok := client.(JARClient); ok && jarc.GetRequireSignedRequestObject() {
+		return true
+	}
+
+	return false
 }
 
 func hintRequestObjectPrefix(openid bool) string {

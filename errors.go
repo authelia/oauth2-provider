@@ -302,6 +302,8 @@ const (
 	hintRequestObjectPrefixJAR                      = "OAuth 2.0 JWT-Secured Authorization Request"
 	hintRequestObjectRequiredRequestSyntaxParameter = "%s parameter '%s' must be accompanied by the '%s' parameter in the request syntax."
 	hintRequestObjectFetchRequestURI                = "%s request failed to fetch request parameters from the provided 'request_uri'."
+	hintRequestObjectRequired                       = "%s requests must be protected as a Request Object provided by either the 'request' or 'request_uri' parameter, but neither parameter was included in this request."
+	hintRequestObjectRequiredSigned                 = "%s requests must be protected as a signed Request Object, but the OAuth 2.0 Client is registered with a 'request_object_signing_alg' value of 'none'."
 	hintRequestObjectValidate                       = "%s request failed with an error attempting to validate the request object."
 	hintRequestObjectInvalidAuthorizationClaim      = "%s request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted."
 	debugRequestObjectValueMismatch                 = "The OAuth 2.0 client with id '%s' included a request object with a '%s' claim with a value of '%s' which is required to match the value '%s' in the parameter with the same name from the OAuth 2.0 request syntax."

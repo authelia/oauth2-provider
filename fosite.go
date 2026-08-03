@@ -192,6 +192,7 @@ type Configurator interface {
 	RevocationHandlersProvider
 	PushedAuthorizeRequestHandlersProvider
 	PushedAuthorizeRequestConfigProvider
+	JWTSecuredAuthorizationRequestConfigProvider
 	RFC8693ConfigProvider
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider

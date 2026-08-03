@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,6 +28,7 @@ type DefaultClientAuthenticationStrategy struct {
 		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
 		AllowedJWTAssertionAudiencesProvider
+		MTLSConfigProvider
 	}
 }
 
@@ -66,12 +68,45 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 		secret = secretBasic
 	}
 
+	var cert *x509.Certificate
+
+	if s.Config.GetMTLSEnabled(ctx) {
+		if cert, err = ClientCertificateFromRequest(r, s.Config.GetMTLSClientCertificateHeader(ctx)); err != nil {
+			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
+		}
+	}
+
 	hasNone := !hasPost && !hasBasic && assertion == nil && len(id) != 0
 
-	return s.authenticate(ctx, id, secret, assertion, hasBasic, hasPost, hasNone, strategy)
+	return s.authenticate(ctx, id, secret, assertion, cert, hasBasic, hasPost, hasNone, strategy)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, cert *x509.Certificate, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
+	if assertion != nil && assertion.Client != nil {
+		client = assertion.Client
+	}
+
+	if client == nil {
+		if client, err = s.Store.GetClient(ctx, id); err != nil {
+			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	// RFC 8705 Section 2 makes mutual TLS an authentication method only for a client registered to use one. A
+	// certificate can be presented incidentally, by a proxy configured to forward one unconditionally or by an
+	// optional-mTLS listener, and treating that as an attempt to authenticate would reject every conventional client
+	// behind such a deployment. For any other client the certificate is ignored here and serves only to bind tokens.
+	isMTLS := isMTLSAuthMethod(client, strategy)
+	hasMTLS := cert != nil && isMTLS
+
+	// A client registered to use mutual TLS is gated off the 'none' method regardless of whether it presented a
+	// certificate. Gating this on hasMTLS instead (i.e. only once a certificate is known to be present) would leave
+	// the no-certificate case reading as 'none', which doAuthenticateNone would then reject with a method-mismatch
+	// error masking the real problem: no known authentication method was used. Section 2 also requires that a client
+	// authenticating with mutual TLS still sends 'client_id', which on its own would otherwise be read as the 'none'
+	// method and produce a spurious two-method conflict once the certificate is counted as well.
+	hasNone = hasNone && !isMTLS
+
 	var methods []string
 
 	if hasBasic {
@@ -86,18 +121,12 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 		methods = append(methods, consts.ClientAuthMethodNone)
 	}
 
-	if assertion != nil {
-		methods = append(methods, fmt.Sprintf("%s (i.e. %s or %s)", consts.ClientAssertionTypeJWTBearer, consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodClientSecretJWT))
-
-		if assertion.Client != nil {
-			client = assertion.Client
-		}
+	if hasMTLS {
+		methods = append(methods, strategy.GetAuthMethod(client.(AuthenticationMethodClient)))
 	}
 
-	if client == nil {
-		if client, err = s.Store.GetClient(ctx, id); err != nil {
-			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
-		}
+	if assertion != nil {
+		methods = append(methods, fmt.Sprintf("%s (i.e. %s or %s)", consts.ClientAssertionTypeJWTBearer, consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodClientSecretJWT))
 	}
 
 	switch len(methods) {
@@ -121,6 +150,8 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	}
 
 	switch {
+	case hasMTLS:
+		method, err = s.doAuthenticateMTLS(ctx, client, cert, strategy)
 	case assertion != nil:
 		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, strategy)
 	case hasBasic, hasPost:

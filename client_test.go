@@ -89,3 +89,39 @@ func TestDefaultBackChannelLogoutClientDefaults(t *testing.T) {
 	assert.Equal(t, "", client.GetBackChannelLogoutURI())
 	assert.False(t, client.GetBackChannelLogoutSessionRequired())
 }
+
+func TestDefaultMTLSClient(t *testing.T) {
+	client := &DefaultMTLSClient{
+		DefaultJARClient: &DefaultJARClient{
+			DefaultClient:           &DefaultClient{ID: "test", TLSClientCertificateBoundAccessTokens: true},
+			TokenEndpointAuthMethod: consts.ClientAuthMethodTLSClientAuth,
+		},
+		TLSClientAuthSubjectDN: "CN=test,O=Example",
+		TLSClientAuthSANDNS:    "client.example.com",
+		TLSClientAuthSANURI:    "https://client.example.com/",
+		TLSClientAuthSANIP:     "203.0.113.1",
+		TLSClientAuthSANEmail:  "client@example.com",
+	}
+
+	assert.Equal(t, "CN=test,O=Example", client.GetTLSClientAuthSubjectDN())
+	assert.Equal(t, "client.example.com", client.GetTLSClientAuthSANDNS())
+	assert.Equal(t, "https://client.example.com/", client.GetTLSClientAuthSANURI())
+	assert.Equal(t, "203.0.113.1", client.GetTLSClientAuthSANIP())
+	assert.Equal(t, "client@example.com", client.GetTLSClientAuthSANEmail())
+	assert.True(t, client.GetEnableTLSClientAuthBoundAccessTokens())
+
+	var (
+		tlsClient  TLSClientAuthClient
+		mtlsClient MTLSClient
+		authClient AuthenticationMethodClient
+	)
+
+	assert.Implements(t, &tlsClient, client)
+	assert.Implements(t, &mtlsClient, client)
+
+	assert.Implements(t, &authClient, client)
+	assert.Equal(t, consts.ClientAuthMethodTLSClientAuth, (&TokenEndpointClientAuthStrategy{}).GetAuthMethod(client))
+	assert.True(t, isMTLSAuthMethod(client, &TokenEndpointClientAuthStrategy{}))
+
+	assert.False(t, (&DefaultClient{}).GetEnableTLSClientAuthBoundAccessTokens())
+}

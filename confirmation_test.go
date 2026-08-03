@@ -13,19 +13,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func confirmationSession(jkt string) Session {
-	session := &DefaultSession{}
-	session.SetDPoPJWKThumbprint(jkt)
-
-	return session
-}
-
-// plainSession is a Session that does not implement DPoPBoundSession at all, as distinct from one that implements it
-// and reports no binding.
-type plainSession struct {
-	Session
-}
-
 func TestApplyConfirmation(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -177,9 +164,6 @@ func TestRestoreConfirmation(t *testing.T) {
 	})
 }
 
-// TestConfirmationRoundTrip asserts that every registered confirmation method survives issuance followed by recovery.
-// It runs over confirmationMethods rather than over 'jkt' alone so that a method added later, such as the RFC 8705
-// 'x5t#S256', is covered the moment it is registered rather than only if someone remembers to write this test again.
 func TestConfirmationRoundTrip(t *testing.T) {
 	require.NotEmpty(t, confirmationMethods)
 
@@ -225,4 +209,121 @@ func TestGetDPoPConfirmationJWKThumbprint(t *testing.T) {
 			assert.Equal(t, tc.expected, GetDPoPConfirmationJWKThumbprint(tc.claims))
 		})
 	}
+}
+
+func TestApplyConfirmationMTLS(t *testing.T) {
+	testCases := []struct {
+		name     string
+		claims   map[string]any
+		session  Session
+		expected map[string]any
+	}{
+		{
+			name:     "ShouldAddCertificateThumbprintWhenBound",
+			claims:   map[string]any{jwt.ClaimSubject: "peter"},
+			session:  confirmationSessionMTLS("", "test-x5t"),
+			expected: map[string]any{jwt.ClaimSubject: "peter", jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "test-x5t"}},
+		},
+		{
+			name:    "ShouldAddBothConfirmationMethodsWhenBoundByBoth",
+			claims:  map[string]any{jwt.ClaimSubject: "peter"},
+			session: confirmationSessionMTLS("test-jkt", "test-x5t"),
+			expected: map[string]any{jwt.ClaimSubject: "peter", jwt.ClaimConfirmation: map[string]any{
+				jwt.ClaimConfirmationJWKThumbprint:        "test-jkt",
+				jwt.ClaimConfirmationX509SHA256Thumbprint: "test-x5t",
+			}},
+		},
+		{
+			name:     "ShouldNotAddCertificateThumbprintWhenUnbound",
+			claims:   map[string]any{jwt.ClaimSubject: "peter"},
+			session:  confirmationSessionMTLS("", ""),
+			expected: map[string]any{jwt.ClaimSubject: "peter"},
+		},
+		{
+			name:     "ShouldRemoveCertificateThumbprintTheSessionDoesNotAssert",
+			claims:   map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "forged-x5t"}},
+			session:  confirmationSessionMTLS("", ""),
+			expected: map[string]any{},
+		},
+		{
+			name:     "ShouldOverwriteCertificateThumbprintTheSessionDidNotEstablish",
+			claims:   map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "forged-x5t"}},
+			session:  confirmationSessionMTLS("", "test-x5t"),
+			expected: map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "test-x5t"}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ApplyConfirmation(tc.claims, tc.session)
+
+			assert.Equal(t, tc.expected, tc.claims)
+		})
+	}
+}
+
+func TestConfirmationMTLSRoundTrip(t *testing.T) {
+	claims := map[string]any{jwt.ClaimSubject: "peter"}
+
+	ApplyConfirmation(claims, confirmationSessionMTLS("test-jkt", "test-x5t"))
+
+	restored := &DefaultSession{}
+
+	RestoreConfirmation(claims, restored)
+
+	assert.Equal(t, "test-x5t", restored.GetClientCertificateSHA256Thumbprint())
+	assert.Equal(t, "test-jkt", restored.GetDPoPJWKThumbprint())
+}
+
+func TestGetMTLSConfirmationX509SHA256Thumbprint(t *testing.T) {
+	testCases := []struct {
+		name     string
+		claims   map[string]any
+		expected string
+	}{
+		{name: "ShouldReturnTheThumbprint", claims: map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "test-x5t"}}, expected: "test-x5t"},
+		{name: "ShouldReturnEmptyWhenAbsent", claims: map[string]any{}, expected: ""},
+		{name: "ShouldReturnEmptyWhenConfirmationIsNotAnObject", claims: map[string]any{jwt.ClaimConfirmation: "not-an-object"}, expected: ""},
+		{name: "ShouldReturnEmptyWhenTheMemberIsNotAString", claims: map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: 42}}, expected: ""},
+		{name: "ShouldReturnEmptyForNilClaims", claims: nil, expected: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, GetMTLSConfirmationX509SHA256Thumbprint(tc.claims))
+		})
+	}
+}
+
+func TestDefaultSessionMTLSBinding(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
+
+	session = &DefaultSession{}
+
+	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
+
+	session.SetClientCertificateSHA256Thumbprint("test-x5t")
+
+	assert.Equal(t, "test-x5t", session.GetClientCertificateSHA256Thumbprint())
+}
+
+func confirmationSessionMTLS(jkt, x5t string) Session {
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint(jkt)
+	session.SetClientCertificateSHA256Thumbprint(x5t)
+
+	return session
+}
+
+func confirmationSession(jkt string) Session {
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint(jkt)
+
+	return session
+}
+
+type plainSession struct {
+	Session
 }

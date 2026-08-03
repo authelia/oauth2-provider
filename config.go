@@ -537,3 +537,17 @@ type DPoPConfigProvider interface {
 	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
 }
+
+// MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.
+type MTLSConfigProvider interface {
+	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.
+	GetMTLSEnabled(ctx context.Context) (enabled bool)
+
+	// GetMTLSEnforce returns true if certificate-bound access tokens are required for all clients regardless of
+	// client metadata.
+	GetMTLSEnforce(ctx context.Context) (enforce bool)
+
+	// GetMTLSClientCertificateHeader returns the name of the header carrying the client certificate forwarded by a
+	// trusted TLS terminating proxy, or an empty string to never read one.
+	GetMTLSClientCertificateHeader(ctx context.Context) (header string)
+}

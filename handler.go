@@ -42,6 +42,23 @@ type TokenEndpointHandler interface {
 	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) bool
 }
 
+// TokenEndpointGrantAugmenter is implemented by a TokenEndpointHandler that augments another handler's grant rather
+// than owning a grant type of its own, such as the RFC 8705 certificate binding and RFC 9449 DPoP handlers. Such a
+// handler never satisfies an access request by itself: it returns ErrUnknownRequest from HandleTokenEndpointRequest
+// even on success, and answers CanHandleTokenEndpointRequest by asking whether any other registered handler will
+// process the request.
+//
+// That delegation is why the marker exists. An augmenting handler MUST skip every other handler implementing this
+// interface while it scans, because two augmenting handlers each asking the other whether the request will be handled
+// recurses until the stack is exhausted. Since the scan runs before client authentication is enforced in
+// (*Fosite).NewAccessRequest, such a recursion is reachable by an unauthenticated caller.
+type TokenEndpointGrantAugmenter interface {
+	TokenEndpointHandler
+
+	// AugmentsTokenEndpointGrant is a marker identifying this handler as augmenting rather than owning a grant.
+	AugmentsTokenEndpointGrant()
+}
+
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.
 // https://datatracker.ietf.org/doc/html/rfc7009
 //

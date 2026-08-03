@@ -305,6 +305,28 @@ type Config struct {
 
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
+
+	// MTLSEnabled enables RFC 8705 Mutual-TLS handling.
+	MTLSEnabled bool
+
+	// MTLSEnforce requires certificate-bound access tokens for all clients regardless of client metadata.
+	MTLSEnforce bool
+
+	// MTLSClientCertificateHeader is the name of the header a trusted TLS terminating proxy forwards the client
+	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header
+	// entirely so that only a certificate from the TLS connection itself is used.
+	//
+	// Setting this is a decision to trust the named header absolutely. It is not authenticated, and a request that
+	// reaches this server without transiting the proxy can set it to any value, authenticating the sender as any
+	// client registered with an mTLS authentication method and binding tokens to a certificate it does not hold. A
+	// deployment that sets this MUST ensure the proxy unconditionally overwrites the header on every inbound request,
+	// and that the server is unreachable except through that proxy.
+	//
+	// The certificate chain is not validated here. For a certificate from the TLS connection Go has already done so
+	// against the listener's ClientCAs; for a forwarded one the proxy that performed the handshake is the component
+	// that validated it, and RFC 8705 Section 6.5 places that channel out of scope. Per Section 7.4 the trust anchors
+	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
+	MTLSClientCertificateHeader string
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -829,6 +851,18 @@ func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 	return c.DPoPStrategy
 }
 
+func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
+	return c.MTLSEnabled
+}
+
+func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
+	return c.MTLSEnforce
+}
+
+func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
+	return c.MTLSClientCertificateHeader
+}
+
 var (
 	_ AuthorizeCodeLifespanProvider                   = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                    = (*Config)(nil)
@@ -890,4 +924,5 @@ var (
 	_ IntrospectionEndpointClientAuthStrategyProvider = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider    = (*Config)(nil)
 	_ DPoPConfigProvider                              = (*Config)(nil)
+	_ MTLSConfigProvider                              = (*Config)(nil)
 )

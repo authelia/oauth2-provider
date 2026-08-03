@@ -118,5 +118,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		PushedAuthorizeHandlerFactory,
 
 		DPoPFactory,
+		RFC8705Factory,
 	)
 }

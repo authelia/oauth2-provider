@@ -212,6 +212,7 @@ type Configurator interface {
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
 	DPoPConfigProvider
+	MTLSConfigProvider
 }
 
 // New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package

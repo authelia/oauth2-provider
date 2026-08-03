@@ -69,10 +69,15 @@ func (h *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	session.SetDPoPJWKThumbprint(proof.Thumbprint)
 
-	// DPoP augments a grant, it never satisfies one. Returning nil here would mark the access request as handled in
-	// oauth2.(*Fosite).NewAccessRequest, which combined with CanSkipClientAuth would let an unauthenticated caller
-	// pass off a 'grant_type' no grant handler implements as a valid request. The binding recorded above is retained
-	// because it was written to the session, not to the return value.
+	// DPoP augments a grant, it never satisfies one. Returning nil here would set the 'found' flag in
+	// oauth2.(*Fosite).NewAccessRequest, which is that method's sole record that some handler actually granted the
+	// request. CanHandleTokenEndpointRequest is a claim rather than a guarantee of handling: openid handlers claim a
+	// grant type and then return oauth2.ErrUnknownRequest from HandleTokenEndpointRequest, unconditionally in the case
+	// of OpenIDConnectExplicitHandler, so a request can pass the gate above with no grant handler accepting it. Were
+	// this to return nil such a request would proceed to NewAccessResponse having had no code or refresh token
+	// validated, replacing a 'invalid_request' with a 'server_error' raised only once the populate handlers have
+	// already run. The binding recorded above is retained because it was written to the session, not to the return
+	// value.
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
@@ -109,8 +114,10 @@ func (h *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oau
 	// authentication for this handler, that caller need not be authenticated at all. Validating the proof records a
 	// replay marker, so it would hand an anonymous caller a write into the replay store on every request.
 	for _, handler := range h.Config.GetTokenEndpointHandlers(ctx) {
-		// Skip every DPoP handler, not just this instance, so a duplicate registration cannot recurse.
-		if _, ok := handler.(*Handler); ok {
+		// Skip every augmenting handler, not just this instance, so neither a duplicate registration nor another
+		// augmenting handler that delegates the same question back here can recurse. RFC 8705 is registered alongside
+		// this handler by compose.ComposeAllEnabled and does exactly that.
+		if _, ok := handler.(oauth2.TokenEndpointGrantAugmenter); ok {
 			continue
 		}
 
@@ -121,6 +128,10 @@ func (h *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oau
 
 	return false
 }
+
+// AugmentsTokenEndpointGrant implements oauth2.TokenEndpointGrantAugmenter. DPoP binds a key to a grant another
+// handler owns; it never satisfies an access request by itself.
+func (h *Handler) AugmentsTokenEndpointGrant() {}
 
 func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {
 	if h.Config.GetDPoPEnforce(ctx) {
@@ -135,5 +146,6 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 }
 
 var (
-	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+	_ oauth2.TokenEndpointHandler        = (*Handler)(nil)
+	_ oauth2.TokenEndpointGrantAugmenter = (*Handler)(nil)
 )

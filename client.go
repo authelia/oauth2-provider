@@ -419,6 +419,43 @@ type DPoPClient interface {
 	Client
 }
 
+// TLSClientAuthClient represents a client that authenticates using the RFC 8705 Section 2.1 'tls_client_auth' PKI
+// method. A client using that method MUST register exactly one of these subject values, which is the value the
+// certificate presented during the handshake is checked against.
+type TLSClientAuthClient interface {
+	// GetTLSClientAuthSubjectDN returns the 'tls_client_auth_subject_dn' client metadata value, being the RFC 4514
+	// string representation of the expected certificate subject distinguished name.
+	GetTLSClientAuthSubjectDN() (dn string)
+
+	// GetTLSClientAuthSANDNS returns the 'tls_client_auth_san_dns' client metadata value, being the expected dNSName
+	// subject alternative name entry.
+	GetTLSClientAuthSANDNS() (dns string)
+
+	// GetTLSClientAuthSANURI returns the 'tls_client_auth_san_uri' client metadata value, being the expected
+	// uniformResourceIdentifier subject alternative name entry.
+	GetTLSClientAuthSANURI() (uri string)
+
+	// GetTLSClientAuthSANIP returns the 'tls_client_auth_san_ip' client metadata value, being the expected iPAddress
+	// subject alternative name entry in dotted decimal or colon delimited hexadecimal notation.
+	GetTLSClientAuthSANIP() (ip string)
+
+	// GetTLSClientAuthSANEmail returns the 'tls_client_auth_san_email' client metadata value, being the expected
+	// rfc822Name subject alternative name entry.
+	GetTLSClientAuthSANEmail() (email string)
+
+	Client
+}
+
+// MTLSClient represents a client that can advertise the 'tls_client_certificate_bound_access_tokens' metadata value
+// per RFC 8705 Section 3.4.
+type MTLSClient interface {
+	// GetEnableTLSClientAuthBoundAccessTokens returns the 'tls_client_certificate_bound_access_tokens' client
+	// metadata value. When true, tokens issued to this client are bound to the certificate it presents.
+	GetEnableTLSClientAuthBoundAccessTokens() (enable bool)
+
+	Client
+}
+
 // ClientCredentialsFlowRequestedScopeImplicitClient is a client which can allow implicit scopes in the client credentials flow.
 type ClientCredentialsFlowRequestedScopeImplicitClient interface {
 	// GetClientCredentialsFlowRequestedScopeImplicit is indicative of if a client will implicitly request all scopes it
@@ -495,16 +532,17 @@ type JWTSecuredAuthorizationRequestJWTValidationOptionsClient interface {
 
 // DefaultClient is a simple default implementation of the Client interface.
 type DefaultClient struct {
-	ID                    string         `json:"id"`
-	ClientSecret          ClientSecret   `json:"-"`
-	RotatedClientSecrets  []ClientSecret `json:"-"`
-	RedirectURIs          []string       `json:"redirect_uris"`
-	GrantTypes            []string       `json:"grant_types"`
-	ResponseTypes         []string       `json:"response_types"`
-	Scopes                []string       `json:"scopes"`
-	Audience              []string       `json:"audience"`
-	Public                bool           `json:"public"`
-	DPoPBoundAccessTokens bool           `json:"dpop_bound_access_tokens"`
+	ID                                    string         `json:"id"`
+	ClientSecret                          ClientSecret   `json:"-"`
+	RotatedClientSecrets                  []ClientSecret `json:"-"`
+	RedirectURIs                          []string       `json:"redirect_uris"`
+	GrantTypes                            []string       `json:"grant_types"`
+	ResponseTypes                         []string       `json:"response_types"`
+	Scopes                                []string       `json:"scopes"`
+	Audience                              []string       `json:"audience"`
+	Public                                bool           `json:"public"`
+	DPoPBoundAccessTokens                 bool           `json:"dpop_bound_access_tokens"`
+	TLSClientCertificateBoundAccessTokens bool           `json:"tls_client_certificate_bound_access_tokens"`
 }
 
 type DefaultJARClient struct {
@@ -548,6 +586,26 @@ type DefaultBackChannelLogoutClient struct {
 	*DefaultClient
 }
 
+// DefaultMTLSClient registers the RFC 8705 Section 2.1.2 certificate subject metadata required by the
+// 'tls_client_auth' method.
+//
+// It embeds *DefaultJARClient rather than *DefaultClient because both RFC 8705 authentication methods are unreachable
+// without what that type supplies. A certificate is only counted as an authentication method when the client's
+// registered '*_endpoint_auth_method' names one of them, which is read through AuthenticationMethodClient, and
+// *DefaultClient does not implement it; so a DefaultMTLSClient embedding *DefaultClient could never present
+// 'tls_client_auth' at all. The same embed supplies the 'jwks'/'jwks_uri' metadata that
+// 'self_signed_tls_client_auth' reads the accepted certificates from per Section 2.2.2. *DefaultJARClient embeds
+// *DefaultClient in turn, so every DefaultClient value and accessor remains available.
+type DefaultMTLSClient struct {
+	TLSClientAuthSubjectDN string `json:"tls_client_auth_subject_dn"`
+	TLSClientAuthSANDNS    string `json:"tls_client_auth_san_dns"`
+	TLSClientAuthSANURI    string `json:"tls_client_auth_san_uri"`
+	TLSClientAuthSANIP     string `json:"tls_client_auth_san_ip"`
+	TLSClientAuthSANEmail  string `json:"tls_client_auth_san_email"`
+
+	*DefaultJARClient
+}
+
 func (c *DefaultClient) GetID() string {
 	return c.ID
 }
@@ -562,6 +620,10 @@ func (c *DefaultClient) GetAudience() Arguments {
 
 func (c *DefaultClient) GetEnableDPoPBoundAccessTokens() bool {
 	return c.DPoPBoundAccessTokens
+}
+
+func (c *DefaultClient) GetEnableTLSClientAuthBoundAccessTokens() bool {
+	return c.TLSClientCertificateBoundAccessTokens
 }
 
 func (c *DefaultClient) GetRedirectURIs() []string {
@@ -710,10 +772,36 @@ func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutSessionRequired() (
 	return c.BackChannelLogoutSessionRequired
 }
 
+func (c *DefaultMTLSClient) GetTLSClientAuthSubjectDN() string {
+	return c.TLSClientAuthSubjectDN
+}
+
+func (c *DefaultMTLSClient) GetTLSClientAuthSANDNS() string {
+	return c.TLSClientAuthSANDNS
+}
+
+func (c *DefaultMTLSClient) GetTLSClientAuthSANURI() string {
+	return c.TLSClientAuthSANURI
+}
+
+func (c *DefaultMTLSClient) GetTLSClientAuthSANIP() string {
+	return c.TLSClientAuthSANIP
+}
+
+func (c *DefaultMTLSClient) GetTLSClientAuthSANEmail() string {
+	return c.TLSClientAuthSANEmail
+}
+
 var (
 	_ Client                  = (*DefaultClient)(nil)
 	_ ResponseModeClient      = (*DefaultResponseModeClient)(nil)
 	_ JARClient               = (*DefaultJARClient)(nil)
 	_ RPInitiatedLogoutClient = (*DefaultRPInitiatedLogoutClient)(nil)
 	_ BackChannelLogoutClient = (*DefaultBackChannelLogoutClient)(nil)
+	_ TLSClientAuthClient     = (*DefaultMTLSClient)(nil)
+	_ MTLSClient              = (*DefaultMTLSClient)(nil)
+
+	// AuthenticationMethodClient is what isMTLSAuthMethod reads the registered '*_endpoint_auth_method' through, so
+	// without it a DefaultMTLSClient could never present an RFC 8705 mutual-TLS authentication method.
+	_ AuthenticationMethodClient = (*DefaultMTLSClient)(nil)
 )

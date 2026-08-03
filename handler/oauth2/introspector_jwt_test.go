@@ -204,6 +204,68 @@ func TestIntrospectJWTRecoversDPoPBinding(t *testing.T) {
 	}
 }
 
+func TestIntrospectJWTRecoversMTLSBinding(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
+		},
+		Config: config,
+	}
+
+	validator := &StatelessJWTValidator{
+		StatelessJWTStrategy: strategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		x5t      string
+		jkt      string
+		expected string
+	}{
+		{name: "ShouldRecoverBindingWhenCertificateBound", x5t: "test-x5t", expected: "test-x5t"},
+		{name: "ShouldRecoverBindingWhenBoundByBoth", x5t: "test-x5t", jkt: "test-jkt", expected: "test-x5t"},
+		{name: "ShouldReportUnboundWhenNotCertificateBound", expected: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := jwtValidCase(oauth2.AccessToken)
+
+			if tc.x5t != "" {
+				r.GetSession().(oauth2.MTLSBoundSession).SetClientCertificateSHA256Thumbprint(tc.x5t)
+			}
+
+			if tc.jkt != "" {
+				r.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(tc.jkt)
+			}
+
+			tokenString, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			require.NoError(t, err)
+
+			areq := oauth2.NewAccessRequest(nil)
+
+			_, err = validator.IntrospectToken(t.Context(), tokenString, oauth2.AccessToken, areq, []string{})
+			require.NoError(t, err)
+
+			bound, ok := areq.GetSession().(oauth2.MTLSBoundSession)
+			require.True(t, ok, "expected the merged session to support mutual-TLS binding, got %T", areq.GetSession())
+			assert.Equal(t, tc.expected, bound.GetClientCertificateSHA256Thumbprint())
+
+			assert.Equal(t, tc.jkt, areq.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
+		})
+	}
+}
+
 func BenchmarkIntrospectJWT(b *testing.B) {
 	config := &oauth2.Config{}
 

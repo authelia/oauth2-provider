@@ -632,5 +632,9 @@ func WithAllowUnverified() IDTokenValidationOpt {
 type TokenValidationStrategy interface {
 	// ValidateIDToken decodes and verifies an ID Token, returning its claims. Application-specific claim policy
 	// ('iss' and 'aud' in particular) is the caller's responsibility; see DefaultIDTokenValidationStrategy.
+	//
+	// The request is always supplied, but it may carry no client: a caller which does not yet know the client, such
+	// as one decoding a token with WithAllowUnverified in order to discover it, supplies an otherwise empty Requester.
+	// Implementations must therefore tolerate Requester.GetClient returning nil.
 	ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error)
 }

@@ -372,6 +372,22 @@ func TestNewRPInitiatedLogoutRequest_ErrorPathsNeverExposeRedirectURI(t *testing
 	}
 }
 
+func TestNewRPInitiatedLogoutRequest_RejectsHintWhenIssuerUnconfigured(t *testing.T) {
+	client := &oauth2.DefaultClient{ID: "test-client"}
+	f, jwtStrategy, config := newLogoutProviderWithJWT(t, client)
+
+	hint := mintIDToken(t, jwtStrategy, baseHintClaims("test-client"))
+
+	config.IDTokenIssuer = ""
+
+	_, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{
+		"id_token_hint": []string{hint},
+	}))
+
+	require.Error(t, err, "an unconfigured issuer must not silently skip the 'iss' check")
+	assert.ErrorIs(t, err, oauth2.ErrServerError)
+}
+
 const logoutTestIssuer = "https://issuer.example/"
 
 var logoutTestKey = gen.MustRSAKey()

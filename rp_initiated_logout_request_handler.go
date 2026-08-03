@@ -105,7 +105,9 @@ func (f *Fosite) unsafeRPInitiatedLogoutClientID(ctx context.Context, hint strin
 
 	var claims jwt.MapClaims
 
-	if claims, err = strategy.ValidateIDToken(ctx, nil, hint, WithAllowUnverified()); err != nil {
+	// The client is not known yet; that is what this parse is for. An empty requester is supplied rather than nil so
+	// implementations can rely on the requester itself always being present.
+	if claims, err = strategy.ValidateIDToken(ctx, NewRequest(), hint, WithAllowUnverified()); err != nil {
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be decoded.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -136,16 +138,22 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token validation strategy is not configured."))
 	}
 
-	var claims jwt.MapClaims
-
-	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: request.Client}, request.IDTokenHint, WithAllowExpired()); err != nil {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
-	}
-
 	issuer := ""
 
 	if config, ok := f.Config.(IDTokenIssuerProvider); ok {
 		issuer = config.GetIDTokenIssuer(ctx)
+	}
+
+	// An empty issuer would silently skip the 'iss' check below, accepting a hint issued by anyone. Refuse to validate
+	// at all rather than validate weakly.
+	if issuer == "" {
+		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token issuer is not configured."))
+	}
+
+	var claims jwt.MapClaims
+
+	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: request.Client}, request.IDTokenHint, WithAllowExpired()); err != nil {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 
 	clientID := request.Client.GetID()

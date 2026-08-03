@@ -174,6 +174,44 @@ func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T)
 	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
 }
 
+func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithOption(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+
+	wrongKey := gen.MustRSAKey()
+
+	issuingJWT := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(wrongKey)}
+	validatingJWT := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, issuingJWT)
+
+	req := oauth2.NewAccessRequest(&DefaultSession{})
+	req.Client = &oauth2.DefaultClient{ID: "test-client"}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: validatingJWT}
+
+	_, err := strategy.ValidateIDToken(t.Context(), req, token)
+	require.Error(t, err, "the token must be rejected when no options are supplied")
+
+	claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowUnverified())
+	require.NoError(t, err, "WithAllowUnverified must decode a token which neither verifies nor validates")
+	assert.Equal(t, "alice", claims[jwt.ClaimSubject], "the untrusted claims must still be returned for client discovery")
+
+	assert.Error(t, claims.Valid(), "the returned claims must be ones WithAllowUnverified bypassed rather than passed")
+}
+
+func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, jwtStrategy)
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	claims, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{}, token, oauth2.WithAllowUnverified())
+	require.NoError(t, err, "a Requester with no client must be accepted")
+	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
+}
+
 func newExpiredIDToken(t *testing.T, cfg *oauth2.Config, strategy jwt.Strategy) string {
 	t.Helper()
 

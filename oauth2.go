@@ -13,6 +13,7 @@ import (
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type TokenUse = TokenType
@@ -577,4 +578,63 @@ type RFC8693TokenType interface {
 	GetName(ctx context.Context) (name string)
 
 	GetType(ctx context.Context) (tokenType string)
+}
+
+// IDTokenValidationOpts are the resolved options for TokenValidationStrategy.ValidateIDToken.
+type IDTokenValidationOpts struct {
+	// AllowExpired permits an ID Token whose 'exp' claim is in the past to validate successfully.
+	AllowExpired bool
+
+	// AllowUnverified skips signature verification and all claim validation.
+	AllowUnverified bool
+}
+
+// IDTokenValidationOpt configures IDTokenValidationOpts.
+type IDTokenValidationOpt func(opts *IDTokenValidationOpts)
+
+// NewIDTokenValidationOpts resolves the given options. Implementations of TokenValidationStrategy should use this
+// rather than looping over the options themselves.
+func NewIDTokenValidationOpts(opts ...IDTokenValidationOpt) (o *IDTokenValidationOpts) {
+	o = &IDTokenValidationOpts{}
+
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	return o
+}
+
+// WithAllowExpired permits an ID Token with an 'exp' claim in the past to validate successfully. It narrowly disables
+// the expiration check; the 'iat' and 'nbf' claims remain enforced when present, as do signature verification and
+// every other check.
+//
+// This exists for OpenID Connect RP-Initiated Logout, where the 'id_token_hint' identifies the session the Relying
+// Party is asking to end and is therefore expected to be expired.
+func WithAllowExpired() IDTokenValidationOpt {
+	return func(opts *IDTokenValidationOpts) {
+		opts.AllowExpired = true
+	}
+}
+
+// WithAllowUnverified decodes the token WITHOUT verifying its signature and WITHOUT validating any claim.
+//
+// The result is untrusted. It must only be used to discover which client a token was issued to, so that the token can
+// then be validated properly against that client's keys. Never return claims obtained this way to a caller and never
+// make an authorization decision based on them.
+func WithAllowUnverified() IDTokenValidationOpt {
+	return func(opts *IDTokenValidationOpts) {
+		opts.AllowUnverified = true
+	}
+}
+
+// TokenValidationStrategy validates tokens presented to the authorization server by a client, as opposed to tokens
+// the authorization server itself issued and stored.
+type TokenValidationStrategy interface {
+	// ValidateIDToken decodes and verifies an ID Token, returning its claims. Application-specific claim policy
+	// ('iss' and 'aud' in particular) is the caller's responsibility; see DefaultIDTokenValidationStrategy.
+	//
+	// The request is always supplied, but it may carry no client: a caller which does not yet know the client, such
+	// as one decoding a token with WithAllowUnverified in order to discover it, supplies an otherwise empty Requester.
+	// Implementations must therefore tolerate Requester.GetClient returning nil.
+	ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error)
 }

@@ -102,6 +102,13 @@ type IDTokenIssuerProvider interface {
 	GetIDTokenIssuer(ctx context.Context) (issuer string)
 }
 
+// IDTokenValidationStrategyProvider returns the provider for configuring the ID Token validation strategy, which
+// validates ID Tokens presented to the authorization server by a client.
+type IDTokenValidationStrategyProvider interface {
+	// GetIDTokenValidationStrategy returns the ID Token validation strategy. Has no default and may be nil.
+	GetIDTokenValidationStrategy(ctx context.Context) (strategy TokenValidationStrategy)
+}
+
 // IntrospectionIssuerProvider returns the provider for configuring the Introspection issuer.
 type IntrospectionIssuerProvider interface {
 	// GetIntrospectionIssuer returns the Introspection token issuer.

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type OpenIDConnectTokenStrategy interface {
@@ -20,6 +19,6 @@ type OpenIDConnectBackChannelLogoutTokenStrategy interface {
 	GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error)
 }
 
-type TokenValidationStrategy interface {
-	ValidateIDToken(ctx context.Context, request oauth2.Requester, token string) (jwt.MapClaims, error)
-}
+// TokenValidationStrategy is an alias of oauth2.TokenValidationStrategy. The interface lives in the root package
+// because *Fosite methods need it and the root package cannot import this one.
+type TokenValidationStrategy = oauth2.TokenValidationStrategy

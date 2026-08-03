@@ -16,11 +16,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip verifies the end-to-end contract that motivated
-// the new strategy: an ID token issued by DefaultStrategy (which embeds a jwt.Strategy with a single signing key)
-// can be decoded and verified by DefaultIDTokenValidationStrategy when given the same jwt.Strategy. The asymmetric
-// signing key is shared by both paths via the jwt.Strategy.Issuer, so the validator resolves the verification key
-// from the AS's own issuer JWK set (path 3 of jwt.DefaultStrategy.validate) rather than from the client.
 func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testing.T) {
 	const (
 		issuer  = "https://issuer.example/"
@@ -41,7 +36,6 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 	issueStrategy := &DefaultStrategy{Strategy: jwtStrategy, Config: cfg}
 	validationStrategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
 
-	// Build a request with the minimum DefaultSession plumbing GenerateIDToken needs.
 	session := &DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Subject:  subject,
@@ -54,12 +48,10 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 	req := oauth2.NewAccessRequest(session)
 	req.Client = &oauth2.DefaultClient{ID: "test-client"}
 
-	// Issue: ID token signed with the shared key.
 	token, err := issueStrategy.GenerateIDToken(t.Context(), cfg.IDTokenLifespan, req)
 	require.NoError(t, err, "issuance must succeed when the jwt.Strategy is configured with a usable signing key")
 	require.NotEmpty(t, token)
 
-	// Validate: decoded by the same jwt.Strategy via the new validation strategy.
 	claims, err := validationStrategy.ValidateIDToken(t.Context(), req, token)
 	require.NoError(t, err, "validation must succeed when the issuer key matches the signing key")
 	require.NotNil(t, claims)
@@ -149,4 +141,90 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 
 	_, err = validationStrategy.ValidateIDToken(t.Context(), req, token)
 	require.Error(t, err, "validator must reject a token whose signature does not chain to its configured Issuer key")
+}
+
+func TestDefaultIDTokenValidationStrategy_RejectsExpiredByDefault(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, jwtStrategy)
+
+	req := oauth2.NewAccessRequest(&DefaultSession{})
+	req.Client = &oauth2.DefaultClient{ID: "test-client"}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	_, err := strategy.ValidateIDToken(t.Context(), req, token)
+	assert.Error(t, err, "an expired id_token must be rejected when no options are supplied")
+}
+
+func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, jwtStrategy)
+
+	req := oauth2.NewAccessRequest(&DefaultSession{})
+	req.Client = &oauth2.DefaultClient{ID: "test-client"}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowExpired())
+	require.NoError(t, err, "WithAllowExpired must permit an expired id_token")
+	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
+}
+
+func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithOption(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+
+	wrongKey := gen.MustRSAKey()
+
+	issuingJWT := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(wrongKey)}
+	validatingJWT := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, issuingJWT)
+
+	req := oauth2.NewAccessRequest(&DefaultSession{})
+	req.Client = &oauth2.DefaultClient{ID: "test-client"}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: validatingJWT}
+
+	_, err := strategy.ValidateIDToken(t.Context(), req, token)
+	require.Error(t, err, "the token must be rejected when no options are supplied")
+
+	claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowUnverified())
+	require.NoError(t, err, "WithAllowUnverified must decode a token which neither verifies nor validates")
+	assert.Equal(t, "alice", claims[jwt.ClaimSubject], "the untrusted claims must still be returned for client discovery")
+
+	assert.Error(t, claims.Valid(), "the returned claims must be ones WithAllowUnverified bypassed rather than passed")
+}
+
+func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token := newExpiredIDToken(t, cfg, jwtStrategy)
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	claims, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{}, token, oauth2.WithAllowUnverified())
+	require.NoError(t, err, "a Requester with no client must be accepted")
+	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
+}
+
+func newExpiredIDToken(t *testing.T, cfg *oauth2.Config, strategy jwt.Strategy) string {
+	t.Helper()
+
+	claims := jwt.MapClaims{
+		jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+		jwt.ClaimSubject:        "alice",
+		jwt.ClaimAudience:       []string{"test-client"},
+		jwt.ClaimIssuedAt:       jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
+		jwt.ClaimExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+	}
+
+	token, _, err := strategy.Encode(t.Context(), claims)
+	require.NoError(t, err)
+
+	return token
 }

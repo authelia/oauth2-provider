@@ -57,24 +57,6 @@ func GetResourcesParameter(parameter string, form url.Values) (resources []strin
 // isPathOrSubpath reports whether needlePath equals haystackPath or is a sub-path of it,
 // after normalizing trailing slashes. A sub-path must break on a path-segment boundary
 // so that '/users' does NOT match '/users123' but DOES match '/users/123'.
-//
-// Match — exact:
-//
-//	haystack=/api/users    needle=/api/users     ✓
-//
-// Match — trailing slash on either side:
-//
-//	haystack=/api/users/   needle=/api/users     ✓
-//	haystack=/api/users    needle=/api/users/    ✓
-//
-// Match — needle is a sub-path under the haystack:
-//
-//	haystack=/api/users    needle=/api/users/42  ✓
-//
-// No match — prefix without a segment boundary, or sibling path:
-//
-//	haystack=/api/users    needle=/api/users123  ✗
-//	haystack=/api/users    needle=/api/tenants   ✗
 func isPathOrSubpath(haystackPath, needlePath string) bool {
 	// 1. Exact equality, with whatever trailing slashes both sides happen to have.
 	if needlePath == haystackPath {
@@ -92,7 +74,7 @@ func isPathOrSubpath(haystackPath, needlePath string) bool {
 
 	// 3. Needle is strictly longer than the allowed haystack path AND the byte right
 	//    after the haystack prefix is a '/'. We check that boundary by taking
-	//    needle[:len(allowed)+1] and trimming a trailing '/' off — the result has to
+	//    needle[:len(allowed)+1] and trimming a trailing '/' off; the result has to
 	//    equal `allowed`. (Equivalently: needle starts with allowed + "/".)
 	if len(needlePath) <= len(allowed) {
 		return false

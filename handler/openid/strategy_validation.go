@@ -18,8 +18,9 @@ import (
 //
 // Validation responsibility split:
 //
-//   - This strategy enforces JWS/JWE structural validation, signature verification, signature algorithm enforcement,
-//     and the time-based claims ('exp', 'nbf', 'iat') performed by jwt.Strategy.Decode when a client is supplied.
+//   - This strategy enforces JWS/JWE structural validation, signature verification and signature algorithm
+//     enforcement via jwt.Strategy.Decode, then validates the time-based claims ('exp', 'nbf', 'iat') itself via
+//     jwt.MapClaims.Valid. Note that jwt.Strategy.Decode does NOT validate time-based claims.
 //   - Application-specific claim checks, most notably 'iss' (issuer) and 'aud' (audience), are intentionally
 //     LEFT TO THE CALLER. RFC 8693 ID tokens may originate from federated identity providers, so the AS-specific
 //     issuer/audience policy lives one layer up (e.g. rfc8693.IDTokenTypeHandler.validate enforces 'iss' against
@@ -37,27 +38,49 @@ type DefaultIDTokenValidationStrategy struct {
 //
 // Returns the decoded jwt.MapClaims on success. Decode errors propagate as the jwt.ValidationError they originated
 // as (callers typically map these to oauth2.ErrInvalidRequest).
-func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, request oauth2.Requester, token string) (jwt.MapClaims, error) {
+func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, request oauth2.Requester, token string, opts ...oauth2.IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
 	if s.Strategy == nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate id_token because the JWT strategy is not configured."))
 	}
 
-	var opts []jwt.StrategyOpt
+	o := oauth2.NewIDTokenValidationOpts(opts...)
 
-	if request != nil {
+	var sopts []jwt.StrategyOpt
+
+	if o.AllowUnverified {
+		// The client must NOT be supplied here: jwt.DefaultStrategy.Decode verifies whenever a client is present,
+		// regardless of jwt.WithAllowUnverified.
+		sopts = append(sopts, jwt.WithAllowUnverified())
+	} else if request != nil {
 		if client := request.GetClient(); client != nil {
-			opts = append(opts, jwt.WithIDTokenClient(client))
+			sopts = append(sopts, jwt.WithIDTokenClient(client))
 		}
 	}
 
-	decoded, err := s.Strategy.Decode(ctx, token, opts...)
-	if err != nil {
+	var decoded *jwt.Token
+
+	if decoded, err = s.Strategy.Decode(ctx, token, sopts...); err != nil {
 		return nil, err
 	}
 
-	claims, ok := decoded.Claims.(jwt.MapClaims)
-	if !ok {
+	var ok bool
+
+	if claims, ok = decoded.Claims.(jwt.MapClaims); !ok {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate id_token because the decoded JWT claims are not of the expected map type."))
+	}
+
+	if o.AllowUnverified {
+		return claims, nil
+	}
+
+	var copts []jwt.ClaimValidationOption
+
+	if o.AllowExpired {
+		copts = append(copts, jwt.ValidateIgnoreExpiration())
+	}
+
+	if err = claims.Valid(copts...); err != nil {
+		return nil, errorsx.WithStack(err)
 	}
 
 	return claims, nil

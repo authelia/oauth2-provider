@@ -139,6 +139,7 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 
 type Configurator interface {
 	IDTokenIssuerProvider
+	IDTokenValidationStrategyProvider
 	IDTokenLifespanProvider
 	AuthorizationServerIssuerIdentificationProvider
 	AllowedPromptsProvider

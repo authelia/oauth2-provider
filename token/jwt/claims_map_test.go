@@ -820,3 +820,28 @@ func TestMapClaims_Valid(t *testing.T) {
 		})
 	}
 }
+
+func TestMapClaims_Valid_IgnoreExpiration(t *testing.T) {
+	expired := MapClaims{
+		ClaimExpirationTime: NewNumericDate(time.Now().Add(-time.Hour)),
+		ClaimIssuedAt:       NewNumericDate(time.Now().Add(-2 * time.Hour)),
+	}
+
+	assert.Error(t, expired.Valid(), "an expired token must fail validation by default")
+	assert.NoError(t, expired.Valid(ValidateIgnoreExpiration()), "ValidateIgnoreExpiration must skip the exp check")
+}
+
+func TestMapClaims_Valid_IgnoreExpirationIsNarrow(t *testing.T) {
+	future := MapClaims{
+		ClaimExpirationTime: NewNumericDate(time.Now().Add(-time.Hour)),
+		ClaimNotBefore:      NewNumericDate(time.Now().Add(time.Hour)),
+	}
+
+	err := future.Valid(ValidateIgnoreExpiration())
+	require.Error(t, err, "nbf in the future must still be rejected")
+
+	var vErr *ValidationError
+	require.ErrorAs(t, err, &vErr)
+	assert.Equal(t, uint32(0), vErr.Errors&ValidationErrorExpired, "the expired bit must not be set")
+	assert.NotEqual(t, uint32(0), vErr.Errors&ValidationErrorNotValidYet, "the not-valid-yet bit must be set")
+}

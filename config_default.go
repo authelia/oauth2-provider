@@ -58,6 +58,10 @@ type Config struct {
 	// IntrospectionJWTResponseStrategy is the signer for Introspection Responses. Has no default.
 	IntrospectionJWTResponseStrategy jwt.Strategy
 
+	// IDTokenValidationStrategy validates ID Tokens presented to the authorization server by a client, such as the
+	// 'id_token_hint' of an RP-Initiated Logout request. Has no default.
+	IDTokenValidationStrategy TokenValidationStrategy
+
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
 
@@ -369,6 +373,10 @@ func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx conte
 
 func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
 	return c.IDTokenIssuer
+}
+
+func (c *Config) GetIDTokenValidationStrategy(ctx context.Context) (strategy TokenValidationStrategy) {
+	return c.IDTokenValidationStrategy
 }
 
 func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
@@ -784,6 +792,7 @@ var (
 	_ GetJWTMaxDurationProvider                       = (*Config)(nil)
 	_ IDTokenLifespanProvider                         = (*Config)(nil)
 	_ IDTokenIssuerProvider                           = (*Config)(nil)
+	_ IDTokenValidationStrategyProvider               = (*Config)(nil)
 	_ AuthorizationServerIssuerIdentificationProvider = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)

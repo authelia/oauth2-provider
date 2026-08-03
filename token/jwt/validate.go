@@ -19,6 +19,7 @@ type ClaimValidationOptions struct {
 	sub            string
 	azp            string
 	expRequired    bool
+	expIgnored     bool
 	iatRequired    bool
 	nbfRequired    bool
 	issNotRequired bool
@@ -76,6 +77,18 @@ func ValidateSubject(sub string) ClaimValidationOption {
 func ValidateRequireExpiresAt() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.expRequired = true
+	}
+}
+
+// ValidateIgnoreExpiration skips the 'exp' claim check entirely, permitting an expired token to validate. It narrows
+// nothing else: 'iat' and 'nbf' are still enforced when present. This exists for flows which legitimately operate on
+// an expired token, most notably the 'id_token_hint' of an OpenID Connect RP-Initiated Logout request, where the
+// token identifies the very session the Relying Party is asking to end.
+//
+// This option takes precedence over ValidateRequireExpiresAt.
+func ValidateIgnoreExpiration() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.expIgnored = true
 	}
 }
 

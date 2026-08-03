@@ -333,6 +333,18 @@ type ResponseModeClient interface {
 	Client
 }
 
+// RPInitiatedLogoutClient is a Client which has registered post logout redirect URIs for OpenID Connect
+// RP-Initiated Logout.
+//
+// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
+type RPInitiatedLogoutClient interface {
+	Client
+
+	// GetPostLogoutRedirectURIs returns the client's registered post logout redirect URIs. A client with none
+	// registered cannot use the 'post_logout_redirect_uri' parameter.
+	GetPostLogoutRedirectURIs() (uris []string)
+}
+
 // JWTProfileClient represents a client with can handle RFC9068 responses; i.e. the JWT Profile for OAuth 2.0 Access
 // Tokens.
 type JWTProfileClient interface {
@@ -492,6 +504,11 @@ type DefaultResponseModeClient struct {
 	ResponseModes []ResponseModeType `json:"response_modes"`
 }
 
+type DefaultRPInitiatedLogoutClient struct {
+	*DefaultClient
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
+}
+
 func (c *DefaultClient) GetID() string {
 	return c.ID
 }
@@ -638,8 +655,13 @@ func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
 
+func (c *DefaultRPInitiatedLogoutClient) GetPostLogoutRedirectURIs() (uris []string) {
+	return c.PostLogoutRedirectURIs
+}
+
 var (
-	_ Client             = (*DefaultClient)(nil)
-	_ ResponseModeClient = (*DefaultResponseModeClient)(nil)
-	_ JARClient          = (*DefaultJARClient)(nil)
+	_ Client                  = (*DefaultClient)(nil)
+	_ ResponseModeClient      = (*DefaultResponseModeClient)(nil)
+	_ JARClient               = (*DefaultJARClient)(nil)
+	_ RPInitiatedLogoutClient = (*DefaultRPInitiatedLogoutClient)(nil)
 )

@@ -638,3 +638,14 @@ type TokenValidationStrategy interface {
 	// Implementations must therefore tolerate Requester.GetClient returning nil.
 	ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error)
 }
+
+// BackChannelLogoutTokenStrategy generates the Logout Tokens delivered to Relying Parties for OpenID Connect
+// Back-Channel Logout 1.0.
+//
+// See: https://openid.net/specs/openid-connect-backchannel-1_0.html
+type BackChannelLogoutTokenStrategy interface {
+	// GenerateBackChannelLogoutToken returns a signed Logout Token for the given client. The audience should
+	// name exactly the client the token is delivered to, so that each Relying Party receives a token with its
+	// own 'jti'.
+	GenerateBackChannelLogoutToken(ctx context.Context, client Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error)
+}

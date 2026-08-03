@@ -667,3 +667,33 @@ func TestIDTokenClaims_UnmarshalJSON(t *testing.T) {
 		require.Error(t, c.UnmarshalJSON([]byte(`not-json`)))
 	})
 }
+
+func TestIDTokenClaims_SessionIDRoundTripsThroughMap(t *testing.T) {
+	claims := &IDTokenClaims{Subject: "alice", SessionID: "session-1"}
+
+	m := claims.ToMap()
+
+	assert.Equal(t, "session-1", m[ClaimSessionID])
+
+	var decoded IDTokenClaims
+
+	decoded.FromMap(m)
+
+	assert.Equal(t, "session-1", decoded.SessionID)
+	assert.NotContains(t, decoded.Extra, ClaimSessionID)
+}
+
+func TestIDTokenClaims_SessionIDOmittedWhenEmpty(t *testing.T) {
+	claims := &IDTokenClaims{Subject: "alice"}
+
+	assert.NotContains(t, claims.ToMap(), ClaimSessionID)
+}
+
+func TestIDTokenClaims_SessionIDUnmarshalsFromJSON(t *testing.T) {
+	var claims IDTokenClaims
+
+	require.NoError(t, json.Unmarshal([]byte(`{"sub":"alice","sid":"session-1"}`), &claims))
+
+	assert.Equal(t, "session-1", claims.SessionID)
+	assert.NotContains(t, claims.Extra, ClaimSessionID)
+}

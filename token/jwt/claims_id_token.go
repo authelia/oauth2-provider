@@ -26,6 +26,7 @@ type IDTokenClaims struct {
 	IssuedAt                            *NumericDate   `json:"iat"`
 	AuthTime                            *NumericDate   `json:"auth_time,omitempty"`
 	Nonce                               string         `json:"nonce,omitempty"`
+	SessionID                           string         `json:"sid,omitempty"`
 	AuthenticationContextClassReference string         `json:"acr,omitempty"`
 	AuthenticationMethodsReferences     []string       `json:"amr,omitempty"`
 	AuthorizedParty                     string         `json:"azp,omitempty"`
@@ -214,6 +215,8 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			}
 		case ClaimNonce:
 			c.Nonce, ok = value.(string)
+		case ClaimSessionID:
+			c.SessionID, ok = value.(string)
 		case ClaimAuthenticationContextClassReference:
 			c.AuthenticationContextClassReference, ok = value.(string)
 		case ClaimAuthenticationMethodsReference:
@@ -298,6 +301,12 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, ClaimNonce)
 	}
 
+	if len(c.SessionID) > 0 {
+		ret[ClaimSessionID] = c.SessionID
+	} else {
+		delete(ret, ClaimSessionID)
+	}
+
 	if len(c.AuthenticationContextClassReference) > 0 {
 		ret[ClaimAuthenticationContextClassReference] = c.AuthenticationContextClassReference
 	} else {
@@ -374,6 +383,10 @@ func (c *IDTokenClaims) FromMap(m map[string]any) {
 		case ClaimNonce:
 			if s, ok := v.(string); ok {
 				c.Nonce = s
+			}
+		case ClaimSessionID:
+			if s, ok := v.(string); ok {
+				c.SessionID = s
 			}
 		case ClaimAuthenticationContextClassReference:
 			if s, ok := v.(string); ok {

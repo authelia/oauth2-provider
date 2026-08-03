@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	defaultPARPrefix          = consts.PrefixRequestURI
-	defaultPARContextLifetime = 5 * time.Minute
+	defaultPARPrefix                    = consts.PrefixRequestURI
+	defaultPARContextLifetime           = 5 * time.Minute
+	defaultBackChannelLogoutLifespan    = 5 * time.Minute
+	defaultBackChannelLogoutConcurrency = 10
 )
 
 type Config struct {
@@ -61,6 +63,17 @@ type Config struct {
 	// IDTokenValidationStrategy validates ID Tokens presented to the authorization server by a client, such as the
 	// 'id_token_hint' of an RP-Initiated Logout request. Has no default.
 	IDTokenValidationStrategy TokenValidationStrategy
+
+	// BackChannelLogoutTokenStrategy generates the Logout Tokens delivered to Relying Parties for OpenID
+	// Connect Back-Channel Logout. Has no default.
+	BackChannelLogoutTokenStrategy BackChannelLogoutTokenStrategy
+
+	// BackChannelLogoutLifespan is the lifespan of a Logout Token. Defaults to 5 minutes.
+	BackChannelLogoutLifespan time.Duration
+
+	// BackChannelLogoutConcurrency is the maximum number of Back-Channel Logout requests delivered
+	// concurrently. Defaults to 10.
+	BackChannelLogoutConcurrency int
 
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
@@ -387,6 +400,26 @@ func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
 
 func (c *Config) GetIDTokenValidationStrategy(ctx context.Context) (strategy TokenValidationStrategy) {
 	return c.IDTokenValidationStrategy
+}
+
+func (c *Config) GetBackChannelLogoutTokenStrategy(ctx context.Context) (strategy BackChannelLogoutTokenStrategy) {
+	return c.BackChannelLogoutTokenStrategy
+}
+
+func (c *Config) GetBackChannelLogoutLifespan(ctx context.Context) (lifespan time.Duration) {
+	if c.BackChannelLogoutLifespan <= 0 {
+		return defaultBackChannelLogoutLifespan
+	}
+
+	return c.BackChannelLogoutLifespan
+}
+
+func (c *Config) GetBackChannelLogoutConcurrency(ctx context.Context) (n int) {
+	if c.BackChannelLogoutConcurrency <= 0 {
+		return defaultBackChannelLogoutConcurrency
+	}
+
+	return c.BackChannelLogoutConcurrency
 }
 
 func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
@@ -816,6 +849,9 @@ var (
 	_ IDTokenLifespanProvider                         = (*Config)(nil)
 	_ IDTokenIssuerProvider                           = (*Config)(nil)
 	_ IDTokenValidationStrategyProvider               = (*Config)(nil)
+	_ BackChannelLogoutTokenStrategyProvider          = (*Config)(nil)
+	_ BackChannelLogoutLifespanProvider               = (*Config)(nil)
+	_ BackChannelLogoutConcurrencyProvider            = (*Config)(nil)
 	_ AuthorizationServerIssuerIdentificationProvider = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider            = (*Config)(nil)

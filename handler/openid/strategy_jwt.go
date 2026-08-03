@@ -19,18 +19,25 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-const defaultExpiryTime = time.Hour
+const (
+	defaultExpiryTime                  = time.Hour
+	defaultBackChannelLogoutExpiryTime = 5 * time.Minute
+)
 
+// The Session represents the structure that a valid OpenID Connect 1.0 session has.
 type Session interface {
 	// IDTokenClaims returns a pointer to claims which will be modified in-place by handlers.
 	// Session should store this pointer and return always the same pointer.
 	IDTokenClaims() *jwt.IDTokenClaims
+
 	// IDTokenHeaders returns a pointer to header values which will be modified in-place by handlers.
 	// Session should store this pointer and return always the same pointer.
 	IDTokenHeaders() *jwt.Headers
 
+	// SetRequestedAt sets when this request was originally requested.
 	SetRequestedAt(rat time.Time)
 
+	// GetRequestedAt returns when this request was originally requested.
 	GetRequestedAt() (rat time.Time)
 
 	oauth2.Session
@@ -279,13 +286,23 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
 	if lifespan == 0 {
-		lifespan = defaultExpiryTime
+		lifespan = defaultBackChannelLogoutExpiryTime
 	}
 
 	claims := jwt.NewLogoutTokenClaims(subject, audience, sid, extra)
 
+	// REQUIRED. The 'iss' claim. LogoutTokenClaims.ToMap deletes 'iss' when empty and the JWT strategy injects
+	// no claims of its own, so the issuer must be set here as it is for ID Tokens.
+	if len(claims.Issuer) == 0 {
+		claims.Issuer = h.Config.GetIDTokenIssuer(ctx)
+	}
+
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
 		claims.ExpirationTime = jwt.NewNumericDate(time.Now().UTC().Add(lifespan))
+	}
+
+	if claims.ExpirationTime.Before(time.Now().UTC()) {
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate Logout Token because expiry claim can not be in the past."))
 	}
 
 	token, _, err = h.Encode(

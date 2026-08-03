@@ -85,6 +85,23 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		}
 	}
 
+	session := &JWTSession{
+		JWTClaims: &claims,
+		JWTHeader: &jwt.Headers{
+			Extra: token.Header,
+		},
+		ExpiresAt: map[oauth2.TokenType]time.Time{
+			oauth2.AccessToken: claims.ExpiresAt,
+		},
+		Subject: claims.Subject,
+	}
+
+	// A stateless token's claims are the only record of what it is bound to. Without recovering those bindings the
+	// reconstructed session reports the token as unbound, and since this request replaces the caller's session on
+	// oauth2.(*Request).Merge, introspection would then omit 'cnf' entirely and a resource server would accept a bound
+	// token as a bearer token. The token's signature was verified by the caller before this point.
+	oauth2.RestoreConfirmation(mapClaims, session)
+
 	return &oauth2.Request{
 		RequestedAt: requestedAt,
 		Client: &oauth2.DefaultClient{
@@ -93,16 +110,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		// We do not really know which scopes were requested, so we set them to granted.
 		RequestedScope: claims.Scope,
 		GrantedScope:   claims.Scope,
-		Session: &JWTSession{
-			JWTClaims: &claims,
-			JWTHeader: &jwt.Headers{
-				Extra: token.Header,
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				oauth2.AccessToken: claims.ExpiresAt,
-			},
-			Subject: claims.Subject,
-		},
+		Session:        session,
 		// We do not really know which audiences were requested, so we set them to granted.
 		RequestedAudience: claims.Audience,
 		GrantedAudience:   claims.Audience,

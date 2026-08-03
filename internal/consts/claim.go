@@ -40,6 +40,7 @@ const (
 	ClaimEvents                              = "events"
 	ClaimConfirmation                        = "cnf"
 	ClaimConfirmationJWKThumbprint           = "jkt"
+	ClaimConfirmationX509SHA256Thumbprint    = "x5t#S256"
 	ClaimHTTPMethod                          = "htm"
 	ClaimHTTPURI                             = "htu"
 	ClaimDPoPAccessTokenHash                 = "ath"

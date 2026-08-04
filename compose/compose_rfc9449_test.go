@@ -32,7 +32,7 @@ func TestDPoPFactory(t *testing.T) {
 	config := &oauth2.Config{DPoPEnabled: true}
 	store := storage.NewMemoryStore()
 
-	h := DPoPFactory(config, store, nil)
+	h := DPoPTokenFactory(config, store, nil)
 
 	require.IsType(t, &rfc9449.Handler{}, h)
 	assert.NotNil(t, config.DPoPStrategy)
@@ -55,7 +55,7 @@ func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {
 	config := &oauth2.Config{DPoPEnabled: true}
 
 	assert.Panics(t, func() {
-		DPoPFactory(config, struct{}{}, nil)
+		DPoPTokenFactory(config, struct{}{}, nil)
 	})
 
 	assert.Nil(t, config.DPoPStrategy)

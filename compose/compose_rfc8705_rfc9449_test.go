@@ -208,7 +208,7 @@ func newBothProviderBindingFirst(t *testing.T) (oauth2.Provider, *storage.Memory
 			Strategy:                   strategy,
 		},
 		DPoPAuthorizeFactory,
-		DPoPFactory,
+		DPoPTokenFactory,
 		RFC8705Factory,
 
 		OAuth2AuthorizeExplicitFactory,

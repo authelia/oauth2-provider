@@ -20,11 +20,11 @@ func DPoPAuthorizeFactory(config oauth2.Configurator, storage any, strategy any)
 	}
 }
 
-// DPoPFactory creates the RFC 9449 DPoP token endpoint handler and, when necessary, the default DPoP strategy.
+// DPoPTokenFactory creates the RFC 9449 DPoP token endpoint handler and, when necessary, the default DPoP strategy.
 //
 // It is dispatched in the token binding phase, which runs after every grant handler has restored its session and
 // populated the response, so its position in the factory list does not matter.
-func DPoPFactory(config oauth2.Configurator, storage any, strategy any) any {
+func DPoPTokenFactory(config oauth2.Configurator, storage any, strategy any) any {
 	c := config.(*oauth2.Config)
 
 	if c.DPoPStrategy == nil {

@@ -34,10 +34,6 @@ type ResourceOwnerPasswordCredentialsGrantHandler struct {
 	}
 }
 
-var (
-	_ oauth2.TokenEndpointHandler = (*ResourceOwnerPasswordCredentialsGrantHandler)(nil)
-)
-
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.2
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
@@ -127,12 +123,16 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 	return nil
 }
 
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, _ oauth2.AccessRequester) bool {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	// grant_type REQUIRED.
 	// Value MUST be set to "password".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeResourceOwnerPasswordCredentials)
 }
+
+var (
+	_ oauth2.TokenEndpointHandler = (*ResourceOwnerPasswordCredentialsGrantHandler)(nil)
+)

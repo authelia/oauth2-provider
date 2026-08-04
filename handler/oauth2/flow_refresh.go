@@ -33,10 +33,6 @@ type RefreshTokenGrantHandler struct {
 	}
 }
 
-var (
-	_ oauth2.TokenEndpointHandler = (*RefreshTokenGrantHandler)(nil)
-)
-
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-6
 //
 // TODO: Refactor time permitting.
@@ -318,3 +314,7 @@ func (c *RefreshTokenGrantHandler) CanHandleTokenEndpointRequest(ctx context.Con
 	// Value MUST be set to "refresh_token".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }
+
+var (
+	_ oauth2.TokenEndpointHandler = (*RefreshTokenGrantHandler)(nil)
+)

@@ -37,12 +37,7 @@ type AuthorizeExplicitGrantHandler struct {
 	}
 }
 
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
-)
-
-func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Context) (checker func(context.Context, *url.URL) bool) {
+func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Context) (checker func(context.Context, *url.URL) (secure bool)) {
 	if checker = c.Config.GetRedirectSecureChecker(ctx); checker != nil {
 		return checker
 	}
@@ -50,7 +45,7 @@ func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Con
 	return oauth2.IsRedirectURISecure
 }
 
-func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
+func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
@@ -71,11 +66,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 		}
 	}
 
-	if err := oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
 		return err
 	}
 
-	if err := oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 
@@ -106,10 +101,15 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	return nil
 }
 
-func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Context) []string {
+func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Context) (whitelist []string) {
 	if allowedList := c.Config.GetSanitationWhiteList(ctx); len(allowedList) > 0 {
 		return allowedList
 	}
 
 	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
 }
+
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
+	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
+)

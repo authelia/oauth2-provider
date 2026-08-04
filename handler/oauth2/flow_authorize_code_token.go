@@ -131,7 +131,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	return nil
 }
 
-func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler, request oauth2.Requester) bool {
+func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler, request oauth2.Requester) (issue bool) {
 	scope := c.Config.GetRefreshTokenScopes(ctx)
 
 	// Require one of the refresh token scopes, if set.
@@ -239,11 +239,11 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	return nil
 }
 
-func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	// The 'grant_type' parameter is REQUIRED and the value MUST be set to 'authorization_code'.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

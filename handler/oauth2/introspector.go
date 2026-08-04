@@ -11,20 +11,18 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-type coreValidatorConfigProvider interface {
+type CoreValidatorConfigProvider interface {
 	oauth2.ScopeStrategyProvider
 	oauth2.DisableRefreshTokenValidationProvider
 }
 
-var _ oauth2.TokenIntrospector = (*CoreValidator)(nil)
-
 type CoreValidator struct {
 	CoreStrategy
 	CoreStorage
-	Config coreValidatorConfigProvider
+	Config CoreValidatorConfigProvider
 }
 
-func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (tokenUse oauth2.TokenUse, err error) {
+func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	if len(token) == 0 {
 		return "", oauth2.ErrRequestUnauthorized.WithDebugf("The request either had a malformed Authorization header or didn't include a bearer token.")
 	}
@@ -127,3 +125,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 
 	return nil
 }
+
+var (
+	_ oauth2.TokenIntrospector = (*CoreValidator)(nil)
+)

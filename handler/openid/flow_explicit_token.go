@@ -68,10 +68,10 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	return c.IssueExplicitIDToken(ctx, lifespan, authorize, response)
 }
 
-func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

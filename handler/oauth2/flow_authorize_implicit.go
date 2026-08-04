@@ -31,10 +31,6 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	}
 }
 
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
-)
-
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowToken) {
@@ -102,3 +98,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 
 	return nil
 }
+
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
+)

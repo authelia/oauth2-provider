@@ -24,7 +24,7 @@ type OpenIDConnectRefreshHandler struct {
 	}
 }
 
-func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -51,7 +51,7 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 	return nil
 }
 
-func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -84,10 +84,14 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	return c.IssueExplicitIDToken(ctx, lifespan, request, response)
 }
 
-func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *OpenIDConnectRefreshHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *OpenIDConnectRefreshHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }
+
+var (
+	_ oauth2.TokenEndpointHandler = (*OpenIDConnectRefreshHandler)(nil)
+)

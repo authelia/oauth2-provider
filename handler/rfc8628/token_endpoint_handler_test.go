@@ -531,7 +531,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.
@@ -686,7 +686,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.

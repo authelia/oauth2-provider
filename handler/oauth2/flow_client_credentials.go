@@ -114,14 +114,16 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	return c.IssueAccessToken(ctx, lifespan, request, response)
+	_, err = c.IssueAccessToken(ctx, lifespan, request, response)
+
+	return err
 }
 
-func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
+func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials)
 }
 

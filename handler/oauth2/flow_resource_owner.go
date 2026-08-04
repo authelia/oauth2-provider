@@ -97,25 +97,27 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 }
 
 // PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.3.3
-func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
+func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var refresh, refreshSignature string
-	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || request.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
-		var err error
-		refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request)
-		if err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, request.Sanitize([]string{})); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		}
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+
+	var accessSignature string
+
+	if accessSignature, err = c.IssueAccessToken(ctx, atLifespan, request, response); err != nil {
+		return err
 	}
 
-	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	if err := c.IssueAccessToken(ctx, atLifespan, request, response); err != nil {
-		return err
+	var refresh, refreshSignature string
+
+	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || request.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
+		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, request.Sanitize([]string{})); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 	}
 
 	if refresh != "" {

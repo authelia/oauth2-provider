@@ -42,17 +42,17 @@ func (m *MockRefreshTokenStorage) EXPECT() *MockRefreshTokenStorageMockRecorder 
 }
 
 // CreateRefreshTokenSession mocks base method.
-func (m *MockRefreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
+func (m *MockRefreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, signature, accessSignature string, request oauth2.Requester) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRefreshTokenSession", ctx, signature, request)
+	ret := m.ctrl.Call(m, "CreateRefreshTokenSession", ctx, signature, accessSignature, request)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateRefreshTokenSession indicates an expected call of CreateRefreshTokenSession.
-func (mr *MockRefreshTokenStorageMockRecorder) CreateRefreshTokenSession(ctx, signature, request any) *gomock.Call {
+func (mr *MockRefreshTokenStorageMockRecorder) CreateRefreshTokenSession(ctx, signature, accessSignature, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRefreshTokenSession", reflect.TypeOf((*MockRefreshTokenStorage)(nil).CreateRefreshTokenSession), ctx, signature, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRefreshTokenSession", reflect.TypeOf((*MockRefreshTokenStorage)(nil).CreateRefreshTokenSession), ctx, signature, accessSignature, request)
 }
 
 // DeleteRefreshTokenSession mocks base method.
@@ -82,4 +82,18 @@ func (m *MockRefreshTokenStorage) GetRefreshTokenSession(ctx context.Context, si
 func (mr *MockRefreshTokenStorageMockRecorder) GetRefreshTokenSession(ctx, signature, session any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRefreshTokenSession", reflect.TypeOf((*MockRefreshTokenStorage)(nil).GetRefreshTokenSession), ctx, signature, session)
+}
+
+// RotateRefreshToken mocks base method.
+func (m *MockRefreshTokenStorage) RotateRefreshToken(ctx context.Context, requestID, signature string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateRefreshToken", ctx, requestID, signature)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RotateRefreshToken indicates an expected call of RotateRefreshToken.
+func (mr *MockRefreshTokenStorageMockRecorder) RotateRefreshToken(ctx, requestID, signature any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRefreshToken", reflect.TypeOf((*MockRefreshTokenStorage)(nil).RotateRefreshToken), ctx, requestID, signature)
 }

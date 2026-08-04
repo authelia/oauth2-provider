@@ -24,7 +24,7 @@ ${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_device_auth_s
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/openid_id_token_storage.go authelia.com/provider/oauth2/handler/openid OpenIDConnectRequestStorage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/pkce_storage.go -mock_names Storage=MockPKCERequestStorage authelia.com/provider/oauth2/handler/pkce Storage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/authorize_code_storage.go authelia.com/provider/oauth2/handler/oauth2 AuthorizeCodeStorage
-${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_auth_jwt_storage.go authelia.com/provider/oauth2/handler/rfc7523 RFC7523KeyStorage
+${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_auth_jwt_storage.go -mock_names Storage=MockRFC7523Storage authelia.com/provider/oauth2/handler/rfc7523 Storage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/access_token_storage.go authelia.com/provider/oauth2/handler/oauth2 AccessTokenStorage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/refresh_token_storage.go authelia.com/provider/oauth2/handler/oauth2 RefreshTokenStorage
 ${MOCKGEN:-mockgen} -package mock -destination testing/mock/oauth2_client_storage.go authelia.com/provider/oauth2/handler/oauth2 ClientCredentialsGrantStorage

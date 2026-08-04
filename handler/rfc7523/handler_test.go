@@ -37,7 +37,7 @@ type AuthorizeJWTGrantRequestHandlerTestSuite struct {
 
 	privateKey              *rsa.PrivateKey
 	mockCtrl                *gomock.Controller
-	mockStore               *mock.MockRFC7523KeyStorage
+	mockStore               *mock.MockRFC7523Storage
 	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
 	mockAccessTokenStore    *mock.MockAccessTokenStorage
 	requester               *oauth2.AccessRequest
@@ -65,7 +65,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TearDownTest() {
 // Setup before each test.
 func (s *AuthorizeJWTGrantRequestHandlerTestSuite) SetupTest() {
 	s.mockCtrl = gomock.NewController(s.T())
-	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
+	s.mockStore = mock.NewMockRFC7523Storage(s.mockCtrl)
 	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
 	s.requester = oauth2.NewAccessRequest(new(oauth2.DefaultSession))
@@ -208,7 +208,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeyToChec
 	cl := s.createStandardClaim()
 	keyID := keyID
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(nil, oauth2.ErrNotFound)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(nil, oauth2.ErrNotFound)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -232,7 +232,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoMatchingPublicKeysToChe
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
+	s.mockStore.EXPECT().GetRFC7523PublicKeys(ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -257,7 +257,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeyToCheckAsse
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	jwk := s.createRandomTestJWK()
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&jwk, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&jwk, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -275,7 +275,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestWrongPublicKeysToCheckAss
 	keyID := "" // provide no hint of what key was used to sign assertion
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKeys(ctx, cl.Issuer, cl.Subject).Return(s.createJWS(s.createRandomTestJWK(), s.createRandomTestJWK()), nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeys(ctx, cl.Issuer, cl.Subject).Return(s.createJWS(s.createRandomTestJWK(), s.createRandomTestJWK()), nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -301,7 +301,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoAudienceInAssertion() {
 	cl := s.createStandardClaim()
 	cl.Audience = []string{}
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -324,7 +324,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNotValidAudienceInAsserti
 	cl := s.createStandardClaim()
 	cl.Audience = jwt.Audience{"leela", "fry"}
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -350,7 +350,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestNoExpirationInAssertion()
 	cl := s.createStandardClaim()
 	cl.Expiry = nil
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -373,7 +373,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestExpiredAssertion() {
 	cl := s.createStandardClaim()
 	cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, -1, 0))
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -397,7 +397,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionNotAcceptedBefor
 	cl := s.createStandardClaim()
 	cl.NotBefore = jwt.NewNumericDate(nbf)
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -424,7 +424,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredI
 	cl.IssuedAt = nil
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -446,11 +446,12 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderAbsent
 	keyID := keyID
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
+
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, ""))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
@@ -466,10 +467,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderApplic
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "application/jwt"))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
@@ -484,10 +485,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionTypeHeaderLowerc
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertionWithType(cl, keyID, "jwt"))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
 
@@ -531,7 +532,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateInF
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -560,7 +561,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithIssueDateFar
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -590,7 +591,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -620,7 +621,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithExpirationDa
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -639,7 +640,7 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithoutRequiredT
 	cl := s.createStandardClaim()
 	cl.ID = ""
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -661,8 +662,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionAlreadyUsed() {
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(true, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(true, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -680,8 +681,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenCheckingIfJWTWasUs
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, oauth2.ErrServerError)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, oauth2.ErrServerError)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -699,10 +700,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhenMarkingJWTAsUsed()
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -721,9 +722,9 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestErrWhileFetchingPublicKey
 	cl := s.createStandardClaim()
 
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, oauth2.ErrServerError)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, oauth2.ErrServerError)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -743,9 +744,9 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionWithInvalidScope
 
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.requester.RequestedScope = []string{"some_scope"}
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -769,10 +770,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestValidAssertion() {
 
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
 	s.requester.RequestedScope = []string{"valid_scope"}
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -789,10 +790,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenNoSco
 	pubKey := s.createJWK(s.privateKey.Public(), keyID)
 	cl := s.createStandardClaim()
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -811,8 +812,8 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTID
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIDOptional = true
 	cl.ID = ""
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -831,10 +832,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestAssertionIsValidWhenJWTIs
 	cl.IssuedAt = nil
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -853,10 +854,10 @@ func (s *AuthorizeJWTGrantRequestHandlerTestSuite) TestRequestIsValidWhenClientA
 	s.requester.Client = &oauth2.DefaultClient{}
 	s.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = true
 	s.requester.Form.Add(consts.FormParameterAssertion, s.createTestAssertion(cl, keyID))
-	s.mockStore.EXPECT().GetPublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-	s.mockStore.EXPECT().GetPublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-	s.mockStore.EXPECT().IsJWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
-	s.mockStore.EXPECT().MarkJWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKey(ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+	s.mockStore.EXPECT().GetRFC7523PublicKeyScopes(ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+	s.mockStore.EXPECT().IsRFC7523JWTUsed(ctx, cl.Issuer, cl.ID).Return(false, nil)
+	s.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 
 	// act
 	err := s.handler.HandleTokenEndpointRequest(ctx, s.requester)
@@ -934,7 +935,7 @@ type AuthorizeJWTGrantPopulateTokenEndpointTestSuite struct {
 
 	privateKey              *rsa.PrivateKey
 	mockCtrl                *gomock.Controller
-	mockStore               *mock.MockRFC7523KeyStorage
+	mockStore               *mock.MockRFC7523Storage
 	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
 	mockAccessTokenStore    *mock.MockAccessTokenStorage
 	requester               *oauth2.AccessRequest
@@ -963,7 +964,7 @@ func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) TearDownTest() {
 // Setup before each test.
 func (s *AuthorizeJWTGrantPopulateTokenEndpointTestSuite) SetupTest() {
 	s.mockCtrl = gomock.NewController(s.T())
-	s.mockStore = mock.NewMockRFC7523KeyStorage(s.mockCtrl)
+	s.mockStore = mock.NewMockRFC7523Storage(s.mockCtrl)
 	s.mockAccessTokenStrategy = mock.NewMockAccessTokenStrategy(s.mockCtrl)
 	s.mockAccessTokenStore = mock.NewMockAccessTokenStorage(s.mockCtrl)
 	s.requester = oauth2.NewAccessRequest(new(oauth2.DefaultSession))

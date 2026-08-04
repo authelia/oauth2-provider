@@ -197,7 +197,8 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	}
 
 	if signature != "" {
-		if err = c.CreateRefreshTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
+		// This exchange issues a refresh token only, so there is no paired access token signature to record.
+		if err = c.CreateRefreshTokenSession(ctx, signature, "", request.Sanitize([]string{})); err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.Storage); rollBackTxnErr != nil {
 				err = rollBackTxnErr
 			}

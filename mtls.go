@@ -34,39 +34,43 @@ func X509CertificateSHA256Thumbprint(cert *x509.Certificate) (x5t string) {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// ClientCertificateFromRequest returns the X.509 certificate the client authenticated the TLS connection with, or nil
-// when it presented none. It is the single point at which RFC 8705 obtains a certificate.
+// ClientCertificateFromRequest returns the X.509 certificate the client authenticated with, or nil when it presented
+// none. It is the single point at which RFC 8705 obtains a certificate.
 //
-// A certificate from r.TLS is preferred and is the only source consulted when the connection terminated here, as Go
-// has already validated it against the listener's ClientCAs before the handler ran. The header is consulted only when
-// the connection carries no peer certificate and header names one, which is how a deployment that terminates TLS at a
-// reverse proxy conveys it (see RFC 8705 Section 6.5).
+// The two sources are mutually exclusive, selected by whether header names one. Configuring a header name declares
+// that clients reach this server through a TLS terminating reverse proxy which forwards their certificate in that
+// header (see RFC 8705 Section 6.5); the peer certificate on such a connection belongs to the proxy, not to the
+// client, so r.TLS is not consulted at all. Preferring r.TLS there would bind a token to the proxy's certificate,
+// which every client behind that proxy would then satisfy. A request arriving without the header carries no client
+// certificate, even when the connection has a peer certificate of its own.
+//
+// With no header configured, which is the default, the certificate comes from r.TLS alone, where Go has already
+// validated it against the listener's ClientCAs before the handler ran.
 //
 // The header is fully spoofable by anyone able to reach the server without transiting that proxy, and a forged value
-// authenticates the sender as any client registered with an mTLS authentication method. An empty header disables the
-// header source entirely, and that is the default: the caller must opt in by configuring a name. A deployment that
-// does opt in MUST ensure the proxy overwrites the header on every inbound request and that the server is
-// unreachable except through it.
+// authenticates the sender as any client registered with an mTLS authentication method. The caller must therefore opt
+// in by configuring a name, and a deployment that does MUST ensure the proxy overwrites the header on every inbound
+// request and that the server is unreachable except through it.
 func ClientCertificateFromRequest(r *http.Request, header string) (cert *x509.Certificate, err error) {
 	if r == nil {
 		return nil, nil
+	}
+
+	if header != "" {
+		var value string
+
+		if value = r.Header.Get(header); value == "" {
+			return nil, nil
+		}
+
+		return ParseClientCertificateHeader(value)
 	}
 
 	if r.TLS != nil && len(r.TLS.PeerCertificates) != 0 {
 		return r.TLS.PeerCertificates[0], nil
 	}
 
-	if header == "" {
-		return nil, nil
-	}
-
-	var value string
-
-	if value = r.Header.Get(header); value == "" {
-		return nil, nil
-	}
-
-	return ParseClientCertificateHeader(value)
+	return nil, nil
 }
 
 // ParseClientCertificateHeader decodes a client certificate forwarded by a TLS terminating proxy.

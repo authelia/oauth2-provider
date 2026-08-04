@@ -868,7 +868,7 @@ func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 }
 
 func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
-	return c.MTLSEnabled
+	return c.MTLSEnabled || c.MTLSEnforce
 }
 
 func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {

@@ -287,8 +287,6 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
 	other := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "other"}, DNSNames: []string{"other.example.com"}, SerialNumber: 2})
 
-	const header = "X-Forwarded-Tls-Client-Cert"
-
 	pkiClient := func() Client {
 		return &DefaultMTLSClient{
 			DefaultJARClient: &DefaultJARClient{
@@ -357,7 +355,7 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 			store := newMTLSClientStore()
 			store.clients["test"] = tc.client
 
-			config := &Config{MTLSEnabled: true, MTLSClientCertificateHeader: header}
+			config := &Config{MTLSEnabled: true}
 			strategy := &DefaultClientAuthenticationStrategy{Store: store, Config: config}
 
 			r := &http.Request{Header: http.Header{}, PostForm: tc.form, Form: tc.form}
@@ -381,6 +379,67 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 			assert.Equal(t, tc.method, method)
 		})
 	}
+}
+
+// TestAuthenticateClientMTLSViaForwardedHeader covers the deployment MTLSClientCertificateHeader exists for: a TLS
+// terminating reverse proxy that forwards the client's certificate in a header while authenticating its own
+// connection to this server with mutual TLS. The peer certificate on such a connection is the proxy's, so the header
+// is the only source of the client's certificate.
+func TestAuthenticateClientMTLSViaForwardedHeader(t *testing.T) {
+	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
+	proxy := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "proxy"}, DNSNames: []string{"proxy.example.com"}, SerialNumber: 3})
+
+	const header = "X-Forwarded-Tls-Client-Cert"
+
+	form := url.Values{consts.FormParameterClientID: []string{"test"}}
+
+	newStrategy := func() *DefaultClientAuthenticationStrategy {
+		store := newMTLSClientStore()
+		store.clients["test"] = &DefaultMTLSClient{
+			DefaultJARClient: &DefaultJARClient{
+				DefaultClient:           &DefaultClient{ID: "test"},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodTLSClientAuth,
+			},
+			TLSClientAuthSANDNS: "client.example.com",
+		}
+
+		return &DefaultClientAuthenticationStrategy{
+			Store:  store,
+			Config: &Config{MTLSEnabled: true, MTLSClientCertificateHeader: header},
+		}
+	}
+
+	newRequest := func(peer *x509.Certificate, headerValue string) *http.Request {
+		r := &http.Request{Header: http.Header{}, PostForm: form, Form: form}
+
+		if peer != nil {
+			r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{peer}}
+		}
+
+		if headerValue != "" {
+			r.Header.Set(header, headerValue)
+		}
+
+		return r
+	}
+
+	t.Run("ShouldAuthenticateTheForwardedClientRatherThanTheProxy", func(t *testing.T) {
+		client, method, err := newStrategy().AuthenticateClient(context.TODO(), newRequest(proxy, encodeTraefikV3(cert)), form, &TokenEndpointClientAuthStrategy{})
+
+		require.NoError(t, err)
+		require.NotNil(t, client)
+		assert.Equal(t, consts.ClientAuthMethodTLSClientAuth, method)
+	})
+
+	t.Run("ShouldRejectWhenOnlyTheProxyCertificateIsPresent", func(t *testing.T) {
+		// No header means no client certificate. Were the connection's peer certificate consulted instead, this would
+		// fail on the SAN mismatch rather than on there being no credential at all.
+		client, _, err := newStrategy().AuthenticateClient(context.TODO(), newRequest(proxy, ""), form, &TokenEndpointClientAuthStrategy{})
+
+		assert.Nil(t, client)
+		require.Error(t, err)
+		assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "no known authentication method")
+	})
 }
 
 func TestAuthenticateClientSelfSignedMTLS(t *testing.T) {

@@ -91,20 +91,31 @@ func TestClientCertificateFromRequest(t *testing.T) {
 		return r
 	}
 
-	t.Run("ShouldReturnThePeerCertificate", func(t *testing.T) {
-		actual, err := ClientCertificateFromRequest(newRequest(cert, "", ""), header)
+	t.Run("ShouldReturnThePeerCertificateWhenNoHeaderIsConfigured", func(t *testing.T) {
+		actual, err := ClientCertificateFromRequest(newRequest(cert, "", ""), "")
 
 		require.NoError(t, err)
 		require.NotNil(t, actual)
 		assert.Equal(t, cert.Raw, actual.Raw)
 	})
 
-	t.Run("ShouldPreferThePeerCertificateOverTheHeader", func(t *testing.T) {
-		actual, err := ClientCertificateFromRequest(newRequest(cert, header, encodeTraefikV3(other)), header)
+	t.Run("ShouldPreferTheHeaderOverThePeerCertificate", func(t *testing.T) {
+		// The peer certificate on a connection from a TLS terminating proxy belongs to the proxy. Preferring it would
+		// bind the token to the proxy, which every client behind that proxy would then satisfy.
+		actual, err := ClientCertificateFromRequest(newRequest(other, header, encodeTraefikV3(cert)), header)
 
 		require.NoError(t, err)
 		require.NotNil(t, actual)
 		assert.Equal(t, cert.Raw, actual.Raw)
+	})
+
+	t.Run("ShouldIgnoreThePeerCertificateWhenAHeaderIsConfiguredButAbsent", func(t *testing.T) {
+		// A request arriving without the header carries no client certificate, even over a connection that has a peer
+		// certificate of its own: that certificate is the proxy's.
+		actual, err := ClientCertificateFromRequest(newRequest(other, "", ""), header)
+
+		require.NoError(t, err)
+		assert.Nil(t, actual)
 	})
 
 	t.Run("ShouldReadTheHeaderWhenThereIsNoPeerCertificate", func(t *testing.T) {

@@ -393,9 +393,10 @@ func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
 
 func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 	testCases := []struct {
-		name  string
-		setup func() *IntrospectionResponse
-		check func(t *testing.T, params map[string]any)
+		name   string
+		setup  func() *IntrospectionResponse
+		config *Config
+		check  func(t *testing.T, params map[string]any)
 	}{
 		{
 			name: "ShouldReturnInactiveOnlyWhenNotActive",
@@ -522,6 +523,30 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 			},
 		},
 		{
+			// A session restored from storage still carries a binding recorded while DPoP was enabled, but the
+			// handler that would verify it no longer runs. Reporting 'cnf' would tell the resource server a
+			// proof-of-possession check was performed when none was.
+			name: "ShouldNotPopulateCnfWhenTheBindingMethodIsDisabled",
+			setup: func() *IntrospectionResponse {
+				session := &DefaultSession{Subject: "user-123"}
+				session.SetDPoPJWKThumbprint("test-jkt")
+
+				ar := NewAccessRequest(session)
+				ar.Client = &DefaultClient{ID: "client-id"}
+
+				return &IntrospectionResponse{
+					Active:          true,
+					TokenUse:        AccessToken,
+					AccessRequester: ar,
+				}
+			},
+			config: &Config{DPoPEnabled: false, MTLSEnabled: true},
+			check: func(t *testing.T, params map[string]any) {
+				assert.Equal(t, true, params[consts.ClaimActive])
+				assert.NotContains(t, params, jwt.ClaimConfirmation)
+			},
+		},
+		{
 			name: "ShouldNotAllowExtraClaimsToForgeCnf",
 			setup: func() *IntrospectionResponse {
 				session := &DefaultSession{Subject: "user-123"}
@@ -545,7 +570,12 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := new(Fosite)
+			config := tc.config
+			if config == nil {
+				config = &Config{DPoPEnabled: true, MTLSEnabled: true}
+			}
+
+			provider := &Fosite{Config: config}
 			rw := httptest.NewRecorder()
 
 			provider.WriteIntrospectionResponse(context.Background(), rw, tc.setup())

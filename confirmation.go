@@ -5,6 +5,8 @@
 package oauth2
 
 import (
+	"context"
+
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -18,6 +20,15 @@ import (
 type confirmationMethod struct {
 	// name is the member name within the 'cnf' claim, for example 'jkt'.
 	name string
+
+	// enabled reports whether the binding method this confirmation describes is turned on. A disabled method is never
+	// asserted, because a session outlives a configuration change: a binding recorded while the method was enabled
+	// survives on the session after it is turned off, and the handler that would verify it no longer runs. Emitting
+	// the confirmation anyway would tell the resource server a proof-of-possession check was performed when none was.
+	//
+	// Only ApplyConfirmation consults this. RestoreConfirmation deliberately does not: it recovers what a signed token
+	// already asserts, which is a statement about how the token was issued rather than about current configuration.
+	enabled func(ctx context.Context, config ConfirmationConfigProvider) bool
 
 	// get returns the binding recorded on session, or an empty string when session records none or does not support a
 	// binding of this kind at all.
@@ -34,6 +45,9 @@ type confirmationMethod struct {
 var confirmationMethods = []confirmationMethod{
 	{
 		name: jwt.ClaimConfirmationJWKThumbprint,
+		enabled: func(ctx context.Context, config ConfirmationConfigProvider) bool {
+			return config.GetDPoPEnabled(ctx)
+		},
 		get: func(session Session) (jkt string) {
 			if bound, ok := session.(DPoPBoundSession); ok {
 				return bound.GetDPoPJWKThumbprint()
@@ -49,6 +63,9 @@ var confirmationMethods = []confirmationMethod{
 	},
 	{
 		name: jwt.ClaimConfirmationX509SHA256Thumbprint,
+		enabled: func(ctx context.Context, config ConfirmationConfigProvider) bool {
+			return config.GetMTLSEnabled(ctx)
+		},
 		get: func(session Session) (x5t string) {
 			if bound, ok := session.(MTLSBoundSession); ok {
 				return bound.GetClientCertificateSHA256Thumbprint()
@@ -64,15 +81,20 @@ var confirmationMethods = []confirmationMethod{
 	},
 }
 
-// ApplyConfirmation rebuilds the RFC 7800 'cnf' claim in claims from the bindings recorded on session, and is the only
-// supported way to write that claim.
+// ApplyConfirmation rebuilds the RFC 7800 'cnf' claim in claims from the bindings recorded on session whose binding
+// method is currently enabled, and is the only supported way to write that claim.
 //
 // The claim is rebuilt rather than merged into, so it asserts exactly the bindings the server established and nothing
 // else. That matters because the claims a token is minted from include the session's extra claims, which are free-form:
 // were the existing value merged into, a 'cnf' placed there would travel into the token, and a resource server reads
 // 'cnf' as evidence that a proof-of-possession check was performed. A 'cnf' that would be left empty is removed
 // entirely, since an empty confirmation asserts nothing while still suggesting the token is bound.
-func ApplyConfirmation(claims map[string]any, session Session) {
+//
+// A binding whose method is disabled is skipped for the same reason, and is skipped rather than erased: a session
+// restored from storage still carries a binding recorded while the method was enabled, but the handler that would
+// verify it no longer runs, so asserting it would claim a check that did not happen. Leaving the value on the session
+// keeps the binding dormant rather than lost, so re-enabling the method resumes both enforcement and this claim.
+func ApplyConfirmation(ctx context.Context, config ConfirmationConfigProvider, claims map[string]any, session Session) {
 	if claims == nil {
 		return
 	}
@@ -80,6 +102,13 @@ func ApplyConfirmation(claims map[string]any, session Session) {
 	cnf := map[string]any{}
 
 	for _, method := range confirmationMethods {
+		// A nil config asserts nothing, so no method is enabled. Failing closed is deliberate: the alternative
+		// direction would emit a confirmation on a misconfigured server, which is the one outcome this claim must
+		// never produce. Any existing 'cnf' is still stripped below.
+		if config == nil || !method.enabled(ctx, config) {
+			continue
+		}
+
 		if value := method.get(session); value != "" {
 			cnf[method.name] = value
 		}

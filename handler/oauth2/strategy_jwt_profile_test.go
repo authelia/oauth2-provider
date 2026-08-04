@@ -283,6 +283,8 @@ func anyInt64ToTime(in any) time.Time {
 func TestGenerateJWTIncludesCnf(t *testing.T) {
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
+		DPoPEnabled:                   true,
+		MTLSEnabled:                   true,
 		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 	}
 

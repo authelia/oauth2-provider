@@ -153,6 +153,7 @@ func TestIntrospectJWT(t *testing.T) {
 func TestIntrospectJWTRecoversDPoPBinding(t *testing.T) {
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
+		DPoPEnabled:                   true,
 		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 	}
 
@@ -205,8 +206,12 @@ func TestIntrospectJWTRecoversDPoPBinding(t *testing.T) {
 }
 
 func TestIntrospectJWTRecoversMTLSBinding(t *testing.T) {
+	// Both methods are enabled because one case binds by both, and ApplyConfirmation asserts a confirmation method
+	// only while that method is enabled.
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
+		MTLSEnabled:                   true,
+		DPoPEnabled:                   true,
 		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 	}
 

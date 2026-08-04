@@ -828,7 +828,7 @@ func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (s
 }
 
 func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
-	return c.DPoPEnabled
+	return c.DPoPEnabled || c.DPoPEnforce
 }
 
 func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {

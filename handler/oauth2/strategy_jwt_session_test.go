@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func TestJWTSessionConfirmationRoundTrip(t *testing.T) {
 
 	claims := map[string]any{}
 
-	oauth2.ApplyConfirmation(claims, source.(oauth2.Session))
+	oauth2.ApplyConfirmation(context.Background(), &oauth2.Config{DPoPEnabled: true, MTLSEnabled: true}, claims, source.(oauth2.Session))
 
 	cnf, ok := claims[jwt.ClaimConfirmation].(map[string]any)
 	require.True(t, ok, "expected cnf to be present and a map, got %#v", claims[jwt.ClaimConfirmation])

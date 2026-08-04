@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +19,7 @@ func TestApplyConfirmation(t *testing.T) {
 		name     string
 		claims   map[string]any
 		session  Session
+		config   ConfirmationConfigProvider
 		expected map[string]any
 	}{
 		{
@@ -82,11 +84,44 @@ func TestApplyConfirmation(t *testing.T) {
 			session:  confirmationSession(""),
 			expected: map[string]any{},
 		},
+		{
+			name:     "ShouldNotAssertDPoPWhenTheMethodIsDisabled",
+			claims:   map[string]any{jwt.ClaimSubject: "peter"},
+			session:  confirmationSession("test-jkt"),
+			config:   &Config{DPoPEnabled: false, MTLSEnabled: true},
+			expected: map[string]any{jwt.ClaimSubject: "peter"},
+		},
+		{
+			name:     "ShouldNotAssertMTLSWhenTheMethodIsDisabled",
+			claims:   map[string]any{jwt.ClaimSubject: "peter"},
+			session:  confirmationSessionMTLS("", "test-x5t"),
+			config:   &Config{DPoPEnabled: true, MTLSEnabled: false},
+			expected: map[string]any{jwt.ClaimSubject: "peter"},
+		},
+		{
+			name:     "ShouldAssertOnlyTheEnabledMethod",
+			claims:   map[string]any{jwt.ClaimSubject: "peter"},
+			session:  confirmationSessionMTLS("test-jkt", "test-x5t"),
+			config:   &Config{DPoPEnabled: true, MTLSEnabled: false},
+			expected: map[string]any{jwt.ClaimSubject: "peter", jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationJWKThumbprint: "test-jkt"}},
+		},
+		{
+			name:     "ShouldRemoveExistingConfirmationWhenEveryMethodIsDisabled",
+			claims:   map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationJWKThumbprint: "forged-jkt"}},
+			session:  confirmationSessionMTLS("test-jkt", "test-x5t"),
+			config:   &Config{DPoPEnabled: false, MTLSEnabled: false},
+			expected: map[string]any{},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ApplyConfirmation(tc.claims, tc.session)
+			config := tc.config
+			if config == nil {
+				config = &Config{DPoPEnabled: true, MTLSEnabled: true}
+			}
+
+			ApplyConfirmation(context.Background(), config, tc.claims, tc.session)
 
 			assert.Equal(t, tc.expected, tc.claims)
 		})
@@ -94,7 +129,7 @@ func TestApplyConfirmation(t *testing.T) {
 
 	t.Run("ShouldHandleNilClaims", func(t *testing.T) {
 		assert.NotPanics(t, func() {
-			ApplyConfirmation(nil, confirmationSession("test-jkt"))
+			ApplyConfirmation(context.Background(), &Config{DPoPEnabled: true, MTLSEnabled: true}, nil, confirmationSession("test-jkt"))
 		})
 	})
 }
@@ -175,7 +210,7 @@ func TestConfirmationRoundTrip(t *testing.T) {
 			require.Equal(t, "round-trip-value", method.get(source), "DefaultSession does not record the '%s' confirmation method; give it the accessors that method's interface requires, as it does for DPoPBoundSession", method.name)
 
 			claims := map[string]any{}
-			ApplyConfirmation(claims, source)
+			ApplyConfirmation(context.Background(), &Config{DPoPEnabled: true, MTLSEnabled: true}, claims, source)
 
 			cnf, ok := claims[jwt.ClaimConfirmation].(map[string]any)
 			require.True(t, ok, "expected cnf to be present and a map, got %#v", claims[jwt.ClaimConfirmation])
@@ -255,7 +290,7 @@ func TestApplyConfirmationMTLS(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ApplyConfirmation(tc.claims, tc.session)
+			ApplyConfirmation(context.Background(), &Config{DPoPEnabled: true, MTLSEnabled: true}, tc.claims, tc.session)
 
 			assert.Equal(t, tc.expected, tc.claims)
 		})
@@ -265,7 +300,7 @@ func TestApplyConfirmationMTLS(t *testing.T) {
 func TestConfirmationMTLSRoundTrip(t *testing.T) {
 	claims := map[string]any{jwt.ClaimSubject: "peter"}
 
-	ApplyConfirmation(claims, confirmationSessionMTLS("test-jkt", "test-x5t"))
+	ApplyConfirmation(context.Background(), &Config{DPoPEnabled: true, MTLSEnabled: true}, claims, confirmationSessionMTLS("test-jkt", "test-x5t"))
 
 	restored := &DefaultSession{}
 

@@ -563,3 +563,17 @@ type MTLSConfigProvider interface {
 	// trusted TLS terminating proxy, or an empty string to never read one.
 	GetMTLSClientCertificateHeader(ctx context.Context) (header string)
 }
+
+// ConfirmationConfigProvider is the configuration ApplyConfirmation consults to decide whether a given RFC 7800
+// confirmation method may be asserted in a token or an introspection response.
+//
+// It deliberately restates the two 'enabled' getters rather than embedding DPoPConfigProvider and MTLSConfigProvider,
+// which together carry ten methods where two are needed. Go interfaces are structural, so any configuration already
+// satisfying those providers satisfies this one without change.
+type ConfirmationConfigProvider interface {
+	// GetDPoPEnabled returns true if DPoP handling is enabled.
+	GetDPoPEnabled(ctx context.Context) (enabled bool)
+
+	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.
+	GetMTLSEnabled(ctx context.Context) (enabled bool)
+}

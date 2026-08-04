@@ -369,6 +369,18 @@ type TokenEndpointHandlersProvider interface {
 	GetTokenEndpointHandlers(ctx context.Context) (handlers TokenEndpointHandlers)
 }
 
+// AuthorizeEndpointBindingHandlersProvider returns the provider for configuring the authorize endpoint binding handlers.
+type AuthorizeEndpointBindingHandlersProvider interface {
+	// GetAuthorizeEndpointBindingHandlers returns the authorize endpoint binding handlers.
+	GetAuthorizeEndpointBindingHandlers(ctx context.Context) (handlers AuthorizeEndpointBindingHandlers)
+}
+
+// TokenEndpointBindingHandlersProvider returns the provider for configuring the token endpoint binding handlers.
+type TokenEndpointBindingHandlersProvider interface {
+	// GetTokenEndpointBindingHandlers returns the token endpoint binding handlers.
+	GetTokenEndpointBindingHandlers(ctx context.Context) (handlers TokenEndpointBindingHandlers)
+}
+
 // TokenIntrospectionHandlersProvider returns the provider for configuring the token introspection handlers.
 type TokenIntrospectionHandlersProvider interface {
 	// GetTokenIntrospectionHandlers returns the token introspection handlers.

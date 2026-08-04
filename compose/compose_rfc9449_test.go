@@ -23,8 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
-	oauth2handler "authelia.com/provider/oauth2/handler/oauth2"
-	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -39,7 +37,7 @@ func TestDPoPFactory(t *testing.T) {
 	require.IsType(t, &rfc9449.Handler{}, h)
 	assert.NotNil(t, config.DPoPStrategy)
 
-	var _ oauth2.TokenEndpointHandler = h.(*rfc9449.Handler)
+	var _ oauth2.TokenEndpointBindingHandler = h.(*rfc9449.Handler)
 }
 
 func TestDPoPAuthorizeFactory(t *testing.T) {
@@ -50,37 +48,7 @@ func TestDPoPAuthorizeFactory(t *testing.T) {
 
 	require.IsType(t, &rfc9449.AuthorizeHandler{}, h)
 
-	var _ oauth2.AuthorizeEndpointHandler = h.(*rfc9449.AuthorizeHandler)
-}
-
-func TestDPoPAuthorizeFactoryPrecedesCodeIssuingFactories(t *testing.T) {
-	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
-
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-
-	ComposeAllEnabled(config, storage.NewMemoryStore(), key)
-
-	handlers := config.GetAuthorizeEndpointHandlers(context.Background())
-
-	var dpop = -1
-
-	for i, h := range handlers {
-		if _, ok := h.(*rfc9449.AuthorizeHandler); ok {
-			dpop = i
-
-			break
-		}
-	}
-
-	require.NotEqual(t, -1, dpop, "the DPoP authorize handler is not registered by ComposeAllEnabled")
-
-	for i, h := range handlers {
-		switch h.(type) {
-		case *oauth2handler.AuthorizeExplicitGrantHandler, *openid.OpenIDConnectExplicitHandler, *openid.OpenIDConnectHybridHandler:
-			assert.Greater(t, i, dpop, "the code issuing handler %T at index %d runs before the DPoP authorize handler at index %d", h, i, dpop)
-		}
-	}
+	var _ oauth2.AuthorizeEndpointBindingHandler = h.(*rfc9449.AuthorizeHandler)
 }
 
 func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {
@@ -91,26 +59,6 @@ func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {
 	})
 
 	assert.Nil(t, config.DPoPStrategy)
-}
-
-// snapshotStore records the DPoP binding present on the session at the moment the authorization code session is handed
-// to storage. The bundled MemoryStore retains the session pointer, so a mutation made after this point is still
-// observable through it; a store which serializes the session on write, as any real one does, would not see it.
-type snapshotStore struct {
-	*storage.MemoryStore
-
-	jkt       string
-	persisted bool
-}
-
-func (s *snapshotStore) CreateAuthorizeCodeSession(ctx context.Context, code string, req oauth2.Requester) error {
-	s.persisted = true
-
-	if session, ok := req.GetSession().(oauth2.DPoPBoundSession); ok {
-		s.jkt = session.GetDPoPJWKThumbprint()
-	}
-
-	return s.MemoryStore.CreateAuthorizeCodeSession(ctx, code, req)
 }
 
 func TestDPoPJKTIsBoundBeforeTheAuthorizationCodeSessionIsPersisted(t *testing.T) {
@@ -196,4 +144,21 @@ func TestUnknownGrantTypeIsNotSatisfiedByTheDPoPHandler(t *testing.T) {
 	assert.Equal(t, "invalid_request", rfc.ErrorField)
 
 	assert.Empty(t, store.DPoPProofJTIs, "an unauthenticated caller wrote a replay marker to the store")
+}
+
+type snapshotStore struct {
+	*storage.MemoryStore
+
+	jkt       string
+	persisted bool
+}
+
+func (s *snapshotStore) CreateAuthorizeCodeSession(ctx context.Context, code string, req oauth2.Requester) error {
+	s.persisted = true
+
+	if session, ok := req.GetSession().(oauth2.DPoPBoundSession); ok {
+		s.jkt = session.GetDPoPJWKThumbprint()
+	}
+
+	return s.MemoryStore.CreateAuthorizeCodeSession(ctx, code, req)
 }

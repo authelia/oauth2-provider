@@ -14,23 +14,20 @@ import (
 
 // AuthorizeHandler implements the RFC 9449 Section 10.1 'dpop_jkt' authorize-request parameter.
 //
-// It is a distinct handler from Handler because the two have opposite ordering requirements. The binding is carried on
-// the session, and the handlers that issue an authorization code persist a copy of that session as they run, so this
-// handler MUST be registered ahead of every handler that calls CreateAuthorizeCodeSession (the OAuth 2.0 explicit
-// grant and the OpenID Connect explicit/hybrid flows). Registering it after them leaves the thumbprint absent from the
-// persisted session and silently disables the authorization code injection protection this parameter exists to
-// provide. Handler, in contrast, must run after the grant handlers at the token endpoint so that the session it reads
-// the binding back from has already been restored from storage.
+// It is a distinct handler from Handler because the two bind at different endpoints. This one is dispatched by
+// oauth2.(*Fosite).NewAuthorizeResponse ahead of every oauth2.AuthorizeEndpointHandler, so the thumbprint is on the
+// session before the handlers that issue an authorization code persist a copy of it. Registration order does not
+// affect that.
 type AuthorizeHandler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider
 	}
 }
 
-// HandleAuthorizeEndpointRequest records the 'dpop_jkt' authorize-request parameter onto the session so the
-// authorization code becomes bound to the client's DPoP proof-of-possession key. The bound thumbprint is later
-// enforced by Handler.HandleTokenEndpointRequest against the DPoP proof presented at the token endpoint.
-func (h *AuthorizeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+// BindAuthorizeRequest records the 'dpop_jkt' authorize-request parameter onto the session so the authorization code
+// becomes bound to the client's DPoP proof-of-possession key. The bound thumbprint is later enforced by
+// Handler.BindAccessRequest against the DPoP proof presented at the token endpoint.
+func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
 	if !h.Config.GetDPoPEnabled(ctx) {
 		return nil
 	}
@@ -49,7 +46,7 @@ func (h *AuthorizeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, r
 	types := request.GetResponseTypes()
 
 	// Only record the binding for flows that issue an authorization code; an implicit-only flow never presents a
-	// code at the token endpoint, so it would never pass through Handler.HandleTokenEndpointRequest's proof check and
+	// code at the token endpoint, so it would never pass through Handler.BindAccessRequest's proof check and
 	// would otherwise end up with an unenforceable cnf.jkt on its (directly issued) token.
 	if !types.Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
@@ -76,5 +73,5 @@ func (h *AuthorizeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, r
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeHandler)(nil)
+	_ oauth2.AuthorizeEndpointBindingHandler = (*AuthorizeHandler)(nil)
 )

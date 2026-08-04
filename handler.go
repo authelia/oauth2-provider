@@ -42,21 +42,34 @@ type TokenEndpointHandler interface {
 	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) bool
 }
 
-// TokenEndpointGrantAugmenter is implemented by a TokenEndpointHandler that augments another handler's grant rather
-// than owning a grant type of its own, such as the RFC 8705 certificate binding and RFC 9449 DPoP handlers. Such a
-// handler never satisfies an access request by itself: it returns ErrUnknownRequest from HandleTokenEndpointRequest
-// even on success, and answers CanHandleTokenEndpointRequest by asking whether any other registered handler will
-// process the request.
+// AuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of an authorize request
+// before any handler persists that session.
 //
-// That delegation is why the marker exists. An augmenting handler MUST skip every other handler implementing this
-// interface while it scans, because two augmenting handlers each asking the other whether the request will be handled
-// recurses until the stack is exhausted. Since the scan runs before client authentication is enforced in
-// (*Fosite).NewAccessRequest, such a recursion is reachable by an unauthenticated caller.
-type TokenEndpointGrantAugmenter interface {
-	TokenEndpointHandler
+// A binding handler augments a flow another handler owns; it never satisfies a request by itself. Handlers in a
+// binding list write disjoint session fields, so their order within the list is not significant.
+type AuthorizeEndpointBindingHandler interface {
+	// BindAuthorizeRequest records any binding the request asserts. It returns nil both when it records one and
+	// when there is nothing to record; any error rejects the request.
+	BindAuthorizeRequest(ctx context.Context, request AuthorizeRequester) error
+}
 
-	// AugmentsTokenEndpointGrant is a marker identifying this handler as augmenting rather than owning a grant.
-	AugmentsTokenEndpointGrant()
+// TokenEndpointBindingHandler records and enforces a proof-of-possession binding on an access request that a grant
+// handler has already accepted.
+//
+// A binding handler augments a grant another handler owns; it never satisfies one by itself. It is dispatched only
+// for a request some TokenEndpointHandler accepted, so it needs neither a grant type claim nor a client
+// authentication policy of its own. Handlers in a binding list write disjoint session fields, so their order within
+// the list is not significant.
+type TokenEndpointBindingHandler interface {
+	// BindAccessRequest records the binding presented with this request and enforces any binding the session
+	// already carries. It returns nil both when it records one and when there is nothing to record; any error
+	// rejects the request.
+	BindAccessRequest(ctx context.Context, request AccessRequester) error
+
+	// PopulateBoundTokenEndpointResponse adjusts the response to reflect the binding. It runs after every
+	// TokenEndpointHandler has populated the response. Where two binding handlers write the same response field,
+	// list order applies and the last write wins.
+	PopulateBoundTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) error
 }
 
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.

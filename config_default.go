@@ -237,6 +237,14 @@ type Config struct {
 	// TokenEndpointHandlers is a list of handlers that are called before the token endpoint is served.
 	TokenEndpointHandlers TokenEndpointHandlers
 
+	// AuthorizeEndpointBindingHandlers is a list of handlers that record a proof-of-possession binding on an
+	// authorize request before the authorize endpoint handlers run.
+	AuthorizeEndpointBindingHandlers AuthorizeEndpointBindingHandlers
+
+	// TokenEndpointBindingHandlers is a list of handlers that record and enforce a proof-of-possession binding on
+	// an access request a grant handler has accepted.
+	TokenEndpointBindingHandlers TokenEndpointBindingHandlers
+
 	// TokenIntrospectionHandlers is a list of handlers that are called before the token introspection endpoint is served.
 	TokenIntrospectionHandlers TokenIntrospectionHandlers
 
@@ -351,6 +359,14 @@ func (c *Config) GetAuthorizeEndpointHandlers(ctx context.Context) AuthorizeEndp
 
 func (c *Config) GetTokenEndpointHandlers(ctx context.Context) TokenEndpointHandlers {
 	return c.TokenEndpointHandlers
+}
+
+func (c *Config) GetAuthorizeEndpointBindingHandlers(ctx context.Context) AuthorizeEndpointBindingHandlers {
+	return c.AuthorizeEndpointBindingHandlers
+}
+
+func (c *Config) GetTokenEndpointBindingHandlers(ctx context.Context) TokenEndpointBindingHandlers {
+	return c.TokenEndpointBindingHandlers
 }
 
 func (c *Config) GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrospectionHandlers {
@@ -909,6 +925,8 @@ var (
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)
 	_ TokenEndpointHandlersProvider                   = (*Config)(nil)
+	_ AuthorizeEndpointBindingHandlersProvider        = (*Config)(nil)
+	_ TokenEndpointBindingHandlersProvider            = (*Config)(nil)
 	_ TokenIntrospectionHandlersProvider              = (*Config)(nil)
 	_ RevocationHandlersProvider                      = (*Config)(nil)
 	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)

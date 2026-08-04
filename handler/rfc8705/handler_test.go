@@ -26,9 +26,9 @@ func TestHandlerBindsCertificate(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(cert), session.GetClientCertificateSHA256Thumbprint())
 }
 
@@ -39,9 +39,9 @@ func TestHandlerBindsCertificateWhenEnforced(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, true).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, true).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(cert), session.GetClientCertificateSHA256Thumbprint())
 }
 
@@ -52,9 +52,9 @@ func TestHandlerBindsCertificateForAPublicClient(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{Public: true, TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(cert), session.GetClientCertificateSHA256Thumbprint())
 }
 
@@ -63,7 +63,7 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(nil), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(nil), request)
 
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
@@ -79,7 +79,7 @@ func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(presented), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(presented), request)
 
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(bound), session.GetClientCertificateSHA256Thumbprint())
@@ -94,7 +94,7 @@ func TestHandlerRefreshRequiresTheBoundCertificate(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(nil), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(nil), request)
 
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }
@@ -104,9 +104,9 @@ func TestHandlerIgnoresUnboundRequests(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(nil), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(nil), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
 }
 
@@ -117,9 +117,9 @@ func TestHandlerDisabled(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(false, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(false, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
 }
 
@@ -129,7 +129,7 @@ func TestHandlerSessionDoesNotSupportBinding(t *testing.T) {
 	request := oauth2.NewAccessRequest(&unboundSession{})
 	request.Client = &oauth2.DefaultClient{TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
 }
@@ -140,10 +140,9 @@ func TestHandlerIgnoresIncidentalCertificateOnUnbindableSession(t *testing.T) {
 	request := oauth2.NewAccessRequest(&unboundSession{})
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
-	assert.NotErrorIs(t, err, oauth2.ErrServerError)
+	require.NoError(t, err)
 }
 
 func TestHandlerSessionDoesNotSupportBindingWhenEnforced(t *testing.T) {
@@ -152,7 +151,7 @@ func TestHandlerSessionDoesNotSupportBindingWhenEnforced(t *testing.T) {
 	request := oauth2.NewAccessRequest(&unboundSession{})
 	request.Client = &oauth2.DefaultClient{}
 
-	err := newTestHandler(true, true).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, true).BindAccessRequest(ctxWithCertificate(cert), request)
 
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
 }
@@ -164,13 +163,13 @@ func TestHandlerBindsOpenIDSession(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{TLSClientCertificateBoundAccessTokens: true}
 
-	err := newTestHandler(true, false).HandleTokenEndpointRequest(ctxWithCertificate(cert), request)
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
 
-	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+	require.NoError(t, err)
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(cert), session.GetClientCertificateSHA256Thumbprint())
 }
 
-func TestHandlerPopulateTokenEndpointResponseLeavesTokenTypeAlone(t *testing.T) {
+func TestHandlerPopulateBoundTokenEndpointResponseLeavesTokenTypeAlone(t *testing.T) {
 	session := &oauth2.DefaultSession{}
 	session.SetClientCertificateSHA256Thumbprint("test-x5t")
 
@@ -180,59 +179,45 @@ func TestHandlerPopulateTokenEndpointResponseLeavesTokenTypeAlone(t *testing.T) 
 	response := oauth2.NewAccessResponse()
 	response.SetTokenType(oauth2.BearerAccessToken)
 
-	require.NoError(t, newTestHandler(true, false).PopulateTokenEndpointResponse(context.Background(), request, response))
+	require.NoError(t, newTestHandler(true, false).PopulateBoundTokenEndpointResponse(context.Background(), request, response))
 
 	assert.Equal(t, oauth2.BearerAccessToken, response.GetTokenType())
 }
 
-func TestHandlerCanHandleTokenEndpointRequest(t *testing.T) {
-	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
+	t.Run("ShouldNoOpWhenNothingRequiresABinding", func(t *testing.T) {
+		session := &oauth2.DefaultSession{}
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
 
-	t.Run("ShouldNotHandleWhenNoOtherHandlerWill", func(t *testing.T) {
-		h := &Handler{Config: &oauth2.Config{MTLSEnabled: true}}
-
-		assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+		require.NoError(t, newTestHandler(true, false).BindAccessRequest(context.Background(), request))
+		assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
 	})
 
-	t.Run("ShouldHandleWhenAnotherHandlerWill", func(t *testing.T) {
-		config := &oauth2.Config{MTLSEnabled: true}
-		h := &Handler{Config: config}
+	t.Run("ShouldErrorWhenTheSessionIsAlreadyBound", func(t *testing.T) {
+		session := &oauth2.DefaultSession{}
+		session.SetClientCertificateSHA256Thumbprint("an-existing-x5t")
 
-		config.TokenEndpointHandlers = oauth2.TokenEndpointHandlers{h, &willHandle{}}
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
 
-		assert.True(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+		err := newTestHandler(true, false).BindAccessRequest(context.Background(), request)
+
+		assert.ErrorIs(t, err, oauth2.ErrServerError)
 	})
 
-	t.Run("ShouldNotRecurseOnADuplicateRegistration", func(t *testing.T) {
-		config := &oauth2.Config{MTLSEnabled: true}
-		h := &Handler{Config: config}
+	t.Run("ShouldErrorWhenEnforced", func(t *testing.T) {
+		request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+		request.Client = &oauth2.DefaultClient{}
 
-		config.TokenEndpointHandlers = oauth2.TokenEndpointHandlers{h, &Handler{Config: config}}
+		err := newTestHandler(true, true).BindAccessRequest(context.Background(), request)
 
-		assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
+		assert.ErrorIs(t, err, oauth2.ErrServerError)
 	})
-
-	assert.True(t, (&Handler{Config: &oauth2.Config{MTLSEnabled: true}}).CanSkipClientAuth(context.Background(), request))
 }
 
 type unboundSession struct {
 	oauth2.Session
-}
-
-type willHandle struct{}
-
-func (h *willHandle) HandleTokenEndpointRequest(context.Context, oauth2.AccessRequester) error {
-	return nil
-}
-
-func (h *willHandle) PopulateTokenEndpointResponse(context.Context, oauth2.AccessRequester, oauth2.AccessResponder) error {
-	return nil
-}
-
-func (h *willHandle) CanSkipClientAuth(context.Context, oauth2.AccessRequester) bool { return false }
-
-func (h *willHandle) CanHandleTokenEndpointRequest(context.Context, oauth2.AccessRequester) bool {
-	return true
 }
 
 func newTestHandler(enabled, enforce bool) *Handler {

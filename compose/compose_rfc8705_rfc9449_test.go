@@ -27,16 +27,10 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
-const (
-	bothClientID    = "both-client"
-	bothSecret      = "both-client-secret"
-	bothRedirectURI = "https://rp.example.com/cb"
-	bothTokenURI    = "https://as.example.com/token"
-)
-
-func TestBindingHandlersDoNotRecurseOnAGrantTypeNoHandlerOwns(t *testing.T) {
+func TestNoBindingWorkForAGrantTypeNoHandlerOwns(t *testing.T) {
 	provider, store := newBothProvider(t)
 
 	proofKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -135,6 +129,107 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 
 		assertBoundToBoth(t, granted, cert)
 	})
+}
+
+func TestBindingIsIndependentOfFactoryOrder(t *testing.T) {
+	provider, _ := newBothProviderBindingFirst(t)
+
+	proofKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	code := bothAuthorizeForCode(t, provider)
+
+	response, granted, err := bothTokenRequest(t, provider, url.Values{
+		consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+		consts.FormParameterAuthorizationCode: []string{code},
+		consts.FormParameterRedirectURI:       []string{bothRedirectURI},
+	}, cert, bothDPoPProof(t, proofKey, "order-initial"))
+	require.NoError(t, err)
+
+	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
+
+	assertBoundToBoth(t, granted, cert)
+
+	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+	require.NotEmpty(t, refreshToken, "no refresh token was issued")
+
+	form := url.Values{
+		consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+		consts.FormParameterRefreshToken: []string{refreshToken},
+	}
+
+	_, _, err = bothTokenRequest(t, provider, form, nil, bothDPoPProof(t, proofKey, "order-no-cert"))
+
+	require.Error(t, err)
+	assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+	_, _, err = bothTokenRequest(t, provider, form, cert, "")
+
+	require.Error(t, err)
+	assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+}
+
+const (
+	bothClientID    = "both-client"
+	bothSecret      = "both-client-secret"
+	bothRedirectURI = "https://rp.example.com/cb"
+	bothTokenURI    = "https://as.example.com/token"
+)
+
+func newBothProviderBindingFirst(t *testing.T) (oauth2.Provider, *storage.MemoryStore) {
+	t.Helper()
+
+	store := storage.NewMemoryStore()
+	config := &oauth2.Config{
+		MTLSEnabled:  true,
+		DPoPEnabled:  true,
+		GlobalSecret: []byte("some-cool-secret-that-is-32bytes"),
+	}
+
+	key := gen.MustRSAKey()
+
+	keyGetter := func(context.Context) (any, error) {
+		return key, nil
+	}
+
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	provider := Compose(
+		config,
+		store,
+		&CommonStrategy{
+			CoreStrategy:               NewOAuth2HMACStrategy(config),
+			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
+			Strategy:                   strategy,
+		},
+		DPoPAuthorizeFactory,
+		DPoPFactory,
+		RFC8705Factory,
+
+		OAuth2AuthorizeExplicitFactory,
+		OAuth2RefreshTokenGrantFactory,
+		OpenIDConnectExplicitFactory,
+		OpenIDConnectRefreshFactory,
+		OAuth2PKCEFactory,
+	)
+
+	store.Clients[bothClientID] = &oauth2.DefaultClient{
+		ID:                                    bothClientID,
+		ClientSecret:                          oauth2.NewPlainTextClientSecret(bothSecret),
+		RedirectURIs:                          []string{bothRedirectURI},
+		ResponseTypes:                         []string{consts.ResponseTypeAuthorizationCodeFlow},
+		GrantTypes:                            []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+		Scopes:                                []string{consts.ScopeOffline},
+		DPoPBoundAccessTokens:                 false,
+		TLSClientCertificateBoundAccessTokens: false,
+	}
+
+	return provider, store
 }
 
 func assertBoundToBoth(t *testing.T, session oauth2.Session, cert *x509.Certificate) {

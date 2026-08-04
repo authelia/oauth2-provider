@@ -11,9 +11,8 @@ import (
 
 // RFC8705Factory creates the RFC 8705 certificate-bound access token handler.
 //
-// It MUST be ordered after every factory whose handler restores a session at the token endpoint, so that a binding
-// established when the grant was issued is present on the session by the time the handler checks it against the
-// certificate presented now. Ordering it earlier leaves a refresh of a bound grant unchecked.
+// It is dispatched in the token binding phase, which runs after every grant handler has restored its session, so its
+// position in the factory list does not matter.
 func RFC8705Factory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc8705.Handler{
 		Config: config.(*oauth2.Config),

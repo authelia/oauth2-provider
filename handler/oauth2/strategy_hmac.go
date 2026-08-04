@@ -299,6 +299,7 @@ type CoreStrategyConfigurator interface {
 	oauth2.AccessTokenIssuerProvider
 	oauth2.JWTScopeFieldProvider
 	oauth2.JWTProfileAccessTokensProvider
+	oauth2.ConfirmationConfigProvider
 }
 
 type HMACCoreStrategyConfigurator interface {

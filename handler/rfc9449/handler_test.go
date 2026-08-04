@@ -6,7 +6,6 @@ package rfc9449
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -35,7 +34,7 @@ func TestHandlerBindsProof(t *testing.T) {
 
 	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
 
-	assert.ErrorIs(t, h.HandleTokenEndpointRequest(ctx, request), oauth2.ErrUnknownRequest)
+	assert.NoError(t, h.BindAccessRequest(ctx, request))
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
 }
 
@@ -59,7 +58,7 @@ func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	err := h.HandleTokenEndpointRequest(ctx, request)
+	err := h.BindAccessRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	assert.Empty(t, session.GetDPoPJWKThumbprint())
 }
@@ -72,7 +71,7 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	request.Client = &oauth2.DefaultClient{}
 
 	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
-	err := h.HandleTokenEndpointRequest(ctx, request)
+	err := h.BindAccessRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
@@ -193,7 +192,7 @@ func TestHandlerAuthorize(t *testing.T) {
 				ar.ResponseTypes = tc.responseTypes
 			}
 
-			err := h.HandleAuthorizeEndpointRequest(context.Background(), ar, oauth2.NewAuthorizeResponse())
+			err := h.BindAuthorizeRequest(context.Background(), ar)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -218,40 +217,11 @@ func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 	request.Client = &oauth2.DefaultClient{}
 
 	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
-	err := h.HandleTokenEndpointRequest(ctx, request)
+	err := h.BindAccessRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
-func TestHandlerCanSkipClientAuth(t *testing.T) {
-	h, _, _ := newTestHandler(false)
-
-	assert.True(t, h.CanSkipClientAuth(context.Background(), oauth2.NewAccessRequest(&oauth2.DefaultSession{})))
-}
-
-func TestHandlerCanHandleTokenEndpointRequestGatedByEnabled(t *testing.T) {
-	h, _, cfg := newTestHandler(false)
-	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
-
-	assert.True(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
-
-	cfg.enabled = false
-	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
-}
-
-func TestHandlerCanHandleTokenEndpointRequestGatedByAGrantHandler(t *testing.T) {
-	h, _, cfg := newTestHandler(false)
-	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
-
-	assert.True(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
-
-	cfg.handlers = oauth2.TokenEndpointHandlers{&stubGrantHandler{handles: false}}
-	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
-
-	cfg.handlers = oauth2.TokenEndpointHandlers{h, &Handler{Config: cfg, Strategy: cfg.strategy}}
-	assert.False(t, h.CanHandleTokenEndpointRequest(context.Background(), request))
-}
-
-func TestHandlerReturnsUnknownRequestWhenUnbound(t *testing.T) {
+func TestHandlerIsANoOpWhenUnbound(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 
 	session := &oauth2.DefaultSession{}
@@ -259,11 +229,12 @@ func TestHandlerReturnsUnknownRequestWhenUnbound(t *testing.T) {
 	request.Client = &oauth2.DefaultClient{}
 
 	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
-	err := h.HandleTokenEndpointRequest(ctx, request)
-	assert.True(t, errors.Is(err, oauth2.ErrUnknownRequest))
+
+	require.NoError(t, h.BindAccessRequest(ctx, request))
+	assert.Empty(t, session.GetDPoPJWKThumbprint())
 }
 
-func TestHandlerPopulateTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
+func TestHandlerPopulateBoundTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 
 	session := &oauth2.DefaultSession{}
@@ -273,7 +244,7 @@ func TestHandlerPopulateTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
 
 	response := oauth2.NewAccessResponse()
 
-	require.NoError(t, h.PopulateTokenEndpointResponse(context.Background(), request, response))
+	require.NoError(t, h.PopulateBoundTokenEndpointResponse(context.Background(), request, response))
 	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
 }
 
@@ -290,7 +261,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	})
 	ctx1 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw1)
 
-	require.ErrorIs(t, h.HandleTokenEndpointRequest(ctx1, request), oauth2.ErrUnknownRequest)
+	require.NoError(t, h.BindAccessRequest(ctx1, request))
 	jkt := session.GetDPoPJWKThumbprint()
 	require.NotEmpty(t, jkt)
 
@@ -304,7 +275,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	})
 	ctx2 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw2)
 
-	require.ErrorIs(t, h.HandleTokenEndpointRequest(ctx2, refreshRequest), oauth2.ErrUnknownRequest)
+	require.NoError(t, h.BindAccessRequest(ctx2, refreshRequest))
 	assert.Equal(t, jkt, refreshSession.GetDPoPJWKThumbprint())
 
 	otherKey := newTestProofKey(t)
@@ -318,19 +289,48 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	})
 	ctx3 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw3)
 
-	err := h.HandleTokenEndpointRequest(ctx3, otherRequest)
+	err := h.BindAccessRequest(ctx3, otherRequest)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+}
+
+func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
+	t.Run("ShouldNoOpWhenNothingRequiresABinding", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+
+		session := &oauth2.DefaultSession{}
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
+
+		require.NoError(t, h.BindAccessRequest(context.Background(), request))
+		assert.Empty(t, session.GetDPoPJWKThumbprint())
+	})
+
+	t.Run("ShouldErrorWhenTheSessionIsAlreadyBound", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+
+		session := &oauth2.DefaultSession{}
+		session.SetDPoPJWKThumbprint("an-existing-thumbprint")
+
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
+
+		assert.ErrorIs(t, h.BindAccessRequest(context.Background(), request), oauth2.ErrServerError)
+	})
+
+	t.Run("ShouldErrorWhenEnforced", func(t *testing.T) {
+		h, _, _ := newTestHandler(true)
+
+		request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+		request.Client = &oauth2.DefaultClient{}
+
+		assert.ErrorIs(t, h.BindAccessRequest(context.Background(), request), oauth2.ErrServerError)
+	})
 }
 
 type testHandlerConfig struct {
 	testStrategyConfig
 	enabled, enforce, nonceRequired bool
 	strategy                        oauth2.DPoPStrategy
-	handlers                        oauth2.TokenEndpointHandlers
-}
-
-func (c *testHandlerConfig) GetTokenEndpointHandlers(context.Context) oauth2.TokenEndpointHandlers {
-	return c.handlers
 }
 
 func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool { return c.enabled }
@@ -341,33 +341,12 @@ func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool { return 
 
 func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
 
-type stubGrantHandler struct {
-	handles bool
-}
-
-func (s *stubGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
-	return nil
-}
-
-func (s *stubGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
-	return nil
-}
-
-func (s *stubGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
-	return false
-}
-
-func (s *stubGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
-	return s.handles
-}
-
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
 	cfg := &testHandlerConfig{
 		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute},
 		enabled:            true,
 		enforce:            enforce,
-		handlers:           oauth2.TokenEndpointHandlers{&stubGrantHandler{handles: true}},
 	}
 	strategy := NewDefaultStrategy(cfg, store)
 	cfg.strategy = strategy

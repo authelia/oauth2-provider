@@ -49,7 +49,16 @@ type DefaultSession struct {
 
 	// JWKThumbprint is the RFC 7638 JWK Thumbprint (jkt) this session's tokens are DPoP bound to, if any.
 	JWKThumbprint string `json:"jwk_thumbprint,omitempty"`
+
+	// ClientCertificateThumbprint is the RFC 8705 X.509 SHA-256 certificate thumbprint (x5t#S256) this session's
+	// tokens are bound to, if any.
+	ClientCertificateThumbprint string `json:"client_certificate_thumbprint,omitempty"`
 }
+
+var (
+	_ DPoPBoundSession = (*DefaultSession)(nil)
+	_ MTLSBoundSession = (*DefaultSession)(nil)
+)
 
 // SetExpiresAt sets the expiration time of the token identified by key.
 func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
@@ -132,4 +141,18 @@ func (s *DefaultSession) GetDPoPJWKThumbprint() string {
 	}
 
 	return s.JWKThumbprint
+}
+
+// SetClientCertificateSHA256Thumbprint implements MTLSBoundSession for DefaultSession.
+func (s *DefaultSession) SetClientCertificateSHA256Thumbprint(x5t string) {
+	s.ClientCertificateThumbprint = x5t
+}
+
+// GetClientCertificateSHA256Thumbprint implements MTLSBoundSession for DefaultSession.
+func (s *DefaultSession) GetClientCertificateSHA256Thumbprint() string {
+	if s == nil {
+		return ""
+	}
+
+	return s.ClientCertificateThumbprint
 }

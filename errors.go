@@ -141,6 +141,17 @@ var (
 		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidToken is a resource-server rejection per RFC 8705 Section 3: a protected-resource request bearing a
+	// certificate-bound access token whose certificate does not match the binding must be rejected with HTTP 401 and
+	// the 'invalid_token' error code. It deliberately reuses errInvalidTokenFormatName, the same error code as
+	// ErrInvalidTokenFormat, but with HTTP 401 instead of 400; RFC6749Error.Is compares both ErrorField and CodeField,
+	// so the two remain distinguishable by errors.Is.
+	ErrInvalidToken = &RFC6749Error{
+		ErrorField:       errInvalidTokenFormatName,
+		DescriptionField: "The access token provided is expired, revoked, malformed, or invalid for other reasons.",
+		HintField:        "The access token is invalid or was not presented in the manner it is bound to.",
+		CodeField:        http.StatusUnauthorized,
+	}
 	ErrInvalidDPoPProof = &RFC6749Error{
 		ErrorField:       errInvalidDPoPProofName,
 		DescriptionField: "The DPoP proof is missing or invalid.",

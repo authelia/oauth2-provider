@@ -67,6 +67,34 @@ func (t *TokenEndpointHandlers) Append(h TokenEndpointHandler) {
 	*t = append(*t, h)
 }
 
+// AuthorizeEndpointBindingHandlers is a list of AuthorizeEndpointBindingHandler
+type AuthorizeEndpointBindingHandlers []AuthorizeEndpointBindingHandler
+
+// Append adds an AuthorizeEndpointBindingHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *AuthorizeEndpointBindingHandlers) Append(h AuthorizeEndpointBindingHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// TokenEndpointBindingHandlers is a list of TokenEndpointBindingHandler
+type TokenEndpointBindingHandlers []TokenEndpointBindingHandler
+
+// Append adds a TokenEndpointBindingHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (t *TokenEndpointBindingHandlers) Append(h TokenEndpointBindingHandler) {
+	for _, this := range *t {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*t = append(*t, h)
+}
+
 // TokenIntrospectionHandlers is a list of TokenValidator
 type TokenIntrospectionHandlers []TokenIntrospector
 
@@ -137,6 +165,7 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 	*a = append(*a, h)
 }
 
+// Configurator is the full configuration surface a Provider requires.
 type Configurator interface {
 	IDTokenIssuerProvider
 	IDTokenValidationStrategyProvider
@@ -193,6 +222,8 @@ type Configurator interface {
 	AllowedIntrospectionAudiencesProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
+	AuthorizeEndpointBindingHandlersProvider
+	TokenEndpointBindingHandlersProvider
 	TokenIntrospectionHandlersProvider
 	RevocationHandlersProvider
 	PushedAuthorizeRequestHandlersProvider
@@ -212,6 +243,7 @@ type Configurator interface {
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
 	DPoPConfigProvider
+	MTLSConfigProvider
 }
 
 // New returns a Fosite Provider backed by the given Storage and Configurator. For most consumers the compose package

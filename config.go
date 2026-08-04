@@ -369,6 +369,18 @@ type TokenEndpointHandlersProvider interface {
 	GetTokenEndpointHandlers(ctx context.Context) (handlers TokenEndpointHandlers)
 }
 
+// AuthorizeEndpointBindingHandlersProvider returns the provider for configuring the authorize endpoint binding handlers.
+type AuthorizeEndpointBindingHandlersProvider interface {
+	// GetAuthorizeEndpointBindingHandlers returns the authorize endpoint binding handlers.
+	GetAuthorizeEndpointBindingHandlers(ctx context.Context) (handlers AuthorizeEndpointBindingHandlers)
+}
+
+// TokenEndpointBindingHandlersProvider returns the provider for configuring the token endpoint binding handlers.
+type TokenEndpointBindingHandlersProvider interface {
+	// GetTokenEndpointBindingHandlers returns the token endpoint binding handlers.
+	GetTokenEndpointBindingHandlers(ctx context.Context) (handlers TokenEndpointBindingHandlers)
+}
+
 // TokenIntrospectionHandlersProvider returns the provider for configuring the token introspection handlers.
 type TokenIntrospectionHandlersProvider interface {
 	// GetTokenIntrospectionHandlers returns the token introspection handlers.
@@ -536,4 +548,32 @@ type DPoPConfigProvider interface {
 
 	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
+}
+
+// MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.
+type MTLSConfigProvider interface {
+	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.
+	GetMTLSEnabled(ctx context.Context) (enabled bool)
+
+	// GetMTLSEnforce returns true if certificate-bound access tokens are required for all clients regardless of
+	// client metadata.
+	GetMTLSEnforce(ctx context.Context) (enforce bool)
+
+	// GetMTLSClientCertificateHeader returns the name of the header carrying the client certificate forwarded by a
+	// trusted TLS terminating proxy, or an empty string to never read one.
+	GetMTLSClientCertificateHeader(ctx context.Context) (header string)
+}
+
+// ConfirmationConfigProvider is the configuration ApplyConfirmation consults to decide whether a given RFC 7800
+// confirmation method may be asserted in a token or an introspection response.
+//
+// It deliberately restates the two 'enabled' getters rather than embedding DPoPConfigProvider and MTLSConfigProvider,
+// which together carry ten methods where two are needed. Go interfaces are structural, so any configuration already
+// satisfying those providers satisfies this one without change.
+type ConfirmationConfigProvider interface {
+	// GetDPoPEnabled returns true if DPoP handling is enabled.
+	GetDPoPEnabled(ctx context.Context) (enabled bool)
+
+	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.
+	GetMTLSEnabled(ctx context.Context) (enabled bool)
 }

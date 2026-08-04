@@ -45,16 +45,15 @@ type Session interface {
 
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
-	Claims        *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
-	Headers       *jwt.Headers                   `json:"headers,omitempty"`
-	ExpiresAt     map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
-	Username      string                         `json:"username,omitempty"`
-	Subject       string                         `json:"subject,omitempty"`
-	JWKThumbprint string                         `json:"jwk_thumbprint,omitempty"`
-	RequestedAt   time.Time                      `json:"requested_at"`
+	Claims                      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
+	Headers                     *jwt.Headers                   `json:"headers,omitempty"`
+	ExpiresAt                   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
+	Username                    string                         `json:"username,omitempty"`
+	Subject                     string                         `json:"subject,omitempty"`
+	JWKThumbprint               string                         `json:"jwk_thumbprint,omitempty"`
+	ClientCertificateThumbprint string                         `json:"client_certificate_thumbprint,omitempty"`
+	RequestedAt                 time.Time                      `json:"requested_at"`
 }
-
-var _ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
 
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
@@ -128,6 +127,20 @@ func (s *DefaultSession) GetDPoPJWKThumbprint() string {
 	}
 
 	return s.JWKThumbprint
+}
+
+// SetClientCertificateSHA256Thumbprint implements oauth2.MTLSBoundSession for DefaultSession.
+func (s *DefaultSession) SetClientCertificateSHA256Thumbprint(x5t string) {
+	s.ClientCertificateThumbprint = x5t
+}
+
+// GetClientCertificateSHA256Thumbprint implements oauth2.MTLSBoundSession for DefaultSession.
+func (s *DefaultSession) GetClientCertificateSHA256Thumbprint() string {
+	if s == nil {
+		return ""
+	}
+
+	return s.ClientCertificateThumbprint
 }
 
 func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {
@@ -314,3 +327,8 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 
 	return token, err
 }
+
+var (
+	_ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
+	_ oauth2.MTLSBoundSession = (*DefaultSession)(nil)
+)

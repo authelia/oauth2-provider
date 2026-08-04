@@ -237,6 +237,14 @@ type Config struct {
 	// TokenEndpointHandlers is a list of handlers that are called before the token endpoint is served.
 	TokenEndpointHandlers TokenEndpointHandlers
 
+	// AuthorizeEndpointBindingHandlers is a list of handlers that record a proof-of-possession binding on an
+	// authorize request before the authorize endpoint handlers run.
+	AuthorizeEndpointBindingHandlers AuthorizeEndpointBindingHandlers
+
+	// TokenEndpointBindingHandlers is a list of handlers that record and enforce a proof-of-possession binding on
+	// an access request a grant handler has accepted.
+	TokenEndpointBindingHandlers TokenEndpointBindingHandlers
+
 	// TokenIntrospectionHandlers is a list of handlers that are called before the token introspection endpoint is served.
 	TokenIntrospectionHandlers TokenIntrospectionHandlers
 
@@ -305,6 +313,28 @@ type Config struct {
 
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
+
+	// MTLSEnabled enables RFC 8705 Mutual-TLS handling.
+	MTLSEnabled bool
+
+	// MTLSEnforce requires certificate-bound access tokens for all clients regardless of client metadata.
+	MTLSEnforce bool
+
+	// MTLSClientCertificateHeader is the name of the header a trusted TLS terminating proxy forwards the client
+	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header
+	// entirely so that only a certificate from the TLS connection itself is used.
+	//
+	// Setting this is a decision to trust the named header absolutely. It is not authenticated, and a request that
+	// reaches this server without transiting the proxy can set it to any value, authenticating the sender as any
+	// client registered with an mTLS authentication method and binding tokens to a certificate it does not hold. A
+	// deployment that sets this MUST ensure the proxy unconditionally overwrites the header on every inbound request,
+	// and that the server is unreachable except through that proxy.
+	//
+	// The certificate chain is not validated here. For a certificate from the TLS connection Go has already done so
+	// against the listener's ClientCAs; for a forwarded one the proxy that performed the handshake is the component
+	// that validated it, and RFC 8705 Section 6.5 places that channel out of scope. Per Section 7.4 the trust anchors
+	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
+	MTLSClientCertificateHeader string
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -329,6 +359,14 @@ func (c *Config) GetAuthorizeEndpointHandlers(ctx context.Context) AuthorizeEndp
 
 func (c *Config) GetTokenEndpointHandlers(ctx context.Context) TokenEndpointHandlers {
 	return c.TokenEndpointHandlers
+}
+
+func (c *Config) GetAuthorizeEndpointBindingHandlers(ctx context.Context) AuthorizeEndpointBindingHandlers {
+	return c.AuthorizeEndpointBindingHandlers
+}
+
+func (c *Config) GetTokenEndpointBindingHandlers(ctx context.Context) TokenEndpointBindingHandlers {
+	return c.TokenEndpointBindingHandlers
 }
 
 func (c *Config) GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrospectionHandlers {
@@ -790,7 +828,7 @@ func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (s
 }
 
 func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
-	return c.DPoPEnabled
+	return c.DPoPEnabled || c.DPoPEnforce
 }
 
 func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {
@@ -827,6 +865,18 @@ func (c *Config) GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Durati
 
 func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 	return c.DPoPStrategy
+}
+
+func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
+	return c.MTLSEnabled || c.MTLSEnforce
+}
+
+func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
+	return c.MTLSEnforce
+}
+
+func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
+	return c.MTLSClientCertificateHeader
 }
 
 var (
@@ -875,6 +925,8 @@ var (
 	_ HMACHashingProvider                             = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider               = (*Config)(nil)
 	_ TokenEndpointHandlersProvider                   = (*Config)(nil)
+	_ AuthorizeEndpointBindingHandlersProvider        = (*Config)(nil)
+	_ TokenEndpointBindingHandlersProvider            = (*Config)(nil)
 	_ TokenIntrospectionHandlersProvider              = (*Config)(nil)
 	_ RevocationHandlersProvider                      = (*Config)(nil)
 	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
@@ -890,4 +942,5 @@ var (
 	_ IntrospectionEndpointClientAuthStrategyProvider = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider    = (*Config)(nil)
 	_ DPoPConfigProvider                              = (*Config)(nil)
+	_ MTLSConfigProvider                              = (*Config)(nil)
 )

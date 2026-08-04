@@ -9,24 +9,22 @@ import (
 	"authelia.com/provider/oauth2/handler/rfc9449"
 )
 
-// DPoPAuthorizeFactory creates the RFC 9449 DPoP authorize endpoint handler, which records the 'dpop_jkt' parameter on
-// the session.
+// DPoPAuthorizeFactory creates the RFC 9449 DPoP authorize endpoint binding handler, which records the 'dpop_jkt'
+// parameter on the session.
 //
-// It MUST be ordered ahead of every factory whose handler issues an authorization code, because those handlers persist
-// the session as they run and would otherwise store it without the binding. DPoPFactory carries the opposite
-// constraint and must be ordered last, so the two are deliberately separate factories.
+// It is dispatched in the authorize binding phase, which runs ahead of every authorize endpoint handler, so its
+// position in the factory list does not matter.
 func DPoPAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc9449.AuthorizeHandler{
 		Config: config.(*oauth2.Config),
 	}
 }
 
-// DPoPFactory creates the RFC 9449 DPoP token endpoint handler and, when necessary, the default DPoP strategy.
+// DPoPTokenFactory creates the RFC 9449 DPoP token endpoint handler and, when necessary, the default DPoP strategy.
 //
-// It MUST be ordered after every factory whose handler restores a session at the token endpoint, so that the binding
-// recorded by DPoPAuthorizeFactory's handler is present on the session by the time the proof is checked against it,
-// and so that the DPoP token type is not overwritten by the grant handler that populates the response.
-func DPoPFactory(config oauth2.Configurator, storage any, strategy any) any {
+// It is dispatched in the token binding phase, which runs after every grant handler has restored its session and
+// populated the response, so its position in the factory list does not matter.
+func DPoPTokenFactory(config oauth2.Configurator, storage any, strategy any) any {
 	c := config.(*oauth2.Config)
 
 	if c.DPoPStrategy == nil {

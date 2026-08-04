@@ -34,6 +34,14 @@ func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester)
 		}
 	}
 
+	// Binding handlers populate last so that an adjustment such as the RFC 9449 token type is applied on top of
+	// whatever the grant handler set, and so the check below validates the final state of the response.
+	for _, binding := range f.Config.GetTokenEndpointBindingHandlers(ctx) {
+		if err = binding.PopulateBoundTokenEndpointResponse(ctx, request, response); err != nil {
+			return nil, err
+		}
+	}
+
 	if response.GetAccessToken() == "" || response.GetTokenType() == "" {
 		return nil, errorsx.WithStack(ErrServerError.
 			WithHint("An internal server occurred while trying to complete the request.").

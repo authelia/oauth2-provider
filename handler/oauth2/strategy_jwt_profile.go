@@ -26,6 +26,7 @@ type JWTProfileCoreStrategy struct {
 		oauth2.AccessTokenIssuerProvider
 		oauth2.JWTScopeFieldProvider
 		oauth2.JWTProfileAccessTokensProvider
+		oauth2.ConfirmationConfigProvider
 	}
 }
 
@@ -191,8 +192,9 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	mapClaims := claims.ToMapClaims()
 
 	// The claims above include the session's extra claims, which may carry a 'cnf' of their own. This rebuilds the
-	// claim from the session so the token asserts only the bindings the server actually established.
-	oauth2.ApplyConfirmation(mapClaims, request.GetSession())
+	// claim from the session so the token asserts only the bindings the server actually established, and only for
+	// binding methods that are currently enabled.
+	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
 	return s.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
 }

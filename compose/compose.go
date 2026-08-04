@@ -42,8 +42,14 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if ah, ok := res.(oauth2.AuthorizeEndpointHandler); ok {
 			config.AuthorizeEndpointHandlers.Append(ah)
 		}
+		if abh, ok := res.(oauth2.AuthorizeEndpointBindingHandler); ok {
+			config.AuthorizeEndpointBindingHandlers.Append(abh)
+		}
 		if th, ok := res.(oauth2.TokenEndpointHandler); ok {
 			config.TokenEndpointHandlers.Append(th)
+		}
+		if tbh, ok := res.(oauth2.TokenEndpointBindingHandler); ok {
+			config.TokenEndpointBindingHandlers.Append(tbh)
 		}
 		if tv, ok := res.(oauth2.TokenIntrospector); ok {
 			config.TokenIntrospectionHandlers.Append(tv)
@@ -84,8 +90,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 			OpenIDConnectTokenStrategy: NewOpenIDConnectStrategy(keyGetter, strategy, config),
 			Strategy:                   strategy,
 		},
-		DPoPAuthorizeFactory,
-
 		OAuth2AuthorizeExplicitFactory,
 		OAuth2AuthorizeImplicitFactory,
 		OAuth2AuthorizeNoneFactory,
@@ -117,6 +121,8 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OAuth2PKCEFactory,
 		PushedAuthorizeHandlerFactory,
 
-		DPoPFactory,
+		DPoPAuthorizeFactory,
+		DPoPTokenFactory,
+		RFC8705Factory,
 	)
 }

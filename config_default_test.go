@@ -57,3 +57,26 @@ func TestConfigBackChannelLogoutNonPositiveFallsBackToDefaults(t *testing.T) {
 	assert.Equal(t, time.Minute*5, config.GetBackChannelLogoutLifespan(t.Context()))
 	assert.Equal(t, 10, config.GetBackChannelLogoutConcurrency(t.Context()))
 }
+
+func TestConfigMTLS(t *testing.T) {
+	config := &Config{}
+
+	assert.False(t, config.GetMTLSEnabled(context.TODO()))
+	assert.False(t, config.GetMTLSEnforce(context.TODO()))
+	assert.Empty(t, config.GetMTLSClientCertificateHeader(context.TODO()))
+
+	config = &Config{MTLSEnforce: true}
+
+	assert.True(t, config.GetMTLSEnabled(context.TODO()))
+	assert.True(t, config.GetMTLSEnforce(context.TODO()))
+
+	config = &Config{MTLSEnabled: true, MTLSEnforce: true, MTLSClientCertificateHeader: "X-Forwarded-Tls-Client-Cert"}
+
+	assert.True(t, config.GetMTLSEnabled(context.TODO()))
+	assert.True(t, config.GetMTLSEnforce(context.TODO()))
+	assert.Equal(t, "X-Forwarded-Tls-Client-Cert", config.GetMTLSClientCertificateHeader(context.TODO()))
+
+	var provider MTLSConfigProvider
+
+	assert.Implements(t, &provider, config)
+}

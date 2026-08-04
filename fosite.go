@@ -232,7 +232,7 @@ type Configurator interface {
 	RFC8693ConfigProvider
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
-	RFC9628DeviceAuthorizeConfigProvider
+	RFC8628DeviceAuthorizeConfigProvider
 	IntrospectionIssuerProvider
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider

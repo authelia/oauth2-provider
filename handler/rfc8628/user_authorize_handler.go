@@ -19,7 +19,7 @@ type UserAuthorizeHandler struct {
 	Storage  Storage
 	Strategy CodeStrategy
 	Config   interface {
-		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.RFC8628DeviceAuthorizeConfigProvider
 	}
 }
 

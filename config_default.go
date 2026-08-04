@@ -932,7 +932,7 @@ var (
 	_ PushedAuthorizeRequestHandlersProvider          = (*Config)(nil)
 	_ PushedAuthorizeRequestConfigProvider            = (*Config)(nil)
 	_ RFC8693ConfigProvider                           = (*Config)(nil)
-	_ RFC9628DeviceAuthorizeConfigProvider            = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeConfigProvider            = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider  = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider    = (*Config)(nil)
 	_ IntrospectionIssuerProvider                     = (*Config)(nil)

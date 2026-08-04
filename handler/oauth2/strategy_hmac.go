@@ -42,7 +42,7 @@ type HMACCoreStrategy struct {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.AuthorizeCodeLifespanProvider
-		oauth2.RFC9628DeviceAuthorizeConfigProvider
+		oauth2.RFC8628DeviceAuthorizeConfigProvider
 	}
 
 	usePrefix bool
@@ -310,5 +310,5 @@ type HMACCoreStrategyConfigurator interface {
 	oauth2.GlobalSecretProvider
 	oauth2.RotatedGlobalSecretsProvider
 	oauth2.HMACHashingProvider
-	oauth2.RFC9628DeviceAuthorizeConfigProvider
+	oauth2.RFC8628DeviceAuthorizeConfigProvider
 }

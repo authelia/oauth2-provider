@@ -399,10 +399,10 @@ type PushedAuthorizeRequestHandlersProvider interface {
 	GetPushedAuthorizeEndpointHandlers(ctx context.Context) (handlers PushedAuthorizeEndpointHandlers)
 }
 
-// RFC9628DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response.
+// RFC8628DeviceAuthorizeConfigProvider returns the provider for configuring the device authorization response.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
-type RFC9628DeviceAuthorizeConfigProvider interface {
+type RFC8628DeviceAuthorizeConfigProvider interface {
 	// GetRFC8628CodeLifespan returns the device and user code lifespan.
 	GetRFC8628CodeLifespan(ctx context.Context) (lifespan time.Duration)
 

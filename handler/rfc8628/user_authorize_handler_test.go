@@ -28,7 +28,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		Storage  Storage
 		Strategy CodeStrategy
 		Config   interface {
-			oauth2.RFC9628DeviceAuthorizeConfigProvider
+			oauth2.RFC8628DeviceAuthorizeConfigProvider
 		}
 	}
 	type args struct {
@@ -217,7 +217,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 		Storage  Storage
 		Strategy CodeStrategy
 		Config   interface {
-			oauth2.RFC9628DeviceAuthorizeConfigProvider
+			oauth2.RFC8628DeviceAuthorizeConfigProvider
 		}
 	}
 	type args struct {

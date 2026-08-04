@@ -115,7 +115,8 @@ type StoreAuthorizeCode struct {
 }
 
 type StoreRefreshToken struct {
-	active bool
+	active               bool
+	accessTokenSignature string
 	oauth2.Requester
 }
 
@@ -332,6 +333,8 @@ func (s *MemoryStore) DeletePKCERequestSession(_ context.Context, code string) e
 	return nil
 }
 
+// CreateAccessTokenSession stores the request against the access token signature and records the signature against the
+// request ID so RevokeAccessToken can find it later.
 func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
 	// We first lock accessTokenRequestIDsMutex and then accessTokensMutex because this is the same order
 	// locking happens in RevokeAccessToken and using the same order prevents deadlocks.
@@ -345,6 +348,8 @@ func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature stri
 	return nil
 }
 
+// GetAccessTokenSession returns the request stored against the access token signature, or oauth2.ErrNotFound when no
+// session exists for it.
 func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string, _ oauth2.Session) (oauth2.Requester, error) {
 	s.accessTokensMutex.RLock()
 	defer s.accessTokensMutex.RUnlock()
@@ -356,6 +361,8 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 	return rel, nil
 }
 
+// DeleteAccessTokenSession removes the session stored against the access token signature. Deleting a signature that
+// has no session is not an error.
 func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature string) error {
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
@@ -364,7 +371,10 @@ func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature stri
 	return nil
 }
 
-func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
+// CreateRefreshTokenSession stores the request against the refresh token signature as an active token, retaining the
+// signature of the access token issued alongside it, and records the signature against the request ID so
+// RevokeRefreshToken and RotateRefreshToken can find it later.
+func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature, accessTokenSignature string, req oauth2.Requester) error {
 	// We first lock refreshTokenRequestIDsMutex and then refreshTokensMutex because this is the same order
 	// locking happens in RevokeRefreshToken and using the same order prevents deadlocks.
 	s.refreshTokenRequestIDsMutex.Lock()
@@ -372,11 +382,14 @@ func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature str
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
-	s.RefreshTokens[signature] = StoreRefreshToken{active: true, Requester: req}
+	s.RefreshTokens[signature] = StoreRefreshToken{active: true, accessTokenSignature: accessTokenSignature, Requester: req}
 	s.RefreshTokenRequestIDs[req.GetID()] = signature
 	return nil
 }
 
+// GetRefreshTokenSession returns the request stored against the refresh token signature, or oauth2.ErrNotFound when no
+// session exists for it. When the refresh token has been deactivated it returns the request alongside
+// oauth2.ErrInactiveToken so the refresh token grant handler can revoke the rest of the authorization grant.
 func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string, _ oauth2.Session) (oauth2.Requester, error) {
 	s.refreshTokensMutex.RLock()
 	defer s.refreshTokensMutex.RUnlock()
@@ -391,6 +404,8 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 	return rel, nil
 }
 
+// DeleteRefreshTokenSession removes the session stored against the refresh token signature. Deleting a signature that
+// has no session is not an error.
 func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature string) error {
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
@@ -430,9 +445,16 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	return nil
 }
 
-func (s *MemoryStore) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
-	// no configuration option is available; grace period is not available with memory store
-	return s.RevokeRefreshToken(ctx, requestID)
+// RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request. The
+// refresh token signature is unused here because the request ID is enough to locate both; it exists for stores that
+// track individual tokens. A grace period is not implemented by the memory store; implementations that need one should
+// mark the refresh token as expiring after the grace period instead of deactivating it here.
+func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, signature string) error {
+	if err := s.RevokeRefreshToken(ctx, requestID); err != nil {
+		return err
+	}
+
+	return s.RevokeAccessToken(ctx, requestID)
 }
 
 func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) error {

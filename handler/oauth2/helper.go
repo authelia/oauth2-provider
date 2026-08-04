@@ -22,15 +22,17 @@ type HandleHelper struct {
 	Config              HandleHelperConfigProvider
 }
 
-func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
-	var token, signature string
+// IssueAccessToken generates an access token, persists its session, and populates the response. It returns the
+// signature of the issued access token so callers can associate a refresh token with it.
+func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan time.Duration, request oauth2.AccessRequester, response oauth2.AccessResponder) (signature string, err error) {
+	var token string
 
 	if token, signature, err = h.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
-		return err
+		return "", err
 	}
 
 	if err = h.AccessTokenStorage.CreateAccessTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
-		return err
+		return "", err
 	}
 
 	response.SetAccessToken(token)
@@ -38,7 +40,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 
-	return nil
+	return signature, nil
 }
 
 //nolint:unparam

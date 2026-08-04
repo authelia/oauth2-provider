@@ -83,7 +83,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:       &oauth2.DefaultClient{ID: ""},
 					GrantedScope: []string{consts.ScopeOffline},
 					Session:      session,
@@ -106,7 +106,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
@@ -131,7 +131,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
@@ -157,7 +157,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
@@ -192,7 +192,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 
 				requester.Form.Add("refresh_token", token)
 				requester.Form.Add("scope", "foo bar baz offline")
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
@@ -224,7 +224,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				requester.Form.Add("scope", "foo bar offline")
 				requester.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "bar", "baz", consts.ScopeOffline},
@@ -256,7 +256,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				requester.Form.Add("scope", "foo bar offline")
 				requester.SetRequestedScopes(oauth2.Arguments{"foo", "bar", consts.ScopeOffline})
 
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "baz", consts.ScopeOffline},
@@ -286,7 +286,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
 					RequestedScope: oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
@@ -320,7 +320,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo"},
 					RequestedScope: oauth2.Arguments{"foo", "bar"},
@@ -347,7 +347,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
-				err = store.CreateRefreshTokenSession(t.Context(), sig, &oauth2.Request{
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:         requester.Client,
 					GrantedScope:   oauth2.Arguments{"foo"},
 					RequestedScope: oauth2.Arguments{"foo", "bar"},
@@ -389,7 +389,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 					Form:           url.Values{"foo": []string{"bar"}},
 					RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
 				}
-				err = store.CreateRefreshTokenSession(t.Context(), sig, req)
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", req)
 				require.NoError(t, err)
 
 				err = store.RevokeRefreshToken(t.Context(), req.ID)
@@ -548,7 +548,7 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 
 				token, signature, err := strategy.GenerateRefreshToken(t.Context(), nil)
 				require.NoError(t, err)
-				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, areq))
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", areq))
 				areq.Form.Add(consts.FormParameterRefreshToken, token)
 			},
 			check: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
@@ -619,6 +619,10 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			name: "ShouldCommitTransactionWhenNoErrors",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
+				// The refresh token session must record the signature of the access token issued alongside it.
+				var accessSignature string
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -631,23 +635,27 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
 					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(nil).
+					DoAndReturn(func(_ context.Context, signature string, _ oauth2.Requester) error {
+						accessSignature = signature
+
+						return nil
+					}).
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
-					Return(nil).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _, signature string, _ oauth2.Requester) error {
+						assert.NotEmpty(t, signature)
+						assert.Equal(t, accessSignature, signature)
+
+						return nil
+					}).
 					Times(1)
 				mockTransactional.
 					EXPECT().
@@ -701,60 +709,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldRollbackWhenRevokeAccessTokenReturnsError",
-			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
-			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
-				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
-				mockTransactional.
-					EXPECT().
-					BeginTX(propagatedContext).
-					Return(propagatedContext, nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
-					Return(request, nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(errors.New("Whoops, a nasty database error occurred!")).
-					Times(1)
-				mockTransactional.
-					EXPECT().
-					Rollback(propagatedContext).
-					Return(nil).
-					Times(1)
-			},
-		},
-		{
-			name: "ShouldFailWithInvalidRequestWhenRevokeAccessTokenReturnsErrSerializationFailure",
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
-			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
-				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
-				mockTransactional.
-					EXPECT().
-					BeginTX(propagatedContext).
-					Return(propagatedContext, nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
-					Return(request, nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(oauth2.ErrSerializationFailure).
-					Times(1)
-				mockTransactional.
-					EXPECT().
-					Rollback(propagatedContext).
-					Return(nil).
-					Times(1)
-			},
-		},
-		{
 			name: "ShouldFailWithInvalidRequestWhenGetRefreshTokenSessionReturnsErrInactiveToken",
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. token_inactive",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
@@ -777,7 +731,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldRollbackWhenRevokeRefreshTokenMaybeGracePeriodReturnsError",
+			name: "ShouldRollbackWhenRotateRefreshTokenReturnsError",
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
@@ -793,12 +747,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(errors.New("Whoops, a nasty database error occurred!")).
 					Times(1)
 				mockTransactional.
@@ -809,7 +758,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldFailWithInvalidRequestWhenRevokeRefreshTokenMaybeGracePeriodReturnsErrSerializationFailure",
+			name: "ShouldFailWithInvalidRequestWhenRotateRefreshTokenReturnsErrSerializationFailure",
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
@@ -825,12 +774,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
@@ -857,12 +801,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -894,12 +833,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -931,12 +865,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -946,7 +875,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(errors.New("Whoops, a nasty database error occurred!")).
 					Times(1)
 				mockTransactional.
@@ -973,12 +902,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -988,7 +912,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(oauth2.ErrSerializationFailure).
 					Times(1)
 				mockTransactional.
@@ -1049,12 +973,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -1064,7 +983,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.
@@ -1096,12 +1015,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					RevokeAccessToken(propagatedContext, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
-					RevokeRefreshTokenMaybeGracePeriod(propagatedContext, gomock.Any(), gomock.Any()).
+					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockRevocationStore.
@@ -1111,7 +1025,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.

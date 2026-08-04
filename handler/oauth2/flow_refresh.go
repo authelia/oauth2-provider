@@ -205,39 +205,32 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
 	}()
 
-	var orequest oauth2.Requester
+	srequester, srtrequester := request.Sanitize(nil), request.Sanitize(nil)
 
-	if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
-		return err
+	// The original refresh token session is only needed to restore the scopes originally requested and granted onto
+	// the rotated refresh token session. It must be read before rotation deactivates it. Rotation itself does not need
+	// it as HandleTokenEndpointRequest has already copied the original request ID onto the requester.
+	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
+		var orequest oauth2.Requester
+
+		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
+			return err
+		}
+
+		srtrequester = rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
+		srtrequester.SetSession(request.GetSession().Clone())
 	}
 
-	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, orequest.GetID()); err != nil {
+	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); err != nil {
 		return err
 	}
-
-	if err = c.TokenRevocationStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, orequest.GetID(), signature); err != nil {
-		return err
-	}
-
-	srequester := request.Sanitize(nil)
-	srequester.SetID(orequest.GetID())
 
 	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, srequester); err != nil {
 		return err
 	}
 
-	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
-		srtrequester := rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
-
-		srtrequester.SetSession(request.GetSession().Clone())
-
-		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, srtrequester); err != nil {
-			return err
-		}
-	} else {
-		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, srequester); err != nil {
-			return err
-		}
+	if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, srtrequester); err != nil {
+		return err
 	}
 
 	response.SetAccessToken(accessToken)

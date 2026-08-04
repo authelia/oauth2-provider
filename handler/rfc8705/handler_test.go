@@ -110,6 +110,19 @@ func TestHandlerIgnoresUnboundRequests(t *testing.T) {
 	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
 }
 
+func TestHandlerIgnoresAnIncidentalCertificate(t *testing.T) {
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	session := &oauth2.DefaultSession{}
+	request := oauth2.NewAccessRequest(session)
+	request.Client = &oauth2.DefaultClient{}
+
+	err := newTestHandler(true, false).BindAccessRequest(ctxWithCertificate(cert), request)
+
+	require.NoError(t, err)
+	assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
+}
+
 func TestHandlerDisabled(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{})
 

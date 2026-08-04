@@ -63,6 +63,7 @@ func TestAuthorizeBindingHandlersRunBeforeTheAuthorizeHandlers(t *testing.T) {
 	_, err := provider.NewAuthorizeResponse(context.Background(), request, &oauth2.DefaultSession{})
 	require.NoError(t, err)
 
+	assert.Equal(t, 1, recorder.calls)
 	assert.Equal(t, "bound-before-handlers", recorder.sawSubject)
 }
 
@@ -83,7 +84,7 @@ func TestAuthorizeBindingHandlerErrorAbortsTheRequest(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, responder)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-	assert.Empty(t, recorder.sawSubject, "the authorize handlers ran despite the binding error")
+	assert.Zero(t, recorder.calls, "the authorize handlers ran despite the binding error")
 }
 
 func TestTokenBindingHandlerRunsOnlyForAnAcceptedGrant(t *testing.T) {
@@ -249,10 +250,12 @@ func (c *countingTokenBinder) PopulateBoundTokenEndpointResponse(context.Context
 }
 
 type recordingAuthorizeHandler struct {
+	calls      int
 	sawSubject string
 }
 
 func (h *recordingAuthorizeHandler) HandleAuthorizeEndpointRequest(_ context.Context, request oauth2.AuthorizeRequester, _ oauth2.AuthorizeResponder) error {
+	h.calls++
 	h.sawSubject = request.GetSession().GetSubject()
 
 	request.SetResponseTypeHandled("code")

@@ -73,6 +73,16 @@ func TestValidateResourceAccess(t *testing.T) {
 		assert.Equal(t, cert.Raw, actual.Raw)
 	})
 
+	t.Run("ShouldRejectAMalformedConfiguredHeader", func(t *testing.T) {
+		r := &http.Request{Header: http.Header{}}
+		r.Header.Set("X-Forwarded-Tls-Client-Cert", "not-a-certificate")
+
+		actual, err := ValidateResourceAccess(r, "X-Forwarded-Tls-Client-Cert", oauth2.X509CertificateSHA256Thumbprint(cert))
+
+		assert.Nil(t, actual)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	})
+
 	t.Run("ShouldPairWithTheIntrospectionAccessor", func(t *testing.T) {
 		claims := map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: oauth2.X509CertificateSHA256Thumbprint(cert)}}
 

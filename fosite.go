@@ -165,6 +165,7 @@ func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndp
 	*a = append(*a, h)
 }
 
+// Configurator is the full configuration surface a Provider requires.
 type Configurator interface {
 	IDTokenIssuerProvider
 	IDTokenValidationStrategyProvider

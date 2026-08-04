@@ -65,6 +65,11 @@ func TestConfigMTLS(t *testing.T) {
 	assert.False(t, config.GetMTLSEnforce(context.TODO()))
 	assert.Empty(t, config.GetMTLSClientCertificateHeader(context.TODO()))
 
+	config = &Config{MTLSEnforce: true}
+
+	assert.True(t, config.GetMTLSEnabled(context.TODO()))
+	assert.True(t, config.GetMTLSEnforce(context.TODO()))
+
 	config = &Config{MTLSEnabled: true, MTLSEnforce: true, MTLSClientCertificateHeader: "X-Forwarded-Tls-Client-Cert"}
 
 	assert.True(t, config.GetMTLSEnabled(context.TODO()))

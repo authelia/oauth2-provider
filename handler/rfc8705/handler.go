@@ -93,6 +93,15 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The mutual-TLS client certificate does not match the certificate the grant is bound to."))
 	}
 
+	// Only a required binding is recorded. A certificate that nothing asked to bind is incidental, and binding it
+	// anyway would be self-perpetuating: 'bound' makes the binding required on every subsequent refresh, so a
+	// certificate a proxy happened to forward once would become a permanent condition of using the grant, for a
+	// client that never requested certificate-bound tokens. This is the second half of the asymmetry with RFC 9449
+	// described above, where the trigger is a proof the client chose to send.
+	if !required {
+		return nil
+	}
+
 	session.SetClientCertificateSHA256Thumbprint(x5t)
 
 	return nil

@@ -150,7 +150,16 @@ func TestBindingIsIndependentOfFactoryOrder(t *testing.T) {
 
 	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
 
-	assertBoundToBoth(t, granted, cert)
+	// Neither bound-access-token flag is set on this client, which is what makes the refresh below discriminating.
+	// The DPoP key still binds, because a proof is something the client chose to send; the certificate does not,
+	// because a certificate may be incidental. See rfc8705.Handler.BindAccessRequest.
+	dpop, ok := granted.(oauth2.DPoPBoundSession)
+	require.True(t, ok)
+	assert.NotEmpty(t, dpop.GetDPoPJWKThumbprint(), "the DPoP proof should bind on presentation")
+
+	mtls, ok := granted.(oauth2.MTLSBoundSession)
+	require.True(t, ok)
+	assert.Empty(t, mtls.GetClientCertificateSHA256Thumbprint(), "an incidental certificate must not bind the grant")
 
 	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
 	require.NotEmpty(t, refreshToken, "no refresh token was issued")
@@ -160,15 +169,20 @@ func TestBindingIsIndependentOfFactoryOrder(t *testing.T) {
 		consts.FormParameterRefreshToken: []string{refreshToken},
 	}
 
-	_, _, err = bothTokenRequest(t, provider, form, nil, bothDPoPProof(t, proofKey, "order-no-cert"))
-
-	require.Error(t, err)
-	assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
-
+	// The factory-order proof. Nothing about this client's policy requires a DPoP proof, so the refresh can only be
+	// rejected because the binding recorded on the first leg was restored from the refresh token before the binding
+	// handler ran. With the binding factories registered ahead of the grant handlers and no phase to order them, the
+	// handler would see an empty session and let this through.
 	_, _, err = bothTokenRequest(t, provider, form, cert, "")
 
 	require.Error(t, err)
 	assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+	// The converse, documenting the incidental-certificate rule end to end: no certificate binding was ever
+	// recorded, so omitting the certificate is not an error.
+	_, _, err = bothTokenRequest(t, provider, form, nil, bothDPoPProof(t, proofKey, "order-no-cert"))
+
+	require.NoError(t, err)
 }
 
 const (
@@ -304,8 +318,13 @@ func bothTokenRequest(t *testing.T, provider oauth2.Provider, form url.Values, c
 		r.Header.Set(consts.HeaderDPoP, proof)
 	}
 
+	// Set explicitly rather than relying on what httptest.NewRequest leaves behind. A nil r.TLS would mean "not a TLS
+	// connection", which also flips the scheme oauth2.RequestURL derives and so breaks the DPoP 'htu' match; the
+	// connection here is TLS, the client simply presented no certificate.
 	if cert != nil {
 		r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
+	} else {
+		r.TLS = &tls.ConnectionState{}
 	}
 
 	requester, err := provider.NewAccessRequest(context.Background(), r, &oauth2.DefaultSession{})

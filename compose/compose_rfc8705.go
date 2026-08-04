@@ -15,6 +15,6 @@ import (
 // position in the factory list does not matter.
 func RFC8705Factory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc8705.Handler{
-		Config: config.(*oauth2.Config),
+		Config: config.(oauth2.MTLSConfigProvider),
 	}
 }

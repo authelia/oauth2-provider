@@ -42,8 +42,6 @@ type GenericCodeTokenEndpointHandler struct {
 	}
 }
 
-var _ oauth2.TokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
-
 // HandleTokenEndpointRequest handles verifying the access request.
 //
 //nolint:gocyclo
@@ -244,7 +242,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	return nil
 }
 
-func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Context, request oauth2.Requester) bool {
+func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Context, request oauth2.Requester) (issue bool) {
 	scope := c.Config.GetRefreshTokenScopes(ctx)
 
 	// Require one of the refresh token scopes, if set.
@@ -260,14 +258,15 @@ func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Conte
 	return true
 }
 
-func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return c.CodeTokenEndpointHandler.CanSkipClientAuth(ctx, request)
 }
 
-func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
+func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return c.CodeTokenEndpointHandler.CanHandleTokenEndpointRequest(ctx, request)
 }
 
 var (
-	_ CodeTokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
+	_ oauth2.TokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
+	_ CodeTokenEndpointHandler    = (*GenericCodeTokenEndpointHandler)(nil)
 )

@@ -28,10 +28,6 @@ type OpenIDConnectImplicitHandler struct {
 	}
 }
 
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
-)
-
 // HandleAuthorizeEndpointRequest implements oauth2.AuthorizeEndpointHandler.
 //
 // TODO: Refactor time permitting.
@@ -107,3 +103,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 	return nil
 }
+
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
+)

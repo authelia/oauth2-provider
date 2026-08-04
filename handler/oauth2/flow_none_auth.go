@@ -26,10 +26,6 @@ type NoneResponseTypeHandler struct {
 	}
 }
 
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*NoneResponseTypeHandler)(nil)
-)
-
 func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeNone) {
 		return nil
@@ -69,10 +65,14 @@ func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Con
 	return nil
 }
 
-func (c *NoneResponseTypeHandler) GetRedirectSecureChecker(ctx context.Context) func(context.Context, *url.URL) bool {
+func (c *NoneResponseTypeHandler) GetRedirectSecureChecker(ctx context.Context) func(context.Context, *url.URL) (secure bool) {
 	if c.Config.GetRedirectSecureChecker(ctx) == nil {
 		return oauth2.IsRedirectURISecure
 	}
 
 	return c.Config.GetRedirectSecureChecker(ctx)
 }
+
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*NoneResponseTypeHandler)(nil)
+)

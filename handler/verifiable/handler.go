@@ -26,11 +26,7 @@ type Handler struct {
 	NonceManager
 }
 
-var (
-	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
-)
-
-func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
+func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -38,11 +34,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	return nil
 }
 
-func (c *Handler) PopulateTokenEndpointResponse(
-	ctx context.Context,
-	request oauth2.AccessRequester,
-	response oauth2.AccessResponder,
-) error {
+func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
@@ -60,10 +52,14 @@ func (c *Handler) PopulateTokenEndpointResponse(
 	return nil
 }
 
-func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) bool {
+func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
-func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
+func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
 }
+
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)

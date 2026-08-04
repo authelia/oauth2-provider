@@ -20,26 +20,26 @@ type AuthorizeEndpointHandler interface {
 	//   authorization code as described by Section 4.1.1, "token" for
 	//   requesting an access token (implicit grant) as described by
 	//   Section 4.2.1, or a registered extension value as described by Section 8.4.
-	HandleAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response AuthorizeResponder) error
+	HandleAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response AuthorizeResponder) (err error)
 }
 
 type TokenEndpointHandler interface {
 	// PopulateTokenEndpointResponse is responsible for setting return values and should only be executed if
 	// the handler's HandleTokenEndpointRequest did not return ErrUnknownRequest.
-	PopulateTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) error
+	PopulateTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) (err error)
 
 	// HandleTokenEndpointRequest handles an authorize request. If the handler is not responsible for handling
 	// the request, this method should return ErrUnknownRequest and otherwise handle the request.
-	HandleTokenEndpointRequest(ctx context.Context, request AccessRequester) error
+	HandleTokenEndpointRequest(ctx context.Context, request AccessRequester) (err error)
 
 	// CanSkipClientAuth indicates if client authentication can be skipped. By default it MUST be false, unless you are
 	// implementing extension grant type, which allows unauthenticated client. CanSkipClientAuth must be called
 	// before HandleTokenEndpointRequest to decide, if AccessRequester will contain authenticated client.
-	CanSkipClientAuth(ctx context.Context, request AccessRequester) bool
+	CanSkipClientAuth(ctx context.Context, request AccessRequester) (skip bool)
 
 	// CanHandleTokenEndpointRequest indicates, if TokenEndpointHandler can handle this request or not. If true,
 	// HandleTokenEndpointRequest can be called.
-	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) bool
+	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) (handle bool)
 }
 
 // AuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of an authorize request
@@ -50,7 +50,7 @@ type TokenEndpointHandler interface {
 type AuthorizeEndpointBindingHandler interface {
 	// BindAuthorizeRequest records any binding the request asserts. It returns nil both when it records one and
 	// when there is nothing to record; any error rejects the request.
-	BindAuthorizeRequest(ctx context.Context, request AuthorizeRequester) error
+	BindAuthorizeRequest(ctx context.Context, request AuthorizeRequester) (err error)
 }
 
 // TokenEndpointBindingHandler records and enforces a proof-of-possession binding on an access request that a grant
@@ -64,12 +64,12 @@ type TokenEndpointBindingHandler interface {
 	// BindAccessRequest records the binding presented with this request and enforces any binding the session
 	// already carries. It returns nil both when it records one and when there is nothing to record; any error
 	// rejects the request.
-	BindAccessRequest(ctx context.Context, request AccessRequester) error
+	BindAccessRequest(ctx context.Context, request AccessRequester) (err error)
 
 	// PopulateBoundTokenEndpointResponse adjusts the response to reflect the binding. It runs after every
 	// TokenEndpointHandler has populated the response. Where two binding handlers write the same response field,
 	// list order applies and the last write wins.
-	PopulateBoundTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) error
+	PopulateBoundTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) (err error)
 }
 
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.
@@ -87,7 +87,7 @@ type TokenEndpointBindingHandler interface {
 // token as well.
 type RevocationHandler interface {
 	// RevokeToken handles access and refresh token revocation.
-	RevokeToken(ctx context.Context, token string, tokenType TokenType, client Client) error
+	RevokeToken(ctx context.Context, token string, tokenType TokenType, client Client) (err error)
 }
 
 // PushedAuthorizeEndpointHandler is the interface that handles PAR (https://datatracker.ietf.org/doc/html/rfc9126)
@@ -95,7 +95,7 @@ type PushedAuthorizeEndpointHandler interface {
 	// HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
 	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
 	// the pushed authorize request, he must return nil and NOT modify session nor responder neither requester.
-	HandlePushedAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response PushedAuthorizeResponder) error
+	HandlePushedAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response PushedAuthorizeResponder) (err error)
 }
 
 type RFC8628DeviceAuthorizeEndpointHandler interface {
@@ -105,7 +105,7 @@ type RFC8628DeviceAuthorizeEndpointHandler interface {
 	//
 	// The following spec is a good example of what HandleDeviceAuthorizeRequest should do.
 	// * https://tools.ietf.org/html/rfc8628#section-3.2
-	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder) error
+	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder) (err error)
 }
 
 type RFC8628UserAuthorizeEndpointHandler interface {
@@ -113,10 +113,10 @@ type RFC8628UserAuthorizeEndpointHandler interface {
 	//
 	// The following spec is a good example of what PopulateRFC8628UserAuthorizeEndpointResponse should do.
 	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3
-	HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester) error
+	HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error)
 
 	// PopulateRFC8628UserAuthorizeEndpointResponse populates the response object as an outcome of user authorization during
 	// the device authorization grant flow.
 	//
-	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder) error
+	PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder) (err error)
 }

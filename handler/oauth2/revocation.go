@@ -125,3 +125,7 @@ func (r *TokenRevocationHandler) handleErrors(errs []error) (err error) {
 
 	return nil
 }
+
+var (
+	_ oauth2.RevocationHandler = (*TokenRevocationHandler)(nil)
+)

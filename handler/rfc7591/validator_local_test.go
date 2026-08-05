@@ -59,6 +59,53 @@ func TestLocalValidator(t *testing.T) {
 			err: "invalid_redirect_uri",
 		},
 		{
+			name: "ShouldRejectLocalhostRedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://localhost:8080/cb"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			// The 'localhost' name and the loopback IP literals are the same host: rejecting only the name leaves
+			// the rule bypassable by spelling it as an address.
+			name: "ShouldRejectLoopbackIPv4RedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://127.0.0.1:8080/cb"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			name: "ShouldRejectLoopbackIPv6RedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://[::1]:8080/cb"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			// 127.0.0.0/8 is loopback in its entirety, not just 127.0.0.1.
+			name: "ShouldRejectNonCanonicalLoopbackIPv4RedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://127.0.0.2:8080/cb"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			// RFC 6761 §6.3 reserves names under '.localhost' as loopback, and 'localhost.' is the same name fully
+			// qualified.
+			name: "ShouldRejectLocalhostNamesForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://app.LOCALHOST./cb"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			// The loopback prohibition is scoped to web clients: it must not follow a native client to the loopback
+			// redirect RFC 8252 §7.3 requires of it.
 			name: "ShouldAcceptLoopbackRedirectURIForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",
@@ -66,6 +113,49 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:      []string{"authorization_code"},
 				ResponseTypes:   []string{"code"},
 			},
+		},
+		{
+			// RFC 8252 §7.1 requires a private-use scheme be based on a domain the app controls, expressed in
+			// reverse order.
+			name: "ShouldAcceptReverseDNSPrivateUseSchemeForNativeApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "native",
+				RedirectURIs:    []string{"com.example.app:/oauth2redirect/example-provider"},
+				GrantTypes:      []string{"authorization_code"},
+				ResponseTypes:   []string{"code"},
+			},
+		},
+		{
+			// A single-label scheme is claimable by any other application on the device, so it is not a scheme the
+			// registrant can be said to control.
+			name: "ShouldRejectSingleLabelPrivateUseSchemeForNativeApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "native",
+				RedirectURIs:    []string{"myapp://cb"},
+				GrantTypes:      []string{"authorization_code"},
+				ResponseTypes:   []string{"code"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			name: "ShouldRejectJavascriptSchemeForNativeApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "native",
+				RedirectURIs:    []string{"javascript:alert(1)"},
+				GrantTypes:      []string{"authorization_code"},
+				ResponseTypes:   []string{"code"},
+			},
+			err: "invalid_redirect_uri",
+		},
+		{
+			name: "ShouldRejectDataSchemeForNativeApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "native",
+				RedirectURIs:    []string{"data:text/html,<script>alert(1)</script>"},
+				GrantTypes:      []string{"authorization_code"},
+				ResponseTypes:   []string{"code"},
+			},
+			err: "invalid_redirect_uri",
 		},
 		{
 			name: "ShouldRejectBothJWKSAndJWKSURI",
@@ -152,6 +242,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldAcceptTLSClientAuthWithExactlyOneSubject",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "tls_client_auth",
 				TLSClientAuthSubjectDN:  "CN=client,O=Example",
 			},
@@ -159,6 +250,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldAcceptTLSClientAuthOnANonTokenEndpoint",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:                      []string{"client_credentials"},
 				IntrospectionEndpointAuthMethod: "tls_client_auth",
 				TLSClientAuthSANDNS:             "client.example.com",
 			},
@@ -166,6 +258,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldRejectTLSClientAuthWithNoSubject",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "tls_client_auth",
 			},
 			err: "invalid_client_metadata",
@@ -173,6 +266,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldRejectTLSClientAuthWithMultipleSubjects",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "tls_client_auth",
 				TLSClientAuthSubjectDN:  "CN=client,O=Example",
 				TLSClientAuthSANEmail:   "client@example.com",
@@ -182,6 +276,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldRejectSubjectWithoutTLSClientAuth",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "client_secret_basic",
 				TLSClientAuthSANDNS:     "client.example.com",
 			},
@@ -190,6 +285,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldRejectTLSClientAuthWithMalformedSANIP",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "tls_client_auth",
 				TLSClientAuthSANIP:      "not-an-ip",
 			},
@@ -198,6 +294,7 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldAcceptSelfSignedTLSClientAuthWithJSONWebKeysURI",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "self_signed_tls_client_auth",
 				JSONWebKeysURI:          "https://example.com/jwks.json",
 			},
@@ -205,7 +302,33 @@ func TestLocalValidator(t *testing.T) {
 		{
 			name: "ShouldRejectSelfSignedTLSClientAuthWithoutJSONWebKeys",
 			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "self_signed_tls_client_auth",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name:     "ShouldRejectOmittedGrantTypesWithoutRedirectURI",
+			metadata: &oauth2.ClientRegistrationMetadata{},
+			err:      "invalid_client_metadata",
+		},
+		{
+			name: "ShouldAcceptOmittedGrantTypesWithRedirectURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+			},
+		},
+		{
+			name: "ShouldAcceptExplicitNonRedirectingGrantWithoutRedirectURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes: []string{"client_credentials"},
+			},
+		},
+		{
+			name: "ShouldRejectImplicitResponseTypeWithOmittedGrantTypes",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				ResponseTypes: []string{"id_token"},
 			},
 			err: "invalid_client_metadata",
 		},

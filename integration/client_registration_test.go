@@ -11,12 +11,16 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	xoauth2 "golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
@@ -134,28 +138,111 @@ func doDCRRequest(t *testing.T, method, url, token string, body any, out any) (s
 	return resp.StatusCode
 }
 
-// TestClientRegistration exercises the RFC 7591 client registration endpoint and the RFC 7592 client configuration
-// endpoint together over real HTTP: minting a creation token, registering a client within its scope ceiling,
-// rejecting a registration that exceeds it, reading and rotating the client's own management token, rejecting each
-// token at the other's endpoint, proving the scope ceiling survives rotation, and finally deleting the client.
-//
-// The provider is wired with compose.Compose directly, listing only the two RFC 7591 / RFC 7592 factories, rather
-// than with compose.ComposeAllEnabled. This is the exact wiring compose.ComposeAllEnabled itself delegates to (see
-// compose.ComposeAllEnabled in compose/compose.go), so it exercises the identical handler code path; the only
-// difference is the strategy. compose.ComposeAllEnabled always builds its strategy with compose.NewOAuth2HMACStrategy,
-// which never applies a token prefix - so under compose.ComposeAllEnabled, a client registration access token is
-// indistinguishable by prefix from any other token the provider mints. This test instead builds a prefixed
-// hoauth2.NewHMACCoreStrategy (the "authelia_%s_" convention used throughout handler/rfc7591's own tests), so the
-// 'registration_access_token' this test receives actually carries a verifiable 'authelia_at_' prefix - proof that it
-// is an ordinary access token, not the dedicated 'authelia_dt_' token RFC 7591/7592 minted before this refactor
-// (handler/rfc7591/token.go no longer contains that machinery at all).
+func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
+	config := &oauth2.Config{
+		GlobalSecret:                                []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret:       []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationStrategy:           rfc7591.NewDefaultClientRegistrationStrategy(),
+		TokenEntropy:                                32,
+		ScopeStrategy:                               oauth2.ExactScopeStrategy,
+		AudienceStrategy:                            oauth2.ExactAudienceStrategy,
+		ClientCredentialsFlowImplicitGrantRequested: true,
+	}
+
+	store := storage.NewMemoryStore()
+
+	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	provider := compose.Compose(config, store, strategy,
+		compose.OAuth2ClientCredentialsGrantFactory,
+		compose.RFC7591ClientRegistrationFactory,
+	)
+
+	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/token", tokenEndpointHandler(t, provider))
+	router.HandleFunc("/register", registrationEndpointHandler(provider))
+
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	registrationURL := ts.URL + "/register"
+
+	config.RFC7591ClientRegistrationEndpointURL = registrationURL
+
+	newClient := func(id string, scopes, audience []string) *oauth2.DefaultClient {
+		return &oauth2.DefaultClient{
+			ID:           id,
+			ClientSecret: oauth2.NewPlainTextClientSecret("foobar"),
+			GrantTypes:   []string{"client_credentials"},
+			Scopes:       scopes,
+			Audience:     audience,
+		}
+	}
+
+	store.Clients["onboarding"] = newClient("onboarding", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{registrationURL})
+	store.Clients["no-audience"] = newClient("no-audience", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{"https://api.example.com"})
+	store.Clients["no-scope"] = newClient("no-scope", []string{consts.ScopeOpenID}, []string{registrationURL})
+
+	token := func(t *testing.T, id string, scopes []string, audience string) (*xoauth2.Token, error) {
+		t.Helper()
+
+		return (&clientcredentials.Config{
+			ClientID:       id,
+			ClientSecret:   "foobar",
+			Scopes:         scopes,
+			TokenURL:       ts.URL + "/token",
+			EndpointParams: url.Values{consts.FormParameterAudience: {audience}},
+		}).Token(t.Context())
+	}
+
+	creation, err := token(t, "onboarding", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, registrationURL)
+	require.NoError(t, err)
+	require.NotEmpty(t, creation.AccessToken)
+	assert.Truef(t, strings.HasPrefix(creation.AccessToken, "authelia_at_"),
+		"a creation token is an ordinary access token and carries the ordinary access token prefix, got %q", creation.AccessToken)
+
+	var created dcrResponse
+
+	status := doDCRRequest(t, http.MethodPost, registrationURL, creation.AccessToken, map[string]any{
+		"client_name":                "End To End Client",
+		"redirect_uris":              []string{"https://client.example.com/callback"},
+		"token_endpoint_auth_method": "client_secret_basic",
+		"scope":                      "openid",
+	}, &created)
+
+	require.Equal(t, http.StatusCreated, status)
+	assert.NotEmpty(t, created.ClientID)
+	assert.Equal(t, "openid", created.Scope)
+	assert.Truef(t, strings.HasPrefix(created.RegistrationAccessToken, "authelia_cr_"),
+		"the management token is still minted through the client registration token strategy, got %q", created.RegistrationAccessToken)
+
+	_, err = token(t, "no-audience", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, registrationURL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid_target")
+
+	_, err = token(t, "no-scope", []string{consts.ScopeClientRegistration}, registrationURL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid_scope")
+
+	unscoped, err := token(t, "onboarding", []string{consts.ScopeOpenID}, registrationURL)
+	require.NoError(t, err)
+
+	status = doDCRRequest(t, http.MethodPost, registrationURL, unscoped.AccessToken, map[string]any{
+		"redirect_uris": []string{"https://client.example.com/callback"},
+	}, nil)
+	assert.Equal(t, http.StatusUnauthorized, status)
+}
+
 func TestClientRegistration(t *testing.T) {
 	ctx := context.Background()
 
 	config := &oauth2.Config{
-		GlobalSecret:                      []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationStrategy: rfc7591.NewDefaultClientRegistrationStrategy(),
-		TokenEntropy:                      32,
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationStrategy:     rfc7591.NewDefaultClientRegistrationStrategy(),
+		TokenEntropy:                          32,
 	}
 
 	store := storage.NewMemoryStore()
@@ -164,7 +251,7 @@ func TestClientRegistration(t *testing.T) {
 
 	provider := compose.Compose(config, store, strategy, compose.RFC7591ClientRegistrationFactory, compose.RFC7592ClientConfigurationFactory)
 
-	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, store, strategy)
+	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/register", registrationEndpointHandler(provider))
@@ -175,13 +262,22 @@ func TestClientRegistration(t *testing.T) {
 
 	config.RFC7591ClientRegistrationEndpointURL = ts.URL + "/register"
 
-	// Step 1: mint a creation token bound to a real client, its grantable scopes ceilinged to {"openid", "profile"}.
 	creator := &oauth2.DefaultClient{ID: "initial-access-client"}
 
-	creationToken, err := rfc7591.NewClientCreationToken(ctx, strategy, store, config, creator, oauth2.Arguments{"openid", "profile"})
-	require.NoError(t, err)
+	creation := oauth2.NewRequest()
+	creation.Client = creator
+	creation.Session = &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+	}
+	creation.GrantScope(consts.ScopeClientRegistration)
+	creation.GrantScope(consts.ScopeOpenID)
+	creation.GrantScope("profile")
+	creation.GrantAudience(config.RFC7591ClientRegistrationEndpointURL)
 
-	// Step 2: registering within the ceiling succeeds, and the returned token is an ordinary access token.
+	creationToken, creationSignature, err := strategy.GenerateAccessToken(ctx, creation)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateAccessTokenSession(ctx, creationSignature, creation))
+
 	var created dcrResponse
 
 	status := doDCRRequest(t, http.MethodPost, ts.URL+"/register", creationToken, map[string]any{
@@ -195,15 +291,14 @@ func TestClientRegistration(t *testing.T) {
 	assert.NotEmpty(t, created.ClientID)
 	assert.NotEmpty(t, created.ClientSecret)
 	assert.NotEmpty(t, created.RegistrationAccessToken)
-	assert.Truef(t, strings.HasPrefix(created.RegistrationAccessToken, "authelia_at_"),
-		"expected an ordinary access token carrying the 'authelia_at_' prefix, got %q", created.RegistrationAccessToken)
+	assert.Truef(t, strings.HasPrefix(created.RegistrationAccessToken, "authelia_cr_"),
+		"expected a client registration token carrying the 'authelia_cr_' prefix, got %q", created.RegistrationAccessToken)
 	assert.NotEmpty(t, created.RegistrationClientURI)
 	assert.Equal(t, "openid", created.Scope)
 
 	managementToken := created.RegistrationAccessToken
 	registrationClientURI := created.RegistrationClientURI
 
-	// Step 3: a second registration requesting a scope outside the ceiling ('email') is rejected.
 	var overScoped dcrErrorResponse
 
 	status = doDCRRequest(t, http.MethodPost, ts.URL+"/register", creationToken, map[string]any{
@@ -216,7 +311,6 @@ func TestClientRegistration(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, status)
 	assert.Equal(t, "invalid_client_metadata", overScoped.Error)
 
-	// Step 4: reading the client with the management token succeeds and reflects the registered metadata.
 	var read dcrResponse
 
 	status = doDCRRequest(t, http.MethodGet, registrationClientURI, managementToken, nil, &read)
@@ -226,18 +320,14 @@ func TestClientRegistration(t *testing.T) {
 	assert.Equal(t, "Test Client", read.ClientName)
 	assert.Equal(t, "openid", read.Scope)
 
-	// Step 5: the creation token is rejected at the client configuration endpoint (registration_client_uri).
 	status = doDCRRequest(t, http.MethodGet, registrationClientURI, creationToken, nil, nil)
 	assert.Equal(t, http.StatusUnauthorized, status)
 
-	// Step 6: the management token is rejected at the client registration endpoint (POST /register).
 	status = doDCRRequest(t, http.MethodPost, ts.URL+"/register", managementToken, map[string]any{
 		"redirect_uris": []string{"https://client.example.com/callback"},
 	}, nil)
 	assert.Equal(t, http.StatusUnauthorized, status)
 
-	// Step 7: replacing the metadata applies the replacement and rotates the management token; the old token
-	// presented at the endpoint it used to authenticate now fails.
 	var updated dcrResponse
 
 	status = doDCRRequest(t, http.MethodPut, registrationClientURI, managementToken, map[string]any{
@@ -257,8 +347,6 @@ func TestClientRegistration(t *testing.T) {
 	status = doDCRRequest(t, http.MethodGet, registrationClientURI, managementToken, nil, nil)
 	assert.Equal(t, http.StatusUnauthorized, status, "the token rotated away by the PUT above must no longer authenticate")
 
-	// Step 8: the scope ceiling survives rotation - an update requesting a scope outside it, using the rotated
-	// token, is still rejected.
 	var overScopedUpdate dcrErrorResponse
 
 	status = doDCRRequest(t, http.MethodPut, registrationClientURI, rotatedToken, map[string]any{
@@ -270,7 +358,6 @@ func TestClientRegistration(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, status)
 	assert.Equal(t, "invalid_client_metadata", overScopedUpdate.Error)
 
-	// Step 9: deleting with the rotated token succeeds, and the client - and its registration session - is gone.
 	status = doDCRRequest(t, http.MethodDelete, registrationClientURI, rotatedToken, nil, nil)
 	assert.Equal(t, http.StatusNoContent, status)
 

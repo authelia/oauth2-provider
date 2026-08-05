@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // DefaultRegisteredClient is a Client implementation capable of holding every client metadata value defined by
@@ -60,7 +62,7 @@ type DefaultRegisteredClient struct {
 	RequestObjectEncryptionAlg   string   `json:"request_object_encryption_alg"`
 	RequestObjectEncryptionEnc   string   `json:"request_object_encryption_enc"`
 	TokenEndpointAuthSigningAlg  string   `json:"token_endpoint_auth_signing_alg"`
-	DefaultMaxAge                int64    `json:"default_max_age"`
+	DefaultMaxAge                *int64   `json:"default_max_age,omitempty"`
 	RequireAuthTime              bool     `json:"require_auth_time"`
 	DefaultACRValues             []string `json:"default_acr_values"`
 	InitiateLoginURI             string   `json:"initiate_login_uri"`
@@ -245,7 +247,7 @@ func (c *DefaultRegisteredClient) GetAuthorizationEncryptedResponseEnc() string 
 // unset per OpenID Connect Dynamic Client Registration 1.0 Section 2.
 func (c *DefaultRegisteredClient) GetTokenEndpointAuthMethod() string {
 	if c.TokenEndpointAuthMethod == "" {
-		return "client_secret_basic"
+		return consts.ClientAuthMethodClientSecretBasic
 	}
 
 	return c.TokenEndpointAuthMethod

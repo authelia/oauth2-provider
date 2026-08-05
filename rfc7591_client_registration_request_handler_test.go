@@ -77,6 +77,50 @@ func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	// RFC 7591 Section 2 defines the request body as a JSON object. A literal 'null' is valid JSON but not an object,
+	// and decoding it into a value would leave a zero-valued struct behind and register a client from a body that
+	// carried no metadata at all.
+	t.Run("ShouldRejectNullBody", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`null`))
+		r.Header.Set("Content-Type", "application/json")
+
+		_, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidClientMetadata)
+		assert.Equal(t, "The request body must be a JSON object.", ErrorToRFC6749Error(err).HintField)
+	})
+
+	// A decoder stops at the end of the first value, so without an explicit end-of-input check a second document
+	// would be silently ignored rather than reported.
+	t.Run("ShouldRejectMultipleJSONDocuments", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`{} {}`))
+		r.Header.Set("Content-Type", "application/json")
+
+		_, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidClientMetadata)
+		assert.Equal(t, "The request body must contain a single JSON object.", ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldRejectTrailingGarbage", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`{"client_name":"Example"} not-json`))
+		r.Header.Set("Content-Type", "application/json")
+
+		_, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidClientMetadata)
+	})
+
+	t.Run("ShouldAcceptTrailingWhitespace", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`{"client_name":"Example"}`+"\n\n"))
+		r.Header.Set("Content-Type", "application/json")
+
+		requester, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Example", requester.GetMetadata().ClientName)
+	})
+
 	t.Run("ShouldRejectMissingContentType", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`{}`))
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2"
-	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -23,7 +22,7 @@ type ClientConfigurationHandler struct {
 	Store Storage
 
 	// Strategy mints the client registration access tokens this handler issues.
-	Strategy hoauth2.AccessTokenStrategy
+	Strategy ClientRegistrationTokenStrategy
 
 	// Config supplies the client registration strategy, validators, endpoint URL, and token entropy this handler
 	// needs.
@@ -107,6 +106,14 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	metadata := requester.GetMetadata()
 
+	// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, so a PUT arriving with none is a
+	// shape the interface itself makes reachable: reject it before the metadata is filtered, checked, and validated
+	// rather than dereferencing it. RFC 7592 Section 2.2 replacement semantics also make an empty PUT the wrong
+	// thing to treat as "nothing to change" - it would replace the client's entire metadata with nothing.
+	if metadata == nil {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
+	}
+
 	filter := metadataStrategy(ctx, h.Config)
 
 	if err = filter.FilterClientRegistrationMetadata(ctx, client, metadata); err != nil {
@@ -127,6 +134,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	if err = CheckGrantableAudience(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+		return err
+	}
+
 	var patched oauth2.Client
 
 	if patched, err = strategy.PatchClient(ctx, client, nil, metadata); err != nil {
@@ -140,19 +151,25 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	registrationClientURI := ClientConfigurationURL(h.Config.GetRFC7591ClientRegistrationEndpointURL(ctx), id)
 
 	grantable := oauth2.Arguments(nil)
+	grantableAudience := oauth2.Arguments(nil)
 
-	// IsClientRegistration is required as well as the type assertion, matching ClientRegistrationHandler and
-	// checkGrantableScopes: a session may satisfy Session and still be an ordinary access token's, in which case its
-	// zero-valued GrantableScopes is not a ceiling and must not be carried onto the rotated token.
+	// The authenticated requester came from the configured oauth2.ClientRegistrationEndpointAuthStrategy, whose sole
+	// contract is authenticating client registration tokens - this package's own DefaultEndpointAuthStrategy resolves
+	// it from the client registration token store, a storage namespace separate from ordinary access tokens, so a
+	// requester reaching this point through it always carries a genuine client registration token's own grant. A
+	// deployment supplying its own implementation of that interface is expected to honour the same contract.
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
-		if session, ok := authenticated.GetSession().(Session); ok && session.IsClientRegistration() {
-			grantable = session.GetGrantableScopes()
-		}
+		grantable = authenticated.GetGrantedScopes()
+		grantableAudience = authenticated.GetGrantedAudience()
 	}
+
+	// The registration scope is never carried forward onto the rotated management token, even if the token
+	// authenticating this update somehow held it: see ExcludeRegistrationScope.
+	grantable = ExcludeRegistrationScope(ctx, h.Config, grantable)
 
 	var token string
 
-	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable); err != nil {
+	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable, grantableAudience); err != nil {
 		// The replacement client metadata is already persisted, but no replacement token was minted. The client's
 		// existing management token (not yet deleted, see below) still works, so nothing is lost.
 		return err
@@ -164,7 +181,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	// client already holds the new, working token from the mint above, so that is preferred over failing the whole
 	// request; the stale old session is otherwise harmless since it authenticates a client that continues to exist.
 	if oldSignature := requester.GetSignature(); oldSignature != "" {
-		_ = h.Store.DeleteAccessTokenSession(ctx, oldSignature)
+		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, oldSignature)
 	}
 
 	var responseMetadata *oauth2.ClientRegistrationMetadata
@@ -245,7 +262,7 @@ func (h *ClientConfigurationHandler) delete(ctx context.Context, id string, requ
 	}
 
 	if signature := requester.GetSignature(); signature != "" {
-		_ = h.Store.DeleteAccessTokenSession(ctx, signature)
+		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, signature)
 	}
 
 	responder.SetMetadata(nil)

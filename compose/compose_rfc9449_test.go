@@ -68,7 +68,7 @@ func TestDPoPJKTIsBoundBeforeTheAuthorizationCodeSessionIsPersisted(t *testing.T
 	require.NoError(t, err)
 
 	store := &snapshotStore{MemoryStore: storage.NewMemoryStore()}
-	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
+	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 	provider := ComposeAllEnabled(config, store, key)
 
@@ -108,7 +108,7 @@ func TestUnknownGrantTypeIsNotSatisfiedByTheDPoPHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	store := storage.NewMemoryStore()
-	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
+	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 	provider := ComposeAllEnabled(config, store, key)
 

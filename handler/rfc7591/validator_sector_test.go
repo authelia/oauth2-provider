@@ -20,7 +20,7 @@ import (
 func TestSectorIdentifierValidator(t *testing.T) {
 	ctx := context.Background()
 
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/good":
 			rw.Header().Set("Content-Type", "application/json")
@@ -40,6 +40,8 @@ func TestSectorIdentifierValidator(t *testing.T) {
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 	httpClient.RetryMax = 0
+
+	httpClient.HTTPClient = server.Client()
 
 	config := &oauth2.Config{HTTPClient: httpClient}
 	validator := NewSectorIdentifierValidator(config)
@@ -90,7 +92,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectTransportFailure", func(t *testing.T) {
-		closedServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
+		closedServer := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
 		closedServer.Close()
 
 		err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{
@@ -110,6 +112,17 @@ func TestSectorIdentifierValidator(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	})
+
+	t.Run("ShouldRejectPlainHTTPLoopbackSectorIdentifierURI", func(t *testing.T) {
+		err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{
+			SectorIdentifierURI: "http://127.0.0.1:8080/sector",
+			RedirectURIs:        []string{"https://example.com/cb"},
+		})
+
+		require.Error(t, err)
+		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "must use the 'https' scheme")
 	})
 
 	t.Run("ShouldRejectUnparseableSectorIdentifierURI", func(t *testing.T) {

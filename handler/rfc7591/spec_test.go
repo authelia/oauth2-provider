@@ -106,7 +106,7 @@ func TestSpec_RFC7591_3_2_2_ErrorResponseShape(t *testing.T) {
 			RedirectURIs: []string{"https://example.com/cb"},
 			Scope:        "openid profile",
 		}
-		requester.Authenticated = grantableFixture(KindCreate, oauth2.Arguments{"openid"})
+		requester.Authenticated = grantableFixture("", oauth2.Arguments{"openid"})
 
 		err := registrar.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 		require.Error(t, err)
@@ -201,7 +201,7 @@ func TestSpec_RFC7592_2_1_ReadReturnsCurrentMetadata(t *testing.T) {
 // invalid. [...] the authorization server returns an HTTP 401 status code..."
 //
 // This exercises the client configuration endpoint specifically (a non-empty client_id in the path, i.e. the
-// KindManage side of DefaultEndpointAuthStrategy): TestAuthRejectsUnknownToken and TestAuthRejectsOrdinaryAccessToken
+// management-token side of DefaultEndpointAuthStrategy): TestAuthRejectsUnknownToken and TestAuthRejectsOrdinaryAccessToken
 // (strategy_auth_test.go) already prove the "unknown token" and "ordinary access token" cases reject with
 // oauth2.ErrRequestUnauthorized, but only at the client registration endpoint (empty id); this proves the same two
 // guards hold symmetrically at the configuration endpoint, and additionally pins the concrete 401 status code the
@@ -234,16 +234,6 @@ func TestSpec_RFC7592_3_InvalidTokenReturns401(t *testing.T) {
 		token, signature, err := tokens.GenerateAccessToken(ctx, requester)
 		require.NoError(t, err)
 		require.NoError(t, store.CreateAccessTokenSession(ctx, signature, requester))
-
-		_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/target-client", token), "target-client")
-		assertUnauthorized(t, err)
-	})
-
-	t.Run("CreationTokenAtConfigurationEndpoint", func(t *testing.T) {
-		auth, config, store, tokens := newAuthFixtures(t)
-
-		token, err := NewClientCreationToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "target-client"}, nil)
-		require.NoError(t, err)
 
 		_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/target-client", token), "target-client")
 		assertUnauthorized(t, err)
@@ -281,4 +271,58 @@ func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
 	err := validator.ValidateClientRegistrationMetadata(context.Background(), nil, metadata)
 	require.Error(t, err, "an omitted 'application_type' must default to 'web' and therefore reject a non-https redirect URI")
 	assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+}
+
+// OIDC DCR §2: "Web Clients [...] MUST only register URLs using the https scheme as redirect_uris; they MUST NOT
+// use localhost as the hostname. Native Clients MUST only register redirect_uris using custom URI schemes or
+// loopback URLs using the http scheme; loopback URLs use localhost or the IP loopback literals 127.0.0.1 or [::1]
+// as the hostname." The same sentence that bars 'localhost' for web clients defines it as one of three spellings of
+// the loopback host, so the prohibition cannot be satisfied by rejecting the name and admitting the literals: all
+// three reach the resource owner's own machine, which is not a host the web client controls. This pins that the
+// literals are rejected for a web client and, in the same breath, that a native client keeps the loopback redirect
+// RFC 8252 §7.3 requires of it.
+func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
+	ctx := context.Background()
+
+	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
+	validator := NewLocalValidator(config)
+
+	for _, uri := range []string{"https://localhost/cb", "https://127.0.0.1/cb", "https://[::1]/cb"} {
+		metadata := &oauth2.ClientRegistrationMetadata{ApplicationType: "web", RedirectURIs: []string{uri}}
+
+		err := validator.ValidateClientRegistrationMetadata(ctx, nil, metadata)
+		require.Error(t, err, "a 'web' client must not register the loopback redirect URI '%s'", uri)
+		assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	}
+
+	native := &oauth2.ClientRegistrationMetadata{
+		ApplicationType: "native",
+		RedirectURIs:    []string{"http://127.0.0.1:8080/cb"},
+		GrantTypes:      []string{"authorization_code"},
+	}
+
+	require.NoError(t, validator.ValidateClientRegistrationMetadata(ctx, nil, native), "a 'native' client must keep the loopback redirect URI RFC 8252 §7.3 requires of it")
+}
+
+// RFC 7591 §2: "grant_types [...] If omitted, the default behavior is that the client will use only the
+// 'authorization_code' Grant Type." oauth2.DefaultClient.GetGrantTypes applies that default at request time, so a
+// client registered with no 'grant_types' is an authorization code client to the rest of the provider and must
+// satisfy the same redirect URI requirement as one that declares the grant explicitly - otherwise omitting the
+// parameter is all it takes to register a redirect-less authorization code client. The default is paired: an
+// explicitly declared non-redirecting grant does not acquire the 'code' response type it never registered.
+func TestSpec_RFC7591_2_OmittedGrantTypesDefaultToAuthorizationCode(t *testing.T) {
+	ctx := context.Background()
+
+	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
+	validator := NewLocalValidator(config)
+
+	err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{})
+	require.Error(t, err, "an omitted 'grant_types' must default to 'authorization_code' and therefore require a redirect URI")
+	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+	client := &oauth2.DefaultClient{}
+	assert.Equal(t, oauth2.Arguments{"authorization_code"}, client.GetGrantTypes(), "the rejection above must match the default the client applies at request time")
+
+	err = validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{GrantTypes: []string{"client_credentials"}})
+	require.NoError(t, err, "an explicitly declared non-redirecting grant must not be held to the redirect URI requirement")
 }

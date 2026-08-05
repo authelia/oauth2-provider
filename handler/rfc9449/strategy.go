@@ -135,4 +135,6 @@ func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context) []jose.Signatur
 	return algs
 }
 
-var _ oauth2.DPoPStrategy = (*DefaultStrategy)(nil)
+var (
+	_ oauth2.DPoPStrategy = (*DefaultStrategy)(nil)
+)

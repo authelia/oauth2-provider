@@ -64,3 +64,70 @@ func TestClientRegistrationMetadataGetScopes(t *testing.T) {
 
 	assert.Empty(t, (&ClientRegistrationMetadata{}).GetScopes())
 }
+
+func TestClientRegistrationMetadataDefaultMaxAgePresence(t *testing.T) {
+	testCases := []struct {
+		name     string
+		raw      string
+		expected *int64
+	}{
+		{
+			name:     "ShouldDecodeAnOmittedValueAsAbsent",
+			raw:      `{"client_name":"Example"}`,
+			expected: nil,
+		},
+		{
+			name:     "ShouldDecodeAnExplicitZeroAsPresent",
+			raw:      `{"default_max_age":0}`,
+			expected: pointerTo(int64(0)),
+		},
+		{
+			name:     "ShouldDecodeAnOrdinaryValue",
+			raw:      `{"default_max_age":3600}`,
+			expected: pointerTo(int64(3600)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := &ClientRegistrationMetadata{}
+
+			require.NoError(t, json.Unmarshal([]byte(tc.raw), metadata))
+			assert.Equal(t, tc.expected, metadata.DefaultMaxAge)
+			assert.NotContains(t, metadata.Extra, "default_max_age")
+
+			out, err := json.Marshal(metadata)
+			require.NoError(t, err)
+
+			round := map[string]any{}
+			require.NoError(t, json.Unmarshal(out, &round))
+
+			if tc.expected == nil {
+				assert.NotContains(t, round, "default_max_age")
+			} else {
+				require.Contains(t, round, "default_max_age")
+				assert.Equal(t, float64(*tc.expected), round["default_max_age"])
+			}
+		})
+	}
+}
+
+func TestClientRegistrationMetadataPreservesLargeNumbers(t *testing.T) {
+	const raw = `{"client_name":"Example","vendor_serial":9007199254740993}`
+
+	metadata := &ClientRegistrationMetadata{}
+
+	require.NoError(t, json.Unmarshal([]byte(raw), metadata))
+
+	require.Contains(t, metadata.Extra, "vendor_serial")
+	assert.Equal(t, json.Number("9007199254740993"), metadata.Extra["vendor_serial"])
+
+	out, err := json.Marshal(metadata)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(out), `"vendor_serial":9007199254740993`)
+}
+
+func pointerTo[T any](value T) *T {
+	return &value
+}

@@ -26,31 +26,31 @@ func TestCheckGrantableScopes(t *testing.T) {
 	}{
 		{
 			"ShouldAllowExactMatch",
-			grantableFixture(KindCreate, oauth2.Arguments{"openid", "profile"}),
+			grantableFixture("", oauth2.Arguments{"openid", "profile"}),
 			"openid profile",
 			"",
 		},
 		{
 			"ShouldAllowStrictSubset",
-			grantableFixture(KindCreate, oauth2.Arguments{"openid", "profile"}),
+			grantableFixture("", oauth2.Arguments{"openid", "profile"}),
 			"openid",
 			"",
 		},
 		{
 			"ShouldAllowOmittedScope",
-			grantableFixture(KindCreate, oauth2.Arguments{"openid"}),
+			grantableFixture("", oauth2.Arguments{"openid"}),
 			"",
 			"",
 		},
 		{
 			"ShouldRejectExcess",
-			grantableFixture(KindCreate, oauth2.Arguments{"openid"}),
+			grantableFixture("", oauth2.Arguments{"openid"}),
 			"openid profile",
 			"The request requested the scopes 'profile' which the presented Client Registration Token is not permitted to grant.",
 		},
 		{
 			"ShouldRejectAllWhenCeilingEmpty",
-			grantableFixture(KindCreate, nil),
+			grantableFixture("", nil),
 			"openid",
 			"The request requested the scopes 'openid' which the presented Client Registration Token is not permitted to grant.",
 		},
@@ -81,13 +81,166 @@ func TestCheckGrantableScopes(t *testing.T) {
 	}
 }
 
-func grantableFixture(kind Kind, scopes oauth2.Arguments) oauth2.Requester {
-	session := NewDefaultSession()
-	session.SetClientRegistrationKind(kind)
-	session.SetGrantableScopes(scopes)
+func TestCheckGrantableAudience(t *testing.T) {
+	config := &oauth2.Config{AudienceStrategy: oauth2.DefaultAudienceStrategy}
 
+	newAuthenticated := func(grantable oauth2.Arguments) oauth2.Requester {
+		request := oauth2.NewRequest()
+		request.Session = &oauth2.DefaultSession{}
+
+		for _, audience := range grantable {
+			request.GrantAudience(audience)
+		}
+
+		return request
+	}
+
+	testCases := []struct {
+		name          string
+		authenticated oauth2.Requester
+		metadata      *oauth2.ClientRegistrationMetadata
+		err           string
+	}{
+		{
+			name:     "ShouldSkipWithoutAnAuthenticatedRequester",
+			metadata: &oauth2.ClientRegistrationMetadata{Audience: []string{"https://api.example.com"}},
+		},
+		{
+			name:          "ShouldAcceptAnAudienceInsideTheCeiling",
+			authenticated: newAuthenticated(oauth2.Arguments{"https://api.example.com"}),
+			metadata:      &oauth2.ClientRegistrationMetadata{Audience: []string{"https://api.example.com"}},
+		},
+		{
+			name:          "ShouldRejectAnAudienceOutsideTheCeiling",
+			authenticated: newAuthenticated(oauth2.Arguments{"https://api.example.com"}),
+			metadata:      &oauth2.ClientRegistrationMetadata{Audience: []string{"https://other.example.com"}},
+			err:           "invalid_client_metadata",
+		},
+		{
+			name:          "ShouldRejectEveryAudienceWhenTheCeilingIsEmpty",
+			authenticated: newAuthenticated(nil),
+			metadata:      &oauth2.ClientRegistrationMetadata{Audience: []string{"https://api.example.com"}},
+			err:           "invalid_client_metadata",
+		},
+		{
+			name:          "ShouldAcceptWhenNoAudienceIsRequested",
+			authenticated: newAuthenticated(nil),
+			metadata:      &oauth2.ClientRegistrationMetadata{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckGrantableAudience(context.Background(), config, tc.authenticated, tc.metadata)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.Equal(t, tc.err, oauth2.ErrorToRFC6749Error(err).ErrorField)
+		})
+	}
+}
+
+func TestCheckGrantableScopesFromTheTokenGrant(t *testing.T) {
+	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy}
+
+	newAuthenticated := func(granted ...string) oauth2.Requester {
+		request := oauth2.NewRequest()
+		request.Session = &oauth2.DefaultSession{}
+
+		for _, scope := range granted {
+			request.GrantScope(scope)
+		}
+
+		return request
+	}
+
+	testCases := []struct {
+		name          string
+		authenticated oauth2.Requester
+		requested     string
+		err           string
+	}{
+		{
+			name:          "ShouldAcceptAScopeInsideTheGrant",
+			authenticated: newAuthenticated("client_registration", "openid", "profile"),
+			requested:     "openid profile",
+		},
+		{
+			name:          "ShouldRejectAScopeOutsideTheGrant",
+			authenticated: newAuthenticated("client_registration", "openid"),
+			requested:     "openid profile",
+			err:           "invalid_client_metadata",
+		},
+		{
+			name:          "ShouldRejectTheRegistrationScopeEvenThoughTheTokenHoldsIt",
+			authenticated: newAuthenticated("client_registration", "openid"),
+			requested:     "client_registration",
+			err:           "invalid_client_metadata",
+		},
+		{
+			name:          "ShouldRejectEveryScopeWhenTheGrantIsEmpty",
+			authenticated: newAuthenticated(),
+			requested:     "openid",
+			err:           "invalid_client_metadata",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckGrantableScopes(context.Background(), config, tc.authenticated, &oauth2.ClientRegistrationMetadata{Scope: tc.requested})
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.Equal(t, tc.err, oauth2.ErrorToRFC6749Error(err).ErrorField)
+		})
+	}
+}
+
+func grantableFixture(clientID string, scopes oauth2.Arguments) oauth2.Requester {
+	return grantableFixtureWithAudience(clientID, scopes, nil)
+}
+
+func grantableFixtureWithAudience(clientID string, scopes, audience oauth2.Arguments) oauth2.Requester {
 	requester := oauth2.NewRequest()
-	requester.Session = session
+	requester.Session = &oauth2.DefaultSession{}
+
+	if clientID != "" {
+		requester.Client = &oauth2.DefaultClient{ID: clientID}
+	}
+
+	for _, scope := range scopes {
+		requester.GrantScope(scope)
+	}
+
+	for _, aud := range audience {
+		requester.GrantAudience(aud)
+	}
+
+	return requester
+}
+
+func grantableFixtureWithClient(client oauth2.Client, scopes, audience oauth2.Arguments) oauth2.Requester {
+	requester := oauth2.NewRequest()
+	requester.Session = &oauth2.DefaultSession{}
+	requester.Client = client
+
+	for _, scope := range scopes {
+		requester.GrantScope(scope)
+	}
+
+	for _, aud := range audience {
+		requester.GrantAudience(aud)
+	}
 
 	return requester
 }

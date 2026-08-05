@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -194,37 +195,6 @@ func TestIntrospectToken(t *testing.T) {
 				)
 			},
 			expected: oauth2.AccessToken,
-		},
-		{
-			// A client registration token (RFC 7591 / RFC 7592) is an ordinary access token in ordinary access token
-			// storage, so nothing but its session distinguishes it here. It must not be introspectable, and above all
-			// must not authenticate its holder as its client at the introspection endpoint - see
-			// Fosite.handleNewIntrospectionRequestClientAuthentication, which does exactly that with whatever token
-			// introspects successfully out of the Authorization header. ValidateAccessToken is deliberately not
-			// expected: the rejection happens before it.
-			name: "ShouldFailBecauseAccessTokenSessionIsAClientRegistrationSession",
-			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
-				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
-
-				original := oauth2.NewAccessRequest(&testClientRegistrationSession{DefaultSession: &oauth2.DefaultSession{}})
-
-				gomock.InOrder(
-					strategy.
-						EXPECT().
-						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
-						Return("asdf"),
-					store.
-						EXPECT().
-						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
-						Return(original, nil),
-					strategy.
-						EXPECT().
-						RefreshTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
-						Return(""),
-				)
-			},
-			error:    oauth2.ErrRequestUnauthorized,
-			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. The token is a client registration token which may only be presented at the client registration and client configuration endpoints.",
 		},
 		{
 			name: "ShouldFailBecauseAccessTokenSignatureEmpty",
@@ -436,13 +406,55 @@ func TestIntrospectToken(t *testing.T) {
 	}
 }
 
-// testClientRegistrationSession stands in for handler/rfc7591.DefaultSession, which cannot be used here because
-// handler/rfc7591 imports this package. handler/rfc7591 carries the end-to-end proof that a real registration token
-// is rejected by CoreValidator; this only needs the discriminating behaviour.
-type testClientRegistrationSession struct {
-	*oauth2.DefaultSession
-}
+func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
+	ctx := t.Context()
 
-func (s *testClientRegistrationSession) IsClientRegistration() (is bool) {
-	return true
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		TokenEntropy:                          32,
+	}
+
+	strategy := NewHMACCoreStrategy(config, "authelia_%s_")
+
+	validator := &CoreValidator{
+		CoreStrategy: strategy,
+		CoreStorage:  storage.NewMemoryStore(),
+		Config:       config,
+	}
+
+	registration, _, err := strategy.GenerateClientRegistrationToken(ctx, oauth2.NewRequest())
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		token    string
+		expected error
+	}{
+		{
+			name:     "ShouldReportAClientRegistrationTokenAsUnknown",
+			token:    registration,
+			expected: oauth2.ErrUnknownRequest,
+		},
+		{
+			name:     "ShouldRejectAnUnprefixedToken",
+			token:    "not-a-token",
+			expected: oauth2.ErrRequestUnauthorized,
+		},
+		{
+			name:     "ShouldRejectAnAuthorizeCode",
+			token:    "authelia_ac_notreal.notreal",
+			expected: oauth2.ErrRequestUnauthorized,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err = validator.IntrospectToken(ctx, tc.token, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+			assert.ErrorIs(t, err, tc.expected)
+
+			_, err = validator.IntrospectToken(ctx, tc.token, oauth2.RefreshToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+			assert.ErrorIs(t, err, tc.expected)
+		})
+	}
 }

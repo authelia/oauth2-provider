@@ -23,10 +23,11 @@ type TokenType string
 type GrantType string
 
 const (
-	AccessToken  TokenType = consts.TokenTypeAccessToken
-	RefreshToken TokenType = consts.TokenTypeRefreshToken
-	DeviceCode   TokenType = consts.CodeDevice
-	UserCode     TokenType = consts.CodeUser
+	AccessToken             TokenType = consts.TokenTypeAccessToken
+	RefreshToken            TokenType = consts.TokenTypeRefreshToken
+	ClientRegistrationToken TokenType = consts.TokenTypeClientRegistrationToken
+	DeviceCode              TokenType = consts.CodeDevice
+	UserCode                TokenType = consts.CodeUser
 
 	// PushedAuthorizeRequestContext represents the PAR context object
 	PushedAuthorizeRequestContext TokenType = "par_context"

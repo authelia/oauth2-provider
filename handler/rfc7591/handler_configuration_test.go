@@ -51,7 +51,7 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	requester := oauth2.NewClientConfigurationRequest()
 	requester.Method = http.MethodPut
 	requester.ClientID = id
-	requester.Signature = handler.Strategy.AccessTokenSignature(ctx, oldToken)
+	requester.Signature = handler.Strategy.ClientRegistrationTokenSignature(ctx, oldToken)
 	requester.Metadata = &oauth2.ClientRegistrationMetadata{
 		RedirectURIs: []string{"https://example.com/other"},
 	}
@@ -72,11 +72,75 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	newToken := responder.ToMap()["registration_access_token"].(string)
 	assert.NotEqual(t, oldToken, newToken)
 
-	_, err = store.GetAccessTokenSession(ctx, handler.Strategy.AccessTokenSignature(ctx, oldToken), &oauth2.DefaultSession{})
+	_, err = store.GetClientRegistrationTokenSession(ctx, handler.Strategy.ClientRegistrationTokenSignature(ctx, oldToken), &oauth2.DefaultSession{})
 	require.Error(t, err)
 
-	_, err = store.GetAccessTokenSession(ctx, handler.Strategy.AccessTokenSignature(ctx, newToken), &oauth2.DefaultSession{})
+	_, err = store.GetClientRegistrationTokenSession(ctx, handler.Strategy.ClientRegistrationTokenSignature(ctx, newToken), &oauth2.DefaultSession{})
 	require.NoError(t, err)
+}
+
+// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, which makes a PUT carrying none a
+// shape the interface itself admits. It must be answered with an error rather than dereferenced - without the guard
+// the nil reaches the validator chain and the handler panics - and the target client must be left untouched, since
+// RFC 7592 §2.2 replacement semantics would otherwise read an empty PUT as "replace everything with nothing".
+func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, store := newConfigurationHandler(t)
+
+	config.RFC7591ClientRegistrationValidators = []oauth2.ClientRegistrationValidator{NewLocalValidator(config)}
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+	require.Error(t, err)
+	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+	client, gerr := store.GetClient(ctx, id)
+	require.NoError(t, gerr)
+	assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs())
+}
+
+type failingUpdateClientStore struct {
+	Storage
+}
+
+func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
+	return errTestUpdateClientFailed
+}
+
+func TestClientConfigurationHandlerUpdateLeavesClientIntactWhenStoreFails(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, _, store := newConfigurationHandler(t)
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	handler.Store = &failingUpdateClientStore{Storage: store}
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs: []string{"https://example.com/other"},
+	}
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+	require.Error(t, err)
+	assert.Equal(t, "server_error", oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+	client, gerr := store.GetClient(ctx, id)
+	require.NoError(t, gerr)
+
+	assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs(), "a failed update must not leave the replacement applied to the stored client")
+
+	registered, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok)
+	assert.Equal(t, "Example", registered.ClientName)
 }
 
 func TestClientConfigurationHandlerUpdateRejectsClientIDMismatch(t *testing.T) {
@@ -139,7 +203,7 @@ func TestClientConfigurationHandlerUpdateAcceptsCorrectClientSecretAndStripsExtr
 	requester := oauth2.NewClientConfigurationRequest()
 	requester.Method = http.MethodPut
 	requester.ClientID = id
-	requester.Signature = handler.Strategy.AccessTokenSignature(ctx, oldToken)
+	requester.Signature = handler.Strategy.ClientRegistrationTokenSignature(ctx, oldToken)
 	requester.Metadata = &oauth2.ClientRegistrationMetadata{
 		RedirectURIs: []string{"https://example.com/other"},
 		Extra: map[string]any{
@@ -175,7 +239,7 @@ func TestClientConfigurationHandlerDeletes(t *testing.T) {
 	requester := oauth2.NewClientConfigurationRequest()
 	requester.Method = http.MethodDelete
 	requester.ClientID = id
-	requester.Signature = handler.Strategy.AccessTokenSignature(ctx, token)
+	requester.Signature = handler.Strategy.ClientRegistrationTokenSignature(ctx, token)
 
 	responder := oauth2.NewClientRegistrationResponse()
 
@@ -187,7 +251,7 @@ func TestClientConfigurationHandlerDeletes(t *testing.T) {
 	_, err := store.GetClient(ctx, id)
 	require.Error(t, err)
 
-	_, err = store.GetAccessTokenSession(ctx, handler.Strategy.AccessTokenSignature(ctx, token), &oauth2.DefaultSession{})
+	_, err = store.GetClientRegistrationTokenSession(ctx, handler.Strategy.ClientRegistrationTokenSignature(ctx, token), &oauth2.DefaultSession{})
 	require.Error(t, err)
 }
 
@@ -223,7 +287,90 @@ func TestClientConfigurationHandlerEnforcesScopeCeiling(t *testing.T) {
 		ResponseTypes: []string{"code"},
 		Scope:         "openid profile",
 	}
-	requester.Authenticated = grantableFixture(KindManage, oauth2.Arguments{"openid"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"openid"})
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func TestClientConfigurationHandlerRejectsRegistrationScopeInMetadata(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, _ := newConfigurationHandler(t)
+	config.ScopeStrategy = oauth2.ExactScopeStrategy
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		Scope:         "client_registration",
+	}
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"client_registration", "openid"})
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func TestClientConfigurationHandlerRotatedManagementTokenExcludesRegistrationScope(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, store := newConfigurationHandler(t)
+	config.ScopeStrategy = oauth2.ExactScopeStrategy
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		Scope:         "openid",
+	}
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"client_registration", "openid"})
+
+	responder := oauth2.NewClientRegistrationResponse()
+	require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
+
+	rotated := responder.ToMap()["registration_access_token"].(string)
+
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	next, err := store.GetClientRegistrationTokenSession(ctx, tokens.ClientRegistrationTokenSignature(ctx, rotated), &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	granted := next.GetGrantedScopes()
+	assert.NotContains(t, granted, "client_registration")
+	assert.Contains(t, granted, "openid")
+}
+
+func TestClientConfigurationHandlerEnforcesAudienceCeiling(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, _, _ := newConfigurationHandler(t)
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		Audience:      []string{"https://ceiling.example.com", "https://outside.example.com"},
+	}
+	requester.Authenticated = grantableFixtureWithAudience(id, nil, oauth2.Arguments{"https://ceiling.example.com"})
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
@@ -248,7 +395,7 @@ func TestClientConfigurationHandlerPreservesCeilingAcrossRotation(t *testing.T) 
 		ResponseTypes: []string{"code"},
 		Scope:         "openid",
 	}
-	requester.Authenticated = grantableFixture(KindManage, oauth2.Arguments{"openid", "profile"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"openid", "profile"})
 
 	responder := oauth2.NewClientRegistrationResponse()
 	require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
@@ -257,14 +404,44 @@ func TestClientConfigurationHandlerPreservesCeilingAcrossRotation(t *testing.T) 
 
 	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	next, err := store.GetAccessTokenSession(ctx, tokens.AccessTokenSignature(ctx, rotated), NewDefaultSession())
+	next, err := store.GetClientRegistrationTokenSession(ctx, tokens.ClientRegistrationTokenSignature(ctx, rotated), &oauth2.DefaultSession{})
 	require.NoError(t, err)
 
-	session, ok := next.GetSession().(Session)
-	require.True(t, ok)
+	assert.Equal(t, id, next.GetClient().GetID())
+	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, next.GetGrantedScopes())
+}
 
-	assert.Equal(t, KindManage, session.GetClientRegistrationKind())
-	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, session.GetGrantableScopes())
+func TestClientConfigurationHandlerPreservesAudienceCeilingAcrossRotation(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, store := newConfigurationHandler(t)
+	config.ScopeStrategy = oauth2.ExactScopeStrategy
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		Scope:         "openid",
+	}
+	requester.Authenticated = grantableFixtureWithAudience(id, oauth2.Arguments{"openid"}, oauth2.Arguments{"https://api.example.com"})
+
+	responder := oauth2.NewClientRegistrationResponse()
+	require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
+
+	rotated := responder.ToMap()["registration_access_token"].(string)
+
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	next, err := store.GetClientRegistrationTokenSession(ctx, tokens.ClientRegistrationTokenSignature(ctx, rotated), &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	assert.Equal(t, id, next.GetClient().GetID())
+	assert.Equal(t, oauth2.Arguments{ClientConfigurationURL(testEndpoint, id), "https://api.example.com"}, next.GetGrantedAudience())
 }
 
 func TestClientConfigurationHandlerCeilingIgnoresClientScopeStrategy(t *testing.T) {
@@ -278,7 +455,7 @@ func TestClientConfigurationHandlerCeilingIgnoresClientScopeStrategy(t *testing.
 	registered, err := store.GetClient(ctx, id)
 	require.NoError(t, err)
 
-	store.Clients[id] = &scopeStrategyClient{Client: registered}
+	permissive := &scopeStrategyClient{Client: registered}
 
 	requester := oauth2.NewClientConfigurationRequest()
 	requester.Method = http.MethodPut
@@ -289,7 +466,37 @@ func TestClientConfigurationHandlerCeilingIgnoresClientScopeStrategy(t *testing.
 		ResponseTypes: []string{"code"},
 		Scope:         "openid profile",
 	}
-	requester.Authenticated = grantableFixture(KindManage, oauth2.Arguments{"openid"})
+	requester.Authenticated = grantableFixtureWithClient(permissive, oauth2.Arguments{"openid"}, nil)
+
+	err = handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func TestClientConfigurationHandlerCeilingIgnoresClientAudienceStrategy(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, store := newConfigurationHandler(t)
+	config.AudienceStrategy = oauth2.ExactAudienceStrategy
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	registered, err := store.GetClient(ctx, id)
+	require.NoError(t, err)
+
+	permissive := &audienceStrategyClient{Client: registered}
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		Audience:      []string{"https://other.example.com"},
+	}
+	requester.Authenticated = grantableFixtureWithClient(permissive, nil, oauth2.Arguments{"https://api.example.com"})
 
 	err = handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
@@ -345,7 +552,6 @@ func TestClientConfigurationHandlerWithholdsDisabledFeatureMetadataOnRead(t *tes
 
 	assert.NotContains(t, read(), "tls_client_auth_subject_dn")
 
-	// The store was never rewritten, so re-enabling the feature makes the value visible again.
 	config.MTLSEnabled = true
 
 	assert.Equal(t, "CN=client,O=Example", read()["tls_client_auth_subject_dn"])
@@ -388,10 +594,11 @@ func newConfigurationHandler(t *testing.T) (*ClientConfigurationHandler, *Client
 	t.Helper()
 
 	config := &oauth2.Config{
-		GlobalSecret:                         []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationEndpointURL: testEndpoint,
-		RFC7591ClientRegistrationStrategy:    NewDefaultClientRegistrationStrategy(),
-		TokenEntropy:                         32,
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
+		TokenEntropy:                          32,
 	}
 
 	store := storage.NewMemoryStore()
@@ -427,4 +634,12 @@ type scopeStrategyClient struct {
 
 func (c *scopeStrategyClient) GetScopeStrategy(_ context.Context) (strategy oauth2.ScopeStrategy) {
 	return func(haystack []string, needle string) bool { return true }
+}
+
+type audienceStrategyClient struct {
+	oauth2.Client
+}
+
+func (c *audienceStrategyClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
+	return func(haystack, needle []string) error { return nil }
 }

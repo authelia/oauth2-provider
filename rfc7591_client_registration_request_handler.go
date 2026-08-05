@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -50,10 +51,25 @@ func (f *Fosite) NewRFC7591ClientRegistrationRequest(ctx context.Context, r *htt
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("The Content-Type header must be 'application/json'."))
 	}
 
-	metadata := &ClientRegistrationMetadata{}
+	var metadata *ClientRegistrationMetadata
 
-	if err = json.NewDecoder(io.LimitReader(r.Body, maxClientRegistrationRequestBodyBytes)).Decode(metadata); err != nil {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, maxClientRegistrationRequestBodyBytes))
+
+	// Decoded into a pointer, not a value: RFC 7591 Section 2 requires the body be a JSON object, and a literal 'null'
+	// decoded into a value would leave a zero-valued struct behind and register a client from a body that carried no
+	// metadata at all. Into a pointer it leaves nil, which is distinguishable.
+	if err = decoder.Decode(&metadata); err != nil {
 		return request, errorsx.WithStack(ErrInvalidClientMetadata.WithHint("Unable to parse HTTP body, make sure to send a properly formatted JSON request body.").WithWrap(err).WithDebugError(err))
+	}
+
+	if metadata == nil {
+		return request, errorsx.WithStack(ErrInvalidClientMetadata.WithHint("The request body must be a JSON object."))
+	}
+
+	// The body is one JSON object, not a stream of them: a decoder stops at the end of the first value and would
+	// otherwise silently ignore whatever follows it, so anything but the end of the input here is a malformed body.
+	if trailing := decoder.Decode(new(json.RawMessage)); !errors.Is(trailing, io.EOF) {
+		return request, errorsx.WithStack(ErrInvalidClientMetadata.WithHint("The request body must contain a single JSON object.").WithWrap(trailing).WithDebugError(trailing))
 	}
 
 	request.Metadata = metadata

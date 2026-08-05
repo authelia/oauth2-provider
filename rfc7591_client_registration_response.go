@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -69,10 +70,6 @@ type ClientRegistrationResponder interface {
 // ClientConfigurationResponder is the response object for the RFC 7592 client configuration endpoint. It is the same
 // shape as ClientRegistrationResponder because both endpoints return the same wire format.
 type ClientConfigurationResponder = ClientRegistrationResponder
-
-var (
-	_ ClientRegistrationResponder = (*ClientRegistrationResponse)(nil)
-)
 
 // ClientRegistrationResponse is an implementation of ClientRegistrationResponder.
 type ClientRegistrationResponse struct {
@@ -175,7 +172,13 @@ func (r *ClientRegistrationResponse) ToMap() (values map[string]any) {
 
 	if r.Metadata != nil {
 		if data, err := json.Marshal(r.Metadata); err == nil {
-			_ = json.Unmarshal(data, &values)
+			// UseNumber, matching ClientRegistrationMetadata's own marshaling: this map is what the response writer
+			// encodes, so decoding numbers into float64 here would undo the precision the metadata took care to
+			// preserve for unregistered parameters.
+			decoder := json.NewDecoder(bytes.NewReader(data))
+			decoder.UseNumber()
+
+			_ = decoder.Decode(&values)
 		}
 	}
 
@@ -201,8 +204,21 @@ func (r *ClientRegistrationResponse) ToMap() (values map[string]any) {
 		values[consts.ClientRegistrationResponseClientSecretExpiresAt] = expiresAt
 	}
 
-	values[consts.ClientRegistrationResponseRegistrationAccessToken] = r.RegistrationAccessToken
-	values[consts.ClientRegistrationResponseRegistrationClientURI] = r.RegistrationClientURI
+	delete(values, consts.ClientRegistrationResponseRegistrationAccessToken)
+
+	if r.RegistrationAccessToken != "" {
+		values[consts.ClientRegistrationResponseRegistrationAccessToken] = r.RegistrationAccessToken
+	}
+
+	delete(values, consts.ClientRegistrationResponseRegistrationClientURI)
+
+	if r.RegistrationClientURI != "" {
+		values[consts.ClientRegistrationResponseRegistrationClientURI] = r.RegistrationClientURI
+	}
 
 	return values
 }
+
+var (
+	_ ClientRegistrationResponder = (*ClientRegistrationResponse)(nil)
+)

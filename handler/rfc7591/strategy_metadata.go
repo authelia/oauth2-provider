@@ -101,4 +101,6 @@ func metadataStrategy(ctx context.Context, config Configurator) (strategy oauth2
 	return NewDefaultClientRegistrationMetadataStrategy(config)
 }
 
-var _ oauth2.ClientRegistrationMetadataStrategy = (*DefaultClientRegistrationMetadataStrategy)(nil)
+var (
+	_ oauth2.ClientRegistrationMetadataStrategy = (*DefaultClientRegistrationMetadataStrategy)(nil)
+)

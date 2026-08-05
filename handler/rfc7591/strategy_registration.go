@@ -48,47 +48,43 @@ func (s *DefaultClientRegistrationStrategy) NewClient(ctx context.Context, id st
 // deliberately NOT preserved: it is derived from TokenEndpointAuthMethod by apply on every call, so a client
 // switching to or from "none" is reflected correctly rather than fighting a stale preserved value. A nil secret
 // leaves the existing client secret untouched.
+//
+// The patched client is a new value and client is never written to. A oauth2.ClientStorage implementation is free
+// to return a pointer into its own state from GetClient - MemoryStore does exactly that - so patching in place
+// would apply the replacement to the stored client before the caller has had the chance to persist it, leaving the
+// update applied even on a request that goes on to fail and be reported as an error. Returning a new value keeps
+// the store's copy authoritative until UpdateClient succeeds.
 func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, client oauth2.Client, secret oauth2.ClientSecret, metadata *oauth2.ClientRegistrationMetadata) (patched oauth2.Client, err error) {
 	registered, ok := client.(*oauth2.DefaultRegisteredClient)
 	if !ok {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The default client registration strategy can only patch a '*oauth2.DefaultRegisteredClient' but the client with id '%s' is a '%T'.", client.GetID(), client))
 	}
 
+	replacement := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}}
+
+	s.apply(replacement, metadata)
+
 	// RFC 7592 Section 2.2 replacement semantics govern client metadata: everything the metadata does not carry is
-	// reset. They do not govern registration bookkeeping or server-administered policy, which have no
-	// ClientRegistrationMetadata source and so must be carried across explicitly rather than reset to zero value.
-	id := registered.ID
-	issued := registered.ClientIDIssuedAt
-	current := registered.ClientSecret
-	rotated := registered.RotatedClientSecrets
-	secretExpiresAt := registered.ClientSecretExpiresAt
-	enforcePKCE := registered.EnforcePKCE
-	enforcePKCEChallengeMethod := registered.EnforcePKCEChallengeMethod
-	pkceChallengeMethod := registered.PKCEChallengeMethod
-	enableJWTProfileOAuthAccessTokens := registered.EnableJWTProfileOAuthAccessTokens
-	pushedAuthorizeContextLifespan := registered.PushedAuthorizeContextLifespan
-
-	*registered = oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}}
-
-	s.apply(registered, metadata)
-
-	registered.ID = id
-	registered.ClientIDIssuedAt = issued
-	registered.RotatedClientSecrets = rotated
-	registered.ClientSecretExpiresAt = secretExpiresAt
-	registered.EnforcePKCE = enforcePKCE
-	registered.EnforcePKCEChallengeMethod = enforcePKCEChallengeMethod
-	registered.PKCEChallengeMethod = pkceChallengeMethod
-	registered.EnableJWTProfileOAuthAccessTokens = enableJWTProfileOAuthAccessTokens
-	registered.PushedAuthorizeContextLifespan = pushedAuthorizeContextLifespan
+	// reset, which the fresh value above already expresses. They do not govern registration bookkeeping or
+	// server-administered policy, which have no ClientRegistrationMetadata source and so must be carried across
+	// from the existing client explicitly rather than left at zero value.
+	replacement.ID = registered.ID
+	replacement.ClientIDIssuedAt = registered.ClientIDIssuedAt
+	replacement.RotatedClientSecrets = registered.RotatedClientSecrets
+	replacement.ClientSecretExpiresAt = registered.ClientSecretExpiresAt
+	replacement.EnforcePKCE = registered.EnforcePKCE
+	replacement.EnforcePKCEChallengeMethod = registered.EnforcePKCEChallengeMethod
+	replacement.PKCEChallengeMethod = registered.PKCEChallengeMethod
+	replacement.EnableJWTProfileOAuthAccessTokens = registered.EnableJWTProfileOAuthAccessTokens
+	replacement.PushedAuthorizeContextLifespan = registered.PushedAuthorizeContextLifespan
 
 	if secret == nil {
-		registered.ClientSecret = current
+		replacement.ClientSecret = registered.ClientSecret
 	} else {
-		registered.ClientSecret = secret
+		replacement.ClientSecret = secret
 	}
 
-	return registered, nil
+	return replacement, nil
 }
 
 // MetadataFromClient converts a *oauth2.DefaultRegisteredClient back into its oauth2.ClientRegistrationMetadata
@@ -135,7 +131,7 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		RequestObjectEncryptionAlg:   registered.RequestObjectEncryptionAlg,
 		RequestObjectEncryptionEnc:   registered.RequestObjectEncryptionEnc,
 		TokenEndpointAuthSigningAlg:  registered.TokenEndpointAuthSigningAlg,
-		DefaultMaxAge:                registered.DefaultMaxAge,
+		DefaultMaxAge:                copyInt64(registered.DefaultMaxAge),
 		RequireAuthTime:              registered.RequireAuthTime,
 		DefaultACRValues:             registered.DefaultACRValues,
 		InitiateLoginURI:             registered.InitiateLoginURI,
@@ -226,7 +222,7 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.RequestObjectEncryptionAlg = metadata.RequestObjectEncryptionAlg
 	registered.RequestObjectEncryptionEnc = metadata.RequestObjectEncryptionEnc
 	registered.TokenEndpointAuthSigningAlg = metadata.TokenEndpointAuthSigningAlg
-	registered.DefaultMaxAge = metadata.DefaultMaxAge
+	registered.DefaultMaxAge = copyInt64(metadata.DefaultMaxAge)
 	registered.RequireAuthTime = metadata.RequireAuthTime
 	registered.DefaultACRValues = metadata.DefaultACRValues
 	registered.InitiateLoginURI = metadata.InitiateLoginURI
@@ -280,6 +276,21 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	}
 
 	registered.Extra = metadata.Extra
+}
+
+// copyInt64 returns a distinct pointer to the same value, or nil for nil. Optional numeric client metadata is carried
+// by pointer so an explicitly registered zero stays distinguishable from an absent value; assigning the pointer
+// itself across the metadata/client boundary would leave request-owned metadata and the persisted client sharing one
+// int64, so a later write through either would be visible through the other.
+func copyInt64(value *int64) (copied *int64) {
+	if value == nil {
+		return nil
+	}
+
+	copied = new(int64)
+	*copied = *value
+
+	return copied
 }
 
 var (

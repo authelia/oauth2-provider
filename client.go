@@ -770,15 +770,12 @@ func (c *DefaultMTLSClient) GetTLSClientAuthSANEmail() string {
 }
 
 var (
-	_ Client                  = (*DefaultClient)(nil)
-	_ ResponseModeClient      = (*DefaultResponseModeClient)(nil)
-	_ JARClient               = (*DefaultJARClient)(nil)
-	_ RPInitiatedLogoutClient = (*DefaultRPInitiatedLogoutClient)(nil)
-	_ BackChannelLogoutClient = (*DefaultBackChannelLogoutClient)(nil)
-	_ TLSClientAuthClient     = (*DefaultMTLSClient)(nil)
-	_ MTLSClient              = (*DefaultMTLSClient)(nil)
-
-	// AuthenticationMethodClient is what isMTLSAuthMethod reads the registered '*_endpoint_auth_method' through, so
-	// without it a DefaultMTLSClient could never present an RFC 8705 mutual-TLS authentication method.
+	_ Client                     = (*DefaultClient)(nil)
+	_ ResponseModeClient         = (*DefaultResponseModeClient)(nil)
+	_ JARClient                  = (*DefaultJARClient)(nil)
+	_ RPInitiatedLogoutClient    = (*DefaultRPInitiatedLogoutClient)(nil)
+	_ BackChannelLogoutClient    = (*DefaultBackChannelLogoutClient)(nil)
+	_ TLSClientAuthClient        = (*DefaultMTLSClient)(nil)
+	_ MTLSClient                 = (*DefaultMTLSClient)(nil)
 	_ AuthenticationMethodClient = (*DefaultMTLSClient)(nil)
 )

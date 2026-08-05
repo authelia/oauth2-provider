@@ -19,11 +19,10 @@ import (
 )
 
 const (
-	defaultPARPrefix                                    = consts.PrefixRequestURI
-	defaultPARContextLifetime                           = 5 * time.Minute
-	defaultBackChannelLogoutLifespan                    = 5 * time.Minute
-	defaultBackChannelLogoutConcurrency                 = 10
-	defaultRFC7591ClientRegistrationCreateTokenLifespan = time.Minute * 10
+	defaultPARPrefix                    = consts.PrefixRequestURI
+	defaultPARContextLifetime           = 5 * time.Minute
+	defaultBackChannelLogoutLifespan    = 5 * time.Minute
+	defaultBackChannelLogoutConcurrency = 10
 )
 
 type Config struct {
@@ -45,14 +44,6 @@ type Config struct {
 
 	// Sets how long a device user/device code pair is valid for
 	RFC8628CodeLifespan time.Duration
-
-	// RFC7591ClientRegistrationCreateTokenLifespan is the lifespan of a client registration token permitting the
-	// holder to register new clients. Zero applies a ten minute default.
-	RFC7591ClientRegistrationCreateTokenLifespan time.Duration
-
-	// RFC7591ClientRegistrationManageTokenLifespan is the lifespan of a client registration token permitting the
-	// holder to manage one registered client. Zero means the token does not expire.
-	RFC7591ClientRegistrationManageTokenLifespan time.Duration
 
 	// IDTokenIssuer sets the default issuer of the ID Token.
 	IDTokenIssuer string
@@ -351,6 +342,16 @@ type Config struct {
 	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
 	MTLSClientCertificateHeader string
 
+	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is
+	// deliberately separate from GlobalSecret: a client management token never expires and RFC 7592 provides no way
+	// to re-issue one, so signing it with the global secret would mean routine rotation of that secret permanently
+	// locked every registered client out of its own registration.
+	RFC7591ClientRegistrationGlobalSecret []byte
+
+	// RFC7591ClientRegistrationRotatedGlobalSecrets is a list of rotated client registration token secrets, which
+	// remain valid for verification but are not used for signing.
+	RFC7591ClientRegistrationRotatedGlobalSecrets [][]byte
+
 	// RFC7591ClientRegistrationEndpointURL is the absolute URL of the client registration endpoint.
 	RFC7591ClientRegistrationEndpointURL string
 
@@ -371,6 +372,14 @@ type Config struct {
 
 	// RFC7591ClientRegistrationValidators are the validators run in order against submitted metadata.
 	RFC7591ClientRegistrationValidators []ClientRegistrationValidator
+
+	// RFC7591ClientRegistrationEndpointAudience is the audience a client creation token must carry. Empty means the
+	// request URL is expected.
+	RFC7591ClientRegistrationEndpointAudience string
+
+	// RFC7591ClientRegistrationScope is the scope a client creation token must carry. Empty means
+	// consts.ScopeClientRegistration.
+	RFC7591ClientRegistrationScope string
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -659,21 +668,6 @@ func (c *Config) GetRFC8628CodeLifespan(_ context.Context) time.Duration {
 	return c.RFC8628CodeLifespan
 }
 
-// GetRFC7591ClientRegistrationCreateTokenLifespan returns the client creation token lifespan.
-func (c *Config) GetRFC7591ClientRegistrationCreateTokenLifespan(_ context.Context) (lifespan time.Duration) {
-	if c.RFC7591ClientRegistrationCreateTokenLifespan <= 0 {
-		return defaultRFC7591ClientRegistrationCreateTokenLifespan
-	}
-
-	return c.RFC7591ClientRegistrationCreateTokenLifespan
-}
-
-// GetRFC7591ClientRegistrationManageTokenLifespan returns the client management token lifespan. Zero means the token
-// does not expire.
-func (c *Config) GetRFC7591ClientRegistrationManageTokenLifespan(_ context.Context) (lifespan time.Duration) {
-	return c.RFC7591ClientRegistrationManageTokenLifespan
-}
-
 // GetAccessTokenLifespan returns how long an access token should be valid. Defaults to one hour.
 func (c *Config) GetAccessTokenLifespan(_ context.Context) time.Duration {
 	if c.AccessTokenLifespan == 0 {
@@ -938,6 +932,14 @@ func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header str
 	return c.MTLSClientCertificateHeader
 }
 
+func (c *Config) GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error) {
+	return c.RFC7591ClientRegistrationGlobalSecret, nil
+}
+
+func (c *Config) GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error) {
+	return c.RFC7591ClientRegistrationRotatedGlobalSecrets, nil
+}
+
 func (c *Config) GetRFC7591ClientRegistrationEndpointURL(ctx context.Context) (endpoint string) {
 	return c.RFC7591ClientRegistrationEndpointURL
 }
@@ -960,6 +962,18 @@ func (c *Config) GetRFC7591ClientRegistrationEndpointAuthStrategy(ctx context.Co
 
 func (c *Config) GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator) {
 	return c.RFC7591ClientRegistrationValidators
+}
+
+func (c *Config) GetRFC7591ClientRegistrationEndpointAudience(ctx context.Context) (audience string) {
+	return c.RFC7591ClientRegistrationEndpointAudience
+}
+
+func (c *Config) GetRFC7591ClientRegistrationScope(ctx context.Context) (scope string) {
+	if c.RFC7591ClientRegistrationScope == "" {
+		return consts.ScopeClientRegistration
+	}
+
+	return c.RFC7591ClientRegistrationScope
 }
 
 var (
@@ -1027,7 +1041,6 @@ var (
 	_ DPoPConfigProvider                                 = (*Config)(nil)
 	_ MTLSConfigProvider                                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider            = (*Config)(nil)
-	_ RFC7591ClientRegistrationTokenLifespanProvider     = (*Config)(nil)
 	_ RFC7591ClientRegistrationEndpointHandlersProvider  = (*Config)(nil)
 	_ RFC7592ClientConfigurationEndpointHandlersProvider = (*Config)(nil)
 )

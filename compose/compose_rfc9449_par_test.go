@@ -45,9 +45,10 @@ func newPARProvider(t *testing.T, nonceRequired bool) (oauth2.Provider, *storage
 	store := storage.NewMemoryStore()
 
 	config := &oauth2.Config{
-		DPoPEnabled:       true,
-		DPoPNonceRequired: nonceRequired,
-		GlobalSecret:      []byte("some-cool-secret-that-is-32bytes"),
+		DPoPEnabled:                           true,
+		DPoPNonceRequired:                     nonceRequired,
+		GlobalSecret:                          []byte("some-cool-secret-that-is-32bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}
 
 	provider := ComposeAllEnabled(config, store, key)

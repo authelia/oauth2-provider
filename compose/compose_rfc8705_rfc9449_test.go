@@ -264,9 +264,10 @@ func newBothProvider(t *testing.T) (oauth2.Provider, *storage.MemoryStore) {
 
 	store := storage.NewMemoryStore()
 	config := &oauth2.Config{
-		MTLSEnabled:  true,
-		DPoPEnabled:  true,
-		GlobalSecret: []byte("some-cool-secret-that-is-32bytes"),
+		MTLSEnabled:                           true,
+		DPoPEnabled:                           true,
+		GlobalSecret:                          []byte("some-cool-secret-that-is-32bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}
 
 	provider := ComposeAllEnabled(config, store, gen.MustRSAKey())

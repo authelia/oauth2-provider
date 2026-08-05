@@ -415,23 +415,28 @@ type RFC8628DeviceAuthorizeConfigProvider interface {
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
-// RFC7591ClientRegistrationTokenLifespanProvider returns the providers for configuring the lifespans of the two
-// client registration access tokens.
-type RFC7591ClientRegistrationTokenLifespanProvider interface {
-	// GetRFC7591ClientRegistrationCreateTokenLifespan returns the lifespan of a token permitting the holder to
-	// register new clients.
-	GetRFC7591ClientRegistrationCreateTokenLifespan(ctx context.Context) (lifespan time.Duration)
+// RFC7591ClientRegistrationTokenSecretProvider returns the provider for configuring the secret client registration
+// tokens are signed and verified with. It is declared once here, rather than inline wherever a configurator needs
+// it, because it is embedded by more than one interface across packages (RFC7591ClientRegistrationConfigProvider
+// here; HMACCoreStrategyConfigurator in handler/oauth2 and HMACSHAStrategyConfigurator in compose both need it to
+// build a hmac.HMACStrategy for client registration tokens) and three independently-maintained copies of the same
+// two methods and doc comments would drift.
+type RFC7591ClientRegistrationTokenSecretProvider interface {
+	// GetRFC7591ClientRegistrationGlobalSecret returns the secret used to sign client registration tokens. It is
+	// deliberately separate from the global secret: a client management token never expires and RFC 7592 provides no
+	// way to re-issue one, so signing it with the global secret would mean routine rotation of that secret
+	// permanently locked every registered client out of its own registration.
+	GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error)
 
-	// GetRFC7591ClientRegistrationManageTokenLifespan returns the lifespan of a token permitting the holder to
-	// manage one registered client. A zero duration means the token does not expire, which is the usual case for
-	// RFC 7592 registration access tokens.
-	GetRFC7591ClientRegistrationManageTokenLifespan(ctx context.Context) (lifespan time.Duration)
+	// GetRFC7591ClientRegistrationRotatedGlobalSecrets returns the rotated client registration token secrets, which
+	// remain valid for verification but are not used for signing.
+	GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
 }
 
 // RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
 // Dynamic Client Registration 1.0.
 type RFC7591ClientRegistrationConfigProvider interface {
-	RFC7591ClientRegistrationTokenLifespanProvider
+	RFC7591ClientRegistrationTokenSecretProvider
 
 	// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint. It is
 	// used to build 'registration_client_uri' values and to audience initial access tokens.
@@ -455,6 +460,18 @@ type RFC7591ClientRegistrationConfigProvider interface {
 
 	// GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
 	GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator)
+
+	// GetRFC7591ClientRegistrationEndpointAudience returns the audience a client creation token must carry to be
+	// accepted at the client registration endpoint. An empty value means the URL the request was made to is expected
+	// instead. A deployment authorises a client to obtain such a token by adding this value to that client's
+	// registered audience.
+	GetRFC7591ClientRegistrationEndpointAudience(ctx context.Context) (audience string)
+
+	// GetRFC7591ClientRegistrationScope returns the scope a client creation token must carry to be accepted at the
+	// client registration endpoint, defaulting to consts.ScopeClientRegistration. It is a second authorization
+	// dimension alongside the audience: the audience says a token is for this endpoint, the scope says its holder may
+	// register clients. This scope is never grantable to a registered client - see CheckGrantableScopes.
+	GetRFC7591ClientRegistrationScope(ctx context.Context) (scope string)
 }
 
 // RFC7591ClientRegistrationEndpointHandlersProvider returns the provider for configuring the client registration

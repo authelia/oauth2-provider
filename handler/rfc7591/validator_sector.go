@@ -48,10 +48,13 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' could not be parsed as a URI.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI).WithWrap(err).WithDebugError(err))
 	}
 
-	// The specification requires 'https'. The loopback carve-out for plain 'http' exists only so the value is
-	// testable (e.g. against an httptest.Server, which serves plain HTTP on a loopback host) and so local
-	// development works; it is not sanctioned by the specification for general use.
-	if parsed.Scheme != consts.SchemeHTTPS && !(parsed.Scheme == consts.SchemeHTTP && isLoopbackHost(parsed.Hostname())) {
+	// OpenID Connect Dynamic Client Registration 1.0 Section 5 requires 'https', with no exception, and there is no
+	// loopback carve-out here for the same reason the fetch below refuses to follow redirects: the value is chosen by
+	// the registrant, so exempting plain 'http' on a loopback host would hand any registrant a direct fetch against
+	// the authorization server's own loopback interface, with the redirect URI containment check below as the read
+	// oracle. A local deployment that needs this validator in development must serve the document over TLS, as tests
+	// in this package do with httptest.NewTLSServer.
+	if parsed.Scheme != consts.SchemeHTTPS {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must use the 'https' scheme.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI))
 	}
 
@@ -101,7 +104,7 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 // withoutRedirects returns a *retryablehttp.Client that performs a 'sector_identifier_uri' fetch identically to
 // client, except that it refuses to follow HTTP redirects: the first redirect response is returned as-is instead
 // of being dereferenced. This is a fresh *retryablehttp.Client value built from client's exported configuration
-// fields, not a mutation of client itself — client is typically the shared instance returned by
+// fields, not a mutation of client itself; client is typically the shared instance returned by
 // oauth2.HTTPClientProvider.GetHTTPClient, and every other consumer of that shared instance must keep following
 // redirects normally.
 //

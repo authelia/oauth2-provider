@@ -37,7 +37,9 @@ func newIDSession(j *jwt.IDTokenClaims) *defaultSession {
 
 func TestOpenIDConnectExplicitFlow(t *testing.T) {
 	f := compose.ComposeAllEnabled(&oauth2.Config{
-		GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}, store, gen.MustRSAKey())
+		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+	}, store, gen.MustRSAKey())
 
 	for k, c := range []struct {
 		description    string

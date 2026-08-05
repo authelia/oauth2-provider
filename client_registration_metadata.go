@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -58,7 +59,7 @@ type ClientRegistrationMetadata struct {
 	RequestObjectEncryptionAlg   string   `json:"request_object_encryption_alg,omitempty"`
 	RequestObjectEncryptionEnc   string   `json:"request_object_encryption_enc,omitempty"`
 	TokenEndpointAuthSigningAlg  string   `json:"token_endpoint_auth_signing_alg,omitempty"`
-	DefaultMaxAge                int64    `json:"default_max_age,omitempty"`
+	DefaultMaxAge                *int64   `json:"default_max_age,omitempty"`
 	RequireAuthTime              bool     `json:"require_auth_time,omitempty"`
 	DefaultACRValues             []string `json:"default_acr_values,omitempty"`
 	InitiateLoginURI             string   `json:"initiate_login_uri,omitempty"`
@@ -151,7 +152,10 @@ func (m *ClientRegistrationMetadata) UnmarshalJSON(data []byte) (err error) {
 
 	all := map[string]any{}
 
-	if err = json.Unmarshal(data, &all); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+
+	if err = decoder.Decode(&all); err != nil {
 		return err
 	}
 
@@ -181,7 +185,10 @@ func (m *ClientRegistrationMetadata) MarshalJSON() (data []byte, err error) {
 
 	merged := map[string]any{}
 
-	if err = json.Unmarshal(data, &merged); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+
+	if err = decoder.Decode(&merged); err != nil {
 		return nil, err
 	}
 

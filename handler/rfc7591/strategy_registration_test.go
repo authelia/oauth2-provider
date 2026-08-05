@@ -98,6 +98,8 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	rotatedSecret := oauth2.NewPlainTextClientSecret("rotated-out")
 	registered.RotatedClientSecrets = []oauth2.ClientSecret{rotatedSecret}
 
+	expiresAt := registered.ClientSecretExpiresAt
+
 	patched, err := strategy.PatchClient(ctx, registered, nil, &oauth2.ClientRegistrationMetadata{
 		RedirectURIs: []string{"https://example.com/other"},
 	})
@@ -111,7 +113,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	assert.Equal(t, "S256", result.PKCEChallengeMethod)
 	assert.True(t, result.EnableJWTProfileOAuthAccessTokens)
 	assert.Equal(t, 5*60*int64(1e9), int64(result.PushedAuthorizeContextLifespan))
-	assert.Equal(t, registered.ClientSecretExpiresAt, result.ClientSecretExpiresAt)
+	assert.Equal(t, expiresAt, result.ClientSecretExpiresAt)
 	assert.Equal(t, []oauth2.ClientSecret{rotatedSecret}, result.RotatedClientSecrets)
 	assert.Empty(t, result.ClientName)
 	assert.Equal(t, []string{"https://example.com/other"}, result.GetRedirectURIs())
@@ -138,6 +140,34 @@ func TestDefaultClientRegistrationStrategyNewClientDerivesPublic(t *testing.T) {
 	unsetClient, err := strategy.NewClient(ctx, "unset", oauth2.NewPlainTextClientSecret("s"), &oauth2.ClientRegistrationMetadata{})
 	require.NoError(t, err)
 	assert.False(t, unsetClient.IsPublic())
+}
+
+func TestDefaultClientRegistrationStrategyPatchClientDoesNotMutateInput(t *testing.T) {
+	ctx := context.Background()
+	strategy := NewDefaultClientRegistrationStrategy()
+
+	client, err := strategy.NewClient(ctx, "abc", oauth2.NewPlainTextClientSecret("the-secret"), &oauth2.ClientRegistrationMetadata{
+		RedirectURIs: []string{"https://example.com/cb"},
+		Scope:        "openid profile",
+		ClientName:   "Example",
+	})
+	require.NoError(t, err)
+
+	patched, err := strategy.PatchClient(ctx, client, nil, &oauth2.ClientRegistrationMetadata{
+		RedirectURIs: []string{"https://example.com/other"},
+	})
+	require.NoError(t, err)
+
+	assert.NotSame(t, client, patched)
+
+	original, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok)
+
+	assert.Equal(t, []string{"https://example.com/cb"}, original.GetRedirectURIs())
+	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, original.GetScopes())
+	assert.Equal(t, "Example", original.ClientName)
+
+	assert.Equal(t, []string{"https://example.com/other"}, patched.GetRedirectURIs())
 }
 
 func TestDefaultClientRegistrationStrategyPatchClientDerivesPublic(t *testing.T) {
@@ -255,4 +285,41 @@ func TestDefaultClientRegistrationStrategyRejectsForeignClient(t *testing.T) {
 
 	_, err = strategy.MetadataFromClient(ctx, &oauth2.DefaultClient{ID: "abc"})
 	require.Error(t, err)
+}
+
+func TestDefaultClientRegistrationStrategyPreservesDefaultMaxAgePresence(t *testing.T) {
+	ctx := context.Background()
+	strategy := NewDefaultClientRegistrationStrategy()
+
+	zero := int64(0)
+
+	testCases := []struct {
+		name     string
+		value    *int64
+		expected *int64
+	}{
+		{name: "ShouldPreserveAnAbsentValue", value: nil, expected: nil},
+		{name: "ShouldPreserveAnExplicitZero", value: &zero, expected: &zero},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := strategy.NewClient(ctx, "abc", nil, &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				DefaultMaxAge: tc.value,
+			})
+			require.NoError(t, err)
+
+			metadata, err := strategy.MetadataFromClient(ctx, client)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expected, metadata.DefaultMaxAge)
+
+			if metadata.DefaultMaxAge != nil {
+				registered, ok := client.(*oauth2.DefaultRegisteredClient)
+				require.True(t, ok)
+				assert.NotSame(t, registered.DefaultMaxAge, metadata.DefaultMaxAge)
+			}
+		})
+	}
 }

@@ -5,11 +5,13 @@
 package oauth2
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestClientRegistrationResponseToMap(t *testing.T) {
@@ -56,9 +58,6 @@ func TestClientRegistrationResponseToMap(t *testing.T) {
 	assert.Equal(t, "1", response.GetHeader().Get("X-Test"))
 }
 
-// TestClientRegistrationResponseToMapOmitsUnsetClientIDIssuedAt confirms that an unset ClientIDIssuedAt is omitted
-// entirely from ToMap rather than emitted as 0. Unlike ClientSecretExpiresAt, 'client_id_issued_at' has no zero
-// sentinel defined by RFC 7591, so emitting 0 would falsely assert the client was registered at the Unix epoch.
 func TestClientRegistrationResponseToMapOmitsUnsetClientIDIssuedAt(t *testing.T) {
 	response := NewClientRegistrationResponse()
 	response.SetClientID("abc")
@@ -72,13 +71,6 @@ func TestClientRegistrationResponseToMapOmitsUnsetClientIDIssuedAt(t *testing.T)
 	assert.NotContains(t, response.ToMap(), "client_id_issued_at")
 }
 
-// TestClientRegistrationResponseToMapDoesNotLeakExtraServerControlledKeys confirms that a client cannot inject
-// values for server-controlled response keys by submitting them as unrecognized ('Extra') client metadata
-// parameters. None of 'client_secret', 'client_secret_expires_at', or 'client_id_issued_at' are registered
-// ClientRegistrationMetadata fields, so a client-submitted value for any of them is preserved in Extra and merged
-// into the map by ClientRegistrationMetadata.MarshalJSON before the registration values are overlaid. When the
-// server did not itself set a value for one of these keys, ToMap must delete it rather than leave the
-// client-submitted value in place.
 func TestClientRegistrationResponseToMapDoesNotLeakExtraServerControlledKeys(t *testing.T) {
 	response := NewClientRegistrationResponse()
 
@@ -92,12 +84,25 @@ func TestClientRegistrationResponseToMapDoesNotLeakExtraServerControlledKeys(t *
 	})
 
 	response.SetClientID("abc")
-	// No client secret is issued and no client_id_issued_at is set: the public-client, no-timestamp case.
-
 	values := response.ToMap()
 
 	assert.NotContains(t, values, "client_secret")
 	assert.NotContains(t, values, "client_secret_expires_at")
 	assert.NotContains(t, values, "client_id_issued_at")
 	assert.Equal(t, "Example", values["client_name"])
+}
+
+func TestClientRegistrationResponseToMapPreservesLargeNumbers(t *testing.T) {
+	metadata := &ClientRegistrationMetadata{}
+
+	require.NoError(t, json.Unmarshal([]byte(`{"vendor_serial":9007199254740993}`), metadata))
+
+	response := NewClientRegistrationResponse()
+	response.SetMetadata(metadata)
+	response.SetClientID("abc")
+
+	data, err := json.Marshal(response.ToMap())
+	require.NoError(t, err)
+
+	assert.Contains(t, string(data), `"vendor_serial":9007199254740993`)
 }

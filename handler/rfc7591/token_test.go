@@ -21,51 +21,27 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestNewClientCreationToken(t *testing.T) {
-	ctx := context.Background()
-	config, store, tokens, client := newTokenFixtures(t)
-
-	tokenString, err := NewClientCreationToken(ctx, tokens, store, config, client, oauth2.Arguments{"openid", "profile"})
-	require.NoError(t, err)
-	require.NotEmpty(t, tokenString)
-	assert.True(t, strings.HasPrefix(tokenString, "authelia_at_"))
-
-	requester, err := store.GetAccessTokenSession(ctx, tokens.AccessTokenSignature(ctx, tokenString), NewDefaultSession())
-	require.NoError(t, err)
-
-	assert.Equal(t, "creator", requester.GetClient().GetID())
-	assert.True(t, requester.GetGrantedAudience().Has("https://auth.example.com/register"))
-
-	session, ok := requester.GetSession().(Session)
-	require.True(t, ok)
-
-	assert.Equal(t, KindCreate, session.GetClientRegistrationKind())
-	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, session.GetGrantableScopes())
-	assert.False(t, session.GetExpiresAt(oauth2.AccessToken).IsZero())
-}
-
 func TestNewClientManagementToken(t *testing.T) {
 	ctx := context.Background()
 	config, store, tokens, _ := newTokenFixtures(t)
 
 	managed := &oauth2.DefaultClient{ID: "managed-one"}
 
-	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, managed, oauth2.Arguments{"openid"})
+	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, managed, oauth2.Arguments{"openid"}, oauth2.Arguments{"https://api.example.com"})
 	require.NoError(t, err)
 
-	requester, err := store.GetAccessTokenSession(ctx, tokens.AccessTokenSignature(ctx, tokenString), NewDefaultSession())
+	requester, err := store.GetClientRegistrationTokenSession(ctx, tokens.ClientRegistrationTokenSignature(ctx, tokenString), &oauth2.DefaultSession{})
 	require.NoError(t, err)
 	assert.Equal(t, "managed-one", requester.GetClient().GetID())
 	assert.True(t, requester.GetGrantedAudience().Has("https://auth.example.com/register/managed-one"))
+	assert.True(t, requester.GetGrantedAudience().Has("https://api.example.com"))
+	assert.Equal(t, oauth2.Arguments{"openid"}, requester.GetGrantedScopes())
 
-	session, ok := requester.GetSession().(Session)
-	require.True(t, ok)
+	// The subject is deliberately left unset: the client id lives on the requester's client, not a session field, so
+	// an introspected management token no longer surfaces a 'sub' claim.
+	assert.Empty(t, requester.GetSession().GetSubject())
 
-	assert.Equal(t, KindManage, session.GetClientRegistrationKind())
-	assert.Equal(t, "managed-one", session.GetSubject())
-	assert.Equal(t, oauth2.Arguments{"openid"}, session.GetGrantableScopes())
-
-	exp := session.GetExpiresAt(oauth2.AccessToken)
+	exp := requester.GetSession().GetExpiresAt(oauth2.AccessToken)
 
 	require.False(t, exp.IsZero())
 	assert.True(t, exp.After(time.Now().UTC().AddDate(50, 0, 0)), "expected a far-future expiry, got '%s'", exp)
@@ -76,16 +52,17 @@ func TestNewClientManagementTokenNeverExpires(t *testing.T) {
 	config, store, tokens, _ := newTokenFixtures(t)
 
 	config.AccessTokenLifespan = time.Nanosecond
-	auth := NewDefaultEndpointAuthStrategy(config, store, tokens)
+	auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
 
-	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "forever"}, oauth2.Arguments{"openid"})
+	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "forever"}, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(time.Millisecond)
 
 	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/forever", tokenString), "forever")
 	require.NoError(t, err)
-	assert.Equal(t, "forever", requester.GetSession().GetSubject())
+
+	assert.Equal(t, "forever", requester.GetClient().GetID())
 }
 
 func TestZeroExpiryRegistrationTokenIsRetired(t *testing.T) {
@@ -94,20 +71,16 @@ func TestZeroExpiryRegistrationTokenIsRetired(t *testing.T) {
 
 	config.AccessTokenLifespan = time.Nanosecond
 
-	auth := NewDefaultEndpointAuthStrategy(config, store, tokens)
-
-	session := NewDefaultSession()
-	session.SetClientRegistrationKind(KindManage)
-	session.SetSubject("forever")
+	auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
 
 	requester := oauth2.NewRequest()
 	requester.Client = &oauth2.DefaultClient{ID: "forever"}
-	requester.Session = session
+	requester.Session = &oauth2.DefaultSession{}
 	requester.GrantAudience(ClientConfigurationURL("https://auth.example.com/register", "forever"))
 
-	tokenString, signature, err := tokens.GenerateAccessToken(ctx, requester)
+	tokenString, signature, err := tokens.GenerateClientRegistrationToken(ctx, requester)
 	require.NoError(t, err)
-	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, requester))
+	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, requester))
 
 	time.Sleep(time.Millisecond)
 
@@ -119,11 +92,12 @@ func TestNewClientManagementTokenNeverExpiresUnderJWTProfile(t *testing.T) {
 	ctx := context.Background()
 
 	config := &oauth2.Config{
-		GlobalSecret:                         []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationEndpointURL: "https://auth.example.com/register",
-		EnforceJWTProfileAccessTokens:        true,
-		AccessTokenIssuer:                    "https://auth.example.com",
-		AccessTokenLifespan:                  time.Nanosecond,
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EnforceJWTProfileAccessTokens:         true,
+		AccessTokenIssuer:                     "https://auth.example.com",
+		AccessTokenLifespan:                   time.Nanosecond,
 	}
 
 	store := storage.NewMemoryStore()
@@ -137,51 +111,36 @@ func TestNewClientManagementTokenNeverExpiresUnderJWTProfile(t *testing.T) {
 		Config: config,
 	}
 
-	auth := NewDefaultEndpointAuthStrategy(config, store, strategy)
+	auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
-	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "forever-jwt"}, oauth2.Arguments{"openid"})
+	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "forever-jwt"}, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
+
+	// Client registration tokens are always opaque, even when EnforceJWTProfileAccessTokens is set: that is what
+	// distinguishes them from the ordinary access tokens JWTProfileCoreStrategy otherwise issues as JWTs, so there is
+	// no JWT to decode here.
+	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
 
 	time.Sleep(time.Millisecond)
 
 	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/forever-jwt", tokenString), "forever-jwt")
 	require.NoError(t, err)
 
-	assert.Equal(t, "forever-jwt", requester.GetSession().GetSubject())
+	assert.Equal(t, "forever-jwt", requester.GetClient().GetID())
 
-	token, err := strategy.Decode(ctx, tokenString)
-	require.NoError(t, err)
-
-	expires, err := token.Claims.GetExpirationTime()
-	require.NoError(t, err)
-	require.NotNil(t, expires)
-
-	assert.True(t, expires.After(time.Now().UTC().AddDate(50, 0, 0)), "expected a far-future 'exp' claim, got '%s'", expires)
-}
-
-func TestNewClientManagementTokenHonoursConfiguredLifespan(t *testing.T) {
-	ctx := context.Background()
-	config, store, tokens, _ := newTokenFixtures(t)
-	config.RFC7591ClientRegistrationManageTokenLifespan = time.Hour
-
-	managed := &oauth2.DefaultClient{ID: "managed-two"}
-
-	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, managed, nil)
-	require.NoError(t, err)
-
-	requester, err := store.GetAccessTokenSession(ctx, tokens.AccessTokenSignature(ctx, tokenString), NewDefaultSession())
-	require.NoError(t, err)
-	assert.False(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken).IsZero())
+	exp := requester.GetSession().GetExpiresAt(oauth2.AccessToken)
+	assert.True(t, exp.After(time.Now().UTC().AddDate(50, 0, 0)), "expected a far-future expiry, got '%s'", exp)
 }
 
 func TestNewClientManagementTokenUnderJWTProfile(t *testing.T) {
 	ctx := context.Background()
 
 	config := &oauth2.Config{
-		GlobalSecret:                         []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationEndpointURL: "https://auth.example.com/register",
-		EnforceJWTProfileAccessTokens:        true,
-		AccessTokenIssuer:                    "https://auth.example.com",
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EnforceJWTProfileAccessTokens:         true,
+		AccessTokenIssuer:                     "https://auth.example.com",
 	}
 
 	store := storage.NewMemoryStore()
@@ -197,30 +156,37 @@ func TestNewClientManagementTokenUnderJWTProfile(t *testing.T) {
 
 	managed := &oauth2.DefaultClient{ID: "managed-jwt"}
 
-	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, managed, oauth2.Arguments{"openid"})
-	require.NoError(t, err)
-	assert.Len(t, strings.SplitN(tokenString, ".", 4), 3)
-
-	requester, err := store.GetAccessTokenSession(ctx, strategy.AccessTokenSignature(ctx, tokenString), NewDefaultSession())
+	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, managed, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
-	session, ok := requester.GetSession().(Session)
-	require.True(t, ok)
-	assert.Equal(t, KindManage, session.GetClientRegistrationKind())
-	assert.Equal(t, oauth2.Arguments{"openid"}, session.GetGrantableScopes())
+	// Unlike the ordinary access tokens JWTProfileCoreStrategy otherwise issues as JWTs, a client registration token
+	// is always opaque.
+	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
+	assert.True(t, strings.HasPrefix(tokenString, "authelia_cr_"))
+
+	requester, err := store.GetClientRegistrationTokenSession(ctx, strategy.ClientRegistrationTokenSignature(ctx, tokenString), &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	assert.Equal(t, "managed-jwt", requester.GetClient().GetID())
+	assert.Equal(t, oauth2.Arguments{"openid"}, requester.GetGrantedScopes())
 }
 
-func TestRegistrationTokenIsRejectedByIntrospection(t *testing.T) {
+func TestRegistrationTokenIsNotIntrospectedAsAnAccessToken(t *testing.T) {
 	ctx := context.Background()
 	config, store, tokens, client := newTokenFixtures(t)
 
 	validator := &hoauth2.CoreValidator{CoreStrategy: tokens, CoreStorage: store, Config: config}
 
-	registration, err := NewClientCreationToken(ctx, tokens, store, config, client, oauth2.Arguments{"openid"})
+	registration, err := NewClientManagementToken(ctx, tokens, store, config, client, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
-	_, err = validator.IntrospectToken(ctx, registration, oauth2.AccessToken, oauth2.NewAccessRequest(NewDefaultSession()), nil)
+	_, err = validator.IntrospectToken(ctx, registration, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
 	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+
+	config.TokenIntrospectionHandlers = oauth2.TokenIntrospectionHandlers{validator}
+
+	_, _, err = (&oauth2.Fosite{Store: store, Config: config}).IntrospectToken(ctx, registration, oauth2.AccessToken, &oauth2.DefaultSession{})
 	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
 
 	ordinary := oauth2.NewRequest()
@@ -236,13 +202,39 @@ func TestRegistrationTokenIsRejectedByIntrospection(t *testing.T) {
 	assert.Equal(t, oauth2.AccessToken, use)
 }
 
+func TestManagementTokenIgnoresClientLifespanOverride(t *testing.T) {
+	ctx := context.Background()
+
+	config, store, strategy, _ := newTokenFixtures(t)
+
+	client := &shortLifespanClient{DefaultClient: &oauth2.DefaultClient{ID: "client-a"}}
+
+	token, err := NewClientManagementToken(ctx, strategy, store, config, client, oauth2.Arguments{"openid"}, nil)
+	require.NoError(t, err)
+
+	requester, err := store.GetClientRegistrationTokenSession(ctx, strategy.ClientRegistrationTokenSignature(ctx, token), &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	// NonExpiringTokenLifespan, not the client's one second.
+	assert.WithinDuration(t, time.Now().UTC().Add(NonExpiringTokenLifespan), requester.GetSession().GetExpiresAt(oauth2.AccessToken), time.Minute)
+}
+
 func newTokenFixtures(t *testing.T) (*oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy, oauth2.Client) {
 	t.Helper()
 
 	config := &oauth2.Config{
-		GlobalSecret:                         []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationEndpointURL: "https://auth.example.com/register",
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
 	}
 
 	return config, storage.NewMemoryStore(), hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"), &oauth2.DefaultClient{ID: "creator"}
+}
+
+type shortLifespanClient struct {
+	*oauth2.DefaultClient
+}
+
+func (c *shortLifespanClient) GetEffectiveLifespan(gt oauth2.GrantType, tt oauth2.TokenType, fallback time.Duration) time.Duration {
+	return time.Second
 }

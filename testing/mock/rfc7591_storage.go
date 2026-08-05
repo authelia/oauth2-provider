@@ -84,6 +84,20 @@ func (mr *MockRFC7591StorageMockRecorder) CreateClient(ctx, client any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateClient", reflect.TypeOf((*MockRFC7591Storage)(nil).CreateClient), ctx, client)
 }
 
+// CreateClientRegistrationTokenSession mocks base method.
+func (m *MockRFC7591Storage) CreateClientRegistrationTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateClientRegistrationTokenSession", ctx, signature, request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateClientRegistrationTokenSession indicates an expected call of CreateClientRegistrationTokenSession.
+func (mr *MockRFC7591StorageMockRecorder) CreateClientRegistrationTokenSession(ctx, signature, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateClientRegistrationTokenSession", reflect.TypeOf((*MockRFC7591Storage)(nil).CreateClientRegistrationTokenSession), ctx, signature, request)
+}
+
 // DeleteAccessTokenSession mocks base method.
 func (m *MockRFC7591Storage) DeleteAccessTokenSession(ctx context.Context, signature string) error {
 	m.ctrl.T.Helper()
@@ -110,6 +124,20 @@ func (m *MockRFC7591Storage) DeleteClient(ctx context.Context, id string) error 
 func (mr *MockRFC7591StorageMockRecorder) DeleteClient(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClient", reflect.TypeOf((*MockRFC7591Storage)(nil).DeleteClient), ctx, id)
+}
+
+// DeleteClientRegistrationTokenSession mocks base method.
+func (m *MockRFC7591Storage) DeleteClientRegistrationTokenSession(ctx context.Context, signature string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteClientRegistrationTokenSession", ctx, signature)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteClientRegistrationTokenSession indicates an expected call of DeleteClientRegistrationTokenSession.
+func (mr *MockRFC7591StorageMockRecorder) DeleteClientRegistrationTokenSession(ctx, signature any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClientRegistrationTokenSession", reflect.TypeOf((*MockRFC7591Storage)(nil).DeleteClientRegistrationTokenSession), ctx, signature)
 }
 
 // GetAccessTokenSession mocks base method.
@@ -140,6 +168,21 @@ func (m *MockRFC7591Storage) GetClient(ctx context.Context, id string) (oauth2.C
 func (mr *MockRFC7591StorageMockRecorder) GetClient(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClient", reflect.TypeOf((*MockRFC7591Storage)(nil).GetClient), ctx, id)
+}
+
+// GetClientRegistrationTokenSession mocks base method.
+func (m *MockRFC7591Storage) GetClientRegistrationTokenSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClientRegistrationTokenSession", ctx, signature, session)
+	ret0, _ := ret[0].(oauth2.Requester)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClientRegistrationTokenSession indicates an expected call of GetClientRegistrationTokenSession.
+func (mr *MockRFC7591StorageMockRecorder) GetClientRegistrationTokenSession(ctx, signature, session any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientRegistrationTokenSession", reflect.TypeOf((*MockRFC7591Storage)(nil).GetClientRegistrationTokenSession), ctx, signature, session)
 }
 
 // SetClientAssertionJWT mocks base method.

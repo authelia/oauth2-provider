@@ -44,11 +44,6 @@ type ClientConfigurationRequester interface {
 	Requester
 }
 
-var (
-	_ ClientRegistrationRequester  = (*ClientRegistrationRequest)(nil)
-	_ ClientConfigurationRequester = (*ClientConfigurationRequest)(nil)
-)
-
 // ClientRegistrationRequest is an implementation of ClientRegistrationRequester.
 type ClientRegistrationRequest struct {
 	// Metadata is the client metadata submitted by the client.
@@ -134,3 +129,8 @@ func (r *ClientConfigurationRequest) GetAuthenticatedRequester() (requester Requ
 func (r *ClientConfigurationRequest) GetSignature() (signature string) {
 	return r.Signature
 }
+
+var (
+	_ ClientRegistrationRequester  = (*ClientRegistrationRequest)(nil)
+	_ ClientConfigurationRequester = (*ClientConfigurationRequest)(nil)
+)

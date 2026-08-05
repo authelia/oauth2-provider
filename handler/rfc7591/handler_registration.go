@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
-	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/randx"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -21,6 +20,7 @@ type Configurator interface {
 	oauth2.RFC7591ClientRegistrationConfigProvider
 	oauth2.TokenEntropyProvider
 	oauth2.ScopeStrategyProvider
+	oauth2.AudienceStrategyProvider
 
 	ClientRegistrationMetadataStrategyConfig
 }
@@ -41,7 +41,7 @@ type ClientRegistrationHandler struct {
 	Store Storage
 
 	// Strategy mints the client registration access tokens this handler issues.
-	Strategy hoauth2.AccessTokenStrategy
+	Strategy ClientRegistrationTokenStrategy
 
 	// Config supplies the client registration strategy, validators, endpoint URL, secret lifespan, and token
 	// entropy this handler needs.
@@ -52,7 +52,8 @@ type ClientRegistrationHandler struct {
 //
 // It performs, in order: (1) confirms a client registration strategy is configured, (2) runs every configured
 // validator against the submitted metadata with a nil client, (3) enforces the requesting creation token's scope
-// ceiling, if any, against the requested scopes, (4) generates the client_id, (5) generates a plaintext client
+// and audience ceilings, if any, against the requested scopes and audiences, and then strips the client registration
+// scope from the requested scopes unconditionally, (4) generates the client_id, (5) generates a plaintext client
 // secret unless the metadata's token_endpoint_auth_method is "none", (6) constructs the concrete client via the
 // strategy, (7) persists it, (8) mints and persists the registration access token - compensating with a client
 // delete if that fails, since a client nobody holds a token for is permanently unmanageable - and (9) populates
@@ -65,6 +66,14 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	}
 
 	metadata := requester.GetMetadata()
+
+	// A registration with no metadata at all is rejected here rather than dereferenced below. The shipped
+	// NewRFC7591ClientRegistrationRequest never produces one - it either decodes a body into a non-nil value or
+	// fails - but ClientRegistrationRequester is an extension point, so nil is a value this exported handler can be
+	// handed and must answer rather than panic on.
+	if metadata == nil {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
+	}
 
 	filter := metadataStrategy(ctx, h.Config)
 
@@ -83,6 +92,15 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	if err = CheckGrantableScopes(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
 		return err
 	}
+
+	if err = CheckGrantableAudience(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+		return err
+	}
+
+	// Unconditional, and after the ceiling check rather than before it: an authenticated request asking for the
+	// registration scope was already rejected above, while an unauthenticated (open) endpoint has no ceiling to
+	// reject it with and would otherwise register a client holding it. See ExcludeRegistrationScopeFromMetadata.
+	ExcludeRegistrationScopeFromMetadata(ctx, h.Config, metadata)
 
 	var idSeq []rune
 
@@ -123,16 +141,20 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	registrationClientURI := ClientConfigurationURL(h.Config.GetRFC7591ClientRegistrationEndpointURL(ctx), id)
 
 	grantable := metadata.GetScopes()
+	grantableAudience := oauth2.Arguments(metadata.Audience)
 
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
-		if session, ok := authenticated.GetSession().(Session); ok && session.IsClientRegistration() {
-			grantable = session.GetGrantableScopes()
-		}
+		grantable = authenticated.GetGrantedScopes()
+		grantableAudience = authenticated.GetGrantedAudience()
 	}
+
+	// The registration scope is never carried forward onto the minted management token, even though every
+	// legitimate creation token holds it: see ExcludeRegistrationScope.
+	grantable = ExcludeRegistrationScope(ctx, h.Config, grantable)
 
 	var token string
 
-	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, client, grantable); err != nil {
+	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, client, grantable, grantableAudience); err != nil {
 		// The client was persisted but nobody holds a token to manage it: it would be permanently unmanageable and
 		// its client_id burned. Compensate by deleting it before returning the original error. If the compensating
 		// delete itself fails, prefer the original error and note the cleanup failure in the debug field rather
@@ -159,7 +181,12 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	responder.SetClientSecret(plainSecret)
 	responder.SetClientIDIssuedAt(time.Now().UTC())
 
-	if lifespan := h.Config.GetRFC7591ClientSecretLifespan(ctx); lifespan > 0 {
+	// Only when a secret was actually issued: RFC 7591 Section 3.2.1 makes 'client_secret_expires_at' meaningful only
+	// alongside a 'client_secret', so a client registering with 'token_endpoint_auth_method' of 'none' must not be
+	// handed an expiry for a secret it does not have. ClientRegistrationResponse.ToMap already omits both together, but
+	// ClientRegistrationResponder is a public interface and a deployment's own implementation should never be told an
+	// expiry that describes nothing.
+	if lifespan := h.Config.GetRFC7591ClientSecretLifespan(ctx); lifespan > 0 && len(plainSecret) != 0 {
 		responder.SetClientSecretExpiresAt(time.Now().UTC().Add(lifespan))
 	}
 

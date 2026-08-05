@@ -81,27 +81,30 @@ func TestConfigMTLS(t *testing.T) {
 	assert.Implements(t, &provider, config)
 }
 
-func TestConfigRFC7591ClientRegistrationTokenLifespans(t *testing.T) {
+func TestConfigRFC7591ClientRegistrationEndpointAudienceAndScope(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Defaults", func(t *testing.T) {
 		config := &Config{}
 
-		// A creation token is short-lived; it exists only to onboard one client.
-		assert.Equal(t, time.Minute*10, config.GetRFC7591ClientRegistrationCreateTokenLifespan(ctx))
-
-		// A management token defaults to never expiring, the usual case for an RFC 7592 registration_access_token.
-		assert.Equal(t, time.Duration(0), config.GetRFC7591ClientRegistrationManageTokenLifespan(ctx))
+		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
+		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
 	})
 
 	t.Run("Configured", func(t *testing.T) {
 		config := &Config{
-			RFC7591ClientRegistrationCreateTokenLifespan: time.Minute * 3,
-			RFC7591ClientRegistrationManageTokenLifespan: time.Hour * 24,
+			RFC7591ClientRegistrationEndpointAudience: "https://auth.example.com/register",
+			RFC7591ClientRegistrationScope:            "urn:example:register",
 		}
 
-		assert.Equal(t, time.Minute*3, config.GetRFC7591ClientRegistrationCreateTokenLifespan(ctx))
-		assert.Equal(t, time.Hour*24, config.GetRFC7591ClientRegistrationManageTokenLifespan(ctx))
+		assert.Equal(t, "https://auth.example.com/register", config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
+		assert.Equal(t, "urn:example:register", config.GetRFC7591ClientRegistrationScope(ctx))
+	})
+
+	t.Run("ExplicitlyEmptyScopeStillDefaults", func(t *testing.T) {
+		config := &Config{RFC7591ClientRegistrationScope: ""}
+
+		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
 	})
 }
 

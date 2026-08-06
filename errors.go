@@ -353,9 +353,11 @@ type (
 		HintField        string
 		CodeField        int
 		DebugField       string
-		cause            error
-		useLegacyFormat  bool
-		exposeDebug      bool
+		ScopeField       string `json:"-"`
+
+		cause           error
+		useLegacyFormat bool
+		exposeDebug     bool
 
 		// Fields for globalization
 		hintIDField string
@@ -580,6 +582,20 @@ func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
 func (e *RFC6749Error) WithDescription(description string) *RFC6749Error {
 	err := *e
 	err.DescriptionField = description
+	return &err
+}
+
+// WithCode returns a copy of the receiver with the HTTP status code replaced.
+//
+// It exists because the same error code carries a different status depending on where it is reported. RFC 9449 uses
+// 'invalid_dpop_proof' and 'use_dpop_nonce' with HTTP 400 at the token endpoint (Section 5) but HTTP 401 at a
+// protected resource (Section 7.1 Figure 16, Section 9 Figure 24). Returning a copy matters: ErrorToRFC6749Error
+// hands back the very pointer the error chain carries, which for a bare errorsx.WithStack(ErrX) is the package-level
+// variable itself, so assigning CodeField on it would corrupt that variable for the whole process.
+func (e *RFC6749Error) WithCode(code int) *RFC6749Error {
+	err := *e
+	err.CodeField = code
+
 	return &err
 }
 

@@ -1,0 +1,251 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package oauth2
+
+import (
+	"context"
+	"net/http"
+	"strings"
+
+	"authelia.com/provider/oauth2/x/errorsx"
+)
+
+// BearerAuthorizationConfig is the configuration ValidateBearerAuthorization depends on.
+//
+// It names no ScopeStrategyProvider or AudienceStrategyProvider deliberately. An endpoint authorises a bearer
+// credential by exact containment of a required scope and audience in the grant it already carries, never through a
+// configured or client-supplied strategy - see validateBearerScope for why.
+//
+// The whole of DPoPConfigProvider and MTLSConfigProvider is named rather than the individual accessors, because both
+// the verification of a binding the credential carries and the enforcement of one it must carry are drawn from here:
+// GetDPoPEnabled and GetMTLSEnabled decide whether a method participates at all, GetDPoPEnforce and GetMTLSEnforce
+// decide whether an unbound credential is admitted, and the remainder configure the check itself.
+type BearerAuthorizationConfig interface {
+	DPoPConfigProvider
+	MTLSConfigProvider
+}
+
+// BearerAuthorization is the per-endpoint policy a caller resolves from its own configuration and hands to
+// ValidateBearerAuthorization. The values differ per endpoint, which is why they are parameters rather than another
+// configuration interface: the shared code owns the checking, not the sourcing.
+type BearerAuthorization struct {
+	// Audiences are the permitted audiences. The credential must carry at least one. When empty the check falls back
+	// to Endpoint, and then to RequestURL.
+	Audiences []string
+
+	// Endpoint is the configured absolute endpoint URL, used as the permitted audience when Audiences is empty.
+	//
+	// It exists so a deployment that has configured its endpoint URL does not depend on RequestURL, which is
+	// reconstructed from the client-controlled Host header and X-Forwarded-Proto. Without it, a caller holding a
+	// token audienced at some other origin could send a matching Host header and satisfy the check.
+	//
+	// Only the client registration endpoint has such a URL to supply. The introspection endpoint has none -
+	// GetIntrospectionIssuer is the 'iss' claim of a JWT introspection response, not this endpoint's own URL - so it
+	// leaves this empty and falls through from its configured list straight to RequestURL.
+	Endpoint string
+
+	// Scopes are the required scopes. The credential must carry at least one. Empty means no scope check; neither
+	// shipped endpoint can reach that state, since both configuration accessors substitute a non-empty default. The
+	// empty case exists for a deployment supplying its own Configurator that deliberately returns none.
+	Scopes []string
+}
+
+// ValidateBearerAuthorization performs the checks common to every endpoint that accepts an Access Token as a bearer
+// credential authorizing the call. requester is the resolved credential; token is the raw value as presented.
+//
+// The order is proof-of-possession, then scope, then audience, and it is load-bearing rather than cosmetic. Two
+// failures below report distinguishable errors - ErrInvalidDPoPProof and ErrInsufficientScope - while every other
+// failure reports the deliberately non-discriminating ErrInvalidToken (RFC 6750 Section 3.1: "expired, revoked,
+// malformed, or invalid for other reasons"). A distinguishable error implicitly reports that every check before it
+// passed, so position bounds disclosure:
+//
+//   - Proof-of-possession runs first, so ErrInvalidDPoPProof discloses only that the credential resolved and is
+//     bound - which its holder already knows. It also means the scope diagnostic is only ever delivered to a caller
+//     who has proven possession of the key, never to someone holding a stolen bound token. That property is what
+//     requires the enforcement rejection of an unbound credential to run here too rather than after scope: an
+//     enforcing deployment has no credential the scope diagnostic could safely be delivered to except a bound one.
+//   - Scope runs before audience, so ErrInsufficientScope discloses nothing about the audience. The audience failure
+//     reports ErrInvalidToken and so stays indistinguishable from expiry, revocation, and an unknown token.
+//
+// Proof-of-possession cannot run any earlier: validating the proof requires the token's bound thumbprint, which
+// requires the resolved session the caller has already fetched.
+func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, auth BearerAuthorization) (err error) {
+	if err = validateBearerProofOfPossession(ctx, config, r, requester, token); err != nil {
+		return err
+	}
+
+	if err = validateBearerScope(requester, auth.Scopes); err != nil {
+		return err
+	}
+
+	return validateBearerAudience(r, requester, auth)
+}
+
+// validateBearerProofOfPossession enforces the RFC 9449 (DPoP) and RFC 8705 (mTLS) bindings the credential carries,
+// and - where the deployment enforces a binding method - that it carries one at all. The endpoint is the resource
+// server for that credential, and a binding nothing checks is not a binding: a DPoP-bound token accepted as a plain
+// bearer credential can be lifted out of a proxy log and replayed with no key.
+//
+// Each method contributes one of two checks, chosen by whether the credential is bound:
+//
+//   - Bound. The binding is verified, unconditionally. This is the case that holds however the deployment has
+//     configured enforcement, since a client that asked for a bound token gets its binding checked whether or not
+//     every other client is obliged to have one.
+//   - Unbound and the method is enforced. The credential is rejected. GetDPoPEnforce and GetMTLSEnforce mean the
+//     binding is required of every client regardless of client metadata, which the token endpoint reads as 'issue
+//     nothing unbound'; a protected resource that still admitted an unbound credential would leave the deployment
+//     enforcing binding at issuance and not at use, and it is use that the binding exists to constrain. A credential
+//     issued before enforcement was turned on is rejected too - that is what turning it on asks for, and it is the
+//     same trade the token endpoint already makes when it refuses to refresh such a grant.
+//   - Unbound and the method is not enforced. Admitted unchanged. This is the ordinary case, and every credential
+//     issued before binding was possible.
+//
+// A method disabled in configuration contributes neither check, whatever its enforcement setting. That matches
+// ApplyConfirmation: a session outlives a configuration change, and enforcing a binding the rest of the deployment
+// has stopped asserting would reject a credential nothing else considers bound. It also keeps a Configurator
+// reporting enforcement of a disabled method - which the shipped Config cannot produce, since GetDPoPEnabled and
+// GetMTLSEnabled both report true whenever the corresponding enforcement is set - from rejecting every credential at
+// a deployment where no handler ever binds one.
+//
+// The two methods are independent in both directions. A credential carrying both bindings must satisfy both, or
+// holding either key alone would be enough and the other binding would be decorative; and a deployment enforcing
+// both requires the credential to carry both, because whichever it carried alone would leave the other unenforced.
+//
+// The rejection of an unbound credential reports ErrInvalidToken. RFC 6750 Section 3.1 defines that code as covering
+// "expired, revoked, malformed, or invalid for other reasons" and it is the code both underlying validators already
+// use for a credential that is not bound, so an enforcement rejection stays indistinguishable on the wire from the
+// mismatch it is the precondition of. It is deliberately not ErrInvalidDPoPProof: no proof was deemed invalid under
+// the RFC 9449 Section 4.3 criteria, and there may be no proof at all.
+//
+// Errors from the underlying strategies are returned unwrapped. rfc9449 reports failures of the RFC 9449 Section 4.3
+// criteria as ErrInvalidDPoPProof and a missing or stale nonce as ErrUseDPoPNonce; ValidateClientCertificateBinding
+// reports a certificate mismatch as ErrInvalidToken. Those are exactly the codes the specifications require, so
+// re-wrapping them would lose the distinction the response writers depend on.
+func validateBearerProofOfPossession(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string) (err error) {
+	// A nil session, and one whose type cannot record a binding, both leave the thumbprint empty below rather than
+	// returning early. Such a credential is unbound as far as this endpoint can tell, and that is precisely the
+	// condition an enforced method must reject: returning early would make 'the session cannot carry a binding' a way
+	// to bypass enforcement entirely.
+	session := requester.GetSession()
+
+	if config.GetDPoPEnabled(ctx) {
+		var jkt string
+
+		if bound, ok := session.(DPoPBoundSession); ok {
+			jkt = bound.GetDPoPJWKThumbprint()
+		}
+
+		switch {
+		case jkt != "":
+			strategy, isResourceStrategy := config.GetDPoPStrategy(ctx).(DPoPResourceStrategy)
+
+			// Fail closed: the credential asserts a binding this deployment cannot verify, so it must not be
+			// accepted as if it carried none. This is a server capability gap rather than a failure of the
+			// Section 4.3 criteria, so it reports ErrInvalidToken and not ErrInvalidDPoPProof.
+			if !isResourceStrategy {
+				return errorsx.WithStack(ErrInvalidToken.
+					WithDebug("The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access."))
+			}
+
+			if _, err = strategy.ValidateResourceAccess(ctx, r, token, jkt, config.GetDPoPNonceRequired(ctx)); err != nil {
+				return err
+			}
+		case config.GetDPoPEnforce(ctx):
+			return errorsx.WithStack(ErrInvalidToken.
+				WithHint("The credential used to authenticate the request is not bound to a DPoP key.").
+				WithDebug("DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding."))
+		}
+	}
+
+	if config.GetMTLSEnabled(ctx) {
+		var x5t string
+
+		if bound, ok := session.(MTLSBoundSession); ok {
+			x5t = bound.GetClientCertificateSHA256Thumbprint()
+		}
+
+		switch {
+		case x5t != "":
+			if _, err = ValidateClientCertificateBinding(r, config.GetMTLSClientCertificateHeader(ctx), x5t); err != nil {
+				return err
+			}
+		case config.GetMTLSEnforce(ctx):
+			return errorsx.WithStack(ErrInvalidToken.
+				WithHint("The credential used to authenticate the request is not bound to a client certificate.").
+				WithDebug("Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding."))
+		}
+	}
+
+	return nil
+}
+
+// validateBearerScope enforces that the credential carries at least one of the required scopes.
+//
+// The comparison is exact containment and never resolves a ScopeStrategy, not even the server's own. A strategy is a
+// policy about what a client may ask for; this is an endpoint authorization decision about what a credential already
+// carries, and the two must not share a comparison function. The default WildcardScopeStrategy would let a token
+// granted '*' satisfy every required scope - including the client registration scope, which is precisely the
+// self-replication ExcludeRegistrationScope and CheckGrantableScopes exist to close.
+//
+// The required scopes are recorded on the returned error's ScopeField so a challenge can name them in its RFC 6750
+// Section 3.1 'scope' parameter.
+func validateBearerScope(requester Requester, scopes []string) (err error) {
+	if len(scopes) == 0 {
+		return nil
+	}
+
+	if requester.GetGrantedScopes().HasOneOf(scopes...) {
+		return nil
+	}
+
+	rfc := ErrInsufficientScope.
+		WithHintf("The credential used to authenticate the request is not granted any of the scopes '%s', at least one of which is required.", strings.Join(scopes, "', '"))
+
+	rfc.ScopeField = strings.Join(scopes, " ")
+
+	return errorsx.WithStack(rfc)
+}
+
+// validateBearerAudience enforces that the credential carries at least one permitted audience, resolved through the
+// fallback chain documented on BearerAuthorization.
+//
+// The granted audience and the granted RFC 8707 resource indicators are both considered. A credential with no
+// audience at all is therefore rejected, because the fallback chain always yields a non-empty permitted set.
+//
+// Like validateBearerScope this is exact containment, and for the same reason: a deployment-configured
+// AudienceStrategy loose enough to match by prefix or wildcard would admit a credential never issued for this
+// endpoint.
+//
+// The failure reports ErrInvalidToken rather than a dedicated code, which is what keeps it indistinguishable from an
+// expired, revoked or unknown credential. RFC 6750 Section 3.1 defines that code as covering "expired, revoked,
+// malformed, or invalid for other reasons" - one code, deliberately non-discriminating - so the response never
+// reports which of those applies. The distinguishing detail goes in the debug field, surfaced only when the
+// deployment opts in.
+func validateBearerAudience(r *http.Request, requester Requester, auth BearerAuthorization) (err error) {
+	permitted := auth.Audiences
+
+	switch {
+	case len(permitted) != 0:
+		break
+	case auth.Endpoint != "":
+		permitted = []string{auth.Endpoint}
+	default:
+		permitted = []string{RequestURL(r)}
+	}
+
+	granted := JoinGrantedAudienceAndResource(requester.GetGrantedAudience(), requester.GetGrantedResource())
+
+	if granted.HasOneOf(permitted...) {
+		return nil
+	}
+
+	outer := ErrInvalidToken.WithHint("The credential used to authenticate the request does not have an audience which is permitted at this endpoint.")
+
+	if len(granted) == 0 {
+		return errorsx.WithStack(outer.WithDebugf("The credential was expected to have an audience matching one of the values '%s' but it does not have an audience.", strings.Join(permitted, "', '")))
+	}
+
+	return errorsx.WithStack(outer.WithDebugf("The credential was expected to have an audience matching one of the values '%s' but the audience had the values '%s'.", strings.Join(permitted, "', '"), strings.Join(granted, "', '")))
+}

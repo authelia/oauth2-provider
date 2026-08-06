@@ -11,7 +11,6 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
-	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -20,25 +19,16 @@ import (
 //
 // It names no oauth2.ScopeStrategyProvider or oauth2.AudienceStrategyProvider: the client registration endpoint
 // authorises an access token by exact containment of the required audience and scope in its grant, never through a
-// configured or client-supplied strategy - see authenticateClientRegistration for why.
+// configured or client-supplied strategy - see oauth2.ValidateBearerAuthorization for why.
 //
 // It does name the DPoP and mTLS providers, because the client registration endpoint is a resource server for the
 // creation token it is presented with, and a proof-of-possession binding is only worth anything if the resource
-// server checks it - see validateProofOfPossession.
+// server checks it. Naming them is also what satisfies oauth2.BearerAuthorizationConfig, the interface that shared
+// validator takes.
 type EndpointAuthStrategyConfig interface {
 	oauth2.RFC7591ClientRegistrationConfigProvider
 	oauth2.DPoPConfigProvider
 	oauth2.MTLSConfigProvider
-}
-
-// DPoPResourceStrategy is the resource-server half of the RFC 9449 strategy, which the client registration endpoint
-// needs and oauth2.DPoPStrategy - the type EndpointAuthStrategyConfig's GetDPoPStrategy returns - does not declare.
-// *rfc9449.DefaultStrategy implements it; the assertion is made at the point of use rather than by widening
-// oauth2.DPoPStrategy so a deployment supplying its own strategy is not broken by a method it has no DPoP-bound
-// creation tokens to serve.
-type DPoPResourceStrategy interface {
-	// ValidateResourceAccess performs the RFC 9449 7.1/7.2 resource-server checks for a DPoP-bound access token.
-	ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *oauth2.DPoPProof, err error)
 }
 
 // DefaultEndpointAuthStrategy is the oauth2.ClientRegistrationEndpointAuthStrategy used to authenticate requests to
@@ -83,9 +73,27 @@ func NewDefaultEndpointAuthStrategy(config EndpointAuthStrategyConfig, store Sto
 // authenticateClientConfiguration, which take entirely different credentials from entirely different storage
 // namespaces.
 //
-// Every failure returns oauth2.ErrRequestUnauthorized. Storage, token validation and proof-of-possession errors are
-// attached with WithWrap and WithDebugError only, never surfaced in the client-facing hint, so a storage error
-// cannot let an attacker distinguish an unknown token from an expired one.
+// Error codes differ by branch, because the two branches answer to different specifications.
+//
+// The client registration branch acts as an OAuth 2.0 protected resource and reports:
+//
+//   - oauth2.ErrInvalidRequest (400) when more than one Authorization header is present, per RFC 9449
+//     Section 7.2 Figure 19.
+//   - oauth2.ErrInsufficientScope (403) when the credential holds none of the required scopes, per RFC 6750
+//     Section 3.1. RFC 7591 says nothing about authentication errors, so that general rule governs here; the
+//     introspection endpoint differs, because RFC 7662 Section 2.3 mandates 401 for the same condition.
+//   - oauth2.ErrInvalidDPoPProof or oauth2.ErrUseDPoPNonce for a failure of the RFC 9449 Section 4.3 criteria,
+//     propagated from the strategy so a nonce handshake can complete.
+//   - oauth2.ErrInvalidToken (401) for everything else.
+//
+// That last code is what preserves the property the previous blanket collapse provided: RFC 6750 Section 3.1 defines
+// it as covering "expired, revoked, malformed, or invalid for other reasons" - one code, deliberately
+// non-discriminating - so a storage error still cannot let an attacker distinguish an unknown token from an expired
+// one, or either from a wrong audience. Storage and token validation errors continue to be attached with WithWrap
+// and WithDebugError only, never surfaced in the client-facing hint.
+//
+// The client configuration branch is not a protected resource in this sense - it takes a management token that can
+// never be bound - and keeps reporting oauth2.ErrRequestUnauthorized for every failure.
 func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx context.Context, r *http.Request, id string) (requester oauth2.Requester, err error) {
 	var tokenString string
 
@@ -106,14 +114,30 @@ func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx 
 
 // authenticateClientRegistration authenticates a client registration request (RFC 7591). The credential is an
 // ordinary access token obtained through the token endpoint, so it is resolved from access token storage and
-// validated as one. Two independent checks authorise it, both by exact containment: its granted audience must
-// contain this endpoint's audience, and its granted scopes must contain the configured registration scope. The
-// audience says the token is for this endpoint; the scope says its holder may register clients.
+// validated as one.
+//
+// Resolution happens here; everything that authorises the resolved credential - proof-of-possession, then scope,
+// then audience, in that order - is delegated to oauth2.ValidateBearerAuthorization, which the introspection
+// endpoint calls with its own configuration values. Sharing that function is what keeps the two endpoints from
+// drifting apart, and its doc comment records why the order is load-bearing.
+//
+// One caveat a deployment must know about, a consequence of what this endpoint has to work with: any binding is read
+// off the session hydrated below, which is an oauth2.DefaultSession. A store that keeps sessions serialized and uses
+// its own session type therefore only surfaces a thumbprint if that type's JSON tags agree with
+// oauth2.DefaultSession's 'jwk_thumbprint' and 'client_certificate_thumbprint'. Where they do not, the token arrives
+// looking unbound. There is no session to hydrate into instead - the RFC 7591 request handler takes none.
+//
+// Which way that fails depends on enforcement, and both directions are worth knowing. With GetDPoPEnforce and
+// GetMTLSEnforce unset a token that arrives looking unbound simply has nothing enforced, so the binding is lost
+// quietly. With either set oauth2.ValidateBearerAuthorization rejects an unbound credential, so the same
+// disagreement rejects every registration request instead. The loud failure is the safer of the two and needs no
+// special handling here, but a deployment that turns enforcement on and finds this endpoint refusing every token
+// should look at its session type's JSON tags first.
 func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context.Context, r *http.Request, tokenString string) (requester oauth2.Requester, err error) {
 	signature := s.AccessTokenStrategy.AccessTokenSignature(ctx, tokenString)
 
 	if signature == "" {
-		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided credential does not appear to be an Access Token."))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided credential does not appear to be an Access Token."))
 	}
 
 	// A concrete session is passed, never nil: GetAccessTokenSession is documented to hydrate the session it is given,
@@ -124,108 +148,22 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 	// the deployment's own session type being unknown here: only the expiry is read, every session type carries it,
 	// and this strategy has no request-scoped session to hydrate into instead.
 	if requester, err = s.Store.GetAccessTokenSession(ctx, signature, &oauth2.DefaultSession{}); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
 	}
 
 	if err = s.AccessTokenStrategy.ValidateAccessToken(ctx, requester, tokenString); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
 	}
 
-	audience := s.Config.GetRFC7591ClientRegistrationEndpointAudience(ctx)
-
-	if len(audience) == 0 {
-		audience = oauth2.RequestURL(r)
-	}
-
-	// Both checks below are exact containment, deliberately, and neither resolves an oauth2.ScopeStrategy or
-	// oauth2.AudienceStrategy at all - not even the server's own.
-	//
-	// A strategy is a policy about what a client may ask for; this is an endpoint authorization decision about what a
-	// token already carries, and the two must not share a comparison function. The default oauth2.ScopeStrategy is
-	// oauth2.WildcardScopeStrategy, under which a token granted '*' matches every scope including the registration
-	// scope - so a registered client granted '*' (which CheckGrantableScopes admits, since it excludes only the
-	// registration scope by exact equality) would obtain creation tokens of its own and register further clients,
-	// which is precisely the self-replication ExcludeRegistrationScope and CheckGrantableScopes exist to close. The
-	// same asymmetry applies to the audience: a deployment-configured oauth2.AudienceStrategy loose enough to match
-	// the registration endpoint by prefix or by wildcard would admit a token never issued for this endpoint.
-	//
-	// Exact containment here is symmetric with the exclusion applied on the way out, and it matches what the client
-	// configuration branch below already does with its own audience.
-	if !requester.GetGrantedAudience().Has(audience) {
-		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHintf("The provided Access Token is not permitted to be used at '%s'.", audience))
-	}
-
-	scope := s.Config.GetRFC7591ClientRegistrationScope(ctx)
-
-	if !requester.GetGrantedScopes().Has(scope) {
-		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHintf("The provided Access Token is not granted the '%s' scope which is required to register clients.", scope))
-	}
-
-	if err = s.validateProofOfPossession(ctx, r, requester, tokenString); err != nil {
+	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
+		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
+		Endpoint:  s.Config.GetRFC7591ClientRegistrationEndpointURL(ctx),
+		Scopes:    s.Config.GetRFC7591ClientRegistrationScopes(ctx),
+	}); err != nil {
 		return nil, err
 	}
 
 	return requester, nil
-}
-
-// validateProofOfPossession enforces any RFC 9449 (DPoP) or RFC 8705 (mTLS) binding the presented creation token
-// carries. This endpoint is the resource server for that token, and a binding nothing checks is not a binding: a
-// DPoP-bound token that is accepted as a plain bearer credential can be lifted out of a proxy log and replayed here
-// with no key at all.
-//
-// Nothing happens unless the token is actually bound. A creation token issued without binding - the ordinary case,
-// and every creation token issued before binding was possible - reaches here with no thumbprint on its session and
-// is admitted unchanged. A binding whose method is disabled in configuration is likewise skipped, matching
-// ApplyConfirmation: a session outlives a configuration change, and enforcing a binding the rest of the deployment
-// has stopped asserting would reject a token nothing else considers bound.
-//
-// Two caveats a deployment must know about, both consequences of what this endpoint has to work with:
-//
-//   - The binding is read off the session hydrated by authenticateClientRegistration, which is an
-//     oauth2.DefaultSession. A store that keeps sessions serialized and uses its own session type therefore only
-//     surfaces a thumbprint here if that type's JSON tags agree with oauth2.DefaultSession's 'jwk_thumbprint' and
-//     'client_certificate_thumbprint'. Where they do not, the token arrives looking unbound and this function has
-//     nothing to enforce. There is no session to hydrate into instead - the RFC 7591 request handler takes none.
-//   - A DPoP failure is reported as oauth2.ErrRequestUnauthorized like every other failure in this strategy,
-//     including oauth2.ErrUseDPoPNonce. The client registration endpoint's error writer emits no DPoP-Nonce
-//     challenge header, so a deployment that sets GetDPoPNonceRequired cannot complete a nonce handshake here and
-//     should not use DPoP-bound creation tokens.
-func (s *DefaultEndpointAuthStrategy) validateProofOfPossession(ctx context.Context, r *http.Request, requester oauth2.Requester, tokenString string) (err error) {
-	session := requester.GetSession()
-
-	if session == nil {
-		return nil
-	}
-
-	if s.Config.GetDPoPEnabled(ctx) {
-		if bound, ok := session.(oauth2.DPoPBoundSession); ok {
-			if jkt := bound.GetDPoPJWKThumbprint(); jkt != "" {
-				strategy, isResourceStrategy := s.Config.GetDPoPStrategy(ctx).(DPoPResourceStrategy)
-
-				// Fail closed: the token asserts a binding this deployment cannot verify, so it cannot be accepted
-				// as if it carried none.
-				if !isResourceStrategy {
-					return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided Access Token is not valid.").WithDebug("The provided Access Token is bound to a DPoP key but the configured DPoP strategy cannot validate resource access."))
-				}
-
-				if _, err = strategy.ValidateResourceAccess(ctx, r, tokenString, jkt, s.Config.GetDPoPNonceRequired(ctx)); err != nil {
-					return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
-				}
-			}
-		}
-	}
-
-	if s.Config.GetMTLSEnabled(ctx) {
-		if bound, ok := session.(oauth2.MTLSBoundSession); ok {
-			if x5t := bound.GetClientCertificateSHA256Thumbprint(); x5t != "" {
-				if _, err = rfc8705.ValidateResourceAccess(r, s.Config.GetMTLSClientCertificateHeader(ctx), x5t); err != nil {
-					return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 // authenticateClientConfiguration authenticates a client configuration request (RFC 7592) for the client named by id.
@@ -314,13 +252,20 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientConfiguration(ctx contex
 // endpoint keeps Bearer only and a DPoP presentation there is a malformed request rather than a token to look up.
 //
 // The scheme itself is not returned. Whether a DPoP proof is required is decided by the token's own binding, read off
-// its session in validateProofOfPossession, never by how the caller chose to present it; rfc9449's
+// its session by oauth2.ValidateBearerAuthorization, never by how the caller chose to present it; rfc9449's
 // ValidateResourceAccess re-reads the header itself and rejects a bound token presented under any other scheme.
 func endpointToken(r *http.Request, dpop bool) (token string, err error) {
 	values := r.Header.Values(consts.HeaderAuthorization)
 
-	if len(values) != 1 {
-		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The request must contain exactly one Authorization header."))
+	// RFC 9449 Section 7.2 Figure 19: using more than one method to include an access token is a malformed request,
+	// reported with HTTP 400 and 'invalid_request' rather than as an authentication failure. The detection is
+	// independent of any token, so distinguishing it discloses nothing.
+	if len(values) > 1 {
+		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	}
+
+	if len(values) == 0 {
+		return "", errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The request must contain an Authorization header."))
 	}
 
 	scheme, value, ok := strings.Cut(values[0], " ")
@@ -337,10 +282,10 @@ func endpointToken(r *http.Request, dpop bool) (token string, err error) {
 	}
 
 	if dpop {
-		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The Authorization header must use the Bearer or DPoP scheme."))
+		return "", errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The Authorization header must use the Bearer or DPoP scheme."))
 	}
 
-	return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The Authorization header must use the Bearer scheme."))
+	return "", errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The Authorization header must use the Bearer scheme."))
 }
 
 var (

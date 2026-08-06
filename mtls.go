@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -13,6 +14,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 const (
@@ -164,6 +167,41 @@ func decodeCertificateBase64(value string) (der []byte, err error) {
 	}
 
 	return der, nil
+}
+
+// ValidateClientCertificateBinding performs the RFC 8705 Section 3 resource server check for a certificate-bound
+// access token, returning the certificate the connection was authenticated with.
+//
+// boundX5T is the confirmed 'cnf' member 'x5t#S256' the caller obtained by introspecting the access token, for which
+// GetMTLSConfirmationX509SHA256Thumbprint is provided; header names the trusted proxy header to fall back to when the
+// connection carries no peer certificate, and is empty when there is none.
+//
+// Every failure returns an error wrapping ErrInvalidToken, which Section 3 requires be reported with an HTTP 401
+// status and the 'invalid_token' error code. The function is intended only for tokens already known to be certificate
+// bound; an empty boundX5T is treated as caller misuse rather than as a token bound to nothing.
+//
+// This lives here rather than in handler/rfc8705 - whose ValidateResourceAccess is the RFC-named entry point and
+// delegates to it - because the root package needs it too, to enforce the binding of an access token presented as a
+// credential at the introspection endpoint, and a proof-of-possession check with two implementations is a check with
+// one of them eventually wrong.
+func ValidateClientCertificateBinding(r *http.Request, header, boundX5T string) (cert *x509.Certificate, err error) {
+	if boundX5T == "" {
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The access token is not bound to a client certificate."))
+	}
+
+	if cert, err = ClientCertificateFromRequest(r, header); err != nil {
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The client certificate could not be read.").WithWrap(err).WithDebugError(err))
+	}
+
+	if cert == nil {
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The access token is bound to a client certificate but the request was not made over a mutually authenticated TLS connection."))
+	}
+
+	if subtle.ConstantTimeCompare([]byte(boundX5T), []byte(X509CertificateSHA256Thumbprint(cert))) != 1 {
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The client certificate does not match the certificate the access token is bound to."))
+	}
+
+	return cert, nil
 }
 
 // MTLSBoundSession is implemented by sessions that can be bound to a mutual-TLS client certificate per RFC 8705

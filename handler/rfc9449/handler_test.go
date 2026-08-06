@@ -75,10 +75,6 @@ func TestHandlerRequiredButMissing(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
-// testAuthorizeJKT is a well-formed 'dpop_jkt', being 43 characters of base64url which decode to a SHA-256 sized
-// digest. The parameter is validated, so a placeholder will not do.
-const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
-
 func TestHandlerAuthorize(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -163,7 +159,6 @@ func TestHandlerAuthorize(t *testing.T) {
 			wantErr:       oauth2.ErrInvalidRequest,
 		},
 		{
-			// A malformed value is rejected even for a flow whose binding would be skipped anyway.
 			name:          "RejectsMalformedDPoPJKTForSkippedFlow",
 			enabled:       true,
 			session:       &oauth2.DefaultSession{},
@@ -327,6 +322,8 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 }
 
+const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
+
 type testHandlerConfig struct {
 	testStrategyConfig
 	enabled, enforce, nonceRequired bool
@@ -344,7 +341,7 @@ func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
 	cfg := &testHandlerConfig{
-		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute},
+		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, lifespan: time.Minute, nonceExp: time.Minute},
 		enabled:            true,
 		enforce:            enforce,
 	}

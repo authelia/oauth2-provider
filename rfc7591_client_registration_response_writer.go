@@ -79,13 +79,22 @@ func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.Re
 // writeClientRegistrationError writes an error response shared by the RFC 7591 client registration endpoint and the
 // RFC 7592 client configuration endpoint. requester may be nil.
 //
-// mapMethodNotAllowed maps an ErrInvalidRequest to 405 rather than its usual 400. It is used by the RFC 7592 client
-// configuration endpoint only: HandleRFC7592ClientConfigurationEndpointRequest (handler/rfc7591) returns
-// ErrInvalidRequest naming the method when requester.GetMethod() is not GET, PUT, or DELETE, and RFC 7592 Section 3
-// requires that be reported as 405, a status ErrInvalidRequest does not otherwise carry. The client registration
-// endpoint only ever accepts POST, so an analogous method mismatch there is reported as the ordinary 400 - the same
-// treatment NewPushedAuthorizeRequest gives a non-POST pushed authorization request.
-func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, mapMethodNotAllowed bool) {
+// configuration selects which of the two endpoints is being written for, and drives two behaviours.
+//
+// It maps an ErrInvalidRequest to 405 rather than its usual 400, which the RFC 7592 client configuration endpoint
+// needs: HandleRFC7592ClientConfigurationEndpointRequest (handler/rfc7591) returns ErrInvalidRequest naming the
+// method when requester.GetMethod() is not GET, PUT, or DELETE, and RFC 7592 Section 3 requires that be reported as
+// 405, a status ErrInvalidRequest does not otherwise carry. The client registration endpoint only ever accepts POST,
+// so an analogous method mismatch there is reported as the ordinary 400 - the same treatment NewPushedAuthorizeRequest
+// gives a non-POST pushed authorization request.
+//
+// It also selects the 'WWW-Authenticate' challenge. The client registration endpoint is a full OAuth 2.0 protected
+// resource: it accepts a creation token under the Bearer or the DPoP scheme, so it answers with the challenge
+// WriteBearerAuthorizationChallenge composes, including the RFC 9449 status promotion and the 'DPoP-Nonce' a client
+// needs to complete a nonce handshake. The client configuration endpoint takes a management token that is minted
+// outside the binding machinery and can never be bound, so it keeps the bare Bearer challenge - advertising DPoP
+// there would offer a scheme it cannot honour.
+func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, configuration bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
@@ -93,14 +102,22 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 	rfc := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).
 		WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(requester))
 
-	if mapMethodNotAllowed && rfc.ErrorField == ErrInvalidRequest.ErrorField {
-		rfc.CodeField = http.StatusMethodNotAllowed
+	if configuration && rfc.ErrorField == ErrInvalidRequest.ErrorField {
+		rfc = rfc.WithCode(http.StatusMethodNotAllowed)
 	}
 
-	// RFC 7592 Section 3: a missing or invalid registration access token is reported with a 401 status and a
-	// 'WWW-Authenticate' header, as for any other bearer token protected resource (RFC 6750 Section 3).
-	if rfc.CodeField == http.StatusUnauthorized {
-		rw.Header().Set(consts.HeaderWWWAuthenticate, consts.AuthSchemeBearer)
+	switch {
+	case configuration:
+		// RFC 7592 Section 3: a missing or invalid registration access token is reported with a 401 status and a
+		// 'WWW-Authenticate' header, as for any other bearer token protected resource (RFC 6750 Section 3).
+		if rfc.CodeField == http.StatusUnauthorized {
+			rw.Header().Set(consts.HeaderWWWAuthenticate, consts.AuthSchemeBearer)
+		}
+	case IsBearerCredentialError(err):
+		// The request is not available here - WriteRFC7591ClientRegistrationError is public API taking only a
+		// context - so the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2 Figure 19
+		// covers.
+		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, nil, rfc)
 	}
 
 	data, merr := json.Marshal(rfc)

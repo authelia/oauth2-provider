@@ -23,6 +23,8 @@ const (
 	defaultPARContextLifetime           = 5 * time.Minute
 	defaultBackChannelLogoutLifespan    = 5 * time.Minute
 	defaultBackChannelLogoutConcurrency = 10
+	defaultDPoPClockSkew                = 10 * time.Second
+	defaultDPoPProofLifespan            = 10 * time.Second
 )
 
 type Config struct {
@@ -122,9 +124,15 @@ type Config struct {
 	AllowedJWTAssertionAudiences []string
 
 	// AllowedIntrospectionAudiences is a list of audiences permitted for an Access Token used to authenticate a request
-	// to the introspection endpoint. When set, such an Access Token MUST have at least one of these values within its
-	// granted audience or granted RFC 8707 resource indicators. Defaults to empty which does not restrict the audience.
+	// to the introspection endpoint. Such an Access Token MUST have at least one of these values within its granted
+	// audience or granted RFC 8707 resource indicators. Defaults to empty, which does not disable the check: it means
+	// the URL the request was made to is expected instead.
 	AllowedIntrospectionAudiences []string
+
+	// AllowedIntrospectionScopes is a list of scopes permitted for an Access Token used to authenticate a request to
+	// the introspection endpoint. Such an Access Token MUST have at least one of these values within its granted
+	// scopes. Defaults to consts.ScopeIntrospection.
+	AllowedIntrospectionScopes []string
 
 	// JWKSFetcherStrategy is responsible for fetching JSON Web Keys from remote URLs. This is required when the private_key_jwt
 	// client authentication method is used. Defaults to oauth2.DefaultJWKSFetcherStrategy.
@@ -175,6 +183,11 @@ type Config struct {
 	// IntrospectionEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at
 	// the introspection endpoint. Defaults to an IntrospectionEndpointClientAuthStrategy.
 	IntrospectionEndpointClientAuthStrategy EndpointClientAuthStrategy
+
+	// IntrospectionEndpointClientAuthDisabled turns off client authentication at the introspection endpoint, leaving
+	// an Access Token presented as a bearer credential the only way to authorize a call to it. Defaults to false,
+	// which permits both. See IntrospectionEndpointClientAuthDisabledProvider for why a deployment would set it.
+	IntrospectionEndpointClientAuthDisabled bool
 
 	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
@@ -308,8 +321,21 @@ type Config struct {
 	// DPoPAllowedJWSAlgorithms is the permitted asymmetric DPoP proof signing algorithms.
 	DPoPAllowedJWSAlgorithms []string
 
-	// DPoPClockSkew is the permitted 'iat' leeway for DPoP proofs. Defaults to five minutes.
+	// DPoPClockSkew is the tolerance allowed for disagreement between this server's clock and the client's when
+	// judging a DPoP proof's 'iat' claim. Defaults to ten seconds.
+	//
+	// It is not how long a proof lasts - that is DPoPProofLifespan. Skew widens the acceptance window at both ends,
+	// so a proof is accepted from DPoPClockSkew before its 'iat' until DPoPProofLifespan+DPoPClockSkew after it.
+	// Raise this, and only this, to tolerate clients whose clocks are not synchronised.
 	DPoPClockSkew time.Duration
+
+	// DPoPProofLifespan is how long a DPoP proof remains valid after the 'iat' it was minted with. Defaults to ten
+	// seconds.
+	//
+	// A proof is single use, so this bounds how long a captured one could be replayed if the replay record were
+	// lost, and how long a client may sit on a proof before sending it. Combined with the default DPoPClockSkew a
+	// proof is usable for at most 20 seconds after it was minted.
+	DPoPProofLifespan time.Duration
 
 	// DPoPNonceRequired requires a server nonce in DPoP proofs.
 	DPoPNonceRequired bool
@@ -373,13 +399,14 @@ type Config struct {
 	// RFC7591ClientRegistrationValidators are the validators run in order against submitted metadata.
 	RFC7591ClientRegistrationValidators []ClientRegistrationValidator
 
-	// RFC7591ClientRegistrationEndpointAudience is the audience a client creation token must carry. Empty means the
-	// request URL is expected.
-	RFC7591ClientRegistrationEndpointAudience string
+	// RFC7591ClientRegistrationEndpointAudiences are the audiences a client creation token may carry. The token must
+	// carry at least one of them. Empty means the configured registration endpoint URL is expected, falling back to
+	// the request URL.
+	RFC7591ClientRegistrationEndpointAudiences []string
 
-	// RFC7591ClientRegistrationScope is the scope a client creation token must carry. Empty means
-	// consts.ScopeClientRegistration.
-	RFC7591ClientRegistrationScope string
+	// RFC7591ClientRegistrationScopes are the scopes a client creation token may carry. The token must carry at least
+	// one of them. Empty means consts.ScopeClientRegistration.
+	RFC7591ClientRegistrationScopes []string
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -452,6 +479,14 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 
 func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {
 	return c.AllowedIntrospectionAudiences
+}
+
+func (c *Config) GetAllowedIntrospectionScopes(ctx context.Context) (scopes []string) {
+	if len(c.AllowedIntrospectionScopes) == 0 {
+		return []string{consts.ScopeIntrospection}
+	}
+
+	return c.AllowedIntrospectionScopes
 }
 
 func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template {
@@ -872,6 +907,10 @@ func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context)
 	return c.IntrospectionEndpointClientAuthStrategy
 }
 
+func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool) {
+	return c.IntrospectionEndpointClientAuthDisabled
+}
+
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	if c.RevocationEndpointClientAuthStrategy == nil {
 		c.RevocationEndpointClientAuthStrategy = &RevocationEndpointClientAuthStrategy{}
@@ -898,10 +937,18 @@ func (c *Config) GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string
 
 func (c *Config) GetDPoPClockSkew(ctx context.Context) (skew time.Duration) {
 	if c.DPoPClockSkew <= 0 {
-		return time.Minute * 5
+		return defaultDPoPClockSkew
 	}
 
 	return c.DPoPClockSkew
+}
+
+func (c *Config) GetDPoPProofLifespan(ctx context.Context) (lifespan time.Duration) {
+	if c.DPoPProofLifespan <= 0 {
+		return defaultDPoPProofLifespan
+	}
+
+	return c.DPoPProofLifespan
 }
 
 func (c *Config) GetDPoPNonceRequired(ctx context.Context) (required bool) {
@@ -964,16 +1011,16 @@ func (c *Config) GetRFC7591ClientRegistrationValidators(ctx context.Context) (va
 	return c.RFC7591ClientRegistrationValidators
 }
 
-func (c *Config) GetRFC7591ClientRegistrationEndpointAudience(ctx context.Context) (audience string) {
-	return c.RFC7591ClientRegistrationEndpointAudience
+func (c *Config) GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string) {
+	return c.RFC7591ClientRegistrationEndpointAudiences
 }
 
-func (c *Config) GetRFC7591ClientRegistrationScope(ctx context.Context) (scope string) {
-	if c.RFC7591ClientRegistrationScope == "" {
-		return consts.ScopeClientRegistration
+func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string) {
+	if len(c.RFC7591ClientRegistrationScopes) == 0 {
+		return []string{consts.ScopeClientRegistration}
 	}
 
-	return c.RFC7591ClientRegistrationScope
+	return c.RFC7591ClientRegistrationScopes
 }
 
 var (
@@ -1018,6 +1065,7 @@ var (
 	_ FormPostResponseProvider                           = (*Config)(nil)
 	_ AllowedJWTAssertionAudiencesProvider               = (*Config)(nil)
 	_ AllowedIntrospectionAudiencesProvider              = (*Config)(nil)
+	_ AllowedIntrospectionScopesProvider                 = (*Config)(nil)
 	_ HTTPClientProvider                                 = (*Config)(nil)
 	_ HMACHashingProvider                                = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider                  = (*Config)(nil)
@@ -1037,6 +1085,7 @@ var (
 	_ AuthorizeErrorFieldResponseStrategyProvider        = (*Config)(nil)
 	_ TokenEndpointClientAuthStrategyProvider            = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthStrategyProvider    = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthDisabledProvider    = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider       = (*Config)(nil)
 	_ DPoPConfigProvider                                 = (*Config)(nil)
 	_ MTLSConfigProvider                                 = (*Config)(nil)

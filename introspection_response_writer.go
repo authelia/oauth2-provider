@@ -47,6 +47,28 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 	// Inactive token errors should never written out as an error.
 	if !errors.Is(err, ErrInactiveToken) && (errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrRequestUnauthorized)) {
 		f.writeErrorJSON(ctx, rw, nil, err)
+
+		return
+	}
+
+	// A rejected bearer credential additionally warrants a challenge naming the schemes this endpoint accepts.
+	if !errors.Is(err, ErrInactiveToken) && IsBearerCredentialError(err) {
+		// The request is present when the caller writes the error from the context NewIntrospectionRequest derived,
+		// and absent otherwise. WriteBearerAuthorizationChallenge accepts either.
+		r, _ := ctx.Value(RequestContextKey).(*http.Request)
+
+		rfc := f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
+
+		// RFC 7662 Section 2.3: a bearer credential that "does not contain sufficient privileges or is otherwise
+		// invalid for this request" is answered with HTTP 401. That is more specific than RFC 6750 Section 3.1's
+		// general 403 for insufficient_scope, so it wins here. The RFC 7591 client registration endpoint has no such
+		// override and answers 403 for the same condition.
+		if rfc.ErrorField == errInsufficientScopeName {
+			rfc = rfc.WithCode(http.StatusUnauthorized)
+		}
+
+		f.writeErrorJSONRFC(ctx, rw, rfc)
+
 		return
 	}
 

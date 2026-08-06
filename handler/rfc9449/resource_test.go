@@ -134,7 +134,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
 			},
 			boundJKT: func(t *testing.T, key *jose.JSONWebKey) string { return "" },
-			wantErr:  oauth2.ErrInvalidDPoPProof,
+			wantErr:  oauth2.ErrInvalidToken,
 			wantHint: "The access token is not bound to a DPoP key.",
 		},
 		{
@@ -147,7 +147,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				r.Header.Set(consts.HeaderAuthorization, "Bearer "+token)
 				return r
 			},
-			wantErr:   oauth2.ErrInvalidDPoPProof,
+			wantErr:   oauth2.ErrInvalidToken,
 			wantHint:  "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
 			wantDebug: "dpop scheme used: false, token matches: true",
 		},
@@ -159,7 +159,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				})
 				return newResourceRequest(http.MethodPost, resourceURL, "some-other-token", proof)
 			},
-			wantErr:   oauth2.ErrInvalidDPoPProof,
+			wantErr:   oauth2.ErrInvalidToken,
 			wantHint:  "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
 			wantDebug: "dpop scheme used: true, token matches: false",
 		},
@@ -255,6 +255,8 @@ func TestValidateResourceAccessRequiresNonce(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
 
+const resourceURL = "https://rs.example.com/userinfo"
+
 func athClaim(token string) string {
 	sum := sha256.Sum256([]byte(token))
 
@@ -289,5 +291,3 @@ func newResourceRequest(method, rawURL, token, proof string) *http.Request {
 
 	return r
 }
-
-const resourceURL = "https://rs.example.com/userinfo"

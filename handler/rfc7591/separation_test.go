@@ -6,6 +6,8 @@ package rfc7591
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -44,4 +47,45 @@ func TestClientRegistrationTokensAreNotAccessTokens(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 
 	assert.Empty(t, strategy.AccessTokenSignature(ctx, token), "a registration token must not yield an access token signature")
+}
+
+func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ShouldRejectAnIntrospectionScopedTokenAtTheRegistrationEndpoint", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{consts.ScopeIntrospection}, []string{testEndpoint})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	})
+
+	t.Run("ShouldAcceptARegistrationScopedToken", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{consts.ScopeClientRegistration}, []string{testEndpoint})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("ShouldRejectARegistrationScopedTokenAtAnIntrospectionScopedEndpoint", func(t *testing.T) {
+		requester := oauth2.NewRequest()
+		requester.Session = &oauth2.DefaultSession{}
+		requester.GrantScope(consts.ScopeClientRegistration)
+		requester.GrantAudience(testEndpoint)
+
+		err := oauth2.ValidateBearerAuthorization(ctx, &oauth2.Config{},
+			httptest.NewRequest(http.MethodPost, testEndpoint, nil), requester, "token",
+			oauth2.BearerAuthorization{Audiences: []string{testEndpoint}, Scopes: []string{consts.ScopeIntrospection}})
+
+		require.Error(t, err)
+		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	})
 }

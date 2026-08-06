@@ -5,12 +5,10 @@
 package rfc8705
 
 import (
-	"crypto/subtle"
 	"crypto/x509"
 	"net/http"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // ValidateResourceAccess performs the RFC 8705 Section 3 resource server check for a certificate-bound access token.
@@ -26,21 +24,5 @@ import (
 // The method is intended only for tokens already known to be certificate bound; an empty boundX5T is treated as caller
 // misuse rather than as a token that is bound to nothing.
 func ValidateResourceAccess(r *http.Request, header, boundX5T string) (cert *x509.Certificate, err error) {
-	if boundX5T == "" {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The access token is not bound to a client certificate."))
-	}
-
-	if cert, err = oauth2.ClientCertificateFromRequest(r, header); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The client certificate could not be read.").WithWrap(err).WithDebugError(err))
-	}
-
-	if cert == nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The access token is bound to a client certificate but the request was not made over a mutually authenticated TLS connection."))
-	}
-
-	if subtle.ConstantTimeCompare([]byte(boundX5T), []byte(oauth2.X509CertificateSHA256Thumbprint(cert))) != 1 {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The client certificate does not match the certificate the access token is bound to."))
-	}
-
-	return cert, nil
+	return oauth2.ValidateClientCertificateBinding(r, header, boundX5T)
 }

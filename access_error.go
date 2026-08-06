@@ -48,19 +48,27 @@ func (f *Fosite) writeErrorDPoPJSON(ctx context.Context, rw http.ResponseWriter,
 }
 
 func (f *Fosite) writeErrorJSON(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {
-	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
-	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
-
-	rfc := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
+	rfc := ErrorToRFC6749Error(err)
 
 	if request != nil {
 		rfc = rfc.WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
 	}
 
-	var data []byte
+	f.writeErrorJSONRFC(ctx, rw, rfc)
+}
 
-	if data, err = json.Marshal(rfc); err != nil {
+// writeErrorJSONRFC writes an already-resolved *RFC6749Error, for callers that needed to inspect or adjust it before
+// it was written - such as WriteIntrospectionError, which corrects the status per RFC 7662 Section 2.3 and emits a
+// 'WWW-Authenticate' challenge first. Deriving the error a second time would discard those adjustments.
+func (f *Fosite) writeErrorJSONRFC(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
+	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+
+	rfc = rfc.WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
+
+	data, err := json.Marshal(rfc)
+	if err != nil {
 		f.writeFallbackJSONError(ctx, rw, err)
 
 		return

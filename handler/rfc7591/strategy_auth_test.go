@@ -29,7 +29,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, request(http.MethodPost, testEndpoint, ""), "")
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 
 	t.Run("ShouldRejectDuplicateHeader", func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	})
 
 	t.Run("ShouldRejectNonBearerScheme", func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 }
 
@@ -121,7 +121,7 @@ func TestAuthRejectsUnknownToken(t *testing.T) {
 	auth, _, _, _ := newAuthFixtures(t)
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, "https://auth.example.com/register", "authelia_at_notreal.notreal"), "")
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 }
 
 func TestAuthRejectsAnExpiredAccessToken(t *testing.T) {
@@ -144,7 +144,7 @@ func TestAuthRejectsAnExpiredAccessToken(t *testing.T) {
 
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 }
 
 func TestAuthAcceptsAnAccessTokenWithTheAudienceAndScope(t *testing.T) {
@@ -172,7 +172,7 @@ func TestAuthRejectsAnAccessTokenMissingTheScope(t *testing.T) {
 	_, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
 }
 
 func TestAuthRejectsAnAccessTokenMissingTheAudience(t *testing.T) {
@@ -186,7 +186,7 @@ func TestAuthRejectsAnAccessTokenMissingTheAudience(t *testing.T) {
 	_, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 }
 
 func TestAuthRejectsAManagementTokenAtTheRegistrationEndpoint(t *testing.T) {
@@ -200,7 +200,7 @@ func TestAuthRejectsAManagementTokenAtTheRegistrationEndpoint(t *testing.T) {
 	_, err = handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 }
 
 func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
@@ -221,7 +221,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			name:     "ShouldRejectATokenAudiencedElsewhereWhenFallingBack",
 			granted:  "https://elsewhere.example.com/register",
 			url:      testEndpoint,
-			expected: "is not permitted to be used at",
+			expected: "does not have an audience which is permitted at this endpoint",
 		},
 		{
 			name:       "ShouldAcceptTheConfiguredAudience",
@@ -237,7 +237,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			configured: "https://auth.example.com/api/register",
 			granted:    testEndpoint,
 			url:        testEndpoint,
-			expected:   "is not permitted to be used at",
+			expected:   "does not have an audience which is permitted at this endpoint",
 		},
 	}
 
@@ -245,12 +245,18 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 
+			var audiences []string
+
+			if tc.configured != "" {
+				audiences = []string{tc.configured}
+			}
+
 			config := &oauth2.Config{
-				GlobalSecret:                              []byte("super-duper-secret-that-is-at-least-32-bytes"),
-				RFC7591ClientRegistrationGlobalSecret:     []byte("a-completely-different-secret-at-least-32b"),
-				RFC7591ClientRegistrationEndpointURL:      testEndpoint,
-				RFC7591ClientRegistrationEndpointAudience: tc.configured,
-				TokenEntropy:                              32,
+				GlobalSecret:                               []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret:      []byte("a-completely-different-secret-at-least-32b"),
+				RFC7591ClientRegistrationEndpointURL:       testEndpoint,
+				RFC7591ClientRegistrationEndpointAudiences: audiences,
+				TokenEntropy:                               32,
 			}
 
 			store := storage.NewMemoryStore()
@@ -269,7 +275,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			}
 
 			require.Error(t, err)
-			assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 			assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, tc.expected)
 		})
 	}
@@ -312,8 +318,8 @@ func TestAuthRejectsAWildcardScopeAtTheRegistrationEndpoint(t *testing.T) {
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "scope which is required to register clients")
+	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "at least one of which is required")
 }
 
 func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -329,8 +335,8 @@ func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *tes
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "is not permitted to be used at")
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "does not have an audience which is permitted at this endpoint")
 }
 
 func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -354,8 +360,8 @@ func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "is not permitted to be used at")
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "does not have an audience which is permitted at this endpoint")
 }
 
 func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -379,8 +385,8 @@ func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "scope which is required to register clients")
+	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "at least one of which is required")
 }
 
 func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
@@ -612,4 +618,71 @@ func TestAuthAcceptsExtraSpacesAfterTheScheme(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "client-a", requester.GetClient().GetID())
+}
+
+func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ShouldReportInsufficientScopeAt403", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{testEndpoint})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.Equal(t, "insufficient_scope", rfc.ErrorField)
+		assert.Equal(t, http.StatusForbidden, rfc.CodeField)
+	})
+
+	t.Run("ShouldReportInvalidTokenForWrongAudience", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{"urn:wrong"})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.Equal(t, "invalid_token", rfc.ErrorField)
+		assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+	})
+
+	t.Run("ShouldReportInsufficientScopeWhenBothScopeAndAudienceFail", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{"urn:wrong"})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	})
+
+	t.Run("ShouldReportInvalidTokenForUnknownToken", func(t *testing.T) {
+		auth, _, _, _ := newAuthFixtures(t)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, "authelia_at_notreal.notreal"), "")
+
+		require.Error(t, err)
+		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	})
+
+	t.Run("ShouldReportInvalidRequestAt400ForMultipleAuthorizationHeaders", func(t *testing.T) {
+		auth, _, _, _ := newAuthFixtures(t)
+
+		r := authRequest(t, http.MethodPost, testEndpoint, "one")
+		r.Header.Add("Authorization", "Bearer two")
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.Equal(t, "invalid_request", rfc.ErrorField)
+		assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
+	})
 }

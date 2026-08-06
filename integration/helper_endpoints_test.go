@@ -93,9 +93,6 @@ func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.
 			ar.GrantAudience(a)
 		}
 
-		// Normally, this would be the place where you would check if the user is logged in and gives his consent.
-		// For this test, let's assume that the user exists, is logged in, and gives his consent...
-
 		response, err := provider.NewAuthorizeResponse(ctx, ar, session)
 		if err != nil {
 			t.Logf("Access request failed because: %+v", err)
@@ -141,6 +138,10 @@ func tokenEndpointHandler(t *testing.T, provider oauth2.Provider) func(rw http.R
 
 		if requester.GetRequestedScopes().Has("oauth2") {
 			requester.GrantScope("oauth2")
+		}
+
+		for _, audience := range requester.GetRequestedAudience() {
+			requester.GrantAudience(audience)
 		}
 
 		response, err := provider.NewAccessResponse(ctx, requester)

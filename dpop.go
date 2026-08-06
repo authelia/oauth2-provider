@@ -57,6 +57,14 @@ func RequestURL(r *http.Request) string {
 		}
 	}
 
+	// A request served by net/http always carries a URL, but this is reached from authorization decisions - the DPoP
+	// 'htu' comparison and the bearer credential audience fallback - where a panic would be a far worse failure mode
+	// than a mismatch. A hand-constructed request with no URL therefore reconstructs to just the scheme and host,
+	// which no legitimately issued audience or proof will match.
+	if r.URL == nil {
+		return scheme + "://" + r.Host
+	}
+
 	host := r.Host
 	if host == "" {
 		host = r.URL.Host
@@ -101,6 +109,17 @@ type DPoPStrategy interface {
 
 	// ValidateDPoPNonce returns nil when the nonce exists and is unexpired, otherwise an error wrapping ErrUseDPoPNonce.
 	ValidateDPoPNonce(ctx context.Context, nonce string) (err error)
+}
+
+// DPoPResourceStrategy is the resource-server half of the RFC 9449 strategy, which an endpoint accepting an access
+// token as a credential needs and DPoPStrategy - the type GetDPoPStrategy returns - does not declare.
+// *rfc9449.DefaultStrategy implements it; the assertion is made at the point of use rather than by widening
+// DPoPStrategy so a deployment supplying its own strategy is not broken by a method it has no bound tokens to serve.
+type DPoPResourceStrategy interface {
+	// ValidateResourceAccess performs the RFC 9449 7.1/7.2 resource-server checks for a DPoP-bound access token. It
+	// verifies the token was presented under the DPoP scheme, that the proof covers this request and this token via
+	// the 'ath' claim, and that the proof key is the key the token is bound to.
+	ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *DPoPProof, err error)
 }
 
 // DPoPBoundSession is implemented by sessions that can be bound to a DPoP proof-of-possession key. The binding is the

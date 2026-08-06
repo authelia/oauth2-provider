@@ -30,23 +30,35 @@ func AccessTokenFromRequest(r *http.Request) (token string, dpop bool) {
 
 // ValidateResourceAccess performs the RFC 9449 7.1/7.2 resource-server checks for a DPoP-bound access token. boundJKT is
 // the confirmed cnf.jkt the caller obtained via token introspection; accessToken is the raw token value the proof's
-// 'ath' claim is verified against. On success it returns the validated proof. It returns an error wrapping
-// oauth2.ErrInvalidDPoPProof for any failed check, or oauth2.ErrUseDPoPNonce when a nonce is required but missing or
-// invalid, so the caller can respond with a DPoP-Nonce challenge.
+// 'ath' claim is verified against. On success it returns the validated proof.
+//
+// Error codes follow Section 7.1, which defines invalid_dpop_proof as indicating the proof "was deemed invalid based
+// on the criteria of Section 4.3". So:
+//
+//   - Failures of those twelve criteria return oauth2.ErrInvalidDPoPProof.
+//   - A missing or stale nonce returns oauth2.ErrUseDPoPNonce, so the caller can respond with a DPoP-Nonce challenge.
+//   - Conditions that are not Section 4.3 criteria - a bound token presented under the wrong scheme (Section 7.2), or
+//     a token that is not bound at all - return oauth2.ErrInvalidToken instead.
 //
 // The method is intended only for tokens already known to be DPoP-bound; an empty boundJKT is treated as caller misuse.
 func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
+	// Not one of the RFC 9449 Section 4.3 criteria, so this reports ErrInvalidToken: an unbound token is caller
+	// misuse and there is no proof to have been deemed invalid.
 	if boundJKT == "" {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The access token is not bound to a DPoP key."))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The access token is not bound to a DPoP key."))
 	}
 
 	// RFC 9449 7.2: a DPoP-bound access token MUST be presented under the DPoP authentication scheme; reject a bearer
 	// (or any non-DPoP) presentation to prevent downgraded use of the token.
+	//
+	// This reports ErrInvalidToken, not ErrInvalidDPoPProof. Section 7.1 defines invalid_dpop_proof as indicating the
+	// proof "was deemed invalid based on the criteria of Section 4.3", and presenting a token under the wrong scheme
+	// is none of those criteria - the request may carry no proof at all, so there is nothing to have deemed.
 	token, dpop := AccessTokenFromRequest(r)
 	if !dpop || token != accessToken {
 		// The client-facing hint stays generic so it does not reveal which sub-condition failed; the debug field (only
 		// surfaced to clients when the server opts in) records the distinction for operators.
-		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.
 			WithHint("The DPoP-bound access token was not presented using the DPoP authentication scheme.").
 			WithDebugf("The access token must be presented via the DPoP scheme and match the introspected token (dpop scheme used: %t, token matches: %t).", dpop, token == accessToken))
 	}

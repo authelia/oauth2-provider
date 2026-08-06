@@ -30,114 +30,6 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-// dcrResponse captures the wire fields of a successful RFC 7591 client registration or RFC 7592 client
-// configuration response this test asserts on. The full response also echoes every submitted (or server-applied)
-// ClientRegistrationMetadata field; only the fields this test needs are modeled here, everything else decodes into
-// the zero value and is ignored.
-type dcrResponse struct {
-	ClientID                string `json:"client_id"`
-	ClientSecret            string `json:"client_secret"`
-	ClientName              string `json:"client_name"`
-	Scope                   string `json:"scope"`
-	RegistrationAccessToken string `json:"registration_access_token"`
-	RegistrationClientURI   string `json:"registration_client_uri"`
-}
-
-// dcrErrorResponse captures the 'error' field of an RFC 6749 error response.
-type dcrErrorResponse struct {
-	Error string `json:"error"`
-}
-
-// registrationEndpointHandler adapts the RFC 7591 client registration provider methods to net/http, following the
-// same request/response/error shape every other handler in this package uses (see e.g. tokenEndpointHandler in
-// helper_endpoints_test.go).
-func registrationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
-	return func(rw http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		requester, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
-		if err != nil {
-			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
-
-			return
-		}
-
-		responder, err := provider.NewRFC7591ClientRegistrationResponse(ctx, requester)
-		if err != nil {
-			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
-
-			return
-		}
-
-		provider.WriteRFC7591ClientRegistrationResponse(ctx, rw, requester, responder)
-	}
-}
-
-// configurationEndpointHandler adapts the RFC 7592 client configuration provider methods to net/http.
-func configurationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
-	return func(rw http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		requester, err := provider.NewRFC7592ClientConfigurationRequest(ctx, r)
-		if err != nil {
-			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
-
-			return
-		}
-
-		responder, err := provider.NewRFC7592ClientConfigurationResponse(ctx, requester)
-		if err != nil {
-			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
-
-			return
-		}
-
-		provider.WriteRFC7592ClientConfigurationResponse(ctx, rw, requester, responder)
-	}
-}
-
-// doDCRRequest issues an HTTP request against the client registration or client configuration endpoint mounted by
-// TestClientRegistration, optionally bearer-authenticated with token, and decodes a JSON response body into out
-// (when out is non-nil and the body is non-empty, as for a 204 No Content response). It returns the response status
-// code.
-func doDCRRequest(t *testing.T, method, url, token string, body any, out any) (status int) {
-	t.Helper()
-
-	var reader io.Reader
-
-	if body != nil {
-		data, err := json.Marshal(body)
-		require.NoError(t, err)
-
-		reader = bytes.NewReader(data)
-	}
-
-	req, err := http.NewRequest(method, url, reader)
-	require.NoError(t, err)
-
-	if body != nil {
-		req.Header.Set(consts.HeaderContentType, "application/json")
-	}
-
-	if token != "" {
-		req.Header.Set(consts.HeaderAuthorization, "Bearer "+token)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-
-	defer func() { _ = resp.Body.Close() }()
-
-	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	if out != nil && len(data) > 0 {
-		require.NoErrorf(t, json.Unmarshal(data, out), "response body: %s", data)
-	}
-
-	return resp.StatusCode
-}
-
 func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                                []byte("super-duper-secret-that-is-at-least-32-bytes"),
@@ -232,7 +124,7 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 	status = doDCRRequest(t, http.MethodPost, registrationURL, unscoped.AccessToken, map[string]any{
 		"redirect_uris": []string{"https://client.example.com/callback"},
 	}, nil)
-	assert.Equal(t, http.StatusUnauthorized, status)
+	assert.Equal(t, http.StatusForbidden, status)
 }
 
 func TestClientRegistration(t *testing.T) {
@@ -363,4 +255,99 @@ func TestClientRegistration(t *testing.T) {
 
 	status = doDCRRequest(t, http.MethodGet, registrationClientURI, rotatedToken, nil, nil)
 	assert.Equal(t, http.StatusUnauthorized, status, "the session backing the rotated token was deleted by the DELETE above")
+}
+
+func doDCRRequest(t *testing.T, method, url, token string, body any, out any) (status int) {
+	t.Helper()
+
+	var reader io.Reader
+
+	if body != nil {
+		data, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		reader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(method, url, reader)
+	require.NoError(t, err)
+
+	if body != nil {
+		req.Header.Set(consts.HeaderContentType, "application/json")
+	}
+
+	if token != "" {
+		req.Header.Set(consts.HeaderAuthorization, "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer func() { _ = resp.Body.Close() }()
+
+	data, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	if out != nil && len(data) > 0 {
+		require.NoErrorf(t, json.Unmarshal(data, out), "response body: %s", data)
+	}
+
+	return resp.StatusCode
+}
+
+func configurationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		requester, err := provider.NewRFC7592ClientConfigurationRequest(ctx, r)
+		if err != nil {
+			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
+
+			return
+		}
+
+		responder, err := provider.NewRFC7592ClientConfigurationResponse(ctx, requester)
+		if err != nil {
+			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
+
+			return
+		}
+
+		provider.WriteRFC7592ClientConfigurationResponse(ctx, rw, requester, responder)
+	}
+}
+
+type dcrResponse struct {
+	ClientID                string `json:"client_id"`
+	ClientSecret            string `json:"client_secret"`
+	ClientName              string `json:"client_name"`
+	Scope                   string `json:"scope"`
+	RegistrationAccessToken string `json:"registration_access_token"`
+	RegistrationClientURI   string `json:"registration_client_uri"`
+}
+
+type dcrErrorResponse struct {
+	Error string `json:"error"`
+}
+
+func registrationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		requester, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
+		if err != nil {
+			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
+
+			return
+		}
+
+		responder, err := provider.NewRFC7591ClientRegistrationResponse(ctx, requester)
+		if err != nil {
+			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
+
+			return
+		}
+
+		provider.WriteRFC7591ClientRegistrationResponse(ctx, rw, requester, responder)
+	}
 }

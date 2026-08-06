@@ -24,12 +24,6 @@ func TestConfig_GetIDTokenValidationStrategy(t *testing.T) {
 	assert.Same(t, strategy, c.GetIDTokenValidationStrategy(t.Context()))
 }
 
-type testTokenValidationStrategy struct{}
-
-func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
-	return nil, nil
-}
-
 func TestConfigBackChannelLogoutDefaults(t *testing.T) {
 	config := &Config{}
 
@@ -81,30 +75,64 @@ func TestConfigMTLS(t *testing.T) {
 	assert.Implements(t, &provider, config)
 }
 
-func TestConfigRFC7591ClientRegistrationEndpointAudienceAndScope(t *testing.T) {
+func TestConfigRFC7591ClientRegistrationEndpointAudiencesAndScopes(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Defaults", func(t *testing.T) {
 		config := &Config{}
 
-		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
-		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
+		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudiences(ctx))
+		assert.Equal(t, []string{"client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 
 	t.Run("Configured", func(t *testing.T) {
 		config := &Config{
-			RFC7591ClientRegistrationEndpointAudience: "https://auth.example.com/register",
-			RFC7591ClientRegistrationScope:            "urn:example:register",
+			RFC7591ClientRegistrationEndpointAudiences: []string{"https://auth.example.com/register", "urn:example:register"},
+			RFC7591ClientRegistrationScopes:            []string{"urn:example:register", "urn:example:admin"},
 		}
 
-		assert.Equal(t, "https://auth.example.com/register", config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
-		assert.Equal(t, "urn:example:register", config.GetRFC7591ClientRegistrationScope(ctx))
+		assert.Equal(t, []string{"https://auth.example.com/register", "urn:example:register"}, config.GetRFC7591ClientRegistrationEndpointAudiences(ctx))
+		assert.Equal(t, []string{"urn:example:register", "urn:example:admin"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 
-	t.Run("ExplicitlyEmptyScopeStillDefaults", func(t *testing.T) {
-		config := &Config{RFC7591ClientRegistrationScope: ""}
+	t.Run("ExplicitlyEmptyScopesStillDefaults", func(t *testing.T) {
+		config := &Config{RFC7591ClientRegistrationScopes: []string{}}
 
-		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
+		assert.Equal(t, []string{"client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
+	})
+}
+
+func TestConfigAllowedIntrospectionScopes(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Defaults", func(t *testing.T) {
+		config := &Config{}
+
+		assert.Equal(t, []string{"token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		config := &Config{AllowedIntrospectionScopes: []string{"urn:example:introspect"}}
+
+		assert.Equal(t, []string{"urn:example:introspect"}, config.GetAllowedIntrospectionScopes(ctx))
+	})
+
+	t.Run("ExplicitlyEmptyStillDefaults", func(t *testing.T) {
+		config := &Config{AllowedIntrospectionScopes: []string{}}
+
+		assert.Equal(t, []string{"token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
+	})
+}
+
+func TestConfigIntrospectionEndpointClientAuthDisabled(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("DefaultsToEnabled", func(t *testing.T) {
+		assert.False(t, (&Config{}).GetIntrospectionEndpointClientAuthDisabled(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		assert.True(t, (&Config{IntrospectionEndpointClientAuthDisabled: true}).GetIntrospectionEndpointClientAuthDisabled(ctx))
 	})
 }
 
@@ -123,4 +151,10 @@ type testClientRegistrationMetadataStrategy struct{}
 
 func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
 	return nil
+}
+
+type testTokenValidationStrategy struct{}
+
+func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
+	return nil, nil
 }

@@ -80,3 +80,47 @@ func TestConfigMTLS(t *testing.T) {
 
 	assert.Implements(t, &provider, config)
 }
+
+func TestConfigRFC7591ClientRegistrationEndpointAudienceAndScope(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Defaults", func(t *testing.T) {
+		config := &Config{}
+
+		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
+		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		config := &Config{
+			RFC7591ClientRegistrationEndpointAudience: "https://auth.example.com/register",
+			RFC7591ClientRegistrationScope:            "urn:example:register",
+		}
+
+		assert.Equal(t, "https://auth.example.com/register", config.GetRFC7591ClientRegistrationEndpointAudience(ctx))
+		assert.Equal(t, "urn:example:register", config.GetRFC7591ClientRegistrationScope(ctx))
+	})
+
+	t.Run("ExplicitlyEmptyScopeStillDefaults", func(t *testing.T) {
+		config := &Config{RFC7591ClientRegistrationScope: ""}
+
+		assert.Equal(t, "client_registration", config.GetRFC7591ClientRegistrationScope(ctx))
+	})
+}
+
+func TestConfigRFC7591ClientRegistrationMetadataStrategy(t *testing.T) {
+	config := &Config{}
+
+	assert.Nil(t, config.GetRFC7591ClientRegistrationMetadataStrategy(t.Context()), "must be nil when unconfigured")
+
+	strategy := &testClientRegistrationMetadataStrategy{}
+	config.RFC7591ClientRegistrationMetadataStrategy = strategy
+
+	assert.Same(t, strategy, config.GetRFC7591ClientRegistrationMetadataStrategy(t.Context()))
+}
+
+type testClientRegistrationMetadataStrategy struct{}
+
+func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
+	return nil
+}

@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type MemoryUserRelation struct {
@@ -54,58 +55,61 @@ type DPoPProofMarker struct {
 }
 
 type MemoryStore struct {
-	Clients                map[string]oauth2.Client
-	AuthorizeCodes         map[string]StoreAuthorizeCode
-	IDSessions             map[string]oauth2.Requester
-	AccessTokens           map[string]oauth2.Requester
-	RefreshTokens          map[string]StoreRefreshToken
-	DeviceCodes            map[string]oauth2.Requester
-	UserCodes              map[string]oauth2.Requester
-	PKCES                  map[string]oauth2.Requester
-	Users                  map[string]MemoryUserRelation
-	BlacklistedJTIs        map[string]time.Time
-	AccessTokenRequestIDs  map[string]string
-	RefreshTokenRequestIDs map[string]string
-	IssuerPublicKeys       map[string]IssuerPublicKeys
-	PARSessions            map[string]oauth2.AuthorizeRequester
-	DPoPProofJTIs          map[DPoPProofMarker]time.Time
-	DPoPNonces             map[string]time.Time
+	Clients                  map[string]oauth2.Client
+	AuthorizeCodes           map[string]StoreAuthorizeCode
+	IDSessions               map[string]oauth2.Requester
+	AccessTokens             map[string]oauth2.Requester
+	ClientRegistrationTokens map[string]oauth2.Requester
+	RefreshTokens            map[string]StoreRefreshToken
+	DeviceCodes              map[string]oauth2.Requester
+	UserCodes                map[string]oauth2.Requester
+	PKCES                    map[string]oauth2.Requester
+	Users                    map[string]MemoryUserRelation
+	BlacklistedJTIs          map[string]time.Time
+	AccessTokenRequestIDs    map[string]string
+	RefreshTokenRequestIDs   map[string]string
+	IssuerPublicKeys         map[string]IssuerPublicKeys
+	PARSessions              map[string]oauth2.AuthorizeRequester
+	DPoPProofJTIs            map[DPoPProofMarker]time.Time
+	DPoPNonces               map[string]time.Time
 
-	clientsMutex                sync.RWMutex
-	authorizeCodesMutex         sync.RWMutex
-	idSessionsMutex             sync.RWMutex
-	accessTokensMutex           sync.RWMutex
-	refreshTokensMutex          sync.RWMutex
-	deviceCodesMutex            sync.RWMutex
-	pkcesMutex                  sync.RWMutex
-	usersMutex                  sync.RWMutex
-	blacklistedJTIsMutex        sync.RWMutex
-	accessTokenRequestIDsMutex  sync.RWMutex
-	refreshTokenRequestIDsMutex sync.RWMutex
-	issuerPublicKeysMutex       sync.RWMutex
-	parSessionsMutex            sync.RWMutex
-	dpopProofJTIsMutex          sync.RWMutex
-	dpopNoncesMutex             sync.RWMutex
+	clientsMutex                  sync.RWMutex
+	authorizeCodesMutex           sync.RWMutex
+	idSessionsMutex               sync.RWMutex
+	accessTokensMutex             sync.RWMutex
+	clientRegistrationTokensMutex sync.RWMutex
+	refreshTokensMutex            sync.RWMutex
+	deviceCodesMutex              sync.RWMutex
+	pkcesMutex                    sync.RWMutex
+	usersMutex                    sync.RWMutex
+	blacklistedJTIsMutex          sync.RWMutex
+	accessTokenRequestIDsMutex    sync.RWMutex
+	refreshTokenRequestIDsMutex   sync.RWMutex
+	issuerPublicKeysMutex         sync.RWMutex
+	parSessionsMutex              sync.RWMutex
+	dpopProofJTIsMutex            sync.RWMutex
+	dpopNoncesMutex               sync.RWMutex
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		Clients:                make(map[string]oauth2.Client),
-		AuthorizeCodes:         make(map[string]StoreAuthorizeCode),
-		IDSessions:             make(map[string]oauth2.Requester),
-		AccessTokens:           make(map[string]oauth2.Requester),
-		RefreshTokens:          make(map[string]StoreRefreshToken),
-		DeviceCodes:            make(map[string]oauth2.Requester),
-		UserCodes:              make(map[string]oauth2.Requester),
-		PKCES:                  make(map[string]oauth2.Requester),
-		Users:                  make(map[string]MemoryUserRelation),
-		AccessTokenRequestIDs:  make(map[string]string),
-		RefreshTokenRequestIDs: make(map[string]string),
-		BlacklistedJTIs:        make(map[string]time.Time),
-		IssuerPublicKeys:       make(map[string]IssuerPublicKeys),
-		PARSessions:            make(map[string]oauth2.AuthorizeRequester),
-		DPoPProofJTIs:          make(map[DPoPProofMarker]time.Time),
-		DPoPNonces:             make(map[string]time.Time),
+		Clients:                  make(map[string]oauth2.Client),
+		AuthorizeCodes:           make(map[string]StoreAuthorizeCode),
+		IDSessions:               make(map[string]oauth2.Requester),
+		AccessTokens:             make(map[string]oauth2.Requester),
+		ClientRegistrationTokens: make(map[string]oauth2.Requester),
+		RefreshTokens:            make(map[string]StoreRefreshToken),
+		DeviceCodes:              make(map[string]oauth2.Requester),
+		UserCodes:                make(map[string]oauth2.Requester),
+		PKCES:                    make(map[string]oauth2.Requester),
+		Users:                    make(map[string]MemoryUserRelation),
+		AccessTokenRequestIDs:    make(map[string]string),
+		RefreshTokenRequestIDs:   make(map[string]string),
+		BlacklistedJTIs:          make(map[string]time.Time),
+		IssuerPublicKeys:         make(map[string]IssuerPublicKeys),
+		PARSessions:              make(map[string]oauth2.AuthorizeRequester),
+		DPoPProofJTIs:            make(map[DPoPProofMarker]time.Time),
+		DPoPNonces:               make(map[string]time.Time),
 	}
 }
 
@@ -214,6 +218,54 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 		return nil, oauth2.ErrNotFound
 	}
 	return cl, nil
+}
+
+func (s *MemoryStore) CreateClient(_ context.Context, client oauth2.Client) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	id := client.GetID()
+
+	if _, ok := s.Clients[id]; ok {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("Client with id '%s' already exists.", id))
+	}
+
+	s.Clients[id] = client
+
+	return nil
+}
+
+func (s *MemoryStore) UpdateClient(_ context.Context, id string, client oauth2.Client) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	if _, ok := s.Clients[id]; !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound.WithHintf("No client with id '%s' was found.", id))
+	}
+
+	// The id argument and the client's own id must agree, otherwise the client stored under this key would answer
+	// GetClient with a client that reports a different id - and every later lookup keyed off that reported id would
+	// miss it, or worse, find a different client.
+	if client.GetID() != id {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The client with id '%s' can not be updated with a client with id '%s'.", id, client.GetID()))
+	}
+
+	s.Clients[id] = client
+
+	return nil
+}
+
+func (s *MemoryStore) DeleteClient(_ context.Context, id string) (err error) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	if _, ok := s.Clients[id]; !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound.WithHintf("No client with id '%s' was found.", id))
+	}
+
+	delete(s.Clients, id)
+
+	return nil
 }
 
 func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.ClientLifespanConfig) error {
@@ -368,6 +420,40 @@ func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature stri
 	defer s.accessTokensMutex.Unlock()
 
 	delete(s.AccessTokens, signature)
+	return nil
+}
+
+// CreateClientRegistrationTokenSession stores the request against the client registration token signature, in a
+// namespace separate from access tokens.
+func (s *MemoryStore) CreateClientRegistrationTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
+	s.clientRegistrationTokensMutex.Lock()
+	defer s.clientRegistrationTokensMutex.Unlock()
+
+	s.ClientRegistrationTokens[signature] = req
+
+	return nil
+}
+
+// GetClientRegistrationTokenSession returns the request stored against the client registration token signature.
+func (s *MemoryStore) GetClientRegistrationTokenSession(_ context.Context, signature string, _ oauth2.Session) (oauth2.Requester, error) {
+	s.clientRegistrationTokensMutex.RLock()
+	defer s.clientRegistrationTokensMutex.RUnlock()
+
+	rel, ok := s.ClientRegistrationTokens[signature]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	return rel, nil
+}
+
+// DeleteClientRegistrationTokenSession removes the session stored against the client registration token signature.
+func (s *MemoryStore) DeleteClientRegistrationTokenSession(_ context.Context, signature string) error {
+	s.clientRegistrationTokensMutex.Lock()
+	defer s.clientRegistrationTokensMutex.Unlock()
+
+	delete(s.ClientRegistrationTokens, signature)
+
 	return nil
 }
 

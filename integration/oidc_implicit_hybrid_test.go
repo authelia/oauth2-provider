@@ -94,7 +94,8 @@ func TestOIDCImplicitFlow(t *testing.T) {
 				},
 			}
 			f := compose.ComposeAllEnabled(&oauth2.Config{
-				GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-"),
+				GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 			}, store, gen.MustRSAKey())
 			ts := mockServer(t, f, session)
 			defer ts.Close()

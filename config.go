@@ -415,6 +415,79 @@ type RFC8628DeviceAuthorizeConfigProvider interface {
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
+// RFC7591ClientRegistrationTokenSecretProvider returns the provider for configuring the secret client registration
+// tokens are signed and verified with. It is declared once here, rather than inline wherever a configurator needs
+// it, because it is embedded by more than one interface across packages (RFC7591ClientRegistrationConfigProvider
+// here; HMACCoreStrategyConfigurator in handler/oauth2 and HMACSHAStrategyConfigurator in compose both need it to
+// build a hmac.HMACStrategy for client registration tokens) and three independently-maintained copies of the same
+// two methods and doc comments would drift.
+type RFC7591ClientRegistrationTokenSecretProvider interface {
+	// GetRFC7591ClientRegistrationGlobalSecret returns the secret used to sign client registration tokens. It is
+	// deliberately separate from the global secret: a client management token never expires and RFC 7592 provides no
+	// way to re-issue one, so signing it with the global secret would mean routine rotation of that secret
+	// permanently locked every registered client out of its own registration.
+	GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error)
+
+	// GetRFC7591ClientRegistrationRotatedGlobalSecrets returns the rotated client registration token secrets, which
+	// remain valid for verification but are not used for signing.
+	GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
+}
+
+// RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
+// Dynamic Client Registration 1.0.
+type RFC7591ClientRegistrationConfigProvider interface {
+	RFC7591ClientRegistrationTokenSecretProvider
+
+	// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint. It is
+	// used to build 'registration_client_uri' values and to audience initial access tokens.
+	GetRFC7591ClientRegistrationEndpointURL(ctx context.Context) (endpoint string)
+
+	// GetRFC7591ClientSecretLifespan returns the lifespan used to derive 'client_secret_expires_at'. A zero
+	// duration indicates the secret does not expire.
+	GetRFC7591ClientSecretLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetRFC7591ClientRegistrationStrategy returns the strategy used to construct and patch clients.
+	GetRFC7591ClientRegistrationStrategy(ctx context.Context) (strategy ClientRegistrationStrategy)
+
+	// GetRFC7591ClientRegistrationMetadataStrategy returns the strategy used to filter client metadata before it
+	// reaches the client registration strategy and before it is returned to the client. A nil strategy leaves the
+	// handlers to apply their default.
+	GetRFC7591ClientRegistrationMetadataStrategy(ctx context.Context) (strategy ClientRegistrationMetadataStrategy)
+
+	// GetRFC7591ClientRegistrationEndpointAuthStrategy returns the strategy used to authenticate requests at the
+	// client registration and client configuration endpoints.
+	GetRFC7591ClientRegistrationEndpointAuthStrategy(ctx context.Context) (strategy ClientRegistrationEndpointAuthStrategy)
+
+	// GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
+	GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator)
+
+	// GetRFC7591ClientRegistrationEndpointAudience returns the audience a client creation token must carry to be
+	// accepted at the client registration endpoint. An empty value means the URL the request was made to is expected
+	// instead. A deployment authorises a client to obtain such a token by adding this value to that client's
+	// registered audience.
+	GetRFC7591ClientRegistrationEndpointAudience(ctx context.Context) (audience string)
+
+	// GetRFC7591ClientRegistrationScope returns the scope a client creation token must carry to be accepted at the
+	// client registration endpoint, defaulting to consts.ScopeClientRegistration. It is a second authorization
+	// dimension alongside the audience: the audience says a token is for this endpoint, the scope says its holder may
+	// register clients. This scope is never grantable to a registered client - see CheckGrantableScopes.
+	GetRFC7591ClientRegistrationScope(ctx context.Context) (scope string)
+}
+
+// RFC7591ClientRegistrationEndpointHandlersProvider returns the provider for configuring the client registration
+// endpoint handlers.
+type RFC7591ClientRegistrationEndpointHandlersProvider interface {
+	// GetRFC7591ClientRegistrationEndpointHandlers returns the handlers.
+	GetRFC7591ClientRegistrationEndpointHandlers(ctx context.Context) (handlers RFC7591ClientRegistrationEndpointHandlers)
+}
+
+// RFC7592ClientConfigurationEndpointHandlersProvider returns the provider for configuring the client configuration
+// endpoint handlers.
+type RFC7592ClientConfigurationEndpointHandlersProvider interface {
+	// GetRFC7592ClientConfigurationEndpointHandlers returns the handlers.
+	GetRFC7592ClientConfigurationEndpointHandlers(ctx context.Context) (handlers RFC7592ClientConfigurationEndpointHandlers)
+}
+
 // RFC8628DeviceAuthorizeEndpointHandlersProvider returns the provider for setting up the Device authorization handlers.
 type RFC8628DeviceAuthorizeEndpointHandlersProvider interface {
 	// GetRFC8628DeviceAuthorizeEndpointHandlers returns the handlers.

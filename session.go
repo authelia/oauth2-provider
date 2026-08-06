@@ -55,11 +55,6 @@ type DefaultSession struct {
 	ClientCertificateThumbprint string `json:"client_certificate_thumbprint,omitempty"`
 }
 
-var (
-	_ DPoPBoundSession = (*DefaultSession)(nil)
-	_ MTLSBoundSession = (*DefaultSession)(nil)
-)
-
 // SetExpiresAt sets the expiration time of the token identified by key.
 func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
@@ -156,3 +151,8 @@ func (s *DefaultSession) GetClientCertificateSHA256Thumbprint() string {
 
 	return s.ClientCertificateThumbprint
 }
+
+var (
+	_ DPoPBoundSession = (*DefaultSession)(nil)
+	_ MTLSBoundSession = (*DefaultSession)(nil)
+)

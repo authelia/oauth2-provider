@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -166,6 +167,30 @@ func TestIntrospectToken(t *testing.T) {
 					strategy.
 						EXPECT().
 						ValidateAccessToken(gomock.Eq(t.Context()), gomock.Eq(requester), gomock.Eq("1234")).
+						Return(nil),
+				)
+			},
+			expected: oauth2.AccessToken,
+		},
+		{
+			name: "ShouldPassAccessTokenWithNonRegistrationSession",
+			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
+				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
+
+				original := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+				gomock.InOrder(
+					strategy.
+						EXPECT().
+						AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).
+						Return("asdf"),
+					store.
+						EXPECT().
+						GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).
+						Return(original, nil),
+					strategy.
+						EXPECT().
+						ValidateAccessToken(gomock.Eq(t.Context()), gomock.Eq(original), gomock.Eq("1234")).
 						Return(nil),
 				)
 			},
@@ -377,6 +402,59 @@ func TestIntrospectToken(t *testing.T) {
 				assert.EqualError(t, err, tc.error.Error())
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.errorStr)
 			}
+		})
+	}
+}
+
+func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
+	ctx := t.Context()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		TokenEntropy:                          32,
+	}
+
+	strategy := NewHMACCoreStrategy(config, "authelia_%s_")
+
+	validator := &CoreValidator{
+		CoreStrategy: strategy,
+		CoreStorage:  storage.NewMemoryStore(),
+		Config:       config,
+	}
+
+	registration, _, err := strategy.GenerateClientRegistrationToken(ctx, oauth2.NewRequest())
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		token    string
+		expected error
+	}{
+		{
+			name:     "ShouldReportAClientRegistrationTokenAsUnknown",
+			token:    registration,
+			expected: oauth2.ErrUnknownRequest,
+		},
+		{
+			name:     "ShouldRejectAnUnprefixedToken",
+			token:    "not-a-token",
+			expected: oauth2.ErrRequestUnauthorized,
+		},
+		{
+			name:     "ShouldRejectAnAuthorizeCode",
+			token:    "authelia_ac_notreal.notreal",
+			expected: oauth2.ErrRequestUnauthorized,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err = validator.IntrospectToken(ctx, tc.token, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+			assert.ErrorIs(t, err, tc.expected)
+
+			_, err = validator.IntrospectToken(ctx, tc.token, oauth2.RefreshToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+			assert.ErrorIs(t, err, tc.expected)
 		})
 	}
 }

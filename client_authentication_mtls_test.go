@@ -506,6 +506,21 @@ func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _ string, _ t
 	return nil
 }
 
+// The mutual-TLS tests exercise authentication, not dynamic registration, so this store implements the
+// ClientRegistrationManager half of ClientManager as unsupported.
+
+func (s *mtlsClientStore) CreateClient(_ context.Context, _ Client) error {
+	return ErrNotFound
+}
+
+func (s *mtlsClientStore) UpdateClient(_ context.Context, _ string, _ Client) error {
+	return ErrNotFound
+}
+
+func (s *mtlsClientStore) DeleteClient(_ context.Context, _ string) error {
+	return ErrNotFound
+}
+
 type mtlsJWKSClient struct {
 	*DefaultJARClient
 }

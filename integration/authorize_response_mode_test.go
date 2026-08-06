@@ -36,8 +36,9 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		},
 	}
 	provider := compose.ComposeAllEnabled(&oauth2.Config{
-		UseLegacyErrorFormat: true,
-		GlobalSecret:         []byte("some-secret-thats-random-some-secret-thats-random-"),
+		UseLegacyErrorFormat:                  true,
+		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}, store, gen.MustRSAKey())
 	ts := mockServer(t, provider, session)
 	defer ts.Close()

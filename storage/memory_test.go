@@ -156,6 +156,47 @@ func TestMemoryStore_RotateRefreshToken(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestMemoryStoreClientRegistrationManager(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	client := &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid"}}
+
+	require.NoError(t, store.CreateClient(ctx, client))
+
+	// Creating the same id twice must fail.
+	assert.ErrorIs(t, store.CreateClient(ctx, client), oauth2.ErrInvalidClientMetadata)
+
+	got, err := store.GetClient(ctx, "new-client")
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.Arguments{"openid"}, got.GetScopes())
+
+	require.NoError(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid", "profile"}}))
+
+	got, err = store.GetClient(ctx, "new-client")
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes())
+
+	// Updating an unknown id must fail.
+	assert.ErrorIs(t, store.UpdateClient(ctx, "missing", client), oauth2.ErrNotFound)
+
+	// Updating with a client whose own id disagrees with the key must fail: the stored client would otherwise report
+	// an id no lookup would find it under.
+	assert.ErrorIs(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "other-client"}), oauth2.ErrInvalidClientMetadata)
+
+	got, err = store.GetClient(ctx, "new-client")
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes(), "the rejected update must not have replaced the stored client")
+
+	require.NoError(t, store.DeleteClient(ctx, "new-client"))
+
+	_, err = store.GetClient(ctx, "new-client")
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+	// Deleting an unknown id must fail.
+	assert.ErrorIs(t, store.DeleteClient(ctx, "new-client"), oauth2.ErrNotFound)
+}
+
 func TestExampleStoreSupportsDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewExampleStore()
@@ -169,4 +210,25 @@ func TestExampleStoreSupportsDPoP(t *testing.T) {
 	valid, err := s.IsDPoPNonceValid(ctx, "n-1")
 	require.NoError(t, err)
 	assert.True(t, valid)
+}
+
+func TestMemoryStoreClientRegistrationTokenSessions(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	request := &oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{Subject: "abc"}}
+
+	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, "cr-sig", request))
+
+	got, err := store.GetClientRegistrationTokenSession(ctx, "cr-sig", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "req-id", got.GetID())
+
+	_, err = store.GetAccessTokenSession(ctx, "cr-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+	require.NoError(t, store.DeleteClientRegistrationTokenSession(ctx, "cr-sig"))
+
+	_, err = store.GetClientRegistrationTokenSession(ctx, "cr-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }

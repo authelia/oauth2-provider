@@ -129,7 +129,10 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 					},
 				}
 
-				config := &oauth2.Config{GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+				config := &oauth2.Config{
+					GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				}
 				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
 
 				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
@@ -186,7 +189,10 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 					},
 				}
 
-				config := &oauth2.Config{GlobalSecret: []byte("some-secret-thats-random-some-secret-thats-random-")}
+				config := &oauth2.Config{
+					GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				}
 				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
 
 				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())

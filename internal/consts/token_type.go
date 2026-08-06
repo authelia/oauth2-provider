@@ -5,8 +5,9 @@
 package consts
 
 const (
-	TokenTypeAccessToken  = "access_token"
-	TokenTypeRefreshToken = "refresh_token"
+	TokenTypeAccessToken             = "access_token"
+	TokenTypeRefreshToken            = "refresh_token"
+	TokenTypeClientRegistrationToken = "client_registration_token"
 )
 
 // OAuth 2.0 Token Exchange (RFC 8693) token type identifiers.

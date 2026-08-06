@@ -73,7 +73,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := new(Config)
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 			provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 
 			tc.setup(config, validator, ctx)
@@ -216,7 +216,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := new(Config)
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 
 			httpreq := tc.setup(config, validator, ctx)
@@ -313,7 +313,7 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := &Config{AllowedIntrospectionAudiences: tc.allowed}
+			config := &Config{AllowedIntrospectionAudiences: tc.allowed, RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 

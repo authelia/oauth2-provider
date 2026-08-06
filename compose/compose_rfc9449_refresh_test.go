@@ -36,7 +36,7 @@ func newRefreshProvider(t *testing.T) (oauth2.Provider, *storage.MemoryStore) {
 	require.NoError(t, err)
 
 	store := storage.NewMemoryStore()
-	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
+	config := &oauth2.Config{DPoPEnabled: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 	provider := ComposeAllEnabled(config, store, key)
 
@@ -169,7 +169,7 @@ func TestTokenEndpointDPoPNonceRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	store := storage.NewMemoryStore()
-	config := &oauth2.Config{DPoPEnabled: true, DPoPNonceRequired: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
+	config := &oauth2.Config{DPoPEnabled: true, DPoPNonceRequired: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 	provider := ComposeAllEnabled(config, store, key)
 

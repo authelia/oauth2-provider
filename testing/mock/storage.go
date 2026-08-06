@@ -56,6 +56,34 @@ func (mr *MockStorageMockRecorder) ClientAssertionJWTValid(ctx, jti any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientAssertionJWTValid", reflect.TypeOf((*MockStorage)(nil).ClientAssertionJWTValid), ctx, jti)
 }
 
+// CreateClient mocks base method.
+func (m *MockStorage) CreateClient(ctx context.Context, client oauth2.Client) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateClient", ctx, client)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateClient indicates an expected call of CreateClient.
+func (mr *MockStorageMockRecorder) CreateClient(ctx, client any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateClient", reflect.TypeOf((*MockStorage)(nil).CreateClient), ctx, client)
+}
+
+// DeleteClient mocks base method.
+func (m *MockStorage) DeleteClient(ctx context.Context, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteClient", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteClient indicates an expected call of DeleteClient.
+func (mr *MockStorageMockRecorder) DeleteClient(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClient", reflect.TypeOf((*MockStorage)(nil).DeleteClient), ctx, id)
+}
+
 // GetClient mocks base method.
 func (m *MockStorage) GetClient(ctx context.Context, id string) (oauth2.Client, error) {
 	m.ctrl.T.Helper()
@@ -83,4 +111,18 @@ func (m *MockStorage) SetClientAssertionJWT(ctx context.Context, jti string, exp
 func (mr *MockStorageMockRecorder) SetClientAssertionJWT(ctx, jti, exp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClientAssertionJWT", reflect.TypeOf((*MockStorage)(nil).SetClientAssertionJWT), ctx, jti, exp)
+}
+
+// UpdateClient mocks base method.
+func (m *MockStorage) UpdateClient(ctx context.Context, id string, client oauth2.Client) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateClient", ctx, id, client)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateClient indicates an expected call of UpdateClient.
+func (mr *MockStorageMockRecorder) UpdateClient(ctx, id, client any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateClient", reflect.TypeOf((*MockStorage)(nil).UpdateClient), ctx, id, client)
 }

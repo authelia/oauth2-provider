@@ -16,10 +16,6 @@ const (
 	DeviceAuthorizeStatusDenied
 )
 
-var (
-	_ DeviceAuthorizeRequester = (*DeviceAuthorizeRequest)(nil)
-)
-
 // DeviceAuthorizeRequest is an implementation of DeviceAuthorizeRequester
 type DeviceAuthorizeRequest struct {
 	Request
@@ -89,3 +85,7 @@ func (d *DeviceAuthorizeRequest) Merge(requester Requester) {
 		d.LastChecked = authReq.LastChecked
 	}
 }
+
+var (
+	_ DeviceAuthorizeRequester = (*DeviceAuthorizeRequest)(nil)
+)

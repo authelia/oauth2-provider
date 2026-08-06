@@ -71,6 +71,26 @@ func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, reques
 	return s.HMACCoreStrategy.ValidateAccessToken(ctx, request, tokenString)
 }
 
+// IsOpaqueClientRegistrationToken implements the client registration token strategy by delegation. Client
+// registration tokens are always opaque and never follow the JWT profile, so every method here defers to the HMAC
+// strategy unconditionally rather than branching on GetEnforceJWTProfileAccessTokens the way the access token
+// methods do.
+func (s *JWTProfileCoreStrategy) IsOpaqueClientRegistrationToken(ctx context.Context, tokenString string) bool {
+	return s.HMACCoreStrategy.IsOpaqueClientRegistrationToken(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) ClientRegistrationTokenSignature(ctx context.Context, tokenString string) (signature string) {
+	return s.HMACCoreStrategy.ClientRegistrationTokenSignature(ctx, tokenString)
+}
+
+func (s *JWTProfileCoreStrategy) GenerateClientRegistrationToken(ctx context.Context, requester oauth2.Requester) (tokenString string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateClientRegistrationToken(ctx, requester)
+}
+
+func (s *JWTProfileCoreStrategy) ValidateClientRegistrationToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
+	return s.HMACCoreStrategy.ValidateClientRegistrationToken(ctx, r, tokenString)
+}
+
 func (s *JWTProfileCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, tokenString string) bool {
 	return s.HMACCoreStrategy.IsOpaqueRefreshToken(ctx, tokenString)
 }

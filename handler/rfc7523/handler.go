@@ -36,10 +36,6 @@ type Handler struct {
 	*hoauth2.HandleHelper
 }
 
-var (
-	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
-)
-
 // HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything) and
 // https://datatracker.ietf.org/doc/html/rfc7523#section-2.1 (everything)
 //
@@ -340,3 +336,7 @@ func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extende
 		return jwtSession, nil
 	}
 }
+
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)

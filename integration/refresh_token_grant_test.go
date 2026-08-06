@@ -50,6 +50,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 	fc := new(oauth2.Config)
 	fc.RefreshTokenLifespan = -1
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
+	fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
 	f := compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 	ts := mockServer(t, f, session)
 
@@ -164,6 +165,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Nanosecond
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
+				fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
 				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 
@@ -179,6 +181,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Minute
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
+				fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
 				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
 				ts = mockServer(t, f, session)
 

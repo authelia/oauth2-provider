@@ -177,7 +177,7 @@ func TestIntrospect(t *testing.T) {
 			defer ctrl.Finish()
 
 			validator := mock.NewMockTokenIntrospector(ctrl)
-			config := new(Config)
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), nil).(*Fosite)
 
 			tc.setup(ctrl, config, validator)

@@ -254,6 +254,26 @@ var (
 		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInvalidClientMetadata = &RFC6749Error{
+		ErrorField:       errInvalidClientMetadataName,
+		DescriptionField: "The value of one of the client metadata fields is invalid and the server has rejected this request.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrInvalidRedirectURI = &RFC6749Error{
+		ErrorField:       errInvalidRedirectURIName,
+		DescriptionField: "The value of one or more redirection URIs is invalid.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrInvalidSoftwareStatement = &RFC6749Error{
+		ErrorField:       errInvalidSoftwareStatementName,
+		DescriptionField: "The software statement presented is invalid.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrUnapprovedSoftwareStatement = &RFC6749Error{
+		ErrorField:       errUnapprovedSoftwareStatementName,
+		DescriptionField: "The software statement presented is not approved for use by this authorization server.",
+		CodeField:        http.StatusBadRequest,
+	}
 )
 
 const (
@@ -286,17 +306,21 @@ const (
 	errTokenClaimName              = "token_claim"
 	errTokenInactiveName           = "token_inactive"
 	// errAuthorizationCodeInactiveName = "authorization_code_inactive"
-	errUnknownErrorName             = "error"
-	errRequestNotSupportedName      = "request_not_supported"
-	errRequestURINotSupportedName   = "request_uri_not_supported"
-	errRegistrationNotSupportedName = "registration_not_supported"
-	errJTIKnownName                 = "jti_known"
-	errAuthorizationPendingName     = "authorization_pending"
-	errDeviceExpiredTokenName       = "expired_token"
-	errSlowDownName                 = "slow_down"
-	errInvalidTargetName            = "invalid_target"
-	errInvalidDPoPProofName         = "invalid_dpop_proof"
-	errUseDPoPNonceName             = "use_dpop_nonce"
+	errUnknownErrorName                = "error"
+	errRequestNotSupportedName         = "request_not_supported"
+	errRequestURINotSupportedName      = "request_uri_not_supported"
+	errRegistrationNotSupportedName    = "registration_not_supported"
+	errJTIKnownName                    = "jti_known"
+	errAuthorizationPendingName        = "authorization_pending"
+	errDeviceExpiredTokenName          = "expired_token"
+	errSlowDownName                    = "slow_down"
+	errInvalidTargetName               = "invalid_target"
+	errInvalidDPoPProofName            = "invalid_dpop_proof"
+	errUseDPoPNonceName                = "use_dpop_nonce"
+	errInvalidClientMetadataName       = "invalid_client_metadata"
+	errInvalidRedirectURIName          = "invalid_redirect_uri"
+	errInvalidSoftwareStatementName    = "invalid_software_statement"
+	errUnapprovedSoftwareStatementName = "unapproved_software_statement"
 
 	errServerErrorDescription = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request."
 )

@@ -58,6 +58,7 @@ func TestFositeWriteRFC7592ClientConfigurationError(t *testing.T) {
 		err        error
 		code       int
 		wwwAuth    string
+		allow      string
 		bodyErrKey string
 	}{
 		{
@@ -77,6 +78,7 @@ func TestFositeWriteRFC7592ClientConfigurationError(t *testing.T) {
 			name:       "ShouldWrite405ForInvalidRequestCarryingMethodHint",
 			err:        errorsx.WithStack(ErrInvalidRequest.WithHintf("The client configuration endpoint does not support the '%s' method.", http.MethodPatch)),
 			code:       http.StatusMethodNotAllowed,
+			allow:      "GET, PUT, DELETE",
 			bodyErrKey: "invalid_request",
 		},
 	}
@@ -90,6 +92,7 @@ func TestFositeWriteRFC7592ClientConfigurationError(t *testing.T) {
 
 			assert.Equal(t, tc.code, rw.Code)
 			assert.Equal(t, tc.wwwAuth, rw.Header().Get(consts.HeaderWWWAuthenticate))
+			assert.Equal(t, tc.allow, rw.Header().Get(consts.HeaderAllow))
 			assert.Contains(t, rw.Body.String(), tc.bodyErrKey)
 		})
 	}

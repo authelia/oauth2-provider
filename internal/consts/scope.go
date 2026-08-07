@@ -5,14 +5,14 @@
 package consts
 
 const (
-	ScopeOpenID             = "openid"
-	ScopeOffline            = "offline"
-	ScopeOfflineAccess      = "offline_access"
-	ScopeEmail              = "email"
-	ScopeClientRegistration = "client_registration"
+	ScopeOpenID        = "openid"
+	ScopeOffline       = "offline"
+	ScopeOfflineAccess = "offline_access"
+	ScopeEmail         = "email"
+)
 
-	// ScopeIntrospection is the scope an Access Token must carry to authenticate a request to the token
-	// introspection endpoint. RFC 7662 defines no such scope, so this value is specific to this implementation and
-	// interoperates with nothing. It is named after the endpoint it guards, symmetric with ScopeClientRegistration.
-	ScopeIntrospection = "token_introspection"
+// The following scopes are special scopes for particular purposes.
+const (
+	ScopeClientRegistration = "authelia:oauth2:client_registration"
+	ScopeIntrospection      = "authelia:oauth2:token_introspection"
 )

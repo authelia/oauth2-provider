@@ -93,7 +93,12 @@ func NewDefaultEndpointAuthStrategy(config EndpointAuthStrategyConfig, store Sto
 // and WithDebugError only, never surfaced in the client-facing hint.
 //
 // The client configuration branch is not a protected resource in this sense - it takes a management token that can
-// never be bound - and keeps reporting oauth2.ErrRequestUnauthorized for every failure.
+// never be bound - and reports oauth2.ErrRequestUnauthorized (401) for every failure to resolve or authorise the
+// token itself. The header is read before either branch is chosen, so this branch reports the same codes as the one
+// above for a malformed Authorization header: oauth2.ErrInvalidRequest (400) when more than one is present, and
+// oauth2.ErrInvalidToken (401) when none is present or the scheme is not Bearer. Every one of these is a status RFC
+// 7592 Section 2 allows, which requires a 401 for an invalid registration access token and defers to RFC 6750 for its
+// form.
 func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx context.Context, r *http.Request, id string) (requester oauth2.Requester, err error) {
 	var tokenString string
 

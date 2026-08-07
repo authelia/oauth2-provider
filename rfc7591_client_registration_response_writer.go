@@ -104,6 +104,9 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 
 	if configuration && rfc.ErrorField == ErrInvalidRequest.ErrorField {
 		rfc = rfc.WithCode(http.StatusMethodNotAllowed)
+
+		// RFC 9110 Section 15.5.6 requires a 405 to name the methods the target resource does support.
+		rw.Header().Set(consts.HeaderAllow, clientConfigurationAllowedMethods)
 	}
 
 	switch {
@@ -130,3 +133,5 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 	rw.WriteHeader(rfc.CodeField)
 	_, _ = rw.Write(data)
 }
+
+const clientConfigurationAllowedMethods = http.MethodGet + ", " + http.MethodPut + ", " + http.MethodDelete

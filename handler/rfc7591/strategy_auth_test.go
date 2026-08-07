@@ -64,7 +64,7 @@ func TestAuthRejectsAnAccessTokenAtTheConfigurationEndpoint(t *testing.T) {
 	auth, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{"https://auth.example.com/register/some-client"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://auth.example.com/register/some-client"})
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/some-client", token), "some-client")
 	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
@@ -135,7 +135,7 @@ func TestAuthRejectsAnExpiredAccessToken(t *testing.T) {
 	request.Session = &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(-time.Hour)},
 	}
-	request.GrantScope("client_registration")
+	request.GrantScope("authelia:oauth2:client_registration")
 	request.GrantAudience(testEndpoint)
 
 	token, signature, err := access.GenerateAccessToken(ctx, request)
@@ -153,7 +153,7 @@ func TestAuthAcceptsAnAccessTokenWithTheAudienceAndScope(t *testing.T) {
 	handler, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{testEndpoint})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{testEndpoint})
 
 	requester, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -181,7 +181,7 @@ func TestAuthRejectsAnAccessTokenMissingTheAudience(t *testing.T) {
 	handler, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{"https://elsewhere.example.com/register"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://elsewhere.example.com/register"})
 
 	_, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -262,7 +262,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			store := storage.NewMemoryStore()
 			strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-			token := mintAccessToken(t, ctx, store, strategy, []string{"client_registration"}, []string{tc.granted})
+			token := mintAccessToken(t, ctx, store, strategy, []string{"authelia:oauth2:client_registration"}, []string{tc.granted})
 
 			auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
@@ -294,7 +294,7 @@ func TestAuthHydratesTheAccessTokenSession(t *testing.T) {
 	store := &hydratingAccessTokenStore{MemoryStore: storage.NewMemoryStore()}
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store.MemoryStore, strategy, []string{"client_registration"}, []string{testEndpoint})
+	token := mintAccessToken(t, ctx, store.MemoryStore, strategy, []string{"authelia:oauth2:client_registration"}, []string{testEndpoint})
 
 	auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
@@ -330,7 +330,7 @@ func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *tes
 
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{"https://elsewhere.example.com/register"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://elsewhere.example.com/register"})
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -350,7 +350,7 @@ func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T
 	request.Session = &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 	}
-	request.GrantScope("client_registration")
+	request.GrantScope("authelia:oauth2:client_registration")
 	request.GrantAudience("https://elsewhere.example.com/register")
 
 	token, signature, err := access.GenerateAccessToken(ctx, request)
@@ -641,7 +641,7 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 		auth, config, store, _ := newAuthFixtures(t)
 		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-		token := mintAccessToken(t, ctx, store, access, []string{"client_registration"}, []string{"urn:wrong"})
+		token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"urn:wrong"})
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 

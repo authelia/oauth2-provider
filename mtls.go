@@ -180,10 +180,10 @@ func decodeCertificateBase64(value string) (der []byte, err error) {
 // status and the 'invalid_token' error code. The function is intended only for tokens already known to be certificate
 // bound; an empty boundX5T is treated as caller misuse rather than as a token bound to nothing.
 //
-// This lives here rather than in handler/rfc8705 - whose ValidateResourceAccess is the RFC-named entry point and
-// delegates to it - because the root package needs it too, to enforce the binding of an access token presented as a
-// credential at the introspection endpoint, and a proof-of-possession check with two implementations is a check with
-// one of them eventually wrong.
+// This lives in the root package rather than in handler/rfc8705 because the root package needs it itself, to enforce
+// the binding of an access token presented as a credential at the introspection endpoint, and a proof-of-possession
+// check with two implementations is a check with one of them eventually wrong. It is the single entry point for the
+// Section 3 check, for callers inside this module and resource servers outside it alike.
 func ValidateClientCertificateBinding(r *http.Request, header, boundX5T string) (cert *x509.Certificate, err error) {
 	if boundX5T == "" {
 		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The access token is not bound to a client certificate."))

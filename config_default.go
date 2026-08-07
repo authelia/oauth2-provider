@@ -324,9 +324,9 @@ type Config struct {
 	// DPoPClockSkew is the tolerance allowed for disagreement between this server's clock and the client's when
 	// judging a DPoP proof's 'iat' claim. Defaults to ten seconds.
 	//
-	// It is not how long a proof lasts - that is DPoPProofLifespan. Skew widens the acceptance window at both ends,
+	// It is not how long a proof lasts; that is DPoPProofLifespan. Skew widens the acceptance window at both ends,
 	// so a proof is accepted from DPoPClockSkew before its 'iat' until DPoPProofLifespan+DPoPClockSkew after it.
-	// Raise this, and only this, to tolerate clients whose clocks are not synchronised.
+	// Raise this, and only this, to tolerate clients whose clocks are not synchronized.
 	DPoPClockSkew time.Duration
 
 	// DPoPProofLifespan is how long a DPoP proof remains valid after the 'iat' it was minted with. Defaults to ten

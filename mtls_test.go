@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestX509CertificateSHA256Thumbprint(t *testing.T) {
@@ -162,6 +163,80 @@ func TestClientCertificateFromRequest(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, actual)
+		assert.Equal(t, cert.Raw, actual.Raw)
+	})
+}
+
+func TestValidateClientCertificateBinding(t *testing.T) {
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+	other := gen.MustCertificate(gen.CertificateOptions{SerialNumber: 2})
+
+	newRequest := func(peer *x509.Certificate) *http.Request {
+		r := &http.Request{Header: http.Header{}}
+
+		if peer != nil {
+			r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{peer}}
+		}
+
+		return r
+	}
+
+	t.Run("ShouldAcceptTheBoundCertificate", func(t *testing.T) {
+		actual, err := ValidateClientCertificateBinding(newRequest(cert), "", X509CertificateSHA256Thumbprint(cert))
+
+		require.NoError(t, err)
+		require.NotNil(t, actual)
+		assert.Equal(t, cert.Raw, actual.Raw)
+	})
+
+	t.Run("ShouldRejectADifferentCertificate", func(t *testing.T) {
+		actual, err := ValidateClientCertificateBinding(newRequest(other), "", X509CertificateSHA256Thumbprint(cert))
+
+		assert.Nil(t, actual)
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("ShouldRejectNoCertificate", func(t *testing.T) {
+		actual, err := ValidateClientCertificateBinding(newRequest(nil), "", X509CertificateSHA256Thumbprint(cert))
+
+		assert.Nil(t, actual)
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("ShouldRejectAnEmptyBinding", func(t *testing.T) {
+		actual, err := ValidateClientCertificateBinding(newRequest(cert), "", "")
+
+		assert.Nil(t, actual)
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("ShouldReadTheConfiguredHeader", func(t *testing.T) {
+		r := &http.Request{Header: http.Header{}}
+		r.Header.Set("X-Forwarded-Tls-Client-Cert", encodeTraefikV3(cert))
+
+		actual, err := ValidateClientCertificateBinding(r, "X-Forwarded-Tls-Client-Cert", X509CertificateSHA256Thumbprint(cert))
+
+		require.NoError(t, err)
+		require.NotNil(t, actual)
+		assert.Equal(t, cert.Raw, actual.Raw)
+	})
+
+	t.Run("ShouldRejectAMalformedConfiguredHeader", func(t *testing.T) {
+		r := &http.Request{Header: http.Header{}}
+		r.Header.Set("X-Forwarded-Tls-Client-Cert", "not-a-certificate")
+
+		actual, err := ValidateClientCertificateBinding(r, "X-Forwarded-Tls-Client-Cert", X509CertificateSHA256Thumbprint(cert))
+
+		assert.Nil(t, actual)
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("ShouldPairWithTheIntrospectionAccessor", func(t *testing.T) {
+		claims := map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: X509CertificateSHA256Thumbprint(cert)}}
+
+		actual, err := ValidateClientCertificateBinding(newRequest(cert), "", GetMTLSConfirmationX509SHA256Thumbprint(claims))
+
+		require.NoError(t, err)
 		assert.Equal(t, cert.Raw, actual.Raw)
 	})
 }

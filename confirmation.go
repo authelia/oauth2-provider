@@ -151,7 +151,7 @@ func GetDPoPConfirmationJWKThumbprint(claims map[string]any) (jkt string) {
 // GetMTLSConfirmationX509SHA256Thumbprint returns the 'x5t#S256' confirmation method of the RFC 7800 'cnf' claim in
 // claims, or an empty string when the claim is absent, is not a JSON object, or carries no certificate thumbprint. It
 // serves callers holding claims but no session, such as a resource server taking the bound thumbprint out of an
-// introspection response to hand to the RFC 8705 ValidateResourceAccess.
+// introspection response to hand to ValidateClientCertificateBinding.
 func GetMTLSConfirmationX509SHA256Thumbprint(claims map[string]any) (x5t string) {
 	x5t, _ = confirmationClaim(claims)[jwt.ClaimConfirmationX509SHA256Thumbprint].(string)
 

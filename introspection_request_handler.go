@@ -250,7 +250,26 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}
 
-	if scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); found && strings.EqualFold(scheme, DPoPAccessToken) {
+	scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
+
+	// RFC 6750 Section 2 forbids a client using more than one of its transports in a single request, and Section 3.1
+	// makes doing so 'invalid_request' with HTTP 400 - the same condition and the same code as the duplicate header
+	// above, so the hint is shared. AccessTokenFromRequest cannot detect this itself: it falls back to the
+	// 'access_token' parameter whenever the header is not Bearer, so a header and a parameter arriving together
+	// resolve to the header and the conflict goes unreported.
+	//
+	// Only a header that actually carries an access token counts. A 'Basic' header is client authentication rather
+	// than a second copy of the token - RFC 7662 Section 2.1 names it as an alternative to a bearer credential, and
+	// its own example pairs it with a form body - so a request combining it with the parameter is still using exactly
+	// one transport and must not be rejected here.
+	//
+	// The parameter is read off r.Form, which NewIntrospectionRequest has already populated and which carries the URI
+	// query alongside the form body, so both of the transports AccessTokenFromRequest can return are covered.
+	if found && len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
+		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	}
+
+	if found && strings.EqualFold(scheme, DPoPAccessToken) {
 		return value, nil
 	}
 

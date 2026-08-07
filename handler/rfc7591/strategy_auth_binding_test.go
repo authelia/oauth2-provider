@@ -473,7 +473,7 @@ func mintBoundAccessToken(t *testing.T, ctx context.Context, store *storage.Memo
 		JWKThumbprint:               jkt,
 		ClientCertificateThumbprint: x5t,
 	}
-	request.GrantScope("client_registration")
+	request.GrantScope("authelia:oauth2:client_registration")
 	request.GrantAudience(testEndpoint)
 
 	token, signature, err := strategy.GenerateAccessToken(ctx, request)

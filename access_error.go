@@ -57,9 +57,6 @@ func (f *Fosite) writeErrorJSON(ctx context.Context, rw http.ResponseWriter, req
 	f.writeErrorJSONRFC(ctx, rw, rfc)
 }
 
-// writeErrorJSONRFC writes an already-resolved *RFC6749Error, for callers that needed to inspect or adjust it before
-// it was written - such as WriteIntrospectionError, which corrects the status per RFC 7662 Section 2.3 and emits a
-// 'WWW-Authenticate' challenge first. Deriving the error a second time would discard those adjustments.
 func (f *Fosite) writeErrorJSONRFC(ctx context.Context, rw http.ResponseWriter, rfc *RFC6749Error) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)

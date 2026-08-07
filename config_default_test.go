@@ -82,7 +82,7 @@ func TestConfigRFC7591ClientRegistrationEndpointAudiencesAndScopes(t *testing.T)
 		config := &Config{}
 
 		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudiences(ctx))
-		assert.Equal(t, []string{"client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 
 	t.Run("Configured", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestConfigRFC7591ClientRegistrationEndpointAudiencesAndScopes(t *testing.T)
 	t.Run("ExplicitlyEmptyScopesStillDefaults", func(t *testing.T) {
 		config := &Config{RFC7591ClientRegistrationScopes: []string{}}
 
-		assert.Equal(t, []string{"client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 }
 
@@ -108,7 +108,7 @@ func TestConfigAllowedIntrospectionScopes(t *testing.T) {
 	t.Run("Defaults", func(t *testing.T) {
 		config := &Config{}
 
-		assert.Equal(t, []string{"token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
 	})
 
 	t.Run("Configured", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestConfigAllowedIntrospectionScopes(t *testing.T) {
 	t.Run("ExplicitlyEmptyStillDefaults", func(t *testing.T) {
 		config := &Config{AllowedIntrospectionScopes: []string{}}
 
-		assert.Equal(t, []string{"token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:token_introspection"}, config.GetAllowedIntrospectionScopes(ctx))
 	})
 }
 

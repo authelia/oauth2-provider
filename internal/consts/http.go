@@ -7,6 +7,7 @@ package consts
 const (
 	HeaderContentType     = "Content-Type"
 	HeaderCacheControl    = "Cache-Control"
+	HeaderAllow           = "Allow"
 	HeaderPragma          = "Pragma"
 	HeaderAuthorization   = "Authorization"
 	HeaderLocation        = "Location"

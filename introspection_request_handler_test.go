@@ -379,7 +379,7 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			audience: []string{"https://introspection.example.com"},
 			resource: nil,
 			scope:    []string{"read"},
-			err:      "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'token_introspection', at least one of which is required.",
+			err:      "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:token_introspection', at least one of which is required.",
 			errField: "insufficient_scope",
 			code:     http.StatusUnauthorized,
 		},

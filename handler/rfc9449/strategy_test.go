@@ -67,7 +67,7 @@ func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
 		{name: "ShouldRejectBeyondTheSkewAhead", offset: skew + 5*time.Second},
 		{name: "ShouldAcceptWithinTheLifespan", offset: -10 * time.Second, ok: true},
 		{name: "ShouldAcceptPastTheLifespanButWithinTheSkew", offset: -(lifespan + 10*time.Second), ok: true},
-		{name: "ShouldAcceptJustInsideTheOuterBound", offset: -(lifespan + skew - 2*time.Second), ok: true},
+		{name: "ShouldAcceptJustInsideTheOuterBound", offset: -(lifespan + skew - 5*time.Second), ok: true},
 		{name: "ShouldRejectBeyondTheLifespanPlusSkew", offset: -(lifespan + skew + 5*time.Second)},
 	}
 

@@ -10,13 +10,12 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// confirmationMethod is one member of the RFC 7800 'cnf' claim paired with the accessors that move it between a session
-// and a set of token claims.
+// confirmationMethod is one member of the RFC 7800 'cnf' claim paired with the accessors that move it between a
+// session and a set of token claims.
 //
-// Both directions live in a single entry deliberately. An issuing side without a matching recovery side silently drops
-// the binding whenever a stateless token is introspected, because such a token's own claims are the only record of what
-// it is bound to; that asymmetry is exactly how 'jkt' came to be lost. Pairing them means a confirmation method cannot
-// be half-implemented.
+// Both directions live in a single entry. An issuing side without a matching recovery side silently drops the binding
+// whenever a stateless token is introspected, because such a token's own claims are the only record of what it is
+// bound to. Pairing them means a confirmation method cannot be half-implemented.
 type confirmationMethod struct {
 	// name is the member name within the 'cnf' claim, for example 'jkt'.
 	name string
@@ -26,8 +25,8 @@ type confirmationMethod struct {
 	// survives on the session after it is turned off, and the handler that would verify it no longer runs. Emitting
 	// the confirmation anyway would tell the resource server a proof-of-possession check was performed when none was.
 	//
-	// Only ApplyConfirmation consults this. RestoreConfirmation deliberately does not: it recovers what a signed token
-	// already asserts, which is a statement about how the token was issued rather than about current configuration.
+	// Only ApplyConfirmation consults this. RestoreConfirmation does not: it recovers what a signed token already
+	// asserts, which is a statement about how the token was issued rather than about current configuration.
 	enabled func(ctx context.Context, config ConfirmationConfigProvider) bool
 
 	// get returns the binding recorded on session, or an empty string when session records none or does not support a
@@ -84,16 +83,14 @@ var confirmationMethods = []confirmationMethod{
 // ApplyConfirmation rebuilds the RFC 7800 'cnf' claim in claims from the bindings recorded on session whose binding
 // method is currently enabled, and is the only supported way to write that claim.
 //
-// The claim is rebuilt rather than merged into, so it asserts exactly the bindings the server established and nothing
-// else. That matters because the claims a token is minted from include the session's extra claims, which are free-form:
-// were the existing value merged into, a 'cnf' placed there would travel into the token, and a resource server reads
-// 'cnf' as evidence that a proof-of-possession check was performed. A 'cnf' that would be left empty is removed
-// entirely, since an empty confirmation asserts nothing while still suggesting the token is bound.
+// The claim is rebuilt rather than merged into, so it asserts exactly the bindings the server established. The claims
+// a token is minted from include the session's free-form extra claims, so merging would let a 'cnf' placed there
+// travel into the token, and a resource server reads 'cnf' as evidence that a proof-of-possession check was
+// performed. A 'cnf' that would be left empty is removed entirely.
 //
-// A binding whose method is disabled is skipped for the same reason, and is skipped rather than erased: a session
-// restored from storage still carries a binding recorded while the method was enabled, but the handler that would
-// verify it no longer runs, so asserting it would claim a check that did not happen. Leaving the value on the session
-// keeps the binding dormant rather than lost, so re-enabling the method resumes both enforcement and this claim.
+// A binding whose method is disabled is skipped rather than erased. Asserting it would claim a check that did not
+// happen, while leaving the value on the session keeps the binding dormant, so re-enabling the method resumes both
+// enforcement and this claim.
 func ApplyConfirmation(ctx context.Context, config ConfirmationConfigProvider, claims map[string]any, session Session) {
 	if claims == nil {
 		return
@@ -102,9 +99,8 @@ func ApplyConfirmation(ctx context.Context, config ConfirmationConfigProvider, c
 	cnf := map[string]any{}
 
 	for _, method := range confirmationMethods {
-		// A nil config asserts nothing, so no method is enabled. Failing closed is deliberate: the alternative
-		// direction would emit a confirmation on a misconfigured server, which is the one outcome this claim must
-		// never produce. Any existing 'cnf' is still stripped below.
+		// A nil config asserts nothing, so no method is enabled. Failing closed keeps a misconfigured server from
+		// emitting a confirmation. Any existing 'cnf' is still stripped below.
 		if config == nil || !method.enabled(ctx, config) {
 			continue
 		}

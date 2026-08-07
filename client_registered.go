@@ -258,10 +258,9 @@ func (c *DefaultRegisteredClient) GetTokenEndpointAuthSigningAlg() string {
 }
 
 // GetIntrospectionEndpointAuthMethod returns the 'introspection_endpoint_auth_method' value, falling back to the
-// client's token endpoint method when unset. No specification defines a default for this value, so the choice is
-// this implementation's: inheriting keeps a single registered method meaningful at every endpoint, where returning
-// an empty value would instead mean no method is registered and so let the introspection endpoint accept any
-// authenticated method - widening what the client asked for rather than honouring it.
+// client's token endpoint method when unset. No specification defines a default for this value. Inheriting keeps a
+// single registered method meaningful at every endpoint, where returning an empty value would mean no method is
+// registered and let the introspection endpoint accept any authenticated method.
 func (c *DefaultRegisteredClient) GetIntrospectionEndpointAuthMethod() string {
 	if c.IntrospectionEndpointAuthMethod == "" {
 		return c.GetTokenEndpointAuthMethod()

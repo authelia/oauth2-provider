@@ -6,13 +6,8 @@
 // RFC 7592 client configuration endpoint, and the OpenID Connect Dynamic Client Registration 1.0 metadata they both
 // carry.
 //
-// These tests are written to map directly to numbered sections of those specs so that the behavior the
-// implementation guarantees can be read out against the spec text. Each test name carries the relevant section
-// reference and a description; failures should be interpreted as a divergence from that spec section.
-//
-// A number of cases in the task brief this file was written against turned out to already be covered verbatim by
-// existing tests elsewhere in this package (or, for the two HTTP-transport-shaped cases, in the root package's
-// request/response handler tests) - those are noted, not duplicated, in the task report rather than reproduced here.
+// Each test name carries the relevant section reference and a description; a failure is a divergence from that
+// section.
 //
 // https://datatracker.ietf.org/doc/html/rfc7591
 // https://datatracker.ietf.org/doc/html/rfc7592
@@ -136,9 +131,7 @@ func TestSpec_RFC7591_3_2_2_ErrorResponseShape(t *testing.T) {
 
 // RFC 7591 §2: "scope ... OPTIONAL, [...] a space-separated list of scope values [...] that the client can use when
 // requesting access tokens." An omitted 'scope' therefore registers a client with no scopes of its own, rather than
-// silently inheriting some other set. This exercises the whole path (strategy.apply + persistence), which is
-// distinct from checkGrantableScopes's "ShouldAllowOmittedScope" case (scope_test.go): that proves the ceiling check
-// has nothing to reject when 'scope' is absent, not that the persisted client actually ends up scopeless.
+// silently inheriting some other set.
 func TestSpec_RFC7591_ScopeOmittedGrantsNone(t *testing.T) {
 	ctx := context.Background()
 	_, registrar, _, store := newConfigurationHandler(t)
@@ -161,10 +154,8 @@ func TestSpec_RFC7591_ScopeOmittedGrantsNone(t *testing.T) {
 }
 
 // §2.1: "the authorization server responds with an HTTP 200 OK status code and a body ... containing the client
-// metadata... The response body includes ALL of the client metadata currently associated with the client".
-// TestClientConfigurationHandlerReads (handler_configuration_test.go) already proves a GET right after registration
-// returns that metadata; this test proves the "currently" part - GET after an update must reflect the update, not
-// what registration originally returned.
+// metadata... The response body includes ALL of the client metadata currently associated with the client". A GET
+// after an update must therefore reflect the update, not what registration originally returned.
 func TestSpec_RFC7592_2_1_ReadReturnsCurrentMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, _, _ := newConfigurationHandler(t)
@@ -199,13 +190,6 @@ func TestSpec_RFC7592_2_1_ReadReturnsCurrentMetadata(t *testing.T) {
 // §3: "All requests to the client configuration endpoint MUST be authenticated using the registration access token
 // issued to the client and MUST be rejected if the registration access token has been revoked or is otherwise
 // invalid. [...] the authorization server returns an HTTP 401 status code..."
-//
-// This exercises the client configuration endpoint specifically (a non-empty client_id in the path, i.e. the
-// management-token side of DefaultEndpointAuthStrategy): TestAuthRejectsUnknownToken and TestAuthRejectsOrdinaryAccessToken
-// (strategy_auth_test.go) already prove the "unknown token" and "ordinary access token" cases reject with
-// oauth2.ErrRequestUnauthorized, but only at the client registration endpoint (empty id); this proves the same two
-// guards hold symmetrically at the configuration endpoint, and additionally pins the concrete 401 status code the
-// spec names rather than just "an error".
 func TestSpec_RFC7592_3_InvalidTokenReturns401(t *testing.T) {
 	ctx := context.Background()
 
@@ -257,9 +241,7 @@ func TestSpec_OIDCDCR_2_DefaultTokenEndpointAuthMethod(t *testing.T) {
 }
 
 // §2: "application_type [...] OPTIONAL. [...] The default, if omitted, is 'web'." A 'web' client's redirect URIs
-// must use 'https' (validateRedirectURIs in validator_local.go); this proves that rule applies even when
-// 'application_type' is never set to 'web' explicitly, i.e. that omission really does default to 'web' rather than
-// to some more permissive unrecognized-type behavior.
+// must use 'https', so that rule applies even when 'application_type' is never set explicitly.
 func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
 	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
 	validator := NewLocalValidator(config)
@@ -277,10 +259,8 @@ func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
 // use localhost as the hostname. Native Clients MUST only register redirect_uris using custom URI schemes or
 // loopback URLs using the http scheme; loopback URLs use localhost or the IP loopback literals 127.0.0.1 or [::1]
 // as the hostname." The same sentence that bars 'localhost' for web clients defines it as one of three spellings of
-// the loopback host, so the prohibition cannot be satisfied by rejecting the name and admitting the literals: all
-// three reach the resource owner's own machine, which is not a host the web client controls. This pins that the
-// literals are rejected for a web client and, in the same breath, that a native client keeps the loopback redirect
-// RFC 8252 §7.3 requires of it.
+// the loopback host, so the prohibition cannot be satisfied by rejecting the name and admitting the literals, while
+// a native client keeps the loopback redirect RFC 8252 §7.3 requires of it.
 func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
 	ctx := context.Background()
 
@@ -307,8 +287,7 @@ func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
 // RFC 7591 §2: "grant_types [...] If omitted, the default behavior is that the client will use only the
 // 'authorization_code' Grant Type." oauth2.DefaultClient.GetGrantTypes applies that default at request time, so a
 // client registered with no 'grant_types' is an authorization code client to the rest of the provider and must
-// satisfy the same redirect URI requirement as one that declares the grant explicitly - otherwise omitting the
-// parameter is all it takes to register a redirect-less authorization code client. The default is paired: an
+// satisfy the same redirect URI requirement as one declaring the grant explicitly. The default is paired: an
 // explicitly declared non-redirecting grant does not acquire the 'code' response type it never registered.
 func TestSpec_RFC7591_2_OmittedGrantTypesDefaultToAuthorizationCode(t *testing.T) {
 	ctx := context.Background()

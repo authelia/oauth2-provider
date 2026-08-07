@@ -41,19 +41,17 @@ func (s *DefaultClientRegistrationStrategy) NewClient(ctx context.Context, id st
 
 // PatchClient applies the complete metadata set onto an existing *oauth2.DefaultRegisteredClient, implementing the
 // full replacement semantics of RFC 7592 Section 2.2: client metadata absent from the update is removed, not
-// merged. Values which are not client metadata - registration bookkeeping (id, issuance time, secret expiry,
-// rotated secrets) and locally administered server policy that has no ClientRegistrationMetadata source (PKCE
-// enforcement, JWT profile access tokens, PAR context lifespan) - are preserved across the replacement, since RFC
-// 7592's replacement semantics govern client metadata, not server policy the client does not control. Public is
-// deliberately NOT preserved: it is derived from TokenEndpointAuthMethod by apply on every call, so a client
-// switching to or from "none" is reflected correctly rather than fighting a stale preserved value. A nil secret
-// leaves the existing client secret untouched.
+// merged. Values which are not client metadata are preserved across the replacement, since RFC 7592's replacement
+// semantics govern client metadata and not server policy the client does not control. Those are registration
+// bookkeeping (id, issuance time, secret expiry, rotated secrets) and locally administered policy with no
+// ClientRegistrationMetadata source (PKCE enforcement, JWT profile access tokens, PAR context lifespan). Public is
+// NOT preserved: apply derives it from TokenEndpointAuthMethod on every call, so a client switching to or from "none"
+// is reflected rather than fighting a stale value. A nil secret leaves the existing client secret untouched.
 //
-// The patched client is a new value and client is never written to. A oauth2.ClientStorage implementation is free
-// to return a pointer into its own state from GetClient - MemoryStore does exactly that - so patching in place
-// would apply the replacement to the stored client before the caller has had the chance to persist it, leaving the
-// update applied even on a request that goes on to fail and be reported as an error. Returning a new value keeps
-// the store's copy authoritative until UpdateClient succeeds.
+// The patched client is a new value and client is never written to. A oauth2.ClientStorage implementation is free to
+// return a pointer into its own state from GetClient, as MemoryStore does, so patching in place would apply the
+// replacement to the stored client before the caller persists it, leaving the update applied even on a request that
+// goes on to fail. Returning a new value keeps the store's copy authoritative until UpdateClient succeeds.
 func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, client oauth2.Client, secret oauth2.ClientSecret, metadata *oauth2.ClientRegistrationMetadata) (patched oauth2.Client, err error) {
 	registered, ok := client.(*oauth2.DefaultRegisteredClient)
 	if !ok {

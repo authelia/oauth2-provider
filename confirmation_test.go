@@ -59,8 +59,6 @@ func TestApplyConfirmation(t *testing.T) {
 			expected: map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationJWKThumbprint: "test-jkt"}},
 		},
 		{
-			// A confirmation method the session does not record is not the server's assertion to make, whichever RFC
-			// defines it. Once RFC 8705 records 'x5t#S256' on the session it is emitted from there, not from here.
 			name:     "ShouldDiscardConfirmationMethodsNotRecordedOnTheSession",
 			claims:   map[string]any{jwt.ClaimConfirmation: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: "forged-x5t"}},
 			session:  confirmationSession("test-jkt"),

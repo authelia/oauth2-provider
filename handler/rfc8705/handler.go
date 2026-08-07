@@ -71,7 +71,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return nil
 	}
 
-	// A session that cannot carry a binding is only an error when a binding was actually required. This deliberately
+	// A session that cannot carry a binding is only an error when a binding was actually required. This
 	// differs from the RFC 9449 DPoP handler, which reports the equivalent condition unconditionally: there the
 	// trigger is a 'DPoP' header the client chose to send, so a session that cannot record the proof is a
 	// misconfiguration the deployment asked for. Here the trigger is a certificate that may be entirely incidental, a

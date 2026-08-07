@@ -17,7 +17,7 @@ import (
 // request's session on write and unmarshals it into the caller-supplied session on read, returning a requester
 // carrying that caller-supplied value.
 //
-// MemoryStore does neither - it ignores the session argument and hands back the object it was given - which makes it
+// MemoryStore does neither: it ignores the session argument and hands back the object it was given, which makes it
 // unable to detect a whole class of defect. Code that type asserts on the session returned by a Get*Session call
 // passes against MemoryStore and fails against every JSON or SQL backed store, because only the latter actually
 // hydrates. A guard written that way shipped green once already; use this store for any test whose subject is what
@@ -25,7 +25,7 @@ import (
 //
 // Hydration works by cloning the stored request and swapping in the caller-supplied session, and it can only clone
 // a *oauth2.Request. A Get*Session call for a request stored as any other oauth2.Requester implementation returns an
-// error rather than silently handing back an unhydrated result - this store never trades a wrong answer for a
+// error rather than silently handing back an unhydrated result, so this store never trades a wrong answer for a
 // convenient one.
 //
 // The clone is shallow: fields such as Form and Client are shared with the stored request, so a caller mutating them
@@ -68,7 +68,7 @@ func (s *HydratingMemoryStore) marshal(key string, request oauth2.Requester) (er
 // hydrate unmarshals the stored session blob into session and returns a shallow copy of request carrying it. When no
 // blob was stored, or the caller supplied no session, request is returned untouched.
 //
-// request must be a *oauth2.Request - that is the only type this method knows how to clone. It is checked before any
+// request must be a *oauth2.Request, the only type this method knows how to clone. It is checked before any
 // unmarshalling happens, so a caller-supplied session is never mutated on a path that then fails to return it.
 func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, session oauth2.Session) (out oauth2.Requester, err error) {
 	if session == nil {

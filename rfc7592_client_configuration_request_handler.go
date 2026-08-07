@@ -17,7 +17,7 @@ import (
 )
 
 // NewRFC7592ClientConfigurationRequest validates the request and produces a ClientConfigurationRequester that can be
-// passed to NewRFC7592ClientConfigurationResponse. The HTTP method itself is not validated here - GET, PUT, and
+// passed to NewRFC7592ClientConfigurationResponse. The HTTP method itself is not validated here; GET, PUT, and
 // DELETE are all accepted, a JSON body is decoded only for PUT, and any other method is recorded on the request as
 // given. HandleRFC7592ClientConfigurationEndpointRequest (handler/rfc7591) is the one that rejects an unsupported
 // method, with ErrInvalidRequest naming it; WriteRFC7592ClientConfigurationError maps that to 405.
@@ -36,11 +36,11 @@ func (f *Fosite) NewRFC7592ClientConfigurationRequest(ctx context.Context, r *ht
 
 	// The client_id is derived from the final path segment, e.g. 'https://auth.example.com/register/{client_id}'
 	// (see handler/rfc7591.ClientConfigurationURL, which constructs that same shape by appending url.PathEscape(id)).
-	// Deriving from r.URL.EscapedPath() rather than r.URL.Path - which net/http has already percent-decoded - and
+	// Deriving from r.URL.EscapedPath() rather than the already percent-decoded r.URL.Path, and
 	// unescaping only the final segment keeps derivation the exact inverse of that construction for any id, not just
 	// the alphanumeric ids the shipped generator happens to produce: an id containing '/' round-trips correctly
 	// because the '/' stays encoded as '%2F' in every segment but the one being unescaped, so it is never mistaken
-	// for a path separator. An empty segment - for example a request to '.../register/' - MUST be rejected here,
+	// for a path separator. An empty segment, for example a request to '.../register/', MUST be rejected here,
 	// before the auth strategy is consulted: the auth strategy's subject check (defence in depth on top of the
 	// audience check) is skipped entirely when id is empty, since an empty id also means "no subject check" for the
 	// client registration endpoint's initial access token, which this is not.
@@ -99,7 +99,7 @@ func (f *Fosite) NewRFC7592ClientConfigurationRequest(ctx context.Context, r *ht
 // without unescaping any percent-encoding present in p. A path ending in '/' therefore yields an empty segment,
 // which is deliberate: it is what lets NewRFC7592ClientConfigurationRequest detect and reject a request with no
 // client_id. Callers that need the client_id itself, rather than just detecting its absence, must unescape the
-// returned segment separately - see NewRFC7592ClientConfigurationRequest, which calls this with r.URL.EscapedPath()
+// returned segment separately. See NewRFC7592ClientConfigurationRequest, which calls this with r.URL.EscapedPath()
 // so that a '%2F' within the id is not mistaken for a path separator before it is unescaped.
 func lastPathSegment(p string) (segment string) {
 	segments := strings.Split(p, "/")

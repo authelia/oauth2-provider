@@ -293,13 +293,6 @@ func TestNewRPInitiatedLogoutRequest_AcceptsAuthorizedPartyMatchingClient(t *tes
 	assert.Equal(t, "test-client", requester.GetClient().GetID())
 }
 
-func newLogoutClient(id string, uris ...string) *oauth2.DefaultRPInitiatedLogoutClient {
-	return &oauth2.DefaultRPInitiatedLogoutClient{
-		DefaultClient:          &oauth2.DefaultClient{ID: id},
-		PostLogoutRedirectURIs: uris,
-	}
-}
-
 func TestNewRPInitiatedLogoutRequest_AcceptsRegisteredPostLogoutRedirectURI(t *testing.T) {
 	client := newLogoutClient("test-client", "https://rp.example/logged-out")
 	f, _, _ := newLogoutProviderWithJWT(t, client)
@@ -386,6 +379,13 @@ func TestNewRPInitiatedLogoutRequest_RejectsHintWhenIssuerUnconfigured(t *testin
 
 	require.Error(t, err, "an unconfigured issuer must not silently skip the 'iss' check")
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
+}
+
+func newLogoutClient(id string, uris ...string) *oauth2.DefaultRPInitiatedLogoutClient {
+	return &oauth2.DefaultRPInitiatedLogoutClient{
+		DefaultClient:          &oauth2.DefaultClient{ID: id},
+		PostLogoutRedirectURIs: uris,
+	}
 }
 
 const logoutTestIssuer = "https://issuer.example/"

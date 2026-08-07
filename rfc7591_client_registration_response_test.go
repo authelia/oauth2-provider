@@ -45,7 +45,6 @@ func TestClientRegistrationResponseToMap(t *testing.T) {
 	response.SetClientSecretExpiresAt(time.Time{})
 	assert.Equal(t, int64(0), response.ToMap()["client_secret_expires_at"])
 
-	// The secret is omitted entirely when there is none.
 	response.SetClientSecret("")
 	assert.NotContains(t, response.ToMap(), "client_secret")
 	assert.NotContains(t, response.ToMap(), "client_secret_expires_at")

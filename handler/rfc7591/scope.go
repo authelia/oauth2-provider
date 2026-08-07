@@ -35,11 +35,10 @@ type ScopeCeilingConfig interface {
 //
 // An omitted or empty 'scope' registers the client with no scopes, so there is nothing to check.
 //
-// The comparison always uses the server's configured oauth2.ScopeStrategy, never a client-supplied one. No client is
-// passed to oauth2.GetScopeStrategy for that reason: the ceiling is a server-side control over what a client may be
+// The comparison always uses the server's configured oauth2.ScopeStrategy, never a client-supplied one, which is why
+// no client is passed to oauth2.GetScopeStrategy. The ceiling is a server-side control over what a client may be
 // granted, so letting the controlled party supply the comparison function through oauth2.ScopeStrategyProvider would
-// be the wrong shape - and it would additionally make registration and update disagree, since only the latter has a
-// registered client to hand.
+// invert it, and would make registration and update disagree since only the latter has a registered client to hand.
 func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authenticated oauth2.Requester, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if authenticated == nil || metadata == nil {
 		return nil
@@ -73,14 +72,11 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 }
 
 // ExcludeRegistrationScope removes every configured client registration scope from scopes. It is the ceiling-side
-// counterpart to the exclusion CheckGrantableScopes enforces on requested scopes: every legitimate creation token
-// carries one of them by design, so without this the management token minted at registration - and every
-// one minted at a later rotation - would carry it forward permanently, letting the registered client obtain creation
-// tokens of its own and register further clients unchecked. Excluding them only from CheckGrantableScopes would close
-// the update path (a request may not ask for the scope) while leaving the management token itself able to carry it,
-// which is the hole that matters most: the scope would sit in the token's own granted scopes regardless of what any
-// future request asks for, observable wherever that token's grant is read back - including client registration
-// token introspection, where opt-in.
+// counterpart to the exclusion CheckGrantableScopes enforces on requested scopes. Every legitimate creation token
+// carries one of these scopes, so without this the management token minted at registration, and every one minted at a
+// later rotation, would carry it forward permanently and let the registered client obtain creation tokens of its own.
+// Excluding them only from CheckGrantableScopes would close the update path while leaving the scope sitting in the
+// management token's own granted scopes, observable wherever that grant is read back.
 //
 // Callers apply this to whatever scopes they are about to hand to NewClientManagementToken as its ceiling, whether
 // that ceiling came from an authenticated creation token's own grant or, on an unauthenticated (open) registration
@@ -101,13 +97,11 @@ func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRe
 // ExcludeRegistrationScopeFromMetadata removes every configured client registration scope from the 'scope' a
 // registration request asks for, so none can end up on the registered client itself.
 //
-// It is the third and last place the exclusion is applied, and the only one that covers an **unauthenticated** (open)
+// It is the third and last place the exclusion is applied, and the only one covering an unauthenticated (open)
 // registration endpoint, which RFC 7591 permits. On that path there is no creation token, so CheckGrantableScopes has
-// no ceiling to enforce and returns early, and ExcludeRegistrationScope only ever filters the minted management
-// token - leaving the requested scope itself untouched. A deployment running an open endpoint would therefore store a
-// client whose own registered scopes contain the registration scope, and that client can then obtain creation tokens
-// through client_credentials and keep registering clients long after the endpoint is closed again. That is the
-// "tempting half-fix" this package's design warns about, in the one configuration where it still bites.
+// no ceiling to enforce and returns early, and ExcludeRegistrationScope only filters the minted management token.
+// Without this, an open endpoint would store a client whose own registered scopes contain the registration scope, and
+// that client could obtain creation tokens through client_credentials long after the endpoint was closed again.
 //
 // Callers apply this after CheckGrantableScopes, never before: on the authenticated path a request that asks for the
 // registration scope must be rejected outright rather than silently stripped, and CheckGrantableScopes is what

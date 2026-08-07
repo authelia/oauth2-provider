@@ -61,10 +61,6 @@ func TestDefaultRegisteredClientDefaults(t *testing.T) {
 	assert.Equal(t, "ES256", set.GetIDTokenSignedResponseAlg())
 }
 
-// TestDefaultRegisteredClientEndpointAuthMethodInheritance pins that an unregistered introspection or revocation
-// endpoint authentication method inherits the token endpoint's method rather than staying empty. An empty value
-// would mean no method is registered, which those endpoints read as "accept any authenticated method"; inheriting
-// keeps one registered method meaningful everywhere.
 func TestDefaultRegisteredClientEndpointAuthMethodInheritance(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -117,10 +113,6 @@ func TestDefaultRegisteredClientEndpointAuthMethodInheritance(t *testing.T) {
 	}
 }
 
-// TestDefaultRegisteredClientPublicClientEndpointAuthentication records the consequence of that inheritance for a
-// public client. Before it inherited, such a client reported an empty revocation method, which is not the literal
-// 'none' this endpoint requires, so it could never revoke its own tokens. Introspection stays closed to it either
-// way, because that endpoint does not permit the 'none' method at all.
 func TestDefaultRegisteredClientPublicClientEndpointAuthentication(t *testing.T) {
 	client := &DefaultRegisteredClient{
 		DefaultClient:           &DefaultClient{ID: "abc", Public: true},

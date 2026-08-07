@@ -37,8 +37,8 @@ func AccessTokenFromRequest(r *http.Request) (token string, dpop bool) {
 //
 //   - Failures of those twelve criteria return oauth2.ErrInvalidDPoPProof.
 //   - A missing or stale nonce returns oauth2.ErrUseDPoPNonce, so the caller can respond with a DPoP-Nonce challenge.
-//   - Conditions that are not Section 4.3 criteria - a bound token presented under the wrong scheme (Section 7.2), or
-//     a token that is not bound at all - return oauth2.ErrInvalidToken instead.
+//   - Conditions that are not Section 4.3 criteria, being a bound token presented under the wrong scheme
+//     (Section 7.2) or a token that is not bound at all, return oauth2.ErrInvalidToken instead.
 //
 // The method is intended only for tokens already known to be DPoP-bound; an empty boundJKT is treated as caller misuse.
 func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
@@ -53,7 +53,7 @@ func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Re
 	//
 	// This reports ErrInvalidToken, not ErrInvalidDPoPProof. Section 7.1 defines invalid_dpop_proof as indicating the
 	// proof "was deemed invalid based on the criteria of Section 4.3", and presenting a token under the wrong scheme
-	// is none of those criteria - the request may carry no proof at all, so there is nothing to have deemed.
+	// is none of those criteria, since the request may carry no proof at all.
 	token, dpop := AccessTokenFromRequest(r)
 	if !dpop || token != accessToken {
 		// The client-facing hint stays generic so it does not reveal which sub-condition failed; the debug field (only

@@ -124,10 +124,7 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 	if use == AccessToken {
 		// RFC 9449 Section 6.2: "If the token_type member is included in the introspection response, it MUST contain
 		// the value DPoP." This describes the token being introspected, not the credential authorizing the call, so
-		// it is derived from that token's own session.
-		//
-		// It must come from the same session ApplyConfirmation reads for 'cnf' (see WriteIntrospectionResponse), or
-		// the response would contradict itself by reporting a 'cnf.jkt' alongside a 'bearer' token type.
+		// it is derived from that token's own session, which is also the session ApplyConfirmation reads for 'cnf'.
 		//
 		// RFC 8705 defines no token type of its own, so a certificate-bound token remains 'bearer'.
 		accessTokenType = BearerAccessToken
@@ -153,33 +150,22 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 // RFC 7662 Section 2.1 requires "some form of authorization" and names those two as its examples without choosing
 // between them, so both are offered. A deployment that wants only the first sets
 // GetIntrospectionEndpointClientAuthDisabled, after which a request presenting no credential is rejected here rather
-// than falling through - see that provider for why a deployment would, and the branch below for why the rejection
-// reports ErrInvalidToken.
+// than falling through. The credential branch is tried first either way, so turning that option on removes the
+// fallback and alters nothing about a request already presenting a credential.
 //
-// The order does not change with it. The credential branch is tried first either way, so turning the option on
-// removes the fallback and alters nothing about a request that was already presenting a credential.
-//
-// Everything that authorises a bearer credential - the RFC 9449 and RFC 8705 bindings it carries, then scope, then
-// audience - is delegated to ValidateBearerAuthorization, which the RFC 7591 client registration endpoint calls with
-// its own configuration values. Sharing that function is what keeps the two endpoints from drifting apart.
+// Authorising the bearer credential (its RFC 9449 and RFC 8705 bindings, then scope, then audience) is delegated to
+// ValidateBearerAuthorization, which the RFC 7591 client registration endpoint also calls with its own configuration
+// values.
 //
 // Those checks apply to the credential in the Authorization header only, never to the token being introspected. The
-// introspected token is the subject of the request rather than a credential presented by the caller: the caller is
-// not claiming to hold its key, and a resource server introspecting a bound token it received is the entire point of
-// reporting 'cnf' back to it. RFC 9449 Section 6.2 says so directly - "the authorization server does not validate an
-// access token's DPoP binding at the introspection endpoint" - and demanding a proof for that token would make
-// introspection impossible for exactly the tokens it matters most for.
+// introspected token is the subject of the request rather than a credential the caller claims to hold the key for,
+// and RFC 9449 Section 6.2 states that "the authorization server does not validate an access token's DPoP binding at
+// the introspection endpoint". The same asymmetry governs enforcement: GetDPoPEnforce and GetMTLSEnforce require the
+// credential in the Authorization header to be bound and still require nothing of the introspected token, since a
+// resource server introspects whatever token it was handed, including an unbound one it intends to reject.
 //
-// Without the check on the credential, though, a DPoP-bound access token presented as a bearer credential would
-// authenticate its client here, so a token lifted from a proxy log would replay at this endpoint with no key - the
-// binding the token endpoint enforced buys nothing the moment the token is used as a credential rather than
-// exchanged.
-//
-// The same asymmetry governs enforcement. Where the deployment sets GetDPoPEnforce or GetMTLSEnforce,
-// ValidateBearerAuthorization additionally requires the credential in the Authorization header to be bound at all,
-// and still requires nothing of the introspected token: a resource server introspects whatever token it was handed,
-// including an unbound one it intends to reject on exactly that basis, and an introspection endpoint that refused to
-// answer for it would leave the resource server unable to tell an unbound token from an unknown one.
+// Without the check on the credential a DPoP-bound access token presented as a bearer credential would authenticate
+// its client here, so a token lifted from a proxy log would replay at this endpoint with no key.
 func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, err error) {
 	var clientToken string
 
@@ -207,10 +193,9 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithDebugf("The HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
 		}
 
-		// Endpoint is deliberately left empty. GetIntrospectionIssuer returns the 'iss' claim used in JWT
-		// introspection responses, not this endpoint's own URL, so it is not a valid audience to fall back to. The
-		// introspection endpoint has no configured URL, so the chain runs from the configured list straight to
-		// RequestURL - which is what the requirement specifies, and why configuring the list is recommended here.
+		// Endpoint is left empty: GetIntrospectionIssuer returns the 'iss' claim used in JWT introspection
+		// responses, not this endpoint's own URL, so it is not a valid audience to fall back to. The chain therefore
+		// runs from the configured list straight to RequestURL, which is why configuring the list is recommended.
 		if err = ValidateBearerAuthorization(ctx, f.Config, r, ar, clientToken, BearerAuthorization{
 			Audiences: f.Config.GetAllowedIntrospectionAudiences(ctx),
 			Scopes:    f.Config.GetAllowedIntrospectionScopes(ctx),
@@ -221,12 +206,10 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		client = ar.GetClient()
 	} else if f.Config.GetIntrospectionEndpointClientAuthDisabled(ctx) {
 		// No credential was presented and client authentication is off, so there is no method left to try. The code
-		// is ErrInvalidToken rather than the ErrRequestUnauthorized the client authentication branch reports, and the
-		// difference is not cosmetic: IsBearerCredentialError admits the former and excludes the latter, so this is
-		// what makes WriteIntrospectionError answer with the RFC 6750 Section 3 'WWW-Authenticate' challenge naming
-		// the Bearer and DPoP schemes. Reporting ErrRequestUnauthorized would send no challenge at all, leaving a
-		// caller with nothing to discover the one scheme this endpoint now accepts - which is precisely the case
-		// Section 3.1 has a parameterless challenge for.
+		// is ErrInvalidToken rather than the ErrRequestUnauthorized the client authentication branch reports because
+		// IsBearerCredentialError admits the former and excludes the latter, which is what makes
+		// WriteIntrospectionError answer with the RFC 6750 Section 3.1 parameterless 'WWW-Authenticate' challenge
+		// naming the one scheme this endpoint now accepts.
 		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint."))
 	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetIntrospectionEndpointClientAuthStrategy(ctx)); err != nil {
 		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
@@ -239,9 +222,9 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 // introspection endpoint, accepting the RFC 9449 DPoP scheme in addition to the schemes AccessTokenFromRequest
 // understands.
 //
-// AccessTokenFromRequest is deliberately not widened to do this. It implements RFC 6750, and every other caller of it
-// is a place where accepting a DPoP-presented token would mean accepting it without the proof that makes the
-// presentation meaningful. Here the proof is checked, by ValidateBearerAuthorization.
+// AccessTokenFromRequest is not widened to do this. It implements RFC 6750, and every other caller of it is a place
+// where accepting a DPoP-presented token would mean accepting it without the proof that makes the presentation
+// meaningful. Here the proof is checked, by ValidateBearerAuthorization.
 func introspectionCredentialFromRequest(r *http.Request) (token string, err error) {
 	// RFC 9449 Section 7.2 Figure 19: using more than one method to include an access token is a malformed request,
 	// reported with HTTP 400 and 'invalid_request'. Without this check Header.Get would silently take the first.
@@ -253,18 +236,16 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 	scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
 
 	// RFC 6750 Section 2 forbids a client using more than one of its transports in a single request, and Section 3.1
-	// makes doing so 'invalid_request' with HTTP 400 - the same condition and the same code as the duplicate header
-	// above, so the hint is shared. AccessTokenFromRequest cannot detect this itself: it falls back to the
-	// 'access_token' parameter whenever the header is not Bearer, so a header and a parameter arriving together
-	// resolve to the header and the conflict goes unreported.
+	// makes doing so 'invalid_request' with HTTP 400, the same condition and code as the duplicate header above.
+	// AccessTokenFromRequest cannot detect this itself: it falls back to the 'access_token' parameter whenever the
+	// header is not Bearer, so a header and a parameter arriving together resolve to the header.
 	//
-	// Only a header that actually carries an access token counts. A 'Basic' header is client authentication rather
-	// than a second copy of the token - RFC 7662 Section 2.1 names it as an alternative to a bearer credential, and
-	// its own example pairs it with a form body - so a request combining it with the parameter is still using exactly
-	// one transport and must not be rejected here.
+	// Only a header actually carrying an access token counts. A 'Basic' header is client authentication rather than a
+	// second copy of the token, which RFC 7662 Section 2.1 names as an alternative to a bearer credential, so a
+	// request combining it with the parameter still uses exactly one transport.
 	//
 	// The parameter is read off r.Form, which NewIntrospectionRequest has already populated and which carries the URI
-	// query alongside the form body, so both of the transports AccessTokenFromRequest can return are covered.
+	// query alongside the form body, so both transports AccessTokenFromRequest can return are covered.
 	if found && len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}

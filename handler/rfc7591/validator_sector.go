@@ -108,7 +108,7 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 // oauth2.HTTPClientProvider.GetHTTPClient, and every other consumer of that shared instance must keep following
 // redirects normally.
 //
-// client's unexported sync.Once guards are deliberately not copied (copying a sync.Once by value is unsafe once it
+// client's unexported sync.Once guards are not copied (copying a sync.Once by value is unsafe once it
 // may have fired); the returned Client starts with its own, unfired guards, which is safe because every field they
 // guard (the resolved logger and the lazily-defaulted HTTPClient) is set explicitly below.
 func withoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {

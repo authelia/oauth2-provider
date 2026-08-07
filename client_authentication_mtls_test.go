@@ -381,10 +381,6 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 	}
 }
 
-// TestAuthenticateClientMTLSViaForwardedHeader covers the deployment MTLSClientCertificateHeader exists for: a TLS
-// terminating reverse proxy that forwards the client's certificate in a header while authenticating its own
-// connection to this server with mutual TLS. The peer certificate on such a connection is the proxy's, so the header
-// is the only source of the client's certificate.
 func TestAuthenticateClientMTLSViaForwardedHeader(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
 	proxy := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "proxy"}, DNSNames: []string{"proxy.example.com"}, SerialNumber: 3})
@@ -432,8 +428,6 @@ func TestAuthenticateClientMTLSViaForwardedHeader(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectWhenOnlyTheProxyCertificateIsPresent", func(t *testing.T) {
-		// No header means no client certificate. Were the connection's peer certificate consulted instead, this would
-		// fail on the SAN mismatch rather than on there being no credential at all.
 		client, _, err := newStrategy().AuthenticateClient(context.TODO(), newRequest(proxy, ""), form, &TokenEndpointClientAuthStrategy{})
 
 		assert.Nil(t, client)
@@ -505,9 +499,6 @@ func (s *mtlsClientStore) ClientAssertionJWTValid(_ context.Context, _ string) e
 func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
 	return nil
 }
-
-// The mutual-TLS tests exercise authentication, not dynamic registration, so this store implements the
-// ClientRegistrationManager half of ClientManager as unsupported.
 
 func (s *mtlsClientStore) CreateClient(_ context.Context, _ Client) error {
 	return ErrNotFound

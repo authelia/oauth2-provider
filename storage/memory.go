@@ -740,8 +740,8 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	return nil
 }
 
-// CheckAndSetDPoPProofUsed implements rfc9449.DPoPReplayStorage. The jkt and nonce arguments are deliberately unused:
-// this store keys on the endpoint the proof is bound to. See DPoPProofMarker for the trade-off that implies.
+// CheckAndSetDPoPProofUsed implements rfc9449.DPoPReplayStorage. The jkt and nonce arguments are unused because this
+// store keys on the endpoint the proof is bound to. See DPoPProofMarker for the trade-off that implies.
 func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti, _, _, htm, htu string, exp time.Time) (bool, error) {
 	s.dpopProofJTIsMutex.Lock()
 	defer s.dpopProofJTIsMutex.Unlock()

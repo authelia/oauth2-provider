@@ -14,23 +14,6 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-func newFilterMetadata() *oauth2.ClientRegistrationMetadata {
-	return &oauth2.ClientRegistrationMetadata{
-		RedirectURIs:                          []string{"https://example.com/cb"},
-		ClientName:                            "Example",
-		TokenEndpointAuthMethod:               "tls_client_auth",
-		IntrospectionEndpointAuthMethod:       "self_signed_tls_client_auth",
-		RevocationEndpointAuthMethod:          "tls_client_auth",
-		TLSClientAuthSubjectDN:                "CN=client,O=Example",
-		TLSClientAuthSANDNS:                   "client.example.com",
-		TLSClientAuthSANURI:                   "https://client.example.com",
-		TLSClientAuthSANIP:                    "203.0.113.10",
-		TLSClientAuthSANEmail:                 "client@example.com",
-		TLSClientCertificateBoundAccessTokens: true,
-		DPoPBoundAccessTokens:                 true,
-	}
-}
-
 func TestDefaultClientRegistrationMetadataStrategyStripsMTLSWhenDisabled(t *testing.T) {
 	strategy := NewDefaultClientRegistrationMetadataStrategy(&oauth2.Config{DPoPEnabled: true})
 
@@ -49,7 +32,6 @@ func TestDefaultClientRegistrationMetadataStrategyStripsMTLSWhenDisabled(t *test
 	assert.Empty(t, metadata.IntrospectionEndpointAuthMethod)
 	assert.Empty(t, metadata.RevocationEndpointAuthMethod)
 
-	// DPoP is enabled here, so its value survives; ungated metadata is never touched.
 	assert.True(t, metadata.DPoPBoundAccessTokens)
 	assert.Equal(t, "Example", metadata.ClientName)
 	assert.Equal(t, []string{"https://example.com/cb"}, metadata.RedirectURIs)
@@ -118,6 +100,23 @@ func TestMetadataStrategyFallsBackToDefault(t *testing.T) {
 	config.RFC7591ClientRegistrationMetadataStrategy = configured
 
 	assert.Same(t, configured, metadataStrategy(context.Background(), config))
+}
+
+func newFilterMetadata() *oauth2.ClientRegistrationMetadata {
+	return &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:                          []string{"https://example.com/cb"},
+		ClientName:                            "Example",
+		TokenEndpointAuthMethod:               "tls_client_auth",
+		IntrospectionEndpointAuthMethod:       "self_signed_tls_client_auth",
+		RevocationEndpointAuthMethod:          "tls_client_auth",
+		TLSClientAuthSubjectDN:                "CN=client,O=Example",
+		TLSClientAuthSANDNS:                   "client.example.com",
+		TLSClientAuthSANURI:                   "https://client.example.com",
+		TLSClientAuthSANIP:                    "203.0.113.10",
+		TLSClientAuthSANEmail:                 "client@example.com",
+		TLSClientCertificateBoundAccessTokens: true,
+		DPoPBoundAccessTokens:                 true,
+	}
 }
 
 type testMetadataStrategy struct {

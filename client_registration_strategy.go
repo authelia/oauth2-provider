@@ -56,7 +56,7 @@ type ClientRegistrationEndpointAuthStrategy interface {
 	// client.
 	//
 	// An implementation may return a nil requester together with a nil error, which reports that the endpoint is open
-	// and the request carries no authenticated identity - RFC 7591 Section 3.1 makes the initial access token optional,
+	// and the request carries no authenticated identity. RFC 7591 Section 3.1 makes the initial access token optional,
 	// "if authorization is required". Consumers must therefore treat a nil error as permission to proceed, not as a
 	// promise of a requester, and check the requester before dereferencing it; the scope and audience ceilings derived
 	// from it simply do not apply when there is none. Returning a non-nil error is what refuses a request.

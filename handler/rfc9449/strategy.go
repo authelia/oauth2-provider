@@ -70,7 +70,7 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	//     this server's clock, and one running slow mints one that already looks old.
 	//
 	// So the proof is good from iat-skew until iat+lifespan+skew. Collapsing the two into a single symmetric leeway -
-	// which this previously did - forces a deployment to buy tolerance for a badly synchronised clock by leaving
+	// which this previously did, forces a deployment to buy tolerance for a badly synchronised clock by leaving
 	// every proof valid for that same span, and the two have no reason to be equal.
 	var (
 		skew     = s.Config.GetDPoPClockSkew(ctx)
@@ -105,8 +105,8 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	}
 
 	// Check-and-mark the proof as used in a single atomic step so concurrent requests presenting the same proof cannot
-	// both pass the replay check. The marker is kept until 'expires' - the exact instant the acceptance window above
-	// closes - rather than any interval measured from now: a proof presented early (client clock ahead, within skew)
+	// both pass the replay check. The marker is kept until 'expires', the instant the acceptance window above
+	// closes, rather than any interval measured from now: a proof presented early (client clock ahead, within skew)
 	// stays acceptable until iat+lifespan+skew, so a marker expiring before that would reopen a replay window for the
 	// remainder. Deriving both from the same value is what keeps them in step if either setting is retuned. It is
 	// recorded against the proof key together with the method, normalized target URI and nonce the proof commits to

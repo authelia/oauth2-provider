@@ -143,7 +143,7 @@ var (
 	}
 	// ErrInvalidToken is a resource-server rejection per RFC 8705 Section 3: a protected-resource request bearing a
 	// certificate-bound access token whose certificate does not match the binding must be rejected with HTTP 401 and
-	// the 'invalid_token' error code. It deliberately reuses errInvalidTokenFormatName, the same error code as
+	// the 'invalid_token' error code. It reuses errInvalidTokenFormatName, the same error code as
 	// ErrInvalidTokenFormat, but with HTTP 401 instead of 400; RFC6749Error.Is compares both ErrorField and CodeField,
 	// so the two remain distinguishable by errors.Is.
 	ErrInvalidToken = &RFC6749Error{

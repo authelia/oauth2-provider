@@ -45,8 +45,8 @@ func (f *Fosite) WriteRFC7591ClientRegistrationError(ctx context.Context, rw htt
 // writeClientRegistrationResponse writes a successful ClientRegistrationResponder, shared by the RFC 7591 client
 // registration endpoint and the RFC 7592 client configuration endpoint since both return the same wire format (see
 // ClientConfigurationResponder's doc comment). It marshals responder.ToMap() to JSON, sets the standard headers, and
-// copies any additional headers set on the responder. A 204 status - written by the RFC 7592 client configuration
-// endpoint's DELETE case - writes no body at all, not '{}'.
+// copies any additional headers set on the responder. A 204 status, written by the RFC 7592 client
+// configuration endpoint's DELETE case, writes no body at all, not '{}'.
 func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, responder ClientRegistrationResponder) {
 	headers := responder.GetHeader()
 	for header := range headers {
@@ -85,14 +85,14 @@ func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.Re
 // needs: HandleRFC7592ClientConfigurationEndpointRequest (handler/rfc7591) returns ErrInvalidRequest naming the
 // method when requester.GetMethod() is not GET, PUT, or DELETE, and RFC 7592 Section 3 requires that be reported as
 // 405, a status ErrInvalidRequest does not otherwise carry. The client registration endpoint only ever accepts POST,
-// so an analogous method mismatch there is reported as the ordinary 400 - the same treatment NewPushedAuthorizeRequest
+// so an analogous method mismatch there is reported as the ordinary 400, the same treatment NewPushedAuthorizeRequest
 // gives a non-POST pushed authorization request.
 //
 // It also selects the 'WWW-Authenticate' challenge. The client registration endpoint is a full OAuth 2.0 protected
 // resource: it accepts a creation token under the Bearer or the DPoP scheme, so it answers with the challenge
 // WriteBearerAuthorizationChallenge composes, including the RFC 9449 status promotion and the 'DPoP-Nonce' a client
 // needs to complete a nonce handshake. The client configuration endpoint takes a management token that is minted
-// outside the binding machinery and can never be bound, so it keeps the bare Bearer challenge - advertising DPoP
+// outside the binding machinery and can never be bound, so it keeps the bare Bearer challenge; advertising DPoP
 // there would offer a scheme it cannot honour.
 func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, configuration bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
@@ -117,8 +117,8 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 			rw.Header().Set(consts.HeaderWWWAuthenticate, consts.AuthSchemeBearer)
 		}
 	case IsBearerCredentialError(err):
-		// The request is not available here - WriteRFC7591ClientRegistrationError is public API taking only a
-		// context - so the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2 Figure 19
+		// The request is not available here, since WriteRFC7591ClientRegistrationError is public API taking only a
+		// context, so the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2 Figure 19
 		// covers.
 		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, nil, rfc)
 	}

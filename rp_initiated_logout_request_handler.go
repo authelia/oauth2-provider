@@ -125,7 +125,7 @@ func (f *Fosite) unsafeRPInitiatedLogoutClientID(ctx context.Context, hint strin
 }
 
 // validateRPInitiatedLogoutIDTokenHint verifies the 'id_token_hint' signature and applies the claim policy. The
-// expiration check is deliberately disabled: the hint identifies the session the Relying Party is asking to end and
+// expiration check is disabled: the hint identifies the session the Relying Party is asking to end and
 // is expected to be expired.
 func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, request *RPInitiatedLogoutRequest) (err error) {
 	if request.IDTokenHint == "" {

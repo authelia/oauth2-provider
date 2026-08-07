@@ -33,7 +33,7 @@ type ClientConfigurationHandler struct {
 //
 // It loads the client named by requester.GetClientID(), returning oauth2.ErrNotFound when no such client exists,
 // then dispatches on requester.GetMethod() to read, update, or delete. A method other than GET, PUT, or DELETE
-// yields oauth2.ErrInvalidRequest naming the method, which the RFC 7592 response writer (Task 15) maps to 405.
+// yields oauth2.ErrInvalidRequest naming the method, which the RFC 7592 response writer maps to 405.
 func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointRequest(ctx context.Context, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	id := requester.GetClientID()
 
@@ -56,9 +56,9 @@ func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointReq
 }
 
 // read implements the GET case: it renders the client's current metadata, status 200. The 'client_secret' is
-// included only when the client exposes one in plaintext; a hashed-secret store simply omits it. The presented
-// registration access token is deliberately not re-emitted: only its signature reaches this handler (see
-// DefaultEndpointAuthStrategy), and a signature cannot be turned back into the token it was derived from.
+// included only when the client exposes one in plaintext; a hashed-secret store omits it. The presented registration
+// access token is not re-emitted, because only its signature reaches this handler and a signature cannot be turned
+// back into the token it was derived from.
 func (h *ClientConfigurationHandler) read(ctx context.Context, client oauth2.Client, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {
@@ -96,8 +96,8 @@ func (h *ClientConfigurationHandler) read(ctx context.Context, client oauth2.Cli
 // arrive as unregistered metadata parameters (see PatchClient's doc comment), are validated and stripped from Extra
 // so they are never persisted as unregistered client metadata, the remaining metadata is validated and applied as a
 // complete replacement, and finally a replacement registration access token is minted before the old one's session
-// is deleted - in that order, so a failure minting the replacement leaves the client still holding a working token
-// rather than locked out of its own registration.
+// is deleted. That order leaves the client still holding a working token when minting the replacement fails, rather
+// than locked out of its own registration.
 func (h *ClientConfigurationHandler) update(ctx context.Context, id string, client oauth2.Client, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {
@@ -107,9 +107,9 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	metadata := requester.GetMetadata()
 
 	// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, so a PUT arriving with none is a
-	// shape the interface itself makes reachable: reject it before the metadata is filtered, checked, and validated
-	// rather than dereferencing it. RFC 7592 Section 2.2 replacement semantics also make an empty PUT the wrong
-	// thing to treat as "nothing to change" - it would replace the client's entire metadata with nothing.
+	// shape the interface makes reachable and must be rejected rather than dereferenced. Under RFC 7592 Section 2.2
+	// replacement semantics an empty PUT is not "nothing to change"; it would replace the client's metadata with
+	// nothing.
 	if metadata == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
 	}
@@ -154,10 +154,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	grantableAudience := oauth2.Arguments(nil)
 
 	// The authenticated requester came from the configured oauth2.ClientRegistrationEndpointAuthStrategy, whose sole
-	// contract is authenticating client registration tokens - this package's own DefaultEndpointAuthStrategy resolves
-	// it from the client registration token store, a storage namespace separate from ordinary access tokens, so a
-	// requester reaching this point through it always carries a genuine client registration token's own grant. A
-	// deployment supplying its own implementation of that interface is expected to honour the same contract.
+	// contract is authenticating client registration tokens. DefaultEndpointAuthStrategy resolves it from the client
+	// registration token store, a namespace separate from ordinary access tokens, so a requester reaching this point
+	// always carries a genuine client registration token's own grant. A deployment supplying its own implementation
+	// is expected to honour the same contract.
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
 		grantable = authenticated.GetGrantedScopes()
 		grantableAudience = authenticated.GetGrantedAudience()
@@ -175,11 +175,9 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	// The replacement token above is minted before the old session is deleted here: if minting had failed, the
-	// client would still hold a working token (returned above). Deleting first and having the mint then fail would
-	// instead leave the client permanently locked out of its own registration. If this delete itself fails, the
-	// client already holds the new, working token from the mint above, so that is preferred over failing the whole
-	// request; the stale old session is otherwise harmless since it authenticates a client that continues to exist.
+	// Deleted only after the replacement was minted, so a failed mint leaves the client holding a working token
+	// instead of locked out of its own registration. A failed delete is not reported: the client already holds the
+	// new token, and the stale session authenticates a client that continues to exist.
 	if oldSignature := requester.GetSignature(); oldSignature != "" {
 		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, oldSignature)
 	}

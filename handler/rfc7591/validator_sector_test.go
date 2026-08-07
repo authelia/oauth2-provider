@@ -80,8 +80,6 @@ func TestSectorIdentifierValidator(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectNonOKStatus", func(t *testing.T) {
-		// /missing is answered live by the server with a 404: this exercises the non-200-status branch, not a
-		// transport failure (see ShouldRejectTransportFailure below for that).
 		err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{
 			SectorIdentifierURI: server.URL + "/missing",
 			RedirectURIs:        []string{"https://example.com/cb"},

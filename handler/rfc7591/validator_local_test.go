@@ -67,8 +67,6 @@ func TestLocalValidator(t *testing.T) {
 			err: "invalid_redirect_uri",
 		},
 		{
-			// The 'localhost' name and the loopback IP literals are the same host: rejecting only the name leaves
-			// the rule bypassable by spelling it as an address.
 			name: "ShouldRejectLoopbackIPv4RedirectURIForWebApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "web",
@@ -85,7 +83,6 @@ func TestLocalValidator(t *testing.T) {
 			err: "invalid_redirect_uri",
 		},
 		{
-			// 127.0.0.0/8 is loopback in its entirety, not just 127.0.0.1.
 			name: "ShouldRejectNonCanonicalLoopbackIPv4RedirectURIForWebApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "web",
@@ -104,8 +101,6 @@ func TestLocalValidator(t *testing.T) {
 			err: "invalid_redirect_uri",
 		},
 		{
-			// The loopback prohibition is scoped to web clients: it must not follow a native client to the loopback
-			// redirect RFC 8252 §7.3 requires of it.
 			name: "ShouldAcceptLoopbackRedirectURIForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",
@@ -126,8 +121,6 @@ func TestLocalValidator(t *testing.T) {
 			},
 		},
 		{
-			// A single-label scheme is claimable by any other application on the device, so it is not a scheme the
-			// registrant can be said to control.
 			name: "ShouldRejectSingleLabelPrivateUseSchemeForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",

@@ -21,10 +21,10 @@ import (
 // declares; the client registration token methods live only on the concrete *hoauth2.HMACCoreStrategy or
 // *hoauth2.JWTProfileCoreStrategy CommonStrategy is ordinarily constructed with (see NewOAuth2HMACStrategy,
 // NewOAuth2JWTStrategy), and are invisible through CommonStrategy regardless of whether it is held by value or by
-// pointer. RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory know this and resolve the
-// underlying CoreStrategy directly - see mustClientRegistrationTokenStrategy - rather than requiring CommonStrategy
-// itself to satisfy the interface. A CoreStrategy that does not implement it fails there, at compose time, with a
-// message naming this field and the methods it lacks.
+// pointer. RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory therefore resolve the underlying
+// CoreStrategy directly, via mustClientRegistrationTokenStrategy, rather than requiring CommonStrategy itself to
+// satisfy the interface. A CoreStrategy that does not implement it fails there, at compose time, with a message
+// naming this field and the methods it lacks.
 type CommonStrategy struct {
 	hoauth2.CoreStrategy
 	openid.OpenIDConnectTokenStrategy
@@ -79,14 +79,12 @@ func (s CommonStrategy) clientRegistrationTokenStrategy() (strategy rfc7591.Clie
 // with a message naming what is wrong.
 //
 // It special-cases CommonStrategy, by value and by pointer, because CommonStrategy never satisfies the interface
-// through method promotion alone (see its doc comment) - it resolves CoreStrategy directly instead. Any other
-// strategy type is asserted against the interface directly, exactly as every other compose factory asserts its
-// strategy parameter.
+// through method promotion alone (see its doc comment), so its CoreStrategy is resolved directly. Any other strategy
+// type is asserted against the interface, exactly as every other compose factory asserts its strategy parameter.
 //
 // RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory call this from inside the Factory Compose
-// invokes synchronously while assembling the Provider, so a misconfigured CoreStrategy fails here - at compose time
-// - rather than as an interface-conversion panic on the first request that reaches the client registration or
-// configuration endpoint.
+// invokes synchronously while assembling the Provider, so a misconfigured CoreStrategy fails at compose time rather
+// than as an interface-conversion panic on the first request reaching one of those endpoints.
 func mustClientRegistrationTokenStrategy(strategy any) (resolved rfc7591.ClientRegistrationTokenStrategy) {
 	var (
 		cs  CommonStrategy

@@ -260,7 +260,7 @@ func isLoopbackHost(host string) bool {
 // name (RFC 6761 Section 6.3, which reserves 'localhost' and any name under '.localhost') or by any loopback IP
 // address (127.0.0.0/8 or ::1).
 //
-// It is deliberately broader than isLoopbackHost. That function is an allow list: it gates the loopback redirect a
+// It is broader than isLoopbackHost. That function is an allow list: it gates the loopback redirect a
 // native client may register, where RFC 8252 Section 7.3 names the two literals exactly and admitting no more than
 // those is the conservative reading. This one is a deny list, where the conservative reading is the opposite: every
 // host that reaches the resource owner's own machine must be caught, since anything missed is not a stricter rule
@@ -333,8 +333,8 @@ func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error
 // to carry exactly what was submitted.
 //
 // The 'response_types' default is applied only when 'grant_types' is absent as well, i.e. only as the other half of
-// the same default pair. A client that declares 'grant_types' without 'response_types' - a 'client_credentials'
-// client being the common case - has declared it will not use a redirection flow, and synthesizing a 'code'
+// the same default pair. A client that declares 'grant_types' without 'response_types', commonly a
+// 'client_credentials' client, has declared it will not use a redirection flow, and synthesizing a 'code'
 // response type for it would reject the registration over a response type it never asked for.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
@@ -438,7 +438,7 @@ func isToken(s string) bool {
 
 // validateScopes implements a syntactic check of the 'scope' metadata: RFC 6749 Section 3.3 defines a scope token
 // as one or more characters drawn from %x21 / %x23-5B / %x5D-7E, i.e. printable US-ASCII excluding space,
-// double-quote ('"'), and backslash ('\'). This deliberately does not validate the declared scopes against
+// double-quote ('"'), and backslash ('\'). This does not validate the declared scopes against
 // config.GetScopeStrategy(ctx): at registration time there is nothing to match a self-contained needle against
 // other than itself, which is always true and would not catch anything.
 //

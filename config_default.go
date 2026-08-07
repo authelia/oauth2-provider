@@ -368,10 +368,10 @@ type Config struct {
 	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
 	MTLSClientCertificateHeader string
 
-	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is
-	// deliberately separate from GlobalSecret: a client management token never expires and RFC 7592 provides no way
-	// to re-issue one, so signing it with the global secret would mean routine rotation of that secret permanently
-	// locked every registered client out of its own registration.
+	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is separate
+	// from GlobalSecret because a client management token never expires and RFC 7592 provides no way to re-issue
+	// one, so signing it with the global secret would mean routine rotation of that secret permanently locked every
+	// registered client out of its own registration.
 	RFC7591ClientRegistrationGlobalSecret []byte
 
 	// RFC7591ClientRegistrationRotatedGlobalSecrets is a list of rotated client registration token secrets, which

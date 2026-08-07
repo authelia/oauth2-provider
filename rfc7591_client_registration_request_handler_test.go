@@ -20,18 +20,6 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// staticEndpointAuth is a minimal ClientRegistrationEndpointAuthStrategy test double that always returns the
-// configured requester and error, regardless of the request or id it is called with. It is shared by the RFC 7591
-// and RFC 7592 request handler tests in this package.
-type staticEndpointAuth struct {
-	requester Requester
-	err       error
-}
-
-func (s *staticEndpointAuth) AuthenticateClientRegistrationRequest(_ context.Context, _ *http.Request, _ string) (requester Requester, err error) {
-	return s.requester, s.err
-}
-
 func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 	ctx := context.Background()
 
@@ -191,4 +179,13 @@ func TestFositeWriteRFC7591ClientRegistrationError(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rw.Code)
 	assert.Contains(t, rw.Body.String(), `"error":"invalid_client_metadata"`)
+}
+
+type staticEndpointAuth struct {
+	requester Requester
+	err       error
+}
+
+func (s *staticEndpointAuth) AuthenticateClientRegistrationRequest(_ context.Context, _ *http.Request, _ string) (requester Requester, err error) {
+	return s.requester, s.err
 }

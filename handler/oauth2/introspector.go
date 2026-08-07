@@ -48,7 +48,7 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 			// Neither path recognised the token as its hinted kind. If introspectRefreshToken only failed because
 			// the token was not found there (ErrUnknownRequest) while introspectAccessToken produced a definite
 			// rejection (e.g. the token was found but expired), that definite rejection must win: the token was
-			// recognised and deliberately rejected, not merely unrecognised. preferDefiniteIntrospectionError keeps
+			// recognised and rejected, not merely unrecognised. preferDefiniteIntrospectionError keeps
 			// err as-is whenever it is already definite, or both errors are unknown.
 			err = preferDefiniteIntrospectionError(err, accessErr)
 		}
@@ -75,13 +75,11 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 // neither path succeeded. primary is the error from the path that matched the caller's hint (or the default path);
 // secondary is the error from the other path.
 //
-// oauth2.ErrUnknownRequest means "this lookup found nothing", not "this token is invalid" - see the doc comment on
-// introspectAccessToken. When primary is ErrUnknownRequest but secondary is a definite rejection (the token WAS
-// found by the other path, and failed validation there - expired, wrong scope, malformed, ...), returning primary
-// would misreport a recognised-and-rejected token as merely unknown, and IntrospectToken's caller (Fosite's dispatch
-// loop, see introspect.go) treats ErrUnknownRequest as "not mine, try the next introspector" rather than aborting.
-// In every other case - both definite, or both unknown - primary is preserved, matching this function's pre-existing
-// behaviour.
+// oauth2.ErrUnknownRequest means "this lookup found nothing", not "this token is invalid"; see introspectAccessToken.
+// When primary is ErrUnknownRequest but secondary is a definite rejection, meaning the other path found the token and
+// rejected it, returning primary would misreport a recognised-and-rejected token as merely unknown, and Fosite's
+// dispatch loop treats ErrUnknownRequest as "not mine, try the next introspector" rather than aborting. Where both
+// are definite or both unknown, primary is preserved.
 func preferDefiniteIntrospectionError(primary, secondary error) error {
 	if errors.Is(primary, oauth2.ErrUnknownRequest) && !errors.Is(secondary, oauth2.ErrUnknownRequest) {
 		return secondary
@@ -113,8 +111,8 @@ type clientRegistrationTokenFormatStrategy interface {
 }
 
 // isClientRegistrationToken reports whether the configured CoreStrategy recognises token as an RFC 7591 / RFC 7592
-// client registration token purely by its format - which, for a prefixed strategy, is exactly the case in which the
-// access and refresh token signatures come back empty. See introspectAccessToken for why that distinction matters.
+// client registration token by its format alone, which for a prefixed strategy is the case in which the access and
+// refresh token signatures come back empty. See introspectAccessToken for why that distinction matters.
 func (c *CoreValidator) isClientRegistrationToken(ctx context.Context, token string) (is bool) {
 	strategy, ok := c.CoreStrategy.(clientRegistrationTokenFormatStrategy)
 
@@ -124,26 +122,23 @@ func (c *CoreValidator) isClientRegistrationToken(ctx context.Context, token str
 // introspectAccessToken resolves and validates an access token for introspection.
 //
 // A signature that fails to resolve to a stored session (oauth2.ErrNotFound from GetAccessTokenSession) becomes
-// oauth2.ErrUnknownRequest rather than oauth2.ErrRequestUnauthorized. This distinction is load-bearing for
-// composition: Fosite.IntrospectToken runs every registered oauth2.TokenIntrospector in turn and aborts the whole
-// call on the first error that is not ErrUnknownRequest (see introspect.go). Other token kinds - for example RFC
-// 7591 / RFC 7592 client registration tokens, which now live in their own storage namespace - compute a signature
-// same as any other opaque token but are simply absent from access token storage; reporting that as ErrUnknownRequest
-// lets the dispatch loop move on to the introspector that actually owns the token instead of failing the request
-// outright.
+// oauth2.ErrUnknownRequest rather than oauth2.ErrRequestUnauthorized. That distinction matters for composition:
+// Fosite.IntrospectToken runs every registered oauth2.TokenIntrospector in turn and aborts the whole call on the
+// first error that is not ErrUnknownRequest. Other token kinds, such as RFC 7591 / RFC 7592 client registration
+// tokens which live in their own storage namespace, compute a signature like any other opaque token but are absent
+// from access token storage, so reporting ErrUnknownRequest lets the dispatch loop move on to the introspector that
+// owns the token.
 //
-// A prefixed strategy reaches the same conclusion one step earlier: AccessTokenSignature returns an empty signature
-// for a token carrying another kind's prefix, so there is nothing to look up at all. An empty signature is therefore
-// only reported as ErrUnknownRequest when the strategy positively recognises the token as another kind it knows -
-// a client registration token - and stays ErrRequestUnauthorized for anything it does not, which is what keeps a
-// merely malformed credential from being reported as unrecognised. Note the loop aborts on a non-ErrUnknownRequest
-// error from any introspector, not just the first one to run, so ordering the registration token introspector ahead
-// of this one is not an alternative to this check.
+// A prefixed strategy reaches the same conclusion one step earlier, since AccessTokenSignature returns an empty
+// signature for a token carrying another kind's prefix. An empty signature is therefore only reported as
+// ErrUnknownRequest when the strategy positively recognises the token as a client registration token, and stays
+// ErrRequestUnauthorized otherwise, so a malformed credential is not reported as unrecognised. The loop aborts on a
+// non-ErrUnknownRequest error from any introspector, so ordering the registration token introspector first is not an
+// alternative to this check.
 //
-// Every other failure here - an expired token, a scope mismatch, a signature validation failure, or a genuine
-// storage outage - keeps returning ErrRequestUnauthorized: downgrading those to ErrUnknownRequest would let a bad
-// token fall through to other handlers and be reported as merely unrecognised, which would be a security
-// regression, not a composition nicety.
+// Every other failure keeps returning ErrRequestUnauthorized. Downgrading an expired token, a scope mismatch, a
+// signature validation failure, or a storage outage to ErrUnknownRequest would let a bad token fall through to other
+// handlers and be reported as merely unrecognised.
 func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, request oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.AccessTokenSignature(ctx, token)
 

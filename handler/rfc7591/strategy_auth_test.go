@@ -231,8 +231,6 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			expected:   "",
 		},
 		{
-			// The configured audience replaces the request URL rather than supplementing it: a token audienced only
-			// at the URL the request happens to arrive on is not enough once a deployment names the audience.
 			name:       "ShouldRejectTheRequestURLWhenAnAudienceIsConfigured",
 			configured: "https://auth.example.com/api/register",
 			granted:    testEndpoint,
@@ -389,153 +387,6 @@ func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
 	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "at least one of which is required")
 }
 
-func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
-	t.Helper()
-
-	config := &oauth2.Config{
-		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
-	}
-
-	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-	store := storage.NewMemoryStore()
-
-	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
-}
-
-func mintToken(t *testing.T, ctx context.Context, tokens ClientRegistrationTokenStrategy, store Storage, audience, subject string, exp time.Time) string {
-	t.Helper()
-
-	session := &oauth2.DefaultSession{Subject: subject}
-
-	if !exp.IsZero() {
-		session.SetExpiresAt(oauth2.AccessToken, exp)
-	}
-
-	req := oauth2.NewRequest()
-	req.Session = session
-	req.GrantAudience(audience)
-
-	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
-	require.NoError(t, err)
-
-	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
-
-	return token
-}
-
-func request(method, url, token string) *http.Request {
-	r := httptest.NewRequest(method, url, nil)
-
-	if token != "" {
-		r.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	return r
-}
-
-func newAuthFixtures(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
-	t.Helper()
-
-	config := &oauth2.Config{
-		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
-	}
-
-	store := storage.NewMemoryStore()
-	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-
-	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
-}
-
-func authRequest(t *testing.T, method, url, token string) *http.Request {
-	t.Helper()
-
-	r := httptest.NewRequest(method, url, nil)
-	r.Header.Set("Authorization", "Bearer "+token)
-
-	return r
-}
-
-func mintAccessToken(t *testing.T, ctx context.Context, store *storage.MemoryStore, strategy hoauth2.AccessTokenStrategy, scopes, audience []string) string {
-	t.Helper()
-
-	request := oauth2.NewRequest()
-	request.Client = &oauth2.DefaultClient{ID: "onboarding"}
-	request.Session = &oauth2.DefaultSession{
-		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
-	}
-
-	for _, scope := range scopes {
-		request.GrantScope(scope)
-	}
-
-	for _, aud := range audience {
-		request.GrantAudience(aud)
-	}
-
-	token, signature, err := strategy.GenerateAccessToken(ctx, request)
-	require.NoError(t, err)
-	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
-
-	return token
-}
-
-type permissiveAudienceClient struct {
-	oauth2.Client
-}
-
-func (c *permissiveAudienceClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
-	return func(haystack, needle []string) error { return nil }
-}
-
-type permissiveScopeClient struct {
-	oauth2.Client
-}
-
-func (c *permissiveScopeClient) GetScopeStrategy(_ context.Context) (strategy oauth2.ScopeStrategy) {
-	return func(haystack []string, needle string) bool { return true }
-}
-
-type hydratingAccessTokenStore struct {
-	*storage.MemoryStore
-}
-
-func (s *hydratingAccessTokenStore) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
-	if session == nil {
-		return nil, errors.New("cannot hydrate a nil session")
-	}
-
-	var stored oauth2.Requester
-
-	if stored, err = s.MemoryStore.GetAccessTokenSession(ctx, signature, session); err != nil {
-		return nil, err
-	}
-
-	var data []byte
-
-	if data, err = json.Marshal(stored.GetSession()); err != nil {
-		return nil, err
-	}
-
-	if err = json.Unmarshal(data, session); err != nil {
-		return nil, err
-	}
-
-	request = &oauth2.Request{
-		ID:              stored.GetID(),
-		RequestedAt:     stored.GetRequestedAt(),
-		Client:          stored.GetClient(),
-		GrantedScope:    stored.GetGrantedScopes(),
-		GrantedAudience: stored.GetGrantedAudience(),
-		Session:         session,
-	}
-
-	return request, nil
-}
-
 func TestAuthAcceptsAManagementTokenBehindAProxy(t *testing.T) {
 	ctx := context.Background()
 	auth, config, store, tokens := newAuthFixtures(t)
@@ -685,4 +536,151 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 		assert.Equal(t, "invalid_request", rfc.ErrorField)
 		assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
 	})
+}
+
+func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
+	t.Helper()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+	}
+
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+	store := storage.NewMemoryStore()
+
+	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
+}
+
+func mintToken(t *testing.T, ctx context.Context, tokens ClientRegistrationTokenStrategy, store Storage, audience, subject string, exp time.Time) string {
+	t.Helper()
+
+	session := &oauth2.DefaultSession{Subject: subject}
+
+	if !exp.IsZero() {
+		session.SetExpiresAt(oauth2.AccessToken, exp)
+	}
+
+	req := oauth2.NewRequest()
+	req.Session = session
+	req.GrantAudience(audience)
+
+	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
+
+	return token
+}
+
+func request(method, url, token string) *http.Request {
+	r := httptest.NewRequest(method, url, nil)
+
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	return r
+}
+
+func newAuthFixtures(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
+	t.Helper()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+	}
+
+	store := storage.NewMemoryStore()
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
+}
+
+func authRequest(t *testing.T, method, url, token string) *http.Request {
+	t.Helper()
+
+	r := httptest.NewRequest(method, url, nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+
+	return r
+}
+
+func mintAccessToken(t *testing.T, ctx context.Context, store *storage.MemoryStore, strategy hoauth2.AccessTokenStrategy, scopes, audience []string) string {
+	t.Helper()
+
+	request := oauth2.NewRequest()
+	request.Client = &oauth2.DefaultClient{ID: "onboarding"}
+	request.Session = &oauth2.DefaultSession{
+		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+	}
+
+	for _, scope := range scopes {
+		request.GrantScope(scope)
+	}
+
+	for _, aud := range audience {
+		request.GrantAudience(aud)
+	}
+
+	token, signature, err := strategy.GenerateAccessToken(ctx, request)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+	return token
+}
+
+type permissiveAudienceClient struct {
+	oauth2.Client
+}
+
+func (c *permissiveAudienceClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
+	return func(haystack, needle []string) error { return nil }
+}
+
+type permissiveScopeClient struct {
+	oauth2.Client
+}
+
+func (c *permissiveScopeClient) GetScopeStrategy(_ context.Context) (strategy oauth2.ScopeStrategy) {
+	return func(haystack []string, needle string) bool { return true }
+}
+
+type hydratingAccessTokenStore struct {
+	*storage.MemoryStore
+}
+
+func (s *hydratingAccessTokenStore) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
+	if session == nil {
+		return nil, errors.New("cannot hydrate a nil session")
+	}
+
+	var stored oauth2.Requester
+
+	if stored, err = s.MemoryStore.GetAccessTokenSession(ctx, signature, session); err != nil {
+		return nil, err
+	}
+
+	var data []byte
+
+	if data, err = json.Marshal(stored.GetSession()); err != nil {
+		return nil, err
+	}
+
+	if err = json.Unmarshal(data, session); err != nil {
+		return nil, err
+	}
+
+	request = &oauth2.Request{
+		ID:              stored.GetID(),
+		RequestedAt:     stored.GetRequestedAt(),
+		Client:          stored.GetClient(),
+		GrantedScope:    stored.GetGrantedScopes(),
+		GrantedAudience: stored.GetGrantedAudience(),
+		Session:         session,
+	}
+
+	return request, nil
 }

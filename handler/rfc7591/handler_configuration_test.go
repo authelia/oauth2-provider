@@ -79,10 +79,6 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, which makes a PUT carrying none a
-// shape the interface itself admits. It must be answered with an error rather than dereferenced - without the guard
-// the nil reaches the validator chain and the handler panics - and the target client must be left untouched, since
-// RFC 7592 §2.2 replacement semantics would otherwise read an empty PUT as "replace everything with nothing".
 func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, config, store := newConfigurationHandler(t)
@@ -103,14 +99,6 @@ func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 	client, gerr := store.GetClient(ctx, id)
 	require.NoError(t, gerr)
 	assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs())
-}
-
-type failingUpdateClientStore struct {
-	Storage
-}
-
-func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
-	return errTestUpdateClientFailed
 }
 
 func TestClientConfigurationHandlerUpdateLeavesClientIntactWhenStoreFails(t *testing.T) {
@@ -588,6 +576,14 @@ func TestClientConfigurationHandlerIgnoresDisabledFeatureMetadataOnUpdate(t *tes
 
 	assert.Empty(t, registered.TLSClientAuthSubjectDN)
 	assert.False(t, registered.DPoPBoundAccessTokens)
+}
+
+type failingUpdateClientStore struct {
+	Storage
+}
+
+func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
+	return errTestUpdateClientFailed
 }
 
 func newConfigurationHandler(t *testing.T) (*ClientConfigurationHandler, *ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {

@@ -71,7 +71,7 @@ func normalizeDistinguishedName(dn string) (rdns []string) {
 	return rdns
 }
 
-// trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is deliberately narrower
+// trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is narrower
 // than strings.TrimSpace, which strips the full unicode.IsSpace set (tab, newline, U+00A0, ...).
 //
 // Go's pkix.RDNSequence.String, which produces one side of every comparison EqualDistinguishedNames performs, escapes
@@ -136,7 +136,7 @@ func splitDistinguishedName(dn string) (rdns []string) {
 // matchTLSClientAuthSubject performs the RFC 8705 Section 2.1 PKI method check, verifying that the subject information
 // in cert matches the single subject value registered for client.
 //
-// The certificate chain is deliberately not validated here; see the documentation on Config.MTLSClientCertificateHeader
+// The certificate chain is not validated here; see the documentation on Config.MTLSClientCertificateHeader
 // for where that responsibility sits.
 func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificate, endpoint string) (err error) {
 	if cert == nil {
@@ -235,7 +235,7 @@ func matchCertificateIPAddress(cert *x509.Certificate, ip string) bool {
 // cert is one of the certificates conveyed by the client's registered 'jwks' or 'jwks_uri' via the 'x5c' member of a
 // JSON Web Key.
 //
-// Per Section 2.2 the certificate chain is deliberately not validated for this method; possession of the private key
+// Per Section 2.2 the certificate chain is not validated for this method; possession of the private key
 // was proven by the TLS handshake and the registration is what confers trust.
 func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethodClient, cert *x509.Certificate, fetcher jwt.JWKSFetcherStrategy, endpoint string) (err error) {
 	if cert == nil {

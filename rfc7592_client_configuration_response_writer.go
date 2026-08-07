@@ -25,8 +25,8 @@ func (f *Fosite) NewRFC7592ClientConfigurationResponse(ctx context.Context, requ
 	return response, nil
 }
 
-// WriteRFC7592ClientConfigurationResponse writes the client configuration response. A 204 status - written for a
-// successful DELETE - carries no body at all, not '{}'.
+// WriteRFC7592ClientConfigurationResponse writes the client configuration response. A 204 status, written for a
+// successful DELETE, carries no body at all, not '{}'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7592#section-2.3
 func (f *Fosite) WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, responder ClientConfigurationResponder) {
@@ -44,7 +44,7 @@ func (f *Fosite) WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw
 // This implementation reports 401 (accompanied by a 'WWW-Authenticate: Bearer' header per RFC 6750 Section 3) for a
 // missing or invalid registration access token, 404 for an unknown client_id, and 405 for a method other than GET,
 // PUT, or DELETE. RFC 7592 also describes 403 for a token that is otherwise valid but not authorized for the target
-// client; DefaultEndpointAuthStrategy (handler/rfc7591) deliberately reports that case as 401 as well, the same as
+// client; DefaultEndpointAuthStrategy (handler/rfc7591) reports that case as 401 as well, the same as
 // any other authentication failure, so an attacker cannot use the status code to distinguish an unknown token from
 // one that is simply not authorized for this client. See that type's doc comment for the rationale.
 func (f *Fosite) WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error) {

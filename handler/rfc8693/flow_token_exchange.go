@@ -334,6 +334,46 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 	return config.GetRFC8693TokenTypes(ctx)[id]
 }
 
+// validateExchangeTokenPolicy applies the client and scope policy for a 'subject_token' or 'actor_token' resolved
+// back to the request it was issued for.
+//
+// A client may not exchange a subject token issued to itself, and may only request scopes the subject token was
+// granted. Neither rule applies to an actor token, which identifies the acting party rather than the authority
+// being exchanged: that party is normally the requesting client itself, and the issued token's scopes come from
+// the subject token.
+//
+// See https://datatracker.ietf.org/doc/html/rfc8693#section-2.1.
+func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole) (err error) {
+	client := request.GetClient()
+	originalClientID := original.GetClient().GetID()
+	self := client.GetID() == originalClientID
+
+	if self && role == tokenRoleSubject {
+		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
+	}
+
+	// A client implicitly authorizes the exchange of its own token.
+	if !self {
+		if originalClient, ok := original.GetClient().(Client); ok {
+			if !originalClient.GetTokenExchangePermitted(client, resolveRequestedTokenType(ctx, request, config)) {
+				return errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), originalClientID))
+			}
+		}
+	}
+
+	if role != tokenRoleSubject {
+		return nil
+	}
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(original.GetGrantedScopes(), scope) {
+			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
+		}
+	}
+
+	return nil
+}
+
 // copyClaimMap returns a deep copy of the supplied claim map so the caller can mutate or store the result without
 // disturbing the source map (e.g. the subject_token snapshot persisted on the session). Nested maps are recursively
 // copied; other values are copied by reference since claim values are expected to be immutable JSON scalars or slices.

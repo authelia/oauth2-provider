@@ -17,6 +17,16 @@ const (
 	tokenRoleActor
 )
 
+// hint returns the name of the role with an article, for use in error hints.
+func (r tokenRole) hint() string {
+	switch r {
+	case tokenRoleActor:
+		return "an actor token"
+	default:
+		return "a subject token"
+	}
+}
+
 // clientAllowedIssuers returns the per-client issuer allow-list for the given role,
 // or nil if the request's client doesn't implement the rfc8693.Client interface.
 func clientAllowedIssuers(client oauth2.Client, role tokenRole) []string {

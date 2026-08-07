@@ -59,7 +59,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 	if form.Get(consts.FormParameterActorTokenType) == consts.TokenTypeRFC8693AccessToken {
 		token := form.Get(consts.FormParameterActorToken)
 
-		if _, claims, err = c.validate(ctx, request, token); err != nil {
+		if _, claims, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
 			return err
 		}
 
@@ -71,7 +71,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 
 		var subjectTokenSession oauth2.Session
 
-		if subjectTokenSession, claims, err = c.validate(ctx, request, token); err != nil {
+		if subjectTokenSession, claims, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
 			return err
 		}
 
@@ -121,7 +121,7 @@ func (c *AccessTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Conte
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (s oauth2.Session, claims map[string]any, err error) {
+func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (s oauth2.Session, claims map[string]any, err error) {
 	var (
 		original oauth2.Requester
 		session  Session
@@ -142,33 +142,8 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 		return nil, nil, err
 	}
 
-	var (
-		subjectTokenClientID string
-		subjectTokenClient   Client
-	)
-
-	subjectTokenClientID = original.GetClient().GetID()
-
-	// Prevent clients from exchanging their own tokens.
-	if client.GetID() == subjectTokenClientID {
-		return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
-	}
-
-	// Check if the client is allowed to exchange this token, gated by the requested_token_type so the policy can
-	// distinguish "may exchange to X" from "may exchange to Y".
-	if subjectTokenClient, ok = original.GetClient().(Client); ok {
-		requestedType := resolveRequestedTokenType(ctx, request, c.Config)
-		if !subjectTokenClient.GetTokenExchangePermitted(client, requestedType) {
-			return nil, nil, errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange a subject token issued to client %s", subjectTokenClientID))
-		}
-	}
-
-	strategy := c.GetScopeStrategy(ctx, client)
-
-	for _, scope := range request.GetRequestedScopes() {
-		if !strategy(original.GetGrantedScopes(), scope) {
-			return nil, nil, errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
-		}
+	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), original, role); err != nil {
+		return nil, nil, err
 	}
 
 	// Convert to flat session with only access token claims.

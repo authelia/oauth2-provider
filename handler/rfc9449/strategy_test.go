@@ -20,6 +20,7 @@ import (
 type testStrategyConfig struct {
 	algs     []string
 	skew     time.Duration
+	lifespan time.Duration
 	nonceExp time.Duration
 }
 
@@ -27,11 +28,13 @@ func (c *testStrategyConfig) GetDPoPAllowedJWSAlgorithms(context.Context) []stri
 
 func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration { return c.skew }
 
+func (c *testStrategyConfig) GetDPoPProofLifespan(context.Context) time.Duration { return c.lifespan }
+
 func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration { return c.nonceExp }
 
 func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
 	store := storage.NewMemoryStore()
-	cfg := &testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, nonceExp: time.Minute}
+	cfg := &testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, lifespan: time.Minute, nonceExp: time.Minute}
 
 	return NewDefaultStrategy(cfg, store), store
 }
@@ -48,6 +51,84 @@ func TestStrategyValidateProofAcceptsMatchingMethodURL(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
+	const (
+		skew     = 30 * time.Second
+		lifespan = 15 * time.Second
+	)
+
+	testCases := []struct {
+		name   string
+		offset time.Duration
+		ok     bool
+	}{
+		{name: "ShouldAcceptWellWithinTheSkewAhead", offset: 10 * time.Second, ok: true},
+		{name: "ShouldAcceptAtTheSkewAhead", offset: skew - time.Second, ok: true},
+		{name: "ShouldRejectBeyondTheSkewAhead", offset: skew + 5*time.Second},
+		{name: "ShouldAcceptWithinTheLifespan", offset: -10 * time.Second, ok: true},
+		{name: "ShouldAcceptPastTheLifespanButWithinTheSkew", offset: -(lifespan + 10*time.Second), ok: true},
+		{name: "ShouldAcceptJustInsideTheOuterBound", offset: -(lifespan + skew - 5*time.Second), ok: true},
+		{name: "ShouldRejectBeyondTheLifespanPlusSkew", offset: -(lifespan + skew + 5*time.Second)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			s := NewDefaultStrategy(&testStrategyConfig{algs: []string{"ES256"}, skew: skew, lifespan: lifespan, nonceExp: time.Minute}, store)
+
+			raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: "window-" + tc.name, jwt.ClaimHTTPMethod: http.MethodPost,
+				jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(tc.offset).Unix(),
+			})
+
+			_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+
+			if tc.ok {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			assert.Equal(t, "The DPoP proof 'iat' claim is outside of the acceptable time window.", oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
+
+	t.Run("ShouldNotLetTheLifespanWidenTheFutureBound", func(t *testing.T) {
+		s := NewDefaultStrategy(&testStrategyConfig{algs: []string{"ES256"}, skew: skew, lifespan: time.Hour, nonceExp: time.Minute}, storage.NewMemoryStore())
+
+		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "window-future", jwt.ClaimHTTPMethod: http.MethodPost,
+			jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(skew + 5*time.Second).Unix(),
+		})
+
+		_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+}
+
+func TestStrategyValidateProofReplayMarkerCoversTheWholeWindow(t *testing.T) {
+	s := NewDefaultStrategy(&testStrategyConfig{
+		algs: []string{"ES256"}, skew: 30 * time.Second, lifespan: 15 * time.Second, nonceExp: time.Minute,
+	}, storage.NewMemoryStore())
+
+	raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "early-1", jwt.ClaimHTTPMethod: http.MethodPost,
+		jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(25 * time.Second).Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+	require.NoError(t, err, "a proof issued within the skew ahead should be accepted")
+
+	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
+
+	require.Error(t, err)
+	assert.Equal(t, "The DPoP proof has already been used.", oauth2.ErrorToRFC6749Error(err).HintField)
+}
+
 func TestStrategyValidateProofReplay(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
@@ -62,11 +143,6 @@ func TestStrategyValidateProofReplay(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
-// TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheProofKey pins the consequence of the reference store
-// keying on (jti, htu) alone, as RFC 9449 Section 11.1 describes: the 'jti' namespace is shared by every client, so a
-// second client presenting the same 'jti' at the same endpoint is refused even though its proof is signed by a
-// different key and is not a replay. A deployment serving mutually distrusting clients should key on the thumbprint
-// too; DPoPReplayStorage passes it for that purpose.
 func TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheProofKey(t *testing.T) {
 	s, _ := newTestStrategy()
 
@@ -119,9 +195,6 @@ func TestStrategyValidateProofReplayIsScopedToTheMethod(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheNonce pins that the nonce does not open a new replay
-// slot in the reference store either. The practical consequence is that a client answering a DPoP-Nonce challenge must
-// mint a fresh 'jti' along with the new nonce; re-signing with the same 'jti' is refused as a replay.
 func TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheNonce(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
@@ -145,7 +218,6 @@ func TestStrategyValidateProofReplayWithMemoryStoreIsNotScopedToTheNonce(t *test
 	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", signProof(t, key, jwt.JSONWebTokenTypeDPoP, claims(second)), true)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 
-	// A fresh 'jti' against that same nonce is accepted, so the challenge remains answerable.
 	fresh := claims(second)
 	fresh[jwt.ClaimJWTID] = "per-nonce-2"
 

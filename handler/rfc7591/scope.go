@@ -6,6 +6,7 @@ package rfc7591
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"authelia.com/provider/oauth2"
@@ -13,17 +14,20 @@ import (
 )
 
 // ScopeCeilingConfig is the configuration CheckGrantableScopes depends on. It needs the scope strategy to compare
-// with, and the registration scope so it can refuse to grant it onward.
+// with, and the registration scopes so it can refuse to grant any of them onward.
 type ScopeCeilingConfig interface {
 	oauth2.ScopeStrategyProvider
 	oauth2.RFC7591ClientRegistrationConfigProvider
 }
 
 // CheckGrantableScopes enforces that the scopes requested in metadata are a subset of those the authenticated
-// client registration token was itself granted, and additionally refuses the client registration scope even though
-// every client creation token holds it: granting it onward would let the registered client obtain creation tokens
-// of its own and register further clients, registration authority replicating itself with no administrator
-// approving the descendants.
+// client registration token was itself granted, and additionally refuses every configured client registration scope
+// even though every client creation token holds one of them: granting one onward would let the registered client
+// obtain creation tokens of its own and register further clients, registration authority replicating itself with no
+// administrator approving the descendants.
+//
+// Every configured registration scope is refused, not merely the first. Refusing only one would let a caller
+// authorised by a different registration scope grant that scope onward, which is the same hole by another route.
 //
 // A request with no authenticated requester has no ceiling to enforce: RFC 7591 permits an open registration
 // endpoint, and such a deployment has no creation token from which a ceiling could come. Deployments wanting a
@@ -48,15 +52,15 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 
 	var (
 		grantable    = authenticated.GetGrantedScopes()
-		registration = config.GetRFC7591ClientRegistrationScope(ctx)
+		registration = config.GetRFC7591ClientRegistrationScopes(ctx)
 		strategy     = oauth2.GetScopeStrategy(ctx, config, nil)
 		excess       []string
 	)
 
 	for _, scope := range requested {
-		// The registration scope is never grantable onward, even though every client creation token holds it.
-		// Granting it would let the registered client obtain creation tokens of its own.
-		if scope == registration || !strategy(grantable, scope) {
+		// No registration scope is ever grantable onward, even though every client creation token holds one of them.
+		// Granting one would let the registered client obtain creation tokens of its own.
+		if slices.Contains(registration, scope) || !strategy(grantable, scope) {
 			excess = append(excess, scope)
 		}
 	}
@@ -68,11 +72,11 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 	return nil
 }
 
-// ExcludeRegistrationScope removes the client registration scope from scopes, if present. It is the ceiling-side
+// ExcludeRegistrationScope removes every configured client registration scope from scopes. It is the ceiling-side
 // counterpart to the exclusion CheckGrantableScopes enforces on requested scopes: every legitimate creation token
-// carries the registration scope by design, so without this the management token minted at registration - and every
+// carries one of them by design, so without this the management token minted at registration - and every
 // one minted at a later rotation - would carry it forward permanently, letting the registered client obtain creation
-// tokens of its own and register further clients unchecked. Excluding it only from CheckGrantableScopes would close
+// tokens of its own and register further clients unchecked. Excluding them only from CheckGrantableScopes would close
 // the update path (a request may not ask for the scope) while leaving the management token itself able to carry it,
 // which is the hole that matters most: the scope would sit in the token's own granted scopes regardless of what any
 // future request asks for, observable wherever that token's grant is read back - including client registration
@@ -83,10 +87,10 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 // endpoint, from the request's own metadata. It covers the token half only: the scopes the registered client itself
 // is stored with are covered by ExcludeRegistrationScopeFromMetadata, which every registration path must also call.
 func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRegistrationConfigProvider, scopes oauth2.Arguments) (filtered oauth2.Arguments) {
-	registration := config.GetRFC7591ClientRegistrationScope(ctx)
+	registration := config.GetRFC7591ClientRegistrationScopes(ctx)
 
 	for _, scope := range scopes {
-		if scope != registration {
+		if !slices.Contains(registration, scope) {
 			filtered = append(filtered, scope)
 		}
 	}
@@ -94,8 +98,8 @@ func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRe
 	return filtered
 }
 
-// ExcludeRegistrationScopeFromMetadata removes the client registration scope from the 'scope' a registration request
-// asks for, so it can never end up on the registered client itself.
+// ExcludeRegistrationScopeFromMetadata removes every configured client registration scope from the 'scope' a
+// registration request asks for, so none can end up on the registered client itself.
 //
 // It is the third and last place the exclusion is applied, and the only one that covers an **unauthenticated** (open)
 // registration endpoint, which RFC 7591 permits. On that path there is no creation token, so CheckGrantableScopes has

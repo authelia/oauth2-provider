@@ -351,10 +351,18 @@ type AllowedJWTAssertionAudiencesProvider interface {
 // AllowedIntrospectionAudiencesProvider is a provider used in contexts where the permitted audiences for an Access
 // Token used to authenticate a request to the introspection endpoint is required to validate a request.
 type AllowedIntrospectionAudiencesProvider interface {
-	// GetAllowedIntrospectionAudiences returns the permitted audience list for introspection authentication. An empty
-	// list indicates the audience of an Access Token used to authenticate a request to the introspection endpoint is
-	// not restricted.
+	// GetAllowedIntrospectionAudiences returns the permitted audience list for introspection authentication. The
+	// Access Token must carry at least one of them. An empty list does not disable the check: it means the URL the
+	// request was made to is expected instead. See BearerAuthorization for the full fallback chain.
 	GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string)
+}
+
+// AllowedIntrospectionScopesProvider is a provider used in contexts where the required scopes for an Access Token
+// used to authenticate a request to the introspection endpoint is required to validate a request.
+type AllowedIntrospectionScopesProvider interface {
+	// GetAllowedIntrospectionScopes returns the scopes an Access Token may carry to authenticate a request to the
+	// introspection endpoint. The token must carry at least one of them. Defaults to consts.ScopeIntrospection.
+	GetAllowedIntrospectionScopes(ctx context.Context) (scopes []string)
 }
 
 // AuthorizeEndpointHandlersProvider returns the provider for configuring the authorize endpoint handlers.
@@ -461,17 +469,19 @@ type RFC7591ClientRegistrationConfigProvider interface {
 	// GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
 	GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator)
 
-	// GetRFC7591ClientRegistrationEndpointAudience returns the audience a client creation token must carry to be
-	// accepted at the client registration endpoint. An empty value means the URL the request was made to is expected
-	// instead. A deployment authorises a client to obtain such a token by adding this value to that client's
+	// GetRFC7591ClientRegistrationEndpointAudiences returns the audiences a client creation token may carry to be
+	// accepted at the client registration endpoint. The token must carry at least one of them. An empty value means
+	// the configured registration endpoint URL is expected, falling back to the URL the request was made to. A
+	// deployment authorises a client to obtain such a token by adding one of these values to that client's
 	// registered audience.
-	GetRFC7591ClientRegistrationEndpointAudience(ctx context.Context) (audience string)
+	GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string)
 
-	// GetRFC7591ClientRegistrationScope returns the scope a client creation token must carry to be accepted at the
-	// client registration endpoint, defaulting to consts.ScopeClientRegistration. It is a second authorization
-	// dimension alongside the audience: the audience says a token is for this endpoint, the scope says its holder may
-	// register clients. This scope is never grantable to a registered client - see CheckGrantableScopes.
-	GetRFC7591ClientRegistrationScope(ctx context.Context) (scope string)
+	// GetRFC7591ClientRegistrationScopes returns the scopes a client creation token may carry to be accepted at the
+	// client registration endpoint, defaulting to consts.ScopeClientRegistration. The token must carry at least one
+	// of them. They are a second authorization dimension alongside the audience: the audience says a token is for
+	// this endpoint, the scope says its holder may register clients. None of these scopes is ever grantable to a
+	// registered client - see CheckGrantableScopes.
+	GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string)
 }
 
 // RFC7591ClientRegistrationEndpointHandlersProvider returns the provider for configuring the client registration
@@ -591,6 +601,23 @@ type IntrospectionEndpointClientAuthStrategyProvider interface {
 	GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
 }
 
+// IntrospectionEndpointClientAuthDisabledProvider returns the provider for turning off client authentication at the
+// introspection endpoint.
+type IntrospectionEndpointClientAuthDisabledProvider interface {
+	// GetIntrospectionEndpointClientAuthDisabled returns true when the introspection endpoint must not accept client
+	// authentication, leaving an Access Token presented as a bearer credential the only way to authorize a call.
+	//
+	// RFC 7662 Section 2.1 requires the endpoint to "require some form of authorization", naming client
+	// authentication and a bearer token as the two examples, and leaves the choice open. This narrows it to the
+	// second. It is off by default, because turning it on rejects every caller using the first.
+	//
+	// A deployment turns this on to make one property hold: that authorizing a call to this endpoint always means
+	// presenting a credential carrying a grant, which can be scoped, audienced, bound to a key or a certificate, and
+	// revoked on its own. Client credentials carry none of those - a client registered for introspection can call it
+	// for as long as it holds its secret - so while both methods are available the weaker one sets the bar.
+	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
+}
+
 // RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
 // revocation endpoint.
 type RevocationEndpointClientAuthStrategyProvider interface {
@@ -610,8 +637,16 @@ type DPoPConfigProvider interface {
 	// GetDPoPAllowedJWSAlgorithms returns the permitted asymmetric DPoP proof signing algorithms.
 	GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string)
 
-	// GetDPoPClockSkew returns the permitted 'iat' leeway for DPoP proofs.
+	// GetDPoPClockSkew returns the tolerance allowed for disagreement between this server's clock and the client's
+	// when judging a DPoP proof's 'iat' claim. It widens the acceptance window at both ends and is not itself a
+	// lifespan; see GetDPoPProofLifespan for that.
 	GetDPoPClockSkew(ctx context.Context) (skew time.Duration)
+
+	// GetDPoPProofLifespan returns how long a DPoP proof remains valid after the 'iat' it was minted with.
+	//
+	// Together with GetDPoPClockSkew this fixes the acceptance window: a proof is accepted from one clock skew
+	// before its 'iat' until one lifespan plus one clock skew after it.
+	GetDPoPProofLifespan(ctx context.Context) (lifespan time.Duration)
 
 	// GetDPoPNonceRequired returns true if a server nonce is required in DPoP proofs.
 	GetDPoPNonceRequired(ctx context.Context) (required bool)

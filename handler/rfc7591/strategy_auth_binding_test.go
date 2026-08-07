@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,7 +57,7 @@ func TestAuthEnforcesDPoPBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 
 	t.Run("ShouldRejectABoundTokenPresentedWithoutAProof", func(t *testing.T) {
@@ -68,7 +69,7 @@ func TestAuthEnforcesDPoPBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, "", nil), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
 
 	t.Run("ShouldRejectAProofSignedByAnotherKey", func(t *testing.T) {
@@ -82,7 +83,7 @@ func TestAuthEnforcesDPoPBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
 
 	t.Run("ShouldSkipWhenDPoPIsDisabled", func(t *testing.T) {
@@ -109,7 +110,7 @@ func TestAuthEnforcesDPoPBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 }
 
@@ -138,7 +139,7 @@ func TestAuthEnforcesMTLSBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", other), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 
 	t.Run("ShouldRejectNoCertificate", func(t *testing.T) {
@@ -149,7 +150,7 @@ func TestAuthEnforcesMTLSBindingAtTheRegistrationEndpoint(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	})
 
 	t.Run("ShouldReadTheConfiguredProxyHeader", func(t *testing.T) {
@@ -191,6 +192,69 @@ func TestAuthAcceptsAnUnboundTokenWithBindingEnabled(t *testing.T) {
 	assert.Equal(t, "onboarding", requester.GetClient().GetID())
 }
 
+func TestAuthRequiresABoundTokenWhenBindingIsEnforced(t *testing.T) {
+	ctx := context.Background()
+
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	t.Run("ShouldRejectAnUnboundTokenWhenDPoPIsEnforced", func(t *testing.T) {
+		auth, config, store, access := newBindingFixtures(t)
+		config.DPoPEnforce = true
+
+		token := mintBoundAccessToken(t, ctx, store, access, "", "")
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+		assert.Equal(t, "The credential used to authenticate the request is not bound to a DPoP key.", oauth2.ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldRejectAnUnboundTokenWhenMTLSIsEnforced", func(t *testing.T) {
+		auth, config, store, access := newBindingFixtures(t)
+		config.MTLSEnforce = true
+
+		token := mintBoundAccessToken(t, ctx, store, access, "", "")
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+		assert.Equal(t, "The credential used to authenticate the request is not bound to a client certificate.", oauth2.ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldRejectATokenSatisfyingOnlyOneOfTwoEnforcedBindings", func(t *testing.T) {
+		auth, config, store, access := newBindingFixtures(t)
+		config.DPoPEnforce, config.MTLSEnforce = true, true
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+		proof := signDPoPProof(t, key, "enforce-1", http.MethodPost, testEndpoint, token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, cert), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+		assert.Equal(t, "The credential used to authenticate the request is not bound to a client certificate.", oauth2.ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldAcceptATokenSatisfyingBothEnforcedBindings", func(t *testing.T) {
+		auth, config, store, access := newBindingFixtures(t)
+		config.DPoPEnforce, config.MTLSEnforce = true, true
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), oauth2.X509CertificateSHA256Thumbprint(cert))
+
+		proof := signDPoPProof(t, key, "enforce-2", http.MethodPost, testEndpoint, token)
+
+		requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, cert), "")
+
+		require.NoError(t, err)
+		assert.Equal(t, "onboarding", requester.GetClient().GetID())
+	})
+}
+
 func TestAuthRejectsTheDPoPSchemeAtTheConfigurationEndpoint(t *testing.T) {
 	ctx := context.Background()
 
@@ -205,8 +269,164 @@ func TestAuthRejectsTheDPoPSchemeAtTheConfigurationEndpoint(t *testing.T) {
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, r, "client-a")
 
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "must use the Bearer scheme")
+}
+
+func TestAuthEnforcesBothBindingsIndependentlyAtTheRegistrationEndpoint(t *testing.T) {
+	ctx := context.Background()
+
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+	other := gen.MustCertificate(gen.CertificateOptions{SerialNumber: 2})
+
+	t.Run("ShouldAcceptWhenBothAreSatisfied", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), oauth2.X509CertificateSHA256Thumbprint(cert))
+
+		proof := signDPoPProof(t, key, "both-1", http.MethodPost, testEndpoint, token)
+
+		requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, cert), "")
+
+		require.NoError(t, err)
+		assert.Equal(t, "onboarding", requester.GetClient().GetID())
+	})
+
+	t.Run("ShouldRejectAValidProofWithTheWrongCertificate", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), oauth2.X509CertificateSHA256Thumbprint(cert))
+
+		proof := signDPoPProof(t, key, "both-2", http.MethodPost, testEndpoint, token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, other), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	})
+
+	t.Run("ShouldRejectTheCorrectCertificateWithAProofFromAnotherKey", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key, attacker := newProofKey(t), newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), oauth2.X509CertificateSHA256Thumbprint(cert))
+
+		proof := signDPoPProof(t, attacker, "both-3", http.MethodPost, testEndpoint, token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, cert), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+}
+
+func TestAuthRejectsAMisdirectedOrSubstitutedDPoPProof(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ShouldRejectAProofWhoseATHNamesAnotherToken", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+		elsewhere := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+		proof := signDPoPProof(t, key, "sub-1", http.MethodPost, testEndpoint, elsewhere)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+
+	t.Run("ShouldRejectAProofMintedForAnotherURI", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+		proof := signDPoPProof(t, key, "sub-2", http.MethodPost, "https://auth.example.com/token", token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+
+	t.Run("ShouldRejectAProofMintedForAnotherMethod", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+		proof := signDPoPProof(t, key, "sub-3", http.MethodGet, testEndpoint, token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+
+	t.Run("ShouldRejectAReplayedProof", func(t *testing.T) {
+		auth, _, store, access := newBindingFixtures(t)
+
+		key := newProofKey(t)
+		token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+		proof := signDPoPProof(t, key, "sub-4", http.MethodPost, testEndpoint, token)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+		require.NoError(t, err, "the first presentation of the proof should have been accepted")
+
+		_, err = auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+}
+
+func TestAuthRejectsAnUnreadableClientCertificateHeader(t *testing.T) {
+	ctx := context.Background()
+
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	auth, config, store, access := newBindingFixtures(t)
+	config.MTLSClientCertificateHeader = "X-Forwarded-Tls-Client-Cert"
+
+	token := mintBoundAccessToken(t, ctx, store, access, "", oauth2.X509CertificateSHA256Thumbprint(cert))
+
+	r := bindingRequest("Bearer", token, "", nil)
+	r.Header.Set("X-Forwarded-Tls-Client-Cert", "not-a-certificate")
+
+	_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+}
+
+func TestAuthRequiresANonceWhenConfigured(t *testing.T) {
+	ctx := context.Background()
+
+	auth, config, store, access := newBindingFixtures(t)
+	config.DPoPNonceRequired = true
+
+	key := newProofKey(t)
+	token := mintBoundAccessToken(t, ctx, store, access, proofThumbprint(t, key), "")
+
+	proof := signDPoPProof(t, key, "nonce-1", http.MethodPost, testEndpoint, token)
+
+	_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
+
+	proof = signDPoPProofWithClaims(t, key, "nonce-2", http.MethodPost, testEndpoint, token, map[string]any{jwt.ClaimNonce: "guessed-nonce"})
+
+	_, err = auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
 
 type proofOnlyDPoPStrategy struct{}
@@ -253,7 +473,7 @@ func mintBoundAccessToken(t *testing.T, ctx context.Context, store *storage.Memo
 		JWKThumbprint:               jkt,
 		ClientCertificateThumbprint: x5t,
 	}
-	request.GrantScope("client_registration")
+	request.GrantScope("authelia:oauth2:client_registration")
 	request.GrantAudience(testEndpoint)
 
 	token, signature, err := strategy.GenerateAccessToken(ctx, request)
@@ -284,21 +504,31 @@ func proofThumbprint(t *testing.T, key *jose.JSONWebKey) string {
 func signDPoPProof(t *testing.T, key *jose.JSONWebKey, id, method, url, token string) string {
 	t.Helper()
 
+	return signDPoPProofWithClaims(t, key, id, method, url, token, nil)
+}
+
+func signDPoPProofWithClaims(t *testing.T, key *jose.JSONWebKey, id, method, url, token string, extra map[string]any) string {
+	t.Helper()
+
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: jose.SignatureAlgorithm(key.Algorithm), Key: key},
-		(&jose.SignerOptions{EmbedJWK: true}).WithType(jose.ContentType(jwt.JSONWebTokenTypeDPoP)),
+		(&jose.SignerOptions{EmbedJWK: true}).WithType(jwt.JSONWebTokenTypeDPoP),
 	)
 	require.NoError(t, err)
 
 	sum := sha256.Sum256([]byte(token))
 
-	raw, err := josejwt.Signed(signer).Claims(map[string]any{
+	claims := map[string]any{
 		jwt.ClaimJWTID:               id,
 		jwt.ClaimHTTPMethod:          method,
 		jwt.ClaimHTTPURI:             url,
 		jwt.ClaimIssuedAt:            time.Now().Unix(),
 		jwt.ClaimDPoPAccessTokenHash: base64.RawURLEncoding.EncodeToString(sum[:]),
-	}).Serialize()
+	}
+
+	maps.Copy(claims, extra)
+
+	raw, err := josejwt.Signed(signer).Claims(claims).Serialize()
 	require.NoError(t, err)
 
 	return raw

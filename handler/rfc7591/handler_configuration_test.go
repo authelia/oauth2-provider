@@ -310,9 +310,9 @@ func TestClientConfigurationHandlerRejectsRegistrationScopeInMetadata(t *testing
 		RedirectURIs:  []string{"https://example.com/cb"},
 		GrantTypes:    []string{"authorization_code"},
 		ResponseTypes: []string{"code"},
-		Scope:         "client_registration",
+		Scope:         "authelia:oauth2:client_registration",
 	}
-	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"client_registration", "openid"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
@@ -337,7 +337,7 @@ func TestClientConfigurationHandlerRotatedManagementTokenExcludesRegistrationSco
 		ResponseTypes: []string{"code"},
 		Scope:         "openid",
 	}
-	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"client_registration", "openid"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
 
 	responder := oauth2.NewClientRegistrationResponse()
 	require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
@@ -350,7 +350,7 @@ func TestClientConfigurationHandlerRotatedManagementTokenExcludesRegistrationSco
 	require.NoError(t, err)
 
 	granted := next.GetGrantedScopes()
-	assert.NotContains(t, granted, "client_registration")
+	assert.NotContains(t, granted, "authelia:oauth2:client_registration")
 	assert.Contains(t, granted, "openid")
 }
 

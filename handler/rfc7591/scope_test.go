@@ -55,7 +55,6 @@ func TestCheckGrantableScopes(t *testing.T) {
 			"The request requested the scopes 'openid' which the presented Client Registration Token is not permitted to grant.",
 		},
 		{
-			// Unauthenticated registration has no creation token and therefore no ceiling to enforce.
 			"ShouldSkipWhenUnauthenticated",
 			nil,
 			"openid profile",
@@ -167,19 +166,19 @@ func TestCheckGrantableScopesFromTheTokenGrant(t *testing.T) {
 	}{
 		{
 			name:          "ShouldAcceptAScopeInsideTheGrant",
-			authenticated: newAuthenticated("client_registration", "openid", "profile"),
+			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid", "profile"),
 			requested:     "openid profile",
 		},
 		{
 			name:          "ShouldRejectAScopeOutsideTheGrant",
-			authenticated: newAuthenticated("client_registration", "openid"),
+			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid"),
 			requested:     "openid profile",
 			err:           "invalid_client_metadata",
 		},
 		{
 			name:          "ShouldRejectTheRegistrationScopeEvenThoughTheTokenHoldsIt",
-			authenticated: newAuthenticated("client_registration", "openid"),
-			requested:     "client_registration",
+			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid"),
+			requested:     "authelia:oauth2:client_registration",
 			err:           "invalid_client_metadata",
 		},
 		{
@@ -204,6 +203,66 @@ func TestCheckGrantableScopesFromTheTokenGrant(t *testing.T) {
 			assert.Equal(t, tc.err, oauth2.ErrorToRFC6749Error(err).ErrorField)
 		})
 	}
+}
+
+func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
+	ctx := context.Background()
+	config := &oauth2.Config{
+		ScopeStrategy:                   oauth2.ExactScopeStrategy,
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+	}
+
+	authenticated := oauth2.NewRequest()
+	authenticated.GrantScope("authelia:oauth2:client_registration")
+	authenticated.GrantScope("urn:example:register")
+	authenticated.GrantScope("read")
+
+	testCases := []struct {
+		name  string
+		scope string
+	}{
+		{"ShouldRejectPrimaryRegistrationScope", "authelia:oauth2:client_registration"},
+		{"ShouldRejectSecondaryRegistrationScope", "urn:example:register"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckGrantableScopes(ctx, config, authenticated, &oauth2.ClientRegistrationMetadata{Scope: tc.scope})
+
+			require.Error(t, err)
+			assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, tc.scope)
+		})
+	}
+
+	t.Run("ShouldPermitANonRegistrationScope", func(t *testing.T) {
+		assert.NoError(t, CheckGrantableScopes(ctx, config, authenticated, &oauth2.ClientRegistrationMetadata{Scope: "read"}))
+	})
+}
+
+func TestExcludeRegistrationScopeStripsEveryConfiguredScope(t *testing.T) {
+	ctx := context.Background()
+	config := &oauth2.Config{
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+	}
+
+	filtered := ExcludeRegistrationScope(ctx, config, oauth2.Arguments{
+		"authelia:oauth2:client_registration", "read", "urn:example:register", "write",
+	})
+
+	assert.Equal(t, oauth2.Arguments{"read", "write"}, filtered)
+}
+
+func TestExcludeRegistrationScopeFromMetadataStripsEveryConfiguredScope(t *testing.T) {
+	ctx := context.Background()
+	config := &oauth2.Config{
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+	}
+
+	metadata := &oauth2.ClientRegistrationMetadata{Scope: "authelia:oauth2:client_registration read urn:example:register write"}
+
+	ExcludeRegistrationScopeFromMetadata(ctx, config, metadata)
+
+	assert.Equal(t, "read write", metadata.Scope)
 }
 
 func grantableFixture(clientID string, scopes oauth2.Arguments) oauth2.Requester {

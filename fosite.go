@@ -248,6 +248,7 @@ type Configurator interface {
 	FormPostResponseProvider
 	AllowedJWTAssertionAudiencesProvider
 	AllowedIntrospectionAudiencesProvider
+	AllowedIntrospectionScopesProvider
 	AuthorizeEndpointHandlersProvider
 	TokenEndpointHandlersProvider
 	AuthorizeEndpointBindingHandlersProvider
@@ -270,6 +271,7 @@ type Configurator interface {
 	TokenEndpointClientAuthStrategyProvider
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
+	IntrospectionEndpointClientAuthDisabledProvider
 	DPoPConfigProvider
 	MTLSConfigProvider
 	RFC7591ClientRegistrationConfigProvider

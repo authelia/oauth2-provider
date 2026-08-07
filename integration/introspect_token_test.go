@@ -60,11 +60,15 @@ func TestIntrospectToken(t *testing.T) {
 }
 
 func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, introspectionFactory compose.Factory) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
+	f := compose.Compose(&oauth2.Config{
+		AllowedIntrospectionScopes:    []string{"oauth2"},
+		AllowedIntrospectionAudiences: []string{tokenURL},
+	}, store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
 	oauthClient := newOAuth2AppClient(ts)
+	oauthClient.EndpointParams = url.Values{consts.FormParameterAudience: []string{tokenURL}}
 	a, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
 	b, err := oauthClient.Token(t.Context())

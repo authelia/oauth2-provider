@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,15 +28,11 @@ import (
 )
 
 func TestIntrospectionResponseTokenUse(t *testing.T) {
-	httpreq := &http.Request{
-		Method: http.MethodPost,
-		Header: http.Header{
-			consts.HeaderAuthorization: []string{"bearer some-token"},
-		},
-		PostForm: url.Values{
-			"token": []string{"introspect-token"},
-		},
-	}
+	const requestURL = introspectionCredentialURL
+
+	httpreq := httptest.NewRequest(http.MethodPost, requestURL, strings.NewReader("token=introspect-token"))
+	httpreq.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+	httpreq.Header.Set(consts.HeaderAuthorization, "bearer some-token")
 
 	testCases := []struct {
 		name        string
@@ -47,7 +44,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			name: "ShouldIntrospectAccessToken",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
 			},
 			expectedATT: BearerAccessToken,
@@ -57,7 +54,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			name: "ShouldIntrospectRefreshToken",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(RefreshToken, nil)
 			},
 			expectedATT: "",
@@ -119,17 +116,13 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			name: "ShouldFailIntrospectionError",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), newErr)
-				return &http.Request{
-					Method: http.MethodPost,
-					Header: http.Header{
-						consts.HeaderAuthorization: []string{"bearer some-token"},
-					},
-					PostForm: url.Values{
-						"token": []string{"introspect-token"},
-					},
-				}
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
+				r.PostForm = url.Values{"token": []string{"introspect-token"}}
+
+				return r
 			},
 			isActive: false,
 			err:      "Token is inactive because it is malformed, expired or otherwise invalid. An introspection strategy indicated that the token is inactive. The error is unrecognizable asdf",
@@ -138,17 +131,13 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			name: "ShouldPass",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
-				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
-				return &http.Request{
-					Method: http.MethodPost,
-					Header: http.Header{
-						consts.HeaderAuthorization: []string{"bearer some-token"},
-					},
-					PostForm: url.Values{
-						"token": []string{"introspect-token"},
-					},
-				}
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
+				r.PostForm = url.Values{"token": []string{"introspect-token"}}
+
+				return r
 			},
 			isActive: true,
 		},
@@ -160,7 +149,6 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{
-						// Basic Authorization with username=encoded:client and password=encoded&password
 						consts.HeaderAuthorization: []string{"Basic ZW5jb2RlZCUzQWNsaWVudDplbmNvZGVkJTI2cGFzc3dvcmQ="},
 					},
 					PostForm: url.Values{
@@ -178,7 +166,6 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{
-						// Basic Authorization with username=my-client and password=foobar
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
@@ -196,13 +183,64 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{
-						// Basic Authorization with username=my-client and password=foobar
 						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
 					},
 					PostForm: url.Values{
 						"token": []string{"introspect-token"},
 					},
 				}
+			},
+			isActive: true,
+		},
+		{
+			name: "ShouldFailBasicAuthWhenClientAuthIsDisabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+				return &http.Request{
+					Method: http.MethodPost,
+					Header: http.Header{
+						consts.HeaderAuthorization: []string{"Basic bXktY2xpZW50OmZvb2Jhcg=="},
+					},
+					PostForm: url.Values{
+						"token": []string{"introspect-token"},
+					},
+				}
+			},
+			err: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint.",
+		},
+		{
+			name: "ShouldFailPostBodyClientCredentialsWhenClientAuthIsDisabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+				return &http.Request{
+					Method: http.MethodPost,
+					Header: http.Header{},
+					PostForm: url.Values{
+						"token":         []string{"introspect-token"},
+						"client_id":     []string{"my-client"},
+						"client_secret": []string{"foobar"},
+					},
+				}
+			},
+			err: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint.",
+		},
+		{
+			name: "ShouldPassWithABearerCredentialWhenClientAuthIsDisabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
+				r.PostForm = url.Values{"token": []string{"introspect-token"}}
+
+				return r
 			},
 			isActive: true,
 		},
@@ -233,29 +271,46 @@ func TestNewIntrospectionRequest(t *testing.T) {
 }
 
 func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
+	const requestURL = "https://as.example.com/introspect"
+
 	testCases := []struct {
 		name     string
 		allowed  []string
 		audience []string
 		resource []string
+		scope    []string
 		err      string
+		errField string
+		code     int
 	}{
 		{
-			name:     "ShouldPassWithoutConfiguredAudiencesGivenNoTokenAudience",
+			name:     "ShouldFailWithoutConfiguredAudiencesGivenNoTokenAudience",
 			allowed:  nil,
 			audience: nil,
 			resource: nil,
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://as.example.com/introspect' but it does not have an audience.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
 		},
 		{
-			name:     "ShouldPassWithoutConfiguredAudiencesGivenTokenAudience",
+			name:     "ShouldFailWithoutConfiguredAudiencesGivenAnUnrelatedTokenAudience",
 			allowed:  nil,
 			audience: []string{"https://app.example.com"},
 			resource: nil,
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://as.example.com/introspect' but the audience had the values 'https://app.example.com'.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
 		},
 		{
-			name:     "ShouldPassWithEmptyConfiguredAudiences",
+			name:     "ShouldPassWithoutConfiguredAudiencesGivenTheRequestURL",
+			allowed:  nil,
+			audience: []string{requestURL},
+			resource: nil,
+		},
+		{
+			name:     "ShouldPassWithEmptyConfiguredAudiencesGivenTheRequestURL",
 			allowed:  []string{},
-			audience: []string{"https://app.example.com"},
+			audience: []string{requestURL},
 			resource: nil,
 		},
 		{
@@ -283,25 +338,50 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			resource: nil,
 		},
 		{
+			name:     "ShouldFailWithTheRequestURLWhenAnAudienceIsConfigured",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{requestURL},
+			resource: nil,
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://introspection.example.com' but the audience had the values 'https://as.example.com/introspect'.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
+		},
+		{
 			name:     "ShouldFailWithoutTokenAudience",
 			allowed:  []string{"https://introspection.example.com"},
 			audience: nil,
 			resource: nil,
-			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but it does not have an audience.",
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://introspection.example.com' but it does not have an audience.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
 		},
 		{
 			name:     "ShouldFailWithMismatchedAudience",
 			allowed:  []string{"https://introspection.example.com"},
 			audience: []string{"https://app.example.com"},
 			resource: []string{"https://api.example.com"},
-			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but the audience had the values 'https://app.example.com', 'https://api.example.com'.",
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://introspection.example.com' but the audience had the values 'https://app.example.com', 'https://api.example.com'.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
 		},
 		{
 			name:     "ShouldFailWithPartiallyMatchingAudiencePrefix",
 			allowed:  []string{"https://introspection.example.com"},
 			audience: []string{"https://introspection.example.com.evil.com"},
 			resource: nil,
-			err:      "The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint. The Access Token used to authenticate the request was expected to have an audience which matches one of the values 'https://introspection.example.com' but the audience had the values 'https://introspection.example.com.evil.com'.",
+			err:      "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://introspection.example.com' but the audience had the values 'https://introspection.example.com.evil.com'.",
+			errField: "invalid_token",
+			code:     http.StatusUnauthorized,
+		},
+		{
+			name:     "ShouldFailWithInsufficientScopeAt401",
+			allowed:  []string{"https://introspection.example.com"},
+			audience: []string{"https://introspection.example.com"},
+			resource: nil,
+			scope:    []string{"read"},
+			err:      "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:token_introspection', at least one of which is required.",
+			errField: "insufficient_scope",
+			code:     http.StatusUnauthorized,
 		},
 	}
 
@@ -319,6 +399,11 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 
 			config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 
+			scope := tc.scope
+			if scope == nil {
+				scope = []string{consts.ScopeIntrospection}
+			}
+
 			validator.EXPECT().
 				IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).
 				DoAndReturn(func(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
@@ -330,24 +415,21 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 						requester.GrantResource(resource)
 					}
 
+					for _, s := range scope {
+						requester.GrantScope(s)
+					}
+
 					return AccessToken, nil
 				})
 
-			// The introspected token is only reached when the authenticating token passes the audience check.
 			validator.EXPECT().
 				IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(AccessToken, nil).
 				AnyTimes()
 
-			httpreq := &http.Request{
-				Method: http.MethodPost,
-				Header: http.Header{
-					consts.HeaderAuthorization: []string{"bearer some-token"},
-				},
-				PostForm: url.Values{
-					"token": []string{"introspect-token"},
-				},
-			}
+			httpreq := httptest.NewRequest(http.MethodPost, requestURL, strings.NewReader("token=introspect-token"))
+			httpreq.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+			httpreq.Header.Set(consts.HeaderAuthorization, "bearer some-token")
 
 			res, err := f.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 
@@ -361,19 +443,16 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			assert.False(t, res.IsActive())
 
-			require.True(t, errors.Is(err, ErrRequestUnauthorized))
-
 			rfc := ErrorToRFC6749Error(err)
 
-			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+			assert.Equal(t, tc.errField, rfc.ErrorField)
 
-			// The failure must be written out as an error rather than masked as an inactive token response.
 			rw := httptest.NewRecorder()
 
 			f.WriteIntrospectionError(t.Context(), rw, err)
 
-			assert.Equal(t, http.StatusUnauthorized, rw.Code)
-			assert.JSONEq(t, `{"error":"request_unauthorized","error_description":"The request could not be authorized. The Access Token used to authenticate the request does not have an audience which is permitted at the introspection endpoint."}`, rw.Body.String())
+			assert.Equal(t, tc.code, rw.Code)
+			assert.NotEmpty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
 		})
 	}
 }
@@ -504,4 +583,80 @@ func TestIntrospectionResponseToMap(t *testing.T) {
 			assert.Equal(t, tc.expected, introspection)
 		})
 	}
+}
+
+func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  *DefaultSession
+		use      TokenUse
+		expected string
+	}{
+		{
+			name:     "ShouldReportDPoPForABoundSubjectToken",
+			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
+			use:      AccessToken,
+			expected: DPoPAccessToken,
+		},
+		{
+			name:     "ShouldReportBearerForAnUnboundSubjectToken",
+			session:  &DefaultSession{},
+			use:      AccessToken,
+			expected: BearerAccessToken,
+		},
+		{
+			name:     "ShouldReportBearerForACertificateBoundSubjectToken",
+			session:  &DefaultSession{ClientCertificateThumbprint: "some-x5t"},
+			use:      AccessToken,
+			expected: BearerAccessToken,
+		},
+		{
+			name:     "ShouldReportNothingForARefreshToken",
+			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
+			use:      RefreshToken,
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			validator := mock.NewMockTokenIntrospector(ctrl)
+			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
+
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
+
+			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+
+			config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+			validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+			validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
+					requester.SetSession(tc.session)
+
+					return tc.use, nil
+				})
+
+			r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, strings.NewReader("token=introspect-token"))
+			r.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+			r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
+
+			responder, err := f.NewIntrospectionRequest(t.Context(), r, &DefaultSession{})
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, responder.GetAccessTokenType())
+		})
+	}
+}
+
+const introspectionCredentialURL = "https://as.example.com/introspect"
+
+func grantCredential(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
+	requester.GrantScope(consts.ScopeIntrospection)
+	requester.GrantAudience(introspectionCredentialURL)
+
+	return TokenUse(""), nil
 }

@@ -344,7 +344,19 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods as it could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
+	// RFC7523 Section 3 requires the JWT be digitally signed or have a MAC applied, and the authorization server
+	// reject any JWT with an invalid signature or MAC. An 'alg' of 'none' is neither, and unlike an OpenID Connect
+	// 1.0 Request Object, which Section 6.1 permits to be unsigned, no registration value makes an unsigned client
+	// assertion acceptable. It is therefore rejected irrespective of the client's registered
+	// '<endpoint>_endpoint_auth_signing_alg' value. The algorithm list supplied to Decode below excludes 'none' so
+	// an unsigned assertion cannot be parsed at all; this check runs first only to return a diagnosable error.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
+	if assertion.Algorithm == consts.JSONWebTokenAlgNone {
+		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.", client.GetID()))
+	}
+
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithms...)); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
 	}
 

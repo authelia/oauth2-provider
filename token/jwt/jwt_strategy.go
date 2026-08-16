@@ -233,8 +233,10 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 
 	validate := o.client != nil || !o.allowUnverified
 
-	if alg != JSONWebTokenAlgNone && validate {
-		if err = j.validate(ctx, t, &claims, o); err != nil {
+	if validate {
+		if alg == JSONWebTokenAlgNone {
+			validate = o.client != nil && o.client.GetSigningAlg() == JSONWebTokenAlgNone
+		} else if err = j.validate(ctx, t, &claims, o); err != nil {
 			return nil, errorsx.WithStack(err)
 		}
 	}

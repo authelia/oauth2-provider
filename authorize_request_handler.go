@@ -307,15 +307,18 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		jwt.ValidateContentEncryption(client.GetRequestObjectEncryptionEnc()),
 	}
 
-	if err = token.Valid(optsHeader...); err != nil {
-		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
-	}
-
+	// This check precedes token.Valid so a client that did not explicitly register 'none' receives the specific
+	// reason its unsigned request object was refused. An unsigned token is never marked as having a verified
+	// signature, so token.Valid would otherwise reject it first with a generic signature error.
 	if algAny && token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
 		return errorsx.WithStack(
 			ErrInvalidRequestObject.
 				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
 				WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
+	}
+
+	if err = token.Valid(optsHeader...); err != nil {
+		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
 	claims := token.Claims

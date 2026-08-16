@@ -43,6 +43,8 @@ const (
 	ClientMetadataRequestObjectSigningAlg      = "request_object_signing_alg"
 	ClientMetadataRequestObjectEncryptionAlg   = "request_object_encryption_alg"
 	ClientMetadataRequestObjectEncryptionEnc   = "request_object_encryption_enc"
+	ClientMetadataIntrospectionEndpointAuthAlg = "introspection_endpoint_auth_signing_alg"
+	ClientMetadataRevocationEndpointAuthAlg    = "revocation_endpoint_auth_signing_alg"
 )
 
 // Client metadata parameters naming a client authentication method, validated by name.

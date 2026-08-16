@@ -836,7 +836,77 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. OAuth 2.0 client with id 'bar' expects client assertions to be signed with the 'alg' header value 'RS256' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value 'none'.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion for the client with id 'bar' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.",
+		},
+		{
+			name: "ShouldFailBecauseJWTAlgorithmIsNoneWhenSigningAlgUnregistered",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			form: url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {mustGenerateNoneAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, keyRSA, "kid-foo")}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion for the client with id 'bar' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.",
+		},
+		{
+			name: "ShouldFailBecauseJWTAlgorithmIsNoneWhenSigningAlgUnregisteredAtIntrospection",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			strategy: &IntrospectionEndpointClientAuthStrategy{},
+			form: url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {mustGenerateNoneAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, keyRSA, "kid-foo")}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion for the client with id 'bar' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.",
+		},
+		{
+			name: "ShouldFailBecauseJWTAlgorithmIsNoneWhenSigningAlgUnregisteredAtRevocation",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			strategy: &RevocationEndpointClientAuthStrategy{},
+			form: url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {mustGenerateNoneAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, keyRSA, "kid-foo")}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion for the client with id 'bar' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.",
+		},
+		{
+			name: "ShouldFailBecauseJWTAlgorithmIsNoneWhenSigningAlgRegisteredAsNone",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, TokenEndpointAuthSigningAlg: consts.JSONWebTokenAlgNone}
+			},
+			form: url.Values{consts.FormParameterClientID: {"bar"}, consts.FormParameterClientAssertion: {mustGenerateNoneAssertion(t, jwt.MapClaims{
+				consts.ClaimSubject:        "bar",
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimIssuer:         "bar",
+				consts.ClaimJWTID:          "12345",
+				consts.ClaimAudience:       "token-url",
+			}, keyRSA, "kid-foo")}, consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion for the client with id 'bar' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.",
 		},
 		{
 			name: "ShouldPassWithProperAssertionWhenJWKsURIIsSet",

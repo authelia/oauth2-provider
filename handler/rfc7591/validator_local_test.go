@@ -200,6 +200,37 @@ func TestLocalValidator(t *testing.T) {
 			err: "invalid_client_metadata",
 		},
 		{
+			name: "ShouldRejectNoneTokenEndpointAuthSigningAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                []string{"https://example.com/cb"},
+				TokenEndpointAuthSigningAlg: "none",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectNoneIntrospectionEndpointAuthSigningAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                        []string{"https://example.com/cb"},
+				IntrospectionEndpointAuthSigningAlg: "none",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectNoneRevocationEndpointAuthSigningAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                     []string{"https://example.com/cb"},
+				RevocationEndpointAuthSigningAlg: "none",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldAcceptNoneRequestObjectSigningAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:            []string{"https://example.com/cb"},
+				RequestObjectSigningAlg: "none",
+			},
+		},
+		{
 			name: "ShouldRejectImplicitResponseTypeWithoutImplicitGrant",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:  []string{"https://example.com/cb"},

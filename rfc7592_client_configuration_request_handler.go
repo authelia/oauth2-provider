@@ -80,17 +80,26 @@ func (f *Fosite) NewRFC7592ClientConfigurationRequest(ctx context.Context, r *ht
 		return request, err
 	}
 
+	// A nil requester returned with a nil error is the strategy reporting that the endpoint is open. That is a legal
+	// return for the client registration endpoint, which RFC 7591 Section 3.1 permits to be unauthenticated, but it
+	// is never legal for this one: RFC 7592 Section 2 requires that "The client MUST use its registration access
+	// token in all calls to this endpoint as an OAuth 2.0 Bearer Token".
+	//
+	// This fails closed here rather than leaving each downstream consumer to notice the requester is absent, because
+	// the client acted upon is named by the request path. Proceeding would authorize reading, replacing, or deleting
+	// any client on the server on the strength of its identifier alone - an identifier which is not a secret.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7592#section-2
+	if request.Authenticated == nil {
+		return request, errorsx.WithStack(ErrRequestUnauthorized.
+			WithHint("The Client Configuration Endpoint requires a Client Registration Token.").
+			WithDebug("The configured ClientRegistrationEndpointAuthStrategy reported the endpoint is open by returning no requester and no error. That return is only valid for the client registration endpoint; every client configuration request must be authenticated."))
+	}
+
 	// The authenticated requester's ID carries the presented registration access token's signature (see
 	// DefaultEndpointAuthStrategy.AuthenticateClientRegistrationRequest), so the PUT handler can delete the old
 	// session when it rotates in a replacement token.
-	//
-	// ClientRegistrationEndpointAuthStrategy is an extension point, and a nil requester with a nil error is a legal
-	// return meaning the endpoint is unauthenticated, so it must not be dereferenced unguarded here. Every other
-	// consumer of the authenticated requester guards it the same way; with no requester there is no signature to
-	// derive, and the handler simply skips deleting a previous session.
-	if request.Authenticated != nil {
-		request.Signature = request.Authenticated.GetID()
-	}
+	request.Signature = request.Authenticated.GetID()
 
 	return request, nil
 }

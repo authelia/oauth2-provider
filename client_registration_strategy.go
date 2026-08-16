@@ -60,5 +60,13 @@ type ClientRegistrationEndpointAuthStrategy interface {
 	// "if authorization is required". Consumers must therefore treat a nil error as permission to proceed, not as a
 	// promise of a requester, and check the requester before dereferencing it; the scope and audience ceilings derived
 	// from it simply do not apply when there is none. Returning a non-nil error is what refuses a request.
+	//
+	// That open-endpoint return is valid ONLY for the client registration endpoint, i.e. when id is empty. RFC 7592
+	// Section 2 requires that "The client MUST use its registration access token in all calls to this endpoint as an
+	// OAuth 2.0 Bearer Token", so an implementation must never report the client configuration endpoint as open: the
+	// client acted upon there is named by the request path, and its identifier is not a secret, so an unauthenticated
+	// request would be able to read, replace, or delete any registered client. An implementation that wants open
+	// registration must therefore branch on id and return an error when it is non-empty. NewRFC7592ClientConfiguration
+	// Request rejects a nil requester regardless, so a strategy which does not branch fails closed rather than open.
 	AuthenticateClientRegistrationRequest(ctx context.Context, r *http.Request, id string) (requester Requester, err error)
 }

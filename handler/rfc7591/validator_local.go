@@ -391,12 +391,17 @@ type signingOrEncryptionAlgorithm struct {
 	value string
 }
 
-// validateAlgorithms checks the declared signing and encryption algorithm metadata: 'id_token_signed_response_alg'
-// must not be 'none' (OpenID Connect Dynamic Client Registration 1.0 Section 2), and every non-empty signing or
-// encryption algorithm value must be a syntactically valid, non-empty token (no embedded whitespace).
+// validateAlgorithms checks the declared signing and encryption algorithm metadata.
 func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error) {
-	if metadata.IDTokenSignedResponseAlg == consts.JSONWebTokenAlgNone {
-		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value must not be '%s'.", consts.ClientMetadataIDTokenSignedResponseAlg, consts.JSONWebTokenAlgNone))
+	for _, algorithm := range []signingOrEncryptionAlgorithm{
+		{consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg},
+		{consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg},
+		{consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg},
+		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
+	} {
+		if algorithm.value == consts.JSONWebTokenAlgNone {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value must not be '%s'.", algorithm.name, consts.JSONWebTokenAlgNone))
+		}
 	}
 
 	algorithms := []signingOrEncryptionAlgorithm{
@@ -410,6 +415,8 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 		{consts.ClientMetadataRequestObjectEncryptionAlg, metadata.RequestObjectEncryptionAlg},
 		{consts.ClientMetadataRequestObjectEncryptionEnc, metadata.RequestObjectEncryptionEnc},
 		{consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg},
+		{consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg},
+		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
 	}
 
 	for _, algorithm := range algorithms {

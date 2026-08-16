@@ -928,3 +928,66 @@ func TestEncodeNestedCompactEncrypted(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 }
+
+func TestDefaultStrategyDecodeAlgNone(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	strategy := &DefaultStrategy{
+		Config: &testConfig{},
+		Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{
+			Keys: []jose.JSONWebKey{
+				{KeyID: "rs256-sig", Key: key, Use: JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+			},
+		}),
+	}
+
+	unsigned, err := NewWithClaims(SigningMethodNone, MapClaims{
+		"iss": "client-id",
+		"sub": "client-id",
+		"aud": "https://auth.example.com",
+		"jti": "test-jti",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}).CompactSignedString(UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		client   Client
+		expected bool
+	}{
+		{"ShouldNotVerifyWithoutAClient", nil, false},
+		{"ShouldNotVerifyWhenSigningAlgIsUnregistered", &testClient{id: "client-id", csigned: true}, false},
+		{"ShouldNotVerifyWhenSigningAlgIsRS256", &testClient{id: "client-id", csigned: true, alg: string(jose.RS256)}, false},
+		{"ShouldVerifyWhenSigningAlgIsNone", &testClient{id: "client-id", csigned: true, alg: JSONWebTokenAlgNone}, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := []StrategyOpt{WithSigAlgorithm(SignatureAlgorithmsNone...)}
+
+			if tc.client != nil {
+				opts = append(opts, WithClient(tc.client))
+			}
+
+			decoded, err := strategy.Decode(t.Context(), unsigned, opts...)
+			require.NoError(t, err)
+			require.NotNil(t, decoded)
+
+			err = decoded.Valid()
+
+			if tc.expected {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+
+			var verr *ValidationError
+
+			require.ErrorAs(t, err, &verr)
+			assert.True(t, verr.Has(ValidationErrorSignatureInvalid), "expected the unsigned token to be reported as having an invalid signature, got: %v", err)
+		})
+	}
+}

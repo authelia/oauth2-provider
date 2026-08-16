@@ -45,6 +45,15 @@ type DefaultSession struct {
 	Extra        map[string]any `json:"extra,omitempty"`
 }
 
+// NewDefaultSession returns a *DefaultSession with the embedded OpenID Connect session and the Extra map SetClaimActor
+// writes to already initialised.
+func NewDefaultSession() *DefaultSession {
+	return &DefaultSession{
+		DefaultSession: openid.NewDefaultSession(),
+		Extra:          map[string]any{},
+	}
+}
+
 func (s *DefaultSession) SetActorToken(token map[string]any) {
 	s.ActorToken = token
 }
@@ -70,6 +79,10 @@ func (s *DefaultSession) GetSubjectToken() map[string]any {
 //   - s.DefaultSession.Claims.Extra flattened into the JWT body by jwt.IDTokenClaims.ToMap, so the 'act' claim
 //     is included in issued ID tokens and custom JWTs.
 func (s *DefaultSession) SetClaimActor(act map[string]any) {
+	if s.Extra == nil {
+		s.Extra = map[string]any{}
+	}
+
 	s.Extra[consts.ClaimActor] = act
 
 	if s.DefaultSession == nil {

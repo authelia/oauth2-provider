@@ -82,7 +82,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 
 		var hash string
 
-		if hash, err = c.ComputeHash(ctx, session, response.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
+		if hash, err = c.ComputeHash(ctx, request.GetClient(), response.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
 			return err
 		}
 

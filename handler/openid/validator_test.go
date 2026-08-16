@@ -44,6 +44,7 @@ func TestValidatePrompt(t *testing.T) {
 	testCases := []struct {
 		name        string
 		prompt      string
+		maxAge      string
 		redirectURL string
 		isPublic    bool
 		err         string
@@ -246,13 +247,64 @@ func TestValidatePrompt(t *testing.T) {
 				ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			}),
 		},
+		{
+			name:   "ShouldFailMaxAgeZeroWhenAuthTimeBeforeRequest",
+			maxAge: "0",
+			err:    "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because authentication time does not satisfy max_age time.",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldPassMaxAgeZeroWhenAuthTimeNotBeforeRequest",
+			maxAge: "0",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now()),
+				},
+				RequestedAt: time.Now().Add(-time.Minute),
+			},
+		},
+		{
+			name:   "ShouldFailNegativeMaxAge",
+			maxAge: "-1",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'max_age' must be a non-negative integer. the value '-1' could not be parsed as a non-negative integer",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now()),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldFailMalformedMaxAge",
+			maxAge: "abc",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'max_age' must be a non-negative integer. the value 'abc' could not be parsed as a non-negative integer",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now()),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			session, err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
-					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}},
+					Form:    url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}, "max_age": {tc.maxAge}},
 					Client:  &oauth2.DefaultClient{Public: tc.isPublic},
 					Session: tc.session,
 				},

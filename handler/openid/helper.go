@@ -5,17 +5,21 @@
 package openid
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"fmt"
 	"hash"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type IDTokenHandleHelper struct {
@@ -25,27 +29,12 @@ type IDTokenHandleHelper struct {
 func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (sum string) {
 	var err error
 
-	token := response.GetAccessToken()
-	if session, ok := request.GetSession().(Session); ok {
-		if sum, err = i.ComputeHash(ctx, session, token); err != nil {
-			// The Digest function Write always returns nil for err, the panic should never happen.
-			panic(err)
-		}
-
-		return sum
-	}
-
-	buffer := bytes.NewBufferString(token)
-	h := sha256.New()
-
-	if _, err = h.Write(buffer.Bytes()); err != nil {
-		// The sha256.Digest function Write always returns nil for err, the panic should never happen.
+	if sum, err = i.ComputeHash(ctx, request.GetClient(), response.GetAccessToken()); err != nil {
+		// The only error ComputeHash returns comes from hash.Hash.Write, which is documented never to return one.
 		panic(err)
 	}
 
-	hashBuf := bytes.NewBuffer(h.Sum([]byte{}))
-
-	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2])
+	return sum
 }
 
 func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (token string, err error) {
@@ -80,36 +69,83 @@ func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan
 	return nil
 }
 
-// ComputeHash computes the hash using the alg defined in the id_token header
-func (i *IDTokenHandleHelper) ComputeHash(_ context.Context, session Session, token string) (sum string, err error) {
-	var h hash.Hash
+// ComputeHash computes the 'at_hash', 'c_hash', or 's_hash' value for token.
+//
+// OpenID Connect Core 1.0 Section 3.3.2.11 defines the value as "the base64url encoding of the left-most half of the
+// hash of the octets of the ASCII representation" of the token, "where the hash algorithm used is the hash algorithm
+// used in the 'alg' Header Parameter of the ID Token's JOSE Header. For instance, if the alg is HS512, hash the code
+// value with SHA-512".
+//
+// The algorithm is resolved from the client's registered 'id_token_signed_response_alg', which is what the encoder
+// actually signs the ID Token with, rather than from the session's ID Token headers. The session cannot carry it:
+// jwt.Headers.ToMap deliberately filters 'alg' out, so reading it there always missed and every hash was computed
+// with SHA-256 no matter which algorithm the ID Token declared, which a conforming Relying Party must reject.
+func (i *IDTokenHandleHelper) ComputeHash(_ context.Context, client oauth2.Client, token string) (sum string, err error) {
+	h := hashFor(idTokenSigningAlg(client))
 
-	if alg, ok := session.IDTokenHeaders().Get(consts.JSONWebTokenHeaderAlgorithm).(string); ok && len(alg) > 2 {
-		var bits int
-
-		if bits, err = strconv.Atoi(alg[2:]); err == nil {
-			switch bits / 8 {
-			case sha512.Size:
-				h = sha512.New()
-			case sha512.Size384:
-				h = sha512.New384()
-			case sha512.Size256:
-				h = sha256.New()
-			}
-		}
-	}
-
-	if h == nil {
-		h = sha256.New()
-	}
-
-	buffer := bytes.NewBufferString(token)
-
-	if _, err = h.Write(buffer.Bytes()); err != nil {
+	if _, err = h.Write([]byte(token)); err != nil {
 		return "", err
 	}
 
-	hashBuf := bytes.NewBuffer(h.Sum([]byte{}))
+	// The left-most half of the hash octets, not of their encoded representation.
+	digest := h.Sum(nil)
 
-	return base64.RawURLEncoding.EncodeToString(hashBuf.Bytes()[:hashBuf.Len()/2]), nil
+	return base64.RawURLEncoding.EncodeToString(digest[:len(digest)/2]), nil
+}
+
+// idTokenSigningAlg returns the JWS algorithm the ID Token issued to this client is signed with, defaulting to RS256
+// which OpenID Connect Dynamic Client Registration 1.0 Section 2 makes the default for 'id_token_signed_response_alg'
+// and OpenID Connect Core 1.0 Section 15.1 requires an OpenID Provider support.
+func idTokenSigningAlg(client oauth2.Client) (alg string) {
+	if c := jwt.NewIDTokenClient(client); c != nil {
+		if alg = c.GetSigningAlg(); len(alg) != 0 {
+			return alg
+		}
+	}
+
+	return string(jose.RS256)
+}
+
+// hashFor returns the hash paired with a JWS signing algorithm by OpenID Connect Core 1.0 Section 3.3.2.11.
+//
+// The pairing is expressed as an explicit table rather than derived from the digits in the algorithm name: that
+// derivation silently mis-handles every algorithm not ending in its digest size, of which EdDSA is one.
+func hashFor(alg string) (h hash.Hash) {
+	switch jose.SignatureAlgorithm(alg) {
+	case jose.RS256, jose.PS256, jose.ES256, jose.HS256:
+		return sha256.New()
+	case jose.RS384, jose.PS384, jose.ES384, jose.HS384:
+		return sha512.New384()
+	case jose.RS512, jose.PS512, jose.ES512, jose.HS512:
+		return sha512.New()
+	case jose.EdDSA:
+		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally.
+		return sha512.New()
+	default:
+		// SHA-256 is the correct fallback for an unrecognised algorithm: RS256 is both the
+		// 'id_token_signed_response_alg' default and the algorithm Section 15.1 requires be supported, and
+		// ES256K pairs with SHA-256 as well. Reporting an error here is not an option, because GetAccessTokenHash
+		// panics on one and cannot return it without a breaking signature change.
+		return sha256.New()
+	}
+}
+
+// requestedMaxAge returns the 'max_age' authorization request parameter and whether it was present.
+//
+// A 'max_age' of 0 is not the same as an absent 'max_age': OpenID Connect Core 1.0 Section 3.1.2.1 states that
+// "max_age=0 is equivalent to prompt=login", so it demands re-authentication rather than imposing no constraint at
+// all. Parsing it with the error discarded and then gating enforcement on 'max_age > 0' collapsed the two, so the
+// client that asked most explicitly for a fresh authentication silently received the existing session.
+func requestedMaxAge(form url.Values) (maxAge int64, ok bool, err error) {
+	raw := form.Get(consts.FormParameterMaximumAge)
+
+	if len(raw) == 0 {
+		return 0, false, nil
+	}
+
+	if maxAge, err = strconv.ParseInt(raw, 10, 64); err != nil || maxAge < 0 {
+		return 0, false, fmt.Errorf("the value '%s' could not be parsed as a non-negative integer", raw)
+	}
+
+	return maxAge, true, nil
 }

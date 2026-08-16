@@ -6,7 +6,6 @@ package openid
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
@@ -108,9 +107,9 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
-	maxAge, err := strconv.ParseInt(request.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64)
+	maxAge, hasMaxAge, err := requestedMaxAge(request.GetRequestForm())
 	if err != nil {
-		maxAge = 0
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
 	}
 
 	session, ok := request.GetSession().(Session)
@@ -130,7 +129,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 
 	rat := session.GetRequestedAt()
 
-	if maxAge > 0 {
+	if hasMaxAge {
 		switch {
 		case claims.AuthTime == nil, claims.AuthTime.IsZero():
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))

@@ -6,7 +6,6 @@ package openid
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/mohae/deepcopy"
@@ -192,10 +191,13 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	jwtClient := jwt.NewIDTokenClient(request.GetClient())
 
 	if request.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
-		var maxAge int64
+		var (
+			maxAge    int64
+			hasMaxAge bool
+		)
 
-		if maxAge, err = strconv.ParseInt(request.GetRequestForm().Get(consts.FormParameterMaximumAge), 10, 64); err != nil {
-			maxAge = 0
+		if maxAge, hasMaxAge, err = requestedMaxAge(request.GetRequestForm()); err != nil {
+			return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
 		}
 
 		// Adds a bit of wiggle room for timing issues
@@ -205,7 +207,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 		rat := session.GetRequestedAt()
 
-		if maxAge > 0 {
+		if hasMaxAge {
 			switch {
 			case claims.AuthTime == nil, claims.AuthTime.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when max_age is set."))

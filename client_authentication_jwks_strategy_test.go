@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -278,4 +279,58 @@ func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestDefaultJWKSFetcherStrategyRefusesRedirects(t *testing.T) {
+	var internalHits atomic.Int64
+
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		internalHits.Add(1)
+
+		require.NoError(t, json.NewEncoder(w).Encode(&jose.JSONWebKeySet{
+			Keys: []jose.JSONWebKey{{KeyID: "internal", Key: &gen.MustRSAKey().PublicKey, Algorithm: "RS256", Use: "sig"}},
+		}))
+	}))
+
+	defer internal.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, internal.URL, http.StatusFound)
+	}))
+
+	defer redirector.Close()
+
+	strategy := NewDefaultJWKSFetcherStrategy()
+
+	set, err := strategy.Resolve(t.Context(), redirector.URL, true)
+
+	require.Error(t, err)
+	assert.Nil(t, set)
+	assert.EqualValues(t, 0, internalHits.Load(), "the redirect target must never be contacted")
+}
+
+func TestDefaultJWKSFetcherStrategyBoundsResponseBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[`))
+
+		chunk := bytes.Repeat([]byte(" "), 64*1024)
+
+		for range 64 {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+		}
+
+		_, _ = w.Write([]byte(`]}`))
+	}))
+
+	defer ts.Close()
+
+	strategy := NewDefaultJWKSFetcherStrategy()
+
+	set, err := strategy.Resolve(t.Context(), ts.URL, true)
+
+	require.Error(t, err)
+	assert.Nil(t, set)
 }

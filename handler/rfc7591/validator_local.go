@@ -70,6 +70,83 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateURIs(metadata); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// uriMetadata associates a URI-valued client metadata field's value with the parameter name used in error hints.
+type uriMetadata struct {
+	name  string
+	value string
+}
+
+// validateURIs checks the URI-valued client metadata beyond 'redirect_uris', which validateRedirectURIs covers.
+//
+// The scheme is the point of this check, not merely the shape. The authorization server itself dereferences
+// 'jwks_uri', 'request_uris', 'sector_identifier_uri' and 'backchannel_logout_uri', so a registrant able to set them
+// to an arbitrary scheme and host directs outbound requests from inside the deployment's network at a target of its
+// choosing, using the success, failure, or timing of the fetch as an oracle (RFC 6819 Section 5.1.5). The remaining
+// value, 'post_logout_redirect_uris', is a User Agent redirect target rather than a fetch, so a plaintext one leaks
+// the 'state' it carries rather than reaching inward.
+func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	uris := []uriMetadata{
+		{consts.ClientMetadataJSONWebKeysURI, metadata.JSONWebKeysURI},
+		{consts.ClientMetadataInitiateLoginURI, metadata.InitiateLoginURI},
+		{consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI},
+		{consts.ClientMetadataBackChannelLogoutURI, metadata.BackChannelLogoutURI},
+	}
+
+	for _, value := range metadata.RequestURIs {
+		uris = append(uris, uriMetadata{consts.ClientMetadataRequestURIs, value})
+	}
+
+	for _, uri := range uris {
+		if err = validateURI(uri, true); err != nil {
+			return err
+		}
+	}
+
+	// OpenID Connect RP-Initiated Logout 1.0 Section 3.1 states these "SHOULD use the https scheme ... however, they
+	// MAY use the http scheme, provided that the Client Type is confidential". Unlike the back-channel logout URI
+	// that permission is not additionally conditioned on the OP allowing it, so it is honoured here. A client
+	// registering 'token_endpoint_auth_method' of 'none' is public and does not qualify.
+	requireHTTPS := metadata.TokenEndpointAuthMethod == consts.ClientAuthMethodNone
+
+	for _, value := range metadata.PostLogoutRedirectURIs {
+		if err = validateURI(uriMetadata{consts.ClientMetadataPostLogoutRedirectURIs, value}, requireHTTPS); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateURI checks a single URI-valued metadata entry is a parseable, absolute URI, and where requireHTTPS is set
+// that it uses the 'https' scheme. An empty value is not registered and is skipped.
+func validateURI(uri uriMetadata, requireHTTPS bool) (err error) {
+	if len(uri.value) == 0 {
+		return nil
+	}
+
+	var parsed *url.URL
+
+	if parsed, err = url.Parse(uri.value); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' could not be parsed as a URI.", uri.name, uri.value).WithWrap(err).WithDebugError(err))
+	}
+
+	// An opaque URI such as 'javascript:alert(1)' parses with a scheme and reports itself absolute, so the absence
+	// of a host is what distinguishes a genuine network location from one of those.
+	if !parsed.IsAbs() || len(parsed.Host) == 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must be an absolute URI with a host component.", uri.name, uri.value))
+	}
+
+	if requireHTTPS && parsed.Scheme != consts.SchemeHTTPS {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must use the 'https' scheme.", uri.name, uri.value))
+	}
+
 	return nil
 }
 

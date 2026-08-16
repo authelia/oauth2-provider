@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -18,7 +19,58 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
+const (
+	defaultJWKSFetcherStrategyCachePrefix       = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
+	maxRemoteDocumentBytes                int64 = 1 << 20
+)
+
+// httpClientWithoutRedirects returns a shallow copy of client that refuses to follow redirects, leaving the redirect
+// response itself to be surfaced and rejected by the caller's status check.
+//
+// A URI a client registered is validated for scheme and shape at registration time, but that check binds only the
+// first hop: a registrant-controlled host behind a conformant 'https' URI can answer with a 302 to a loopback,
+// link-local, or otherwise internal address, and the authorization server would follow it. Refusing redirects keeps
+// the fetch pointed at the location the deployment actually validated.
+//
+// The copy is deliberate. The client belongs to the integrator and is shared with every other consumer of
+// GetHTTPClient, so mutating its CheckRedirect in place would silently change their behaviour too.
+func httpClientWithoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {
+	refuseRedirect := func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	inner := &http.Client{CheckRedirect: refuseRedirect}
+
+	if client.HTTPClient != nil {
+		innerCopy := *client.HTTPClient
+		innerCopy.CheckRedirect = refuseRedirect
+		inner = &innerCopy
+	}
+
+	scoped = &retryablehttp.Client{
+		HTTPClient:      inner,
+		RetryWaitMin:    client.RetryWaitMin,
+		RetryWaitMax:    client.RetryWaitMax,
+		RetryMax:        client.RetryMax,
+		CheckRetry:      client.CheckRetry,
+		Backoff:         client.Backoff,
+		ErrorHandler:    client.ErrorHandler,
+		RequestLogHook:  client.RequestLogHook,
+		ResponseLogHook: client.ResponseLogHook,
+	}
+
+	// retryablehttp.Client.Do dereferences CheckRetry and Backoff without a nil guard, and only lazily initialises
+	// HTTPClient, so a client assembled as a struct literal rather than by retryablehttp.NewClient would panic here.
+	if scoped.CheckRetry == nil {
+		scoped.CheckRetry = retryablehttp.DefaultRetryPolicy
+	}
+
+	if scoped.Backoff == nil {
+		scoped.Backoff = retryablehttp.DefaultBackoff
+	}
+
+	return scoped
+}
 
 // DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy interface.
 type DefaultJWKSFetcherStrategy struct {
@@ -101,7 +153,7 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 			hc = s.clientSourceFunc(ctx)
 		}
 
-		response, err := hc.Do(req.WithContext(ctx))
+		response, err := httpClientWithoutRedirects(hc).Do(req.WithContext(ctx))
 		if err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
 		}
@@ -113,7 +165,7 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 
 		var set jose.JSONWebKeySet
 
-		if err = json.NewDecoder(response.Body).Decode(&set); err != nil {
+		if err = json.NewDecoder(io.LimitReader(response.Body, maxRemoteDocumentBytes)).Decode(&set); err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to decode JSON Web Keys from location '%s'. Please check for typos and if the URL returns valid JSON.", location).WithWrap(err).WithDebugError(err))
 		}
 

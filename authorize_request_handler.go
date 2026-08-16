@@ -6,11 +6,13 @@ package oauth2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -363,7 +365,11 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
 			}
 		default:
-			request.Form.Set(k, fmt.Sprintf("%s", v))
+			if value, err = requestObjectFormValue(v); err != nil {
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
+			}
+
+			request.Form.Set(k, value)
 		}
 	}
 
@@ -385,17 +391,82 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
+	// RFC9101 Section 6.3 requires the authorization server "MUST only use the parameters in the Request Object,
+	// even if the same parameter is provided in the query parameter", so the Request Object's scope is authoritative
+	// and the outer query values are discarded rather than merged into it. Unioning them would let any party able to
+	// rewrite the authorization URL - a malicious application, an open redirect, a hostile browser extension - add
+	// scopes to a signed request, bounded only by the client's registered scope set, defeating the integrity
+	// guarantee a signed request object exists to provide.
+	//
+	// The 'openid' value is the sole exception. OpenID Connect Core 1.0 Section 6.1 requires that "Even if a scope
+	// parameter is present in the Request Object value, a scope parameter MUST always be passed using the OAuth 2.0
+	// request syntax containing the openid scope value to indicate to the underlying OAuth 2.0 logic that this is an
+	// OpenID Connect request", making it a marker for the OAuth 2.0 layer rather than a scope the outer syntax gets
+	// to request. It is therefore carried over when the outer syntax marked the request as OpenID Connect, and
+	// nothing else is.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-6.3
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
-	for _, s := range scope {
-		if !stringslice.Has(claimScope, s) {
-			claimScope = append(claimScope, s)
-		}
+
+	if openid && !stringslice.Has(claimScope, consts.ScopeOpenID) {
+		claimScope = append(claimScope, consts.ScopeOpenID)
 	}
 
 	request.State = request.Form.Get(consts.FormParameterState)
 	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 
 	return nil
+}
+
+// requestObjectFormValue renders a Request Object claim value as the string the equivalent OAuth 2.0 request syntax
+// parameter would have carried.
+//
+// A claim is not necessarily a string: RFC9101 Section 4 requires that "Numerical values MUST be included as JSON
+// numbers", and OpenID Connect Core 1.0 Section 5.5 defines 'claims' as a JSON object, as RFC9396 Section 2 does
+// 'authorization_details'. Rendering every value with the %s verb turns the numeric 'max_age' of the specification's
+// own example into the literal string '%!s(float64=86400)' and an object into Go map syntax, neither of which any
+// consumer can parse - and because the 'max_age' call sites treat a parse failure as absent, that silently disables
+// the re-authentication the parameter was sent to demand.
+func requestObjectFormValue(v any) (value string, err error) {
+	switch t := v.(type) {
+	case string:
+		return t, nil
+	case bool:
+		return strconv.FormatBool(t), nil
+	case json.Number:
+		return t.String(), nil
+	case float64:
+		// JSON numbers decode to float64, so this is the path a conformant numeric claim takes. The 'f' format with
+		// precision -1 renders an integral value without a fractional part or an exponent, so 86400 formats as
+		// "86400" rather than "86400.000000" or "8.64e+04".
+		return strconv.FormatFloat(t, 'f', -1, 64), nil
+	case float32:
+		return strconv.FormatFloat(float64(t), 'f', -1, 32), nil
+	case int:
+		return strconv.Itoa(t), nil
+	case int32:
+		return strconv.FormatInt(int64(t), 10), nil
+	case int64:
+		return strconv.FormatInt(t, 10), nil
+	case uint:
+		return strconv.FormatUint(uint64(t), 10), nil
+	case uint32:
+		return strconv.FormatUint(uint64(t), 10), nil
+	case uint64:
+		return strconv.FormatUint(t, 10), nil
+	case nil:
+		return "", nil
+	default:
+		// Objects and arrays are carried as JSON text in the OAuth 2.0 request syntax, which is how a client sending
+		// 'claims' or 'authorization_details' as a query parameter would have encoded them.
+		var data []byte
+
+		if data, err = json.Marshal(t); err != nil {
+			return "", err
+		}
+
+		return string(data), nil
+	}
 }
 
 // requireSignedRequestObject determines if the 'require_signed_request_object' policy applies to this request. It

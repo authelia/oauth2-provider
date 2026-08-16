@@ -34,6 +34,24 @@ func NewLocalValidator(config LocalValidatorConfig) (validator *LocalValidator) 
 	return &LocalValidator{config: config}
 }
 
+// validators returns the configured oauth2.ClientRegistrationValidator values, falling back to a single
+// LocalValidator when none are configured. The fallback is what makes registration safe out of the box, in the same
+// way and for the same reason metadataStrategy defaults the metadata filter: without it an integrator who has never
+// heard of this seam gets an endpoint that validates nothing at all, accepting a 'javascript:' redirect URI, a
+// 'jwks' and 'jwks_uri' together, an 'id_token_signed_response_alg' of 'none', and grant and response types that
+// contradict each other. Configuring validators explicitly replaces the default, including with an empty-but-non-nil
+// slice for a deployment that genuinely wants no local validation.
+//
+// Network-dereferencing validators such as SectorIdentifierValidator are deliberately not included: they perform
+// egress on a client supplied URI, which is a deployment decision rather than a safe default.
+func validators(ctx context.Context, config Configurator) (validators []oauth2.ClientRegistrationValidator) {
+	if validators = config.GetRFC7591ClientRegistrationValidators(ctx); validators != nil {
+		return validators
+	}
+
+	return []oauth2.ClientRegistrationValidator{NewLocalValidator(config)}
+}
+
 // ValidateClientRegistrationMetadata validates the given metadata using purely local, network-free checks. client
 // is nil on a client registration request, and the existing client on a client configuration request; neither is
 // consulted by these checks, which validate the incoming metadata in isolation.

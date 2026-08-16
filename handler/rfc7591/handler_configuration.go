@@ -124,7 +124,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	for _, validator := range h.Config.GetRFC7591ClientRegistrationValidators(ctx) {
+	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, client, metadata); err != nil {
 			return err
 		}

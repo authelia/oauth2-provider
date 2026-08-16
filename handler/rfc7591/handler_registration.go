@@ -83,7 +83,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 		return err
 	}
 
-	for _, validator := range h.Config.GetRFC7591ClientRegistrationValidators(ctx) {
+	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, nil, metadata); err != nil {
 			return err
 		}

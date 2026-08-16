@@ -28,7 +28,7 @@ func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 	// defence-in-depth check be bypassed on the client configuration endpoint.
 	t.Run("ShouldRejectEmptyClientID", func(t *testing.T) {
 		// Fails the test outright if the auth strategy is ever invoked, rather than merely asserting the final
-		// error - a regression that reordered the empty-id check to run after a successful strategy call, still
+		// error; a regression that reordered the empty-id check to run after a successful strategy call, still
 		// rejecting the id afterward, would produce an identical error and leave a weaker assertion unchanged.
 		strategy := &recordingEndpointAuth{
 			requester: NewRequest(),
@@ -67,21 +67,30 @@ func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 		assert.Equal(t, authenticated, requester.GetAuthenticatedRequester())
 	})
 
-	// ClientRegistrationEndpointAuthStrategy is a documented extension point, and returning a nil requester with a
-	// nil error is the documented way to say the endpoint is unauthenticated. Deriving the signature from that
-	// requester must therefore not dereference it unguarded: a library must not panic because a custom strategy took
-	// a legal path.
-	t.Run("ShouldNotPanicWhenAuthStrategyReturnsNoRequester", func(t *testing.T) {
+	// ClientRegistrationEndpointAuthStrategy is a documented extension point where returning a nil requester with a
+	// nil error reports the endpoint is open. RFC 7592 Section 2 requires a registration access token on every call
+	// to the client configuration endpoint, so that return must be refused here rather than honoured: the client is
+	// named by the request path and its identifier is not a secret, so proceeding would let an unauthenticated
+	// request read, replace, or delete any registered client. It must still not panic - a library must not crash
+	// because a custom strategy took a path the interface documents.
+	t.Run("ShouldRejectWhenAuthStrategyReturnsNoRequester", func(t *testing.T) {
 		provider := &Fosite{Config: &Config{
 			RFC7591ClientRegistrationEndpointAuthStrategy: &staticEndpointAuth{requester: nil},
 		}}
 
 		r := httptest.NewRequest(http.MethodGet, "https://auth.example.com/register/client-1", nil)
 
-		requester, err := provider.NewRFC7592ClientConfigurationRequest(ctx, r)
-		require.NoError(t, err)
+		var (
+			requester ClientConfigurationRequester
+			err       error
+		)
 
-		assert.Equal(t, "client-1", requester.GetClientID())
+		require.NotPanics(t, func() {
+			requester, err = provider.NewRFC7592ClientConfigurationRequest(ctx, r)
+		})
+
+		require.Error(t, err)
+		assert.EqualError(t, ErrorToRFC6749Error(err), ErrRequestUnauthorized.Error())
 		assert.Nil(t, requester.GetAuthenticatedRequester())
 		assert.Empty(t, requester.GetSignature())
 	})

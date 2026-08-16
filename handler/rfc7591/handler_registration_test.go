@@ -109,6 +109,38 @@ func TestClientRegistrationHandlerRunsValidators(t *testing.T) {
 	assert.Empty(t, store.Clients)
 }
 
+func TestClientRegistrationHandlerValidatesByDefault(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	require.Nil(t, config.GetRFC7591ClientRegistrationValidators(ctx), "the default path is only exercised while no validators are configured")
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs: []string{"https://example.com/cb#frag"},
+	}
+
+	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+	require.Error(t, err)
+	assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.Empty(t, store.Clients)
+}
+
+func TestClientRegistrationHandlerHonoursExplicitlyEmptyValidators(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	config.RFC7591ClientRegistrationValidators = []oauth2.ClientRegistrationValidator{}
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs: []string{"https://example.com/cb#frag"},
+	}
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse()))
+	assert.Len(t, store.Clients, 1)
+}
+
 func TestClientRegistrationHandlerFiltersBeforeValidation(t *testing.T) {
 	ctx := context.Background()
 	handler, config, store := newRegistrationHandler(t)

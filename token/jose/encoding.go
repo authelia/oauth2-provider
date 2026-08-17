@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/big"
 	"strings"
+	"sync"
 	"unicode"
 
 	"authelia.com/provider/oauth2/token/jose/json"
@@ -86,15 +87,37 @@ func decompress(algorithm CompressionAlgorithm, input []byte) ([]byte, error) {
 	}
 }
 
+// flateWriterPool holds flate writers for reuse. Constructing one allocates over a megabyte of window and hash tables,
+// which dwarfs everything else about compressing a JWE payload.
+var flateWriterPool sync.Pool
+
+// newFlateWriter returns a flate writer for the given output, reusing a pooled one where possible. Reset restores the
+// writer to the state a newly constructed one would have, so nothing of a previous payload can reach the output.
+func newFlateWriter(output io.Writer) *flate.Writer {
+	if v := flateWriterPool.Get(); v != nil {
+		writer := v.(*flate.Writer)
+		writer.Reset(output)
+
+		return writer
+	}
+
+	// Writing to byte buffer, err is always nil
+	writer, _ := flate.NewWriter(output, 1)
+
+	return writer
+}
+
 // deflate compresses the input.
 func deflate(input []byte) ([]byte, error) {
 	output := new(bytes.Buffer)
 
-	// Writing to byte buffer, err is always nil
-	writer, _ := flate.NewWriter(output, 1)
+	writer := newFlateWriter(output)
 	_, _ = io.Copy(writer, bytes.NewBuffer(input))
 
 	err := writer.Close()
+
+	flateWriterPool.Put(writer)
+
 	return output.Bytes(), err
 }
 

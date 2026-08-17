@@ -18,10 +18,16 @@
 package jwt
 
 import (
+	"math"
 	"strconv"
 	"time"
 
 	"authelia.com/provider/oauth2/token/jose/json"
+)
+
+const (
+	unixToInternal int64 = (1969*365 + 1969/4 - 1969/100 + 1969/400) * 24 * 60 * 60
+	maxNumericDate       = math.MaxInt64 - unixToInternal
 )
 
 // Claims represents public claim values (as specified in RFC 7519).
@@ -65,8 +71,12 @@ func (n *NumericDate) UnmarshalJSON(b []byte) error {
 	s := string(b)
 
 	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 		return ErrUnmarshalNumericDate
+	}
+
+	if f >= float64(math.MaxInt64) || f <= float64(math.MinInt64) {
+		return ErrNumericDateOutOfRange
 	}
 
 	*n = NumericDate(f)
@@ -78,7 +88,14 @@ func (n *NumericDate) Time() time.Time {
 	if n == nil {
 		return time.Time{}
 	}
-	return time.Unix(int64(*n), 0)
+
+	sec := int64(*n)
+
+	if sec > maxNumericDate {
+		sec = maxNumericDate
+	}
+
+	return time.Unix(sec, 0)
 }
 
 // Audience represents the recipients that the token is intended for.

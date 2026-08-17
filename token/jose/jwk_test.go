@@ -915,6 +915,157 @@ func TestMarshalUnmarshalJWKSet(t *testing.T) {
 	}
 }
 
+// RFC 7517 Section 5 states that implementations SHOULD ignore JWKs within a JWK Set that use "kty" (key type) values
+// that are not understood by them, that are missing required members, or for which values are out of the supported
+// ranges. Unusable keys must therefore not prevent the remaining keys in the set from being parsed.
+func TestJWKSetUnmarshalIgnoresUnusableKeys(t *testing.T) {
+	testCases := []struct {
+		name string
+		have string
+		kids []string
+		err  string
+	}{
+		{
+			"ShouldIgnoreUnknownKeyType",
+			`{"keys":[{"kty":"oct","k":"AQIDBA","kid":"first"},{"kty":"FUTURE","kid":"unknown"},{"kty":"oct","k":"BQYHCA","kid":"last"}]}`,
+			[]string{"first", "last"},
+			"",
+		},
+		{
+			"ShouldIgnoreMissingKeyType",
+			`{"keys":[{"kid":"absent"},{"kty":"oct","k":"AQIDBA","kid":"first"}]}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldIgnoreUnknownCurve",
+			`{"keys":[{"kty":"OKP","crv":"X25519","x":"AQIDBA","kid":"unknown"},{"kty":"oct","k":"AQIDBA","kid":"first"}]}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldIgnoreMissingRequiredMembers",
+			`{"keys":[{"kty":"EC","crv":"P-256","kid":"incomplete"},{"kty":"oct","k":"AQIDBA","kid":"first"}]}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldIgnoreValuesOutOfSupportedRanges",
+			`{"keys":[{"kty":"EC","crv":"P-256","x":"AQIDBA","y":"BQYHCA","kid":"short"},{"kty":"oct","k":"AQIDBA","kid":"first"}]}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldIgnoreElementsWhichAreNotObjects",
+			`{"keys":[123,{"kty":"oct","k":"AQIDBA","kid":"first"}]}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldIgnoreAllUnusableKeys",
+			`{"keys":[{"kty":"FUTURE","kid":"unknown"}]}`,
+			[]string{},
+			"",
+		},
+		{
+			"ShouldIgnoreAdditionalMembers",
+			`{"keys":[{"kty":"oct","k":"AQIDBA","kid":"first"}],"example.com:extra":{"a":1}}`,
+			[]string{"first"},
+			"",
+		},
+		{
+			"ShouldParseEmptyKeysMember",
+			`{"keys":[]}`,
+			[]string{},
+			"",
+		},
+		{
+			"ShouldErrorOnAbsentKeysMember",
+			`{}`,
+			nil,
+			"go-jose/go-jose: invalid JWK Set, keys member is required",
+		},
+		{
+			"ShouldErrorOnNullKeysMember",
+			`{"keys":null}`,
+			nil,
+			"go-jose/go-jose: invalid JWK Set, keys member is required",
+		},
+		{
+			"ShouldErrorOnKeysMemberWhichIsNotAnArray",
+			`{"keys":{}}`,
+			nil,
+			"json: cannot unmarshal object into Go struct field rawJSONWebKeySet.keys of type []json.RawMessage",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var set JSONWebKeySet
+
+			err := json.Unmarshal([]byte(tc.have), &set)
+
+			if tc.err != "" {
+				if assert.Error(t, err) {
+					assert.Equal(t, err.Error(), tc.err)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			kids := make([]string, len(set.Keys))
+
+			for i, key := range set.Keys {
+				kids[i] = key.KeyID
+			}
+
+			assert.EqualSlice(t, kids, tc.kids)
+		})
+	}
+}
+
+// RFC 7517 Section 5.1 states that the value of the "keys" member is an array of JWK values. A JWK Set with no keys
+// must therefore be serialized with an empty array rather than a null value.
+func TestJWKSetMarshalKeysMemberIsAlwaysAnArray(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     JSONWebKeySet
+		expected string
+	}{
+		{
+			"ShouldMarshalNilKeysAsAnEmptyArray",
+			JSONWebKeySet{},
+			`{"keys":[]}`,
+		},
+		{
+			"ShouldMarshalEmptyKeysAsAnEmptyArray",
+			JSONWebKeySet{Keys: []JSONWebKey{}},
+			`{"keys":[]}`,
+		},
+		{
+			"ShouldMarshalKeys",
+			JSONWebKeySet{Keys: []JSONWebKey{{Key: []byte{1, 2, 3, 4}, KeyID: "first"}}},
+			`{"keys":[{"kty":"oct","kid":"first","k":"AQIDBA"}]}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(tc.have)
+
+			require.NoError(t, err)
+			require.Equal(t, string(data), tc.expected)
+
+			data, err = json.Marshal(&tc.have)
+
+			require.NoError(t, err)
+			require.Equal(t, string(data), tc.expected)
+		})
+	}
+}
+
 func TestJWKSetKey(t *testing.T) {
 	jwk1 := JSONWebKey{Key: rsaTestKey, KeyID: "ABCDEFG", Algorithm: "foo"}
 	jwk2 := JSONWebKey{Key: rsaTestKey, KeyID: "GFEDCBA", Algorithm: "foo"}

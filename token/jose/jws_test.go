@@ -952,3 +952,50 @@ func TestParseSignedTrimsOuterWhitespace(t *testing.T) {
 		t.Errorf("ParseDetached rejected compact serialization with outer whitespace: %v", err)
 	}
 }
+
+// An embedded OKP JWK whose "x" resolves to the Ed25519 identity point accepts a signature which anyone can construct
+// without a private key, because [s]B == R + [k]A holds for s of zero, R of the identity point and A the identity
+// point, whatever the payload. Such a JWK must never survive parsing. See go-jose/go-jose#249.
+func TestEmbeddedEd25519IdentityPointCannotForgeSignature(t *testing.T) {
+	testCases := []struct {
+		name string
+		x    []byte
+	}{
+		{"ShouldRejectTruncatedX", []byte{0x01}},
+		{
+			"ShouldRejectIdentityPoint",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000000`),
+		},
+		{
+			"ShouldRejectIdentityPointSignBitAlias",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000080`),
+		},
+	}
+
+	// R is the identity point and s is zero.
+	forged := make([]byte, 64)
+	forged[0] = 0x01
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			protected := []byte(`{"alg":"EdDSA","jwk":{"kty":"OKP","crv":"Ed25519","x":"` +
+				base64.RawURLEncoding.EncodeToString(tc.x) + `"}}`)
+
+			msg := strings.Join([]string{
+				base64.RawURLEncoding.EncodeToString(protected),
+				base64.RawURLEncoding.EncodeToString([]byte("forged payload")),
+				base64.RawURLEncoding.EncodeToString(forged),
+			}, ".")
+
+			object, err := ParseSigned(msg, []SignatureAlgorithm{EdDSA})
+			if err != nil {
+				return
+			}
+
+			payload, err := object.Verify(object.Signatures[0].Header.JSONWebKey)
+			if err == nil {
+				t.Fatalf("forged signature was accepted, returning payload %q", payload)
+			}
+		})
+	}
+}

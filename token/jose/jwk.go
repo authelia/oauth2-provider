@@ -380,6 +380,69 @@ type JSONWebKeySet struct {
 	Keys []JSONWebKey `json:"keys"`
 }
 
+// rawJSONWebKeySet represents a JWK Set with the individual keys left unparsed, used for parsing.
+type rawJSONWebKeySet struct {
+	Keys []json.RawMessage `json:"keys"`
+}
+
+// MarshalJSON serializes the given JWK Set to its JSON representation.
+//
+// RFC 7517 Section 5.1 (keys Parameter):
+//
+//	The value of the "keys" parameter is an array of JWK values.
+//
+// A JWK Set with no keys is therefore serialized with an empty array rather than a null value.
+func (s JSONWebKeySet) MarshalJSON() ([]byte, error) {
+	keys := s.Keys
+
+	if keys == nil {
+		keys = []JSONWebKey{}
+	}
+
+	return json.Marshal(struct {
+		Keys []JSONWebKey `json:"keys"`
+	}{Keys: keys})
+}
+
+// UnmarshalJSON deserializes the given JWK Set, ignoring any key within it which cannot be used.
+//
+// RFC 7517 Section 5 (JWK Set Format):
+//
+//	Implementations SHOULD ignore JWKs within a JWK Set that use "kty"
+//	(key type) values that are not understood by them, that are missing
+//	required members, or for which values are out of the supported
+//	ranges.
+//
+// A single unusable key therefore does not prevent the remaining keys in the set from being used. Errors which relate
+// to the structure of the set itself, rather than to an individual key, are still returned.
+func (s *JSONWebKeySet) UnmarshalJSON(data []byte) (err error) {
+	var raw rawJSONWebKeySet
+
+	if err = json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if raw.Keys == nil {
+		return errors.New("go-jose/go-jose: invalid JWK Set, keys member is required")
+	}
+
+	keys := make([]JSONWebKey, 0, len(raw.Keys))
+
+	for _, rawKey := range raw.Keys {
+		var key JSONWebKey
+
+		if kerr := key.UnmarshalJSON(rawKey); kerr != nil {
+			continue
+		}
+
+		keys = append(keys, key)
+	}
+
+	s.Keys = keys
+
+	return nil
+}
+
 // Key convenience method returns keys by key ID. Specification states
 // that a JWK Set "SHOULD" use distinct key IDs, but allows for some
 // cases where they are not distinct. Hence method returns a slice

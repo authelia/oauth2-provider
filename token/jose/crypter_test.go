@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -33,6 +34,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"authelia.com/provider/oauth2/token/jose/json"
 )
 
 // We generate only a single RSA and EC key for testing, speeds up tests.
@@ -1417,4 +1420,140 @@ func craftEncryptedCompact(t *testing.T, enc ContentEncryption, cek []byte, body
 		base64.RawURLEncoding.EncodeToString(parts.ciphertext),
 		base64.RawURLEncoding.EncodeToString(parts.tag),
 	}, ".")
+}
+
+func TestJWEUnprotectedIdentityHeadersAreNotExposed(t *testing.T) {
+	encrypter, err := NewEncrypter(A128GCM, Recipient{
+		Algorithm: RSA_OAEP,
+		Key:       &rsaTestKey.PublicKey,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ciphertext, err := encrypter.Encrypt([]byte("Lorem ipsum dolor sit amet"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]interface{}{
+		"kid":    "attacker",
+		"jwk":    JSONWebKey{Key: &ecTestKey256.PublicKey, KeyID: "attacker"},
+		"x5c":    []string{base64.StdEncoding.EncodeToString(testCertificates[0].Raw)},
+		"custom": "preserved",
+	}
+
+	serialized := injectJWEHeader(t, ciphertext.FullSerialize(), "unprotected", header)
+
+	parsed, err := ParseEncrypted(serialized, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plaintext, err := parsed.Decrypt(rsaTestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(plaintext) != "Lorem ipsum dolor sit amet" {
+		t.Fatalf("plaintext = %q", plaintext)
+	}
+
+	// The unprotected kid must remain usable as a key selection hint, as selecting the wrong key merely fails.
+	keySet := JSONWebKeySet{
+		Keys: []JSONWebKey{{Key: rsaTestKey, KeyID: "attacker"}},
+	}
+
+	plaintext, err = parsed.Decrypt(keySet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(plaintext) != "Lorem ipsum dolor sit amet" {
+		t.Fatalf("JWKS plaintext = %q", plaintext)
+	}
+
+	if parsed.Header.KeyID != "" {
+		t.Errorf("unprotected kid was exposed as %q", parsed.Header.KeyID)
+	}
+	if parsed.Header.JSONWebKey != nil {
+		t.Error("unprotected jwk was exposed")
+	}
+	if _, err = parsed.Header.Certificates(x509.VerifyOptions{}); err != ErrMissingX5cHeader {
+		t.Errorf("unprotected x5c error = %v, want %v", err, ErrMissingX5cHeader)
+	}
+	if parsed.Header.ExtraHeaders[HeaderKey("custom")] != "preserved" {
+		t.Errorf("custom header = %v, want %q", parsed.Header.ExtraHeaders[HeaderKey("custom")], "preserved")
+	}
+}
+
+func TestJWERecipientUnprotectedIdentityHeadersAreNotExposed(t *testing.T) {
+	encrypter, err := NewEncrypter(A128GCM, Recipient{
+		Algorithm: RSA_OAEP,
+		Key:       &rsaTestKey.PublicKey,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ciphertext, err := encrypter.Encrypt([]byte("Lorem ipsum dolor sit amet"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]interface{}{
+		"kid":    "attacker",
+		"jwk":    JSONWebKey{Key: &ecTestKey256.PublicKey, KeyID: "attacker"},
+		"x5c":    []string{base64.StdEncoding.EncodeToString(testCertificates[0].Raw)},
+		"custom": "preserved",
+	}
+
+	serialized := injectJWEHeader(t, ciphertext.FullSerialize(), "header", header)
+
+	parsed, err := ParseEncrypted(serialized, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index, headerOut, plaintext, err := parsed.DecryptMulti(rsaTestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if index != 0 {
+		t.Fatalf("recipient index = %d, want 0", index)
+	}
+	if string(plaintext) != "Lorem ipsum dolor sit amet" {
+		t.Fatalf("plaintext = %q", plaintext)
+	}
+
+	if headerOut.KeyID != "" {
+		t.Errorf("unprotected kid was exposed as %q", headerOut.KeyID)
+	}
+	if headerOut.JSONWebKey != nil {
+		t.Error("unprotected jwk was exposed")
+	}
+	if _, err = headerOut.Certificates(x509.VerifyOptions{}); err != ErrMissingX5cHeader {
+		t.Errorf("unprotected x5c error = %v, want %v", err, ErrMissingX5cHeader)
+	}
+	if headerOut.ExtraHeaders[HeaderKey("custom")] != "preserved" {
+		t.Errorf("custom header = %v, want %q", headerOut.ExtraHeaders[HeaderKey("custom")], "preserved")
+	}
+}
+
+func injectJWEHeader(t *testing.T, serialized, field string, header map[string]interface{}) string {
+	t.Helper()
+
+	var raw map[string]interface{}
+
+	if err := json.Unmarshal([]byte(serialized), &raw); err != nil {
+		t.Fatal(err)
+	}
+
+	raw[field] = header
+
+	out, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(out)
 }

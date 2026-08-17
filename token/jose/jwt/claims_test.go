@@ -18,6 +18,7 @@
 package jwt
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -117,6 +118,74 @@ func TestNumericDate(t *testing.T) {
 	if !nonZeroDate.Time().Equal(expected) {
 		t.Errorf("nonZeroDate.Time() = %s, want %s", nonZeroDate.Time(), expected)
 	}
+}
+
+// A NumericDate is an int64 number of seconds. Converting a float64 which falls outside the range of an int64 is
+// implementation-dependent in Go, so such values must be rejected rather than silently truncated to whatever the
+// platform happens to produce.
+func TestNumericDateUnmarshalRejectsValuesOutOfRange(t *testing.T) {
+	testCases := []struct {
+		name string
+		have string
+		err  error
+	}{
+		{"ShouldRejectLargePositive", `1e300`, ErrNumericDateOutOfRange},
+		{"ShouldRejectLargeNegative", `-1e300`, ErrNumericDateOutOfRange},
+		{"ShouldRejectMaxInt64Exceeded", `9223372036854775808`, ErrNumericDateOutOfRange},
+		{"ShouldRejectMinInt64Exceeded", `-9223372036854775809`, ErrNumericDateOutOfRange},
+		{"ShouldRejectNaN", `NaN`, ErrUnmarshalNumericDate},
+		{"ShouldRejectInf", `Inf`, ErrUnmarshalNumericDate},
+		{"ShouldRejectNegativeInf", `-Inf`, ErrUnmarshalNumericDate},
+		{"ShouldRejectOutOfFloatRange", `1e400`, ErrUnmarshalNumericDate},
+		{"ShouldRejectString", `"invalid"`, ErrUnmarshalNumericDate},
+		{"ShouldParseEpoch", `0`, nil},
+		{"ShouldParseFractional", `1.5`, nil},
+		{"ShouldParseNegative", `-1700000000`, nil},
+		{"ShouldParseSeconds", `1700000000`, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var date NumericDate
+
+			assert.Equal(t, tc.err, date.UnmarshalJSON([]byte(tc.have)))
+		})
+	}
+}
+
+// time.Unix stores seconds relative to year 1, so a large positive number of seconds since the epoch overflows and
+// wraps around to a time in the past. Ordering must be preserved so that a date in the future never compares as one
+// in the past, which would silently skip the nbf and iat checks.
+func TestNumericDateTimeDoesNotWrapAround(t *testing.T) {
+	now := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+
+	testCases := []struct {
+		name   string
+		have   NumericDate
+		future bool
+	}{
+		{"ShouldOrderMaxInt64AsFuture", NumericDate(math.MaxInt64), true},
+		{"ShouldOrderMinInt64AsPast", NumericDate(math.MinInt64), false},
+		{"ShouldOrderYear9999AsFuture", NumericDate(253402300799), true},
+		{"ShouldOrderEpochAsPast", NumericDate(0), false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.have.Time().After(now), tc.future)
+			assert.Equal(t, tc.have.Time().Before(now), !tc.future)
+		})
+	}
+}
+
+// A token which is not valid until a date beyond the representable range must not be accepted before that date.
+func TestValidateRejectsNotBeforeOutOfRange(t *testing.T) {
+	now := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+
+	notBefore := NumericDate(math.MaxInt64)
+	c := Claims{NotBefore: &notBefore}
+
+	assert.Equal(t, ErrNotValidYet, c.ValidateWithLeeway(Expected{Time: now}, 0))
 }
 
 func TestEncodeClaimsTimeValues(t *testing.T) {

@@ -25,6 +25,10 @@ var ErrUnmarshalAudience = errors.New("go-jose/go-jose/jwt: expected string or a
 // ErrUnmarshalNumericDate indicates that JWT NumericDate could not be unmarshalled.
 var ErrUnmarshalNumericDate = errors.New("go-jose/go-jose/jwt: expected number value to unmarshal NumericDate")
 
+// ErrNumericDateOutOfRange indicates that a JWT NumericDate falls outside the range representable as a number of
+// seconds in an int64.
+var ErrNumericDateOutOfRange = errors.New("go-jose/go-jose/jwt: numeric date is out of range")
+
 // ErrInvalidClaims indicates that given claims have invalid type.
 var ErrInvalidClaims = errors.New("go-jose/go-jose/jwt: expected claims to be value convertible into JSON object")
 

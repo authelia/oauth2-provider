@@ -26,6 +26,8 @@ import (
 	"testing"
 
 	"authelia.com/provider/oauth2/token/jose/json"
+	"authelia.com/provider/oauth2/token/jose/testutils/assert"
+	"authelia.com/provider/oauth2/token/jose/testutils/require"
 )
 
 func TestEd25519(t *testing.T) {
@@ -415,5 +417,42 @@ func TestInvalidAlgorithmEC(t *testing.T) {
 	err := ecEncrypterVerifier{publicKey: &ecTestKey256.PublicKey}.verifyPayload([]byte{}, []byte{}, "XYZ")
 	if err != ErrUnsupportedAlgorithm {
 		t.Fatal("should not accept invalid/unsupported algorithm")
+	}
+}
+
+func TestECDHDecryptKeyRejectsEPKOnAnotherCurve(t *testing.T) {
+	testCases := []struct {
+		name string
+		epk  *ecdsa.PublicKey
+		err  string
+	}{
+		{"ShouldAcceptMatchingCurve", &ecTestKey256.PublicKey, ""},
+		{"ShouldRejectLargerCurve", &ecTestKey384.PublicKey, "go-jose/go-jose: invalid public key in epk header"},
+		{"ShouldRejectSmallerCurve", &ecTestKey521.PublicKey, "go-jose/go-jose: invalid public key in epk header"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := rawHeader{}
+
+			require.NoError(t, headers.set(headerEPK, &JSONWebKey{Key: tc.epk}))
+			require.NoError(t, headers.set(headerAlgorithm, ECDH_ES))
+
+			ctx := ecDecrypterSigner{privateKey: ecTestKey256}
+
+			_, err := ctx.decryptKey(headers, &recipientInfo{}, randomKeyGenerator{size: 16})
+
+			if tc.err == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			if err == nil {
+				t.Fatal("accepted an epk header on another curve")
+			}
+
+			assert.Equal(t, err.Error(), tc.err)
+		})
 	}
 }

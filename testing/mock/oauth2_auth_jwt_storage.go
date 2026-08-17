@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	jose "github.com/go-jose/go-jose/v4"
+	jose "authelia.com/provider/oauth2/token/jose"
 	gomock "go.uber.org/mock/gomock"
 )
 

@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	jjson "github.com/go-jose/go-jose/v4/json"
 	"github.com/google/uuid"
 
+	jjson "authelia.com/provider/oauth2/token/jose/json"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

@@ -15,10 +15,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 

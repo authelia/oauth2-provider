@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/go-jose/go-jose/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 type testClient struct {

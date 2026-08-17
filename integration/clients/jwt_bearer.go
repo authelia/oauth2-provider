@@ -13,10 +13,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
-
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
 type JWTBearer struct {

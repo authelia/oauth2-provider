@@ -17,9 +17,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/errors"
+
+	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
 var (

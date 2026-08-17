@@ -8,3 +8,17 @@ version = 1
 path = "*"
 SPDX-FileCopyrightText = "Authelia"
 SPDX-License-Identifier = "Apache-2.0"
+
+# token/jose is a vendored copy of github.com/go-jose/go-jose/v4 (from the
+# james-d-elliott/go-jose mldsa branch) with the module path rewritten. The
+# copyright remains with the upstream authors.
+[[annotations]]
+path = "token/jose/**"
+SPDX-FileCopyrightText = ["2014 Square Inc.", "go-jose contributors"]
+SPDX-License-Identifier = "Apache-2.0"
+
+# token/jose/json is a fork of the Go standard library encoding/json package.
+[[annotations]]
+path = "token/jose/json/**"
+SPDX-FileCopyrightText = "The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"

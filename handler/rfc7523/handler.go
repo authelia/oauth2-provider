@@ -10,12 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
-
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/oauth2/token/jose/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

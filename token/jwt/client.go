@@ -5,7 +5,7 @@
 package jwt
 
 import (
-	"github.com/go-jose/go-jose/v4"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 // NewJARClient converts a type into a Client provided it implements the JARClient.

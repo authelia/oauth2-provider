@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-jose/go-jose/v4"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 // NewDefaultIssuer returns a new issuer and verifies that one RS256 key exists.

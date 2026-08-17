@@ -496,6 +496,10 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey interface{}) ([]byte, error) 
 		return nil, ErrCryptoFailure
 	}
 
+	if err = validateCEKSize(cek, cipher); err != nil {
+		return nil, ErrCryptoFailure
+	}
+
 	// Found a valid CEK -- let's try to decrypt.
 	plaintext, err = cipher.decrypt(cek, authData, parts)
 	if err != nil {
@@ -573,6 +577,10 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey interface{}) (int, Heade
 			continue
 		}
 
+		if err = validateCEKSize(cek, cipher); err != nil {
+			continue
+		}
+
 		// Found a valid CEK -- let's try to decrypt.
 		plaintext, err = cipher.decrypt(cek, authData, parts)
 		if err != nil {
@@ -618,4 +626,12 @@ func (obj JSONWebEncryption) decompress(plaintext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("go-jose/go-jose: failed to decompress plaintext: %v", err)
 	}
 	return plaintext, nil
+}
+
+func validateCEKSize(cek []byte, cipher contentCipher) (err error) {
+	if len(cek) != cipher.keySize() {
+		return ErrInvalidKeySize
+	}
+
+	return nil
 }

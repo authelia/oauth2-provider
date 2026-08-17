@@ -23,6 +23,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -1227,4 +1229,192 @@ func mustEncrypter(keyAlg KeyAlgorithm, encAlg ContentEncryption, encryptionKey 
 		panic(err)
 	}
 	return enc
+}
+
+func TestDecryptRejectsContentEncryptionKeyOfIncorrectSize(t *testing.T) {
+	testCases := []struct {
+		name string
+		enc  ContentEncryption
+		cek  []byte
+		body contentCipher
+	}{
+		{"ShouldRejectOversizedKeyForA128GCM", A128GCM, mustRandomBytes(t, 32), newAESGCM(32)},
+		{"ShouldRejectUndersizedKeyForA256GCM", A256GCM, mustRandomBytes(t, 16), newAESGCM(16)},
+		{"ShouldRejectOversizedKeyForA128CBCHS256", A128CBC_HS256, mustRandomBytes(t, 64), newAESCBC(32)},
+		{"ShouldRejectKeyWithoutCorrespondingHash", A128CBC_HS256, mustRandomBytes(t, 31), nil},
+		{"ShouldRejectEmptyKey", A128GCM, []byte{}, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			serialized := craftEncryptedCompact(t, tc.enc, tc.cek, tc.body, []byte("Lorem ipsum dolor sit amet"))
+
+			object, err := ParseEncrypted(serialized, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{tc.enc})
+			if err != nil {
+				t.Fatalf("failed to parse crafted object: %v", err)
+			}
+
+			plaintext, err := object.Decrypt(rsaTestKey)
+
+			if err != ErrCryptoFailure {
+				t.Errorf("Decrypt() error = %v, want %v", err, ErrCryptoFailure)
+			}
+
+			if plaintext != nil {
+				t.Errorf("Decrypt() plaintext = %q, want nil", plaintext)
+			}
+		})
+	}
+}
+
+func TestDecryptAcceptsContentEncryptionKeyOfCorrectSize(t *testing.T) {
+	expected := []byte("Lorem ipsum dolor sit amet")
+
+	testCases := []struct {
+		name string
+		enc  ContentEncryption
+		body contentCipher
+	}{
+		{"ShouldAcceptA128GCM", A128GCM, newAESGCM(16)},
+		{"ShouldAcceptA256GCM", A256GCM, newAESGCM(32)},
+		{"ShouldAcceptA128CBCHS256", A128CBC_HS256, newAESCBC(16)},
+		{"ShouldAcceptA256CBCHS512", A256CBC_HS512, newAESCBC(32)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cek := mustRandomBytes(t, tc.body.keySize())
+
+			serialized := craftEncryptedCompact(t, tc.enc, cek, tc.body, expected)
+
+			object, err := ParseEncrypted(serialized, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{tc.enc})
+			if err != nil {
+				t.Fatalf("failed to parse crafted object: %v", err)
+			}
+
+			plaintext, err := object.Decrypt(rsaTestKey)
+			if err != nil {
+				t.Fatalf("Decrypt() error = %v, want nil", err)
+			}
+
+			if !bytes.Equal(plaintext, expected) {
+				t.Errorf("Decrypt() plaintext = %q, want %q", plaintext, expected)
+			}
+		})
+	}
+}
+
+func TestDecryptMultiSkipsRecipientWithContentEncryptionKeyOfIncorrectSize(t *testing.T) {
+	expected := []byte("Lorem ipsum dolor sit amet")
+
+	body := newAESCBC(16)
+	cek := mustRandomBytes(t, body.keySize())
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RSA-OAEP","enc":"A128CBC-HS256"}`))
+
+	parts, err := body.encrypt(cek, []byte(protected), expected)
+	if err != nil {
+		t.Fatalf("failed to encrypt plaintext: %v", err)
+	}
+
+	// The first recipient carries a key which halves to 15 bytes, for which there is no corresponding HMAC hash.
+	serialized := fmt.Sprintf(
+		`{"protected":%q,"recipients":[{"encrypted_key":%q},{"encrypted_key":%q}],"iv":%q,"ciphertext":%q,"tag":%q}`,
+		protected,
+		base64.RawURLEncoding.EncodeToString(mustWrapKey(t, mustRandomBytes(t, 31))),
+		base64.RawURLEncoding.EncodeToString(mustWrapKey(t, cek)),
+		base64.RawURLEncoding.EncodeToString(parts.iv),
+		base64.RawURLEncoding.EncodeToString(parts.ciphertext),
+		base64.RawURLEncoding.EncodeToString(parts.tag),
+	)
+
+	object, err := ParseEncrypted(serialized, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{A128CBC_HS256})
+	if err != nil {
+		t.Fatalf("failed to parse crafted object: %v", err)
+	}
+
+	index, _, plaintext, err := object.DecryptMulti(rsaTestKey)
+	if err != nil {
+		t.Fatalf("DecryptMulti() error = %v, want nil", err)
+	}
+
+	if index != 1 {
+		t.Errorf("DecryptMulti() index = %d, want 1", index)
+	}
+
+	if !bytes.Equal(plaintext, expected) {
+		t.Errorf("DecryptMulti() plaintext = %q, want %q", plaintext, expected)
+	}
+}
+
+func TestValidateCEKSize(t *testing.T) {
+	testCases := []struct {
+		name   string
+		cipher contentCipher
+		size   int
+		err    error
+	}{
+		{"ShouldAcceptExactSizeGCM", newAESGCM(16), 16, nil},
+		{"ShouldAcceptExactSizeCBC", newAESCBC(16), 32, nil},
+		{"ShouldRejectOversized", newAESGCM(16), 17, ErrInvalidKeySize},
+		{"ShouldRejectUndersized", newAESGCM(32), 31, ErrInvalidKeySize},
+		{"ShouldRejectEmpty", newAESGCM(16), 0, ErrInvalidKeySize},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateCEKSize(make([]byte, tc.size), tc.cipher); err != tc.err {
+				t.Errorf("validateCEKSize() error = %v, want %v", err, tc.err)
+			}
+		})
+	}
+}
+
+func mustRandomBytes(t *testing.T, n int) []byte {
+	t.Helper()
+
+	out := make([]byte, n)
+	if _, err := io.ReadFull(rand.Reader, out); err != nil {
+		t.Fatalf("failed to read random bytes: %v", err)
+	}
+
+	return out
+}
+
+func mustWrapKey(t *testing.T, cek []byte) []byte {
+	t.Helper()
+
+	out, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, &rsaTestKey.PublicKey, cek, []byte{})
+	if err != nil {
+		t.Fatalf("failed to wrap content encryption key: %v", err)
+	}
+
+	return out
+}
+
+func craftEncryptedCompact(t *testing.T, enc ContentEncryption, cek []byte, body contentCipher, plaintext []byte) string {
+	t.Helper()
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RSA-OAEP","enc":"` + string(enc) + `"}`))
+
+	encryptedKey, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, &rsaTestKey.PublicKey, cek, []byte{})
+	if err != nil {
+		t.Fatalf("failed to wrap content encryption key: %v", err)
+	}
+
+	parts := &aeadParts{iv: make([]byte, 16), ciphertext: make([]byte, 16), tag: make([]byte, 16)}
+
+	if body != nil {
+		if parts, err = body.encrypt(cek, []byte(protected), plaintext); err != nil {
+			t.Fatalf("failed to encrypt plaintext: %v", err)
+		}
+	}
+
+	return strings.Join([]string{
+		protected,
+		base64.RawURLEncoding.EncodeToString(encryptedKey),
+		base64.RawURLEncoding.EncodeToString(parts.iv),
+		base64.RawURLEncoding.EncodeToString(parts.ciphertext),
+		base64.RawURLEncoding.EncodeToString(parts.tag),
+	}, ".")
 }

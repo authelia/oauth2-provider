@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 // Storage holds information needed to validate jwt assertion in authorization grants.

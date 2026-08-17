@@ -17,8 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 
@@ -27,6 +25,8 @@ import (
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
 // Define the suite, and absorb the built-in basic suite

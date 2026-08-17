@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-jose/go-jose/v4"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 // ClientRegistrationMetadata is the client metadata wire format used by OAuth 2.0 Dynamic Client Registration

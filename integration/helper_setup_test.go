@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
 	"github.com/gorilla/mux"
 	xoauth2 "golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -26,6 +25,7 @@ import (
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
+	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 

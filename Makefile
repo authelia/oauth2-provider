@@ -7,12 +7,14 @@ LICENSE   ?= Apache-2.0
 YEAR      ?= $(shell date +%Y)
 FILES     ?= $(shell git ls-files)
 
+GOIMPORTS_EXCLUDES ?= token/jose/*mldsa.go,token/jose/*mldsa_test.go,token/jose/cryptosigner/*mldsa.go,token/jose/cryptosigner/*mldsa_test.go,token/jose/jose-util/generator/*mldsa.go,token/jose/jose-util/generator/*mldsa_test.go
+
 .PHONY: reuse-lint reuse-annotate reuse-annotate-all reuse-annotate-changed
 
 format: format-goimports-reviser format-prettier
 
 format-goimports-reviser: .bin/goimports-reviser
-	.bin/goimports-reviser -rm-unused -recursive .
+	.bin/goimports-reviser -company-prefixes github.com/authelia,authelia.com -recursive -use-cache -excludes "$(GOIMPORTS_EXCLUDES)" .
 
 format-prettier: node_modules
 	pnpm exec -- prettier --write .

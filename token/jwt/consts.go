@@ -5,9 +5,8 @@
 package jwt
 
 import (
-	"github.com/go-jose/go-jose/v4"
-
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 const (

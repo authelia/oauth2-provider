@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/go-retryablehttp"
 
+	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )

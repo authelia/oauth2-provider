@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -18,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/integration/clients"
+	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
 type authorizeJWTBearerRequiredJtiSuite struct {

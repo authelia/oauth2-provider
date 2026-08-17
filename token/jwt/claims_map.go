@@ -9,8 +9,7 @@ import (
 	"errors"
 	"fmt"
 
-	jjson "github.com/go-jose/go-jose/v4/json"
-
+	jjson "authelia.com/provider/oauth2/token/jose/json"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

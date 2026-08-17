@@ -136,12 +136,22 @@ func hashFor(alg string) (h hash.Hash) {
 // "max_age=0 is equivalent to prompt=login", so it demands re-authentication rather than imposing no constraint at
 // all. Parsing it with the error discarded and then gating enforcement on 'max_age > 0' collapsed the two, so the
 // client that asked most explicitly for a fresh authentication silently received the existing session.
+//
+// Presence is decided by the key itself rather than by url.Values.Get, which returns an empty string for an absent
+// key, for an explicitly empty 'max_age=', and for a repeated parameter alike. The latter two are malformed rather
+// than absent: RFC6749 Section 3.1 requires that request parameters are not included more than once, and an empty
+// value is not a non-negative integer, so both are rejected instead of being silently read as no constraint.
 func requestedMaxAge(form url.Values) (maxAge int64, ok bool, err error) {
-	raw := form.Get(consts.FormParameterMaximumAge)
+	values, present := form[consts.FormParameterMaximumAge]
 
-	if len(raw) == 0 {
+	switch {
+	case !present, len(values) == 0:
 		return 0, false, nil
+	case len(values) != 1:
+		return 0, false, fmt.Errorf("the parameter was provided %d times but must be provided exactly once", len(values))
 	}
+
+	raw := values[0]
 
 	if maxAge, err = strconv.ParseInt(raw, 10, 64); err != nil || maxAge < 0 {
 		return 0, false, fmt.Errorf("the value '%s' could not be parsed as a non-negative integer", raw)

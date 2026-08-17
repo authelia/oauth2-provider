@@ -21,11 +21,15 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"errors"
 	"io"
 	"testing"
 
 	"authelia.com/provider/oauth2/token/jose/json"
+	"authelia.com/provider/oauth2/token/jose/testutils/require"
 )
 
 func TestEd25519(t *testing.T) {
@@ -416,4 +420,141 @@ func TestInvalidAlgorithmEC(t *testing.T) {
 	if err != ErrUnsupportedAlgorithm {
 		t.Fatal("should not accept invalid/unsupported algorithm")
 	}
+}
+
+// RFC 7518 Section 3.4 binds each ECDSA algorithm to exactly one curve: ES256 to P-256, ES384 to P-384 and ES512 to
+// P-521. Verifying without enforcing that lets a token declare a stronger algorithm than the key behind it actually
+// provides, so a relying party which accepts only ES512 is in truth accepting whatever the weakest key in the set is.
+func TestECDSAVerifyRejectsCurveWhichDoesNotMatchAlgorithm(t *testing.T) {
+	payload := []byte(`eyJhbGciOiJFUzM4NCJ9.eyJzdWIiOiJhdHRhY2tlciJ9`)
+
+	testCases := []struct {
+		name  string
+		curve elliptic.Curve
+		alg   SignatureAlgorithm
+		valid bool
+	}{
+		{"ShouldAcceptP256WithES256", elliptic.P256(), ES256, true},
+		{"ShouldAcceptP384WithES384", elliptic.P384(), ES384, true},
+		{"ShouldAcceptP521WithES512", elliptic.P521(), ES512, true},
+		{"ShouldRejectP256WithES384", elliptic.P256(), ES384, false},
+		{"ShouldRejectP256WithES512", elliptic.P256(), ES512, false},
+		{"ShouldRejectP384WithES512", elliptic.P384(), ES512, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := ecdsa.GenerateKey(tc.curve, rand.Reader)
+			require.NoError(t, err)
+
+			size, digest := ecdsaAlgorithmDigest(t, tc.alg, payload)
+
+			r, s, err := ecdsa.Sign(rand.Reader, key, digest)
+			require.NoError(t, err)
+
+			signature := make([]byte, 2*size)
+			r.FillBytes(signature[:size])
+			s.FillBytes(signature[size:])
+
+			err = ecEncrypterVerifier{publicKey: &key.PublicKey}.verifyPayload(payload, signature, tc.alg)
+
+			if tc.valid {
+				require.NoError(t, err)
+
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("verified a %s signature made with a %s key", tc.alg, tc.curve.Params().Name)
+			}
+		})
+	}
+}
+
+func TestECDSARejectsCurveNotNamedByJWA(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	payload := []byte(`eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJhdHRhY2tlciJ9`)
+
+	size, digest := ecdsaAlgorithmDigest(t, ES256, payload)
+
+	r, s, err := ecdsa.Sign(rand.Reader, key, digest)
+	require.NoError(t, err)
+
+	signature := make([]byte, 2*size)
+	r.FillBytes(signature[:size])
+	s.FillBytes(signature[size:])
+
+	wrapped := key.PublicKey
+	wrapped.Curve = wrappedCurve{Curve: key.Curve}
+
+	if err = (ecEncrypterVerifier{publicKey: &wrapped}).verifyPayload(payload, signature, ES256); err == nil {
+		t.Error("verified a signature against a curve which is not named by JWA")
+	}
+
+	private := *key
+	private.Curve = wrappedCurve{Curve: key.Curve}
+	private.PublicKey.Curve = private.Curve
+
+	if _, err = (ecDecrypterSigner{privateKey: &private}).signPayload(payload, ES256); err == nil {
+		t.Error("signed with a curve which is not named by JWA")
+	}
+}
+
+func TestECDSAVerifyRejectsCurveMismatchThroughJWKS(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"ES384","kid":"ecdsa-key"}`))
+	claims := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"attacker","admin":true}`))
+
+	size, digest := ecdsaAlgorithmDigest(t, ES384, []byte(protected+"."+claims))
+
+	r, s, err := ecdsa.Sign(rand.Reader, key, digest)
+	require.NoError(t, err)
+
+	signature := make([]byte, 2*size)
+	r.FillBytes(signature[:size])
+	s.FillBytes(signature[size:])
+
+	object, err := ParseSigned(
+		protected+"."+claims+"."+base64.RawURLEncoding.EncodeToString(signature),
+		[]SignatureAlgorithm{ES384},
+	)
+	require.NoError(t, err)
+
+	jwks := JSONWebKeySet{Keys: []JSONWebKey{{Key: &key.PublicKey, KeyID: "ecdsa-key", Algorithm: string(ES384)}}}
+
+	verified, err := object.Verify(jwks)
+	if err == nil {
+		t.Fatalf("verified an ES384 token signed with a P-256 key, returning payload %q", verified)
+	}
+}
+
+func ecdsaAlgorithmDigest(t *testing.T, alg SignatureAlgorithm, payload []byte) (size int, digest []byte) {
+	t.Helper()
+
+	switch alg {
+	case ES256:
+		sum := sha256.Sum256(payload)
+
+		return 32, sum[:]
+	case ES384:
+		sum := sha512.Sum384(payload)
+
+		return 48, sum[:]
+	case ES512:
+		sum := sha512.Sum512(payload)
+
+		return 66, sum[:]
+	default:
+		t.Fatalf("unsupported algorithm %s", alg)
+
+		return 0, nil
+	}
+}
+
+type wrappedCurve struct {
+	elliptic.Curve
 }

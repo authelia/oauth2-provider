@@ -21,6 +21,7 @@ import (
 	"crypto/aes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -507,24 +508,13 @@ func (ctx edEncrypterVerifier) verifyPayload(payload []byte, signature []byte, a
 
 // Sign the given payload
 func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
-	var expectedBitSize int
-	var hash crypto.Hash
-
-	switch alg {
-	case ES256:
-		expectedBitSize = 256
-		hash = crypto.SHA256
-	case ES384:
-		expectedBitSize = 384
-		hash = crypto.SHA384
-	case ES512:
-		expectedBitSize = 521
-		hash = crypto.SHA512
+	keyBytes, expectedCurve, hash, err := ecdsaSignatureDetails(alg)
+	if err != nil {
+		return Signature{}, err
 	}
 
-	curveBits := ctx.privateKey.Curve.Params().BitSize
-	if expectedBitSize != curveBits {
-		return Signature{}, fmt.Errorf("go-jose/go-jose: expected %d bit key, got %d bits instead", expectedBitSize, curveBits)
+	if err = validateECDSACurve(ctx.privateKey.Curve, expectedCurve); err != nil {
+		return Signature{}, err
 	}
 
 	hasher := hash.New()
@@ -536,11 +526,6 @@ func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 	r, s, err := ecdsa.Sign(randReader, ctx.privateKey, hashed)
 	if err != nil {
 		return Signature{}, err
-	}
-
-	keyBytes := curveBits / 8
-	if curveBits%8 > 0 {
-		keyBytes++
 	}
 
 	// We serialize the outputs (r and s) into big-endian byte arrays and pad
@@ -564,21 +549,13 @@ func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 
 // Verify the given payload
 func (ctx ecEncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {
-	var keySize int
-	var hash crypto.Hash
+	keySize, expectedCurve, hash, err := ecdsaSignatureDetails(alg)
+	if err != nil {
+		return err
+	}
 
-	switch alg {
-	case ES256:
-		keySize = 32
-		hash = crypto.SHA256
-	case ES384:
-		keySize = 48
-		hash = crypto.SHA384
-	case ES512:
-		keySize = 66
-		hash = crypto.SHA512
-	default:
-		return ErrUnsupportedAlgorithm
+	if err = validateECDSACurve(ctx.publicKey.Curve, expectedCurve); err != nil {
+		return err
 	}
 
 	if len(signature) != 2*keySize {
@@ -597,6 +574,38 @@ func (ctx ecEncrypterVerifier) verifyPayload(payload []byte, signature []byte, a
 	match := ecdsa.Verify(ctx.publicKey, hashed, r, s)
 	if !match {
 		return errors.New("go-jose/go-jose: ecdsa signature failed to verify")
+	}
+
+	return nil
+}
+
+// ecdsaSignatureDetails returns the width in octets of each half of the signature, the name of the curve, and the hash
+// which RFC 7518 Section 3.4 binds to the given ECDSA algorithm.
+func ecdsaSignatureDetails(alg SignatureAlgorithm) (size int, curve string, hash crypto.Hash, err error) {
+	switch alg {
+	case ES256:
+		return 32, "P-256", crypto.SHA256, nil
+	case ES384:
+		return 48, "P-384", crypto.SHA384, nil
+	case ES512:
+		return 66, "P-521", crypto.SHA512, nil
+	default:
+		return 0, "", 0, ErrUnsupportedAlgorithm
+	}
+}
+
+// validateECDSACurve returns an error unless the given curve is the one the algorithm requires. Without it a token can
+// name an algorithm stronger than the key which signed it, and a party accepting only that algorithm silently accepts
+// the weakest key of the set instead.
+func validateECDSACurve(curve elliptic.Curve, expected string) (err error) {
+	var actual string
+
+	if actual, err = curveName(curve); err != nil {
+		return err
+	}
+
+	if actual != expected {
+		return fmt.Errorf("go-jose/go-jose: expected %s key, got %s instead", expected, actual)
 	}
 
 	return nil

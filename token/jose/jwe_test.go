@@ -25,6 +25,7 @@ import (
 	"errors"
 	"math/big"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -853,5 +854,53 @@ func BenchmarkParseEncryptedCompat(b *testing.B) {
 		if _, err := ParseEncryptedCompact(msg, []KeyAlgorithm{RSA_OAEP}, []ContentEncryption{A128GCM}); err != nil {
 			panic(err)
 		}
+	}
+}
+
+// Whitespace within a JSON serialized JWE must be left to the JSON parser rather than removed beforehand, which would
+// otherwise repair a document that no conformant consumer would accept, and alter the base64 members while doing so.
+func TestParseEncryptedDoesNotStripWhitespace(t *testing.T) {
+	key := []byte("0123456789ABCDEF")
+
+	encrypter, err := NewEncrypter(A128GCM, Recipient{Algorithm: DIRECT, Key: key}, nil)
+	if err != nil {
+		t.Fatalf("NewEncrypter: %v", err)
+	}
+
+	object, err := encrypter.Encrypt([]byte("Lorem ipsum dolor sit amet"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	full := object.FullSerialize()
+
+	index := strings.Index(full, `"ciphertext":"`) + len(`"ciphertext":"`)
+	mangled := full[:index+2] + " " + full[index+2:]
+
+	if _, err = ParseEncrypted(mangled, []KeyAlgorithm{DIRECT}, []ContentEncryption{A128GCM}); err == nil {
+		t.Error("ParseEncrypted accepted a JSON serialization with whitespace within a base64 member")
+	}
+
+	compact, err := object.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	if _, err = ParseEncrypted(strings.Replace(compact, ".", " . ", 1), []KeyAlgorithm{DIRECT}, []ContentEncryption{A128GCM}); err == nil {
+		t.Error("ParseEncrypted accepted compact serialization with internal whitespace")
+	}
+
+	parsed, err := ParseEncrypted("\n  "+compact+"  \n", []KeyAlgorithm{DIRECT}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncrypted rejected compact serialization with outer whitespace: %v", err)
+	}
+
+	plaintext, err := parsed.Decrypt(key)
+	if err != nil {
+		t.Fatalf("Decrypt: %v", err)
+	}
+
+	if string(plaintext) != "Lorem ipsum dolor sit amet" {
+		t.Errorf("plaintext = %q", plaintext)
 	}
 }

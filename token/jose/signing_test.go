@@ -37,7 +37,7 @@ func (sns staticNonceSource) Nonce() (string, error) {
 	return string(sns), nil
 }
 
-func RoundtripJWS(sigAlg SignatureAlgorithm, serializer func(*JSONWebSignature) (string, error), corrupter func(*JSONWebSignature), signingKey interface{}, verificationKey interface{}, nonce string) error {
+func RoundtripJWS(sigAlg SignatureAlgorithm, serializer func(*JSONWebSignature) (string, error), corrupter func(*JSONWebSignature), signingKey any, verificationKey any, nonce string) error {
 	opts := &SignerOptions{}
 	if nonce != "" {
 		opts.NonceSource = staticNonceSource(nonce)
@@ -398,7 +398,7 @@ func TestVerifyMultiJWKSNoMatchingKid(t *testing.T) {
 	}
 }
 
-func GenerateSigningTestKey(sigAlg SignatureAlgorithm) (sig, ver interface{}) {
+func GenerateSigningTestKey(sigAlg SignatureAlgorithm) (sig, ver any) {
 	switch sigAlg {
 	case EdDSA:
 		sig = ed25519PrivateKey
@@ -499,7 +499,7 @@ func TestSignerKid(t *testing.T) {
 		t.Error("problem marshalling base JWK", err)
 	}
 
-	var jsonmsi map[string]interface{}
+	var jsonmsi map[string]any
 	err = json.Unmarshal(jsonbar, &jsonmsi)
 	if err != nil {
 		t.Error("problem unmarshalling base JWK", err)
@@ -661,7 +661,7 @@ func TestSignerExtraHeaderInclusion(t *testing.T) {
 		t.Error("Failed to parse jws")
 	}
 
-	correct := map[HeaderKey]interface{}{
+	correct := map[HeaderKey]any{
 		HeaderContentType:           "foo/bar",
 		HeaderKey("myCustomHeader"): "xyz",
 	}

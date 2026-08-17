@@ -93,7 +93,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	//  - https://openid.bitbucket.io/fapi/fapi-2_0-security-profile.html#section-5.6
 	if request.GetResponseTypes().Matches(consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
 		if state := request.GetState(); len(state) != 0 && claims != nil {
-			if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, request.GetState()); err != nil {
+			if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, request.GetClient(), request.GetState()); err != nil {
 				return err
 			}
 
@@ -131,7 +131,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		response.AddParameter(consts.FormParameterAuthorizationCode, code)
 		request.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
 
-		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, response.GetParameters().Get(consts.FormParameterAuthorizationCode)); err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, request.GetClient(), response.GetParameters().Get(consts.FormParameterAuthorizationCode)); err != nil {
 			return err
 		}
 
@@ -153,7 +153,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 		request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)
 
-		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, session, response.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
+		if hash, err = c.IDTokenHandleHelper.ComputeHash(ctx, request.GetClient(), response.GetParameters().Get(consts.AccessResponseAccessToken)); err != nil {
 			return err
 		}
 

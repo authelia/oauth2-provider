@@ -112,80 +112,59 @@ func TestIssueImplicitToken(t *testing.T) {
 }
 
 func TestGetAccessTokenHash(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	req := mock.NewMockAccessRequester(ctrl)
-	resp := mock.NewMockAccessResponder(ctrl)
+	const token = "7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8"
 
-	defer ctrl.Finish()
+	const (
+		sha256Hash = "Zfn_XBitThuDJiETU3OALQ"
+		sha384Hash = "VNX38yiOyeqBPheW5jDsWQKa6IjJzK66"
+		sha512Hash = "0vQSMeFZrxwBD6DqjBfQKEQCQ00-IPnyWBhxLoO91-4"
+	)
 
-	req.EXPECT().GetSession().Return(nil)
-	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
+	testCases := []struct {
+		name     string
+		client   oauth2.Client
+		expected string
+	}{
+		{"ShouldUseSHA256ForRS256", newIDTokenSignedClient("RS256"), sha256Hash},
+		{"ShouldUseSHA384ForRS384", newIDTokenSignedClient("RS384"), sha384Hash},
+		{"ShouldUseSHA512ForRS512", newIDTokenSignedClient("RS512"), sha512Hash},
+		{"ShouldUseSHA256ForES256", newIDTokenSignedClient("ES256"), sha256Hash},
+		{"ShouldUseSHA512ForES512", newIDTokenSignedClient("ES512"), sha512Hash},
+		{"ShouldUseSHA384ForPS384", newIDTokenSignedClient("PS384"), sha384Hash},
+		{"ShouldUseSHA512ForHS512", newIDTokenSignedClient("HS512"), sha512Hash},
 
-	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
+		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally. Deriving
+		// the digest from the digits in the algorithm name, as this once did, cannot express that.
+		{"ShouldUseSHA512ForEdDSA", newIDTokenSignedClient("EdDSA"), sha512Hash},
 
-	hash := h.GetAccessTokenHash(t.Context(), req, resp)
-	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
+		// An unset 'id_token_signed_response_alg' defaults to RS256 per OpenID Connect Dynamic Client Registration
+		// 1.0 Section 2, and a client that does not implement the ID Token metadata at all falls back the same way.
+		{"ShouldDefaultToSHA256WhenAlgUnregistered", newIDTokenSignedClient(""), sha256Hash},
+		{"ShouldDefaultToSHA256WhenClientCarriesNoIDTokenMetadata", &oauth2.DefaultClient{ID: "foo"}, sha256Hash},
+
+		// An algorithm this does not recognise falls back to SHA-256 rather than panicking in GetAccessTokenHash.
+		{"ShouldDefaultToSHA256ForUnknownAlg", newIDTokenSignedClient("XX999"), sha256Hash},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			defer ctrl.Finish()
+
+			req := mock.NewMockAccessRequester(ctrl)
+			resp := mock.NewMockAccessResponder(ctrl)
+
+			req.EXPECT().GetClient().Return(tc.client)
+			resp.EXPECT().GetAccessToken().Return(token)
+
+			h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
+
+			assert.Equal(t, tc.expected, h.GetAccessTokenHash(t.Context(), req, resp))
+		})
+	}
 }
 
-func TestGetAccessTokenHashWithDifferentKeyLength(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	req := mock.NewMockAccessRequester(ctrl)
-	resp := mock.NewMockAccessResponder(ctrl)
-
-	defer ctrl.Finish()
-
-	headers := &jwt.Headers{
-		Extra: map[string]any{
-			"alg": "RS384",
-		},
-	}
-	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
-	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
-
-	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
-
-	hash := h.GetAccessTokenHash(t.Context(), req, resp)
-	assert.Equal(t, "VNX38yiOyeqBPheW5jDsWQKa6IjJzK66", hash)
-}
-
-func TestGetAccessTokenHashWithBadAlg(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	req := mock.NewMockAccessRequester(ctrl)
-	resp := mock.NewMockAccessResponder(ctrl)
-
-	defer ctrl.Finish()
-
-	headers := &jwt.Headers{
-		Extra: map[string]any{
-			"alg": "R",
-		},
-	}
-	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
-	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
-
-	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
-
-	hash := h.GetAccessTokenHash(t.Context(), req, resp)
-	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
-}
-
-func TestGetAccessTokenHashWithMissingKeyLength(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	req := mock.NewMockAccessRequester(ctrl)
-	resp := mock.NewMockAccessResponder(ctrl)
-
-	defer ctrl.Finish()
-
-	headers := &jwt.Headers{
-		Extra: map[string]any{
-			"alg": "RS",
-		},
-	}
-	req.EXPECT().GetSession().Return(&DefaultSession{Headers: headers})
-	resp.EXPECT().GetAccessToken().Return("7a35f818-9164-48cb-8c8f-e1217f44228431c41102-d410-4ed5-9276-07ba53dfdcd8")
-
-	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
-
-	hash := h.GetAccessTokenHash(t.Context(), req, resp)
-	assert.Equal(t, "Zfn_XBitThuDJiETU3OALQ", hash)
+func newIDTokenSignedClient(alg string) oauth2.Client {
+	return &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, IDTokenSignedResponseAlg: alg}
 }

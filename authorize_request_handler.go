@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -253,7 +254,14 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		}
 
 		hc := f.Config.GetHTTPClient(ctx)
-		response, err := hc.Get(requestURI)
+
+		var req *retryablehttp.Request
+
+		if req, err = retryablehttp.NewRequestWithContext(ctx, http.MethodGet, requestURI, nil); err != nil {
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which could not be used to construct an HTTP request: %+v.", request.GetClient().GetID(), requestURI, err))
+		}
+
+		response, err := httpClientWithoutRedirects(hc).Do(req)
 		if err != nil {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object from the URI '%s' with an error: %+v.", request.GetClient().GetID(), requestURI, err))
 		}
@@ -263,7 +271,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object as the response code was %d %s but a 200 OK is expected.", request.GetClient().GetID(), response.StatusCode, http.StatusText(response.StatusCode)))
 		}
 
-		body, err := io.ReadAll(response.Body)
+		body, err := io.ReadAll(io.LimitReader(response.Body, maxRemoteDocumentBytes))
 		if err != nil {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided a response body that could not be read with error: %+v.", request.GetClient().GetID(), err))
 		}

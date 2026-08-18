@@ -45,6 +45,9 @@ const (
 	ClientMetadataRequestObjectEncryptionEnc   = "request_object_encryption_enc"
 	ClientMetadataIntrospectionEndpointAuthAlg = "introspection_endpoint_auth_signing_alg"
 	ClientMetadataRevocationEndpointAuthAlg    = "revocation_endpoint_auth_signing_alg"
+	ClientMetadataRequestURIs                  = "request_uris"
+	ClientMetadataBackChannelLogoutURI         = "backchannel_logout_uri"
+	ClientMetadataPostLogoutRedirectURIs       = "post_logout_redirect_uris"
 )
 
 // Client metadata parameters naming a client authentication method, validated by name.

@@ -363,6 +363,77 @@ func TestLocalValidator(t *testing.T) {
 			},
 			err: "invalid_client_metadata",
 		},
+		{
+			name: "ShouldRejectPlaintextJWKSURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:   []string{"https://example.com/cb"},
+				JSONWebKeysURI: "http://169.254.169.254/latest/meta-data/",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectPlaintextRequestURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				RequestURIs:  []string{"http://127.0.0.1:9200/_cluster/health"},
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectPlaintextInitiateLoginURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:     []string{"https://example.com/cb"},
+				InitiateLoginURI: "http://example.com/login",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectPlaintextBackChannelLogoutURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:         []string{"https://example.com/cb"},
+				BackChannelLogoutURI: "http://169.254.169.254/",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldRejectOpaqueJWKSURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:   []string{"https://example.com/cb"},
+				JSONWebKeysURI: "javascript:alert(1)",
+			},
+			err: "invalid_client_metadata",
+		},
+		{
+			name: "ShouldAcceptSecureFetchedURIs",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:         []string{"https://example.com/cb"},
+				GrantTypes:           []string{"authorization_code"},
+				ResponseTypes:        []string{"code"},
+				JSONWebKeysURI:       "https://example.com/jwks",
+				RequestURIs:          []string{"https://example.com/ro"},
+				InitiateLoginURI:     "https://example.com/login",
+				BackChannelLogoutURI: "https://example.com/logout",
+			},
+		},
+		{
+			name: "ShouldAcceptPlaintextPostLogoutRedirectURIForConfidentialClient",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:            []string{"https://example.com/cb"},
+				GrantTypes:              []string{"authorization_code"},
+				ResponseTypes:           []string{"code"},
+				TokenEndpointAuthMethod: "client_secret_basic",
+				PostLogoutRedirectURIs:  []string{"http://example.com/post-logout"},
+			},
+		},
+		{
+			name: "ShouldRejectPlaintextPostLogoutRedirectURIForPublicClient",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:            []string{"https://example.com/cb"},
+				TokenEndpointAuthMethod: "none",
+				PostLogoutRedirectURIs:  []string{"http://example.com/post-logout"},
+			},
+			err: "invalid_client_metadata",
+		},
 	}
 
 	for _, tc := range testCases {

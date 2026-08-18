@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode"
 
 	"authelia.com/provider/oauth2/token/jose/json"
 )
@@ -90,12 +89,12 @@ func ParseSigned(
 	signature string,
 	signatureAlgorithms []SignatureAlgorithm,
 ) (*JSONWebSignature, error) {
-	trimmed := strings.TrimLeftFunc(signature, unicode.IsSpace)
+	trimmed := strings.TrimSpace(signature)
 	if strings.HasPrefix(trimmed, "{") {
-		return ParseSignedJSON(signature, signatureAlgorithms)
+		return ParseSignedJSON(trimmed, signatureAlgorithms)
 	}
 
-	return parseSignedCompact(stripWhitespace(signature), nil, signatureAlgorithms)
+	return parseSignedCompact(trimmed, nil, signatureAlgorithms)
 }
 
 // ParseSignedCompact parses a message in JWS Compact Serialization. Validation fails if the JWS is
@@ -133,7 +132,7 @@ func ParseDetached(
 	if payload == nil {
 		return nil, errors.New("go-jose/go-jose: nil payload")
 	}
-	return parseSignedCompact(stripWhitespace(signature), payload, signatureAlgorithms)
+	return parseSignedCompact(strings.TrimSpace(signature), payload, signatureAlgorithms)
 }
 
 // Get a header value
@@ -376,6 +375,10 @@ func parseSignedCompact(
 ) (*JSONWebSignature, error) {
 	if len(input) == 0 {
 		return nil, errEmptyInput
+	}
+
+	if containsWhitespace(input) {
+		return nil, errors.New("go-jose/go-jose: compact JWS format must not contain whitespace")
 	}
 
 	protected, s, ok := strings.Cut(input, tokenDelim)

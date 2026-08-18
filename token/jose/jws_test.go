@@ -435,7 +435,7 @@ func TestSampleNimbusJWSMessagesEC(t *testing.T) {
 		panic(err)
 	}
 
-	ecPublicKeys := []interface{}{ecPublicKeyP256, ecPublicKeyP384, ecPublicKeyP521}
+	ecPublicKeys := []any{ecPublicKeyP256, ecPublicKeyP384, ecPublicKeyP521}
 
 	ecSampleMessages := []string{
 		"eyJhbGciOiJFUzI1NiJ9.TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQ.MEWJVlvGRQyzMEGOYm4rwuiwxrX-6LjnlbaRDAuhwmnBm2Gtn7pRpGXRTMFZUXsSGDz2L1p-Hz1qn8j9bFIBtQ",
@@ -676,7 +676,7 @@ func TestJWSWithCertificateChain(t *testing.T) {
 
 	for i, testCase := range testCases {
 		signer, err := NewSigner(signerKey, &SignerOptions{
-			ExtraHeaders: map[HeaderKey]interface{}{HeaderKey("x5c"): testCase.chain},
+			ExtraHeaders: map[HeaderKey]any{HeaderKey("x5c"): testCase.chain},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -827,5 +827,128 @@ func BenchmarkParseSignedCompat(b *testing.B) {
 		if _, err := ParseSignedCompact(raw, []SignatureAlgorithm{HS256}); err != nil {
 			panic(err)
 		}
+	}
+}
+
+// RFC 7515 Section 7.1 defines the compact serialization as three base64url segments separated by periods, which
+// leaves no room for whitespace. Silently removing it gives one logical token unlimited textual representations, each
+// of which verifies, so anything keyed on the token text disagrees with what is accepted. See go-jose/go-jose#244.
+func TestParseSignedDoesNotStripCompactWhitespace(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, nil)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+
+	obj, err := signer.Sign([]byte("payload"))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	compact, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	detached, err := obj.DetachedCompactSerialize()
+	if err != nil {
+		t.Fatalf("DetachedCompactSerialize: %v", err)
+	}
+
+	testCases := []struct {
+		name     string
+		have     string
+		detached string
+	}{
+		{
+			"ShouldRejectSpacesAroundDelimiter",
+			strings.Replace(compact, ".", " . ", 1),
+			strings.Replace(detached, ".", " . ", 1),
+		},
+		{
+			"ShouldRejectNewlineAfterDelimiter",
+			strings.Replace(compact, ".", ".\n", 1),
+			strings.Replace(detached, ".", ".\n", 1),
+		},
+		{
+			"ShouldRejectWhitespaceWithinSegment",
+			compact[:10] + " " + compact[10:],
+			detached[:10] + " " + detached[10:],
+		},
+		// Go's base64 decoder silently ignores carriage returns and newlines, so a segment containing either decodes
+		// as though it were absent unless the serialization is rejected before it is decoded.
+		{
+			"ShouldRejectNewlineWithinSegment",
+			compact[:10] + "\n" + compact[10:],
+			detached[:10] + "\n" + detached[10:],
+		},
+		{
+			"ShouldRejectCarriageReturnWithinSegment",
+			compact[:10] + "\r" + compact[10:],
+			detached[:10] + "\r" + detached[10:],
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseSigned(tc.have, []SignatureAlgorithm{HS256}); err == nil {
+				t.Error("ParseSigned accepted compact serialization with internal whitespace")
+			}
+
+			if _, err := ParseSignedCompact(tc.have, []SignatureAlgorithm{HS256}); err == nil {
+				t.Error("ParseSignedCompact accepted compact serialization with internal whitespace")
+			}
+
+			if _, err := ParseDetached(tc.detached, []byte("payload"), []SignatureAlgorithm{HS256}); err == nil {
+				t.Error("ParseDetached accepted compact serialization with internal whitespace")
+			}
+		})
+	}
+}
+
+// Leading and trailing whitespace, such as a trailing newline from a file or an environment variable, is common and
+// carries none of the risk of stripping whitespace from within the token, so it must still be tolerated.
+func TestParseSignedTrimsOuterWhitespace(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, nil)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+
+	obj, err := signer.Sign([]byte("payload"))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	compact, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	padded := "\n  " + compact + "  \n"
+
+	parsed, err := ParseSigned(padded, []SignatureAlgorithm{HS256})
+	if err != nil {
+		t.Fatalf("ParseSigned rejected compact serialization with outer whitespace: %v", err)
+	}
+
+	payload, err := parsed.Verify(key)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+
+	if string(payload) != "payload" {
+		t.Errorf("payload = %q, want %q", payload, "payload")
+	}
+
+	detached, err := obj.DetachedCompactSerialize()
+	if err != nil {
+		t.Fatalf("DetachedCompactSerialize: %v", err)
+	}
+
+	if _, err = ParseDetached("\n  "+detached+"  \n", []byte("payload"), []SignatureAlgorithm{HS256}); err != nil {
+		t.Errorf("ParseDetached rejected compact serialization with outer whitespace: %v", err)
 	}
 }

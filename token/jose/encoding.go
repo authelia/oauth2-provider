@@ -30,9 +30,13 @@ import (
 	"authelia.com/provider/oauth2/token/jose/json"
 )
 
+func containsWhitespace(data string) bool {
+	return strings.ContainsFunc(data, unicode.IsSpace)
+}
+
 // Helper function to serialize known-good objects.
 // Precondition: value is not a nil pointer.
-func mustSerializeJSON(value interface{}) []byte {
+func mustSerializeJSON(value any) []byte {
 	out, err := json.Marshal(value)
 	if err != nil {
 		panic(err)
@@ -52,18 +56,6 @@ func mustSerializeJSON(value interface{}) []byte {
 		panic("Tried to serialize a nil pointer.")
 	}
 	return out
-}
-
-// Strip all newlines and whitespace
-func stripWhitespace(data string) string {
-	buf := strings.Builder{}
-	buf.Grow(len(data))
-	for _, r := range data {
-		if !unicode.IsSpace(r) {
-			buf.WriteRune(r)
-		}
-	}
-	return buf.String()
 }
 
 // Perform compression based on algorithm

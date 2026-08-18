@@ -93,18 +93,18 @@ func TestDecodeTokenWithJWKS(t *testing.T) {
 
 	tok, err := ParseSigned(rsaSignedTokenWithKid, []jose.SignatureAlgorithm{jose.RS256})
 	if assert.NoError(t, err, "Error parsing signed token.") {
-		cl := make(map[string]interface{})
-		expected := map[string]interface{}{
+		cl := make(map[string]any)
+		expected := map[string]any{
 			"sub":    "subject",
 			"iss":    "issuer",
-			"scopes": []interface{}{"s1", "s2"},
+			"scopes": []any{"s1", "s2"},
 		}
 
 		if assert.NoError(t, tok.Claims(jwks, &cl)) {
 			assert.EqualJSON(t, expected, cl)
 		}
 
-		cl = make(map[string]interface{})
+		cl = make(map[string]any)
 		if assert.NoError(t, tok.Claims(*jwks, &cl)) {
 			assert.EqualJSON(t, expected, cl)
 		}
@@ -125,7 +125,7 @@ func TestDecodeTokenWithMismatchedJWKSKID(t *testing.T) {
 
 	tok, err := ParseSigned(rsaSignedTokenWithKid, []jose.SignatureAlgorithm{jose.RS256})
 	if assert.NoError(t, err, "Error parsing signed token.") {
-		cl := make(map[string]interface{})
+		cl := make(map[string]any)
 		err := tok.Claims(jwks, &cl)
 		assert.Error(t, err, "Expected error when JWT KID does not match any key in JWKS.")
 		assert.ErrorIs(t, err, jose.ErrJWKSKidNotFound)
@@ -133,7 +133,7 @@ func TestDecodeTokenWithMismatchedJWKSKID(t *testing.T) {
 
 	tok, err = ParseSigned(rsaSignedToken, []jose.SignatureAlgorithm{jose.RS256})
 	if assert.NoError(t, err, "Error parsing signed token.") {
-		cl := make(map[string]interface{})
+		cl := make(map[string]any)
 		err := tok.Claims(jwks, &cl)
 		assert.Error(t, err, "Expected error when JWT KID does not match any key in JWKS.")
 		assert.ErrorIs(t, err, jose.ErrJWKSKidNotFound)
@@ -155,12 +155,12 @@ func TestDecodeToken(t *testing.T) {
 
 	tok2, err := ParseSigned(rsaSignedToken, []jose.SignatureAlgorithm{jose.RS256})
 	if assert.NoError(t, err, "Error parsing encrypted token.") {
-		c := make(map[string]interface{})
+		c := make(map[string]any)
 		if assert.NoError(t, tok2.Claims(&testPrivRSAKey1.PublicKey, &c)) {
-			assert.EqualJSON(t, map[string]interface{}{
+			assert.EqualJSON(t, map[string]any{
 				"sub":    "subject",
 				"iss":    "issuer",
-				"scopes": []interface{}{"s1", "s2"},
+				"scopes": []any{"s1", "s2"},
 			}, c)
 		}
 	}

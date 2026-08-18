@@ -76,7 +76,7 @@ func mldsaPrivateOK(priv *mldsa.PrivateKey) bool {
 // is the public half. "Usable" excludes both a nil key and a zero-value key
 // constructed by a caller bypassing crypto/mldsa's validating constructors; see
 // mldsaPublicOK.
-func mldsaKeyInfo(key interface{}) (isPublic bool, ok bool) {
+func mldsaKeyInfo(key any) (isPublic bool, ok bool) {
 	switch k := key.(type) {
 	case *mldsa.PublicKey:
 		return true, mldsaPublicOK(k)
@@ -88,7 +88,7 @@ func mldsaKeyInfo(key interface{}) (isPublic bool, ok bool) {
 }
 
 // mldsaPublicOf returns the public half of an ML-DSA private key.
-func mldsaPublicOf(key interface{}) (interface{}, bool) {
+func mldsaPublicOf(key any) (any, bool) {
 	if k, ok := key.(*mldsa.PrivateKey); ok && mldsaPrivateOK(k) {
 		return k.PublicKey(), true
 	}
@@ -110,7 +110,7 @@ type mldsaPublicKeyVerifier struct {
 
 // mldsaSigner creates a recipientSigInfo for an ML-DSA private key. The second
 // return value reports whether key was an ML-DSA key at all.
-func mldsaSigner(sigAlg SignatureAlgorithm, key interface{}) (recipientSigInfo, bool, error) {
+func mldsaSigner(sigAlg SignatureAlgorithm, key any) (recipientSigInfo, bool, error) {
 	privateKey, ok := key.(*mldsa.PrivateKey)
 	if !ok {
 		return recipientSigInfo{}, false, nil
@@ -137,7 +137,7 @@ func mldsaSigner(sigAlg SignatureAlgorithm, key interface{}) (recipientSigInfo, 
 }
 
 // mldsaVerifier creates a payloadVerifier for an ML-DSA public key.
-func mldsaVerifier(key interface{}) (payloadVerifier, bool, error) {
+func mldsaVerifier(key any) (payloadVerifier, bool, error) {
 	publicKey, ok := key.(*mldsa.PublicKey)
 	if !ok {
 		return nil, false, nil
@@ -160,7 +160,7 @@ func mldsaVerifier(key interface{}) (payloadVerifier, bool, error) {
 // mldsaRawJWK converts an ML-DSA key to its AKP JWK representation. The "alg"
 // member is derived from the key's own parameter set, because RFC 9964 requires
 // it on every AKP key and it is the only member identifying the parameter set.
-func mldsaRawJWK(key interface{}) (*rawJSONWebKey, bool, error) {
+func mldsaRawJWK(key any) (*rawJSONWebKey, bool, error) {
 	var (
 		pub  *mldsa.PublicKey
 		priv *mldsa.PrivateKey
@@ -214,14 +214,14 @@ func mldsaRawJWK(key interface{}) (*rawJSONWebKey, bool, error) {
 // When certPub is non-nil it is checked against the key's public half here,
 // using (*mldsa.PublicKey).Equal, so that the caller does not have to compare
 // unexported crypto/mldsa internals with reflect.DeepEqual.
-func mldsaParseJWK(raw *rawJSONWebKey, certPub interface{}) (interface{}, error) {
+func mldsaParseJWK(raw *rawJSONWebKey, certPub any) (any, error) {
 	params, ok := mldsaParamsFor(SignatureAlgorithm(raw.Alg))
 	if !ok {
 		return nil, ErrUnsupportedKeyType
 	}
 
 	var (
-		key interface{}
+		key any
 		pub *mldsa.PublicKey
 	)
 
@@ -300,7 +300,7 @@ const mldsaThumbprintTemplate = `{"alg":"%s","kty":"AKP","pub":"%s"}`
 
 // mldsaThumbprintInput builds the JWK Thumbprint input for an ML-DSA key. A
 // private key thumbprints as its public half.
-func mldsaThumbprintInput(key interface{}) (string, bool, error) {
+func mldsaThumbprintInput(key any) (string, bool, error) {
 	var pub *mldsa.PublicKey
 
 	switch k := key.(type) {

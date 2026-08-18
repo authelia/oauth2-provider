@@ -31,9 +31,10 @@ import (
 	"math/big"
 	"testing"
 
-	"authelia.com/provider/oauth2/token/jose/json"
 	"crypto/x509/pkix"
 	"time"
+
+	"authelia.com/provider/oauth2/token/jose/json"
 )
 
 func TestMLDSAAlgParamsRoundtrip(t *testing.T) {
@@ -354,7 +355,7 @@ func TestMLDSAMarshalPublicJWK(t *testing.T) {
 			t.Fatalf("%s: MarshalJSON: %v", alg, err)
 		}
 
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err := json.Unmarshal(data, &raw); err != nil {
 			t.Fatalf("%s: unmarshal into map: %v", alg, err)
 		}
@@ -395,7 +396,7 @@ func TestMLDSAMarshalPrivateJWK(t *testing.T) {
 			t.Fatalf("%s: MarshalJSON: %v", alg, err)
 		}
 
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err := json.Unmarshal(data, &raw); err != nil {
 			t.Fatalf("%s: unmarshal into map: %v", alg, err)
 		}
@@ -464,7 +465,7 @@ func TestMLDSAMarshalPreservesOtherKtyAlgHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -479,7 +480,7 @@ func TestMLDSAJWKRoundtrip(t *testing.T) {
 
 		for _, tc := range []struct {
 			name string
-			key  interface{}
+			key  any
 		}{
 			{"public", priv.PublicKey()},
 			{"private", priv},

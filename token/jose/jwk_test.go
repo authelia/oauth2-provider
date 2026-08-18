@@ -26,6 +26,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -1332,5 +1333,49 @@ func TestJWKPaddingY(t *testing.T) {
 	}
 	if jwk.Valid() {
 		t.Errorf("Expected key to be invalid, but it was valid.")
+	}
+}
+
+// RFC 7518 Section 6.2.2.1 defines "d" as the private key scalar for the curve. A scalar of zero, or one at or beyond
+// the group order, is not a usable key, and carrying it as far as a signing or key agreement operation produces
+// nonsense rather than an error at the point the key was read.
+func TestECRejectsPrivateKeyScalarOutOfRange(t *testing.T) {
+	size := curveSize(ecTestKey256.Curve)
+
+	x := base64.RawURLEncoding.EncodeToString(ecTestKey256.X.FillBytes(make([]byte, size)))
+	y := base64.RawURLEncoding.EncodeToString(ecTestKey256.Y.FillBytes(make([]byte, size)))
+
+	order := ecTestKey256.Curve.Params().N
+
+	testCases := []struct {
+		name  string
+		d     []byte
+		valid bool
+	}{
+		{"ShouldAcceptScalarWithinRange", ecTestKey256.D.FillBytes(make([]byte, size)), true},
+		{"ShouldRejectZeroScalar", make([]byte, size), false},
+		{"ShouldRejectScalarAtOrder", order.FillBytes(make([]byte, size)), false},
+		{"ShouldRejectScalarBeyondOrder", bytes.Repeat([]byte{0xff}, size), false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{"kty":"EC","crv":"P-256","x":"` + x + `","y":"` + y + `","d":"` +
+				base64.RawURLEncoding.EncodeToString(tc.d) + `"}`)
+
+			var jwk JSONWebKey
+
+			err := json.Unmarshal(raw, &jwk)
+
+			if tc.valid {
+				require.NoError(t, err)
+
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("accepted EC private JWK with out of range d %s", raw)
+			}
+		})
 	}
 }

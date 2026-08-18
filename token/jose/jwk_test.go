@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -1378,4 +1379,158 @@ func TestECRejectsPrivateKeyScalarOutOfRange(t *testing.T) {
 			}
 		})
 	}
+}
+
+// RFC 8037 Section 2 requires the Ed25519 "x" parameter to be the 32 octet public key. Anything else was previously
+// copied into a 32 byte buffer, so a short value was silently zero padded into a different key entirely, and an "x" of
+// a single 0x01 octet became the identity point. See go-jose/go-jose#249.
+func TestEd25519RejectsMalformedPublicJWK(t *testing.T) {
+	overlongX := append(ed25519.PublicKey(nil), ed25519PublicKey...)
+	overlongX = append(overlongX, 0x42)
+
+	testCases := []struct {
+		name string
+		x    []byte
+	}{
+		{"ShouldRejectShortX", []byte{0x01}},
+		{"ShouldRejectEmptyX", []byte{}},
+		{"ShouldRejectOverlongX", overlongX},
+		{
+			"ShouldRejectIdentityPoint",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000000`),
+		},
+		{
+			"ShouldRejectIdentityPointSignBitAlias",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000080`),
+		},
+		{
+			"ShouldRejectOrderFourPoint",
+			fromHexBytes(`0000000000000000000000000000000000000000000000000000000000000000`),
+		},
+		{
+			"ShouldRejectOrderFourPointSignBitVariant",
+			fromHexBytes(`0000000000000000000000000000000000000000000000000000000000000080`),
+		},
+		{
+			"ShouldRejectOrderEightPointA",
+			fromHexBytes(`26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05`),
+		},
+		{
+			"ShouldRejectOrderEightPointASignBitVariant",
+			fromHexBytes(`26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85`),
+		},
+		{
+			"ShouldRejectOrderEightPointB",
+			fromHexBytes(`c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a`),
+		},
+		{
+			"ShouldRejectOrderEightPointBSignBitVariant",
+			fromHexBytes(`c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa`),
+		},
+		{
+			"ShouldRejectOrderTwoPoint",
+			fromHexBytes(`ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectOrderTwoPointSignBitVariant",
+			fromHexBytes(`ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+		{
+			"ShouldRejectNonCanonicalIdentity",
+			fromHexBytes(`edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectNonCanonicalIdentitySignBitVariant",
+			fromHexBytes(`edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+		{
+			"ShouldRejectNonCanonicalOrderFourPoint",
+			fromHexBytes(`eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectNonCanonicalOrderFourPointSignBitVariant",
+			fromHexBytes(`eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := rawEd25519JWK(t, tc.x, nil)
+
+			var jwk JSONWebKey
+
+			if err := json.Unmarshal(raw, &jwk); err == nil {
+				t.Fatalf("accepted malformed Ed25519 public JWK %s", raw)
+			}
+		})
+	}
+}
+
+func TestEd25519RejectsMalformedPrivateJWK(t *testing.T) {
+	_, otherPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name string
+		x    []byte
+		d    []byte
+	}{
+		{"ShouldRejectShortD", ed25519PublicKey, ed25519PrivateKey.Seed()[:ed25519.SeedSize-1]},
+		{"ShouldRejectShortX", []byte{0x01}, ed25519PrivateKey.Seed()},
+		{"ShouldRejectMismatchedX", otherPrivateKey.Public().(ed25519.PublicKey), ed25519PrivateKey.Seed()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := rawEd25519JWK(t, tc.x, tc.d)
+
+			var jwk JSONWebKey
+
+			if err := json.Unmarshal(raw, &jwk); err == nil {
+				t.Fatalf("accepted malformed Ed25519 private JWK %s", raw)
+			}
+		})
+	}
+}
+
+func TestEd25519RoundTripsValidJWK(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  interface{}
+	}{
+		{"ShouldRoundTripPublicKey", ed25519PublicKey},
+		{"ShouldRoundTripPrivateKey", ed25519PrivateKey},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(JSONWebKey{Key: tc.key})
+			require.NoError(t, err)
+
+			var jwk JSONWebKey
+
+			require.NoError(t, json.Unmarshal(data, &jwk))
+
+			if !reflect.DeepEqual(jwk.Key, tc.key) {
+				t.Errorf("round trip produced %v, want %v", jwk.Key, tc.key)
+			}
+		})
+	}
+}
+
+func rawEd25519JWK(t *testing.T, x, d []byte) []byte {
+	t.Helper()
+
+	raw := map[string]string{
+		"kty": "OKP",
+		"crv": "Ed25519",
+		"x":   base64.RawURLEncoding.EncodeToString(x),
+	}
+
+	if d != nil {
+		raw["d"] = base64.RawURLEncoding.EncodeToString(d)
+	}
+
+	out, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	return out
 }

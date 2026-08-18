@@ -93,7 +93,7 @@ func TestCompressionError(t *testing.T) {
 	}
 }
 
-func RoundtripJWE(keyAlg KeyAlgorithm, encAlg ContentEncryption, compressionAlg CompressionAlgorithm, serializer func(*JSONWebEncryption) (string, error), corrupter func(*JSONWebEncryption) bool, aad []byte, encryptionKey interface{}, decryptionKey interface{}) error {
+func RoundtripJWE(keyAlg KeyAlgorithm, encAlg ContentEncryption, compressionAlg CompressionAlgorithm, serializer func(*JSONWebEncryption) (string, error), corrupter func(*JSONWebEncryption) bool, aad []byte, encryptionKey any, decryptionKey any) error {
 	var rcpt Recipient
 	switch keyAlg {
 	case PBES2_HS256_A128KW, PBES2_HS384_A192KW, PBES2_HS512_A256KW:
@@ -674,7 +674,7 @@ func TestEncrypterWithPBES2(t *testing.T) {
 	}
 
 	// Check with both strings and []byte
-	recipientKeys := []interface{}{"password", []byte("password")}
+	recipientKeys := []any{"password", []byte("password")}
 	for _, key := range recipientKeys {
 		for _, alg := range algs {
 			enc, err := NewEncrypter(A128GCM, Recipient{Algorithm: alg, Key: &JSONWebKey{
@@ -721,7 +721,7 @@ func TestRejectTooHighP2C(t *testing.T) {
 	}
 
 	// Check with both strings and []byte
-	recipientKeys := []interface{}{"password", []byte("password")}
+	recipientKeys := []any{"password", []byte("password")}
 	for _, key := range recipientKeys {
 		for _, alg := range algs {
 			enc, err := NewEncrypter(A128GCM, Recipient{Algorithm: alg, PBES2Count: 1000001, Key: &JSONWebKey{
@@ -787,7 +787,7 @@ func TestDecryptEmptyPlaintext(t *testing.T) {
 }
 
 type testKey struct {
-	enc, dec interface{}
+	enc, dec any
 }
 
 func symmetricTestKey(size int) []testKey {
@@ -1049,7 +1049,7 @@ func benchEncrypt(chunkKey, primKey string, b *testing.B) {
 }
 
 var (
-	decryptionKeys = map[string]interface{}{
+	decryptionKeys = map[string]any{
 		"OAEPAndGCM": rsaTestKey,
 		"PKCSAndGCM": rsaTestKey,
 		"OAEPAndCBC": rsaTestKey,
@@ -1226,7 +1226,7 @@ func benchDecrypt(chunkKey, primKey string, b *testing.B) {
 	}
 }
 
-func mustEncrypter(keyAlg KeyAlgorithm, encAlg ContentEncryption, encryptionKey interface{}) Encrypter {
+func mustEncrypter(keyAlg KeyAlgorithm, encAlg ContentEncryption, encryptionKey any) Encrypter {
 	enc, err := NewEncrypter(encAlg, Recipient{Algorithm: keyAlg, Key: encryptionKey}, nil)
 	if err != nil {
 		panic(err)

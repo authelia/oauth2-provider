@@ -87,7 +87,7 @@ type JSONWebKey struct {
 	//
 	// When marshaling this JSONWebKey into JSON, the "kty" header parameter
 	// will be automatically set based on the type of this field.
-	Key interface{}
+	Key any
 	// Key identifier, parsed from `kid` header.
 	KeyID string
 	// Key algorithm, parsed from `alg` header.
@@ -112,7 +112,7 @@ func (k JSONWebKey) MarshalJSON() ([]byte, error) {
 
 	switch key := k.Key.(type) {
 	case ed25519.PublicKey:
-		raw = fromEdPublicKey(key)
+		raw, err = fromEdPublicKey(key)
 	case *ecdsa.PublicKey:
 		raw, err = fromEcPublicKey(key)
 	case *rsa.PublicKey:
@@ -208,9 +208,9 @@ func (k *JSONWebKey) UnmarshalJSON(data []byte) (err error) {
 		return fmt.Errorf("go-jose/go-jose: failed to unmarshal x5c field: %s", err)
 	}
 
-	var key interface{}
-	var certPub interface{}
-	var keyPub interface{}
+	var key any
+	var certPub any
+	var keyPub any
 
 	if len(certs) > 0 {
 		// We need to check that leaf public key matches the key embedded in this
@@ -486,11 +486,13 @@ func rsaThumbprintInput(n *big.Int, e int) (string, error) {
 
 func edThumbprintInput(ed ed25519.PublicKey) (string, error) {
 	crv := "Ed25519"
-	if len(ed) > 32 {
-		return "", errors.New("go-jose/go-jose: invalid elliptic key (too large)")
+
+	if err := validateEd25519PublicKey(ed); err != nil {
+		return "", err
 	}
+
 	return fmt.Sprintf(edThumbprintTemplate, crv,
-		newFixedSizeBuffer(ed, 32).base64()), nil
+		newFixedSizeBuffer(ed, ed25519.PublicKeySize).base64()), nil
 }
 
 // Thumbprint computes the JWK Thumbprint of a key using the
@@ -612,12 +614,16 @@ func (key rawJSONWebKey) rsaPublicKey() (*rsa.PublicKey, error) {
 	}, nil
 }
 
-func fromEdPublicKey(pub ed25519.PublicKey) *rawJSONWebKey {
+func fromEdPublicKey(pub ed25519.PublicKey) (*rawJSONWebKey, error) {
+	if err := validateEd25519PublicKey(pub); err != nil {
+		return nil, err
+	}
+
 	return &rawJSONWebKey{
 		Kty: "OKP",
 		Crv: "Ed25519",
 		X:   newBuffer(pub),
-	}
+	}, nil
 }
 
 func fromRsaPublicKey(pub *rsa.PublicKey) *rawJSONWebKey {
@@ -659,15 +665,17 @@ func (key rawJSONWebKey) ecPublicKey() (*ecdsa.PublicKey, error) {
 	x := key.X.bigInt()
 	y := key.Y.bigInt()
 
-	if !curve.IsOnCurve(x, y) {
-		return nil, errors.New("go-jose/go-jose: invalid EC key, X/Y are not on declared curve")
-	}
-
-	return &ecdsa.PublicKey{
+	pub := &ecdsa.PublicKey{
 		Curve: curve,
 		X:     x,
 		Y:     y,
-	}, nil
+	}
+
+	if _, err := pub.ECDH(); err != nil {
+		return nil, errors.New("go-jose/go-jose: invalid EC key, X/Y are not on declared curve")
+	}
+
+	return pub, nil
 }
 
 func fromEcPublicKey(pub *ecdsa.PublicKey) (*rawJSONWebKey, error) {
@@ -712,21 +720,37 @@ func (key rawJSONWebKey) edPrivateKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid Ed25519 private key, missing %s value(s)", strings.Join(missing, ", "))
 	}
 
-	privateKey := make([]byte, ed25519.PrivateKeySize)
-	copy(privateKey[0:32], key.D.bytes())
-	copy(privateKey[32:], key.X.bytes())
-	rv := ed25519.PrivateKey(privateKey)
-	return rv, nil
+	publicKey := key.X.bytes()
+
+	if err := validateEd25519PublicKey(publicKey); err != nil {
+		return nil, err
+	}
+
+	seed := key.D.bytes()
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid Ed25519 private key, wrong length for d")
+	}
+
+	privateKey := ed25519.NewKeyFromSeed(seed)
+
+	if !bytes.Equal(privateKey.Public().(ed25519.PublicKey), publicKey) {
+		return nil, errors.New("go-jose/go-jose: invalid Ed25519 private key, x does not match d")
+	}
+
+	return privateKey, nil
 }
 
 func (key rawJSONWebKey) edPublicKey() (ed25519.PublicKey, error) {
 	if key.X == nil {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid Ed key, missing x value")
 	}
-	publicKey := make([]byte, ed25519.PublicKeySize)
-	copy(publicKey[0:32], key.X.bytes())
-	rv := ed25519.PublicKey(publicKey)
-	return rv, nil
+	publicKey := key.X.bytes()
+
+	if err := validateEd25519PublicKey(publicKey); err != nil {
+		return nil, err
+	}
+
+	return ed25519.PublicKey(bytes.Clone(publicKey)), nil
 }
 
 func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
@@ -777,9 +801,17 @@ func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
 }
 
 func fromEdPrivateKey(ed ed25519.PrivateKey) (*rawJSONWebKey, error) {
-	raw := fromEdPublicKey(ed25519.PublicKey(ed[32:]))
+	if len(ed) != ed25519.PrivateKeySize {
+		return nil, errors.New("go-jose/go-jose: invalid Ed25519 private key length")
+	}
 
-	raw.D = newBuffer(ed[0:32])
+	raw, err := fromEdPublicKey(ed.Public().(ed25519.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+
+	raw.D = newBuffer(ed.Seed())
+
 	return raw, nil
 }
 
@@ -854,18 +886,20 @@ func (key rawJSONWebKey) ecPrivateKey() (*ecdsa.PrivateKey, error) {
 	x := key.X.bigInt()
 	y := key.Y.bigInt()
 
-	if !curve.IsOnCurve(x, y) {
-		return nil, errors.New("go-jose/go-jose: invalid EC key, X/Y are not on declared curve")
-	}
-
-	return &ecdsa.PrivateKey{
+	priv := &ecdsa.PrivateKey{
 		PublicKey: ecdsa.PublicKey{
 			Curve: curve,
 			X:     x,
 			Y:     y,
 		},
 		D: key.D.bigInt(),
-	}, nil
+	}
+
+	if _, err := priv.ECDH(); err != nil {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid EC key: %w", err)
+	}
+
+	return priv, nil
 }
 
 func fromEcPrivateKey(ec *ecdsa.PrivateKey) (*rawJSONWebKey, error) {
@@ -918,7 +952,7 @@ var (
 	ErrJWKSKidNotFound = errors.New("go-jose/go-jose: JWK with matching kid not found in JWK Set")
 )
 
-func tryJWKS(key interface{}, header Header) (interface{}, error) {
+func tryJWKS(key any, header Header) (any, error) {
 	var jwks JSONWebKeySet
 
 	switch jwksType := key.(type) {
@@ -945,4 +979,110 @@ func tryJWKS(key interface{}, header Header) (interface{}, error) {
 	}
 
 	return keys[0].Key, nil
+}
+
+var weakEd25519PublicKeys = map[[ed25519.PublicKeySize]byte]struct{}{
+	{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}: {},
+	{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
+	}: {},
+	{
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}: {},
+	{
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
+	}: {},
+	{
+		0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0,
+		0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+		0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39,
+		0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x05,
+	}: {},
+	{
+		0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0,
+		0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+		0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39,
+		0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x85,
+	}: {},
+	{
+		0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+		0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+		0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+		0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0x7a,
+	}: {},
+	{
+		0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+		0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+		0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+		0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0xfa,
+	}: {},
+	{
+		0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+	}: {},
+	{
+		0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}: {},
+	{
+		0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+	}: {},
+	{
+		0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}: {},
+	{
+		0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+	}: {},
+	{
+		0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}: {},
+}
+
+// validateEd25519PublicKey rejects an Ed25519 public key which is not the 32 octets RFC 8037 Section 2 requires, or
+// which is one of the low-order encodings. A low-order key is not rejected by Go's verifier, yet a signature over any
+// payload can be produced for it without possession of a private key.
+func validateEd25519PublicKey(publicKey ed25519.PublicKey) error {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return fmt.Errorf("go-jose/go-jose: invalid Ed25519 public key, wrong length for x")
+	}
+
+	var encoded [ed25519.PublicKeySize]byte
+
+	copy(encoded[:], publicKey)
+
+	if _, ok := weakEd25519PublicKeys[encoded]; ok {
+		return errors.New("go-jose/go-jose: invalid Ed25519 public key, low-order point")
+	}
+
+	return nil
 }

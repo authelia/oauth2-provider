@@ -172,12 +172,12 @@ func ParseEncrypted(input string,
 	keyEncryptionAlgorithms []KeyAlgorithm,
 	contentEncryption []ContentEncryption,
 ) (*JSONWebEncryption, error) {
-	input = stripWhitespace(input)
-	if strings.HasPrefix(input, "{") {
-		return ParseEncryptedJSON(input, keyEncryptionAlgorithms, contentEncryption)
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "{") {
+		return ParseEncryptedJSON(trimmed, keyEncryptionAlgorithms, contentEncryption)
 	}
 
-	return ParseEncryptedCompact(input, keyEncryptionAlgorithms, contentEncryption)
+	return ParseEncryptedCompact(trimmed, keyEncryptionAlgorithms, contentEncryption)
 }
 
 // ParseEncryptedJSON parses a message in JWE JSON Serialization.
@@ -332,6 +332,10 @@ func ParseEncryptedCompact(
 
 	if len(input) == 0 {
 		return nil, errEmptyInput
+	}
+
+	if containsWhitespace(input) {
+		return nil, errors.New("go-jose/go-jose: compact JWE format must not contain whitespace")
 	}
 
 	for i := range 4 {

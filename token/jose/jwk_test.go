@@ -22,10 +22,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -361,7 +363,7 @@ func TestRoundtripX509Hex(t *testing.T) {
 	js, err := jwk2.MarshalJSON()
 	require.NoError(t, err)
 
-	var j1, j2 map[string]interface{}
+	var j1, j2 map[string]any
 	require.NoError(t, json.Unmarshal(js, &j1))
 	require.NoError(t, json.Unmarshal([]byte(output), &j2))
 	if !reflect.DeepEqual(j1, j2) {
@@ -383,7 +385,7 @@ func TestCertificatesURL(t *testing.T) {
 
 	js, err := jwk2.MarshalJSON()
 	require.NoError(t, err)
-	var j1, j2 map[string]interface{}
+	var j1, j2 map[string]any
 	require.NoError(t, json.Unmarshal(js, &j1))
 	require.NoError(t, json.Unmarshal([]byte(urlJWK), &j2))
 	if !reflect.DeepEqual(j1, j2) {
@@ -491,7 +493,7 @@ func TestKeyMismatchX509(t *testing.T) {
 		CertificateThumbprintSHA256: x5tSHA256[:],
 	}
 
-	for _, key := range []interface{}{
+	for _, key := range []any{
 		// None of these keys should match what's in the cert, so parsing should always fail.
 		ecTestKey256,
 		ecTestKey256.Public(),
@@ -518,7 +520,7 @@ func TestKeyMismatchX509(t *testing.T) {
 func TestMarshalUnmarshal(t *testing.T) {
 	kid := "DEADBEEF"
 
-	for i, key := range []interface{}{
+	for i, key := range []any{
 		ecTestKey256,
 		ecTestKey256.Public(),
 		ecTestKey384,
@@ -606,7 +608,7 @@ func TestMarshalUnmarshalInvalid(t *testing.T) {
 	invalidCoord := make([]byte, curveSize(ecTestKey256.Curve)+1)
 	invalidCoord[0] = 1
 
-	keys := []interface{}{
+	keys := []any{
 		// Empty keys
 		&rsa.PrivateKey{},
 		&ecdsa.PrivateKey{},
@@ -1152,7 +1154,7 @@ func TestJWKIsPublic(t *testing.T) {
 	rsaPub := rsa.PublicKey{N: bigInt, E: 1}
 
 	cases := []struct {
-		key              interface{}
+		key              any
 		expectedIsPublic bool
 	}{
 		{&eccPub, true},
@@ -1179,7 +1181,7 @@ func TestJWKValid(t *testing.T) {
 	edPrivEmpty := ed25519.PublicKey([]byte{})
 
 	cases := []struct {
-		key              interface{}
+		key              any
 		expectedValidity bool
 	}{
 		{nil, false},
@@ -1333,4 +1335,202 @@ func TestJWKPaddingY(t *testing.T) {
 	if jwk.Valid() {
 		t.Errorf("Expected key to be invalid, but it was valid.")
 	}
+}
+
+// RFC 7518 Section 6.2.2.1 defines "d" as the private key scalar for the curve. A scalar of zero, or one at or beyond
+// the group order, is not a usable key, and carrying it as far as a signing or key agreement operation produces
+// nonsense rather than an error at the point the key was read.
+func TestECRejectsPrivateKeyScalarOutOfRange(t *testing.T) {
+	size := curveSize(ecTestKey256.Curve)
+
+	x := base64.RawURLEncoding.EncodeToString(ecTestKey256.X.FillBytes(make([]byte, size)))
+	y := base64.RawURLEncoding.EncodeToString(ecTestKey256.Y.FillBytes(make([]byte, size)))
+
+	order := ecTestKey256.Curve.Params().N
+
+	testCases := []struct {
+		name  string
+		d     []byte
+		valid bool
+	}{
+		{"ShouldAcceptScalarWithinRange", ecTestKey256.D.FillBytes(make([]byte, size)), true},
+		{"ShouldRejectZeroScalar", make([]byte, size), false},
+		{"ShouldRejectScalarAtOrder", order.FillBytes(make([]byte, size)), false},
+		{"ShouldRejectScalarBeyondOrder", bytes.Repeat([]byte{0xff}, size), false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{"kty":"EC","crv":"P-256","x":"` + x + `","y":"` + y + `","d":"` +
+				base64.RawURLEncoding.EncodeToString(tc.d) + `"}`)
+
+			var jwk JSONWebKey
+
+			err := json.Unmarshal(raw, &jwk)
+
+			if tc.valid {
+				require.NoError(t, err)
+
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("accepted EC private JWK with out of range d %s", raw)
+			}
+		})
+	}
+}
+
+// RFC 8037 Section 2 requires the Ed25519 "x" parameter to be the 32 octet public key. Anything else was previously
+// copied into a 32 byte buffer, so a short value was silently zero padded into a different key entirely, and an "x" of
+// a single 0x01 octet became the identity point. See go-jose/go-jose#249.
+func TestEd25519RejectsMalformedPublicJWK(t *testing.T) {
+	overlongX := append(ed25519.PublicKey(nil), ed25519PublicKey...)
+	overlongX = append(overlongX, 0x42)
+
+	testCases := []struct {
+		name string
+		x    []byte
+	}{
+		{"ShouldRejectShortX", []byte{0x01}},
+		{"ShouldRejectEmptyX", []byte{}},
+		{"ShouldRejectOverlongX", overlongX},
+		{
+			"ShouldRejectIdentityPoint",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000000`),
+		},
+		{
+			"ShouldRejectIdentityPointSignBitAlias",
+			fromHexBytes(`0100000000000000000000000000000000000000000000000000000000000080`),
+		},
+		{
+			"ShouldRejectOrderFourPoint",
+			fromHexBytes(`0000000000000000000000000000000000000000000000000000000000000000`),
+		},
+		{
+			"ShouldRejectOrderFourPointSignBitVariant",
+			fromHexBytes(`0000000000000000000000000000000000000000000000000000000000000080`),
+		},
+		{
+			"ShouldRejectOrderEightPointA",
+			fromHexBytes(`26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05`),
+		},
+		{
+			"ShouldRejectOrderEightPointASignBitVariant",
+			fromHexBytes(`26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85`),
+		},
+		{
+			"ShouldRejectOrderEightPointB",
+			fromHexBytes(`c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a`),
+		},
+		{
+			"ShouldRejectOrderEightPointBSignBitVariant",
+			fromHexBytes(`c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa`),
+		},
+		{
+			"ShouldRejectOrderTwoPoint",
+			fromHexBytes(`ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectOrderTwoPointSignBitVariant",
+			fromHexBytes(`ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+		{
+			"ShouldRejectNonCanonicalIdentity",
+			fromHexBytes(`edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectNonCanonicalIdentitySignBitVariant",
+			fromHexBytes(`edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+		{
+			"ShouldRejectNonCanonicalOrderFourPoint",
+			fromHexBytes(`eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f`),
+		},
+		{
+			"ShouldRejectNonCanonicalOrderFourPointSignBitVariant",
+			fromHexBytes(`eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := rawEd25519JWK(t, tc.x, nil)
+
+			var jwk JSONWebKey
+
+			if err := json.Unmarshal(raw, &jwk); err == nil {
+				t.Fatalf("accepted malformed Ed25519 public JWK %s", raw)
+			}
+		})
+	}
+}
+
+func TestEd25519RejectsMalformedPrivateJWK(t *testing.T) {
+	_, otherPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name string
+		x    []byte
+		d    []byte
+	}{
+		{"ShouldRejectShortD", ed25519PublicKey, ed25519PrivateKey.Seed()[:ed25519.SeedSize-1]},
+		{"ShouldRejectShortX", []byte{0x01}, ed25519PrivateKey.Seed()},
+		{"ShouldRejectMismatchedX", otherPrivateKey.Public().(ed25519.PublicKey), ed25519PrivateKey.Seed()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := rawEd25519JWK(t, tc.x, tc.d)
+
+			var jwk JSONWebKey
+
+			if err := json.Unmarshal(raw, &jwk); err == nil {
+				t.Fatalf("accepted malformed Ed25519 private JWK %s", raw)
+			}
+		})
+	}
+}
+
+func TestEd25519RoundTripsValidJWK(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  interface{}
+	}{
+		{"ShouldRoundTripPublicKey", ed25519PublicKey},
+		{"ShouldRoundTripPrivateKey", ed25519PrivateKey},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(JSONWebKey{Key: tc.key})
+			require.NoError(t, err)
+
+			var jwk JSONWebKey
+
+			require.NoError(t, json.Unmarshal(data, &jwk))
+
+			if !reflect.DeepEqual(jwk.Key, tc.key) {
+				t.Errorf("round trip produced %v, want %v", jwk.Key, tc.key)
+			}
+		})
+	}
+}
+
+func rawEd25519JWK(t *testing.T, x, d []byte) []byte {
+	t.Helper()
+
+	raw := map[string]string{
+		"kty": "OKP",
+		"crv": "Ed25519",
+		"x":   base64.RawURLEncoding.EncodeToString(x),
+	}
+
+	if d != nil {
+		raw["d"] = base64.RawURLEncoding.EncodeToString(d)
+	}
+
+	out, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	return out
 }

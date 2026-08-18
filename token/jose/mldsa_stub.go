@@ -24,20 +24,20 @@
 
 package jose
 
-func mldsaKeyInfo(_ interface{}) (isPublic bool, ok bool) { return false, false }
+func mldsaKeyInfo(_ any) (isPublic bool, ok bool) { return false, false }
 
-func mldsaPublicOf(_ interface{}) (interface{}, bool) { return nil, false }
+func mldsaPublicOf(_ any) (any, bool) { return nil, false }
 
-func mldsaSigner(_ SignatureAlgorithm, _ interface{}) (recipientSigInfo, bool, error) {
+func mldsaSigner(_ SignatureAlgorithm, _ any) (recipientSigInfo, bool, error) {
 	return recipientSigInfo{}, false, nil
 }
 
-func mldsaVerifier(_ interface{}) (payloadVerifier, bool, error) { return nil, false, nil }
+func mldsaVerifier(_ any) (payloadVerifier, bool, error) { return nil, false, nil }
 
-func mldsaRawJWK(_ interface{}) (*rawJSONWebKey, bool, error) { return nil, false, nil }
+func mldsaRawJWK(_ any) (*rawJSONWebKey, bool, error) { return nil, false, nil }
 
-func mldsaParseJWK(_ *rawJSONWebKey, _ interface{}) (interface{}, error) {
+func mldsaParseJWK(_ *rawJSONWebKey, _ any) (any, error) {
 	return nil, ErrUnsupportedKeyType
 }
 
-func mldsaThumbprintInput(_ interface{}) (string, bool, error) { return "", false, nil }
+func mldsaThumbprintInput(_ any) (string, bool, error) { return "", false, nil }

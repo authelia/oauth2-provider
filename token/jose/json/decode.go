@@ -213,12 +213,12 @@ type errorContext struct {
 type NumberUnmarshalType int
 
 const (
-	// UnmarshalFloat unmarshals a JSON number into an interface{} as a float64.
+	// UnmarshalFloat unmarshals a JSON number into an any as a float64.
 	UnmarshalFloat NumberUnmarshalType = iota
-	// UnmarshalJSONNumber unmarshals a JSON number into an interface{} as a
+	// UnmarshalJSONNumber unmarshals a JSON number into an any as a
 	// [Number].
 	UnmarshalJSONNumber
-	// UnmarshalIntOrFloat unmarshals a JSON number into an interface{} as an
+	// UnmarshalIntOrFloat unmarshals a JSON number into an any as an
 	// int64 if the value is an integer, otherwise as a float64.
 	UnmarshalIntOrFloat
 )

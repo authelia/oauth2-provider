@@ -281,7 +281,7 @@ func ExampleJSONWebToken_Claims_map() {
 		return
 	}
 
-	out := make(map[string]interface{})
+	out := make(map[string]any)
 	if err := tok.Claims(sharedKey, &out); err != nil {
 		fmt.Printf("validating claims: %s\n", err)
 		return
@@ -326,7 +326,7 @@ func mustUnmarshalRSA(data string) *rsa.PrivateKey {
 	panic("key is not of type *rsa.PrivateKey")
 }
 
-func mustMakeSigner(alg jose.SignatureAlgorithm, k interface{}) jose.Signer {
+func mustMakeSigner(alg jose.SignatureAlgorithm, k any) jose.Signer {
 	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: k}, nil)
 	if err != nil {
 		panic("failed to create signer:" + err.Error())

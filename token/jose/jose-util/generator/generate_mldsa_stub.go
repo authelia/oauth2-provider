@@ -1,7 +1,7 @@
 //go:build !go1.27
 
 /*-
- * Copyright 2019 Square Inc.
+ * Copyright 2026 The Go JOSE Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,6 @@ import (
 
 // newMLDSASigningKey generates no keys on toolchains without crypto/mldsa, which
 // was added in Go 1.27.
-func newMLDSASigningKey(_ jose.SignatureAlgorithm) (crypto.PublicKey, crypto.PrivateKey, bool, error) {
+func newMLDSASigningKey(_ jose.SignatureAlgorithm, _ int) (crypto.PublicKey, crypto.PrivateKey, bool, error) {
 	return nil, nil, false, nil
 }

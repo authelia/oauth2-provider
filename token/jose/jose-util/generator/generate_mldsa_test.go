@@ -1,7 +1,7 @@
 //go:build go1.27
 
 /*-
- * Copyright 2019 Square Inc.
+ * Copyright 2026 The Go JOSE Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,16 @@ func TestNewMLDSASigningKey(t *testing.T) {
 			pubJWK := jwk.Public()
 			if !pubJWK.IsPublic() {
 				t.Error("Public() did not yield a public JWK")
+			}
+		})
+	}
+}
+
+func TestNewMLDSASigningKeyRejectsKeySize(t *testing.T) {
+	for _, alg := range []jose.SignatureAlgorithm{jose.ML_DSA_44, jose.ML_DSA_65, jose.ML_DSA_87} {
+		t.Run(string(alg), func(t *testing.T) {
+			if _, _, err := NewSigningKey(alg, 4096); err == nil {
+				t.Error("NewSigningKey accepted a key size for an ML-DSA algorithm")
 			}
 		})
 	}

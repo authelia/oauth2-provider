@@ -167,6 +167,13 @@ func (b *byteBuffer) UnmarshalJSON(data []byte) error {
 }
 
 func (b *byteBuffer) base64() string {
+	// Handling nil here mirrors bytes below. newBuffer returns nil for a nil
+	// slice, and newBufferFromInt(0) reaches it because bytes.TrimLeft reports a
+	// fully trimmed slice as nil.
+	if b == nil {
+		return ""
+	}
+
 	return base64.RawURLEncoding.EncodeToString(b.data)
 }
 

@@ -479,6 +479,12 @@ func ecThumbprintInput(curve elliptic.Curve, x, y *big.Int) (string, error) {
 }
 
 func rsaThumbprintInput(n *big.Int, e int) (string, error) {
+	// A JWK carrying empty "n" and "e" members parses into a zero modulus and a
+	// zero exponent, which is not a key any thumbprint can describe.
+	if n == nil || n.Sign() <= 0 || e <= 0 {
+		return "", errors.New("go-jose/go-jose: invalid RSA key, n and e must be positive")
+	}
+
 	return fmt.Sprintf(rsaThumbprintTemplate,
 		newBufferFromInt(uint64(e)).base64(),
 		newBuffer(n.Bytes()).base64()), nil

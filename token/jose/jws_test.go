@@ -210,8 +210,8 @@ func TestRejectUnprotectedJWSNonce(t *testing.T) {
 	// Flattened JSON
 	input := `{
 		"header": { "nonce": "should-cause-an-error" },
-		"payload": "does-not-matter",
-		"signature": "does-not-matter"
+		"payload": "QUJD",
+		"signature": "QUJD"
 	}`
 	_, err := ParseSigned(input, []SignatureAlgorithm{SignatureAlgorithm("XYZ")})
 	if err == nil {
@@ -222,10 +222,10 @@ func TestRejectUnprotectedJWSNonce(t *testing.T) {
 
 	// Full JSON
 	input = `{
-		"payload": "does-not-matter",
+		"payload": "QUJD",
  		"signatures": [{
  			"header": { "nonce": "should-cause-an-error" },
-			"signature": "does-not-matter"
+			"signature": "QUJD"
 		}]
 	}`
 	_, err = ParseSigned(input, []SignatureAlgorithm{SignatureAlgorithm("XYZ")})
@@ -1108,4 +1108,69 @@ func TestParseSignedRejectsDuplicateHeaderParameters(t *testing.T) {
 			}
 		})
 	}
+}
+
+// RFC 4648 Section 3.5 requires an encoder to zero the unused bits of the final
+// quantum, and permits a decoder to reject them set. Go's decoder does not, so
+// several distinct strings decoded to the same octets and every one verified.
+// A token had no single spelling, which defeats any cache keyed on it: a replay
+// or revocation check on the token string could be sidestepped by re-encoding.
+func TestParseRejectsNonCanonicalBase64(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x"}`))
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(protected + "." + payload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	canonical := protected + "." + payload + "." + signature
+
+	obj, err := ParseSignedCompact(canonical, []SignatureAlgorithm{HS256})
+	if err != nil {
+		t.Fatalf("the canonical token must still parse: %v", err)
+	}
+
+	if _, err = obj.Verify(key); err != nil {
+		t.Fatalf("the canonical token must still verify: %v", err)
+	}
+
+	// Flip the unused trailing bits of a segment's final character. The octets it
+	// decodes to are unchanged, so without the check the variant verifies too.
+	variants := map[string]string{
+		"payload":   protected + "." + flipUnusedBits(t, payload) + "." + signature,
+		"signature": protected + "." + payload + "." + flipUnusedBits(t, signature),
+	}
+
+	for name, variant := range variants {
+		if variant == canonical {
+			t.Fatalf("%s: the variant is identical to the canonical form", name)
+		}
+
+		if _, err = ParseSignedCompact(variant, []SignatureAlgorithm{HS256}); err == nil {
+			t.Errorf("%s: a non-canonical encoding was accepted", name)
+		}
+	}
+}
+
+// flipUnusedBits returns s with the unused bits of its final quantum set, which
+// leaves the decoded octets unchanged.
+func flipUnusedBits(t *testing.T, s string) string {
+	t.Helper()
+
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+	unused := map[int]int{2: 4, 3: 2}[len(s)%4]
+	if unused == 0 {
+		t.Fatalf("a %d character segment has no unused bits to flip", len(s))
+	}
+
+	index := strings.IndexByte(alphabet, s[len(s)-1])
+	if index < 0 {
+		t.Fatalf("segment ends in %q, which is not base64url", s[len(s)-1])
+	}
+
+	// Set the low bits that the encoding does not use.
+	return s[:len(s)-1] + string(alphabet[index|(1<<unused-1)])
 }

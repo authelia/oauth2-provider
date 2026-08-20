@@ -1562,3 +1562,28 @@ func TestJWKUnsupportedCurveIsMatchable(t *testing.T) {
 		})
 	}
 }
+
+// A JWK with empty "n" and "e" members parses into a zero modulus and a zero
+// exponent. Thumbprint then reached newBufferFromInt(0), which is nil because
+// bytes.TrimLeft reports a fully trimmed slice as nil, and dereferenced it.
+func TestJWKThumbprintRejectsDegenerateRSAKey(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Thumbprint panicked: %v", r)
+		}
+	}()
+
+	var key JSONWebKey
+
+	if err := key.UnmarshalJSON([]byte(`{"kty":"RSA","n":"","e":""}`)); err != nil {
+		t.Skipf("key no longer parses, which is also an acceptable outcome: %v", err)
+	}
+
+	if key.Valid() {
+		t.Error("Valid reports a zero RSA key as usable")
+	}
+
+	if _, err := key.Thumbprint(crypto.SHA256); err == nil {
+		t.Error("Thumbprint accepted a zero RSA key, want an error")
+	}
+}

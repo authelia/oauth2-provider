@@ -382,6 +382,40 @@ func TestZeroLengthPadding(t *testing.T) {
 	}
 }
 
+func TestEmptyBufferPadding(t *testing.T) {
+	for _, buffer := range [][]byte{nil, {}} {
+		if _, err := unpadBuffer(buffer, 16); err == nil {
+			t.Errorf("unpadBuffer(%v) must not accept an empty buffer", buffer)
+		}
+	}
+}
+
+func TestOpenEmptyCiphertextWithValidTag(t *testing.T) {
+	for _, keySize := range []int{32, 48, 64} {
+		key := make([]byte, keySize)
+		if _, err := io.ReadFull(rand.Reader, key); err != nil {
+			t.Fatal(err)
+		}
+
+		aead, err := NewCBCHMAC(key, aes.NewCipher)
+		if err != nil {
+			t.Fatalf("NewCBCHMAC with a %d byte key: %v", keySize, err)
+		}
+
+		nonce := make([]byte, aead.NonceSize())
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+			t.Fatal(err)
+		}
+
+		aad := []byte("aad")
+		tag := aead.(*cbcAEAD).computeAuthTag(aad, nonce, nil)
+
+		if _, err = aead.Open(nil, nonce, tag, aad); err == nil {
+			t.Errorf("Open with a %d byte key accepted an empty ciphertext, want an error", keySize)
+		}
+	}
+}
+
 func benchEncryptCBCHMAC(b *testing.B, keySize, chunkSize int) {
 	key := make([]byte, keySize*2)
 	nonce := make([]byte, 16)

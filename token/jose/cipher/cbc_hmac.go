@@ -116,7 +116,10 @@ func (ctx *cbcAEAD) Open(dst, nonce, ciphertext, data []byte) ([]byte, error) {
 	// Make copy of ciphertext buffer, don't want to modify in place
 	buffer := append([]byte{}, ciphertext[:offset]...)
 
-	if len(buffer)%ctx.blockCipher.BlockSize() > 0 {
+	// CBC always pads, so a valid ciphertext is a non-zero whole number of
+	// blocks. A ciphertext consisting of nothing but the authentication tag
+	// leaves an empty buffer here, which unpadBuffer cannot describe.
+	if len(buffer) == 0 || len(buffer)%ctx.blockCipher.BlockSize() > 0 {
 		return nil, errors.New("go-jose/go-jose: invalid ciphertext (invalid length)")
 	}
 
@@ -176,7 +179,7 @@ func padBuffer(buffer []byte, blockSize int) []byte {
 
 // Remove padding
 func unpadBuffer(buffer []byte, blockSize int) ([]byte, error) {
-	if len(buffer)%blockSize != 0 {
+	if len(buffer) == 0 || len(buffer)%blockSize != 0 {
 		return nil, errors.New("go-jose/go-jose: invalid padding")
 	}
 

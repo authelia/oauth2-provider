@@ -17,10 +17,13 @@
 package jose
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -997,5 +1000,47 @@ func TestEmbeddedEd25519IdentityPointCannotForgeSignature(t *testing.T) {
 				t.Fatalf("forged signature was accepted, returning payload %q", payload)
 			}
 		})
+	}
+}
+
+// The per-signature unprotected header was assigned after the merged and
+// unprotected headers had already been derived from it, so in the general JSON
+// serialization Header lost the unprotected values and Unprotected stayed
+// empty. That is where "kid" normally lives for that serialization, so JWKS
+// backed verification could not find a key.
+func TestParseSignedJSONSurfacesPerSignatureHeader(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x"}`))
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(protected + "." + payload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	serialized := fmt.Sprintf(
+		`{"payload":%q,"signatures":[{"protected":%q,"header":{"kid":"k1"},"signature":%q}]}`,
+		payload, protected, signature)
+
+	obj, err := ParseSignedJSON(serialized, []SignatureAlgorithm{HS256})
+	if err != nil {
+		t.Fatalf("ParseSignedJSON: %v", err)
+	}
+
+	if got := obj.Signatures[0].Header.KeyID; got != "k1" {
+		t.Errorf("Header.KeyID = %q, want %q", got, "k1")
+	}
+
+	if got := obj.Signatures[0].Unprotected.KeyID; got != "k1" {
+		t.Errorf("Unprotected.KeyID = %q, want %q", got, "k1")
+	}
+
+	// The protected header must not pick up unprotected values.
+	if got := obj.Signatures[0].Protected.KeyID; got != "" {
+		t.Errorf("Protected.KeyID = %q, want empty", got)
+	}
+
+	if _, err = obj.Verify(key); err != nil {
+		t.Errorf("Verify: %v", err)
 	}
 }

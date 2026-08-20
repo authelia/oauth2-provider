@@ -407,15 +407,17 @@ func (obj JSONWebEncryption) CompactSerialize() (string, error) {
 // FullSerialize serializes an object using the full JSON serialization format.
 func (obj JSONWebEncryption) FullSerialize() string {
 	raw := rawJSONWebEncryption{
-		Unprotected:  obj.unprotected,
-		Iv:           newBuffer(obj.iv),
-		Ciphertext:   newBuffer(obj.ciphertext),
-		EncryptedKey: newBuffer(obj.recipients[0].encryptedKey),
-		Tag:          newBuffer(obj.tag),
-		Aad:          newBuffer(obj.aad),
-		Recipients:   []rawRecipientInfo{},
+		Unprotected: obj.unprotected,
+		Iv:          newBuffer(obj.iv),
+		Ciphertext:  newBuffer(obj.ciphertext),
+		Tag:         newBuffer(obj.tag),
+		Aad:         newBuffer(obj.aad),
+		Recipients:  []rawRecipientInfo{},
 	}
 
+	// RFC 7516 Section 7.2.1 places "encrypted_key" inside each element of the
+	// "recipients" array for the general serialization; the top level member
+	// belongs to the flattened syntax alone.
 	if len(obj.recipients) > 1 {
 		for _, recipient := range obj.recipients {
 			info := rawRecipientInfo{

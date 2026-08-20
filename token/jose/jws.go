@@ -322,6 +322,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 			return nil, ErrUnprotectedNonce
 		}
 
+		// Assign before the headers below are read, otherwise the per-signature
+		// unprotected header is merged into neither Header nor Unprotected.
+		obj.Signatures[i].header = sig.Header
+
 		var err error
 		obj.Signatures[i].Header, err = obj.Signatures[i].mergedHeaders().sanitized()
 		if err != nil {
@@ -358,7 +362,6 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		// Copy value of sig
 		original := sig
 
-		obj.Signatures[i].header = sig.Header
 		obj.Signatures[i].original = &original
 	}
 

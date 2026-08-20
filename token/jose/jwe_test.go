@@ -28,6 +28,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"hash"
 	"math/big"
@@ -974,5 +975,65 @@ func TestDecryptEmptyCiphertextWithValidTag(t *testing.T) {
 				t.Errorf("Decrypt returned %v, want %v", err, ErrCryptoFailure)
 			}
 		})
+	}
+}
+
+// RFC 7516 Section 7.2.1 places "encrypted_key" inside each element of the
+// "recipients" array. The general serialization also emitted a top level
+// member holding the first recipient's wrapped key, which is not valid there
+// and duplicated that key in a second location.
+func TestJWEFullSerializeOmitsTopLevelEncryptedKey(t *testing.T) {
+	first, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enc, err := NewMultiEncrypter(A128GCM, []Recipient{
+		{Algorithm: ECDH_ES_A128KW, Key: &first.PublicKey, KeyID: "a"},
+		{Algorithm: ECDH_ES_A128KW, Key: &second.PublicKey, KeyID: "b"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := enc.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var members map[string]json.RawMessage
+	if err = json.Unmarshal([]byte(obj.FullSerialize()), &members); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if _, ok := members["encrypted_key"]; ok {
+		t.Error("general serialization carries a top level encrypted_key")
+	}
+
+	if _, ok := members["recipients"]; !ok {
+		t.Error("general serialization is missing the recipients array")
+	}
+
+	// Both recipients must still be able to decrypt.
+	for i, key := range []*ecdsa.PrivateKey{first, second} {
+		parsed, err := ParseEncryptedJSON(obj.FullSerialize(), []KeyAlgorithm{ECDH_ES_A128KW}, []ContentEncryption{A128GCM})
+		if err != nil {
+			t.Fatalf("recipient %d: parse: %v", i, err)
+		}
+
+		_, _, plaintext, err := parsed.DecryptMulti(key)
+		if err != nil {
+			t.Errorf("recipient %d: DecryptMulti: %v", i, err)
+			continue
+		}
+
+		if string(plaintext) != "plaintext" {
+			t.Errorf("recipient %d: plaintext = %q", i, plaintext)
+		}
 	}
 }

@@ -17,11 +17,13 @@
 package jose
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 
@@ -454,5 +456,99 @@ func TestECDHDecryptKeyRejectsEPKOnAnotherCurve(t *testing.T) {
 
 			assert.Equal(t, err.Error(), tc.err)
 		})
+	}
+}
+
+// RFC 7518 Section 3.4 pairs each ECDSA algorithm with exactly one curve.
+func TestECDSAVerifyRejectsWrongCurveForAlgorithm(t *testing.T) {
+	testCases := []struct {
+		alg       SignatureAlgorithm
+		curve     elliptic.Curve
+		hash      crypto.Hash
+		sigOctets int
+	}{
+		{ES384, elliptic.P256(), crypto.SHA384, 48},
+		{ES512, elliptic.P256(), crypto.SHA512, 66},
+		{ES512, elliptic.P384(), crypto.SHA512, 66},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s_with_%s", tc.alg, tc.curve.Params().Name), func(t *testing.T) {
+			key, err := ecdsa.GenerateKey(tc.curve, rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			payload := []byte("payload")
+			hasher := tc.hash.New()
+			hasher.Write(payload)
+
+			r, s, err := ecdsa.Sign(rand.Reader, key, hasher.Sum(nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			signature := make([]byte, 2*tc.sigOctets)
+			r.FillBytes(signature[:tc.sigOctets])
+			s.FillBytes(signature[tc.sigOctets:])
+
+			verifier := &ecEncrypterVerifier{publicKey: &key.PublicKey}
+			if err = verifier.verifyPayload(payload, signature, tc.alg); err == nil {
+				t.Errorf("verifyPayload accepted a %s signature under %s, want an error",
+					tc.curve.Params().Name, tc.alg)
+			}
+		})
+	}
+}
+
+// The matching curve must still verify, and each algorithm must still reject a
+// signature made over the wrong digest on the right curve.
+func TestECDSAVerifyAcceptsMatchingCurve(t *testing.T) {
+	testCases := []struct {
+		alg   SignatureAlgorithm
+		curve elliptic.Curve
+	}{
+		{ES256, elliptic.P256()},
+		{ES384, elliptic.P384()},
+		{ES512, elliptic.P521()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.alg), func(t *testing.T) {
+			key, err := ecdsa.GenerateKey(tc.curve, rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			signer := &ecDecrypterSigner{privateKey: key}
+			payload := []byte("payload")
+
+			sig, err := signer.signPayload(payload, tc.alg)
+			if err != nil {
+				t.Fatalf("signPayload: %v", err)
+			}
+
+			verifier := &ecEncrypterVerifier{publicKey: &key.PublicKey}
+			if err = verifier.verifyPayload(payload, sig.Signature, tc.alg); err != nil {
+				t.Errorf("verifyPayload rejected a matching %s signature: %v", tc.alg, err)
+			}
+
+			if err = verifier.verifyPayload([]byte("other"), sig.Signature, tc.alg); err == nil {
+				t.Errorf("verifyPayload accepted a signature over a different payload")
+			}
+		})
+	}
+}
+
+func TestECDSAVerifyRejectsNilKey(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("verifyPayload panicked on a nil public key: %v", r)
+		}
+	}()
+
+	verifier := &ecEncrypterVerifier{publicKey: nil}
+	if err := verifier.verifyPayload([]byte("payload"), make([]byte, 64), ES256); err == nil {
+		t.Error("verifyPayload accepted a nil public key, want an error")
 	}
 }

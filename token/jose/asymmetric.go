@@ -21,6 +21,7 @@ import (
 	"crypto/aes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -513,26 +514,34 @@ func (ctx edEncrypterVerifier) verifyPayload(payload []byte, signature []byte, a
 	return nil
 }
 
-// Sign the given payload
-func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
-	var expectedBitSize int
-	var hash crypto.Hash
-
+// ecdsaAlgCurve returns the curve and hash a JWS ECDSA algorithm requires.
+//
+// RFC 7518 Section 3.4 pairs each algorithm with exactly one curve: ES256 with
+// P-256, ES384 with P-384 and ES512 with P-521. Signing and verification share
+// this mapping so the pairing cannot be enforced on one side only.
+func ecdsaAlgCurve(alg SignatureAlgorithm) (elliptic.Curve, crypto.Hash, bool) {
 	switch alg {
 	case ES256:
-		expectedBitSize = 256
-		hash = crypto.SHA256
+		return elliptic.P256(), crypto.SHA256, true
 	case ES384:
-		expectedBitSize = 384
-		hash = crypto.SHA384
+		return elliptic.P384(), crypto.SHA384, true
 	case ES512:
-		expectedBitSize = 521
-		hash = crypto.SHA512
+		return elliptic.P521(), crypto.SHA512, true
+	default:
+		return nil, 0, false
+	}
+}
+
+// Sign the given payload
+func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
+	curve, hash, ok := ecdsaAlgCurve(alg)
+	if !ok {
+		return Signature{}, ErrUnsupportedAlgorithm
 	}
 
-	curveBits := ctx.privateKey.Curve.Params().BitSize
-	if expectedBitSize != curveBits {
-		return Signature{}, fmt.Errorf("go-jose/go-jose: expected %d bit key, got %d bits instead", expectedBitSize, curveBits)
+	if ctx.privateKey.Curve != curve {
+		return Signature{}, fmt.Errorf("go-jose/go-jose: expected %d bit key, got %d bits instead",
+			curve.Params().BitSize, ctx.privateKey.Curve.Params().BitSize)
 	}
 
 	hasher := hash.New()
@@ -546,10 +555,7 @@ func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 		return Signature{}, err
 	}
 
-	keyBytes := curveBits / 8
-	if curveBits%8 > 0 {
-		keyBytes++
-	}
+	keyBytes := curveSize(curve)
 
 	// We serialize the outputs (r and s) into big-endian byte arrays and pad
 	// them with zeros on the left to make sure the sizes work out. Both arrays
@@ -572,22 +578,25 @@ func (ctx ecDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 
 // Verify the given payload
 func (ctx ecEncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {
-	var keySize int
-	var hash crypto.Hash
-
-	switch alg {
-	case ES256:
-		keySize = 32
-		hash = crypto.SHA256
-	case ES384:
-		keySize = 48
-		hash = crypto.SHA384
-	case ES512:
-		keySize = 66
-		hash = crypto.SHA512
-	default:
+	curve, hash, ok := ecdsaAlgCurve(alg)
+	if !ok {
 		return ErrUnsupportedAlgorithm
 	}
+
+	if ctx.publicKey == nil {
+		return ErrUnsupportedKeyType
+	}
+
+	// The signature width alone does not pin the curve: an r||s pair produced on
+	// a weaker curve can be left-padded to the width a stronger algorithm
+	// implies. Check the curve itself so a key can only be used under the
+	// algorithm RFC 7518 Section 3.4 pairs it with.
+	if ctx.publicKey.Curve != curve {
+		return fmt.Errorf("go-jose/go-jose: %s requires a %d bit key, got %d bits instead",
+			alg, curve.Params().BitSize, ctx.publicKey.Curve.Params().BitSize)
+	}
+
+	keySize := curveSize(curve)
 
 	if len(signature) != 2*keySize {
 		return fmt.Errorf("go-jose/go-jose: invalid signature size, have %d bytes, wanted %d", len(signature), 2*keySize)

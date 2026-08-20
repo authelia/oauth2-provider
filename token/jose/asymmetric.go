@@ -150,8 +150,18 @@ func newRSASigner(sigAlg SignatureAlgorithm, privateKey *rsa.PrivateKey) (recipi
 	}, nil
 }
 
+// isEdDSAAlg reports whether alg names Ed25519 signing.
+//
+// RFC 9864 Section 2.2 registers "Ed25519" as the fully-specified identifier for
+// the parameter set that the polymorphic "EdDSA" of RFC 8037 leaves unstated.
+// Both name the same operation, so both are accepted; the caller decides which
+// one goes in the header.
+func isEdDSAAlg(alg SignatureAlgorithm) bool {
+	return alg == EdDSA || alg == Ed25519
+}
+
 func newEd25519Signer(sigAlg SignatureAlgorithm, privateKey ed25519.PrivateKey) (recipientSigInfo, error) {
-	if sigAlg != EdDSA {
+	if !isEdDSAAlg(sigAlg) {
 		return recipientSigInfo{}, ErrUnsupportedAlgorithm
 	}
 
@@ -545,7 +555,7 @@ func (ctx ecDecrypterSigner) decryptKey(headers rawHeader, recipient *recipientI
 }
 
 func (ctx edDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
-	if alg != EdDSA {
+	if !isEdDSAAlg(alg) {
 		return Signature{}, ErrUnsupportedAlgorithm
 	}
 
@@ -565,7 +575,7 @@ func (ctx edDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 }
 
 func (ctx edEncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {
-	if alg != EdDSA {
+	if !isEdDSAAlg(alg) {
 		return ErrUnsupportedAlgorithm
 	}
 

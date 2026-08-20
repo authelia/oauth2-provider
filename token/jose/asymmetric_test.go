@@ -699,3 +699,79 @@ func TestEd25519AcceptsValidKey(t *testing.T) {
 		t.Error("verifyPayload accepted a signature over a different payload")
 	}
 }
+
+// RFC 9864 Section 2.2 registers "Ed25519" as the fully-specified identifier for
+// the parameter set that RFC 8037's polymorphic "EdDSA" leaves unstated, and
+// Section 4.1.2 deprecates "EdDSA" in the registry. Both name the same
+// operation, so a signature made under one identifier verifies under the other.
+func TestEd25519FullySpecifiedAlgorithm(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signer := &edDecrypterSigner{privateKey: private}
+	verifier := &edEncrypterVerifier{publicKey: public}
+
+	algorithms := []SignatureAlgorithm{EdDSA, Ed25519}
+
+	for _, signAlg := range algorithms {
+		sig, err := signer.signPayload([]byte("payload"), signAlg)
+		if err != nil {
+			t.Fatalf("signPayload(%s): %v", signAlg, err)
+		}
+
+		for _, verifyAlg := range algorithms {
+			if err = verifier.verifyPayload([]byte("payload"), sig.Signature, verifyAlg); err != nil {
+				t.Errorf("signed under %s, verifying under %s: %v", signAlg, verifyAlg, err)
+			}
+		}
+	}
+
+	// An unrelated algorithm must still be refused.
+	if err = verifier.verifyPayload([]byte("payload"), make([]byte, 64), ES256); !errors.Is(err, ErrUnsupportedAlgorithm) {
+		t.Errorf("verifyPayload(ES256) = %v, want %v", err, ErrUnsupportedAlgorithm)
+	}
+}
+
+func TestEd25519AlgorithmReachesTheHeader(t *testing.T) {
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, alg := range []SignatureAlgorithm{EdDSA, Ed25519} {
+		signer, err := NewSigner(SigningKey{Algorithm: alg, Key: private}, nil)
+		if err != nil {
+			t.Fatalf("NewSigner(%s): %v", alg, err)
+		}
+
+		obj, err := signer.Sign([]byte("payload"))
+		if err != nil {
+			t.Fatalf("Sign(%s): %v", alg, err)
+		}
+
+		serialized, err := obj.CompactSerialize()
+		if err != nil {
+			t.Fatalf("CompactSerialize(%s): %v", alg, err)
+		}
+
+		parsed, err := ParseSignedCompact(serialized, []SignatureAlgorithm{alg})
+		if err != nil {
+			t.Fatalf("ParseSignedCompact(%s): %v", alg, err)
+		}
+
+		if got := parsed.Signatures[0].Header.Algorithm; got != string(alg) {
+			t.Errorf("header alg = %q, want %q", got, alg)
+		}
+
+		other := EdDSA
+		if alg == EdDSA {
+			other = Ed25519
+		}
+
+		if _, err = ParseSignedCompact(serialized, []SignatureAlgorithm{other}); err == nil {
+			t.Errorf("a %s token was accepted by a parse restricted to %s", alg, other)
+		}
+	}
+}

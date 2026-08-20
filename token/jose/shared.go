@@ -112,7 +112,19 @@ const (
 
 // Signature algorithms
 const (
-	EdDSA     = SignatureAlgorithm("EdDSA")
+	// EdDSA is the polymorphic Edwards-curve identifier from RFC 8037. RFC 9864
+	// Section 4.1.2 marks it deprecated in the IANA registry in favour of the
+	// fully-specified Ed25519 below, because "EdDSA" alone does not say which
+	// curve is in use and so cannot be negotiated. It stays fully supported here
+	// for compatibility, which is why it carries no Deprecated marker: that would
+	// warn every existing caller about an identifier this package still accepts.
+	EdDSA = SignatureAlgorithm("EdDSA")
+	// Ed25519 is the fully-specified identifier for the Ed25519 parameter set of
+	// RFC 8032 Section 5.1, registered by RFC 9864 Section 2.2.
+	//
+	// RFC 9864 also registers Ed448, which is not implemented here because the
+	// standard library has no Ed448.
+	Ed25519   = SignatureAlgorithm("Ed25519")
 	HS256     = SignatureAlgorithm("HS256")     // HMAC using SHA-256
 	HS384     = SignatureAlgorithm("HS384")     // HMAC using SHA-384
 	HS512     = SignatureAlgorithm("HS512")     // HMAC using SHA-512

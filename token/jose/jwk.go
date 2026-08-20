@@ -1086,3 +1086,13 @@ func validateEd25519PublicKey(publicKey ed25519.PublicKey) error {
 
 	return nil
 }
+
+// validateEd25519PrivateKey rejects an Ed25519 private key which is not the 64 octets crypto/ed25519 requires.
+// Signing with any other length panics rather than returning an error.
+func validateEd25519PrivateKey(privateKey ed25519.PrivateKey) error {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return errors.New("go-jose/go-jose: invalid Ed25519 private key, wrong length")
+	}
+
+	return nil
+}

@@ -19,6 +19,7 @@ package jose
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -621,5 +622,80 @@ func TestRSARejectsNilKeys(t *testing.T) {
 	signer := &rsaDecrypterSigner{privateKey: nil}
 	if _, err := signer.signPayload([]byte("payload"), RS256); err == nil {
 		t.Error("signPayload accepted a nil private key, want an error")
+	}
+}
+
+// A low-order Ed25519 public key admits a single signature that verifies for
+// every message: verification reduces to [S]B = R + [k]A, and for the identity
+// point [k]A is the identity whatever the message hashes to, so R = identity
+// with S = 0 satisfies it universally. The fork screens for these keys when
+// parsing a JWK, but Verify also accepts a raw ed25519.PublicKey, and that path
+// reached crypto/ed25519 unscreened.
+func TestEd25519VerifyRejectsLowOrderKey(t *testing.T) {
+	publicKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	publicKey[0] = 0x01 // identity point
+
+	signature := make([]byte, ed25519.SignatureSize)
+	signature[0] = 0x01 // R = identity, S = 0
+
+	// Precondition: crypto/ed25519 itself accepts this, for any message.
+	if !ed25519.Verify(publicKey, []byte("first message"), signature) {
+		t.Fatal("precondition failed: crypto/ed25519 rejected the forgery")
+	}
+
+	verifier := &edEncrypterVerifier{publicKey: publicKey}
+
+	for _, message := range []string{"first message", "a completely different message"} {
+		if err := verifier.verifyPayload([]byte(message), signature, EdDSA); err == nil {
+			t.Errorf("verifyPayload accepted a low-order key for %q, want an error", message)
+		}
+	}
+}
+
+// Wrong-length keys panicked inside crypto/ed25519 instead of erroring.
+func TestEd25519RejectsMalformedKeys(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("panicked on a malformed key: %v", r)
+		}
+	}()
+
+	for _, publicKey := range []ed25519.PublicKey{nil, make([]byte, 31), make([]byte, 33)} {
+		verifier := &edEncrypterVerifier{publicKey: publicKey}
+		if err := verifier.verifyPayload([]byte("payload"), make([]byte, ed25519.SignatureSize), EdDSA); err == nil {
+			t.Errorf("verifyPayload accepted a %d byte public key, want an error", len(publicKey))
+		}
+	}
+
+	for _, privateKey := range []ed25519.PrivateKey{nil, make([]byte, 63), make([]byte, 65)} {
+		signer := &edDecrypterSigner{privateKey: privateKey}
+		if _, err := signer.signPayload([]byte("payload"), EdDSA); err == nil {
+			t.Errorf("signPayload accepted a %d byte private key, want an error", len(privateKey))
+		}
+	}
+}
+
+// A genuine key must still round-trip, and a signature over another payload
+// must still be rejected.
+func TestEd25519AcceptsValidKey(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signer := &edDecrypterSigner{privateKey: private}
+	verifier := &edEncrypterVerifier{publicKey: public}
+
+	sig, err := signer.signPayload([]byte("payload"), EdDSA)
+	if err != nil {
+		t.Fatalf("signPayload: %v", err)
+	}
+
+	if err = verifier.verifyPayload([]byte("payload"), sig.Signature, EdDSA); err != nil {
+		t.Errorf("verifyPayload rejected a valid signature: %v", err)
+	}
+
+	if err = verifier.verifyPayload([]byte("other"), sig.Signature, EdDSA); err == nil {
+		t.Error("verifyPayload accepted a signature over a different payload")
 	}
 }

@@ -536,6 +536,10 @@ func (ctx edDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 		return Signature{}, ErrUnsupportedAlgorithm
 	}
 
+	if err := validateEd25519PrivateKey(ctx.privateKey); err != nil {
+		return Signature{}, err
+	}
+
 	sig, err := ctx.privateKey.Sign(randReader, payload, crypto.Hash(0))
 	if err != nil {
 		return Signature{}, err
@@ -551,6 +555,11 @@ func (ctx edEncrypterVerifier) verifyPayload(payload []byte, signature []byte, a
 	if alg != EdDSA {
 		return ErrUnsupportedAlgorithm
 	}
+
+	if err := validateEd25519PublicKey(ctx.publicKey); err != nil {
+		return err
+	}
+
 	ok := ed25519.Verify(ctx.publicKey, payload, signature)
 	if !ok {
 		return errors.New("go-jose/go-jose: ed25519 signature failed to verify")

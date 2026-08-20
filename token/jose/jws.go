@@ -26,9 +26,71 @@ import (
 	"authelia.com/provider/oauth2/token/jose/json"
 )
 
+// rawPayload is the payload member of a JWS.
+//
+// RFC 7797 lets a JWS carry its payload either base64url encoded or literally, selected by the "b64" header
+// parameter. That parameter lives in the protected header, so the encoding is not known while the message is being
+// unmarshalled: the value is kept as it arrived and resolved once the header is available.
+type rawPayload struct {
+	wire string
+
+	// resolved holds octets supplied out of band by the compact and detached paths, which know the encoding before
+	// sanitized runs.
+	resolved   []byte
+	isResolved bool
+}
+
+// payloadIsBase64 reports whether a signature's payload is base64url encoded. RFC 7797 Section 3 defaults "b64" to
+// true, which is also the answer for a JWS carrying no protected header at all.
+func payloadIsBase64(protected *rawHeader) (bool, error) {
+	if protected == nil {
+		return true, nil
+	}
+
+	return protected.getB64()
+}
+
+// resolvedPayload wraps payload octets whose encoding has already been resolved.
+func resolvedPayload(payload []byte) *rawPayload {
+	return &rawPayload{resolved: payload, isResolved: true}
+}
+
+// wirePayload renders payload octets for transmission under the given encoding.
+func wirePayload(payload []byte, b64 bool) *rawPayload {
+	if b64 {
+		return &rawPayload{wire: base64.RawURLEncoding.EncodeToString(payload)}
+	}
+
+	return &rawPayload{wire: string(payload)}
+}
+
+func (p *rawPayload) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &p.wire)
+}
+
+func (p rawPayload) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.wire)
+}
+
+// octets returns the payload under the given encoding.
+func (p *rawPayload) octets(b64 bool) ([]byte, error) {
+	switch {
+	case p == nil:
+		return nil, nil
+	case p.isResolved:
+		return p.resolved, nil
+	case !b64:
+		// RFC 7797 Section 5.3: in a JSON serialization the payload is the string as it appears, after JSON escape
+		// processing, which json.Unmarshal has already performed.
+		return []byte(p.wire), nil
+	default:
+		return base64URLDecode(p.wire)
+	}
+}
+
 // rawJSONWebSignature represents a raw JWS JSON object. Used for parsing/serializing.
 type rawJSONWebSignature struct {
-	Payload    *byteBuffer        `json:"payload,omitempty"`
+	Payload    *rawPayload        `json:"payload,omitempty"`
 	Signatures []rawSignatureInfo `json:"signatures,omitempty"`
 	Protected  *byteBuffer        `json:"protected,omitempty"`
 	Header     *rawHeader         `json:"header,omitempty"`
@@ -237,7 +299,6 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 	}
 
 	obj := &JSONWebSignature{
-		payload:    parsed.Payload.bytes(),
 		Signatures: make([]Signature, len(parsed.Signatures)),
 	}
 
@@ -310,6 +371,15 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 			return nil, errors.New("go-jose/go-jose: invalid embedded jwk, must be public key")
 		}
 
+		b64, err := payloadIsBase64(signature.protected)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj.payload, err = parsed.Payload.octets(b64); err != nil {
+			return nil, err
+		}
+
 		obj.Signatures = append(obj.Signatures, signature)
 	}
 
@@ -372,6 +442,24 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		original := sig
 
 		obj.Signatures[i].original = &original
+
+		b64, err := payloadIsBase64(obj.Signatures[i].protected)
+		if err != nil {
+			return nil, err
+		}
+
+		payload, err := parsed.Payload.octets(b64)
+		if err != nil {
+			return nil, err
+		}
+
+		// "b64" governs how the shared payload member is read, so signatures which disagree about it leave the
+		// payload with no single meaning.
+		if i > 0 && !bytes.Equal(payload, obj.payload) {
+			return nil, errors.New("go-jose/go-jose: signatures disagree about the b64 header parameter")
+		}
+
+		obj.payload = payload
 	}
 
 	return obj, nil
@@ -415,9 +503,29 @@ func parseSignedCompact(
 	}
 
 	if payload == nil {
-		payload, err = base64URLDecode(claims)
+		var protectedHeader *rawHeader
+
+		if len(rawProtected) > 0 {
+			protectedHeader = &rawHeader{}
+
+			if err = json.Unmarshal(rawProtected, protectedHeader); err != nil {
+				return nil, err
+			}
+		}
+
+		b64, err := payloadIsBase64(protectedHeader)
 		if err != nil {
 			return nil, err
+		}
+
+		if b64 {
+			if payload, err = base64URLDecode(claims); err != nil {
+				return nil, err
+			}
+		} else {
+			// RFC 7797 Section 5.2 allows an unencoded non-detached payload provided it carries no '.', which the
+			// three way split above has already established.
+			payload = []byte(claims)
 		}
 	}
 
@@ -427,7 +535,7 @@ func parseSignedCompact(
 	}
 
 	raw := &rawJSONWebSignature{
-		Payload:   newBuffer(payload),
+		Payload:   resolvedPayload(payload),
 		Protected: newBuffer(rawProtected),
 		Signature: newBuffer(signature),
 	}
@@ -441,16 +549,32 @@ func (obj JSONWebSignature) compactSerialize(detached bool) (string, error) {
 
 	serializedProtected := mustSerializeJSON(obj.Signatures[0].protected)
 
+	b64, err := payloadIsBase64(obj.Signatures[0].protected)
+	if err != nil {
+		return "", err
+	}
+
 	var payload []byte
 	if !detached {
 		payload = obj.payload
 	}
 
-	return base64JoinWithDots(
-		serializedProtected,
-		payload,
-		obj.Signatures[0].Signature,
-	), nil
+	if b64 {
+		return base64JoinWithDots(
+			serializedProtected,
+			payload,
+			obj.Signatures[0].Signature,
+		), nil
+	}
+
+	// RFC 7797 Section 5.2: a '.' in an unencoded non-detached payload would be read as a segment separator.
+	if bytes.ContainsRune(payload, '.') {
+		return "", ErrNotSupported
+	}
+
+	return base64.RawURLEncoding.EncodeToString(serializedProtected) + "." +
+		string(payload) + "." +
+		base64.RawURLEncoding.EncodeToString(obj.Signatures[0].Signature), nil
 }
 
 // CompactSerialize serializes an object using the compact serialization format.
@@ -465,8 +589,13 @@ func (obj JSONWebSignature) DetachedCompactSerialize() (string, error) {
 
 // FullSerialize serializes an object using the full JSON serialization format.
 func (obj JSONWebSignature) FullSerialize() string {
+	b64 := true
+	if len(obj.Signatures) > 0 {
+		b64, _ = payloadIsBase64(obj.Signatures[0].protected)
+	}
+
 	raw := rawJSONWebSignature{
-		Payload: newBuffer(obj.payload),
+		Payload: wirePayload(obj.payload, b64),
 	}
 
 	if len(obj.Signatures) == 1 {

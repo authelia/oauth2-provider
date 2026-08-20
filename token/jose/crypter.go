@@ -63,6 +63,49 @@ type genericEncrypter struct {
 	recipients     []recipientKeyInfo
 	keyGenerator   keyGenerator
 	extraHeaders   map[HeaderKey]any
+	apuData        []byte
+	apvData        []byte
+}
+
+// ecdhPartyInfo extracts the ECDH-ES PartyUInfo and PartyVInfo values from the
+// caller's extra headers.
+//
+// RFC 7518 Section 4.6.2 makes "apu" and "apv" inputs to the Concat KDF, so
+// they have to be known before the key is derived, whereas extra headers are
+// otherwise only written to the protected header afterwards. Decoding reuses
+// the byteBuffer the decrypter applies to the parsed header, so the two sides
+// cannot disagree about how a value is interpreted.
+func ecdhPartyInfo(extraHeaders map[HeaderKey]any) (apuData, apvData []byte, err error) {
+	if apuData, err = extraHeaderBytes(extraHeaders, headerAPU); err != nil {
+		return nil, nil, err
+	}
+
+	if apvData, err = extraHeaderBytes(extraHeaders, headerAPV); err != nil {
+		return nil, nil, err
+	}
+
+	return apuData, apvData, nil
+}
+
+// extraHeaderBytes decodes a base64url header value supplied through extra headers.
+func extraHeaderBytes(extraHeaders map[HeaderKey]any, k HeaderKey) ([]byte, error) {
+	value, ok := extraHeaders[k]
+	if !ok || value == nil {
+		return nil, nil
+	}
+
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid %q header: %w", string(k), err)
+	}
+
+	var buffer *byteBuffer
+
+	if err = json.Unmarshal(raw, &buffer); err != nil {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid %q header, must be a base64url encoded string: %w", string(k), err)
+	}
+
+	return buffer.bytes(), nil
 }
 
 type recipientKeyInfo struct {
@@ -153,6 +196,12 @@ func NewEncrypter(enc ContentEncryption, rcpt Recipient, opts *EncrypterOptions)
 		return nil, ErrUnsupportedAlgorithm
 	}
 
+	var err error
+
+	if encrypter.apuData, encrypter.apvData, err = ecdhPartyInfo(encrypter.extraHeaders); err != nil {
+		return nil, err
+	}
+
 	var keyID string
 	var rawKey any
 	switch encryptionKey := rcpt.Key.(type) {
@@ -195,6 +244,8 @@ func NewEncrypter(enc ContentEncryption, rcpt Recipient, opts *EncrypterOptions)
 		encrypter.keyGenerator = ecKeyGenerator{
 			size:      encrypter.cipher.keySize(),
 			algID:     string(enc),
+			apuData:   encrypter.apuData,
+			apvData:   encrypter.apvData,
 			publicKey: keyDSA,
 		}
 		recipientInfo, _ := newECDHRecipient(rcpt.Algorithm, keyDSA)
@@ -209,7 +260,7 @@ func NewEncrypter(enc ContentEncryption, rcpt Recipient, opts *EncrypterOptions)
 		encrypter.keyGenerator = randomKeyGenerator{
 			size: encrypter.cipher.keySize(),
 		}
-		err := encrypter.addRecipient(rcpt)
+		err = encrypter.addRecipient(rcpt)
 		return encrypter, err
 	}
 }
@@ -239,9 +290,14 @@ func NewMultiEncrypter(enc ContentEncryption, rcpts []Recipient, opts *Encrypter
 		encrypter.extraHeaders = opts.ExtraHeaders
 	}
 
+	var err error
+
+	if encrypter.apuData, encrypter.apvData, err = ecdhPartyInfo(encrypter.extraHeaders); err != nil {
+		return nil, err
+	}
+
 	for _, recipient := range rcpts {
-		err := encrypter.addRecipient(recipient)
-		if err != nil {
+		if err = encrypter.addRecipient(recipient); err != nil {
 			return nil, err
 		}
 	}
@@ -271,6 +327,11 @@ func (ctx *genericEncrypter) addRecipient(recipient Recipient) (err error) {
 		if sr, ok := recipientInfo.keyEncrypter.(*symmetricKeyCipher); ok {
 			sr.p2c = recipient.PBES2Count
 			sr.p2s = recipient.PBES2Salt
+		}
+	case ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW:
+		if er, ok := recipientInfo.keyEncrypter.(*ecEncrypterVerifier); ok {
+			er.apuData = ctx.apuData
+			er.apvData = ctx.apvData
 		}
 	}
 

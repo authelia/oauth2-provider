@@ -47,6 +47,12 @@ type rsaDecrypterSigner struct {
 // A generic EC-based encrypter/verifier
 type ecEncrypterVerifier struct {
 	publicKey *ecdsa.PublicKey
+
+	// apuData and apvData carry the ECDH-ES "apu" / "apv" key agreement inputs
+	// when this value acts as a JWE key encrypter. They are unused when it acts
+	// as a JWS verifier.
+	apuData []byte
+	apvData []byte
 }
 
 type edEncrypterVerifier struct {
@@ -57,6 +63,8 @@ type edEncrypterVerifier struct {
 type ecKeyGenerator struct {
 	size      int
 	algID     string
+	apuData   []byte
+	apvData   []byte
 	publicKey *ecdsa.PublicKey
 }
 
@@ -400,6 +408,8 @@ func (ctx ecEncrypterVerifier) encryptKey(cek []byte, alg KeyAlgorithm) (recipie
 
 	generator := ecKeyGenerator{
 		algID:     string(alg),
+		apuData:   ctx.apuData,
+		apvData:   ctx.apvData,
 		publicKey: ctx.publicKey,
 	}
 
@@ -445,7 +455,10 @@ func (ctx ecKeyGenerator) genKey() ([]byte, rawHeader, error) {
 		return nil, rawHeader{}, err
 	}
 
-	out := josecipher.DeriveECDHES(ctx.algID, []byte{}, []byte{}, priv, ctx.publicKey, ctx.size)
+	// RFC 7518 Section 4.6.2 makes apu and apv inputs to the Concat KDF. Passing
+	// empty values here while decryptKey reads them back out of the header
+	// produced a JWE this package could not decrypt itself.
+	out := josecipher.DeriveECDHES(ctx.algID, ctx.apuData, ctx.apvData, priv, ctx.publicKey, ctx.size)
 
 	b, err := json.Marshal(&JSONWebKey{
 		Key: &priv.PublicKey,

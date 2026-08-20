@@ -35,6 +35,7 @@ import (
 	"strings"
 	"testing"
 
+	josecipher "authelia.com/provider/oauth2/token/jose/cipher"
 	"authelia.com/provider/oauth2/token/jose/json"
 )
 
@@ -1556,4 +1557,132 @@ func injectJWEHeader(t *testing.T, serialized, field string, header map[string]i
 	}
 
 	return string(out)
+}
+
+// RFC 7518 Section 4.6.2 makes "apu" and "apv" inputs to the Concat KDF.
+func TestECDHESRoundTripWithPartyInfo(t *testing.T) {
+	recipientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, alg := range []KeyAlgorithm{ECDH_ES, ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW} {
+		t.Run(string(alg), func(t *testing.T) {
+			opts := (&EncrypterOptions{}).
+				WithHeader(headerAPU, base64.RawURLEncoding.EncodeToString([]byte("Alice"))).
+				WithHeader(headerAPV, base64.RawURLEncoding.EncodeToString([]byte("Bob")))
+
+			enc, err := NewEncrypter(A128GCM, Recipient{Algorithm: alg, Key: &recipientKey.PublicKey}, opts)
+			if err != nil {
+				t.Fatalf("NewEncrypter: %v", err)
+			}
+
+			obj, err := enc.Encrypt([]byte("plaintext"))
+			if err != nil {
+				t.Fatalf("Encrypt: %v", err)
+			}
+
+			serialized, err := obj.CompactSerialize()
+			if err != nil {
+				t.Fatalf("CompactSerialize: %v", err)
+			}
+
+			parsed, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{alg}, []ContentEncryption{A128GCM})
+			if err != nil {
+				t.Fatalf("ParseEncryptedCompact: %v", err)
+			}
+
+			plaintext, err := parsed.Decrypt(recipientKey)
+			if err != nil {
+				t.Fatalf("Decrypt: %v", err)
+			}
+
+			if string(plaintext) != "plaintext" {
+				t.Errorf("plaintext = %q, want %q", plaintext, "plaintext")
+			}
+		})
+	}
+}
+
+func TestECDHESPartyInfoIsBoundToTheDerivedKey(t *testing.T) {
+	recipientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apuData, apvData := []byte("Alice"), []byte("Bob")
+
+	opts := (&EncrypterOptions{}).
+		WithHeader(headerAPU, base64.RawURLEncoding.EncodeToString(apuData)).
+		WithHeader(headerAPV, base64.RawURLEncoding.EncodeToString(apvData))
+
+	enc, err := NewEncrypter(A128GCM, Recipient{Algorithm: ECDH_ES, Key: &recipientKey.PublicKey}, opts)
+	if err != nil {
+		t.Fatalf("NewEncrypter: %v", err)
+	}
+
+	obj, err := enc.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	serialized, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	parsed, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{ECDH_ES}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncryptedCompact: %v", err)
+	}
+
+	epk, err := parsed.protected.getEPK()
+	if err != nil {
+		t.Fatalf("getEPK: %v", err)
+	}
+
+	ephemeral, ok := epk.Key.(*ecdsa.PublicKey)
+	if !ok {
+		t.Fatalf("epk is a %T, want *ecdsa.PublicKey", epk.Key)
+	}
+
+	contentCipher := getContentCipher(A128GCM)
+	authData := parsed.computeAuthData()
+	parts := &aeadParts{iv: parsed.iv, ciphertext: parsed.ciphertext, tag: parsed.tag}
+
+	unbound := josecipher.DeriveECDHES(string(A128GCM), nil, nil, recipientKey, ephemeral, contentCipher.keySize())
+	if _, err = contentCipher.decrypt(unbound, authData, parts); err == nil {
+		t.Error("ciphertext decrypts under a key derived without apu/apv, so the header values are not bound to the CEK")
+	}
+
+	bound := josecipher.DeriveECDHES(string(A128GCM), apuData, apvData, recipientKey, ephemeral, contentCipher.keySize())
+	if _, err = contentCipher.decrypt(bound, authData, parts); err != nil {
+		t.Errorf("ciphertext does not decrypt under the key derived with apu/apv: %v", err)
+	}
+}
+
+func TestECDHESRejectsMalformedPartyInfo(t *testing.T) {
+	recipientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name  string
+		value any
+	}{
+		{"NotBase64URL", "not valid base64url!!"},
+		{"Padded", "YWxpY2U="},
+		{"NotAString", 42},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := (&EncrypterOptions{}).WithHeader(headerAPU, tc.value)
+
+			if _, err := NewEncrypter(A128GCM, Recipient{Algorithm: ECDH_ES, Key: &recipientKey.PublicKey}, opts); err == nil {
+				t.Errorf("NewEncrypter accepted %v as apu, want an error", tc.value)
+			}
+		})
+	}
 }

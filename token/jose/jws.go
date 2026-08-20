@@ -258,6 +258,11 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		}
 
 		signature.header = parsed.Header
+
+		if err := checkDisjoint(signature.protected, signature.header); err != nil {
+			return nil, err
+		}
+
 		signature.Signature = parsed.Signature.bytes()
 		// Make a fake "original" rawSignatureInfo to store the unprocessed
 		// Protected header. This is necessary because the Protected header can
@@ -325,6 +330,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		// Assign before the headers below are read, otherwise the per-signature
 		// unprotected header is merged into neither Header nor Unprotected.
 		obj.Signatures[i].header = sig.Header
+
+		if err := checkDisjoint(obj.Signatures[i].protected, obj.Signatures[i].header); err != nil {
+			return nil, err
+		}
 
 		var err error
 		obj.Signatures[i].Header, err = obj.Signatures[i].mergedHeaders().sanitized()

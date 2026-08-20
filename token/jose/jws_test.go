@@ -1044,3 +1044,68 @@ func TestParseSignedJSONSurfacesPerSignatureHeader(t *testing.T) {
 		t.Errorf("Verify: %v", err)
 	}
 }
+
+// RFC 7515 Section 5.2 step 4 requires a validator to reject a JOSE Header
+// carrying the same parameter name twice, including across the protected and
+// unprotected objects. Merging resolved the collision by precedence instead, so
+// an attacker could attach an unprotected "kid" naming a different key to a
+// legitimately signed message and have it reported as the signer's identity.
+func TestParseSignedRejectsDuplicateHeaderParameters(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","kid":"real"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x"}`))
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(protected + "." + payload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	testCases := []struct {
+		name       string
+		serialized string
+		wantErr    bool
+	}{
+		{
+			"FlattenedDuplicateKeyID",
+			fmt.Sprintf(`{"payload":%q,"protected":%q,"header":{"kid":"attacker"},"signature":%q}`, payload, protected, signature),
+			true,
+		},
+		{
+			"FlattenedDuplicateAlgorithm",
+			fmt.Sprintf(`{"payload":%q,"protected":%q,"header":{"alg":"none"},"signature":%q}`, payload, protected, signature),
+			true,
+		},
+		{
+			"GeneralDuplicateKeyID",
+			fmt.Sprintf(`{"payload":%q,"signatures":[{"protected":%q,"header":{"kid":"attacker"},"signature":%q}]}`, payload, protected, signature),
+			true,
+		},
+		{
+			"DisjointHeadersAreFine",
+			fmt.Sprintf(`{"payload":%q,"protected":%q,"header":{"cty":"JWT"},"signature":%q}`, payload, protected, signature),
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			obj, err := ParseSignedJSON(tc.serialized, []SignatureAlgorithm{HS256})
+
+			if tc.wantErr {
+				if !errors.Is(err, ErrDuplicateHeaderParameter) {
+					t.Fatalf("got %v, want %v", err, ErrDuplicateHeaderParameter)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ParseSignedJSON: %v", err)
+			}
+
+			if _, err = obj.Verify(key); err != nil {
+				t.Errorf("Verify: %v", err)
+			}
+		})
+	}
+}

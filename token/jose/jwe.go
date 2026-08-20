@@ -272,6 +272,10 @@ func (parsed *rawJSONWebEncryption) sanitized(
 	}
 
 	for i, recipient := range obj.recipients {
+		if err := checkDisjoint(obj.protected, obj.unprotected, recipient.header); err != nil {
+			return nil, fmt.Errorf("go-jose/go-jose: recipient %d: %w", i, err)
+		}
+
 		headers := obj.mergedHeaders(&recipient)
 		if headers.getAlgorithm() == "" {
 			return nil, fmt.Errorf(`go-jose/go-jose: recipient %d: missing header "alg"`, i)

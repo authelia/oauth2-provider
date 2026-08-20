@@ -469,6 +469,17 @@ func (ctx *genericEncrypter) EncryptWithAuthData(plaintext, aad []byte) (*JSONWe
 		(*obj.protected)[k] = makeRawMessage(b)
 	}
 
+	// Extra headers land in the protected header after the per-recipient headers
+	// are built, so a caller setting one that a recipient also carries would
+	// otherwise emit a JWE whose header names are not disjoint. RFC 7516 Section
+	// 7.2.1 forbids that, and this package now rejects it on the way back in, so
+	// fail here rather than produce something nothing can read.
+	for i := range obj.recipients {
+		if err = checkDisjoint(obj.protected, obj.recipients[i].header); err != nil {
+			return nil, fmt.Errorf("go-jose/go-jose: recipient %d: %w", i, err)
+		}
+	}
+
 	authData := obj.computeAuthData()
 	parts, err := ctx.cipher.encrypt(cek, authData, plaintext)
 	if err != nil {

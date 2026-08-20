@@ -86,6 +86,10 @@ var (
 
 	// ErrNotPublic indicates a private key was passed where a public key was expected
 	ErrNotPublic = errors.New("go-jose/go-jose: public key was unexpectedly not public")
+
+	// ErrDuplicateHeaderParameter indicates the same header parameter name appeared in more than one of the header
+	// objects which together form the JOSE Header.
+	ErrDuplicateHeaderParameter = errors.New("go-jose/go-jose: duplicate header parameter")
 )
 
 // Key management algorithms
@@ -530,6 +534,36 @@ func (parsed rawHeader) isSet(k HeaderKey) bool {
 	}
 
 	return true
+}
+
+// checkDisjoint returns an error when the same parameter name appears in more than one of the header objects which
+// together form the JOSE Header.
+//
+// RFC 7515 Section 5.2 step 4 makes this a validation step rather than only a production constraint: "verify that the
+// resulting JOSE Header does not contain duplicate Header Parameter names ... this restriction includes that the same
+// Header Parameter name also MUST NOT occur in distinct JSON object values that together comprise the JOSE Header".
+// RFC 7516 Section 7.2.1 states the three location equivalent for JWE.
+//
+// Merging alone is not enough: it resolves a collision by precedence, which silently discards the duplicate instead of
+// rejecting a message the specification forbids anyone to produce.
+func checkDisjoint(headers ...*rawHeader) error {
+	seen := make(map[HeaderKey]struct{})
+
+	for _, header := range headers {
+		if header == nil {
+			continue
+		}
+
+		for name := range *header {
+			if _, ok := seen[name]; ok {
+				return fmt.Errorf("%w %q", ErrDuplicateHeaderParameter, string(name))
+			}
+
+			seen[name] = struct{}{}
+		}
+	}
+
+	return nil
 }
 
 // Merge headers from src into dst, giving precedence to headers from l.

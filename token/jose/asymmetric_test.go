@@ -552,3 +552,74 @@ func TestECDSAVerifyRejectsNilKey(t *testing.T) {
 		t.Error("verifyPayload accepted a nil public key, want an error")
 	}
 }
+
+// RFC 7518 Sections 3.3, 3.5, 4.2 and 4.3 each require a modulus of at least
+// 2048 bits.
+func TestRSARejectsUndersizedKeys(t *testing.T) {
+	small, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signer := &rsaDecrypterSigner{privateKey: small}
+	verifier := &rsaEncrypterVerifier{publicKey: &small.PublicKey}
+
+	for _, alg := range []SignatureAlgorithm{RS256, RS384, RS512, PS256, PS384, PS512} {
+		if _, err = signer.signPayload([]byte("payload"), alg); !errors.Is(err, ErrInvalidKeySize) {
+			t.Errorf("signPayload(%s) with a 1024 bit key: got %v, want %v", alg, err, ErrInvalidKeySize)
+		}
+
+		if err = verifier.verifyPayload([]byte("payload"), make([]byte, 128), alg); !errors.Is(err, ErrInvalidKeySize) {
+			t.Errorf("verifyPayload(%s) with a 1024 bit key: got %v, want %v", alg, err, ErrInvalidKeySize)
+		}
+	}
+
+	for _, alg := range []KeyAlgorithm{RSA1_5, RSA_OAEP, RSA_OAEP_256} {
+		if _, err = verifier.encrypt(make([]byte, 32), alg); !errors.Is(err, ErrInvalidKeySize) {
+			t.Errorf("encrypt(%s) with a 1024 bit key: got %v, want %v", alg, err, ErrInvalidKeySize)
+		}
+
+		if _, err = signer.decrypt(make([]byte, 128), alg, randomKeyGenerator{size: 32}); !errors.Is(err, ErrInvalidKeySize) {
+			t.Errorf("decrypt(%s) with a 1024 bit key: got %v, want %v", alg, err, ErrInvalidKeySize)
+		}
+	}
+}
+
+func TestRSAAcceptsMinimumKeySize(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, minRSAKeyBits)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signer := &rsaDecrypterSigner{privateKey: key}
+	verifier := &rsaEncrypterVerifier{publicKey: &key.PublicKey}
+
+	for _, alg := range []SignatureAlgorithm{RS256, PS512} {
+		sig, err := signer.signPayload([]byte("payload"), alg)
+		if err != nil {
+			t.Fatalf("signPayload(%s) with a %d bit key: %v", alg, minRSAKeyBits, err)
+		}
+
+		if err = verifier.verifyPayload([]byte("payload"), sig.Signature, alg); err != nil {
+			t.Errorf("verifyPayload(%s) rejected a conforming key: %v", alg, err)
+		}
+	}
+}
+
+func TestRSARejectsNilKeys(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("panicked on a nil key: %v", r)
+		}
+	}()
+
+	verifier := &rsaEncrypterVerifier{publicKey: nil}
+	if err := verifier.verifyPayload([]byte("payload"), make([]byte, 256), RS256); err == nil {
+		t.Error("verifyPayload accepted a nil public key, want an error")
+	}
+
+	signer := &rsaDecrypterSigner{privateKey: nil}
+	if _, err := signer.signPayload([]byte("payload"), RS256); err == nil {
+		t.Error("signPayload accepted a nil private key, want an error")
+	}
+}

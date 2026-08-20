@@ -30,6 +30,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash"
 	"math/big"
 	"regexp"
@@ -1035,5 +1036,100 @@ func TestJWEFullSerializeOmitsTopLevelEncryptedKey(t *testing.T) {
 		if string(plaintext) != "plaintext" {
 			t.Errorf("recipient %d: plaintext = %q", i, plaintext)
 		}
+	}
+}
+
+// RFC 7516 Section 7.2.1 requires the parameter names in the protected, shared
+// unprotected and per-recipient headers to be disjoint.
+func TestParseEncryptedRejectsDuplicateHeaderParameters(t *testing.T) {
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"enc":"A128GCM","kid":"real"}`))
+
+	testCases := []struct {
+		name       string
+		serialized string
+		wantErr    bool
+	}{
+		{
+			"SharedUnprotected",
+			fmt.Sprintf(`{"protected":%q,"unprotected":{"kid":"attacker"},"header":{"alg":"A128KW"},"encrypted_key":"AA","iv":"AA","ciphertext":"AA","tag":"AA"}`, protected),
+			true,
+		},
+		{
+			"PerRecipient",
+			fmt.Sprintf(`{"protected":%q,"recipients":[{"header":{"alg":"A128KW","kid":"attacker"},"encrypted_key":"AA"}],"iv":"AA","ciphertext":"AA","tag":"AA"}`, protected),
+			true,
+		},
+		{
+			"DisjointHeadersAreFine",
+			fmt.Sprintf(`{"protected":%q,"recipients":[{"header":{"alg":"A128KW"},"encrypted_key":"AA"}],"iv":"AA","ciphertext":"AA","tag":"AA"}`, protected),
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseEncryptedJSON(tc.serialized, []KeyAlgorithm{A128KW}, []ContentEncryption{A128GCM})
+
+			if tc.wantErr {
+				if !errors.Is(err, ErrDuplicateHeaderParameter) {
+					t.Fatalf("got %v, want %v", err, ErrDuplicateHeaderParameter)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ParseEncryptedJSON: %v", err)
+			}
+		})
+	}
+}
+
+// The encrypter writes extra headers into the protected header after the
+// per-recipient headers are built, so a colliding name would have produced a
+// JWE this package can no longer parse. It must fail at encryption instead.
+func TestEncryptRejectsHeadersCollidingWithRecipients(t *testing.T) {
+	first, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recipients := []Recipient{
+		{Algorithm: ECDH_ES_A128KW, Key: &first.PublicKey, KeyID: "a"},
+		{Algorithm: ECDH_ES_A128KW, Key: &second.PublicKey, KeyID: "b"},
+	}
+
+	colliding, err := NewMultiEncrypter(A128GCM, recipients, (&EncrypterOptions{}).WithHeader("kid", "shared"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err = colliding.Encrypt([]byte("plaintext")); !errors.Is(err, ErrDuplicateHeaderParameter) {
+		t.Errorf("Encrypt with a colliding kid returned %v, want %v", err, ErrDuplicateHeaderParameter)
+	}
+
+	// A non-colliding extra header must still work, and round-trip.
+	fine, err := NewMultiEncrypter(A128GCM, recipients, (&EncrypterOptions{}).WithContentType("JWT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := fine.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	parsed, err := ParseEncryptedJSON(obj.FullSerialize(), []KeyAlgorithm{ECDH_ES_A128KW}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncryptedJSON: %v", err)
+	}
+
+	if _, _, plaintext, err := parsed.DecryptMulti(first); err != nil || string(plaintext) != "plaintext" {
+		t.Errorf("DecryptMulti = %q, %v", plaintext, err)
 	}
 }

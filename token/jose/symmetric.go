@@ -331,7 +331,7 @@ func (ctx *symmetricKeyCipher) encryptKey(cek []byte, alg KeyAlgorithm) (recipie
 		keyLen, h := getPbkdf2Params(alg)
 		key, err := pbkdf2.Key(h, string(ctx.key), salt, ctx.p2c, keyLen)
 		if err != nil {
-			return recipientInfo{}, nil
+			return recipientInfo{}, err
 		}
 
 		// use AES cipher with derived key

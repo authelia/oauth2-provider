@@ -1534,3 +1534,31 @@ func rawEd25519JWK(t *testing.T, x, d []byte) []byte {
 
 	return out
 }
+
+// ErrUnsupportedEllipticCurve is exported and documented, but the JWK parse
+// path returned a bare fmt.Errorf, so callers could not tell an unsupported
+// curve from a malformed key.
+func TestJWKUnsupportedCurveIsMatchable(t *testing.T) {
+	testCases := []struct {
+		name string
+		raw  string
+	}{
+		{"Public", `{"kty":"EC","crv":"secp256k1","x":"AA","y":"AA"}`},
+		{"Private", `{"kty":"EC","crv":"secp256k1","x":"AA","y":"AA","d":"AA"}`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var jwk JSONWebKey
+
+			err := jwk.UnmarshalJSON([]byte(tc.raw))
+			if err == nil {
+				t.Fatal("UnmarshalJSON accepted an unsupported curve")
+			}
+
+			if !errors.Is(err, ErrUnsupportedEllipticCurve) {
+				t.Errorf("error %v does not match ErrUnsupportedEllipticCurve", err)
+			}
+		})
+	}
+}

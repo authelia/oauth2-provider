@@ -256,7 +256,7 @@ func (parsed *rawJSONWebEncryption) sanitized(
 	} else {
 		obj.recipients = make([]recipientInfo, len(parsed.Recipients))
 		for r := range parsed.Recipients {
-			encryptedKey, err := base64.RawURLEncoding.DecodeString(parsed.Recipients[r].EncryptedKey)
+			encryptedKey, err := base64URLDecode(parsed.Recipients[r].EncryptedKey)
 			if err != nil {
 				return nil, err
 			}
@@ -354,27 +354,27 @@ func ParseEncryptedCompact(
 	}
 	parts[4] = input
 
-	rawProtected, err := base64.RawURLEncoding.DecodeString(parts[0])
+	rawProtected, err := base64URLDecode(parts[0])
 	if err != nil {
 		return nil, err
 	}
 
-	encryptedKey, err := base64.RawURLEncoding.DecodeString(parts[1])
+	encryptedKey, err := base64URLDecode(parts[1])
 	if err != nil {
 		return nil, err
 	}
 
-	iv, err := base64.RawURLEncoding.DecodeString(parts[2])
+	iv, err := base64URLDecode(parts[2])
 	if err != nil {
 		return nil, err
 	}
 
-	ciphertext, err := base64.RawURLEncoding.DecodeString(parts[3])
+	ciphertext, err := base64URLDecode(parts[3])
 	if err != nil {
 		return nil, err
 	}
 
-	tag, err := base64.RawURLEncoding.DecodeString(parts[4])
+	tag, err := base64URLDecode(parts[4])
 	if err != nil {
 		return nil, err
 	}

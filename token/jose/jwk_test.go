@@ -1240,7 +1240,7 @@ func TestJWKPaddingPrivateX(t *testing.T) {
     "crv": "P-256",
     "x": "nPTIABcDASY6FNGSNfHCB51tY7qChtgzeVazOtLrwQ",
     "y": "vEEs4V0egJkNyM2Q4pp001zu14VcpQ0_Ei8xOOPxKZs",
-    "d": "nIVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odir0"
+    "d": "nIVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odirw"
   }`
 	var jwk JSONWebKey
 	err := jwk.UnmarshalJSON([]byte(key))
@@ -1261,7 +1261,7 @@ func TestJWKPaddingPrivateY(t *testing.T) {
     "crv": "P-256",
     "x": "vEEs4V0egJkNyM2Q4pp001zu14VcpQ0_Ei8xOOPxKZs",
     "y": "nPTIABcDASY6FNGSNfHCB51tY7qChtgzeVazOtLrwQ",
-    "d": "nIVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odir0"
+    "d": "nIVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odirw"
   }`
 	var jwk JSONWebKey
 	err := jwk.UnmarshalJSON([]byte(key))
@@ -1282,7 +1282,7 @@ func TestJWKPaddingPrivateD(t *testing.T) {
     "crv": "P-256",
     "x": "vEEs4V0egJkNyM2Q4pp001zu14VcpQ0_Ei8xOOPxKZs",
     "y": "qnPTIABcDASY6FNGSNfHCB51tY7qChtgzeVazOtLrwQ",
-    "d": "IVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odir0"
+    "d": "IVCvMR2wkLmeGJErOpI23VDHl2s3JwGdbzKy0odirw"
   }`
 	var jwk JSONWebKey
 	err := jwk.UnmarshalJSON([]byte(key))

@@ -21,6 +21,7 @@ import (
 	"compress/flate"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -29,6 +30,27 @@ import (
 
 	"authelia.com/provider/oauth2/token/jose/json"
 )
+
+// errNonCanonicalBase64 is returned for a base64url encoding whose final quantum carries non-zero unused bits.
+var errNonCanonicalBase64 = errors.New("go-jose/go-jose: non-canonical base64url encoding")
+
+// base64URLDecode decodes s and rejects a non-canonical encoding.
+//
+// RFC 4648 Section 3.5 requires an encoder to set the unused bits of the final quantum to zero, but Go's decoder
+// accepts them set, so several distinct strings decode to the same octets and every one of them then verifies. A
+// token therefore has no single spelling, which defeats any cache keyed on the token string.
+func base64URLDecode(s string) ([]byte, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+
+	if base64.RawURLEncoding.EncodeToString(decoded) != s {
+		return nil, errNonCanonicalBase64
+	}
+
+	return decoded, nil
+}
 
 func containsWhitespace(data string) bool {
 	return strings.ContainsFunc(data, unicode.IsSpace)
@@ -156,7 +178,7 @@ func (b *byteBuffer) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	decoded, err := base64URLDecode(encoded)
 	if err != nil {
 		return err
 	}

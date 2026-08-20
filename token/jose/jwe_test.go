@@ -207,11 +207,11 @@ func TestRejectUnprotectedJWENonce(t *testing.T) {
 		"alg": "XYZ", "enc": "XYZ",
 		"nonce": "should-cause-an-error"
 	},
-	"encrypted_key": "does-not-matter",
-	"aad": "does-not-matter",
-	"iv": "does-not-matter",
-	"ciphertext": "does-not-matter",
-	"tag": "does-not-matter"
+	"encrypted_key": "QUJD",
+	"aad": "QUJD",
+	"iv": "QUJD",
+	"ciphertext": "QUJD",
+	"tag": "QUJD"
 	}`
 	_, err := ParseEncrypted(input, []KeyAlgorithm{KeyAlgorithm("XYZ")}, []ContentEncryption{ContentEncryption("XYZ")})
 	if err == nil {
@@ -225,11 +225,11 @@ func TestRejectUnprotectedJWENonce(t *testing.T) {
 			"alg": "XYZ", "enc": "XYZ",
 			"nonce": "should-cause-an-error"
 		},
-		"encrypted_key": "does-not-matter",
-		"aad": "does-not-matter",
-		"iv": "does-not-matter",
-		"ciphertext": "does-not-matter",
-		"tag": "does-not-matter"
+		"encrypted_key": "QUJD",
+		"aad": "QUJD",
+		"iv": "QUJD",
+		"ciphertext": "QUJD",
+		"tag": "QUJD"
 	}`
 	_, err = ParseEncrypted(input, []KeyAlgorithm{KeyAlgorithm("XYZ")}, []ContentEncryption{ContentEncryption("XYZ")})
 	if err == nil {
@@ -241,13 +241,13 @@ func TestRejectUnprotectedJWENonce(t *testing.T) {
 	// Full JSON
 	input = `{
 		"header":  { "alg": "XYZ", "enc": "XYZ" },
-		"aad": "does-not-matter",
-		"iv": "does-not-matter",
-		"ciphertext": "does-not-matter",
-		"tag": "does-not-matter",
+		"aad": "QUJD",
+		"iv": "QUJD",
+		"ciphertext": "QUJD",
+		"tag": "QUJD",
 		"recipients": [{
 			"header": { "nonce": "should-cause-an-error" },
-			"encrypted_key": "does-not-matter"
+			"encrypted_key": "QUJD"
 		}]
 	}`
 	_, err = ParseEncrypted(input, []KeyAlgorithm{KeyAlgorithm("XYZ")}, []ContentEncryption{ContentEncryption("XYZ")})
@@ -788,14 +788,17 @@ func TestTamperedJWE(t *testing.T) {
 
 	serialized := object.FullSerialize()
 
-	// Inject a longer iv
+	// Inject a longer iv. The replacement has to be canonical base64url, otherwise
+	// parsing rejects it and the decryption path this test covers is never reached.
 	serialized = regexp.MustCompile(`"iv":"[^"]+"`).
-		ReplaceAllString(serialized, `"iv":"UotNnfiavtNOOSZAcfI03i"`)
+		ReplaceAllString(serialized, `"iv":"AAAAAAAAAAAAAAAAAAAAAA"`)
 
-	object, _ = ParseEncrypted(serialized, []KeyAlgorithm{DIRECT}, []ContentEncryption{A128GCM})
+	object, err := ParseEncrypted(serialized, []KeyAlgorithm{DIRECT}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncrypted: %v", err)
+	}
 
-	_, err := object.Decrypt(key)
-	if err == nil {
+	if _, err = object.Decrypt(key); err == nil {
 		t.Error("Decrypt() on invalid object should fail")
 	}
 }

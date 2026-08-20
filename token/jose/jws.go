@@ -409,19 +409,19 @@ func parseSignedCompact(
 		return nil, fmt.Errorf("go-jose/go-jose: payload is not detached")
 	}
 
-	rawProtected, err := base64.RawURLEncoding.DecodeString(protected)
+	rawProtected, err := base64URLDecode(protected)
 	if err != nil {
 		return nil, err
 	}
 
 	if payload == nil {
-		payload, err = base64.RawURLEncoding.DecodeString(claims)
+		payload, err = base64URLDecode(claims)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	signature, err := base64.RawURLEncoding.DecodeString(sig)
+	signature, err := base64URLDecode(sig)
 	if err != nil {
 		return nil, err
 	}

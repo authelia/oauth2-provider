@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -672,7 +673,11 @@ func TestSignerExtraHeaderInclusion(t *testing.T) {
 }
 
 func TestSignerB64(t *testing.T) {
-	const exp = "eyJhbGciOiJIUzI1NiIsImI2NCI6ZmFsc2UsImNyaXQiOlsiYjY0Il19.JC4wMg.A5dxf2s96_n5FLueVuW1Z_vh161FwXZC4YLPff6dmDY"
+	// RFC 7797 Appendix, Section 4.2: the payload "$.02" with the HMAC key from
+	// RFC 7515 Appendix A.1. Section 5.2 forbids carrying this payload unencoded
+	// in a compact serialization, because the '.' would read as a separator, so
+	// the specification gives only the detached form.
+	const detached = "eyJhbGciOiJIUzI1NiIsImI2NCI6ZmFsc2UsImNyaXQiOlsiYjY0Il19..A5dxf2s96_n5FLueVuW1Z_vh161FwXZC4YLPff6dmDY"
 
 	key := []byte{
 		0x03, 0x23, 0x35, 0x4b, 0x2b, 0x0f, 0xa5, 0xbc, 0x83, 0x7e, 0x06, 0x65, 0x77, 0x7b, 0xa6, 0x8f,
@@ -686,37 +691,99 @@ func TestSignerB64(t *testing.T) {
 
 	signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, opts)
 	if err != nil {
-		t.Error("Failed to create signer")
+		t.Fatalf("Failed to create signer: %v", err)
 	}
 
 	input := []byte("$.02")
 
 	obj, err := signer.Sign(input)
 	if err != nil {
-		t.Error("Failed to sign payload")
+		t.Fatalf("Failed to sign payload: %v", err)
 	}
 
-	msg, err := obj.CompactSerialize()
+	// The detached serialization must match the specification byte for byte.
+	msg, err := obj.DetachedCompactSerialize()
 	if err != nil {
-		t.Error("Failed to serialize")
+		t.Fatalf("Failed to serialize detached: %v", err)
 	}
 
-	if msg != exp {
-		t.Errorf("Invalid serialization, got '%s', expected '%s'", msg, exp)
+	if msg != detached {
+		t.Errorf("Invalid detached serialization, got '%s', expected '%s'", msg, detached)
 	}
 
-	parsed, err := ParseSigned(msg, []SignatureAlgorithm{HS256})
+	parsed, err := ParseDetached(msg, input, []SignatureAlgorithm{HS256})
 	if err != nil {
-		t.Errorf("Error on parse: %s", err)
+		t.Fatalf("Error on parse: %s", err)
 	}
 
-	output, err := parsed.Verify(key)
-	if err != nil {
+	if err = parsed.DetachedVerify(input, key); err != nil {
 		t.Errorf("Error on verify: %s", err)
 	}
 
-	if !bytes.Equal(output, input) {
-		t.Errorf("Input/output do not match, got '%s', expected '%s'", output, input)
+	// Non-detached is refused for this payload, per RFC 7797 Section 5.2.
+	if _, err = obj.CompactSerialize(); !errors.Is(err, ErrNotSupported) {
+		t.Errorf("CompactSerialize of an unencoded payload containing '.' returned %v, want %v", err, ErrNotSupported)
+	}
+}
+
+// RFC 7797 Section 5.2 permits an unencoded non-detached payload when it carries
+// no '.'. The payload used to be base64url encoded on the wire anyway, in both
+// serializations, so the library emitted a token that declared "b64":false while
+// carrying an encoded payload, and could not read a conforming one.
+func TestSignerB64NonDetached(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+	input := []byte("NDA1")
+
+	opts := new(SignerOptions)
+	opts.WithBase64(false)
+
+	signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, opts)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+
+	obj, err := signer.Sign(input)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	compact, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	// The payload segment has to be the payload itself, not its encoding.
+	if segments := strings.Split(compact, "."); segments[1] != string(input) {
+		t.Errorf("compact payload segment = %q, want %q", segments[1], input)
+	}
+
+	// And the JSON serialization carries it literally too, per Section 5.3.
+	var members map[string]any
+	if err = json.Unmarshal([]byte(obj.FullSerialize()), &members); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if members["payload"] != string(input) {
+		t.Errorf("JSON payload member = %v, want %q", members["payload"], input)
+	}
+
+	// Both serializations must round-trip.
+	for name, serialized := range map[string]string{"compact": compact, "json": obj.FullSerialize()} {
+		parsed, err := ParseSigned(serialized, []SignatureAlgorithm{HS256})
+		if err != nil {
+			t.Errorf("%s: ParseSigned: %v", name, err)
+			continue
+		}
+
+		output, err := parsed.Verify(key)
+		if err != nil {
+			t.Errorf("%s: Verify: %v", name, err)
+			continue
+		}
+
+		if !bytes.Equal(output, input) {
+			t.Errorf("%s: payload = %q, want %q", name, output, input)
+		}
 	}
 }
 

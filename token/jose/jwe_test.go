@@ -20,9 +20,16 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
+	"hash"
 	"math/big"
 	"regexp"
 	"strings"
@@ -902,5 +909,70 @@ func TestParseEncryptedDoesNotStripWhitespace(t *testing.T) {
 
 	if string(plaintext) != "Lorem ipsum dolor sit amet" {
 		t.Errorf("plaintext = %q", plaintext)
+	}
+}
+
+func TestDecryptEmptyCiphertextWithValidTag(t *testing.T) {
+	testCases := []struct {
+		enc     ContentEncryption
+		cekSize int
+		tagSize int
+		hash    func() hash.Hash
+	}{
+		{A128CBC_HS256, 32, 16, sha256.New},
+		{A192CBC_HS384, 48, 24, sha512.New384},
+		{A256CBC_HS512, 64, 32, sha512.New},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.enc), func(t *testing.T) {
+			cek := make([]byte, tc.cekSize)
+			if _, err := rand.Read(cek); err != nil {
+				t.Fatal(err)
+			}
+
+			encryptedKey, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &rsaTestKey.PublicKey, cek, []byte{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			protected := base64.RawURLEncoding.EncodeToString(
+				[]byte(`{"alg":"RSA-OAEP-256","enc":"` + string(tc.enc) + `"}`))
+
+			iv := make([]byte, 16)
+			if _, err = rand.Read(iv); err != nil {
+				t.Fatal(err)
+			}
+
+			// RFC 7518 Section 5.2.2.1: MAC_KEY is the leading half of the CEK and
+			// the MAC input is AAD || IV || ciphertext || AL, where the ciphertext
+			// here is empty and AL is the AAD length in bits.
+			al := make([]byte, 8)
+			binary.BigEndian.PutUint64(al, uint64(len(protected))*8)
+
+			mac := hmac.New(tc.hash, cek[:tc.cekSize/2])
+			mac.Write([]byte(protected))
+			mac.Write(iv)
+			mac.Write(al)
+			tag := mac.Sum(nil)[:tc.tagSize]
+
+			serialized := protected + "." +
+				base64.RawURLEncoding.EncodeToString(encryptedKey) + "." +
+				base64.RawURLEncoding.EncodeToString(iv) + ".." +
+				base64.RawURLEncoding.EncodeToString(tag)
+
+			obj, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{RSA_OAEP_256}, []ContentEncryption{tc.enc})
+			if err != nil {
+				t.Fatalf("ParseEncryptedCompact: %v", err)
+			}
+
+			plaintext, err := obj.Decrypt(rsaTestKey)
+			if err == nil {
+				t.Fatalf("Decrypt accepted an empty ciphertext, returned %q, want an error", plaintext)
+			}
+			if !errors.Is(err, ErrCryptoFailure) {
+				t.Errorf("Decrypt returned %v, want %v", err, ErrCryptoFailure)
+			}
+		})
 	}
 }

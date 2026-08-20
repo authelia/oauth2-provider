@@ -5,12 +5,15 @@
 package rfc9449
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -212,14 +215,21 @@ func TestParseProofRSAKeySize(t *testing.T) {
 			priv, err := rsa.GenerateKey(rand.Reader, tc.bits)
 			require.NoError(t, err)
 
-			key := &jose.JSONWebKey{Key: priv, Algorithm: string(jose.RS256), KeyID: "rsa"}
-
-			raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+			claims := map[string]any{
 				ijwt.ClaimJWTID:      "rsa-1",
 				ijwt.ClaimHTTPMethod: http.MethodPost,
 				ijwt.ClaimHTTPURI:    "https://as.example.com/token",
 				ijwt.ClaimIssuedAt:   1000,
-			})
+			}
+
+			var raw string
+
+			if tc.bits < RSAMinimumKeySize {
+				raw = signProofRSARaw(t, priv, ijwt.JSONWebTokenTypeDPoP, claims)
+			} else {
+				key := &jose.JSONWebKey{Key: priv, Algorithm: string(jose.RS256), KeyID: "rsa"}
+				raw = signProof(t, key, ijwt.JSONWebTokenTypeDPoP, claims)
+			}
 
 			proof, err := ParseProof(raw, []jose.SignatureAlgorithm{jose.RS256})
 
@@ -265,4 +275,30 @@ func TestParseProofAcceptsEllipticAndEdDSAKeys(t *testing.T) {
 		_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.EdDSA})
 		require.NoError(t, err)
 	})
+}
+
+func signProofRSARaw(t *testing.T, priv *rsa.PrivateKey, typ string, claims map[string]any) string {
+	t.Helper()
+
+	jwk, err := (&jose.JSONWebKey{Key: &priv.PublicKey, Algorithm: string(jose.RS256), KeyID: "rsa"}).MarshalJSON()
+	require.NoError(t, err)
+
+	header, err := json.Marshal(map[string]any{
+		"alg": string(jose.RS256),
+		"typ": typ,
+		"jwk": json.RawMessage(jwk),
+	})
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(claims)
+	require.NoError(t, err)
+
+	signing := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
+
+	digest := sha256.Sum256([]byte(signing))
+
+	signature, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, digest[:])
+	require.NoError(t, err)
+
+	return signing + "." + base64.RawURLEncoding.EncodeToString(signature)
 }

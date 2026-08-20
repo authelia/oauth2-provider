@@ -69,6 +69,34 @@ type edDecrypterSigner struct {
 	privateKey ed25519.PrivateKey
 }
 
+// minRSAKeyBits is the smallest RSA modulus RFC 7518 permits for the algorithms
+// this package implements.
+const minRSAKeyBits = 2048
+
+// checkRSAPublicKey rejects a key which is unusable, or whose modulus is below
+// the size RFC 7518 requires.
+func checkRSAPublicKey(publicKey *rsa.PublicKey) error {
+	if publicKey == nil || publicKey.N == nil {
+		return ErrUnsupportedKeyType
+	}
+
+	if publicKey.N.BitLen() < minRSAKeyBits {
+		return ErrInvalidKeySize
+	}
+
+	return nil
+}
+
+// checkRSAPrivateKey rejects a key which is unusable, or whose modulus is below
+// the size RFC 7518 requires.
+func checkRSAPrivateKey(privateKey *rsa.PrivateKey) error {
+	if privateKey == nil {
+		return ErrUnsupportedKeyType
+	}
+
+	return checkRSAPublicKey(&privateKey.PublicKey)
+}
+
 // newRSARecipient creates recipientKeyInfo based on the given key.
 func newRSARecipient(keyAlg KeyAlgorithm, publicKey *rsa.PublicKey) (recipientKeyInfo, error) {
 	// Verify that key management algorithm is supported by this encrypter
@@ -198,6 +226,10 @@ func (ctx rsaEncrypterVerifier) encryptKey(cek []byte, alg KeyAlgorithm) (recipi
 // Encrypt the given payload. Based on the key encryption algorithm,
 // this will either use RSA-PKCS1v1.5 or RSA-OAEP (with SHA-1 or SHA-256).
 func (ctx rsaEncrypterVerifier) encrypt(cek []byte, alg KeyAlgorithm) ([]byte, error) {
+	if err := checkRSAPublicKey(ctx.publicKey); err != nil {
+		return nil, err
+	}
+
 	switch alg {
 	case RSA1_5:
 		return rsa.EncryptPKCS1v15(randReader, ctx.publicKey, cek)
@@ -218,6 +250,10 @@ func (ctx rsaDecrypterSigner) decryptKey(headers rawHeader, recipient *recipient
 // Decrypt the given payload. Based on the key encryption algorithm,
 // this will either use RSA-PKCS1v1.5 or RSA-OAEP (with SHA-1 or SHA-256).
 func (ctx rsaDecrypterSigner) decrypt(jek []byte, alg KeyAlgorithm, generator keyGenerator) ([]byte, error) {
+	if err := checkRSAPrivateKey(ctx.privateKey); err != nil {
+		return nil, err
+	}
+
 	// Note: The random reader on decrypt operations is only used for blinding,
 	// so stubbing is meanlingless (hence the direct use of rand.Reader).
 	switch alg {
@@ -266,6 +302,10 @@ func (ctx rsaDecrypterSigner) decrypt(jek []byte, alg KeyAlgorithm, generator ke
 
 // Sign the given payload
 func (ctx rsaDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
+	if err := checkRSAPrivateKey(ctx.privateKey); err != nil {
+		return Signature{}, err
+	}
+
 	var hash crypto.Hash
 
 	switch alg {
@@ -312,6 +352,10 @@ func (ctx rsaDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm
 
 // Verify the given payload
 func (ctx rsaEncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {
+	if err := checkRSAPublicKey(ctx.publicKey); err != nil {
+		return err
+	}
+
 	var hash crypto.Hash
 
 	switch alg {

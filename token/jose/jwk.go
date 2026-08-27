@@ -958,7 +958,20 @@ var (
 	ErrJWKSKidNotFound = errors.New("go-jose/go-jose: JWK with matching kid not found in JWK Set")
 )
 
-func tryJWKS(key any, header Header) (any, error) {
+// Key usage values for the "use" JWK member, per RFC 7517 Section 4.2.
+const (
+	jwkUseSignature  = "sig"
+	jwkUseEncryption = "enc"
+)
+
+// tryJWKS returns the keys which may be used to process a message with the given header. When the supplied key is
+// not a JWK Set it is the sole candidate and is returned as is.
+//
+// A JWK Set may hold more than one key under a single "kid": RFC 7517 Section 4.5 only recommends that key IDs be
+// distinct, so a set which reuses one across an encryption key and a signing key, or across two algorithms, is
+// well formed. Candidates are therefore narrowed by the "use" and "alg" members of each JWK rather than resolved
+// to a single key here, and the caller tries each in turn.
+func tryJWKS(key any, header Header, use string) ([]any, error) {
 	var jwks JSONWebKeySet
 
 	switch jwksType := key.(type) {
@@ -968,7 +981,7 @@ func tryJWKS(key any, header Header) (any, error) {
 		jwks = jwksType
 	default:
 		// If the specified key is not a JWKS, return as is.
-		return key, nil
+		return []any{key}, nil
 	}
 
 	// If no KID is specified in the header, reject.
@@ -977,14 +990,42 @@ func tryJWKS(key any, header Header) (any, error) {
 		return nil, ErrJWKSKidNotFound
 	}
 
-	// Find the JWK with the matching KID. If no JWK with the specified KID is
-	// found, reject.
-	keys := jwks.Key(kid)
+	// Find the JWKs with the matching KID which are suitable for this message. If none is found, reject.
+	var keys []any
+
+	for _, jwk := range jwks.Key(kid) {
+		if !jwk.suitableFor(use, header.Algorithm) {
+			continue
+		}
+
+		keys = append(keys, jwk.Key)
+	}
+
 	if len(keys) == 0 {
 		return nil, ErrJWKSKidNotFound
 	}
 
-	return keys[0].Key, nil
+	return keys, nil
+}
+
+// suitableFor reports whether this key may be used for the given purpose ("sig" or "enc") and JOSE algorithm.
+//
+// RFC 7517 Section 4.2 and Section 4.4 make the "use" and "alg" members optional, and both are advisory rather
+// than binding on the recipient. A key which omits one is therefore a candidate whatever the message asks for;
+// only a key which states a purpose or an algorithm and contradicts the message is dropped.
+func (k JSONWebKey) suitableFor(use, alg string) bool {
+	if k.Use != "" && use != "" && k.Use != use {
+		return false
+	}
+
+	if k.Algorithm == "" || alg == "" || k.Algorithm == alg {
+		return true
+	}
+
+	// RFC 9864 Section 4.1.1 registers "Ed25519" as a fully specified alternative to the polymorphic "EdDSA".
+	// The two name one operation, so a key published under either identifier serves a message declaring the
+	// other; see isEdDSAAlg, which the signing paths share.
+	return isEdDSAAlg(SignatureAlgorithm(k.Algorithm)) && isEdDSAAlg(SignatureAlgorithm(alg))
 }
 
 var weakEd25519PublicKeys = map[[ed25519.PublicKeySize]byte]struct{}{

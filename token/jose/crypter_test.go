@@ -1686,3 +1686,77 @@ func TestECDHESRejectsMalformedPartyInfo(t *testing.T) {
 		})
 	}
 }
+
+// TestDecryptJWKSDuplicateKid checks that a JWK Set which reuses one "kid" across several keys is searched
+// exhaustively on the decrypt path, and that a key reserved for signing by its "use" member is not offered.
+func TestDecryptJWKSDuplicateKid(t *testing.T) {
+	recipientKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	payload := []byte("Lorem ipsum dolor sit amet")
+
+	enc, err := NewEncrypter(A128GCM, Recipient{
+		Algorithm: RSA_OAEP_256,
+		Key:       &JSONWebKey{KeyID: "shared", Key: recipientKey.Public()},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := enc.Encrypt(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correct := JSONWebKey{KeyID: "shared", Key: recipientKey}
+	decoy := JSONWebKey{KeyID: "shared", Key: otherKey}
+	signing := JSONWebKey{KeyID: "shared", Key: recipientKey, Use: "sig"}
+
+	testCases := []struct {
+		name string
+		keys []JSONWebKey
+		err  bool
+	}{
+		{"ShouldDecryptWithTheCorrectKeyFirst", []JSONWebKey{correct, decoy}, false},
+		{"ShouldDecryptWithTheCorrectKeyLast", []JSONWebKey{decoy, correct}, false},
+		{"ShouldSkipKeysReservedForSigning", []JSONWebKey{signing, correct}, false},
+		{"ShouldRejectWhenOnlyASigningKeyMatches", []JSONWebKey{signing}, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := ParseEncryptedCompact(msg, []KeyAlgorithm{RSA_OAEP_256}, []ContentEncryption{A128GCM})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			out, err := parsed.Decrypt(&JSONWebKeySet{Keys: tc.keys})
+
+			if tc.err {
+				if err == nil {
+					t.Fatal("expected decryption to fail")
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Decrypt failed: %v", err)
+			}
+			if !bytes.Equal(out, payload) {
+				t.Error("payload mismatch")
+			}
+		})
+	}
+}

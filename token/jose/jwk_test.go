@@ -1733,6 +1733,32 @@ func TestTryJWKSPassesThroughNonSetKeys(t *testing.T) {
 	assert.Equal(t, keys[0], any(&rsaTestKey.PublicKey))
 }
 
+func TestParseRSAKeyRejectsOversizedExponent(t *testing.T) {
+	const modulus = `pjdss8ZaDfEH6K6U7GeW2nxDqR4IP049fk1fK0lndimbMMVBdPv_hSpm8T8EtBDxrUdi1OHZfMhUixGaut-3nQ4GG9nM249oxhCtxqqNvEXrmQRGqczyLxuh-fKn9Fg--hS9UpwXhguvHXfLQu7XLevaEvDR-tG_lqNBQZ4ScuVKbRc1v3IlvTZmMwscLohxTQe_ki0j0OgyJRqLYSpLnG1H_5UpXK3sqeE8vLnCVjR6M7ykYFHFvS-VMKGnHOgQzZClcyfKQVCTvfxIeXwXKzuMPYQqbLjPvnKlLGtjTDU1_MJyGyeHXKX5Nq2p1zNvGgcVKAasEUL7GhE9CDGWQ3lE1w`
+
+	key := func(exponent string) string {
+		return `{"kty":"RSA","n":"` + modulus + `","e":"` + exponent + `"}`
+	}
+
+	var canonical JSONWebKey
+	if err := json.Unmarshal([]byte(key("AQAB")), &canonical); err != nil {
+		t.Fatalf("the ordinary exponent must still parse: %v", err)
+	}
+
+	if _, err := canonical.Thumbprint(crypto.SHA256); err != nil {
+		t.Fatalf("the ordinary key must still thumbprint: %v", err)
+	}
+
+	for _, exponent := range []string{"AQAAAAAAAQAB", "AQAAAAAAAAAAAQAB"} {
+		var oversized JSONWebKey
+
+		err := json.Unmarshal([]byte(key(exponent)), &oversized)
+		if err == nil {
+			t.Errorf("an %d bit exponent was accepted as E=%d", len(exponent)*6, oversized.Key.(*rsa.PublicKey).E)
+		}
+	}
+}
+
 // Thumbprint reads key material before anything has checked that the key is well formed, so a key the caller
 // built by hand rather than parsed took the process down: an *ecdsa.PublicKey with no Curve dereferenced nil in
 // curveSize, and an ed25519.PrivateKey shorter than the seed was sliced out of range. Neither is reachable from

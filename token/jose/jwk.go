@@ -629,9 +629,14 @@ func (key rawJSONWebKey) rsaPublicKey() (*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, missing n/e values")
 	}
 
+	e, err := key.E.toInt()
+	if err != nil {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, e is out of range: %w", err)
+	}
+
 	return &rsa.PublicKey{
 		N: key.N.bigInt(),
-		E: key.E.toInt(),
+		E: e,
 	}, nil
 }
 
@@ -795,10 +800,15 @@ func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA private key, missing %s value(s)", strings.Join(missing, ", "))
 	}
 
+	e, err := key.E.toInt()
+	if err != nil {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA private key, e is out of range: %w", err)
+	}
+
 	rv := &rsa.PrivateKey{
 		PublicKey: rsa.PublicKey{
 			N: key.N.bigInt(),
-			E: key.E.toInt(),
+			E: e,
 		},
 		D: key.D.bigInt(),
 		Primes: []*big.Int{
@@ -817,7 +827,8 @@ func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
 		rv.Precomputed.Qinv = key.Qi.bigInt()
 	}
 
-	err := rv.Validate()
+	err = rv.Validate()
+
 	return rv, err
 }
 

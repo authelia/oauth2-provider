@@ -211,8 +211,23 @@ func (b byteBuffer) bigInt() *big.Int {
 	return new(big.Int).SetBytes(b.data)
 }
 
-func (b byteBuffer) toInt() int {
-	return int(b.bigInt().Int64())
+// toInt returns the buffer as an int, and reports a value which does not fit rather than truncating it. The only
+// caller is the RSA public exponent, where silently keeping the low bits made two JWKs differing above that
+// boundary parse to one key -- and, since rsaThumbprintInput re-encodes from the result, share a thumbprint.
+func (b byteBuffer) toInt() (int, error) {
+	value := b.bigInt()
+
+	if !value.IsInt64() {
+		return 0, errors.New("go-jose/go-jose: value is too large to be represented as an integer")
+	}
+
+	wide := value.Int64()
+
+	if narrow := int(wide); int64(narrow) == wide {
+		return narrow, nil
+	}
+
+	return 0, errors.New("go-jose/go-jose: value is too large to be represented as an integer")
 }
 
 func base64EncodeLen(sl []byte) int {

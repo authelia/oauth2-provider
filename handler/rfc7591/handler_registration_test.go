@@ -475,3 +475,40 @@ func (f *failingSessionStore) CreateClient(ctx context.Context, client oauth2.Cl
 func (f *failingSessionStore) CreateClientRegistrationTokenSession(ctx context.Context, signature string, requester oauth2.Requester) (err error) {
 	return errTestCreateSessionFailed
 }
+
+func TestClientRegistrationHandlerPersistsClientSecretExpiry(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	config.RFC7591ClientSecretLifespan = time.Hour
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+	}
+
+	responder := oauth2.NewClientRegistrationResponse()
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
+
+	values := responder.ToMap()
+
+	expiresAt, ok := values["client_secret_expires_at"].(int64)
+	require.True(t, ok, "the response must carry client_secret_expires_at, got %#v", values["client_secret_expires_at"])
+	require.NotZero(t, expiresAt)
+
+	id, ok := values["client_id"].(string)
+	require.True(t, ok)
+
+	client, err := store.GetClient(ctx, id)
+	require.NoError(t, err)
+
+	registered, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok, "got %T", client)
+
+	assert.False(t, registered.ClientSecretExpiresAt.IsZero(),
+		"the expiry advertised in the response must be persisted on the client, or the response promises an expiry nothing enforces")
+	assert.Equal(t, expiresAt, registered.ClientSecretExpiresAt.Unix())
+}

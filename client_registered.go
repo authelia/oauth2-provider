@@ -407,3 +407,8 @@ var (
 	_ TLSClientAuthClient              = (*DefaultRegisteredClient)(nil)
 	_ MTLSClient                       = (*DefaultRegisteredClient)(nil)
 )
+
+// GetClientSecretExpiresAt returns the time the client secret expires, or the zero time when it does not.
+func (c *DefaultRegisteredClient) GetClientSecretExpiresAt() (expires time.Time) {
+	return c.ClientSecretExpiresAt
+}

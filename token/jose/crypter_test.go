@@ -1972,3 +1972,110 @@ func TestNewEncrypterRejectsUnusableExtraHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestDecryptMultiJWKSPerRecipientKid(t *testing.T) {
+	first, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encrypter, err := NewMultiEncrypter(A128GCM, []Recipient{
+		{Algorithm: ECDH_ES_A128KW, Key: &first.PublicKey, KeyID: "a"},
+		{Algorithm: ECDH_ES_A128KW, Key: &second.PublicKey, KeyID: "b"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := encrypter.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := ParseEncryptedJSON(obj.FullSerialize(), []KeyAlgorithm{ECDH_ES_A128KW}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	set := func(keys ...JSONWebKey) JSONWebKeySet {
+		return JSONWebKeySet{Keys: keys}
+	}
+
+	testCases := []struct {
+		name      string
+		key       any
+		wantIndex int
+		wantErr   error
+	}{
+		{
+			"FirstRecipient",
+			set(JSONWebKey{KeyID: "a", Key: first, Use: jwkUseEncryption}),
+			0,
+			nil,
+		},
+		{
+			"SecondRecipient",
+			set(JSONWebKey{KeyID: "b", Key: second, Use: jwkUseEncryption}),
+			1,
+			nil,
+		},
+		{
+			"BothRecipients",
+			set(
+				JSONWebKey{KeyID: "a", Key: first, Use: jwkUseEncryption},
+				JSONWebKey{KeyID: "b", Key: second, Use: jwkUseEncryption},
+			),
+			0,
+			nil,
+		},
+		{
+			"AlgorithmContradictsTheRecipient",
+			set(JSONWebKey{KeyID: "a", Key: first, Use: jwkUseEncryption, Algorithm: string(RSA_OAEP)}),
+			-1,
+			ErrJWKSKidNotFound,
+		},
+		{
+			"NoMatchingKeyID",
+			set(JSONWebKey{KeyID: "c", Key: first, Use: jwkUseEncryption}),
+			-1,
+			ErrJWKSKidNotFound,
+		},
+		{
+			"PlainKeyStillWorks",
+			second,
+			1,
+			nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			index, _, plaintext, err := parsed.DecryptMulti(tc.key)
+
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("DecryptMulti: got %v, want %v", err, tc.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("DecryptMulti: %v", err)
+			}
+
+			if index != tc.wantIndex {
+				t.Errorf("index = %d, want %d", index, tc.wantIndex)
+			}
+
+			if string(plaintext) != "plaintext" {
+				t.Errorf("plaintext = %q, want %q", plaintext, "plaintext")
+			}
+		})
+	}
+}

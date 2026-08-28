@@ -150,6 +150,39 @@ func getPbkdf2Params(alg KeyAlgorithm) (int, func() hash.Hash) {
 	}
 }
 
+// symmetricKeySize returns the key length in bytes that a symmetric key management algorithm is defined over, and
+// whether the algorithm fixes one at all. RFC 7518 Section 4.4 and Section 4.7 give each "A*KW" and "A*GCMKW"
+// identifier exactly one length, so the local key has to match the algorithm the message declares. Taking the
+// length from the key instead selects whichever variant happens to fit it, which leaves "alg" describing
+// something other than the operation performed. DIRECT is sized by the content encryption and PBES2 takes a
+// password of any length, so neither fixes one here.
+func symmetricKeySize(alg KeyAlgorithm) (int, bool) {
+	switch alg {
+	case A128KW, A128GCMKW:
+		return 16, true
+	case A192KW, A192GCMKW:
+		return 24, true
+	case A256KW, A256GCMKW:
+		return 32, true
+	default:
+		return 0, false
+	}
+}
+
+// checkKeySize rejects a key whose length contradicts the algorithm it is about to be used under.
+func (ctx *symmetricKeyCipher) checkKeySize(alg KeyAlgorithm) error {
+	size, ok := symmetricKeySize(alg)
+	if !ok {
+		return nil
+	}
+
+	if len(ctx.key) != size {
+		return ErrInvalidKeySize
+	}
+
+	return nil
+}
+
 // getRandomSalt generates a new salt of the given size.
 func getRandomSalt(size int) ([]byte, error) {
 	salt := make([]byte, size)
@@ -170,11 +203,17 @@ func newSymmetricRecipient(keyAlg KeyAlgorithm, key []byte) (recipientKeyInfo, e
 		return recipientKeyInfo{}, ErrUnsupportedAlgorithm
 	}
 
+	cipher := &symmetricKeyCipher{
+		key: key,
+	}
+
+	if err := cipher.checkKeySize(keyAlg); err != nil {
+		return recipientKeyInfo{}, err
+	}
+
 	return recipientKeyInfo{
-		keyAlg: keyAlg,
-		keyEncrypter: &symmetricKeyCipher{
-			key: key,
-		},
+		keyAlg:       keyAlg,
+		keyEncrypter: cipher,
 	}, nil
 }
 
@@ -275,7 +314,8 @@ func (ctx *symmetricKeyCipher) encryptKey(cek []byte, alg KeyAlgorithm) (recipie
 			header: &rawHeader{},
 		}, nil
 	case A128GCMKW, A192GCMKW, A256GCMKW:
-		aead := newAESGCM(len(ctx.key))
+		size, _ := symmetricKeySize(alg)
+		aead := newAESGCM(size)
 
 		parts, err := aead.encrypt(ctx.key, []byte{}, cek)
 		if err != nil {
@@ -375,6 +415,10 @@ func (ctx *symmetricKeyCipher) decryptKey(headers rawHeader, recipient *recipien
 		return bytes.Clone(ctx.key), nil
 	}
 
+	if err := ctx.checkKeySize(alg); err != nil {
+		return nil, err
+	}
+
 	encryptedKey := recipient.encryptedKey
 	if len(encryptedKey) == 0 {
 		return nil, fmt.Errorf("go-jose/go-jose: missing JWE Encrypted Key")
@@ -382,7 +426,8 @@ func (ctx *symmetricKeyCipher) decryptKey(headers rawHeader, recipient *recipien
 
 	switch alg {
 	case A128GCMKW, A192GCMKW, A256GCMKW:
-		aead := newAESGCM(len(ctx.key))
+		size, _ := symmetricKeySize(alg)
+		aead := newAESGCM(size)
 
 		iv, err := headers.getIV()
 		if err != nil {

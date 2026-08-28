@@ -534,6 +534,11 @@ func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 		}
 
 		input, err = edThumbprintInput(ed25519.PublicKey(key[32:]))
+	case []byte:
+		// RFC 7638 Section 3.2 defines {"k":…,"kty":"oct"} as the input, so this is implementable, and is
+		// declined rather than unimplemented: the input is the key, and Section 8.1 warns the digest of a key
+		// with little entropy can be searched back to the key.
+		return nil, ErrSymmetricThumbprint
 	case OpaqueSigner:
 		return key.Public().Thumbprint(hash)
 	default:

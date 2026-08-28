@@ -95,6 +95,11 @@ var (
 	// cannot apply, such as PBES2 parameters given to an OpaqueKeyEncrypter.
 	ErrUnsupportedRecipientParameter = errors.New("go-jose/go-jose: recipient parameter not supported by the key encrypter")
 
+	// ErrSymmetricThumbprint indicates a thumbprint was requested for a symmetric key. RFC 7638 Section 3.2
+	// defines the computation, but its input is the key itself, and Section 8.1 warns that the result is
+	// brute-forceable for a key which does not carry much entropy. This package declines to compute one.
+	ErrSymmetricThumbprint = errors.New("go-jose/go-jose: thumbprint of a symmetric key is not supported")
+
 	// ErrB64NotCritical indicates a JWS used the "b64" header parameter without listing it in "crit", which
 	// RFC 7797 Section 6 requires.
 	ErrB64NotCritical = errors.New("go-jose/go-jose: b64 header parameter used without being marked critical")

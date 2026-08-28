@@ -1809,3 +1809,22 @@ func TestThumbprintRejectsMalformedKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestThumbprintDeclinesSymmetricKeys(t *testing.T) {
+	var parsed JSONWebKey
+	if err := json.Unmarshal([]byte(`{"kty":"oct","kid":"k1","k":"c3ltbWV0cmljLWtleQ"}`), &parsed); err != nil {
+		t.Fatalf("an oct key must still parse: %v", err)
+	}
+
+	for name, key := range map[string]JSONWebKey{
+		"constructed": {Key: []byte("symmetric-key")},
+		"parsed":      parsed,
+	} {
+		t.Run(name, func(t *testing.T) {
+			thumbprint, err := key.Thumbprint(crypto.SHA256)
+			if !errors.Is(err, ErrSymmetricThumbprint) {
+				t.Fatalf("Thumbprint returned %x, %v; want %v", thumbprint, err, ErrSymmetricThumbprint)
+			}
+		})
+	}
+}

@@ -76,7 +76,7 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 	// internal, link-local, or loopback address, using this validator's redirect-URI containment check as a read
 	// oracle against that address (SSRF). A redirect response is instead surfaced as-is and rejected below by the
 	// non-200 status check, exactly like any other unexpected status code.
-	if response, err = withoutRedirects(httpClient).Do(req); err != nil {
+	if response, err = oauth2.HTTPClientWithoutRedirects(httpClient).Do(req); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' could not be fetched.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI).WithWrap(err).WithDebugError(err))
 	}
 
@@ -99,44 +99,6 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 	}
 
 	return nil
-}
-
-// withoutRedirects returns a *retryablehttp.Client that performs a 'sector_identifier_uri' fetch identically to
-// client, except that it refuses to follow HTTP redirects: the first redirect response is returned as-is instead
-// of being dereferenced. This is a fresh *retryablehttp.Client value built from client's exported configuration
-// fields, not a mutation of client itself; client is typically the shared instance returned by
-// oauth2.HTTPClientProvider.GetHTTPClient, and every other consumer of that shared instance must keep following
-// redirects normally.
-//
-// client's unexported sync.Once guards are deliberately not copied (copying a sync.Once by value is unsafe once it
-// may have fired); the returned Client starts with its own, unfired guards, which is safe because every field they
-// guard (the resolved logger and the lazily-defaulted HTTPClient) is set explicitly below.
-func withoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {
-	refuseRedirect := func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	inner := &http.Client{CheckRedirect: refuseRedirect}
-
-	if client.HTTPClient != nil {
-		innerCopy := *client.HTTPClient
-		innerCopy.CheckRedirect = refuseRedirect
-		inner = &innerCopy
-	}
-
-	return &retryablehttp.Client{
-		HTTPClient:      inner,
-		Logger:          client.Logger,
-		RetryWaitMin:    client.RetryWaitMin,
-		RetryWaitMax:    client.RetryWaitMax,
-		RetryMax:        client.RetryMax,
-		RequestLogHook:  client.RequestLogHook,
-		ResponseLogHook: client.ResponseLogHook,
-		CheckRetry:      client.CheckRetry,
-		Backoff:         client.Backoff,
-		ErrorHandler:    client.ErrorHandler,
-		PrepareRetry:    client.PrepareRetry,
-	}
 }
 
 var (

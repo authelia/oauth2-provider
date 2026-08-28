@@ -568,7 +568,7 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey any) ([]byte, error) {
 		return nil, errors.New("go-jose/go-jose: too many recipients in payload; expecting only one")
 	}
 
-	err := headers.checkNoCritical()
+	err := obj.checkNoCritical()
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey any) ([]byte, error) {
 func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byte, error) {
 	globalHeaders := obj.mergedHeaders(nil)
 
-	err := globalHeaders.checkNoCritical()
+	err := obj.checkNoCritical()
 	if err != nil {
 		return -1, Header{}, nil, err
 	}

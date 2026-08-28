@@ -2079,3 +2079,100 @@ func TestDecryptMultiJWKSPerRecipientKid(t *testing.T) {
 		})
 	}
 }
+
+func TestDecryptRejectsPerRecipientCritical(t *testing.T) {
+	key := []byte("0123456789abcdef")
+
+	encrypter, err := NewEncrypter(A128GCM, Recipient{Algorithm: A128KW, Key: key, KeyID: "k1"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := encrypter.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serialized := obj.FullSerialize()
+
+	// RFC 7516 Section 7.2.2 allows the "header" member, and nothing in the protected header collides with it, so
+	// the message is well formed apart from the "crit" itself.
+	injected := strings.Replace(serialized, `{"protected":`, `{"header":{"crit":["unknown-extension"]},"protected":`, 1)
+	if injected == serialized {
+		t.Fatalf("the message has no protected header to inject alongside")
+	}
+
+	for name, input := range map[string]string{"withCritical": injected, "without": serialized} {
+		t.Run(name, func(t *testing.T) {
+			parsed, err := ParseEncryptedJSON(input, []KeyAlgorithm{A128KW}, []ContentEncryption{A128GCM})
+			if err != nil {
+				t.Fatalf("ParseEncryptedJSON: %v", err)
+			}
+
+			plaintext, err := parsed.Decrypt(key)
+			_, _, multiPlaintext, multiErr := parsed.DecryptMulti(key)
+
+			if name == "without" {
+				if err != nil || string(plaintext) != "plaintext" {
+					t.Errorf("Decrypt = %q, %v", plaintext, err)
+				}
+
+				if multiErr != nil || string(multiPlaintext) != "plaintext" {
+					t.Errorf("DecryptMulti = %q, %v", multiPlaintext, multiErr)
+				}
+
+				return
+			}
+
+			if !errors.Is(err, ErrUnsupportedCriticalHeader) {
+				t.Errorf("Decrypt: got %v, want %v", err, ErrUnsupportedCriticalHeader)
+			}
+
+			if !errors.Is(multiErr, ErrUnsupportedCriticalHeader) {
+				t.Errorf("DecryptMulti: got %v, want %v", multiErr, ErrUnsupportedCriticalHeader)
+			}
+		})
+	}
+}
+
+func TestDecryptMultiRejectsCriticalOnAnotherRecipient(t *testing.T) {
+	first, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encrypter, err := NewMultiEncrypter(A128GCM, []Recipient{
+		{Algorithm: ECDH_ES_A128KW, Key: &first.PublicKey, KeyID: "a"},
+		{Algorithm: ECDH_ES_A128KW, Key: &second.PublicKey, KeyID: "b"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, err := encrypter.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serialized := obj.FullSerialize()
+
+	injected := strings.Replace(serialized, `"kid":"b"`, `"kid":"b","crit":["unknown-extension"]`, 1)
+	if injected == serialized {
+		t.Fatalf("the second recipient header was not where it was expected: %s", serialized)
+	}
+
+	parsed, err := ParseEncryptedJSON(injected, []KeyAlgorithm{ECDH_ES_A128KW}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncryptedJSON: %v", err)
+	}
+
+	// The first recipient's key decrypts, and must not be allowed to.
+	if _, _, plaintext, err := parsed.DecryptMulti(first); !errors.Is(err, ErrUnsupportedCriticalHeader) {
+		t.Errorf("DecryptMulti = %q, got %v, want %v", plaintext, err, ErrUnsupportedCriticalHeader)
+	}
+}

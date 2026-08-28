@@ -90,6 +90,10 @@ var (
 	// ErrDuplicateHeaderParameter indicates the same header parameter name appeared in more than one of the header
 	// objects which together form the JOSE Header.
 	ErrDuplicateHeaderParameter = errors.New("go-jose/go-jose: duplicate header parameter")
+
+	// ErrB64NotCritical indicates a JWS used the "b64" header parameter without listing it in "crit", which
+	// RFC 7797 Section 6 requires.
+	ErrB64NotCritical = errors.New("go-jose/go-jose: b64 header parameter used without being marked critical")
 )
 
 // Key management algorithms

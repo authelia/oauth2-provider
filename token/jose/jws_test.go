@@ -17,6 +17,7 @@
 package jose
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/x509"
@@ -1173,4 +1174,94 @@ func flipUnusedBits(t *testing.T, s string) string {
 
 	// Set the low bits that the encoding does not use.
 	return s[:len(s)-1] + string(alphabet[index|(1<<unused-1)])
+}
+
+// RFC 7797 Section 6 requires "b64" to be listed in "crit" whenever it is used, so that an implementation which
+// does not implement "b64" rejects the JWS instead of misreading it. Without that requirement one signed blob is
+// read as raw octets here and as base64url decoded octets by a strict verifier, under a signature that is valid
+// for both: the confusion RFC 7797 Section 8 describes.
+func TestParseRejectsB64WithoutCrit(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+	payload := []byte("NDA1")
+
+	testCases := []struct {
+		name    string
+		header  string
+		b64     bool
+		wantErr bool
+	}{
+		{"UnencodedWithoutCritical", `{"alg":"HS256","b64":false}`, false, true},
+		{"UnencodedCriticalOmitsB64", `{"alg":"HS256","b64":false,"crit":["exp"]}`, false, true},
+		{"EncodedWithoutCritical", `{"alg":"HS256","b64":true}`, true, true},
+		{"UnencodedCriticalListsB64", `{"alg":"HS256","b64":false,"crit":["b64"]}`, false, false},
+		{"ParameterAbsent", `{"alg":"HS256"}`, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			protected := base64.RawURLEncoding.EncodeToString([]byte(tc.header))
+
+			wire := string(payload)
+			if tc.b64 {
+				wire = base64.RawURLEncoding.EncodeToString(payload)
+			}
+
+			mac := hmac.New(sha256.New, key)
+			mac.Write([]byte(protected + "." + wire))
+			signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+			parses := map[string]func() (*JSONWebSignature, error){
+				"compact": func() (*JSONWebSignature, error) {
+					return ParseSignedCompact(protected+"."+wire+"."+signature, []SignatureAlgorithm{HS256})
+				},
+				"detached": func() (*JSONWebSignature, error) {
+					return ParseDetached(protected+".."+signature, payload, []SignatureAlgorithm{HS256})
+				},
+				"json": func() (*JSONWebSignature, error) {
+					return ParseSignedJSON(
+						fmt.Sprintf(`{"payload":%q,"protected":%q,"signature":%q}`, wire, protected, signature),
+						[]SignatureAlgorithm{HS256},
+					)
+				},
+			}
+
+			for name, parse := range parses {
+				obj, err := parse()
+
+				if tc.wantErr {
+					if !errors.Is(err, ErrB64NotCritical) {
+						t.Errorf("%s: got %v, want %v", name, err, ErrB64NotCritical)
+					}
+
+					continue
+				}
+
+				if err != nil {
+					t.Errorf("%s: parse: %v", name, err)
+
+					continue
+				}
+
+				// The message is well formed, so it must still verify against the payload it carries.
+				if name == "detached" {
+					if err = obj.DetachedVerify(payload, key); err != nil {
+						t.Errorf("%s: DetachedVerify: %v", name, err)
+					}
+
+					continue
+				}
+
+				output, err := obj.Verify(key)
+				if err != nil {
+					t.Errorf("%s: Verify: %v", name, err)
+
+					continue
+				}
+
+				if !bytes.Equal(output, payload) {
+					t.Errorf("%s: payload = %q, want %q", name, output, payload)
+				}
+			}
+		})
+	}
 }

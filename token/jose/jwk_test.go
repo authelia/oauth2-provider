@@ -1587,3 +1587,148 @@ func TestJWKThumbprintRejectsDegenerateRSAKey(t *testing.T) {
 		t.Error("Thumbprint accepted a zero RSA key, want an error")
 	}
 }
+
+func TestTryJWKSCandidateSelection(t *testing.T) {
+	sig := &rsaTestKey.PublicKey
+	enc := &rsaTestKey.PublicKey
+
+	testCases := []struct {
+		name      string
+		keys      []JSONWebKey
+		header    Header
+		use       string
+		expected  int
+		expectErr error
+	}{
+		{
+			"ShouldReturnEveryKeySharingTheKeyID",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: sig},
+				{KeyID: "shared", Key: enc},
+				{KeyID: "other", Key: sig},
+			},
+			Header{KeyID: "shared"},
+			jwkUseSignature,
+			2,
+			nil,
+		},
+		{
+			"ShouldDropKeysReservedForTheOtherUse",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: enc, Use: "enc"},
+				{KeyID: "shared", Key: sig, Use: "sig"},
+			},
+			Header{KeyID: "shared"},
+			jwkUseSignature,
+			1,
+			nil,
+		},
+		{
+			"ShouldTreatAnAbsentUseAsAWildcard",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: enc, Use: "enc"},
+				{KeyID: "shared", Key: sig},
+			},
+			Header{KeyID: "shared"},
+			jwkUseSignature,
+			1,
+			nil,
+		},
+		{
+			"ShouldDropKeysDeclaringADifferentAlgorithm",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: sig, Algorithm: "RS512"},
+				{KeyID: "shared", Key: sig, Algorithm: "RS256"},
+			},
+			Header{KeyID: "shared", Algorithm: "RS256"},
+			jwkUseSignature,
+			1,
+			nil,
+		},
+		{
+			"ShouldTreatAnAbsentAlgorithmAsAWildcard",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: sig, Algorithm: "RS512"},
+				{KeyID: "shared", Key: sig},
+			},
+			Header{KeyID: "shared", Algorithm: "RS256"},
+			jwkUseSignature,
+			1,
+			nil,
+		},
+		{
+			// RFC 9864 Section 4.1.1 registers "Ed25519" as a fully specified alternative to "EdDSA"; the
+			// two name one operation, so neither may exclude the other.
+			"ShouldMatchTheDeprecatedAndFullySpecifiedEdDSAIdentifiers",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: ed25519PublicKey, Algorithm: "EdDSA"},
+				{KeyID: "shared", Key: ed25519PublicKey, Algorithm: "Ed25519"},
+				{KeyID: "shared", Key: &rsaTestKey.PublicKey, Algorithm: "RS256"},
+			},
+			Header{KeyID: "shared", Algorithm: "Ed25519"},
+			jwkUseSignature,
+			2,
+			nil,
+		},
+		{
+			"ShouldRejectWhenEveryMatchingKeyIsFilteredOut",
+			[]JSONWebKey{
+				{KeyID: "shared", Key: enc, Use: "enc"},
+			},
+			Header{KeyID: "shared"},
+			jwkUseSignature,
+			0,
+			ErrJWKSKidNotFound,
+		},
+		{
+			"ShouldRejectAMessageWithoutAKeyID",
+			[]JSONWebKey{{KeyID: "shared", Key: sig}},
+			Header{},
+			jwkUseSignature,
+			0,
+			ErrJWKSKidNotFound,
+		},
+		{
+			"ShouldRejectAnUnknownKeyID",
+			[]JSONWebKey{{KeyID: "shared", Key: sig}},
+			Header{KeyID: "absent"},
+			jwkUseSignature,
+			0,
+			ErrJWKSKidNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			keys, err := tryJWKS(&JSONWebKeySet{Keys: tc.keys}, tc.header, tc.use)
+
+			if tc.expectErr != nil {
+				assert.ErrorIs(t, err, tc.expectErr)
+
+				if len(keys) != 0 {
+					t.Errorf("expected no candidate keys, got %d", len(keys))
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if len(keys) != tc.expected {
+				t.Errorf("candidate keys = %d, want %d", len(keys), tc.expected)
+			}
+		})
+	}
+}
+
+func TestTryJWKSPassesThroughNonSetKeys(t *testing.T) {
+	keys, err := tryJWKS(&rsaTestKey.PublicKey, Header{}, jwkUseSignature)
+
+	require.NoError(t, err)
+
+	if len(keys) != 1 {
+		t.Fatalf("candidate keys = %d, want 1", len(keys))
+	}
+
+	assert.Equal(t, keys[0], any(&rsaTestKey.PublicKey))
+}

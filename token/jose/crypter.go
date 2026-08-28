@@ -533,11 +533,10 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey any) ([]byte, error) {
 		return nil, err
 	}
 
-	key, err := tryJWKS(decryptionKey, Header{KeyID: headers.getString(headerKeyID)})
-	if err != nil {
-		return nil, err
-	}
-	decrypter, err := newDecrypter(key)
+	keys, err := tryJWKS(decryptionKey, Header{
+		KeyID:     headers.getString(headerKeyID),
+		Algorithm: headers.getString(headerAlgorithm),
+	}, jwkUseEncryption)
 	if err != nil {
 		return nil, err
 	}
@@ -559,22 +558,54 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey any) ([]byte, error) {
 
 	authData := obj.computeAuthData()
 
-	var plaintext []byte
 	recipient := obj.recipients[0]
 	recipientHeaders := obj.mergedHeaders(&recipient)
 
-	cek, err := decrypter.decryptKey(recipientHeaders, &recipient, generator)
-	if err != nil {
-		return nil, ErrCryptoFailure
+	var (
+		plaintext []byte
+		usable    bool
+		decrypted bool
+		errKey    error
+	)
+
+	// A JWK Set may hold several keys under one "kid", so each candidate is tried before the message is
+	// rejected. Which candidate failed is not reported: that would disclose how the set was searched.
+	for _, key := range keys {
+		decrypter, err := newDecrypter(key)
+		if err != nil {
+			if errKey == nil {
+				errKey = err
+			}
+
+			continue
+		}
+
+		usable = true
+
+		cek, err := decrypter.decryptKey(recipientHeaders, &recipient, generator)
+		if err != nil {
+			continue
+		}
+
+		if err = validateCEKSize(cek, cipher); err != nil {
+			continue
+		}
+
+		// Found a valid CEK -- let's try to decrypt. An empty plaintext is a valid result, so success is
+		// tracked separately rather than inferred from the plaintext being non-empty.
+		if plaintext, err = cipher.decrypt(cek, authData, parts); err == nil {
+			decrypted = true
+
+			break
+		}
 	}
 
-	if err = validateCEKSize(cek, cipher); err != nil {
-		return nil, ErrCryptoFailure
+	// No candidate was a key this package can decrypt with, which is a caller error worth reporting as itself.
+	if !usable {
+		return nil, errKey
 	}
 
-	// Found a valid CEK -- let's try to decrypt.
-	plaintext, err = cipher.decrypt(cek, authData, parts)
-	if err != nil {
+	if !decrypted {
 		return nil, ErrCryptoFailure
 	}
 
@@ -604,11 +635,10 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 		return -1, Header{}, nil, err
 	}
 
-	key, err := tryJWKS(decryptionKey, Header{KeyID: globalHeaders.getString(headerKeyID)})
-	if err != nil {
-		return -1, Header{}, nil, err
-	}
-	decrypter, err := newDecrypter(key)
+	keys, err := tryJWKS(decryptionKey, Header{
+		KeyID:     globalHeaders.getString(headerKeyID),
+		Algorithm: globalHeaders.getString(headerAlgorithm),
+	}, jwkUseEncryption)
 	if err != nil {
 		return -1, Header{}, nil, err
 	}
@@ -639,29 +669,60 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 		return -1, Header{}, nil, errors.New("go-jose/go-jose: no recipients")
 	}
 
+	var (
+		usable bool
+		errKey error
+	)
+
+	// A JWK Set may hold several keys under one "kid", so each candidate is tried against each recipient.
 	// Loop sets `err` in the function scope; don't shadow it.
-	for i, recipient := range obj.recipients {
-		recipientHeaders := obj.mergedHeaders(&recipient)
+	for _, key := range keys {
+		var decrypter keyDecrypter
 
-		var cek []byte
-		cek, err = decrypter.decryptKey(recipientHeaders, &recipient, generator)
+		decrypter, err = newDecrypter(key)
 		if err != nil {
+			if errKey == nil {
+				errKey = err
+			}
+
 			continue
 		}
 
-		if err = validateCEKSize(cek, cipher); err != nil {
-			continue
+		usable = true
+
+		for i, recipient := range obj.recipients {
+			recipientHeaders := obj.mergedHeaders(&recipient)
+
+			var cek []byte
+			cek, err = decrypter.decryptKey(recipientHeaders, &recipient, generator)
+			if err != nil {
+				continue
+			}
+
+			if err = validateCEKSize(cek, cipher); err != nil {
+				continue
+			}
+
+			// Found a valid CEK -- let's try to decrypt.
+			plaintext, err = cipher.decrypt(cek, authData, parts)
+			if err != nil {
+				continue
+			}
+
+			index = i
+			headers = obj.publicHeaders(&obj.recipients[i])
+
+			break
 		}
 
-		// Found a valid CEK -- let's try to decrypt.
-		plaintext, err = cipher.decrypt(cek, authData, parts)
-		if err != nil {
-			continue
+		if index >= 0 {
+			break
 		}
+	}
 
-		index = i
-		headers = obj.publicHeaders(&obj.recipients[i])
-		break
+	// No candidate was a key this package can decrypt with, which is a caller error worth reporting as itself.
+	if !usable {
+		return -1, Header{}, nil, errKey
 	}
 
 	if err != nil {

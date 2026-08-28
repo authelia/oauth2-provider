@@ -796,3 +796,84 @@ func BenchmarkParseSigned(b *testing.B) {
 		}
 	}
 }
+
+func TestVerifyJWKSDuplicateKid(t *testing.T) {
+	signing, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	payload := []byte("Lorem ipsum dolor sit amet")
+
+	signer, err := NewSigner(SigningKey{
+		Algorithm: ES256,
+		Key:       &JSONWebKey{KeyID: "shared", Key: signing},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj, err := signer.Sign(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correct := JSONWebKey{KeyID: "shared", Key: signing.Public()}
+	decoy := JSONWebKey{KeyID: "shared", Key: other.Public()}
+
+	for _, tc := range []struct {
+		name string
+		keys []JSONWebKey
+	}{
+		{"CorrectKeyFirst", []JSONWebKey{correct, decoy}},
+		{"CorrectKeyLast", []JSONWebKey{decoy, correct}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := ParseSigned(obj.FullSerialize(), []SignatureAlgorithm{ES256})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			out, err := parsed.Verify(&JSONWebKeySet{Keys: tc.keys})
+			if err != nil {
+				t.Fatalf("Verify failed: %v", err)
+			}
+			if !bytes.Equal(out, payload) {
+				t.Error("payload mismatch")
+			}
+		})
+	}
+}
+
+func TestVerifyJWKSUnusableKeyReportsKeyError(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signer, err := NewSigner(SigningKey{
+		Algorithm: ES256,
+		Key:       &JSONWebKey{KeyID: "shared", Key: key},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj, err := signer.Sign([]byte("Lorem ipsum dolor sit amet"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := ParseSigned(obj.FullSerialize(), []SignatureAlgorithm{ES256})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = parsed.Verify(&JSONWebKeySet{Keys: []JSONWebKey{{KeyID: "shared", Key: "not a key"}}})
+
+	if !errors.Is(err, ErrUnsupportedKeyType) {
+		t.Errorf("expected ErrUnsupportedKeyType, got: %v", err)
+	}
+}

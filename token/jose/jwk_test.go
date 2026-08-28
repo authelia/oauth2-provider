@@ -1828,3 +1828,31 @@ func TestThumbprintDeclinesSymmetricKeys(t *testing.T) {
 		})
 	}
 }
+
+// RFC 7518 Section 6.2.2.1 sizes the private key octet string as ceiling(log2(n)/8), where n is the order of the
+// group. dSize derived it from P, the prime of the underlying field. For every curve this package supports the
+// two have the same bit length, so nothing observable changed, which is exactly why the derivation is pinned
+// here against a curve where they differ.
+func TestDSizeUsesTheGroupOrder(t *testing.T) {
+	skewed := &elliptic.CurveParams{
+		P:       new(big.Int).Lsh(big.NewInt(1), 264),
+		N:       new(big.Int).Lsh(big.NewInt(1), 255),
+		BitSize: 256,
+		Name:    "skewed",
+	}
+
+	if got, want := dSize(skewed), 32; got != want {
+		t.Errorf("dSize = %d, want %d (the order is %d bits, the field prime %d)",
+			got, want, skewed.N.BitLen(), skewed.P.BitLen())
+	}
+
+	for curve, want := range map[elliptic.Curve]int{
+		elliptic.P256(): 32,
+		elliptic.P384(): 48,
+		elliptic.P521(): 66,
+	} {
+		if got := dSize(curve); got != want {
+			t.Errorf("dSize(%s) = %d, want %d", curve.Params().Name, got, want)
+		}
+	}
+}

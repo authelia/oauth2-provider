@@ -125,6 +125,14 @@ type EncrypterOptions struct {
 	// Values will be serialized by [json.Marshal] and must be valid inputs to
 	// that function.
 	//
+	// These are written over the protected header the encrypter assembles, so
+	// "enc", "zip" and "alg" are rejected by [NewEncrypter] and
+	// [NewMultiEncrypter]: the first two come from the arguments to those calls
+	// and the third from the recipient, and a value supplied here would describe
+	// an operation other than the one performed. Use the Compression field for
+	// "zip". "cty", "typ", "kid" and any extension parameter are the caller's to
+	// set, as are "apu" and "apv", which ECDH-ES reads from this map.
+	//
 	// [json.Marshal]: https://pkg.go.dev/encoding/json#Marshal
 	ExtraHeaders map[HeaderKey]any
 }
@@ -190,6 +198,12 @@ func NewEncrypter(enc ContentEncryption, rcpt Recipient, opts *EncrypterOptions)
 	if opts != nil {
 		encrypter.compressionAlg = opts.Compression
 		encrypter.extraHeaders = opts.ExtraHeaders
+
+		// "enc" and "zip" are written into the protected header from the arguments to this call, and "alg" into
+		// each recipient header from the recipient itself.
+		if err := checkExtraHeaders(encrypter.extraHeaders, headerAlgorithm, headerEncryption, headerCompression); err != nil {
+			return nil, err
+		}
 	}
 
 	if encrypter.cipher == nil {
@@ -288,6 +302,12 @@ func NewMultiEncrypter(enc ContentEncryption, rcpts []Recipient, opts *Encrypter
 	if opts != nil {
 		encrypter.compressionAlg = opts.Compression
 		encrypter.extraHeaders = opts.ExtraHeaders
+
+		// "enc" and "zip" are written into the protected header from the arguments to this call, and "alg" into
+		// each recipient header from the recipient itself.
+		if err := checkExtraHeaders(encrypter.extraHeaders, headerAlgorithm, headerEncryption, headerCompression); err != nil {
+			return nil, err
+		}
 	}
 
 	var err error

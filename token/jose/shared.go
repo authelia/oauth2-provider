@@ -98,6 +98,10 @@ var (
 	// ErrInvalidCriticalHeader indicates a "crit" header parameter which RFC 7515 Section 4.1.11 does not permit
 	// to be formed that way: an empty list, a repeated name, or a name which the header does not carry.
 	ErrInvalidCriticalHeader = errors.New("go-jose/go-jose: invalid critical header")
+
+	// ErrReservedHeaderParameter indicates extra headers carried a parameter which the signer or encrypter
+	// determines for itself, and which it would therefore have to either ignore or contradict.
+	ErrReservedHeaderParameter = errors.New("go-jose/go-jose: reserved header parameter")
 )
 
 // Key management algorithms
@@ -380,6 +384,21 @@ func (parsed rawHeader) getCritical() ([]string, error) {
 		return nil, err
 	}
 	return q, nil
+}
+
+// checkExtraHeaders reports whether caller-supplied extra headers can be honoured as given. The reserved names
+// are the ones the signer or encrypter determines for itself: they are seeded into the protected header and the
+// extra headers are then copied over the top, so a caller-supplied value replaces what the operation actually
+// did. The result is signed or authenticated over the header as supplied, leaving a message which is internally
+// consistent and which nothing can read back.
+func checkExtraHeaders(extra map[HeaderKey]any, reserved ...HeaderKey) error {
+	for _, name := range reserved {
+		if _, ok := extra[name]; ok {
+			return fmt.Errorf("%w: %q is determined by the operation and cannot be supplied", ErrReservedHeaderParameter, name)
+		}
+	}
+
+	return nil
 }
 
 // checkNoCritical verifies there are no critical headers present.

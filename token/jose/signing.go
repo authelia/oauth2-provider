@@ -72,6 +72,14 @@ type SignerOptions struct {
 	// Values will be serialized by [json.Marshal] and must be valid inputs to
 	// that function.
 	//
+	// These are written over the protected header the signer assembles, so "alg"
+	// is rejected by [NewSigner] and [NewMultiSigner]: it follows from the
+	// signing key, and a value supplied here would be the header a recipient
+	// trusts while the signature was made with something else. "kid", "typ",
+	// "cty" and any extension parameter are the caller's to set. "b64" is too,
+	// but only alongside a "crit" which lists it, as RFC 7797 Section 6
+	// requires; [SignerOptions.WithBase64] sets the pair together.
+	//
 	// [json.Marshal]: https://pkg.go.dev/encoding/json#Marshal
 	ExtraHeaders map[HeaderKey]any
 }
@@ -121,6 +129,38 @@ func (so *SignerOptions) WithBase64(b64 bool) *SignerOptions {
 		so.WithCritical(headerB64)
 	}
 	return so
+}
+
+// checkExtraB64Critical applies RFC 7797 Section 6 to a signer's extra headers. Unlike "alg", "b64" is the
+// caller's to set -- SignerOptions.WithBase64 routes through the same map -- but only alongside a "crit" which
+// lists it. WithBase64 sets the pair together; a caller reaching for WithHeader on its own would otherwise emit
+// a JWS this package refuses to parse.
+func checkExtraB64Critical(extra map[HeaderKey]any) error {
+	if _, ok := extra[headerB64]; !ok {
+		return nil
+	}
+
+	var names []string
+
+	// WithCritical builds a []string, while a caller which round-trips its headers through JSON has an []any.
+	switch crit := extra[headerCritical].(type) {
+	case []string:
+		names = crit
+	case []any:
+		for _, name := range crit {
+			if s, ok := name.(string); ok {
+				names = append(names, s)
+			}
+		}
+	}
+
+	for _, name := range names {
+		if name == headerB64 {
+			return nil
+		}
+	}
+
+	return ErrB64NotCritical
 }
 
 type payloadSigner interface {
@@ -173,6 +213,16 @@ func NewMultiSigner(sigs []SigningKey, opts *SignerOptions) (Signer, error) {
 		signer.nonceSource = opts.NonceSource
 		signer.embedJWK = opts.EmbedJWK
 		signer.extraHeaders = opts.ExtraHeaders
+
+		// RFC 7515 Section 4.1.1 makes "alg" the parameter a recipient trusts to pick its verification, and it
+		// follows from the signing key rather than from the caller.
+		if err := checkExtraHeaders(signer.extraHeaders, headerAlgorithm); err != nil {
+			return nil, err
+		}
+
+		if err := checkExtraB64Critical(signer.extraHeaders); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, sig := range sigs {

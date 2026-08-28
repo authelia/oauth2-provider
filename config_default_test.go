@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -157,4 +158,64 @@ type testTokenValidationStrategy struct{}
 
 func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
 	return nil, nil
+}
+
+func TestConfig_LazyDefaultsAreConcurrencySafe(t *testing.T) {
+	getters := map[string]func(c *Config) any{
+		"FormPostResponseWriter": func(c *Config) any {
+			return c.GetFormPostResponseWriter(t.Context())
+		},
+		"ResponseModeHandlers": func(c *Config) any {
+			return c.GetResponseModeHandlers(t.Context())
+		},
+		"JWTStrategy": func(c *Config) any {
+			return c.GetJWTStrategy(t.Context())
+		},
+		"ScopeStrategy": func(c *Config) any {
+			return c.GetScopeStrategy(t.Context())
+		},
+		"AudienceStrategy": func(c *Config) any {
+			return c.GetAudienceStrategy(t.Context())
+		},
+		"ResourceStrategy": func(c *Config) any {
+			return c.GetResourceStrategy(t.Context())
+		},
+		"JWKSFetcherStrategy": func(c *Config) any {
+			return c.GetJWKSFetcherStrategy(t.Context())
+		},
+		"AuthorizeErrorFieldResponseStrategy": func(c *Config) any {
+			return c.GetAuthorizeErrorFieldResponseStrategy(t.Context())
+		},
+		"TokenEndpointClientAuthStrategy": func(c *Config) any {
+			return c.GetTokenEndpointClientAuthStrategy(t.Context())
+		},
+		"IntrospectionEndpointClientAuthStrategy": func(c *Config) any {
+			return c.GetIntrospectionEndpointClientAuthStrategy(t.Context())
+		},
+		"RevocationEndpointClientAuthStrategy": func(c *Config) any {
+			return c.GetRevocationEndpointClientAuthStrategy(t.Context())
+		},
+	}
+
+	for name, get := range getters {
+		t.Run(name, func(t *testing.T) {
+			const n = 4
+
+			c := &Config{}
+
+			var wg sync.WaitGroup
+
+			wg.Add(n)
+
+			for range n {
+				go func() {
+					defer wg.Done()
+
+					assert.NotNil(t, get(c))
+				}()
+			}
+
+			wg.Wait()
+		})
+	}
 }

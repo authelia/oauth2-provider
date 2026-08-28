@@ -157,6 +157,26 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'sub' is missing."))
 	}
 
+	// OpenID Connect Core 1.0 Section 2 makes 'aud' the client an ID Token was issued to, and 'azp' the party it was
+	// issued for when present. An ID Token is routinely relayed to, logged by and stored on the client it was issued
+	// to, so a client presenting one whose audience is a different client is presenting a credential that was never
+	// issued to it.
+	//
+	// The rule is the inverse of validateExchangeTokenPolicy, which forbids a client exchanging a token issued to
+	// itself. That is correct for an access token, where the exchange moves authority between clients, and would be
+	// backwards here: exchanging the ID Token issued to you is the intended use.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+	mapped, clientID := jwt.MapClaims(claims), request.GetClient().GetID()
+
+	if !mapped.VerifyAudience(clientID, true) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from the id_token must include the OAuth 2.0 Client '%s'.", clientID))
+	}
+
+	if !mapped.VerifyAuthorizedParty(clientID, false) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'azp' from the id_token must be the OAuth 2.0 Client '%s' when it is present.", clientID))
+	}
+
 	return claims, nil
 }
 

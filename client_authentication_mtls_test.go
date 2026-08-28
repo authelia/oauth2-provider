@@ -137,7 +137,7 @@ func TestMatchTLSClientAuthSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := matchTLSClientAuthSubject(tc.client, cert, "token")
+			err := matchTLSClientAuthSubject(tc.client, cert, true, "token")
 
 			if tc.err == "" {
 				assert.NoError(t, err)
@@ -153,7 +153,7 @@ func TestMatchTLSClientAuthSubject(t *testing.T) {
 	t.Run("ShouldRejectANilCertificate", func(t *testing.T) {
 		client := &DefaultMTLSClient{DefaultJARClient: &DefaultJARClient{DefaultClient: &DefaultClient{ID: "test"}}, TLSClientAuthSubjectDN: "CN=test,O=Example"}
 
-		err := matchTLSClientAuthSubject(client, nil, "token")
+		err := matchTLSClientAuthSubject(client, nil, true, "token")
 
 		require.Error(t, err)
 		assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "did not include a client certificate")
@@ -180,7 +180,7 @@ func TestMatchTLSClientAuthSubjectDNDegenerate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &DefaultMTLSClient{DefaultJARClient: &DefaultJARClient{DefaultClient: &DefaultClient{ID: "test"}}, TLSClientAuthSubjectDN: tc.dn}
 
-			err := matchTLSClientAuthSubject(client, sanOnly, "token")
+			err := matchTLSClientAuthSubject(client, sanOnly, true, "token")
 
 			require.Error(t, err)
 			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
@@ -361,7 +361,12 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 			r := &http.Request{Header: http.Header{}, PostForm: tc.form, Form: tc.form}
 
 			if tc.cert != nil {
-				r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{tc.cert}}
+				// VerifiedChains stands for a listener configured RequireAndVerifyClientCert, which the PKI method
+				// requires. TestAuthenticateClientMTLSRequiresVerifiedChain covers its absence.
+				r.TLS = &tls.ConnectionState{
+					PeerCertificates: []*x509.Certificate{tc.cert},
+					VerifiedChains:   [][]*x509.Certificate{{tc.cert}},
+				}
 			}
 
 			client, method, err := strategy.AuthenticateClient(context.TODO(), r, tc.form, &TokenEndpointClientAuthStrategy{})
@@ -555,4 +560,69 @@ func (f *staticJWKSFetcher) Resolve(_ context.Context, location string, _ bool) 
 	}
 
 	return f.jwks, nil
+}
+
+func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
+	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
+
+	form := url.Values{consts.FormParameterClientID: []string{"test"}}
+
+	newStrategy := func(method string, client Client) *DefaultClientAuthenticationStrategy {
+		store := newMTLSClientStore()
+		store.clients["test"] = client
+
+		return &DefaultClientAuthenticationStrategy{Store: store, Config: &Config{MTLSEnabled: true}}
+	}
+
+	pkiClient := &DefaultMTLSClient{
+		DefaultJARClient: &DefaultJARClient{
+			DefaultClient:           &DefaultClient{ID: "test"},
+			TokenEndpointAuthMethod: consts.ClientAuthMethodTLSClientAuth,
+		},
+		TLSClientAuthSANDNS: "client.example.com",
+	}
+
+	selfSignedClient := &DefaultMTLSClient{
+		DefaultJARClient: &DefaultJARClient{
+			DefaultClient:           &DefaultClient{ID: "test"},
+			TokenEndpointAuthMethod: consts.ClientAuthMethodSelfSignedTLSClientAuth,
+			JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: cert.PublicKey, Certificates: []*x509.Certificate{cert}, KeyID: cert.Subject.CommonName}}},
+		},
+	}
+
+	newRequest := func(verified bool) *http.Request {
+		state := &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
+
+		if verified {
+			state.VerifiedChains = [][]*x509.Certificate{{cert}}
+		}
+
+		return &http.Request{Header: http.Header{}, PostForm: form, Form: form, TLS: state}
+	}
+
+	t.Run("ShouldRejectPKIMethodWhenTheChainWasNotValidated", func(t *testing.T) {
+		_, _, err := newStrategy(consts.ClientAuthMethodTLSClientAuth, pkiClient).
+			AuthenticateClient(context.TODO(), newRequest(false), form, &TokenEndpointClientAuthStrategy{})
+
+		require.Error(t, err)
+		assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "validated certificate chain")
+	})
+
+	t.Run("ShouldAuthenticatePKIMethodWhenTheChainWasValidated", func(t *testing.T) {
+		client, method, err := newStrategy(consts.ClientAuthMethodTLSClientAuth, pkiClient).
+			AuthenticateClient(context.TODO(), newRequest(true), form, &TokenEndpointClientAuthStrategy{})
+
+		require.NoError(t, err)
+		require.NotNil(t, client)
+		assert.Equal(t, consts.ClientAuthMethodTLSClientAuth, method)
+	})
+
+	t.Run("ShouldAuthenticateSelfSignedMethodWithoutAValidatedChain", func(t *testing.T) {
+		client, method, err := newStrategy(consts.ClientAuthMethodSelfSignedTLSClientAuth, selfSignedClient).
+			AuthenticateClient(context.TODO(), newRequest(false), form, &TokenEndpointClientAuthStrategy{})
+
+		require.NoError(t, err)
+		require.NotNil(t, client)
+		assert.Equal(t, consts.ClientAuthMethodSelfSignedTLSClientAuth, method)
+	})
 }

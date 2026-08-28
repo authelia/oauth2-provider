@@ -135,13 +135,21 @@ func splitDistinguishedName(dn string) (rdns []string) {
 // matchTLSClientAuthSubject performs the RFC 8705 Section 2.1 PKI method check, verifying that the subject information
 // in cert matches the single subject value registered for client.
 //
-// The certificate chain is deliberately not validated here; see the documentation on Config.MTLSClientCertificateHeader
-// for where that responsibility sits.
-func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificate, endpoint string) (err error) {
+// The chain is not validated here. verified reports whether it was already validated, by Go against the listener's
+// ClientCAs or by the TLS terminating proxy that forwarded the certificate; see ClientCertificateChainVerified. The
+// method relies on that having happened, since a subject is not a secret and this check would otherwise be satisfied
+// by a self signed certificate bearing a registered one.
+func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificate, verified bool, endpoint string) (err error) {
 	if cert == nil {
 		return errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
 			WithDebugf("The registered client with id '%s' is configured with the '%s_endpoint_auth_method' method '%s' but the request did not include a client certificate.", client.GetID(), endpoint, consts.ClientAuthMethodTLSClientAuth))
+	}
+
+	if !verified {
+		return errorsx.WithStack(ErrInvalidClient.
+			WithHint(hintClientCredentialsInvalid).
+			WithDebugf("The registered client with id '%s' is configured with the '%s_endpoint_auth_method' method '%s' but the client certificate was not presented with a validated certificate chain.", client.GetID(), endpoint, consts.ClientAuthMethodTLSClientAuth))
 	}
 
 	var (
@@ -314,7 +322,7 @@ func isMTLSAuthMethod(client Client, strategy EndpointClientAuthStrategy) bool {
 
 // doAuthenticateMTLS authenticates a client using the RFC 8705 Section 2 mutual-TLS methods. It is reached only when
 // isMTLSAuthMethod reported that the client is registered to use one and a certificate was presented.
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateMTLS(ctx context.Context, client Client, cert *x509.Certificate, strategy EndpointClientAuthStrategy) (method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateMTLS(ctx context.Context, client Client, cert *x509.Certificate, verified bool, strategy EndpointClientAuthStrategy) (method string, err error) {
 	c, ok := client.(AuthenticationMethodClient)
 	if !ok {
 		return "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The registered client does not support RFC 8705 Mutual-TLS client authentication methods."))
@@ -329,7 +337,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateMTLS(ctx context.Con
 				WithDebugf("The registered client with id '%s' is configured to use the '%s_endpoint_auth_method' method '%s' but does not implement the client registration values that method requires.", client.GetID(), strategy.Name(), method))
 		}
 
-		if err = matchTLSClientAuthSubject(tc, cert, strategy.Name()); err != nil {
+		if err = matchTLSClientAuthSubject(tc, cert, verified, strategy.Name()); err != nil {
 			return "", err
 		}
 	case consts.ClientAuthMethodSelfSignedTLSClientAuth:

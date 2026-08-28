@@ -403,6 +403,15 @@ func (ctx *genericSigner) Sign(payload []byte) (*JSONWebSignature, error) {
 			}
 			(*signatureInfo.protected)[k] = makeRawMessage(b)
 		}
+
+		if signatureInfo.Header, err = signatureInfo.protected.sanitized(); err != nil {
+			return nil, err
+		}
+
+		if signatureInfo.Protected, err = signatureInfo.protected.sanitized(); err != nil {
+			return nil, err
+		}
+
 		obj.Signatures[i] = signatureInfo
 	}
 

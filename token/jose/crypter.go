@@ -675,14 +675,6 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 		return -1, Header{}, nil, err
 	}
 
-	keys, err := tryJWKS(decryptionKey, Header{
-		KeyID:     globalHeaders.getString(headerKeyID),
-		Algorithm: globalHeaders.getString(headerAlgorithm),
-	}, jwkUseEncryption)
-	if err != nil {
-		return -1, Header{}, nil, err
-	}
-
 	encryption := globalHeaders.getEncryption()
 	cipher := getContentCipher(encryption)
 	if cipher == nil {
@@ -710,31 +702,44 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 	}
 
 	var (
-		usable bool
-		errKey error
+		usable  bool
+		errKey  error
+		errJWKS error
 	)
 
-	// A JWK Set may hold several keys under one "kid", so each candidate is tried against each recipient.
-	// Loop sets `err` in the function scope; don't shadow it.
-	for _, key := range keys {
-		var decrypter keyDecrypter
+	// "kid" and "alg" are written into each recipient's own header, so the key is selected per recipient rather
+	// than once for the message: a multi-recipient JWE carries neither globally. A JWK Set may then hold several
+	// keys under one "kid", so each candidate is tried before the recipient is given up on.
+	for i := range obj.recipients {
+		recipient := obj.recipients[i]
+		recipientHeaders := obj.mergedHeaders(&recipient)
 
-		decrypter, err = newDecrypter(key)
+		keys, err := tryJWKS(decryptionKey, Header{
+			KeyID:     recipientHeaders.getString(headerKeyID),
+			Algorithm: recipientHeaders.getString(headerAlgorithm),
+		}, jwkUseEncryption)
 		if err != nil {
-			if errKey == nil {
-				errKey = err
+			// The set holds nothing for this recipient. Another recipient may still be ours.
+			if errJWKS == nil {
+				errJWKS = err
 			}
 
 			continue
 		}
 
-		usable = true
+		for _, key := range keys {
+			decrypter, err := newDecrypter(key)
+			if err != nil {
+				if errKey == nil {
+					errKey = err
+				}
 
-		for i, recipient := range obj.recipients {
-			recipientHeaders := obj.mergedHeaders(&recipient)
+				continue
+			}
 
-			var cek []byte
-			cek, err = decrypter.decryptKey(recipientHeaders, &recipient, generator)
+			usable = true
+
+			cek, err := decrypter.decryptKey(recipientHeaders, &recipient, generator)
 			if err != nil {
 				continue
 			}
@@ -743,12 +748,14 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 				continue
 			}
 
-			// Found a valid CEK -- let's try to decrypt.
-			plaintext, err = cipher.decrypt(cek, authData, parts)
+			// Found a valid CEK -- let's try to decrypt. An empty plaintext is a valid result, so the recipient
+			// index tracks success rather than the plaintext being non-empty.
+			decrypted, err := cipher.decrypt(cek, authData, parts)
 			if err != nil {
 				continue
 			}
 
+			plaintext = decrypted
 			index = i
 			headers = obj.publicHeaders(&obj.recipients[i])
 
@@ -760,13 +767,22 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 		}
 	}
 
-	// No candidate was a key this package can decrypt with, which is a caller error worth reporting as itself.
-	if !usable {
-		return -1, Header{}, nil, errKey
-	}
-
-	if err != nil {
-		return -1, Header{}, nil, ErrCryptoFailure
+	if index < 0 {
+		// No candidate was a key this package can decrypt with, which is a caller error worth reporting as
+		// itself. Failing that, no recipient named a key the set holds, which is a fact about the set rather
+		// than about the message and is reported the same way Decrypt reports it.
+		switch {
+		case usable:
+			// Something was tried against the message and did not work; which candidate got furthest is not
+			// reported, as that would disclose how the set was searched.
+			return -1, Header{}, nil, ErrCryptoFailure
+		case errKey != nil:
+			return -1, Header{}, nil, errKey
+		case errJWKS != nil:
+			return -1, Header{}, nil, errJWKS
+		default:
+			return -1, Header{}, nil, ErrCryptoFailure
+		}
 	}
 
 	plaintext, err = obj.decompress(plaintext)
@@ -779,7 +795,7 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 		return -1, Header{}, nil, fmt.Errorf("go-jose/go-jose: failed to sanitize header: %v", err)
 	}
 
-	return index, sanitized, plaintext, err
+	return index, sanitized, plaintext, nil
 }
 
 // decompress decompresses plaintext using the protected "zip" header, if present.

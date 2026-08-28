@@ -132,7 +132,7 @@ func (so *SignerOptions) WithBase64(b64 bool) *SignerOptions {
 }
 
 // checkExtraB64Critical applies RFC 7797 Section 6 to a signer's extra headers. Unlike "alg", "b64" is the
-// caller's to set -- SignerOptions.WithBase64 routes through the same map -- but only alongside a "crit" which
+// caller's to set; SignerOptions.WithBase64 routes through the same map; but only alongside a "crit" which
 // lists it. WithBase64 sets the pair together; a caller reaching for WithHeader on its own would otherwise emit
 // a JWS this package refuses to parse.
 func checkExtraB64Critical(extra map[HeaderKey]any) error {
@@ -425,6 +425,14 @@ func (ctx *genericSigner) Options() SignerOptions {
 // payload header. You cannot assume that the key received in a payload is
 // trusted.
 //
+// A successful verification says that the signature is valid under the key supplied, and nothing more. It does
+// not bind the identity headers to that key: the "kid", "jwk" and "x5c" of the verified signature are whatever
+// the sender wrote, so a signer holding any key the caller accepts can name a different one. Where the accepted
+// keys are not equivalent authorities; a multi-tenant issuer, or per-client key sets; select the key by
+// "kid" before verifying and use the identity of the key you selected afterwards, rather than reading it back
+// out of Signature.Header. Passing a JSONWebKeySet leaves that selection to this package, which will try every
+// key the "kid" and "alg" admit and report only whether one of them worked.
+//
 // The verificationKey argument must have one of these types:
 //   - ed25519.PublicKey
 //   - *mldsa.PublicKey (requires Go 1.27 or later)
@@ -462,7 +470,8 @@ func (obj JSONWebSignature) UnsafePayloadWithoutVerification() []byte {
 // each other.
 //
 // The verificationKey argument must have one of the types allowed for the
-// verificationKey argument of JSONWebSignature.Verify().
+// verificationKey argument of JSONWebSignature.Verify(), and the note there about identity headers not being
+// bound to the verifying key applies here too.
 func (obj JSONWebSignature) DetachedVerify(payload []byte, verificationKey any) error {
 	if len(obj.Signatures) != 1 {
 		return errors.New("go-jose/go-jose: expecting exactly one signature in payload")

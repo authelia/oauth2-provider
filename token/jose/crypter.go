@@ -631,7 +631,7 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey any) ([]byte, error) {
 			continue
 		}
 
-		// Found a valid CEK -- let's try to decrypt. An empty plaintext is a valid result, so success is
+		// Found a valid CEK; let's try to decrypt. An empty plaintext is a valid result, so success is
 		// tracked separately rather than inferred from the plaintext being non-empty.
 		if plaintext, err = cipher.decrypt(cek, authData, parts); err == nil {
 			decrypted = true
@@ -748,7 +748,7 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey any) (int, Header, []byt
 				continue
 			}
 
-			// Found a valid CEK -- let's try to decrypt. An empty plaintext is a valid result, so the recipient
+			// Found a valid CEK; let's try to decrypt. An empty plaintext is a valid result, so the recipient
 			// index tracks success rather than the plaintext being non-empty.
 			decrypted, err := cipher.decrypt(cek, authData, parts)
 			if err != nil {

@@ -976,3 +976,11 @@ func TestNewSignerRejectsUnusableExtraHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestDetachedVerifyWithoutSignatures(t *testing.T) {
+	obj := &JSONWebSignature{}
+
+	if err := obj.DetachedVerify([]byte("payload"), []byte("0123456789ABCDEF0123456789ABCDEF")); err == nil {
+		t.Error("DetachedVerify on an object with no signatures returned no error")
+	}
+}

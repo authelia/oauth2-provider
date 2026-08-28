@@ -2176,3 +2176,133 @@ func TestDecryptMultiRejectsCriticalOnAnotherRecipient(t *testing.T) {
 		t.Errorf("DecryptMulti = %q, got %v, want %v", plaintext, err, ErrUnsupportedCriticalHeader)
 	}
 }
+
+// RFC 7518 Sections 4.4 and 4.7 define one key length per symmetric key management algorithm identifier, but the
+// AES variant was chosen from the length of the local key: newAESGCM(len(ctx.key)) on the "A*GCMKW" path and
+// aes.NewCipher(ctx.key) on the "A*KW" path. So "alg" did not bind the operation performed. With more than one
+// recipient "alg" sits in each recipient's own unprotected header, which is not covered by the AAD, so relabelling
+// it costs nothing: a message declaring A128GCMKW was unwrapped as A256GCMKW whenever the local key was 32 bytes.
+func TestSymmetricKeySizeIsBoundToTheAlgorithm(t *testing.T) {
+	first := []byte("0123456789abcdef0123456789abcdef")
+	second := []byte("fedcba9876543210fedcba9876543210")
+
+	testCases := []struct {
+		name     string
+		actual   KeyAlgorithm
+		declared KeyAlgorithm
+	}{
+		{"KeyWrapWithGCM", A256GCMKW, A128GCMKW},
+		{"KeyWrap", A256KW, A128KW},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			encrypter, err := NewMultiEncrypter(A128GCM, []Recipient{
+				{Algorithm: tc.actual, Key: first, KeyID: "one"},
+				{Algorithm: tc.actual, Key: second, KeyID: "two"},
+			}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			obj, err := encrypter.Encrypt([]byte("plaintext"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			serialized := obj.FullSerialize()
+
+			relabelled := strings.Replace(serialized,
+				`"alg":"`+string(tc.actual)+`"`, `"alg":"`+string(tc.declared)+`"`, 1)
+			if relabelled == serialized {
+				t.Fatalf("the recipient header did not carry %q: %s", tc.actual, serialized)
+			}
+
+			parsed, err := ParseEncryptedJSON(relabelled,
+				[]KeyAlgorithm{tc.actual, tc.declared}, []ContentEncryption{A128GCM})
+			if err != nil {
+				t.Fatalf("ParseEncryptedJSON: %v", err)
+			}
+
+			_, _, plaintext, err := parsed.DecryptMulti(first)
+			if !errors.Is(err, ErrCryptoFailure) {
+				t.Errorf("DecryptMulti: got %v, want %v", err, ErrCryptoFailure)
+			}
+
+			if plaintext != nil {
+				t.Errorf("DecryptMulti returned plaintext %q for a relabelled recipient", plaintext)
+			}
+
+			if _, _, plaintext, err = parsed.DecryptMulti(second); err != nil || string(plaintext) != "plaintext" {
+				t.Errorf("DecryptMulti for the untouched recipient = %q, %v", plaintext, err)
+			}
+		})
+	}
+}
+
+func TestNewEncrypterRejectsKeySizeContradictingTheAlgorithm(t *testing.T) {
+	long := []byte("0123456789abcdef0123456789abcdef")
+	short := []byte("0123456789abcdef")
+
+	testCases := []struct {
+		name    string
+		alg     KeyAlgorithm
+		key     []byte
+		wantErr bool
+	}{
+		{"GCMKeyWrapTooLong", A128GCMKW, long, true},
+		{"KeyWrapTooLong", A128KW, long, true},
+		{"GCMKeyWrapTooShort", A256GCMKW, short, true},
+		{"GCMKeyWrapMatches", A256GCMKW, long, false},
+		{"KeyWrapMatches", A128KW, short, false},
+		{"PBES2TakesAnyLength", PBES2_HS256_A128KW, []byte("pw"), false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			encrypter, err := NewEncrypter(A128GCM, Recipient{Algorithm: tc.alg, Key: tc.key}, nil)
+
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidKeySize) {
+					t.Fatalf("NewEncrypter: got %v, want %v", err, ErrInvalidKeySize)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewEncrypter: %v", err)
+			}
+
+			obj, err := encrypter.Encrypt([]byte("plaintext"))
+			if err != nil {
+				t.Fatalf("Encrypt: %v", err)
+			}
+
+			parsed, err := ParseEncryptedCompact(mustCompactSerialize(t, obj), []KeyAlgorithm{tc.alg}, []ContentEncryption{A128GCM})
+			if err != nil {
+				t.Fatalf("ParseEncryptedCompact: %v", err)
+			}
+
+			plaintext, err := parsed.Decrypt(tc.key)
+			if err != nil {
+				t.Fatalf("Decrypt: %v", err)
+			}
+
+			if string(plaintext) != "plaintext" {
+				t.Errorf("plaintext = %q, want %q", plaintext, "plaintext")
+			}
+		})
+	}
+}
+
+func mustCompactSerialize(t *testing.T, obj *JSONWebEncryption) string {
+	t.Helper()
+
+	serialized, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	return serialized
+}

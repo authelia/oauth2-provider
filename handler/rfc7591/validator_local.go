@@ -60,6 +60,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateURIs(metadata); err != nil {
+		return err
+	}
+
 	if err = validateApplicationType(metadata); err != nil {
 		return err
 	}
@@ -219,6 +223,86 @@ func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err erro
 
 		if isLoopbackRedirect(parsed.Hostname()) {
 			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", consts.ClientMetadataRedirectURIs, raw, consts.ClientMetadataApplicationType))
+		}
+	}
+
+	return nil
+}
+
+// validateURIs checks the client metadata URIs naming a location this authorization server requests itself:
+// 'jwks_uri' and 'request_uris' are fetched, and 'backchannel_logout_uri' is issued a POST whose result reaches the
+// caller. OpenID Connect Dynamic Client Registration 1.0 Section 2 and OpenID Connect Back-Channel Logout Section 2.2
+// define each as an https URL. The scheme is what keeps a registrant from naming an internal service and reading the
+// outcome through an error message or a delivery status.
+//
+// 'post_logout_redirect_uris' is a browser redirect target rather than something this server fetches, so only the
+// absolute and fragment rules apply to it and a native client's private-use scheme stays registrable.
+//
+// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRegistration
+func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if err = validateURI(consts.ClientMetadataJSONWebKeysURI, metadata.JSONWebKeysURI, true); err != nil {
+		return err
+	}
+
+	if err = validateURI(consts.ClientMetadataBackChannelLogoutURI, metadata.BackChannelLogoutURI, true); err != nil {
+		return err
+	}
+
+	if err = validateURIList(consts.ClientMetadataRequestURIs, metadata.RequestURIs, true); err != nil {
+		return err
+	}
+
+	if err = validateURIList(consts.ClientMetadataPostLogoutRedirectURIs, metadata.PostLogoutRedirectURIs, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateURIList applies validateURI to each member of a client metadata URI array. An empty member is rejected
+// rather than skipped: omitting the parameter is how a client registers no value, so an empty string among the
+// members is a malformed entry rather than an absent one.
+func validateURIList(name string, values []string, secure bool) (err error) {
+	for _, value := range values {
+		if value == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' values must not contain an empty value.", name))
+		}
+
+		if err = validateURI(name, value, secure); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateURI checks that value is an absolute URI with no fragment component, and when secure is set that it uses
+// the 'https' scheme and carries a host. An empty value is not registered and is not checked; validateURIList rejects
+// one appearing among the members of a URI array.
+func validateURI(name, value string, secure bool) (err error) {
+	if value == "" {
+		return nil
+	}
+
+	var parsed *url.URL
+
+	if parsed, err = url.Parse(value); err != nil || !parsed.IsAbs() {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must be an absolute URI.", name, value))
+	}
+
+	if parsed.Fragment != "" {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must not contain a fragment component.", name, value))
+	}
+
+	if secure {
+		if parsed.Scheme != consts.SchemeHTTPS {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must use the 'https' scheme.", name, value))
+		}
+
+		// url.Parse reports 'https:', 'https:foo' and 'https:/path' as absolute, since a scheme alone satisfies that.
+		// None names a host, so none is fetchable, and the scheme check above passes them.
+		if parsed.Hostname() == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must include a host component.", name, value))
 		}
 	}
 

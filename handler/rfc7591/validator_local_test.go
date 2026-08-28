@@ -380,3 +380,142 @@ func TestLocalValidator(t *testing.T) {
 		})
 	}
 }
+
+// TestLocalValidatorURIs covers the client metadata URIs the authorization server itself dereferences. Nothing
+// constrained them, so a registrant could point the server at an internal service: 'jwks_uri' and 'request_uris' are
+// fetched, and 'backchannel_logout_uri' is issued a POST whose status code reaches the caller.
+func TestLocalValidatorURIs(t *testing.T) {
+	validator := NewLocalValidator(&oauth2.Config{
+		ScopeStrategy:    oauth2.ExactScopeStrategy,
+		AudienceStrategy: oauth2.DefaultAudienceStrategy,
+	})
+
+	base := func() *oauth2.ClientRegistrationMetadata {
+		return &oauth2.ClientRegistrationMetadata{
+			RedirectURIs:  []string{"https://example.com/cb"},
+			GrantTypes:    []string{"authorization_code"},
+			ResponseTypes: []string{"code"},
+		}
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(m *oauth2.ClientRegistrationMetadata)
+		err    string
+	}{
+		{
+			name:   "ShouldAcceptSecureJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https://example.com/jwks.json" },
+		},
+		{
+			name: "ShouldRejectInsecureJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.JSONWebKeysURI = "http://169.254.169.254/latest/meta-data/"
+			},
+			err: "must use the 'https' scheme",
+		},
+		{
+			name:   "ShouldRejectRelativeJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "/jwks.json" },
+			err:    "must be an absolute URI",
+		},
+		{
+			name:   "ShouldRejectJSONWebKeysURIWithFragment",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https://example.com/jwks.json#k" },
+			err:    "must not contain a fragment component",
+		},
+		{
+			name:   "ShouldAcceptSecureRequestURIs",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt"} },
+		},
+		{
+			name:   "ShouldRejectInsecureRequestURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"http://127.0.0.1:6379/"} },
+			err:    "must use the 'https' scheme",
+		},
+		{
+			name:   "ShouldAcceptSecureBackChannelLogoutURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https://example.com/logout" },
+		},
+		{
+			name:   "ShouldRejectInsecureBackChannelLogoutURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "http://169.254.169.254/" },
+			err:    "must use the 'https' scheme",
+		},
+		{
+			name:   "ShouldRejectBackChannelLogoutURIWithFragment",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https://example.com/logout#f" },
+			err:    "must not contain a fragment component",
+		},
+		{
+			name:   "ShouldRejectRelativePostLogoutRedirectURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"/after-logout"} },
+			err:    "must be an absolute URI",
+		},
+		{
+			name: "ShouldRejectPostLogoutRedirectURIWithFragment",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.PostLogoutRedirectURIs = []string{"https://example.com/o#f"}
+			},
+			err: "must not contain a fragment component",
+		},
+		{
+			// Not fetched by the server, so the https requirement that closes the SSRF does not apply and a native
+			// client's private-use scheme stays registrable.
+			name: "ShouldAcceptPrivateUseSchemePostLogoutRedirectURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.PostLogoutRedirectURIs = []string{"com.example.app:/done"}
+			},
+		},
+		{
+			// url.Parse reports a bare scheme as absolute, so the absolute and https checks both pass and only the
+			// host check rejects it.
+			name:   "ShouldRejectHostlessJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:" },
+			err:    "must include a host component",
+		},
+		{
+			name:   "ShouldRejectOpaqueJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:example.com/jwks.json" },
+			err:    "must include a host component",
+		},
+		{
+			name:   "ShouldRejectSingleSlashJSONWebKeysURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:/jwks.json" },
+			err:    "must include a host component",
+		},
+		{
+			name:   "ShouldRejectHostlessBackChannelLogoutURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https:/logout" },
+			err:    "must include a host component",
+		},
+		{
+			name:   "ShouldRejectEmptyRequestURIMember",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt", ""} },
+			err:    "must not contain an empty value",
+		},
+		{
+			name:   "ShouldRejectEmptyPostLogoutRedirectURIMember",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{""} },
+			err:    "must not contain an empty value",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := base()
+			tc.mutate(metadata)
+
+			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, metadata)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}

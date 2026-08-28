@@ -984,3 +984,70 @@ func TestDetachedVerifyWithoutSignatures(t *testing.T) {
 		t.Error("DetachedVerify on an object with no signatures returned no error")
 	}
 }
+
+func TestSignPopulatesTheSignatureFields(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	opts := (&SignerOptions{}).WithType("JWT").WithHeader(headerKeyID, "k1")
+
+	signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, opts)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+
+	obj, err := signer.Sign([]byte("NDA1"))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	if len(obj.Signatures) != 1 {
+		t.Fatalf("got %d signatures, want 1", len(obj.Signatures))
+	}
+
+	signed := obj.Signatures[0]
+
+	for name, header := range map[string]Header{"Header": signed.Header, "Protected": signed.Protected} {
+		if header.Algorithm != string(HS256) {
+			t.Errorf("%s.Algorithm = %q, want %q", name, header.Algorithm, HS256)
+		}
+
+		if header.KeyID != "k1" {
+			t.Errorf("%s.KeyID = %q, want %q", name, header.KeyID, "k1")
+		}
+
+		if typ := header.ExtraHeaders[HeaderType]; typ == nil {
+			t.Errorf("%s carries no typ", name)
+		}
+	}
+
+	serialized, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	parsed, err := ParseSignedCompact(serialized, []SignatureAlgorithm{HS256})
+	if err != nil {
+		t.Fatalf("ParseSignedCompact: %v", err)
+	}
+
+	if parsed.Signatures[0].Header.Algorithm != signed.Header.Algorithm {
+		t.Errorf("parsed Header.Algorithm = %q, signed = %q",
+			parsed.Signatures[0].Header.Algorithm, signed.Header.Algorithm)
+	}
+
+	if parsed.Signatures[0].Header.KeyID != signed.Header.KeyID {
+		t.Errorf("parsed Header.KeyID = %q, signed = %q",
+			parsed.Signatures[0].Header.KeyID, signed.Header.KeyID)
+	}
+
+	if !reflect.DeepEqual(parsed.Signatures[0].Header.ExtraHeaders, signed.Header.ExtraHeaders) {
+		t.Errorf("parsed ExtraHeaders = %#v, signed = %#v",
+			parsed.Signatures[0].Header.ExtraHeaders, signed.Header.ExtraHeaders)
+	}
+
+	signed.Header.ExtraHeaders[HeaderKey("scratch")] = true
+
+	if _, ok := signed.Protected.ExtraHeaders[HeaderKey("scratch")]; ok {
+		t.Error("Header and Protected share their ExtraHeaders map")
+	}
+}

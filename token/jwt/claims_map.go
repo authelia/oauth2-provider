@@ -288,7 +288,7 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	}
 
 	if len(vopts.azp) != 0 {
-		if m.VerifyAuthorizedParty(vopts.azp, false) {
+		if !m.VerifyAuthorizedParty(vopts.azp, false) {
 			vErr.Inner = errors.New("Token has invalid azp claim")
 			vErr.Errors |= ValidationErrorAuthorizedParty
 		}

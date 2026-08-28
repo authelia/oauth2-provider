@@ -91,6 +91,10 @@ var (
 	// objects which together form the JOSE Header.
 	ErrDuplicateHeaderParameter = errors.New("go-jose/go-jose: duplicate header parameter")
 
+	// ErrUnsupportedRecipientParameter indicates a Recipient carried a parameter which the key encrypter it names
+	// cannot apply, such as PBES2 parameters given to an OpaqueKeyEncrypter.
+	ErrUnsupportedRecipientParameter = errors.New("go-jose/go-jose: recipient parameter not supported by the key encrypter")
+
 	// ErrB64NotCritical indicates a JWS used the "b64" header parameter without listing it in "crit", which
 	// RFC 7797 Section 6 requires.
 	ErrB64NotCritical = errors.New("go-jose/go-jose: b64 header parameter used without being marked critical")

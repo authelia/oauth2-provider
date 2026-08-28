@@ -1762,6 +1762,126 @@ func TestDecryptJWKSDuplicateKid(t *testing.T) {
 	}
 }
 
+// PBES2 parameters were applied by type asserting the key encrypter to *symmetricKeyCipher. An OpaqueKeyEncrypter
+// fails that assertion, so a caller which set PBES2Count or PBES2Salt had both discarded with no error and no way
+// to tell: the message encrypts under the default count and a random salt instead. The ECDH-ES key wrapping arm
+// drops "apu"/"apv" the same way, which produces a JWE whose header advertises party information the key
+// derivation did not use.
+func TestNewEncrypterRejectsUnhonouredRecipientParameters(t *testing.T) {
+	password := []byte("secret-password")
+
+	opaquePBES2 := func() OpaqueKeyEncrypter {
+		return makeOpaqueKeyEncrypter(t, password, PBES2_HS256_A128KW, "opaque")
+	}
+
+	testCases := []struct {
+		name      string
+		recipient Recipient
+		opts      *EncrypterOptions
+		wantErr   bool
+	}{
+		{
+			"OpaqueDropsCount",
+			Recipient{Algorithm: PBES2_HS256_A128KW, Key: opaquePBES2(), PBES2Count: 8192},
+			nil,
+			true,
+		},
+		{
+			"OpaqueDropsSalt",
+			Recipient{Algorithm: PBES2_HS256_A128KW, Key: opaquePBES2(), PBES2Salt: []byte("0123456789abcdef")},
+			nil,
+			true,
+		},
+		{
+			"OpaqueWithoutParametersIsFine",
+			Recipient{Algorithm: PBES2_HS256_A128KW, Key: opaquePBES2()},
+			nil,
+			false,
+		},
+		{
+			"DirectKeyHonoursThem",
+			Recipient{Algorithm: PBES2_HS256_A128KW, Key: password, PBES2Count: 8192},
+			nil,
+			false,
+		},
+		{
+			"OpaqueDropsPartyInformation",
+			Recipient{Algorithm: ECDH_ES_A128KW, Key: makeOpaqueKeyEncrypter(t, &ecTestKey256.PublicKey, ECDH_ES_A128KW, "opaque")},
+			new(EncrypterOptions).WithHeader(headerAPU, base64.RawURLEncoding.EncodeToString([]byte("Alice"))),
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			encrypter, err := NewEncrypter(A128CBC_HS256, tc.recipient, tc.opts)
+
+			if tc.wantErr {
+				if !errors.Is(err, ErrUnsupportedRecipientParameter) {
+					t.Fatalf("NewEncrypter: got %v, want %v", err, ErrUnsupportedRecipientParameter)
+				}
+
+				// The multi-recipient constructor shares addRecipient, so it must agree.
+				if _, err = NewMultiEncrypter(A128CBC_HS256, []Recipient{tc.recipient}, tc.opts); !errors.Is(err, ErrUnsupportedRecipientParameter) {
+					t.Fatalf("NewMultiEncrypter: got %v, want %v", err, ErrUnsupportedRecipientParameter)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewEncrypter: %v", err)
+			}
+
+			obj, err := encrypter.Encrypt([]byte("lorem ipsum"))
+			if err != nil {
+				t.Fatalf("Encrypt: %v", err)
+			}
+
+			serialized, err := obj.CompactSerialize()
+			if err != nil {
+				t.Fatalf("CompactSerialize: %v", err)
+			}
+
+			parsed, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{PBES2_HS256_A128KW}, []ContentEncryption{A128CBC_HS256})
+			if err != nil {
+				t.Fatalf("ParseEncryptedCompact: %v", err)
+			}
+
+			output, err := parsed.Decrypt(password)
+			if err != nil {
+				t.Fatalf("Decrypt: %v", err)
+			}
+
+			if string(output) != "lorem ipsum" {
+				t.Errorf("plaintext = %q, want %q", output, "lorem ipsum")
+			}
+
+			if tc.recipient.PBES2Count == 0 {
+				return
+			}
+
+			// A count the encrypter did accept has to reach the header, or the rejection above is guarding nothing.
+			var header struct {
+				P2C int `json:"p2c"`
+			}
+
+			protected, err := base64.RawURLEncoding.DecodeString(strings.Split(serialized, ".")[0])
+			if err != nil {
+				t.Fatalf("decode protected header: %v", err)
+			}
+
+			if err = json.Unmarshal(protected, &header); err != nil {
+				t.Fatalf("unmarshal protected header: %v", err)
+			}
+
+			if header.P2C != tc.recipient.PBES2Count {
+				t.Errorf("p2c = %d, want %d", header.P2C, tc.recipient.PBES2Count)
+			}
+		})
+	}
+}
+
 // The encrypter has the same collision as the signer did: "enc" and "zip" are written into the protected header
 // and then ExtraHeaders is copied over the top, so a caller-supplied value replaced what the encrypter actually
 // did. "alg" is per recipient and was already caught as a duplicate header parameter at encrypt time; rejecting

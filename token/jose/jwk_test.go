@@ -1732,3 +1732,54 @@ func TestTryJWKSPassesThroughNonSetKeys(t *testing.T) {
 
 	assert.Equal(t, keys[0], any(&rsaTestKey.PublicKey))
 }
+
+// Thumbprint reads key material before anything has checked that the key is well formed, so a key the caller
+// built by hand rather than parsed took the process down: an *ecdsa.PublicKey with no Curve dereferenced nil in
+// curveSize, and an ed25519.PrivateKey shorter than the seed was sliced out of range. Neither is reachable from
+// parsed input, since the parsers validate, but a library owes its callers an error rather than a panic.
+func TestThumbprintRejectsMalformedKeys(t *testing.T) {
+	valid, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name    string
+		key     any
+		wantErr bool
+	}{
+		{"ECDSAPublicKeyWithoutCurve", &ecdsa.PublicKey{}, true},
+		{"ECDSAPrivateKeyWithoutCurve", &ecdsa.PrivateKey{}, true},
+		// A typed nil satisfies the type switch and is dereferenced by the case arm before any field is read.
+		{"NilECDSAPublicKey", (*ecdsa.PublicKey)(nil), true},
+		{"NilECDSAPrivateKey", (*ecdsa.PrivateKey)(nil), true},
+		{"NilRSAPublicKey", (*rsa.PublicKey)(nil), true},
+		{"NilRSAPrivateKey", (*rsa.PrivateKey)(nil), true},
+		{"Ed25519PrivateKeyTooShort", ed25519.PrivateKey([]byte("shorter than a seed")), true},
+		{"ValidKey", &valid.PublicKey, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := &JSONWebKey{Key: tc.key}
+
+			thumbprint, err := key.Thumbprint(crypto.SHA256)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Thumbprint returned %x, want an error", thumbprint)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Thumbprint: %v", err)
+			}
+
+			if len(thumbprint) != crypto.SHA256.Size() {
+				t.Errorf("thumbprint length = %d, want %d", len(thumbprint), crypto.SHA256.Size())
+			}
+		})
+	}
+}

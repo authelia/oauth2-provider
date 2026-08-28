@@ -559,3 +559,36 @@ func BenchmarkDecryptAES256_CBCHMAC_1MB(b *testing.B) {
 func BenchmarkDecryptAES256_CBCHMAC_64MB(b *testing.B) {
 	benchDecryptCBCHMAC(b, 32, 67108864)
 }
+
+func TestNewCBCHMACRejectsUnsupportedKeySize(t *testing.T) {
+	newBlockCipher := func([]byte) (cipher.Block, error) { return blockCipherStub{}, nil }
+
+	for _, size := range []int{2, 20, 34, 40, 128} {
+		aead, err := NewCBCHMAC(make([]byte, size*2), newBlockCipher)
+		if err == nil {
+			t.Errorf("a %d byte half-key was accepted, giving %T", size, aead)
+		}
+	}
+
+	// An odd length has no halves. Rounding down gave an encryption key a byte longer than the integrity key and
+	// an auth tag sized from the shorter of the two, which is not the key the caller passed under any reading.
+	for _, size := range []int{33, 49, 65} {
+		aead, err := NewCBCHMAC(make([]byte, size), newBlockCipher)
+		if err == nil {
+			t.Errorf("a %d byte key was accepted, giving %T", size, aead)
+		}
+	}
+
+	// The three the specification defines still work.
+	for _, size := range []int{16, 24, 32} {
+		if _, err := NewCBCHMAC(make([]byte, size*2), newBlockCipher); err != nil {
+			t.Errorf("a %d byte half-key was rejected: %v", size, err)
+		}
+	}
+}
+
+type blockCipherStub struct{}
+
+func (blockCipherStub) BlockSize() int          { return 16 }
+func (blockCipherStub) Encrypt(dst, src []byte) { copy(dst, src) }
+func (blockCipherStub) Decrypt(dst, src []byte) { copy(dst, src) }

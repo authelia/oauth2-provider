@@ -464,8 +464,8 @@ func (obj JSONWebSignature) UnsafePayloadWithoutVerification() []byte {
 // The verificationKey argument must have one of the types allowed for the
 // verificationKey argument of JSONWebSignature.Verify().
 func (obj JSONWebSignature) DetachedVerify(payload []byte, verificationKey any) error {
-	if len(obj.Signatures) > 1 {
-		return errors.New("go-jose/go-jose: too many signatures in payload; expecting only one")
+	if len(obj.Signatures) != 1 {
+		return errors.New("go-jose/go-jose: expecting exactly one signature in payload")
 	}
 
 	signature := obj.Signatures[0]

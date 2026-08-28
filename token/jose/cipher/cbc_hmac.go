@@ -34,6 +34,12 @@ const (
 
 // NewCBCHMAC instantiates a new AEAD based on CBC+HMAC.
 func NewCBCHMAC(key []byte, newBlockCipher func([]byte) (cipher.Block, error)) (cipher.AEAD, error) {
+	// RFC 7518 Section 5.2.2.1 splits the key into equal halves, so an odd length is not a key this construction
+	// is defined over. Rounding down would hand the block cipher a half a byte longer than the MAC's.
+	if len(key)%2 != 0 {
+		return nil, errors.New("go-jose/go-jose: invalid key size for AES_CBC_HMAC_SHA2")
+	}
+
 	keySize := len(key) / 2
 	integrityKey := key[:keySize]
 	encryptionKey := key[keySize:]
@@ -43,6 +49,8 @@ func NewCBCHMAC(key []byte, newBlockCipher func([]byte) (cipher.Block, error)) (
 		return nil, err
 	}
 
+	// RFC 7518 Section 5.2 defines AES_CBC_HMAC_SHA2 for these three sizes only. Without a default the switch
+	// left hash nil for anything else, and the AEAD panicked the first time it computed an auth tag.
 	var hash func() hash.Hash
 	switch keySize {
 	case 16:
@@ -51,6 +59,8 @@ func NewCBCHMAC(key []byte, newBlockCipher func([]byte) (cipher.Block, error)) (
 		hash = sha512.New384
 	case 32:
 		hash = sha512.New
+	default:
+		return nil, errors.New("go-jose/go-jose: invalid key size for AES_CBC_HMAC_SHA2")
 	}
 
 	return &cbcAEAD{

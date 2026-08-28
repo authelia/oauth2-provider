@@ -463,11 +463,16 @@ const ecThumbprintTemplate = `{"crv":"%s","kty":"EC","x":"%s","y":"%s"}`
 const edThumbprintTemplate = `{"crv":"%s","kty":"OKP","x":"%s"}`
 
 func ecThumbprintInput(curve elliptic.Curve, x, y *big.Int) (string, error) {
-	coordLength := curveSize(curve)
+	if curve == nil || x == nil || y == nil {
+		return "", errors.New("go-jose/go-jose: invalid elliptic key, curve and coordinates are required")
+	}
+
 	crv, err := curveName(curve)
 	if err != nil {
 		return "", err
 	}
+
+	coordLength := curveSize(curve)
 
 	if len(x.Bytes()) > coordLength || len(y.Bytes()) > coordLength {
 		return "", errors.New("go-jose/go-jose: invalid elliptic key (too large)")
@@ -504,6 +509,12 @@ func edThumbprintInput(ed ed25519.PublicKey) (string, error) {
 // Thumbprint computes the JWK Thumbprint of a key using the
 // indicated hash algorithm.
 func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
+	// A typed nil satisfies the type switch below, and each case arm reads a field of the key it matched, so the
+	// nil has to be turned away before the switch rather than inside any one of its arms.
+	if value := reflect.ValueOf(k.Key); value.Kind() == reflect.Ptr && value.IsNil() {
+		return nil, fmt.Errorf("go-jose/go-jose: nil key of type '%s'", value.Type())
+	}
+
 	var input string
 	var err error
 	switch key := k.Key.(type) {
@@ -518,6 +529,10 @@ func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 	case *rsa.PrivateKey:
 		input, err = rsaThumbprintInput(key.N, key.E)
 	case ed25519.PrivateKey:
+		if len(key) != ed25519.PrivateKeySize {
+			return nil, fmt.Errorf("go-jose/go-jose: invalid ed25519 private key, expected %d bytes, got %d", ed25519.PrivateKeySize, len(key))
+		}
+
 		input, err = edThumbprintInput(ed25519.PublicKey(key[32:]))
 	case OpaqueSigner:
 		return key.Public().Thumbprint(hash)

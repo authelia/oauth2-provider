@@ -297,3 +297,42 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 
 	assert.NoError(b, err)
 }
+
+// TestIntrospectJWTRecoversClientID pins the round trip: a stateless access token carries 'client_id', so the request
+// this validator reconstructs names the client the token was issued to rather than an empty one.
+func TestIntrospectJWTRecoversClientID(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
+		},
+		Config: config,
+	}
+
+	validator := &StatelessJWTValidator{
+		StatelessJWTStrategy: strategy,
+		Config: &oauth2.Config{
+			ScopeStrategy: oauth2.HierarchicScopeStrategy,
+		},
+	}
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = &oauth2.DefaultClient{ID: "client-abc"}
+
+	tokenString, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, err)
+
+	areq := oauth2.NewAccessRequest(nil)
+
+	_, err = validator.IntrospectToken(t.Context(), tokenString, oauth2.AccessToken, areq, []string{})
+	require.NoError(t, err)
+
+	require.NotNil(t, areq.GetClient())
+	assert.Equal(t, "client-abc", areq.GetClient().GetID())
+}

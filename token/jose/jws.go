@@ -50,6 +50,33 @@ func payloadIsBase64(protected *rawHeader) (bool, error) {
 	return protected.getB64()
 }
 
+// checkB64Critical verifies that a header which uses the "b64" parameter also marks it critical. RFC 7797
+// Section 6 requires that pairing so an implementation which does not implement "b64" rejects the JWS rather than
+// reading the payload under the wrong encoding, which Section 8 describes as the misinterpretation it prevents.
+// The requirement is on the parameter being used at all, not on the value it carries.
+func checkB64Critical(protected *rawHeader) error {
+	if protected == nil {
+		return nil
+	}
+
+	if _, ok := (*protected)[headerB64]; !ok {
+		return nil
+	}
+
+	crit, err := protected.getCritical()
+	if err != nil {
+		return err
+	}
+
+	for _, name := range crit {
+		if name == headerB64 {
+			return nil
+		}
+	}
+
+	return ErrB64NotCritical
+}
+
 // resolvedPayload wraps payload octets whose encoding has already been resolved.
 func resolvedPayload(payload []byte) *rawPayload {
 	return &rawPayload{resolved: payload, isResolved: true}
@@ -371,6 +398,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 			return nil, errors.New("go-jose/go-jose: invalid embedded jwk, must be public key")
 		}
 
+		if err = checkB64Critical(signature.protected); err != nil {
+			return nil, err
+		}
+
 		b64, err := payloadIsBase64(signature.protected)
 		if err != nil {
 			return nil, err
@@ -442,6 +473,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		original := sig
 
 		obj.Signatures[i].original = &original
+
+		if err = checkB64Critical(obj.Signatures[i].protected); err != nil {
+			return nil, err
+		}
 
 		b64, err := payloadIsBase64(obj.Signatures[i].protected)
 		if err != nil {

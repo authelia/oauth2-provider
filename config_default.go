@@ -9,6 +9,7 @@ import (
 	"hash"
 	"html/template"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -407,6 +408,18 @@ type Config struct {
 	// RFC7591ClientRegistrationScopes are the scopes a client creation token may carry. The token must carry at least
 	// one of them. Empty means consts.ScopeClientRegistration.
 	RFC7591ClientRegistrationScopes []string
+
+	formPostResponseWriterOnce                  sync.Once
+	responseModeHandlersOnce                    sync.Once
+	jwtStrategyOnce                             sync.Once
+	scopeStrategyOnce                           sync.Once
+	audienceStrategyOnce                        sync.Once
+	resourceStrategyOnce                        sync.Once
+	jwksFetcherStrategyOnce                     sync.Once
+	authorizeErrorFieldResponseStrategyOnce     sync.Once
+	tokenEndpointClientAuthStrategyOnce         sync.Once
+	introspectionEndpointClientAuthStrategyOnce sync.Once
+	revocationEndpointClientAuthStrategyOnce    sync.Once
 }
 
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
@@ -494,9 +507,11 @@ func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template
 }
 
 func (c *Config) GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter {
-	if c.FormPostResponseWriter == nil {
-		c.FormPostResponseWriter = DefaultFormPostResponseWriter
-	}
+	c.formPostResponseWriterOnce.Do(func() {
+		if c.FormPostResponseWriter == nil {
+			c.FormPostResponseWriter = DefaultFormPostResponseWriter
+		}
+	})
 
 	return c.FormPostResponseWriter
 }
@@ -506,9 +521,11 @@ func (c *Config) GetMessageCatalog(ctx context.Context) i18n.MessageCatalog {
 }
 
 func (c *Config) GetResponseModeHandlers(ctx context.Context) ResponseModeHandlers {
-	if len(c.ResponseModeHandlers) == 0 {
-		c.ResponseModeHandlers = []ResponseModeHandler{&DefaultResponseModeHandler{Config: c}}
-	}
+	c.responseModeHandlersOnce.Do(func() {
+		if len(c.ResponseModeHandlers) == 0 {
+			c.ResponseModeHandlers = []ResponseModeHandler{&DefaultResponseModeHandler{Config: c}}
+		}
+	})
 
 	return c.ResponseModeHandlers
 }
@@ -626,11 +643,13 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context)
 }
 
 func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
-	if c.JWTStrategy == nil {
-		c.JWTStrategy = &jwt.DefaultStrategy{
-			Config: c,
+	c.jwtStrategyOnce.Do(func() {
+		if c.JWTStrategy == nil {
+			c.JWTStrategy = &jwt.DefaultStrategy{
+				Config: c,
+			}
 		}
-	}
+	})
 
 	return c.JWTStrategy
 }
@@ -645,9 +664,11 @@ func (c *Config) GetAllowedPrompts(_ context.Context) []string {
 
 // GetScopeStrategy returns the scope strategy to be used. Defaults to glob scope strategy.
 func (c *Config) GetScopeStrategy(_ context.Context) ScopeStrategy {
-	if c.ScopeStrategy == nil {
-		c.ScopeStrategy = WildcardScopeStrategy
-	}
+	c.scopeStrategyOnce.Do(func() {
+		if c.ScopeStrategy == nil {
+			c.ScopeStrategy = WildcardScopeStrategy
+		}
+	})
 
 	return c.ScopeStrategy
 }
@@ -655,9 +676,11 @@ func (c *Config) GetScopeStrategy(_ context.Context) ScopeStrategy {
 // GetAudienceStrategy returns the audience matching strategy. Defaults to ExactAudienceStrategy
 // (audience parameter values are matched against the client's allowed audience list via exact string equality).
 func (c *Config) GetAudienceStrategy(_ context.Context) AudienceStrategy {
-	if c.AudienceStrategy == nil {
-		c.AudienceStrategy = DefaultAudienceStrategy
-	}
+	c.audienceStrategyOnce.Do(func() {
+		if c.AudienceStrategy == nil {
+			c.AudienceStrategy = DefaultAudienceStrategy
+		}
+	})
 
 	return c.AudienceStrategy
 }
@@ -665,9 +688,11 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceStrategy {
 // GetResourceStrategy returns the RFC 8707 resource indicator matching strategy. Defaults to
 // DefaultAudienceStrategy (URL-based matching against the client's allowed audience list).
 func (c *Config) GetResourceStrategy(_ context.Context) ResourceStrategy {
-	if c.ResourceStrategy == nil {
-		c.ResourceStrategy = DefaultAudienceStrategy
-	}
+	c.resourceStrategyOnce.Do(func() {
+		if c.ResourceStrategy == nil {
+			c.ResourceStrategy = DefaultAudienceStrategy
+		}
+	})
 
 	return c.ResourceStrategy
 }
@@ -751,9 +776,11 @@ func (c *Config) GetBCryptCost(_ context.Context) int {
 
 // GetJWKSFetcherStrategy returns the jwt.JWKSFetcherStrategy.
 func (c *Config) GetJWKSFetcherStrategy(_ context.Context) jwt.JWKSFetcherStrategy {
-	if c.JWKSFetcherStrategy == nil {
-		c.JWKSFetcherStrategy = NewDefaultJWKSFetcherStrategy()
-	}
+	c.jwksFetcherStrategyOnce.Do(func() {
+		if c.JWKSFetcherStrategy == nil {
+			c.JWKSFetcherStrategy = NewDefaultJWKSFetcherStrategy()
+		}
+	})
 
 	return c.JWKSFetcherStrategy
 }
@@ -884,25 +911,31 @@ func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration
 }
 
 func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy) {
-	if c.AuthorizeErrorFieldResponseStrategy == nil {
-		c.AuthorizeErrorFieldResponseStrategy = &JSONAuthorizeErrorFieldResponseStrategy{Config: c}
-	}
+	c.authorizeErrorFieldResponseStrategyOnce.Do(func() {
+		if c.AuthorizeErrorFieldResponseStrategy == nil {
+			c.AuthorizeErrorFieldResponseStrategy = &JSONAuthorizeErrorFieldResponseStrategy{Config: c}
+		}
+	})
 
 	return c.AuthorizeErrorFieldResponseStrategy
 }
 
 func (c *Config) GetTokenEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	if c.TokenEndpointClientAuthStrategy == nil {
-		c.TokenEndpointClientAuthStrategy = &TokenEndpointClientAuthStrategy{}
-	}
+	c.tokenEndpointClientAuthStrategyOnce.Do(func() {
+		if c.TokenEndpointClientAuthStrategy == nil {
+			c.TokenEndpointClientAuthStrategy = &TokenEndpointClientAuthStrategy{}
+		}
+	})
 
 	return c.TokenEndpointClientAuthStrategy
 }
 
 func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	if c.IntrospectionEndpointClientAuthStrategy == nil {
-		c.IntrospectionEndpointClientAuthStrategy = &IntrospectionEndpointClientAuthStrategy{}
-	}
+	c.introspectionEndpointClientAuthStrategyOnce.Do(func() {
+		if c.IntrospectionEndpointClientAuthStrategy == nil {
+			c.IntrospectionEndpointClientAuthStrategy = &IntrospectionEndpointClientAuthStrategy{}
+		}
+	})
 
 	return c.IntrospectionEndpointClientAuthStrategy
 }
@@ -912,9 +945,11 @@ func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context)
 }
 
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
-	if c.RevocationEndpointClientAuthStrategy == nil {
-		c.RevocationEndpointClientAuthStrategy = &RevocationEndpointClientAuthStrategy{}
-	}
+	c.revocationEndpointClientAuthStrategyOnce.Do(func() {
+		if c.RevocationEndpointClientAuthStrategy == nil {
+			c.RevocationEndpointClientAuthStrategy = &RevocationEndpointClientAuthStrategy{}
+		}
+	})
 
 	return c.RevocationEndpointClientAuthStrategy
 }

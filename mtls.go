@@ -76,6 +76,28 @@ func ClientCertificateFromRequest(r *http.Request, header string) (cert *x509.Ce
 	return nil, nil
 }
 
+// ClientCertificateChainVerified reports whether the chain of the certificate ClientCertificateFromRequest returns
+// was validated before the handler ran. RFC 8705 Section 2.1 requires a validated chain for the 'tls_client_auth'
+// method; Section 2.2's 'self_signed_tls_client_auth' matches a registered key directly and does not.
+//
+// A forwarded certificate is reported verified because the proxy that performed the handshake is what validated it,
+// which Section 6.5 places out of scope. On a direct connection Go populates VerifiedChains only for a listener
+// configured RequireAndVerifyClientCert or VerifyClientCertIfGiven; RequestClientCert and RequireAnyClientCert leave
+// it empty while still populating PeerCertificates.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
+func ClientCertificateChainVerified(r *http.Request, header string) (verified bool) {
+	if r == nil {
+		return false
+	}
+
+	if header != "" {
+		return r.Header.Get(header) != ""
+	}
+
+	return r.TLS != nil && len(r.TLS.VerifiedChains) != 0
+}
+
 // ParseClientCertificateHeader decodes a client certificate forwarded by a TLS terminating proxy.
 //
 // No encoding is prescribed for this header, and the proxies that emit one disagree: Traefik v2 and nginx

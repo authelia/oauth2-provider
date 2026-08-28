@@ -68,20 +68,27 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 		secret = secretBasic
 	}
 
-	var cert *x509.Certificate
+	var (
+		cert     *x509.Certificate
+		verified bool
+	)
 
 	if s.Config.GetMTLSEnabled(ctx) {
-		if cert, err = ClientCertificateFromRequest(r, s.Config.GetMTLSClientCertificateHeader(ctx)); err != nil {
+		header := s.Config.GetMTLSClientCertificateHeader(ctx)
+
+		if cert, err = ClientCertificateFromRequest(r, header); err != nil {
 			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
 		}
+
+		verified = ClientCertificateChainVerified(r, header)
 	}
 
 	hasNone := !hasPost && !hasBasic && assertion == nil && len(id) != 0
 
-	return s.authenticate(ctx, id, secret, assertion, cert, hasBasic, hasPost, hasNone, strategy)
+	return s.authenticate(ctx, id, secret, assertion, cert, verified, hasBasic, hasPost, hasNone, strategy)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, cert *x509.Certificate, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, cert *x509.Certificate, verified bool, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	if assertion != nil && assertion.Client != nil {
 		client = assertion.Client
 	}
@@ -151,7 +158,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 
 	switch {
 	case hasMTLS:
-		method, err = s.doAuthenticateMTLS(ctx, client, cert, strategy)
+		method, err = s.doAuthenticateMTLS(ctx, client, cert, verified, strategy)
 	case assertion != nil:
 		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, strategy)
 	case hasBasic, hasPost:

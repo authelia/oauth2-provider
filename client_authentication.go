@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jose"
@@ -25,6 +26,9 @@ type ClientAuthenticationStrategy interface {
 
 var (
 	ErrClientSecretNotRegistered = errors.New("error occurred checking the client secret: the client is not registered with a secret")
+
+	// ErrClientSecretExpired is returned when the client's secret has passed the expiry recorded at registration.
+	ErrClientSecretExpired = errors.New("error occurred checking the client secret: the client secret has expired")
 )
 
 // AuthenticateClient authenticates client requests using the configured strategy returned by the oauth2.Configurator
@@ -54,6 +58,15 @@ func CompareClientSecret(ctx context.Context, client Client, rawSecret []byte) (
 
 	if secret == nil || !secret.Valid() {
 		return ErrClientSecretNotRegistered
+	}
+
+	// RFC 7591 Section 3.2.1 defines 'client_secret_expires_at' as the time at which the secret will expire, with 0
+	// meaning it does not. A registration response states that time to the client, so the secret must stop
+	// authenticating once it passes.
+	if expiring, ok := client.(ExpiringClientSecretClient); ok {
+		if expires := expiring.GetClientSecretExpiresAt(); !expires.IsZero() && !expires.After(time.Now()) {
+			return ErrClientSecretExpired
+		}
 	}
 
 	if err = secret.Compare(ctx, rawSecret); err == nil {

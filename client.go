@@ -60,6 +60,15 @@ type RotatedClientSecretsClient interface {
 	Client
 }
 
+// ExpiringClientSecretClient extends Client interface by a method providing the time the client secret expires. A
+// zero time means the secret does not expire, which RFC 7591 Section 3.2.1 also assigns to a
+// 'client_secret_expires_at' of 0.
+type ExpiringClientSecretClient interface {
+	GetClientSecretExpiresAt() (expires time.Time)
+
+	Client
+}
+
 // ProofKeyCodeExchangeClient is a Client implementation which provides PKCE client policy values.
 type ProofKeyCodeExchangeClient interface {
 	GetEnforcePKCE() (enforce bool)

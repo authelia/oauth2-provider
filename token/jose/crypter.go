@@ -169,7 +169,9 @@ func (eo *EncrypterOptions) WithType(typ ContentType) *EncrypterOptions {
 // on the password-based encryption algorithms PBES2-HS256+A128KW,
 // PBES2-HS384+A192KW, and PBES2-HS512+A256KW. If they are not provided a safe
 // default of 100000 will be used for the count and a 128-bit random salt will
-// be generated.
+// be generated. An [OpaqueKeyEncrypter] derives the key itself and cannot apply
+// either, so supplying them alongside one is an error rather than a request
+// this package can meet.
 type Recipient struct {
 	Algorithm KeyAlgorithm
 	// Key must have one of these types:
@@ -342,17 +344,35 @@ func (ctx *genericEncrypter) addRecipient(recipient Recipient) (err error) {
 		recipientInfo.keyID = recipient.KeyID
 	}
 
+	// These parameters reach the key encrypter by type assertion, and an OpaqueKeyEncrypter satisfies neither
+	// assertion: it derives or wraps the key itself. Supplying them anyway used to discard them without a word,
+	// leaving a message encrypted under defaults, or a header advertising party information the key derivation
+	// never saw. A caller which supplied nothing is unaffected, since there is then nothing to discard.
 	switch recipient.Algorithm {
 	case PBES2_HS256_A128KW, PBES2_HS384_A192KW, PBES2_HS512_A256KW:
-		if sr, ok := recipientInfo.keyEncrypter.(*symmetricKeyCipher); ok {
-			sr.p2c = recipient.PBES2Count
-			sr.p2s = recipient.PBES2Salt
+		sr, ok := recipientInfo.keyEncrypter.(*symmetricKeyCipher)
+		if !ok {
+			if recipient.PBES2Count != 0 || len(recipient.PBES2Salt) != 0 {
+				return fmt.Errorf("%w: %T cannot apply PBES2Count or PBES2Salt", ErrUnsupportedRecipientParameter, recipientInfo.keyEncrypter)
+			}
+
+			break
 		}
+
+		sr.p2c = recipient.PBES2Count
+		sr.p2s = recipient.PBES2Salt
 	case ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW:
-		if er, ok := recipientInfo.keyEncrypter.(*ecEncrypterVerifier); ok {
-			er.apuData = ctx.apuData
-			er.apvData = ctx.apvData
+		er, ok := recipientInfo.keyEncrypter.(*ecEncrypterVerifier)
+		if !ok {
+			if len(ctx.apuData) != 0 || len(ctx.apvData) != 0 {
+				return fmt.Errorf("%w: %T cannot apply the apu or apv header parameter", ErrUnsupportedRecipientParameter, recipientInfo.keyEncrypter)
+			}
+
+			break
 		}
+
+		er.apuData = ctx.apuData
+		er.apvData = ctx.apvData
 	}
 
 	ctx.recipients = append(ctx.recipients, recipientInfo)

@@ -211,6 +211,15 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	mapClaims := claims.ToMapClaims()
 
+	// RFC9068 Section 2.2 requires 'client_id'. It identifies the client the token was issued to, so it is taken
+	// from the request rather than the session, whose extra claims are not authoritative for it. StatelessJWTValidator
+	// reads it back to reconstruct that client.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+	if requestClient := request.GetClient(); requestClient != nil {
+		mapClaims[consts.ClaimClientIdentifier] = requestClient.GetID()
+	}
+
 	// The claims above include the session's extra claims, which may carry a 'cnf' of their own. This rebuilds the
 	// claim from the session so the token asserts only the bindings the server actually established, and only for
 	// binding methods that are currently enabled.

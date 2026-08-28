@@ -427,3 +427,37 @@ func TestSplitN(t *testing.T) {
 	assert.Len(t, split2, 2)
 	assert.Len(t, split3, 3)
 }
+
+// TestGenerateJWTIncludesClientID covers the 'client_id' claim RFC 9068 Section 2.2 makes REQUIRED of a JWT profile
+// access token.
+func TestGenerateJWTIncludesClientID(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = &oauth2.DefaultClient{ID: "client-abc"}
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, err)
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3, "%s - %v", token, parts)
+
+	rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var payload map[string]any
+
+	require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
+}

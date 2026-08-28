@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -278,4 +279,76 @@ func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestDefaultJWKSFetcherStrategyHardening covers the controls a fetch of a client-supplied 'jwks_uri' needs. The
+// registrant chooses the location, so the fetch must not follow a redirect off it, must not read an unbounded body,
+// and must not report the origin's status code back to the caller, which would make the authorization server a probe
+// of a network the caller cannot otherwise reach.
+func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
+	t.Run("ShouldNotFollowRedirects", func(t *testing.T) {
+		var reached atomic.Bool
+
+		internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reached.Store(true)
+
+			require.NoError(t, json.NewEncoder(w).Encode(&jose.JSONWebKeySet{}))
+		}))
+		t.Cleanup(internal.Close)
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, internal.URL, http.StatusFound)
+		}))
+		t.Cleanup(ts.Close)
+
+		_, err := NewDefaultJWKSFetcherStrategy().Resolve(context.Background(), ts.URL, true)
+
+		require.Error(t, err)
+		assert.False(t, reached.Load(), "the redirect target must not be requested")
+	})
+
+	t.Run("ShouldBoundTheResponseBody", func(t *testing.T) {
+		// Valid, well-formed JSON, merely larger than the bound. Malformed JSON would fail to decode with or
+		// without a limit and would prove nothing.
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+
+			var b strings.Builder
+
+			b.WriteString(`{"keys":[`)
+
+			for i := 0; b.Len() < (2 << 20); i++ {
+				if i != 0 {
+					b.WriteString(",")
+				}
+
+				b.WriteString(`{"kty":"oct","k":"` + strings.Repeat("A", 4096) + `"}`)
+			}
+
+			b.WriteString(`]}`)
+
+			_, _ = w.Write([]byte(b.String()))
+		}))
+		t.Cleanup(ts.Close)
+
+		_, err := NewDefaultJWKSFetcherStrategy().Resolve(context.Background(), ts.URL, true)
+
+		require.Error(t, err)
+	})
+
+	t.Run("ShouldNotDiscloseTheOriginStatusCode", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}))
+		t.Cleanup(ts.Close)
+
+		_, err := NewDefaultJWKSFetcherStrategy().Resolve(context.Background(), ts.URL, true)
+
+		require.Error(t, err)
+
+		var rfc *RFC6749Error
+
+		require.ErrorAs(t, err, &rfc)
+		assert.NotContains(t, rfc.HintField, "418", "the origin's status code must not reach the caller through the hint")
+	})
 }

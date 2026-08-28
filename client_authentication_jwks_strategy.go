@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -101,19 +102,24 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 			hc = s.clientSourceFunc(ctx)
 		}
 
-		response, err := hc.Do(req.WithContext(ctx))
+		response, err := HTTPClientWithoutRedirects(hc).Do(req.WithContext(ctx))
 		if err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
 		}
 		defer response.Body.Close()
 
+		// The status code is reported in the debug field rather than the hint. The location is registrant supplied,
+		// so returning the origin's status verbatim would let a registrant use this server to probe a network it
+		// cannot reach and read the result.
 		if response.StatusCode < 200 || response.StatusCode >= 400 {
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Expected successful status code in range of 200 - 399 from location '%s' but received code %d.", location, response.StatusCode))
+			return nil, errorsx.WithStack(ErrServerError.
+				WithHintf("Expected a successful status code from location '%s'.", location).
+				WithDebugf("The request to location '%s' returned the status code %d.", location, response.StatusCode))
 		}
 
 		var set jose.JSONWebKeySet
 
-		if err = json.NewDecoder(response.Body).Decode(&set); err != nil {
+		if err = json.NewDecoder(io.LimitReader(response.Body, MaxFetchedBodyBytes)).Decode(&set); err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to decode JSON Web Keys from location '%s'. Please check for typos and if the URL returns valid JSON.", location).WithWrap(err).WithDebugError(err))
 		}
 

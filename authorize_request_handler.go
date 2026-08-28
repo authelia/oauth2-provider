@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -252,8 +253,25 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
 		}
 
-		hc := f.Config.GetHTTPClient(ctx)
-		response, err := hc.Get(requestURI)
+		// RFC9101 Section 10.4.1 requires that a 'request_uri' fetch not become a denial of service or a probe: the
+		// location is checked against the registered set above, the request carries the caller's context so a slow
+		// origin cannot outlive it, redirects are refused so a registered location cannot hand the fetch to an
+		// unregistered one, and the body is bounded.
+		//
+		// The same section also suggests checking that the response media type is 'application/oauth-authz-req+jwt'.
+		// That is not done: the origin chooses the header, so it stops no attack the other three controls do not,
+		// while 'text/plain' is what a request object is commonly served as and rejecting it would break those
+		// deployments. The content is a JWS verified against the client's registered key regardless.
+		//
+		// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
+		hc := HTTPClientWithoutRedirects(f.Config.GetHTTPClient(ctx))
+
+		req, err := retryablehttp.NewRequest(http.MethodGet, requestURI, nil)
+		if err != nil {
+			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which could not be used to build a request: %+v.", request.GetClient().GetID(), requestURI, err))
+		}
+
+		response, err := hc.Do(req.WithContext(ctx))
 		if err != nil {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object from the URI '%s' with an error: %+v.", request.GetClient().GetID(), requestURI, err))
 		}
@@ -263,7 +281,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object as the response code was %d %s but a 200 OK is expected.", request.GetClient().GetID(), response.StatusCode, http.StatusText(response.StatusCode)))
 		}
 
-		body, err := io.ReadAll(response.Body)
+		body, err := io.ReadAll(io.LimitReader(response.Body, MaxFetchedBodyBytes))
 		if err != nil {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided a response body that could not be read with error: %+v.", request.GetClient().GetID(), err))
 		}

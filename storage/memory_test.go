@@ -6,6 +6,7 @@ package storage
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -231,4 +232,41 @@ func TestMemoryStoreClientRegistrationTokenSessions(t *testing.T) {
 
 	_, err = store.GetClientRegistrationTokenSession(ctx, "cr-sig", nil)
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+}
+
+func TestMemoryStore_RevokeRefreshTokenSynchronisesRefreshTokens(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+
+	const n = 64
+
+	for i := 0; i < n; i++ {
+		id := strconv.Itoa(i)
+		request := &oauth2.Request{ID: "req-" + id, Session: &oauth2.DefaultSession{}}
+
+		require.NoError(t, s.CreateAccessTokenSession(ctx, "at-"+id, request))
+		require.NoError(t, s.CreateRefreshTokenSession(ctx, "rt-"+id, "at-"+id, request))
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(2 * n)
+
+	for i := 0; i < n; i++ {
+		id := strconv.Itoa(i)
+
+		go func() {
+			defer wg.Done()
+
+			_ = s.RevokeRefreshToken(ctx, "req-"+id)
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			_, _ = s.GetRefreshTokenSession(ctx, "rt-"+id, nil)
+		}()
+	}
+
+	wg.Wait()
 }

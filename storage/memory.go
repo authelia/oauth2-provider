@@ -520,6 +520,9 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
 
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
 	if signature, exists := s.RefreshTokenRequestIDs[requestID]; exists {
 		rel, ok := s.RefreshTokens[signature]
 		if !ok {

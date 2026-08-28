@@ -959,8 +959,11 @@ func fromEcPrivateKey(ec *ecdsa.PrivateKey) (*rawJSONWebKey, error) {
 // The length of this octet string MUST be ceiling(log-base-2(n)/8)
 // octets (where n is the order of the curve).
 // https://tools.ietf.org/html/rfc7518#section-6.2.2.1
+// dSize returns the octet length of a private key value on the given curve. RFC 7518 Section 6.2.2.1 defines it
+// as ceiling(log2(n)/8), where n is the order of the group rather than the prime of the underlying field. The two
+// have the same bit length on every curve this package supports, so the distinction is one of derivation.
 func dSize(curve elliptic.Curve) int {
-	order := curve.Params().P
+	order := curve.Params().N
 	bitLen := order.BitLen()
 	size := bitLen / 8
 	if bitLen%8 != 0 {

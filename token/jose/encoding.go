@@ -120,15 +120,17 @@ func inflate(input []byte) ([]byte, error) {
 	output := new(bytes.Buffer)
 	reader := flate.NewReader(bytes.NewBuffer(input))
 
-	maxCompressedSize := max(250_000, 10*int64(len(input)))
+	// The cap is on the output, not the input: a small compressed payload must not be able to expand without
+	// bound. The name says which side it governs, since the function is handling both.
+	maxDecompressedSize := max(250_000, 10*int64(len(input)))
 
-	limit := maxCompressedSize + 1
+	limit := maxDecompressedSize + 1
 	n, err := io.CopyN(output, reader, limit)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
 	if n == limit {
-		return nil, fmt.Errorf("uncompressed data would be too large (>%d bytes)", maxCompressedSize)
+		return nil, fmt.Errorf("uncompressed data would be too large (>%d bytes)", maxDecompressedSize)
 	}
 
 	err = reader.Close()

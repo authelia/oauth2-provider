@@ -877,3 +877,102 @@ func TestVerifyJWKSUnusableKeyReportsKeyError(t *testing.T) {
 		t.Errorf("expected ErrUnsupportedKeyType, got: %v", err)
 	}
 }
+
+// The protected header used to be seeded with the real algorithm and then have ExtraHeaders copied over the top,
+// so WithHeader("alg", ...) won the collision and the library signed with one algorithm under a header claiming
+// another. The signature covers the bogus header, so the token is internally consistent and simply unverifiable.
+// The same mechanism desynchronised "b64" from the "crit" entry RFC 7797 Section 6 requires alongside it, which
+// produces a JWS this package now refuses to parse.
+func TestNewSignerRejectsUnusableExtraHeaders(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+
+	testCases := []struct {
+		name    string
+		opts    func(*SignerOptions)
+		wantErr error
+	}{
+		{
+			"AlgorithmOverride",
+			func(so *SignerOptions) { so.WithHeader(headerAlgorithm, "TOTALLY-BOGUS") },
+			ErrReservedHeaderParameter,
+		},
+		{
+			"AlgorithmOverrideMatchingTheKey",
+			func(so *SignerOptions) { so.WithHeader(headerAlgorithm, string(HS256)) },
+			ErrReservedHeaderParameter,
+		},
+		{
+			"Base64WithoutCritical",
+			func(so *SignerOptions) { so.WithHeader(headerB64, false) },
+			ErrB64NotCritical,
+		},
+		{
+			"Base64ThroughTheSupportedRoute",
+			func(so *SignerOptions) { so.WithBase64(false) },
+			nil,
+		},
+		{
+			// A caller which round-trips its headers through JSON gets the list back as []any.
+			"Base64WithCriticalFromJSON",
+			func(so *SignerOptions) {
+				so.WithHeader(headerB64, false).WithHeader(headerCritical, []any{"b64"})
+			},
+			nil,
+		},
+		{
+			"KeyIDIsTheCallersToSet",
+			func(so *SignerOptions) { so.WithHeader(headerKeyID, "mine") },
+			nil,
+		},
+		{
+			"NoExtraHeaders",
+			func(so *SignerOptions) {},
+			nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := new(SignerOptions)
+			tc.opts(opts)
+
+			signer, err := NewSigner(SigningKey{Algorithm: HS256, Key: key}, opts)
+
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("NewSigner: got %v, want %v", err, tc.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewSigner: %v", err)
+			}
+
+			// What the signer does accept has to still round-trip, header and payload both.
+			obj, err := signer.Sign([]byte("NDA1"))
+			if err != nil {
+				t.Fatalf("Sign: %v", err)
+			}
+
+			serialized, err := obj.CompactSerialize()
+			if err != nil {
+				t.Fatalf("CompactSerialize: %v", err)
+			}
+
+			parsed, err := ParseSignedCompact(serialized, []SignatureAlgorithm{HS256})
+			if err != nil {
+				t.Fatalf("ParseSignedCompact: %v", err)
+			}
+
+			if _, err = parsed.Verify(key); err != nil {
+				t.Fatalf("Verify: %v", err)
+			}
+
+			if alg := parsed.Signatures[0].Protected.Algorithm; alg != string(HS256) {
+				t.Errorf("protected alg = %q, want %q", alg, HS256)
+			}
+		})
+	}
+}

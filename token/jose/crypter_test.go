@@ -27,6 +27,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -1756,6 +1757,97 @@ func TestDecryptJWKSDuplicateKid(t *testing.T) {
 			}
 			if !bytes.Equal(out, payload) {
 				t.Error("payload mismatch")
+			}
+		})
+	}
+}
+
+// The encrypter has the same collision as the signer did: "enc" and "zip" are written into the protected header
+// and then ExtraHeaders is copied over the top, so a caller-supplied value replaced what the encrypter actually
+// did. "alg" is per recipient and was already caught as a duplicate header parameter at encrypt time; rejecting
+// it here reports the real problem, and reports it before any encryption happens.
+func TestNewEncrypterRejectsUnusableExtraHeaders(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+	recipient := Recipient{Algorithm: DIRECT, Key: key}
+
+	testCases := []struct {
+		name    string
+		opts    func(*EncrypterOptions)
+		wantErr error
+	}{
+		{
+			"ContentEncryptionOverride",
+			func(eo *EncrypterOptions) { eo.WithHeader(headerEncryption, string(A256GCM)) },
+			ErrReservedHeaderParameter,
+		},
+		{
+			"CompressionOverride",
+			func(eo *EncrypterOptions) { eo.WithHeader(headerCompression, string(DEFLATE)) },
+			ErrReservedHeaderParameter,
+		},
+		{
+			"AlgorithmOverride",
+			func(eo *EncrypterOptions) { eo.WithHeader(headerAlgorithm, string(DIRECT)) },
+			ErrReservedHeaderParameter,
+		},
+		{
+			"ContentTypeIsTheCallersToSet",
+			func(eo *EncrypterOptions) { eo.WithContentType("JWT") },
+			nil,
+		},
+		{
+			"NoExtraHeaders",
+			func(eo *EncrypterOptions) {},
+			nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := new(EncrypterOptions)
+			tc.opts(opts)
+
+			encrypter, err := NewEncrypter(A128CBC_HS256, recipient, opts)
+
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("NewEncrypter: got %v, want %v", err, tc.wantErr)
+				}
+
+				// The multi-recipient constructor shares the rule.
+				if _, err = NewMultiEncrypter(A128CBC_HS256, []Recipient{recipient}, opts); !errors.Is(err, tc.wantErr) {
+					t.Fatalf("NewMultiEncrypter: got %v, want %v", err, tc.wantErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewEncrypter: %v", err)
+			}
+
+			obj, err := encrypter.Encrypt([]byte("lorem ipsum"))
+			if err != nil {
+				t.Fatalf("Encrypt: %v", err)
+			}
+
+			serialized, err := obj.CompactSerialize()
+			if err != nil {
+				t.Fatalf("CompactSerialize: %v", err)
+			}
+
+			parsed, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{DIRECT}, []ContentEncryption{A128CBC_HS256})
+			if err != nil {
+				t.Fatalf("ParseEncryptedCompact: %v", err)
+			}
+
+			output, err := parsed.Decrypt(key)
+			if err != nil {
+				t.Fatalf("Decrypt: %v", err)
+			}
+
+			if string(output) != "lorem ipsum" {
+				t.Errorf("plaintext = %q, want %q", output, "lorem ipsum")
 			}
 		})
 	}

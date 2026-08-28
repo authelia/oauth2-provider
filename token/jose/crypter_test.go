@@ -1799,6 +1799,12 @@ func TestNewEncrypterRejectsUnhonouredRecipientParameters(t *testing.T) {
 			false,
 		},
 		{
+			"OpaqueWithAnEmptySaltIsFine",
+			Recipient{Algorithm: PBES2_HS256_A128KW, Key: opaquePBES2(), PBES2Salt: []byte{}},
+			nil,
+			false,
+		},
+		{
 			"DirectKeyHonoursThem",
 			Recipient{Algorithm: PBES2_HS256_A128KW, Key: password, PBES2Count: 8192},
 			nil,
@@ -2237,6 +2243,44 @@ func TestSymmetricKeySizeIsBoundToTheAlgorithm(t *testing.T) {
 				t.Errorf("DecryptMulti for the untouched recipient = %q, %v", plaintext, err)
 			}
 		})
+	}
+}
+
+func TestNewEncrypterAcceptsEmptyPartyInformation(t *testing.T) {
+	recipient := Recipient{
+		Algorithm: ECDH_ES_A128KW,
+		Key:       makeOpaqueKeyEncrypter(t, &ecTestKey256.PublicKey, ECDH_ES_A128KW, "opaque"),
+	}
+
+	opts := new(EncrypterOptions).WithHeader(headerAPU, "").WithHeader(headerAPV, "")
+
+	encrypter, err := NewEncrypter(A128GCM, recipient, opts)
+	if err != nil {
+		t.Fatalf("NewEncrypter: %v", err)
+	}
+
+	obj, err := encrypter.Encrypt([]byte("plaintext"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	serialized, err := obj.CompactSerialize()
+	if err != nil {
+		t.Fatalf("CompactSerialize: %v", err)
+	}
+
+	parsed, err := ParseEncryptedCompact(serialized, []KeyAlgorithm{ECDH_ES_A128KW}, []ContentEncryption{A128GCM})
+	if err != nil {
+		t.Fatalf("ParseEncryptedCompact: %v", err)
+	}
+
+	plaintext, err := parsed.Decrypt(ecTestKey256)
+	if err != nil {
+		t.Fatalf("Decrypt: %v", err)
+	}
+
+	if string(plaintext) != "plaintext" {
+		t.Errorf("plaintext = %q, want %q", plaintext, "plaintext")
 	}
 }
 

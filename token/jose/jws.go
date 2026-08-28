@@ -50,6 +50,45 @@ func payloadIsBase64(protected *rawHeader) (bool, error) {
 	return protected.getB64()
 }
 
+// checkCriticalHeader verifies that a "crit" header parameter is formed the way RFC 7515 Section 4.1.11 permits:
+// it must not be an empty list, must not repeat a name, and must not name a parameter which does not occur in the
+// header. Enforcement is a recipient MAY, but each of the three is a meaningless instruction rather than a
+// difference of opinion about what is critical, and "crit" now decides whether "b64" is honoured.
+func checkCriticalHeader(protected *rawHeader) error {
+	if protected == nil {
+		return nil
+	}
+
+	if _, ok := (*protected)[headerCritical]; !ok {
+		return nil
+	}
+
+	crit, err := protected.getCritical()
+	if err != nil {
+		return err
+	}
+
+	if len(crit) == 0 {
+		return ErrInvalidCriticalHeader
+	}
+
+	seen := make(map[string]struct{}, len(crit))
+
+	for _, name := range crit {
+		if _, ok := seen[name]; ok {
+			return ErrInvalidCriticalHeader
+		}
+
+		seen[name] = struct{}{}
+
+		if _, ok := (*protected)[HeaderKey(name)]; !ok {
+			return ErrInvalidCriticalHeader
+		}
+	}
+
+	return nil
+}
+
 // checkB64Critical verifies that a header which uses the "b64" parameter also marks it critical. RFC 7797
 // Section 6 requires that pairing so an implementation which does not implement "b64" rejects the JWS rather than
 // reading the payload under the wrong encoding, which Section 8 describes as the misinterpretation it prevents.
@@ -398,6 +437,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 			return nil, errors.New("go-jose/go-jose: invalid embedded jwk, must be public key")
 		}
 
+		if err = checkCriticalHeader(signature.protected); err != nil {
+			return nil, err
+		}
+
 		if err = checkB64Critical(signature.protected); err != nil {
 			return nil, err
 		}
@@ -473,6 +516,10 @@ func (parsed *rawJSONWebSignature) sanitized(signatureAlgorithms []SignatureAlgo
 		original := sig
 
 		obj.Signatures[i].original = &original
+
+		if err = checkCriticalHeader(obj.Signatures[i].protected); err != nil {
+			return nil, err
+		}
 
 		if err = checkB64Critical(obj.Signatures[i].protected); err != nil {
 			return nil, err

@@ -94,6 +94,10 @@ var (
 	// ErrB64NotCritical indicates a JWS used the "b64" header parameter without listing it in "crit", which
 	// RFC 7797 Section 6 requires.
 	ErrB64NotCritical = errors.New("go-jose/go-jose: b64 header parameter used without being marked critical")
+
+	// ErrInvalidCriticalHeader indicates a "crit" header parameter which RFC 7515 Section 4.1.11 does not permit
+	// to be formed that way: an empty list, a repeated name, or a name which the header does not carry.
+	ErrInvalidCriticalHeader = errors.New("go-jose/go-jose: invalid critical header")
 )
 
 // Key management algorithms

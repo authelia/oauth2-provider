@@ -213,7 +213,7 @@ func (b byteBuffer) bigInt() *big.Int {
 
 // toInt returns the buffer as an int, and reports a value which does not fit rather than truncating it. The only
 // caller is the RSA public exponent, where silently keeping the low bits made two JWKs differing above that
-// boundary parse to one key -- and, since rsaThumbprintInput re-encodes from the result, share a thumbprint.
+// boundary parse to one key; and, since rsaThumbprintInput re-encodes from the result, share a thumbprint.
 func (b byteBuffer) toInt() (int, error) {
 	value := b.bigInt()
 

@@ -91,7 +91,7 @@ func (ctx *cbcAEAD) Overhead() int {
 
 // Seal encrypts and authenticates the plaintext.
 func (ctx *cbcAEAD) Seal(dst, nonce, plaintext, data []byte) []byte {
-	// Output buffer -- must take care not to mangle plaintext input.
+	// Output buffer; must take care not to mangle plaintext input.
 	ciphertext := make([]byte, uint64(len(plaintext))+uint64(ctx.Overhead()))[:len(plaintext)]
 	copy(ciphertext, plaintext)
 	ciphertext = padBuffer(ciphertext, ctx.blockCipher.BlockSize())

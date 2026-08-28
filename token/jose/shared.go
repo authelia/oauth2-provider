@@ -538,7 +538,17 @@ func (parsed rawHeader) sanitized() (h Header, err error) {
 	return
 }
 
+// maxCertificateChain bounds an "x5c" chain. Neither RFC 7515 Section 4.1.6 nor RFC 5280 gives a limit, so this
+// is a defensive one rather than a conformance rule: the chain is decoded and X.509-parsed while the message is
+// being unmarshalled, before any signature has been checked, and that work should not scale with what an
+// unauthenticated sender chose to write. Ten is well above any chain a real PKI issues.
+const maxCertificateChain = 10
+
 func parseCertificateChain(chain []string) ([]*x509.Certificate, error) {
+	if len(chain) > maxCertificateChain {
+		return nil, fmt.Errorf("go-jose/go-jose: too many certificates in chain, got %d and the limit is %d", len(chain), maxCertificateChain)
+	}
+
 	out := make([]*x509.Certificate, len(chain))
 	for i, cert := range chain {
 		raw, err := base64.StdEncoding.DecodeString(cert)

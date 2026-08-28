@@ -1856,3 +1856,26 @@ func TestDSizeUsesTheGroupOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCertificateChainIsBounded(t *testing.T) {
+	oversized := make([]string, maxCertificateChain+1)
+	for i := range oversized {
+		oversized[i] = "Zm9v"
+	}
+
+	if _, err := parseCertificateChain(oversized); err == nil {
+		t.Fatal("an unbounded chain was accepted")
+	} else if !strings.Contains(err.Error(), "too many certificates") {
+		t.Errorf("got %v, want the chain length to be what was rejected", err)
+	}
+
+	chain, err := json.Marshal(oversized)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var key JSONWebKey
+	if err = json.Unmarshal([]byte(`{"kty":"oct","k":"c3ltbWV0cmljLWtleQ","x5c":`+string(chain)+`}`), &key); err == nil {
+		t.Error("a JWK with an unbounded x5c chain was accepted")
+	}
+}

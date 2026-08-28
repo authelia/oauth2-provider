@@ -57,8 +57,8 @@ func TestAuthorizeCode_PopulateTokenEndpointResponse_HMAC(t *testing.T) {
 				require.NoError(t, err)
 				r.Form.Set(consts.FormParameterAuthorizationCode, code)
 			},
-			err:    oauth2.ErrServerError,
-			errStr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not find the requested resource(s).",
+			err:    oauth2.ErrInvalidGrant,
+			errStr: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code session for the given authorization code was not found.",
 		},
 		{
 			name: "ShouldFailBecauseValidationFailed",
@@ -1124,4 +1124,83 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAuthorizeCodeFlow_ConcurrentReplay exercises the window RFC 6749 Section 4.1.2 addresses: two requests bearing
+// the same authorization code both clear HandleTokenEndpointRequest while the code is still active, and the loser
+// reaches PopulateTokenEndpointResponse after the winner has invalidated it. The loser must be refused with
+// invalid_grant, and the revocation the specification mandates must run.
+func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
+	store := storage.NewMemoryStore()
+	strategy := &hmacshaStrategy
+
+	client := &oauth2.DefaultClient{
+		ID:         "foo",
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+	}
+
+	handler := AuthorizeExplicitGrantHandler{
+		CoreStorage:            store,
+		TokenRevocationStorage: store,
+		AuthorizeCodeStrategy:  strategy,
+		AccessTokenStrategy:    strategy,
+		RefreshTokenStrategy:   strategy,
+		Config: &oauth2.Config{
+			ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+			AccessTokenLifespan:   time.Minute,
+			AuthorizeCodeLifespan: time.Minute,
+		},
+	}
+
+	code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+	require.NoError(t, err)
+
+	authorizeRequest := &oauth2.AuthorizeRequest{
+		Request: oauth2.Request{
+			ID:             "req-id",
+			Client:         client,
+			Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+			RequestedScope: oauth2.Arguments{"foo"},
+			GrantedScope:   oauth2.Arguments{"foo"},
+			Session:        &oauth2.DefaultSession{},
+			RequestedAt:    time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, authorizeRequest))
+
+	// The tokens the winner of the race was issued from this code.
+	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "at-sig", authorizeRequest))
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", authorizeRequest))
+
+	accessRequest := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+		Request: oauth2.Request{
+			Client: client,
+			Form: url.Values{
+				consts.FormParameterAuthorizationCode: []string{code},
+				consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+			},
+			Session:     &oauth2.DefaultSession{},
+			RequestedAt: time.Now().UTC(),
+		},
+	}
+
+	// Both racers clear phase one while the code is still active.
+	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+	// The winner completes phase two and invalidates the code.
+	require.NoError(t, store.InvalidateAuthorizeCodeSession(t.Context(), signature))
+
+	// The loser reaches phase two.
+	err = handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, oauth2.NewAccessResponse())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "a replayed authorization code must be refused with invalid_grant, not server_error")
+
+	_, err = store.GetAccessTokenSession(t.Context(), "at-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrNotFound, "the access token issued from the replayed code must be revoked")
+
+	_, err = store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrInactiveToken, "the refresh token issued from the replayed code must be revoked")
 }

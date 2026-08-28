@@ -72,7 +72,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 				require.NoError(t, err)
 				requester.Form.Set(consts.FormParameterDeviceCode, code)
 			},
-			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not find the requested resource(s).",
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Could not find the requested resource(s).",
 		},
 		{
 			requester: &oauth2.AccessRequest{
@@ -767,4 +767,74 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 			}
 		})
 	}
+}
+
+// TestDeviceAuthorizeCode_ConcurrentReplay covers the device grant's half of the same window the authorization code
+// flow has: both racers clear HandleTokenEndpointRequest while the device code is live, and the loser reaches
+// PopulateTokenEndpointResponse after the winner consumed it. The loser must be refused with invalid_grant rather
+// than told the server failed.
+func TestDeviceAuthorizeCode_ConcurrentReplay(t *testing.T) {
+	strategy := &o2hmacshaStrategy
+	store := storage.NewMemoryStore()
+
+	config := &oauth2.Config{
+		ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+		AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+		AccessTokenLifespan: time.Minute,
+		RefreshTokenScopes:  []string{consts.ScopeOffline},
+	}
+
+	h := hoauth2.GenericCodeTokenEndpointHandler{
+		CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+			Strategy: strategy,
+			Storage:  store,
+			Config:   config,
+		},
+		AccessTokenStrategy:    strategy,
+		RefreshTokenStrategy:   strategy,
+		Config:                 config,
+		CoreStorage:            store,
+		TokenRevocationStorage: store,
+	}
+
+	requester := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+			},
+			Form:         url.Values{},
+			GrantedScope: oauth2.Arguments{"foo"},
+			Session:      &oauth2.DefaultSession{},
+			RequestedAt:  time.Now().UTC(),
+		},
+	}
+
+	deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+	deviceRequester.Merge(requester)
+
+	dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+	require.NoError(t, err)
+
+	_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+	require.NoError(t, err)
+
+	deviceRequester.SetDeviceCodeSignature(dSig)
+	deviceRequester.SetUserCodeSignature(uSig)
+	deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+	require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+	requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+
+	// Both racers clear phase one while the device code is still live.
+	require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+	// The winner completes phase two and consumes the device code.
+	require.NoError(t, store.InvalidateDeviceCodeSession(t.Context(), dSig))
+
+	// The loser reaches phase two.
+	err = h.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "a replayed device code must be refused with invalid_grant, not server_error")
 }

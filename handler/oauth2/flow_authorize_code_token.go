@@ -17,6 +17,32 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// revokeCodeGrant revokes the access and refresh tokens issued for the request a replayed code belongs to, and returns
+// the error the token endpoint answers the replay with. RFC 6749 Section 4.1.2 requires that the authorization server
+// deny a code presented more than once and revoke the tokens previously issued from it.
+//
+// Both the request validation phase and the response population phase re-read the code session, and either can be the
+// one to observe the replay depending on how two concurrent redemptions interleave, so both must reach this. Keeping
+// it in one place is what stops the two phases from disagreeing about what a replay means.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestID string) error {
+	hint := "The authorization code has already been used."
+	debug := ""
+
+	if err := store.RevokeAccessToken(ctx, requestID); err != nil {
+		hint += " Additionally, an error occurred during processing the Access Token revocation."
+		debug += "Revocation of access_token lead to error " + err.Error() + "."
+	}
+
+	if err := store.RevokeRefreshToken(ctx, requestID); err != nil {
+		hint += " Additionally, an error occurred during processing the Refresh Token revocation."
+		debug += "Revocation of refresh_token lead to error " + err.Error() + "."
+	}
+
+	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))
+}
+
 // HandleTokenEndpointRequest implements
 // * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything)
 func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
@@ -40,23 +66,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 				WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'.")
 		}
 
-		// If an authorize code is used twice, we revoke all refresh and access tokens associated with this request.
-		reqID := authorizeRequest.GetID()
-		hint := "The authorization code has already been used."
-		debug := ""
-
-		// TODO: Refactor this similar to the Revocation Handler. Maybe Factorize?
-		if revErr := c.TokenRevocationStorage.RevokeAccessToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the Access Token revocation."
-			debug += "Revocation of access_token lead to error " + revErr.Error() + "."
-		}
-
-		if revErr := c.TokenRevocationStorage.RevokeRefreshToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the Refresh Token revocation."
-			debug += "Revocation of refresh_token lead to error " + revErr.Error() + "."
-		}
-
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))
+		return revokeCodeGrant(ctx, c.TokenRevocationStorage, authorizeRequest.GetID())
 	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The authorization code session for the given authorization code was not found."))
 	case err != nil:
@@ -162,8 +172,26 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	var ar oauth2.Requester
 
+	// This re-read can observe a replay that HandleTokenEndpointRequest could not: two requests bearing the same code
+	// both clear that phase while the code is still active, and only one of them goes on to invalidate it. The loser
+	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
+	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
+	// mandates. That is precisely the window an attacker racing the legitimate client with a stolen code exploits.
 	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession()); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		switch {
+		case errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
+			if ar == nil {
+				return errorsx.WithStack(oauth2.ErrServerError.
+					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+					WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'."))
+			}
+
+			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+		case errors.Is(err, oauth2.ErrNotFound):
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The authorization code session for the given authorization code was not found."))
+		default:
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, request, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	}

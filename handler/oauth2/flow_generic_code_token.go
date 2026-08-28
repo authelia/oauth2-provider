@@ -75,19 +75,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
 		}
 
-		// If an authorize code is used twice, we revoke all refresh and access tokens associated with this request.
-		reqID := deviceRequester.GetID()
-		hint := "The authorization code has already been used."
-		debug := ""
-		if revErr := c.TokenRevocationStorage.RevokeAccessToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the Access Token revocation."
-			debug += "Revocation of access_token lead to error " + revErr.Error() + "."
-		}
-		if revErr := c.TokenRevocationStorage.RevokeRefreshToken(ctx, reqID); revErr != nil {
-			hint += " Additionally, an error occurred during processing the Refresh Token revocation."
-			debug += "Revocation of refresh_token lead to error " + revErr.Error() + "."
-		}
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))
+		return revokeCodeGrant(ctx, c.TokenRevocationStorage, deviceRequester.GetID())
 	} else if errors.Is(err, oauth2.ErrAuthorizationPending) || errors.Is(err, oauth2.ErrAccessDenied) ||
 		errors.Is(err, oauth2.ErrDeviceExpiredToken) || errors.Is(err, oauth2.ErrSlowDown) ||
 		errors.Is(err, oauth2.ErrInvalidGrant) {
@@ -166,9 +154,29 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
+	// This re-read can observe a replay that HandleTokenEndpointRequest could not: two requests bearing the same code
+	// both clear that phase while the code is still active, and only one of them goes on to invalidate it. The loser
+	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
+	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
+	// mandates.
 	code, signature, ar, err := c.GetCodeAndSession(ctx, request)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		switch {
+		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The authorization code has already been used."))
+		case errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
+			if ar == nil {
+				return errorsx.WithStack(oauth2.ErrServerError.
+					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`))
+			}
+
+			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+		case errors.Is(err, oauth2.ErrNotFound):
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
+		default:
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 	} else if err = c.ValidateCodeAndSession(ctx, request, ar, code); err != nil {
 		// This needs to happen after store retrieval for the session to be hydrated properly
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))

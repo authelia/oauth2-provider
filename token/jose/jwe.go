@@ -83,6 +83,30 @@ func (obj JSONWebEncryption) mergedHeaders(recipient *recipientInfo) rawHeader {
 	return out
 }
 
+// checkNoCritical rejects a "crit" in any of this object's headers. RFC 7515 Section 4.1.11 requires "crit" to be
+// integrity protected, so an unprotected one is invalid wherever it sits, and this package implements no JWE
+// extension, so a protected one names something it cannot honour either. Each recipient carries an unprotected
+// header of its own, and the flattened serialization's "header" member becomes one of those, so checking only the
+// merged global headers left the commonest place for it unexamined.
+func (obj JSONWebEncryption) checkNoCritical() error {
+	if err := obj.mergedHeaders(nil).checkNoCritical(); err != nil {
+		return err
+	}
+
+	for i := range obj.recipients {
+		header := obj.recipients[i].header
+		if header == nil {
+			continue
+		}
+
+		if err := header.checkNoCritical(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (obj JSONWebEncryption) publicHeaders(recipient *recipientInfo) rawHeader {
 	out := rawHeader{}
 	out.merge(obj.protected)

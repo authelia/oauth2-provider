@@ -845,3 +845,49 @@ func TestMapClaims_Valid_IgnoreExpirationIsNarrow(t *testing.T) {
 	assert.Equal(t, uint32(0), vErr.Errors&ValidationErrorExpired, "the expired bit must not be set")
 	assert.NotEqual(t, uint32(0), vErr.Errors&ValidationErrorNotValidYet, "the not-valid-yet bit must be set")
 }
+
+func TestMapClaims_Valid_AuthorizedParty(t *testing.T) {
+	testCases := []struct {
+		name string
+		have MapClaims
+		azp  string
+		err  bool
+	}{
+		{
+			name: "ShouldPassMatchingAZP",
+			have: MapClaims{ClaimAuthorizedParty: "client-id"},
+			azp:  "client-id",
+		},
+		{
+			name: "ShouldFailMismatchedAZP",
+			have: MapClaims{ClaimAuthorizedParty: "other-client-id"},
+			azp:  "client-id",
+			err:  true,
+		},
+		{
+			name: "ShouldPassAbsentAZP",
+			have: MapClaims{},
+			azp:  "client-id",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.have.Valid(ValidateAuthorizedParty(tc.azp))
+
+			if !tc.err {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+
+			var vErr *ValidationError
+
+			require.ErrorAs(t, err, &vErr)
+			assert.NotEqual(t, uint32(0), vErr.Errors&ValidationErrorAuthorizedParty)
+			assert.EqualError(t, vErr, "Token has invalid azp claim")
+		})
+	}
+}

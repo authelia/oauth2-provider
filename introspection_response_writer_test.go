@@ -730,3 +730,72 @@ func TestWriteIntrospectionResponseJWT(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteIntrospectionResponseJWTKeysOffTheCaller(t *testing.T) {
+	newResponse := func(callerAlg, tokenClientAlg string, strategy *stubIntrospectionStrategy) (*Fosite, *IntrospectionResponse) {
+		provider := &Fosite{Config: &Config{
+			IntrospectionIssuer:              "https://issuer.example.com",
+			IntrospectionJWTResponseStrategy: strategy,
+		}}
+
+		caller := &introspectionJWTTestClient{
+			DefaultClient: &DefaultClient{ID: "resource-server"},
+			alg:           callerAlg,
+		}
+
+		tokenClient := &introspectionJWTTestClient{
+			DefaultClient: &DefaultClient{ID: "token-client"},
+			alg:           tokenClientAlg,
+		}
+
+		session := &DefaultSession{Subject: "subject"}
+		session.SetExpiresAt(AccessToken, time.Now().Add(time.Hour))
+
+		ar := NewAccessRequest(session)
+		ar.Client = tokenClient
+		ar.GrantedScope = Arguments{"read"}
+
+		return provider, &IntrospectionResponse{
+			Client:          caller,
+			Active:          true,
+			TokenUse:        AccessToken,
+			AccessRequester: ar,
+		}
+	}
+
+	t.Run("ShouldSignWhenTheCallerRegisteredAnAlg", func(t *testing.T) {
+		strategy := &stubIntrospectionStrategy{token: "signed.jwt.token"}
+		provider, ires := newResponse("RS256", "", strategy)
+
+		rw := httptest.NewRecorder()
+		provider.WriteIntrospectionResponse(context.Background(), rw, ires)
+
+		assert.Equal(t, consts.ContentTypeApplicationTokenIntrospectionJWT, rw.Header().Get(consts.HeaderContentType),
+			"the resource server registered 'introspection_signed_response_alg' so it must receive a JWT")
+		assert.Equal(t, []string{"resource-server"}, strategy.claims[consts.ClaimAudience])
+	})
+
+	t.Run("ShouldNotSignWhenOnlyTheIntrospectedTokensClientRegisteredAnAlg", func(t *testing.T) {
+		strategy := &stubIntrospectionStrategy{token: "should-not-be-used"}
+		provider, ires := newResponse("", "RS256", strategy)
+
+		rw := httptest.NewRecorder()
+		provider.WriteIntrospectionResponse(context.Background(), rw, ires)
+
+		assert.Equal(t, consts.ContentTypeApplicationJSON, rw.Header().Get(consts.HeaderContentType),
+			"the introspected token's client does not decide the format of a response sent to a different party")
+	})
+}
+
+func TestWriteIntrospectionResponseHandlesTheErrorResponder(t *testing.T) {
+	provider := &Fosite{Config: &Config{}}
+
+	rw := httptest.NewRecorder()
+
+	require.NotPanics(t, func() {
+		provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{Active: false})
+	}, "the responder NewIntrospectionRequest returns on error carries no AccessRequester")
+
+	assert.Equal(t, http.StatusOK, rw.Code)
+	assert.JSONEq(t, `{"active":false}`, rw.Body.String())
+}

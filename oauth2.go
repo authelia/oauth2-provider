@@ -326,6 +326,20 @@ type IntrospectionResponder interface {
 	ToMap() (audience []string, introspection map[string]any)
 }
 
+// IntrospectionResponderClient is an IntrospectionResponder which reports the client the introspection response is
+// sent to, being the caller rather than the client the introspected token was issued to. RFC 9701 Section 6 bases the
+// response signing and encryption parameters on that client's registered metadata, and Section 5 requires 'aud' to
+// identify it.
+//
+// A responder which does not implement this is written as plain JSON: the parameters cannot be resolved from any
+// other party without keying the response to one that is not receiving it.
+type IntrospectionResponderClient interface {
+	IntrospectionResponder
+
+	// GetClient returns the client the introspection response is sent to.
+	GetClient() (client Client)
+}
+
 // Requester is an abstract interface for handling requests in Fosite.
 type Requester interface {
 	// SetID sets the unique identifier.

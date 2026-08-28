@@ -1191,7 +1191,7 @@ func TestParseRejectsB64WithoutCrit(t *testing.T) {
 		wantErr bool
 	}{
 		{"UnencodedWithoutCritical", `{"alg":"HS256","b64":false}`, false, true},
-		{"UnencodedCriticalOmitsB64", `{"alg":"HS256","b64":false,"crit":["exp"]}`, false, true},
+		{"UnencodedCriticalOmitsB64", `{"alg":"HS256","b64":false,"x-custom":1,"crit":["x-custom"]}`, false, true},
 		{"EncodedWithoutCritical", `{"alg":"HS256","b64":true}`, true, true},
 		{"UnencodedCriticalListsB64", `{"alg":"HS256","b64":false,"crit":["b64"]}`, false, false},
 		{"ParameterAbsent", `{"alg":"HS256"}`, true, false},
@@ -1199,33 +1199,7 @@ func TestParseRejectsB64WithoutCrit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			protected := base64.RawURLEncoding.EncodeToString([]byte(tc.header))
-
-			wire := string(payload)
-			if tc.b64 {
-				wire = base64.RawURLEncoding.EncodeToString(payload)
-			}
-
-			mac := hmac.New(sha256.New, key)
-			mac.Write([]byte(protected + "." + wire))
-			signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-
-			parses := map[string]func() (*JSONWebSignature, error){
-				"compact": func() (*JSONWebSignature, error) {
-					return ParseSignedCompact(protected+"."+wire+"."+signature, []SignatureAlgorithm{HS256})
-				},
-				"detached": func() (*JSONWebSignature, error) {
-					return ParseDetached(protected+".."+signature, payload, []SignatureAlgorithm{HS256})
-				},
-				"json": func() (*JSONWebSignature, error) {
-					return ParseSignedJSON(
-						fmt.Sprintf(`{"payload":%q,"protected":%q,"signature":%q}`, wire, protected, signature),
-						[]SignatureAlgorithm{HS256},
-					)
-				},
-			}
-
-			for name, parse := range parses {
+			for name, parse := range signedJWSForms(t, key, tc.header, tc.b64, payload) {
 				obj, err := parse()
 
 				if tc.wantErr {
@@ -1263,5 +1237,101 @@ func TestParseRejectsB64WithoutCrit(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// RFC 7515 Section 4.1.11 constrains "crit" itself: it must not be empty, must not repeat a name, and must not
+// name a parameter which does not occur in the header. All three were accepted, which matters more now that
+// "crit" governs whether "b64" is honoured: an empty list and a list naming an absent parameter are both
+// meaningless instructions to the recipient, and a duplicate hides how many parameters were really marked.
+func TestParseRejectsMalformedCritical(t *testing.T) {
+	key := []byte("0123456789ABCDEF0123456789ABCDEF")
+	payload := []byte("NDA1")
+
+	testCases := []struct {
+		name    string
+		header  string
+		b64     bool
+		wantErr bool
+	}{
+		{"EmptyList", `{"alg":"HS256","crit":[]}`, true, true},
+		{"DuplicateEntry", `{"alg":"HS256","b64":false,"crit":["b64","b64"]}`, false, true},
+		{"NamesAbsentParameter", `{"alg":"HS256","crit":["b64"]}`, true, true},
+		{"NamesPresentParameter", `{"alg":"HS256","b64":false,"crit":["b64"]}`, false, false},
+		{"ParameterAbsent", `{"alg":"HS256"}`, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for name, parse := range signedJWSForms(t, key, tc.header, tc.b64, payload) {
+				obj, err := parse()
+
+				if tc.wantErr {
+					if !errors.Is(err, ErrInvalidCriticalHeader) {
+						t.Errorf("%s: got %v, want %v", name, err, ErrInvalidCriticalHeader)
+					}
+
+					continue
+				}
+
+				if err != nil {
+					t.Errorf("%s: parse: %v", name, err)
+
+					continue
+				}
+
+				if err = obj.DetachedVerify(payload, key); err != nil {
+					t.Errorf("%s: DetachedVerify: %v", name, err)
+				}
+			}
+		})
+	}
+
+	// A name the header does carry but which this package reserves stays the allow-list's business, and is still
+	// reported as unsupported rather than as malformed.
+	for name, parse := range signedJWSForms(t, key, `{"alg":"HS256","crit":["alg"]}`, true, payload) {
+		obj, err := parse()
+		if err != nil {
+			t.Errorf("%s: parse: %v", name, err)
+
+			continue
+		}
+
+		if err = obj.DetachedVerify(payload, key); !errors.Is(err, ErrUnsupportedCriticalHeader) {
+			t.Errorf("%s: DetachedVerify: got %v, want %v", name, err, ErrUnsupportedCriticalHeader)
+		}
+	}
+}
+
+// signedJWSForms returns the compact, detached and JSON serializations of a JWS over payload with the given
+// protected header, each as a parse to run. The signature is genuine, so a message these reject is one that
+// would otherwise have verified.
+func signedJWSForms(t *testing.T, key []byte, header string, b64 bool, payload []byte) map[string]func() (*JSONWebSignature, error) {
+	t.Helper()
+
+	protected := base64.RawURLEncoding.EncodeToString([]byte(header))
+
+	wire := string(payload)
+	if b64 {
+		wire = base64.RawURLEncoding.EncodeToString(payload)
+	}
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(protected + "." + wire))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	return map[string]func() (*JSONWebSignature, error){
+		"compact": func() (*JSONWebSignature, error) {
+			return ParseSignedCompact(protected+"."+wire+"."+signature, []SignatureAlgorithm{HS256})
+		},
+		"detached": func() (*JSONWebSignature, error) {
+			return ParseDetached(protected+".."+signature, payload, []SignatureAlgorithm{HS256})
+		},
+		"json": func() (*JSONWebSignature, error) {
+			return ParseSignedJSON(
+				fmt.Sprintf(`{"payload":%q,"protected":%q,"signature":%q}`, wire, protected, signature),
+				[]SignatureAlgorithm{HS256},
+			)
+		},
 	}
 }

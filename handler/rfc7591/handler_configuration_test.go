@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -642,4 +643,59 @@ type audienceStrategyClient struct {
 
 func (c *audienceStrategyClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
 	return func(haystack, needle []string) error { return nil }
+}
+
+func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, store := newConfigurationHandler(t)
+
+	config.RFC7591ClientSecretLifespan = time.Hour
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	stored, err := store.GetClient(ctx, id)
+	require.NoError(t, err)
+
+	registered, ok := stored.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok, "got %T", stored)
+	require.False(t, registered.ClientIDIssuedAt.IsZero())
+	require.False(t, registered.ClientSecretExpiresAt.IsZero())
+
+	for _, tc := range []struct {
+		name   string
+		method string
+	}{
+		{name: "ShouldReportOnRead", method: http.MethodGet},
+		{name: "ShouldReportOnUpdate", method: http.MethodPut},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requester := oauth2.NewClientConfigurationRequest()
+			requester.Method = tc.method
+			requester.ClientID = id
+
+			if tc.method == http.MethodPut {
+				requester.Metadata = &oauth2.ClientRegistrationMetadata{
+					RedirectURIs:  []string{"https://example.com/cb"},
+					GrantTypes:    []string{"authorization_code"},
+					ResponseTypes: []string{"code"},
+					Extra: map[string]any{
+						"client_id":     id,
+						"client_secret": created["client_secret"],
+					},
+				}
+			}
+
+			responder := oauth2.NewClientRegistrationResponse()
+
+			require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
+
+			values := responder.ToMap()
+
+			assert.Equal(t, registered.ClientIDIssuedAt.Unix(), values["client_id_issued_at"],
+				"RFC 7591 Section 3.2.1 'client_id_issued_at' must reflect the registered client")
+			assert.Equal(t, registered.ClientSecretExpiresAt.Unix(), values["client_secret_expires_at"],
+				"reporting 0 would state the secret does not expire when it does")
+		})
+	}
 }

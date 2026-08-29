@@ -408,6 +408,11 @@ var (
 	_ MTLSClient                       = (*DefaultRegisteredClient)(nil)
 )
 
+// GetClientIDIssuedAt returns the time the client identifier was issued, or the zero time when it is not recorded.
+func (c *DefaultRegisteredClient) GetClientIDIssuedAt() (issued time.Time) {
+	return c.ClientIDIssuedAt
+}
+
 // GetClientSecretExpiresAt returns the time the client secret expires, or the zero time when it does not.
 func (c *DefaultRegisteredClient) GetClientSecretExpiresAt() (expires time.Time) {
 	return c.ClientSecretExpiresAt

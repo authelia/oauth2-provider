@@ -17,6 +17,15 @@ path = "token/jose/**"
 SPDX-FileCopyrightText = ["2014 Square Inc.", "go-jose contributors"]
 SPDX-License-Identifier = "Apache-2.0"
 
+# token/jose/ed448 is a vendored copy of the Ed448 signature scheme and the curve
+# arithmetic it needs from github.com/cloudflare/circl, with the module path
+# rewritten and circl's internal SHAKE replaced by the standard library's. The
+# copyright remains with Cloudflare.
+[[annotations]]
+path = "token/jose/ed448/**"
+SPDX-FileCopyrightText = "2019 Cloudflare"
+SPDX-License-Identifier = "BSD-3-Clause"
+
 # token/jose/json is a fork of the Go standard library encoding/json package.
 [[annotations]]
 path = "token/jose/json/**"

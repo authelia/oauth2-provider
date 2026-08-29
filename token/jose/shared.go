@@ -147,9 +147,16 @@ const (
 	// Ed25519 is the fully-specified identifier for the Ed25519 parameter set of
 	// RFC 8032 Section 5.1, registered by RFC 9864 Section 2.2.
 	//
-	// RFC 9864 also registers Ed448, which is not implemented here because the
-	// standard library has no Ed448.
-	Ed25519   = SignatureAlgorithm("Ed25519")
+	Ed25519 = SignatureAlgorithm("Ed25519")
+	// Ed448 is the fully-specified identifier for the Ed448 parameter set of
+	// RFC 8032 Section 5.2, registered by RFC 9864 Section 2.2. The standard
+	// library has no Ed448, so the curve comes from the vendored ed448 package.
+	//
+	// The polymorphic EdDSA above also selects this curve when the key is an
+	// Ed448 one, since RFC 8037 Section 3.1 determines the variant from the key
+	// subtype. This identifier states it in the header instead of leaving it to
+	// the key, which is what RFC 9864 registers it for.
+	Ed448     = SignatureAlgorithm("Ed448")
 	HS256     = SignatureAlgorithm("HS256")     // HMAC using SHA-256
 	HS384     = SignatureAlgorithm("HS384")     // HMAC using SHA-384
 	HS512     = SignatureAlgorithm("HS512")     // HMAC using SHA-512

@@ -35,6 +35,8 @@ import (
 	"reflect"
 	"strings"
 
+	"authelia.com/provider/oauth2/token/jose/ed448"
+
 	"authelia.com/provider/oauth2/token/jose/json"
 )
 
@@ -113,12 +115,16 @@ func (k JSONWebKey) MarshalJSON() ([]byte, error) {
 	switch key := k.Key.(type) {
 	case ed25519.PublicKey:
 		raw, err = fromEdPublicKey(key)
+	case ed448.PublicKey:
+		raw, err = fromEd448PublicKey(key)
 	case *ecdsa.PublicKey:
 		raw, err = fromEcPublicKey(key)
 	case *rsa.PublicKey:
 		raw = fromRsaPublicKey(key)
 	case ed25519.PrivateKey:
 		raw, err = fromEdPrivateKey(key)
+	case ed448.PrivateKey:
+		raw, err = fromEd448PrivateKey(key)
 	case *ecdsa.PrivateKey:
 		raw, err = fromEcPrivateKey(key)
 	case *rsa.PrivateKey:
@@ -269,6 +275,20 @@ func (k *JSONWebKey) UnmarshalJSON(data []byte) (err error) {
 				keyPub = key.(ed25519.PrivateKey).Public()
 			} else {
 				key, err = raw.edPublicKey()
+				if err != nil {
+					return err
+				}
+				keyPub = key
+			}
+		} else if raw.Crv == "Ed448" {
+			if raw.D != nil {
+				key, err = raw.ed448PrivateKey()
+				if err != nil {
+					return err
+				}
+				keyPub = key.(ed448.PrivateKey).Public()
+			} else {
+				key, err = raw.ed448PublicKey()
 				if err != nil {
 					return err
 				}
@@ -495,6 +515,17 @@ func rsaThumbprintInput(n *big.Int, e int) (string, error) {
 		newBuffer(n.Bytes()).base64()), nil
 }
 
+// ed448ThumbprintInput returns the RFC 8037 Section 2 thumbprint input for an
+// Ed448 public key: the required members crv, kty and x in lexicographic order.
+func ed448ThumbprintInput(ed ed448.PublicKey) (string, error) {
+	if err := validateEd448PublicKey(ed); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(edThumbprintTemplate, "Ed448",
+		newFixedSizeBuffer(ed, ed448.PublicKeySize).base64()), nil
+}
+
 func edThumbprintInput(ed ed25519.PublicKey) (string, error) {
 	crv := "Ed25519"
 
@@ -520,6 +551,8 @@ func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 	switch key := k.Key.(type) {
 	case ed25519.PublicKey:
 		input, err = edThumbprintInput(key)
+	case ed448.PublicKey:
+		input, err = ed448ThumbprintInput(key)
 	case *ecdsa.PublicKey:
 		input, err = ecThumbprintInput(key.Curve, key.X, key.Y)
 	case *ecdsa.PrivateKey:
@@ -534,6 +567,14 @@ func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 		}
 
 		input, err = edThumbprintInput(ed25519.PublicKey(key[32:]))
+	case ed448.PrivateKey:
+		if err = validateEd448PrivateKey(key); err != nil {
+			return nil, err
+		}
+
+		// RFC 7638 Section 3 computes the thumbprint over the public members, so a private key thumbprints as the
+		// public key it derives. Public() rather than a slice of the encoding, so the layout stays circl's business.
+		input, err = ed448ThumbprintInput(key.Public().(ed448.PublicKey))
 	case []byte:
 		// RFC 7638 Section 3.2 defines {"k":…,"kty":"oct"} as the input, so this is implementable, and is
 		// declined rather than unimplemented: the input is the key, and Section 8.1 warns the digest of a key
@@ -561,7 +602,7 @@ func (k *JSONWebKey) Thumbprint(hash crypto.Hash) ([]byte, error) {
 // IsPublic returns true if the JWK represents a public key (not symmetric, not private).
 func (k *JSONWebKey) IsPublic() bool {
 	switch k.Key.(type) {
-	case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey:
+	case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey, ed448.PublicKey:
 		return true
 	default:
 		isPublic, ok := mldsaKeyInfo(k.Key)
@@ -581,6 +622,8 @@ func (k *JSONWebKey) Public() JSONWebKey {
 	case *rsa.PrivateKey:
 		ret.Key = key.Public()
 	case ed25519.PrivateKey:
+		ret.Key = key.Public()
+	case ed448.PrivateKey:
 		ret.Key = key.Public()
 	default:
 		pub, ok := mldsaPublicOf(k.Key)
@@ -622,6 +665,14 @@ func (k *JSONWebKey) Valid() bool {
 		if len(key) != 64 {
 			return false
 		}
+	case ed448.PublicKey:
+		if len(key) != ed448.PublicKeySize {
+			return false
+		}
+	case ed448.PrivateKey:
+		if len(key) != ed448.PrivateKeySize {
+			return false
+		}
 	default:
 		_, ok := mldsaKeyInfo(k.Key)
 		return ok
@@ -643,6 +694,90 @@ func (key rawJSONWebKey) rsaPublicKey() (*rsa.PublicKey, error) {
 		N: key.N.bigInt(),
 		E: e,
 	}, nil
+}
+
+// fromEd448PublicKey renders an Ed448 public key as the RFC 8037 Section 2 OKP
+// representation, with the crv value RFC 9864 Section 2.2 registers.
+func fromEd448PublicKey(pub ed448.PublicKey) (*rawJSONWebKey, error) {
+	if err := validateEd448PublicKey(pub); err != nil {
+		return nil, err
+	}
+
+	return &rawJSONWebKey{
+		Kty: "OKP",
+		Crv: "Ed448",
+		X:   newBuffer(pub),
+	}, nil
+}
+
+// fromEd448PrivateKey renders an Ed448 private key as an OKP JWK. RFC 8037
+// Section 2 carries the seed in d, not the expanded key.
+func fromEd448PrivateKey(ed ed448.PrivateKey) (*rawJSONWebKey, error) {
+	if err := validateEd448PrivateKey(ed); err != nil {
+		return nil, err
+	}
+
+	raw, err := fromEd448PublicKey(ed.Public().(ed448.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+
+	raw.D = newBuffer(ed.Seed())
+
+	return raw, nil
+}
+
+// ed448PublicKey decodes the OKP x member as an Ed448 public key.
+func (key rawJSONWebKey) ed448PublicKey() (ed448.PublicKey, error) {
+	if key.X == nil {
+		return nil, errors.New("go-jose/go-jose: invalid Ed448 public key, missing x value")
+	}
+
+	publicKey := ed448.PublicKey(key.X.bytes())
+
+	if err := validateEd448PublicKey(publicKey); err != nil {
+		return nil, err
+	}
+
+	return ed448.PublicKey(bytes.Clone(publicKey)), nil
+}
+
+// ed448PrivateKey decodes the OKP d and x members as an Ed448 private key, and
+// checks that the two agree so a key claiming a public value it cannot produce
+// is refused rather than silently signing under a different one.
+func (key rawJSONWebKey) ed448PrivateKey() (ed448.PrivateKey, error) {
+	var missing []string
+
+	if key.D == nil {
+		missing = append(missing, "D")
+	}
+
+	if key.X == nil {
+		missing = append(missing, "X")
+	}
+
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid Ed448 private key, missing %s value(s)", strings.Join(missing, ", "))
+	}
+
+	publicKey := ed448.PublicKey(key.X.bytes())
+
+	if err := validateEd448PublicKey(publicKey); err != nil {
+		return nil, err
+	}
+
+	seed := key.D.bytes()
+	if len(seed) != ed448.SeedSize {
+		return nil, errors.New("go-jose/go-jose: invalid Ed448 private key, wrong length for d")
+	}
+
+	privateKey := ed448.NewKeyFromSeed(seed)
+
+	if !bytes.Equal(privateKey.Public().(ed448.PublicKey), publicKey) {
+		return nil, errors.New("go-jose/go-jose: invalid Ed448 private key, x does not match d")
+	}
+
+	return privateKey, nil
 }
 
 func fromEdPublicKey(pub ed25519.PublicKey) (*rawJSONWebKey, error) {
@@ -1173,6 +1308,30 @@ func validateEd25519PublicKey(publicKey ed25519.PublicKey) error {
 func validateEd25519PrivateKey(privateKey ed25519.PrivateKey) error {
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return errors.New("go-jose/go-jose: invalid Ed25519 private key, wrong length")
+	}
+
+	return nil
+}
+
+// validateEd448PublicKey checks the length of an Ed448 public key.
+//
+// Unlike validateEd25519PublicKey there is no low-order point screen. The set of
+// small-order Ed448 points is not reproduced here because it is not something to
+// derive by hand, and ed448.Verify already performs the RFC 8032 Section 5.2.7
+// checks, rejecting a point that does not decode and a scalar not reduced below
+// the group order.
+func validateEd448PublicKey(publicKey ed448.PublicKey) error {
+	if len(publicKey) != ed448.PublicKeySize {
+		return errors.New("go-jose/go-jose: invalid Ed448 public key, wrong length for x")
+	}
+
+	return nil
+}
+
+// validateEd448PrivateKey checks the length of an Ed448 private key.
+func validateEd448PrivateKey(privateKey ed448.PrivateKey) error {
+	if len(privateKey) != ed448.PrivateKeySize {
+		return errors.New("go-jose/go-jose: invalid Ed448 private key, wrong length")
 	}
 
 	return nil

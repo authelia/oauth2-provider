@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"authelia.com/provider/oauth2/token/jose/ed448"
+
 	josecipher "authelia.com/provider/oauth2/token/jose/cipher"
 	"authelia.com/provider/oauth2/token/jose/json"
 )
@@ -75,6 +77,17 @@ type ecDecrypterSigner struct {
 
 type edDecrypterSigner struct {
 	privateKey ed25519.PrivateKey
+}
+
+// ed448EncrypterVerifier verifies Ed448 signatures. Ed448 signs only; the type
+// is named for symmetry with edEncrypterVerifier and never encrypts.
+type ed448EncrypterVerifier struct {
+	publicKey ed448.PublicKey
+}
+
+// ed448DecrypterSigner signs with Ed448.
+type ed448DecrypterSigner struct {
+	privateKey ed448.PrivateKey
 }
 
 // minRSAKeyBits is the smallest RSA modulus RFC 7518 permits for the algorithms
@@ -150,14 +163,53 @@ func newRSASigner(sigAlg SignatureAlgorithm, privateKey *rsa.PrivateKey) (recipi
 	}, nil
 }
 
-// isEdDSAAlg reports whether alg names Ed25519 signing.
+// isEdDSAAlg reports whether alg may be used with an Ed25519 key.
 //
 // RFC 9864 Section 2.2 registers "Ed25519" as the fully-specified identifier for
 // the parameter set that the polymorphic "EdDSA" of RFC 8037 leaves unstated.
-// Both name the same operation, so both are accepted; the caller decides which
-// one goes in the header.
+// Both name the same operation for an Ed25519 key, so both are accepted; the
+// caller decides which one goes in the header.
+//
+// "EdDSA" alone does not imply this curve. RFC 8037 Section 3.1 determines the
+// variant from the key subtype, so the same header value selects Ed448 when the
+// key is an Ed448 one; see isEd448Alg.
 func isEdDSAAlg(alg SignatureAlgorithm) bool {
 	return alg == EdDSA || alg == Ed25519
+}
+
+// isEd448Alg reports whether alg may be used with an Ed448 key.
+//
+// RFC 8037 Section 3.1 states that for the polymorphic "EdDSA" the "variant used
+// is determined by the subtype of the key (Ed25519 for "Ed25519" and Ed448 for
+// "Ed448")", so "EdDSA" names this curve whenever the key is an Ed448 one. Each
+// signer and verifier here is constructed from the key, which is what makes the
+// key the deciding input rather than the header.
+//
+// The fully-specified "Ed448" of RFC 9864 Section 2.2 names it unconditionally.
+// The converse does not hold: isEdDSAAlg does not accept "Ed448", so a
+// fully-specified identifier can never be paired with the other curve's key.
+func isEd448Alg(alg SignatureAlgorithm) bool {
+	return alg == EdDSA || alg == Ed448
+}
+
+func newEd448Signer(sigAlg SignatureAlgorithm, privateKey ed448.PrivateKey) (recipientSigInfo, error) {
+	if !isEd448Alg(sigAlg) {
+		return recipientSigInfo{}, ErrUnsupportedAlgorithm
+	}
+
+	if privateKey == nil {
+		return recipientSigInfo{}, errors.New("invalid private key")
+	}
+
+	return recipientSigInfo{
+		sigAlg: sigAlg,
+		publicKey: staticPublicKey(&JSONWebKey{
+			Key: privateKey.Public(),
+		}),
+		signer: &ed448DecrypterSigner{
+			privateKey: privateKey,
+		},
+	}, nil
 }
 
 func newEd25519Signer(sigAlg SignatureAlgorithm, privateKey ed25519.PrivateKey) (recipientSigInfo, error) {
@@ -572,6 +624,40 @@ func (ctx edDecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm)
 		Signature: sig,
 		protected: &rawHeader{},
 	}, nil
+}
+
+func (ctx ed448DecrypterSigner) signPayload(payload []byte, alg SignatureAlgorithm) (Signature, error) {
+	if !isEd448Alg(alg) {
+		return Signature{}, ErrUnsupportedAlgorithm
+	}
+
+	if err := validateEd448PrivateKey(ctx.privateKey); err != nil {
+		return Signature{}, err
+	}
+
+	// The empty context string is what makes this Ed448 rather than Ed448 with a
+	// context: RFC 8032 Section 5.2 admits a context, and neither RFC 8037 nor
+	// RFC 9864 gives JOSE a way to carry one, so it is always empty.
+	return Signature{
+		Signature: ed448.Sign(ctx.privateKey, payload, ""),
+		protected: &rawHeader{},
+	}, nil
+}
+
+func (ctx ed448EncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {
+	if !isEd448Alg(alg) {
+		return ErrUnsupportedAlgorithm
+	}
+
+	if err := validateEd448PublicKey(ctx.publicKey); err != nil {
+		return err
+	}
+
+	if !ed448.Verify(ctx.publicKey, payload, signature, "") {
+		return errors.New("go-jose/go-jose: ed448 signature failed to verify")
+	}
+
+	return nil
 }
 
 func (ctx edEncrypterVerifier) verifyPayload(payload []byte, signature []byte, alg SignatureAlgorithm) error {

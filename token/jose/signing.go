@@ -25,6 +25,8 @@ import (
 	"errors"
 	"fmt"
 
+	"authelia.com/provider/oauth2/token/jose/ed448"
+
 	"authelia.com/provider/oauth2/token/jose/json"
 )
 
@@ -43,6 +45,7 @@ type Signer interface {
 //
 // Key must have one of these types:
 //   - ed25519.PrivateKey
+//   - ed448.PrivateKey
 //   - *mldsa.PrivateKey (requires Go 1.27 or later)
 //   - *ecdsa.PrivateKey
 //   - *rsa.PrivateKey
@@ -242,6 +245,10 @@ func newVerifier(verificationKey any) (payloadVerifier, error) {
 		return &edEncrypterVerifier{
 			publicKey: verificationKey,
 		}, nil
+	case ed448.PublicKey:
+		return &ed448EncrypterVerifier{
+			publicKey: verificationKey,
+		}, nil
 	case *rsa.PublicKey:
 		return &rsaEncrypterVerifier{
 			publicKey: verificationKey,
@@ -282,6 +289,8 @@ func makeJWSRecipient(alg SignatureAlgorithm, signingKey any) (recipientSigInfo,
 	switch signingKey := signingKey.(type) {
 	case ed25519.PrivateKey:
 		return newEd25519Signer(alg, signingKey)
+	case ed448.PrivateKey:
+		return newEd448Signer(alg, signingKey)
 	case *rsa.PrivateKey:
 		return newRSASigner(alg, signingKey)
 	case *ecdsa.PrivateKey:
@@ -444,6 +453,7 @@ func (ctx *genericSigner) Options() SignerOptions {
 //
 // The verificationKey argument must have one of these types:
 //   - ed25519.PublicKey
+//   - ed448.PublicKey
 //   - *mldsa.PublicKey (requires Go 1.27 or later)
 //   - *ecdsa.PublicKey
 //   - *rsa.PublicKey

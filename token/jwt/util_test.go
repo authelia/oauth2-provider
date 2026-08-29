@@ -187,7 +187,7 @@ func TestNewClientSecretJWKFromClient(t *testing.T) {
 	})
 
 	t.Run("ShouldReturnJWKWhenSecretAvailable", func(t *testing.T) {
-		client := &testClient{secret: []byte("super-secret-value")}
+		client := &testClient{secret: []byte("super-secret-value-padded-to-thirty-two-octets")}
 		key, err := NewClientSecretJWKFromClient(t.Context(), client, "kid", string(jose.HS256), "", JSONWebTokenUseSignature)
 		require.NoError(t, err)
 		require.NotNil(t, key)
@@ -197,7 +197,7 @@ func TestNewClientSecretJWKFromClient(t *testing.T) {
 }
 
 func TestNewClientSecretJWK(t *testing.T) {
-	secret := []byte("super-secret-value-of-some-length")
+	secret := []byte("super-secret-value-of-some-length-long-enough-for-hs512-mac-keys")
 
 	testCases := []struct {
 		name    string
@@ -206,24 +206,28 @@ func TestNewClientSecretJWK(t *testing.T) {
 		use     string
 		wantErr string
 		keyLen  int
+		wantKey []byte
 	}{
 		{
-			name:   "ShouldDeriveHS256SignatureKey",
-			alg:    string(jose.HS256),
-			use:    JSONWebTokenUseSignature,
-			keyLen: 32,
+			name:    "ShouldUseSecretOctetsForHS256SignatureKey",
+			alg:     string(jose.HS256),
+			use:     JSONWebTokenUseSignature,
+			keyLen:  len(secret),
+			wantKey: secret,
 		},
 		{
-			name:   "ShouldDeriveHS384SignatureKey",
-			alg:    string(jose.HS384),
-			use:    JSONWebTokenUseSignature,
-			keyLen: 48,
+			name:    "ShouldUseSecretOctetsForHS384SignatureKey",
+			alg:     string(jose.HS384),
+			use:     JSONWebTokenUseSignature,
+			keyLen:  len(secret),
+			wantKey: secret,
 		},
 		{
-			name:   "ShouldDeriveHS512SignatureKey",
-			alg:    string(jose.HS512),
-			use:    JSONWebTokenUseSignature,
-			keyLen: 64,
+			name:    "ShouldUseSecretOctetsForHS512SignatureKey",
+			alg:     string(jose.HS512),
+			use:     JSONWebTokenUseSignature,
+			keyLen:  len(secret),
+			wantKey: secret,
 		},
 		{
 			name:    "ShouldErrorUnsupportedSignatureAlg",
@@ -322,6 +326,10 @@ func TestNewClientSecretJWK(t *testing.T) {
 
 			if b, ok := key.Key.([]byte); ok {
 				assert.Len(t, b, tc.keyLen)
+
+				if tc.wantKey != nil {
+					assert.Equal(t, tc.wantKey, b)
+				}
 			}
 		})
 	}
@@ -536,4 +544,35 @@ func TestThumbprintJWK(t *testing.T) {
 func TestThumbprintJWKNil(t *testing.T) {
 	_, err := ThumbprintJWK(nil)
 	assert.Error(t, err)
+}
+
+func TestNewClientSecretJWKSignatureUsesTheSecretOctets(t *testing.T) {
+	secret := []byte("0123456789abcdef0123456789abcdef")
+
+	require.Len(t, secret, 32)
+
+	t.Run("ShouldUseTheSecretOctetsAsTheMACKey", func(t *testing.T) {
+		key, err := NewClientSecretJWK(t.Context(), secret, "kid", string(jose.HS256), "", JSONWebTokenUseSignature)
+		require.NoError(t, err)
+
+		raw, ok := key.Key.([]byte)
+		require.True(t, ok, "got %T", key.Key)
+		assert.Equal(t, secret, raw)
+	})
+
+	t.Run("ShouldRejectASecretShorterThanTheAlgorithmRequires", func(t *testing.T) {
+		_, err := NewClientSecretJWK(t.Context(), secret, "kid", string(jose.HS512), "", JSONWebTokenUseSignature)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "octets")
+	})
+
+	t.Run("ShouldStillDeriveTheEncryptionKeyByHashing", func(t *testing.T) {
+		key, err := NewClientSecretJWK(t.Context(), secret, "kid", string(jose.A256KW), "", JSONWebTokenUseEncryption)
+		require.NoError(t, err)
+
+		raw, ok := key.Key.([]byte)
+		require.True(t, ok, "got %T", key.Key)
+		assert.NotEqual(t, secret, raw, "Section 10.2 derives the encryption key by truncated SHA-2, unlike Section 10.1")
+	})
 }

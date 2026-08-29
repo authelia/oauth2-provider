@@ -21,9 +21,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// TestIDTokenSubjectTokenIsBoundToTheRequestingClient covers the client binding of an 'id_token' presented as a
-// 'subject_token'. OpenID Connect Core 1.0 Section 2 makes 'aud' the client the ID Token was issued to, so a client
-// exchanging one whose audience is a different client is presenting a credential that was never issued to it.
 func TestIDTokenSubjectTokenIsBoundToTheRequestingClient(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
@@ -82,8 +79,6 @@ func TestIDTokenSubjectTokenIsBoundToTheRequestingClient(t *testing.T) {
 		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "azp")
 	})
 
-	// The canonical RFC 8693 use of an id_token as a subject token: a client exchanges the one issued to itself for
-	// a token it can present downstream. This must keep working.
 	t.Run("ShouldAcceptAnIDTokenIssuedToTheRequestingClient", func(t *testing.T) {
 		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), newRequest(requesting.GetID(), "")))
 	})

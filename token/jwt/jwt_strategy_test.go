@@ -183,7 +183,7 @@ func TestDefaultStrategy(t *testing.T) {
 		jwksURI: "",
 	}
 
-	key128 := make([]byte, 32)
+	key128 := make([]byte, 64)
 
 	_, err = rand.Read(key128)
 	require.NoError(t, err)

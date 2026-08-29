@@ -273,6 +273,13 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 
 // NewClientSecretJWK returns a client secret based JWK from a client secret value.
 //
+// OpenID Connect Core 1.0 Section 10.1 states the MAC key used for a symmetric signature is the octets of the UTF-8
+// representation of the client_secret value, with no derivation applied. Section 16.19 requires such a client_secret
+// to carry at least the octets the algorithm's MAC key needs, being the hash output size RFC 7518 Section 3.2
+// mandates, and gives HS256 needing at least 32 octets as its example.
+//
+// The truncated SHA-2 derivation described below is Section 10.2's rule and applies to symmetric encryption only.
+//
 // The symmetric encryption key is derived from the client_secret value by using the left-most bits of a truncated
 // SHA-2 hash of the octets of the UTF-8 representation of the client_secret. For keys of 256 or fewer bits, SHA-256
 // is used; for keys of 257-384 bits, SHA-384 is used; for keys of 385-512 bits, SHA-512 is used. The hash value MUST
@@ -290,27 +297,25 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 
 	switch use {
 	case JSONWebTokenUseSignature:
-		var (
-			hasher hash.Hash
-		)
+		var octets int
 
 		switch jose.SignatureAlgorithm(alg) {
 		case jose.HS256:
-			hasher = sha256.New()
+			octets = 32
 		case jose.HS384:
-			hasher = sha512.New384()
+			octets = 48
 		case jose.HS512:
-			hasher = sha512.New()
+			octets = 64
 		default:
 			return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported algorithm '%s'", alg)}
 		}
 
-		if _, err = hasher.Write(secret); err != nil {
-			return nil, &JWKLookupError{Description: fmt.Sprintf("Unable to derive key from hashing the client secret. %s", err.Error())}
+		if len(secret) < octets {
+			return nil, &JWKLookupError{Description: fmt.Sprintf("The client secret is %d octets long but the '%s' algorithm requires a MAC key of at least %d octets", len(secret), alg, octets)}
 		}
 
 		return &jose.JSONWebKey{
-			Key:       hasher.Sum(nil),
+			Key:       secret,
 			KeyID:     kid,
 			Algorithm: alg,
 			Use:       use,

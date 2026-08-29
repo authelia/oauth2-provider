@@ -87,9 +87,25 @@ func (h *ClientConfigurationHandler) read(ctx context.Context, client oauth2.Cli
 		responder.SetClientSecret(string(secret))
 	}
 
+	setRegistrationTimes(client, responder)
+
 	responder.SetStatusCode(http.StatusOK)
 
 	return nil
+}
+
+// setRegistrationTimes reports the RFC 7591 Section 3.2.1 registration bookkeeping values for client. Both are read
+// from the client rather than recomputed: 'client_id_issued_at' records when the identifier was issued, and
+// 'client_secret_expires_at' is enforced by CompareClientSecret, so reporting a zero here would tell the client its
+// secret does not expire when it does.
+func setRegistrationTimes(client oauth2.Client, responder oauth2.ClientConfigurationResponder) {
+	if issued, ok := client.(oauth2.ClientIDIssuedAtClient); ok {
+		responder.SetClientIDIssuedAt(issued.GetClientIDIssuedAt())
+	}
+
+	if expiring, ok := client.(oauth2.ExpiringClientSecretClient); ok {
+		responder.SetClientSecretExpiresAt(expiring.GetClientSecretExpiresAt())
+	}
 }
 
 // update implements the PUT case, RFC 7592 Section 2.2's full replacement semantics: 'client_id' and 'client_secret'
@@ -203,6 +219,9 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	responder.SetRegistrationAccessToken(token)
 	responder.SetRegistrationClientURI(registrationClientURI)
+
+	setRegistrationTimes(patched, responder)
+
 	responder.SetStatusCode(http.StatusOK)
 
 	return nil

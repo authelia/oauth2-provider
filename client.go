@@ -60,6 +60,14 @@ type RotatedClientSecretsClient interface {
 	Client
 }
 
+// ClientIDIssuedAtClient extends Client interface by a method providing the time the client identifier was issued,
+// being the RFC 7591 Section 3.2.1 'client_id_issued_at' value.
+type ClientIDIssuedAtClient interface {
+	GetClientIDIssuedAt() (issued time.Time)
+
+	Client
+}
+
 // ExpiringClientSecretClient extends Client interface by a method providing the time the client secret expires. A
 // zero time means the secret does not expire, which RFC 7591 Section 3.2.1 also assigns to a
 // 'client_secret_expires_at' of 0.

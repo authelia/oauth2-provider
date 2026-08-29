@@ -17,7 +17,7 @@ func TestConfigDPoPDefaults(t *testing.T) {
 	ctx := context.Background()
 
 	assert.False(t, c.GetDPoPEnabled(ctx))
-	assert.Equal(t, []string{"ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "RS256", "RS384", "RS512", "EdDSA"}, c.GetDPoPAllowedJWSAlgorithms(ctx))
+	assert.Equal(t, []string{"ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "RS256", "RS384", "RS512", "EdDSA", "Ed25519"}, c.GetDPoPAllowedJWSAlgorithms(ctx))
 	assert.Equal(t, time.Second*10, c.GetDPoPClockSkew(ctx))
 	assert.Equal(t, time.Second*10, c.GetDPoPProofLifespan(ctx))
 	assert.Equal(t, time.Hour, c.GetDPoPNonceLifespan(ctx))

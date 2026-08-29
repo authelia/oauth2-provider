@@ -409,6 +409,10 @@ type Config struct {
 	// one of them. Empty means consts.ScopeClientRegistration.
 	RFC7591ClientRegistrationScopes []string
 
+	// RFC7591ClientRegistrationGrantTypes are the grant types a client may register for. Empty permits any grant.
+	// See GetRFC7591ClientRegistrationGrantTypes for why, and when a deployment should set it.
+	RFC7591ClientRegistrationGrantTypes []string
+
 	formPostResponseWriterOnce                  sync.Once
 	responseModeHandlersOnce                    sync.Once
 	jwtStrategyOnce                             sync.Once
@@ -1056,6 +1060,23 @@ func (c *Config) GetRFC7591ClientRegistrationValidators(ctx context.Context) (va
 
 func (c *Config) GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string) {
 	return c.RFC7591ClientRegistrationEndpointAudiences
+}
+
+// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for, or nil to permit any.
+//
+// RFC 7591 Section 2 permits the authorization server to "reject any requested client metadata values ... by
+// returning an error response". The registrant chooses 'grant_types' and every token endpoint authorization check in
+// this library is a GetGrantTypes().Has call, so a client that can register unrestricted grants its own authority:
+// asserting 'client_credentials' produces a client that acts with no resource owner, and 'password' one that
+// RFC 9700 Section 2.4 says MUST NOT be used at all.
+//
+// It is empty by default, permitting any grant, because registering a non-redirecting grant is legitimate and
+// specified: an mTLS client registered under RFC 8705 is a client credentials client, and Section 2 requires only
+// that 'grant_types' and 'response_types' be internally coherent. A deployment whose registration endpoint is open,
+// or is reachable by parties it does not intend to grant every flow to, should set this to the grants it means to
+// hand out.
+func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string) {
+	return c.RFC7591ClientRegistrationGrantTypes
 }
 
 func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string) {

@@ -626,7 +626,15 @@ func (c *Config) GetOmitRedirectScopeParam(ctx context.Context) bool {
 	return c.OmitRedirectScopeParam
 }
 
+// GetAccessTokenIssuer returns the issuer for JWT profile access tokens, falling back to the ID Token issuer. RFC 9068
+// Section 2.2 makes 'iss' a required claim, and RFC 8414 gives an authorization server one issuer identifier, so the
+// value that identifies it as an ID Token issuer identifies it here too. Without the fallback a deployment that
+// enabled JWT profile access tokens without setting this minted tokens carrying no 'iss' at all.
 func (c *Config) GetAccessTokenIssuer(ctx context.Context) string {
+	if c.AccessTokenIssuer == "" {
+		return c.IDTokenIssuer
+	}
+
 	return c.AccessTokenIssuer
 }
 

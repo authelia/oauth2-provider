@@ -349,3 +349,20 @@ func TestJWTClaims_WithScopeField(t *testing.T) {
 		})
 	}
 }
+
+func TestJWTClaimsToMapOmitsAnEmptyAudience(t *testing.T) {
+	claims := &JWTClaims{Subject: "peter", Issuer: "https://as.example.com"}
+
+	ret := claims.ToMap()
+
+	assert.NotContains(t, ret, ClaimAudience,
+		"an empty 'aud' array asserts the token is intended for no one; the claim is simply not asserted")
+}
+
+func TestJWTClaimsToMapKeepsAPopulatedAudience(t *testing.T) {
+	claims := &JWTClaims{Subject: "peter", Audience: []string{"https://api.example.com"}}
+
+	ret := claims.ToMap()
+
+	assert.Equal(t, []string{"https://api.example.com"}, ret[ClaimAudience])
+}

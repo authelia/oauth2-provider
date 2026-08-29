@@ -219,3 +219,33 @@ func TestConfig_LazyDefaultsAreConcurrencySafe(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_GetAccessTokenIssuer(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   *Config
+		expected string
+	}{
+		{
+			name:     "ShouldReturnItsOwnValueWhenSet",
+			config:   &Config{AccessTokenIssuer: "https://at.example.com", IDTokenIssuer: "https://id.example.com"},
+			expected: "https://at.example.com",
+		},
+		{
+			name:     "ShouldFallBackToTheIDTokenIssuer",
+			config:   &Config{IDTokenIssuer: "https://id.example.com"},
+			expected: "https://id.example.com",
+		},
+		{
+			name:     "ShouldReturnEmptyWhenNeitherIsSet",
+			config:   &Config{},
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.config.GetAccessTokenIssuer(t.Context()))
+		})
+	}
+}

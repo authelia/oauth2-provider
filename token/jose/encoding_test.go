@@ -19,8 +19,10 @@ package jose
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -153,4 +155,110 @@ func TestFixedSizeBufferTooLarge(t *testing.T) {
 	}()
 
 	newFixedSizeBuffer(make([]byte, 2), 1)
+}
+
+// A pooled and reset flate writer must behave exactly as a freshly constructed one, both in the bytes it produces and
+// in never carrying anything of the previous plaintext into the next stream.
+func TestDeflateIsUnaffectedByWriterReuse(t *testing.T) {
+	first := []byte(`{"sub":"1234567890","name":"John Doe","iat":1516239022}`)
+	second := []byte(strings.Repeat("a distinctive secret which must not reappear ", 32))
+
+	firstCompressed, err := deflate(first)
+	if err != nil {
+		t.Fatalf("deflate: %v", err)
+	}
+
+	secondCompressed, err := deflate(second)
+	if err != nil {
+		t.Fatalf("deflate: %v", err)
+	}
+
+	firstAgain, err := deflate(first)
+	if err != nil {
+		t.Fatalf("deflate: %v", err)
+	}
+
+	if !bytes.Equal(firstCompressed, firstAgain) {
+		t.Error("deflate produced different output for the same input after the writer had been reused")
+	}
+
+	for _, tc := range []struct {
+		name       string
+		compressed []byte
+		expected   []byte
+	}{
+		{"ShouldRoundTripFirst", firstCompressed, first},
+		{"ShouldRoundTripSecond", secondCompressed, second},
+		{"ShouldRoundTripFirstAfterReuse", firstAgain, first},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := decompress(DEFLATE, tc.compressed)
+			if err != nil {
+				t.Fatalf("decompress: %v", err)
+			}
+
+			if !bytes.Equal(out, tc.expected) {
+				t.Errorf("roundtrip returned %q, want %q", out, tc.expected)
+			}
+		})
+	}
+}
+
+func TestDeflateIsConcurrencySafe(t *testing.T) {
+	inputs := [][]byte{
+		[]byte(`{"sub":"1234567890"}`),
+		[]byte(strings.Repeat("b", 4096)),
+		[]byte("Lorem ipsum dolor sit amet"),
+	}
+
+	expected := make([][]byte, len(inputs))
+
+	for i, input := range inputs {
+		out, err := deflate(input)
+		if err != nil {
+			t.Fatalf("deflate: %v", err)
+		}
+
+		expected[i] = out
+	}
+
+	var wg sync.WaitGroup
+
+	errs := make(chan error, 64)
+
+	for i := range 64 {
+		wg.Add(1)
+
+		go func(n int) {
+			defer wg.Done()
+
+			out, err := deflate(inputs[n%len(inputs)])
+			if err != nil {
+				errs <- err
+
+				return
+			}
+
+			if !bytes.Equal(out, expected[n%len(inputs)]) {
+				errs <- fmt.Errorf("goroutine %d produced %d bytes, want %d", n, len(out), len(expected[n%len(inputs)]))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+func BenchmarkDeflate(b *testing.B) {
+	input := []byte(`{"sub":"1234567890","name":"John Doe","iat":1516239022}`)
+
+	for b.Loop() {
+		if _, err := deflate(input); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

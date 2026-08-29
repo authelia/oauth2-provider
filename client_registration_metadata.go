@@ -80,6 +80,16 @@ type ClientRegistrationMetadata struct {
 	BackChannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
 	BackChannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
 
+	// RFC 8693 (OAuth 2.0 Token Exchange) client metadata. Each is a restriction: an empty value applies no
+	// restriction, which is how a client that expresses none behaves.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
+
+	TokenExchangeSubjectTokenTypes  []string `json:"token_exchange_subject_token_types,omitempty"`
+	TokenExchangeActorTokenTypes    []string `json:"token_exchange_actor_token_types,omitempty"`
+	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types,omitempty"`
+	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids,omitempty"`
+
 	// RFC 8705 (OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens) client metadata.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8705#section-2.1.2

@@ -228,6 +228,11 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.InitiateLoginURI = metadata.InitiateLoginURI
 	registered.RequestURIs = metadata.RequestURIs
 
+	registered.TokenExchangeSubjectTokenTypes = metadata.TokenExchangeSubjectTokenTypes
+	registered.TokenExchangeActorTokenTypes = metadata.TokenExchangeActorTokenTypes
+	registered.TokenExchangeRequestTokenTypes = metadata.TokenExchangeRequestTokenTypes
+	registered.TokenExchangePermittedClientIDs = metadata.TokenExchangePermittedClientIDs
+
 	registered.RequireSignedRequestObject = metadata.RequireSignedRequestObject
 
 	registered.PostLogoutRedirectURIs = metadata.PostLogoutRedirectURIs

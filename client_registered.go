@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"slices"
 	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -66,6 +67,12 @@ type DefaultRegisteredClient struct {
 	DefaultACRValues             []string `json:"default_acr_values"`
 	InitiateLoginURI             string   `json:"initiate_login_uri"`
 	RequestURIs                  []string `json:"request_uris"`
+
+	// RFC 8693 (OAuth 2.0 Token Exchange) restrictions. An empty value applies no restriction.
+	TokenExchangeSubjectTokenTypes  []string `json:"token_exchange_subject_token_types"`
+	TokenExchangeActorTokenTypes    []string `json:"token_exchange_actor_token_types"`
+	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types"`
+	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
 	// RFC 9101 Section 10.5 (JWT-Secured Authorization Request) client metadata.
 	//
@@ -416,4 +423,58 @@ func (c *DefaultRegisteredClient) GetClientIDIssuedAt() (issued time.Time) {
 // GetClientSecretExpiresAt returns the time the client secret expires, or the zero time when it does not.
 func (c *DefaultRegisteredClient) GetClientSecretExpiresAt() (expires time.Time) {
 	return c.ClientSecretExpiresAt
+}
+
+// GetSupportedSubjectTokenTypes returns the RFC 8693 'subject_token_type' values this client may present. Empty
+// applies no restriction.
+func (c *DefaultRegisteredClient) GetSupportedSubjectTokenTypes() (types []string) {
+	return c.TokenExchangeSubjectTokenTypes
+}
+
+// GetSupportedActorTokenTypes returns the RFC 8693 'actor_token_type' values this client may present. Empty applies
+// no restriction.
+func (c *DefaultRegisteredClient) GetSupportedActorTokenTypes() (types []string) {
+	return c.TokenExchangeActorTokenTypes
+}
+
+// GetSupportedRequestTokenTypes returns the RFC 8693 'requested_token_type' values this client may ask for. Empty
+// applies no restriction.
+func (c *DefaultRegisteredClient) GetSupportedRequestTokenTypes() (types []string) {
+	return c.TokenExchangeRequestTokenTypes
+}
+
+// GetSupportedSubjectTokenIssuers returns no per-client issuer restriction, deferring to the token type's own issuer
+// setting as the interface documents. There is no registered metadata for it.
+func (c *DefaultRegisteredClient) GetSupportedSubjectTokenIssuers() (issuers []string) {
+	return nil
+}
+
+// GetSupportedActorTokenIssuers returns no per-client issuer restriction, deferring to the token type's own issuer
+// setting as the interface documents. There is no registered metadata for it.
+func (c *DefaultRegisteredClient) GetSupportedActorTokenIssuers() (issuers []string) {
+	return nil
+}
+
+// GetTokenExchangePermitted reports whether client may exchange a token issued to this one, per RFC 8693 Section 5's
+// recommendation that the exchange be restricted "to only those clients explicitly authorized to perform the exchange
+// operation".
+//
+// An empty list permits any client, which is how a client expressing no policy behaves; the requested token type is
+// not consulted, so a deployment needing a rule of that shape supplies its own client type.
+func (c *DefaultRegisteredClient) GetTokenExchangePermitted(client Client, requestedTokenType RFC8693TokenType) (allowed bool) {
+	if len(c.TokenExchangePermittedClientIDs) == 0 {
+		return true
+	}
+
+	if client == nil {
+		return false
+	}
+
+	return slices.Contains(c.TokenExchangePermittedClientIDs, client.GetID())
+}
+
+// GetAllowActorTokenWithoutMayAct reports false: delegation on a subject token carrying no 'may_act' claim requires
+// an out-of-band authorization mechanism, which registered metadata cannot express.
+func (c *DefaultRegisteredClient) GetAllowActorTokenWithoutMayAct() (allow bool) {
+	return false
 }

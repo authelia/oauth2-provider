@@ -208,19 +208,31 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 //	}
 func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder) {
 	var (
+		caller   Client
 		client   IntrospectionJWTResponseClient
 		ok       bool
 		alg, kid string
 	)
 
-	if client, ok = r.GetAccessRequester().GetClient().(IntrospectionJWTResponseClient); ok {
+	if responder, isResponderClient := r.(IntrospectionResponderClient); isResponderClient {
+		caller = responder.GetClient()
+	}
+
+	// RFC 9701 Section 6 bases the algorithm decision on "registered metadata parameters for the resource server",
+	// and Section 5 requires 'aud' to identify the resource server receiving the response. Both halves therefore
+	// come from the caller. Reading them from the introspected token's client would derive one JWT from two parties:
+	// a resource server that registered 'introspection_signed_response_alg' would be sent plain JSON unless the
+	// token it happened to introspect belonged to a client that registered one too.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
+	if client, ok = caller.(IntrospectionJWTResponseClient); ok {
 		alg, kid = client.GetIntrospectionSignedResponseAlg(), client.GetIntrospectionSignedResponseKeyID()
 	}
 
 	response := map[string]any{jwt.ClaimActive: false}
 
 	if !r.IsActive() {
-		f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
+		f.writeIntrospectionResponse(ctx, rw, r, caller, response, alg, kid)
 
 		return
 	}
@@ -265,10 +277,10 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())
 
-	f.writeIntrospectionResponse(ctx, rw, r, response, alg, kid)
+	f.writeIntrospectionResponse(ctx, rw, r, caller, response, alg, kid)
 }
 
-func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder, response map[string]any, alg, kid string) {
+func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder, caller Client, response map[string]any, alg, kid string) {
 	switch {
 	case (alg != "" && alg != jwt.JSONWebTokenAlgNone) || (kid != "" && alg != jwt.JSONWebTokenAlgNone):
 		var (
@@ -316,7 +328,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			return
 		}
 
-		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(r.GetAccessRequester().GetClient())); err != nil {
+		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(caller)); err != nil {
 			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return

@@ -249,3 +249,13 @@ func TestConfig_GetAccessTokenIssuer(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_GetDPoPAllowedJWSAlgorithmsEdDSAValues(t *testing.T) {
+	algs := (&Config{}).GetDPoPAllowedJWSAlgorithms(t.Context())
+
+	assert.Contains(t, algs, "EdDSA", "RFC 8037 Section 3.1 polymorphic identifier")
+	assert.Contains(t, algs, "Ed25519", "RFC 9864 Table 2 fully-specified identifier")
+	assert.NotContains(t, algs, "Ed448", "registered by RFC 9864 but not implemented by token/jose")
+
+	assert.Equal(t, []string{"a"}, (&Config{DPoPAllowedJWSAlgorithms: []string{"a"}}).GetDPoPAllowedJWSAlgorithms(t.Context()))
+}

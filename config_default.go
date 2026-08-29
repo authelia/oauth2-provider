@@ -995,9 +995,14 @@ func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {
 	return c.DPoPEnforce
 }
 
+// GetDPoPAllowedJWSAlgorithms returns the asymmetric algorithms a DPoP proof may be signed with.
+//
+// Both Edwards-curve identifiers are listed: 'EdDSA' from RFC 8037 Section 3.1, and the fully-specified 'Ed25519'
+// that RFC 9864 Table 2 registers for the same parameter set and recommends in its place, so a client using either
+// identifier is accepted. RFC 9864's 'Ed448' is absent because token/jose does not implement it.
 func (c *Config) GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string) {
 	if len(c.DPoPAllowedJWSAlgorithms) == 0 {
-		return []string{"ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "RS256", "RS384", "RS512", "EdDSA"}
+		return []string{"ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "RS256", "RS384", "RS512", "EdDSA", "Ed25519"}
 	}
 
 	return c.DPoPAllowedJWSAlgorithms

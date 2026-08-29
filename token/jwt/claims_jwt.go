@@ -119,10 +119,13 @@ func (c *JWTClaims) ToMap() map[string]any {
 		ret[ClaimJWTID] = uuid.New().String()
 	}
 
+	// Omitted rather than emitted as an empty array. RFC 7519 Section 4.1.3 has each intended recipient identify
+	// itself with a value in 'aud', so an empty array asserts the token is intended for no one, which is a claim
+	// about the token rather than the absence of one.
 	if len(c.Audience) > 0 {
 		ret[ClaimAudience] = c.Audience
 	} else {
-		ret[ClaimAudience] = []string{}
+		delete(ret, ClaimAudience)
 	}
 
 	if !c.IssuedAt.IsZero() {

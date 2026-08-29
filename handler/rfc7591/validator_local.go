@@ -20,6 +20,7 @@ import (
 type LocalValidatorConfig interface {
 	oauth2.ScopeStrategyProvider
 	oauth2.AudienceStrategyProvider
+	oauth2.RFC7591ClientRegistrationGrantTypesProvider
 }
 
 // LocalValidator is an oauth2.ClientRegistrationValidator that performs purely local checks against submitted
@@ -77,6 +78,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 	}
 
 	if err = validateGrantResponseTypeCoherence(metadata); err != nil {
+		return err
+	}
+
+	if err = validateGrantTypesPermitted(ctx, v.config, metadata); err != nil {
 		return err
 	}
 
@@ -223,6 +228,32 @@ func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err erro
 
 		if isLoopbackRedirect(parsed.Hostname()) {
 			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", consts.ClientMetadataRedirectURIs, raw, consts.ClientMetadataApplicationType))
+		}
+	}
+
+	return nil
+}
+
+// validateGrantTypesPermitted checks the registered 'grant_types' against the grant types the deployment permits a
+// client to register for. RFC 7591 Section 2 permits the authorization server to reject requested metadata values
+// with an error response, and every token endpoint authorization check in this library is a GetGrantTypes().Has
+// call, so without this a registrant asserts its own authority.
+//
+// An empty policy permits any grant, which is the default; see GetRFC7591ClientRegistrationGrantTypes. An absent
+// 'grant_types' is not checked either way: Section 2 makes that the authorization code grant, which
+// validateGrantResponseTypeCoherence already applies.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+func validateGrantTypesPermitted(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	permitted := config.GetRFC7591ClientRegistrationGrantTypes(ctx)
+
+	if len(permitted) == 0 {
+		return nil
+	}
+
+	for _, grantType := range metadata.GrantTypes {
+		if !slices.Contains(permitted, grantType) {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not permitted for registration.", consts.ClientMetadataGrantTypes, grantType))
 		}
 	}
 

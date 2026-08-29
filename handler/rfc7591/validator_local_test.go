@@ -519,3 +519,80 @@ func TestLocalValidatorURIs(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalValidatorGrantTypePolicy(t *testing.T) {
+	base := func(grantTypes, responseTypes []string) *oauth2.ClientRegistrationMetadata {
+		return &oauth2.ClientRegistrationMetadata{
+			RedirectURIs:  []string{"https://example.com/cb"},
+			GrantTypes:    grantTypes,
+			ResponseTypes: responseTypes,
+		}
+	}
+
+	testCases := []struct {
+		name      string
+		permitted []string
+		metadata  *oauth2.ClientRegistrationMetadata
+		err       string
+	}{
+		{
+			// Unset permits any grant, so that registering an mTLS client credentials client keeps working.
+			name:     "ShouldPermitAnyGrantWhenUnset",
+			metadata: base([]string{"client_credentials"}, nil),
+		},
+		{
+			name:     "ShouldPermitResourceOwnerPasswordWhenUnset",
+			metadata: base([]string{"password"}, nil),
+		},
+		{
+			name:      "ShouldRejectClientCredentialsWhenNotPermitted",
+			permitted: []string{"authorization_code", "refresh_token"},
+			metadata:  base([]string{"client_credentials"}, nil),
+			err:       "client_credentials",
+		},
+		{
+			name:      "ShouldRejectResourceOwnerPasswordWhenNotPermitted",
+			permitted: []string{"authorization_code"},
+			metadata:  base([]string{"password"}, nil),
+			err:       "password",
+		},
+		{
+			name:      "ShouldRejectTokenExchangeWhenNotPermitted",
+			permitted: []string{"authorization_code"},
+			metadata:  base([]string{"urn:ietf:params:oauth:grant-type:token-exchange"}, nil),
+			err:       "token-exchange",
+		},
+		{
+			name:      "ShouldAcceptWhatTheDeploymentPermits",
+			permitted: []string{"authorization_code", "client_credentials"},
+			metadata:  base([]string{"client_credentials"}, nil),
+		},
+		{
+			name:      "ShouldRejectWhatTheDeploymentDoesNotPermit",
+			permitted: []string{"authorization_code"},
+			metadata:  base([]string{"authorization_code", "refresh_token"}, []string{"code"}),
+			err:       "refresh_token",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := NewLocalValidator(&oauth2.Config{
+				ScopeStrategy:                       oauth2.ExactScopeStrategy,
+				AudienceStrategy:                    oauth2.DefaultAudienceStrategy,
+				RFC7591ClientRegistrationGrantTypes: tc.permitted,
+			})
+
+			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}

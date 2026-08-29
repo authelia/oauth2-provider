@@ -443,8 +443,16 @@ type RFC7591ClientRegistrationTokenSecretProvider interface {
 
 // RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
 // Dynamic Client Registration 1.0.
+// RFC7591ClientRegistrationGrantTypesProvider returns the provider for the grant types a client may register for.
+type RFC7591ClientRegistrationGrantTypesProvider interface {
+	// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for. A registered grant
+	// type outside this set is rejected with 'invalid_client_metadata'.
+	GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string)
+}
+
 type RFC7591ClientRegistrationConfigProvider interface {
 	RFC7591ClientRegistrationTokenSecretProvider
+	RFC7591ClientRegistrationGrantTypesProvider
 
 	// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint. It is
 	// used to build 'registration_client_uri' values and to audience initial access tokens.

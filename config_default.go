@@ -119,6 +119,10 @@ type Config struct {
 	// AllowedPromptValues sets which OpenID Connect prompt values the server supports. Defaults to []string{"login", "none", "consent", "select_account"}.
 	AllowedPromptValues []string
 
+	// EnforceClientAssertionIssuerAudience requires a JWT client authentication assertion to carry the issuer
+	// identifier as the sole value of its 'aud' claim. See GetEnforceClientAssertionIssuerAudience.
+	EnforceClientAssertionIssuerAudience bool
+
 	// AllowedJWTAssertionAudiences is a list of permitted client assertion audiences. If the authorization server is
 	// intended to be compatible with the client_secret_jwt or private_key_jwt client authentication methods
 	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
@@ -492,6 +496,23 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 
 func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 	return c.AllowedJWTAssertionAudiences
+}
+
+// GetEnforceClientAssertionIssuerAudience returns whether a JWT client authentication assertion must carry this
+// server's issuer identifier as the sole value of its 'aud' claim.
+//
+// draft-ietf-oauth-rfc7523bis Section 4 replaces RFC 7523 Section 3 item 3 and differentiates two cases: the
+// authorization grant MAY identify the server by "either its issuer identifier or its token endpoint URL", while for
+// client authentication the value "MUST use the issuer identifier of the authorization server as its sole value",
+// adding that "the token endpoint URL ... MUST NOT be used as an audience value". Accepting either at both endpoints
+// is the ambiguity Audience.Injection exploits: an assertion minted for one endpoint is replayed at another.
+//
+// It is off by default because the tightening lives in a draft, while published RFC 7523 permits the token endpoint
+// URL, so enabling it rejects assertions from clients that conform to the published specification. A deployment
+// whose clients have adopted the draft should turn it on; the default should be revisited when the draft is
+// published.
+func (c *Config) GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool) {
+	return c.EnforceClientAssertionIssuerAudience
 }
 
 func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {

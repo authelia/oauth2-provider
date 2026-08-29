@@ -346,6 +346,11 @@ type FormPostResponseProvider interface {
 type AllowedJWTAssertionAudiencesProvider interface {
 	// GetAllowedJWTAssertionAudiences returns the permitted audience list for JWT Assertions.
 	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
+
+	// GetEnforceClientAssertionIssuerAudience returns whether a JWT client authentication assertion must carry the
+	// issuer identifier as the sole value of its 'aud' claim, per draft-ietf-oauth-rfc7523bis Section 4. The
+	// authorization grant is unaffected: the draft preserves the looser rule for it.
+	GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool)
 }
 
 // AllowedIntrospectionAudiencesProvider is a provider used in contexts where the permitted audiences for an Access

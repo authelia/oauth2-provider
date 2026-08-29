@@ -347,6 +347,30 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client AuthenticationMethodClient, assertion *ClientAssertion, strategy EndpointClientAuthStrategy) (method, kid, alg string, token *jwt.Token, err error) {
 	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
 
+	// draft-ietf-oauth-rfc7523bis Section 4 replaces RFC 7523 Section 3 item 3 with two differentiated cases. The
+	// authorization grant, handled in handler/rfc7523, may still identify this server by its issuer identifier or
+	// its token endpoint URL. Client authentication may not: the 'aud' value "MUST use the issuer identifier of the
+	// authorization server as its sole value", and "the token endpoint URL of the authorization server MUST NOT be
+	// used as an audience value". Sharing one configured list across both is what makes an assertion minted for one
+	// endpoint replayable at another, which is the Audience.Injection attack the draft exists to close.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc7523bis-11#section-4
+	enforceIssuerAudience := s.Config.GetEnforceClientAssertionIssuerAudience(ctx)
+
+	if enforceIssuerAudience {
+		var issuer string
+
+		if provider, ok := s.Config.(IDTokenIssuerProvider); ok {
+			issuer = provider.GetIDTokenIssuer(ctx)
+		}
+
+		if issuer == "" {
+			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server is configured to require the issuer identifier as the sole audience of a client assertion but has no issuer identifier configured. The draft requires that an authorization server have one to be used with this specification."))
+		}
+
+		audience = []string{issuer}
+	}
+
 	if len(audience) == 0 {
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods as it could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
@@ -375,6 +399,20 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 	if err = token.Claims.Valid(optsClaims...); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
+	}
+
+	// Checked separately because ValidateAudienceAny is satisfied by any one entry matching, which cannot express
+	// the sole value requirement.
+	if enforceIssuerAudience {
+		var aud jwt.ClaimStrings
+
+		if aud, err = token.Claims.GetAudience(); err != nil {
+			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' had an 'aud' claim which could not be read: %s.", client.GetID(), err.Error()))
+		}
+
+		if len(aud) != 1 {
+			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but the issuer identifier must be its sole audience value.", client.GetID(), len(aud)))
+		}
 	}
 
 	var (

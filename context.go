@@ -22,4 +22,5 @@ const (
 	AuthorizeRequestContextKey        = ContextKey("authorizeRequest")
 	AuthorizeResponseContextKey       = ContextKey("authorizeResponse")
 	PushedAuthorizeResponseContextKey = ContextKey("pushedAuthorizeResponse")
+	DPoPProofContextKey               = ContextKey("dpopProof")
 )

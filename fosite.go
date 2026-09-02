@@ -95,6 +95,20 @@ func (t *TokenEndpointBindingHandlers) Append(h TokenEndpointBindingHandler) {
 	*t = append(*t, h)
 }
 
+// RFC8628DeviceAuthorizeEndpointBindingHandlers is a list of RFC8628DeviceAuthorizeEndpointBindingHandler
+type RFC8628DeviceAuthorizeEndpointBindingHandlers []RFC8628DeviceAuthorizeEndpointBindingHandler
+
+// Append adds an RFC8628DeviceAuthorizeEndpointBindingHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *RFC8628DeviceAuthorizeEndpointBindingHandlers) Append(h RFC8628DeviceAuthorizeEndpointBindingHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
 // TokenIntrospectionHandlers is a list of TokenValidator
 type TokenIntrospectionHandlers []TokenIntrospector
 
@@ -253,6 +267,7 @@ type Configurator interface {
 	TokenEndpointHandlersProvider
 	AuthorizeEndpointBindingHandlersProvider
 	TokenEndpointBindingHandlersProvider
+	RFC8628DeviceAuthorizeEndpointBindingHandlersProvider
 	TokenIntrospectionHandlersProvider
 	RevocationHandlersProvider
 	PushedAuthorizeRequestHandlersProvider
@@ -274,6 +289,7 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthDisabledProvider
 	DPoPConfigProvider
 	MTLSConfigProvider
+	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider
 	RFC7591ClientRegistrationEndpointHandlersProvider
 	RFC7592ClientConfigurationEndpointHandlersProvider

@@ -367,8 +367,8 @@ func (d Delim) String() string {
 // properly nested and matched: if Token encounters an unexpected
 // delimiter in the input, it will return an error.
 //
-// The input stream consists of basic JSON values—bool, string,
-// number, and null—along with delimiters [ ] { } of type [Delim]
+// The input stream consists of basic JSON values; bool, string,
+// number, and null; along with delimiters [ ] { } of type [Delim]
 // to mark the start and end of arrays and objects.
 // Commas and colons are elided.
 func (dec *Decoder) Token() (Token, error) {

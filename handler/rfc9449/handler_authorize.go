@@ -45,26 +45,28 @@ func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oau
 
 	types := request.GetResponseTypes()
 
-	// Only record the binding for flows that issue an authorization code; an implicit-only flow never presents a
-	// code at the token endpoint, so it would never pass through Handler.BindAccessRequest's proof check and
-	// would otherwise end up with an unenforceable cnf.jkt on its (directly issued) token.
+	// RFC 9449 Section 10 binds an authorization code, so a flow that issues none records nothing.
 	if !types.Has(consts.ResponseTypeAuthorizationCodeFlow) {
-		return nil
-	}
-
-	// A hybrid flow that also issues an access token straight from the authorization endpoint is skipped for the same
-	// reason. The binding lives on the session shared by every authorize handler, so it cannot be applied to the code
-	// alone: the directly issued access token would pick up a cnf.jkt that no proof was ever checked against, while
-	// still being advertised as 'token_type=bearer' in the authorization response. RFC 9449 Section 7.1 requires a
-	// DPoP bound access token to be presented under the DPoP scheme, so a conforming client would present that token
-	// as a bearer token and the resource server would be obliged to reject it.
-	if types.Has(consts.ResponseTypeImplicitFlowToken) {
 		return nil
 	}
 
 	session, ok := request.GetSession().(oauth2.DPoPBoundSession)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support DPoP binding."))
+	}
+
+	// Section 10: recorded for every flow that issues a code, so Handler.BindAccessRequest rejects a redemption whose
+	// proof key does not match it. Section 10.1 keeps it separate from the binding below, because the token endpoint
+	// overwrites that from the presented proof and OpenID Connect Key Binding 1.0 Section 2.3 needs to know what the
+	// authentication request asked for.
+	session.SetRequestedDPoPJWKThumbprint(jkt)
+
+	// The binding itself is withheld from a hybrid flow that also issues an access token straight from the
+	// authorization endpoint. ApplyConfirmation reads it, so recording it here would put a 'cnf.jkt' on that token
+	// while the authorization response still advertises 'token_type=bearer', and Section 7.1 would then oblige the
+	// resource server to reject it. The code remains bound by the requested thumbprint above.
+	if types.Has(consts.ResponseTypeImplicitFlowToken) {
+		return nil
 	}
 
 	session.SetDPoPJWKThumbprint(jkt)

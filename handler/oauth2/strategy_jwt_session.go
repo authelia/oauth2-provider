@@ -32,6 +32,51 @@ type JWTSession struct {
 	Subject                     string
 	JWKThumbprint               string
 	ClientCertificateThumbprint string
+	RequestedJWKThumbprint      string
+	PublicKeyJWK                []byte
+	KeyBindingGranted           bool
+}
+
+// SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) SetRequestedDPoPJWKThumbprint(jkt string) {
+	s.RequestedJWKThumbprint = jkt
+}
+
+// GetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) GetRequestedDPoPJWKThumbprint() (jkt string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.RequestedJWKThumbprint
+}
+
+// SetDPoPPublicKeyJWK implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) SetDPoPPublicKeyJWK(jwk []byte) {
+	s.PublicKeyJWK = jwk
+}
+
+// GetDPoPPublicKeyJWK implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) GetDPoPPublicKeyJWK() (jwk []byte) {
+	if s == nil {
+		return nil
+	}
+
+	return s.PublicKeyJWK
+}
+
+// SetOIDCKeyBindingGranted implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) SetOIDCKeyBindingGranted(granted bool) {
+	s.KeyBindingGranted = granted
+}
+
+// GetOIDCKeyBindingGranted implements oauth2.DPoPBoundSession for JWTSession.
+func (s *JWTSession) GetOIDCKeyBindingGranted() (granted bool) {
+	if s == nil {
+		return false
+	}
+
+	return s.KeyBindingGranted
 }
 
 var (

@@ -59,7 +59,15 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 		token := form.Get(consts.FormParameterActorToken)
 
-		if _, unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+		var actorTokenSession oauth2.Session
+
+		priorActor := bindingOf(request.GetSession())
+
+		if actorTokenSession, unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+			return err
+		}
+
+		if err = inheritTokenBinding(request, bindingOf(actorTokenSession), tokenRoleActor, priorActor); err != nil {
 			return err
 		}
 
@@ -74,7 +82,13 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 		token := form.Get(consts.FormParameterSubjectToken)
 
+		priorSubject := bindingOf(request.GetSession())
+
 		if subjectTokenSession, unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+			return err
+		}
+
+		if err = inheritTokenBinding(request, bindingOf(subjectTokenSession), tokenRoleSubject, priorSubject); err != nil {
 			return err
 		}
 

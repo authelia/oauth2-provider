@@ -52,6 +52,11 @@ const (
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9449#section-4.2
 	JSONWebTokenTypeDPoP = "dpop+jwt"
+
+	// JSONWebTokenTypeDPoPIDToken represents the JWT type value for a key-bound ID Token.
+	//
+	// See: https://openid.net/specs/openid-connect-key-binding-1_0.html#section-4
+	JSONWebTokenTypeDPoPIDToken = "dpop+id_token"
 )
 
 const (

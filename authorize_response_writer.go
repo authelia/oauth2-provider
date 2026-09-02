@@ -27,8 +27,6 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 
 	request.SetSession(session)
 
-	// Binding handlers run first so that a proof-of-possession binding is present on the session before any
-	// handler persists a copy of it, which the handlers that issue an authorization code do as they run.
 	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
 		if err = h.BindAuthorizeRequest(ctx, request); err != nil {
 			return nil, err

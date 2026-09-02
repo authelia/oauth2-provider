@@ -82,6 +82,8 @@ const (
 	ClaimHTTPMethod                          = consts.ClaimHTTPMethod
 	ClaimHTTPURI                             = consts.ClaimHTTPURI
 	ClaimDPoPAccessTokenHash                 = consts.ClaimDPoPAccessTokenHash
+	ClaimConfirmationJWK                     = consts.ClaimConfirmationJWK
+	ClaimDPoPCodeHash                        = consts.ClaimDPoPCodeHash
 )
 
 const (
@@ -132,6 +134,11 @@ const (
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9449#section-4.2
 	JSONWebTokenTypeDPoP = consts.JSONWebTokenTypeDPoP
+
+	// JSONWebTokenTypeDPoPIDToken represents the JWT type value for a key-bound ID Token.
+	//
+	// See: https://openid.net/specs/openid-connect-key-binding-1_0.html#section-4
+	JSONWebTokenTypeDPoPIDToken = consts.JSONWebTokenTypeDPoPIDToken
 )
 
 const (

@@ -697,3 +697,94 @@ func TestIDTokenClaims_SessionIDUnmarshalsFromJSON(t *testing.T) {
 	assert.Equal(t, "session-1", claims.SessionID)
 	assert.NotContains(t, claims.Extra, ClaimSessionID)
 }
+
+func TestIDTokenClaims_ToMapConfirmation(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     map[string]any
+		expected any
+		present  bool
+	}{
+		{
+			name:     "ShouldEmitConfirmationWhenSet",
+			have:     map[string]any{ClaimConfirmationJWK: map[string]any{"kty": "EC"}},
+			expected: map[string]any{ClaimConfirmationJWK: map[string]any{"kty": "EC"}},
+			present:  true,
+		},
+		{
+			name:    "ShouldOmitConfirmationWhenNil",
+			have:    nil,
+			present: false,
+		},
+		{
+			name:    "ShouldOmitConfirmationWhenEmpty",
+			have:    map[string]any{},
+			present: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := &IDTokenClaims{Subject: "sub", Confirmation: tc.have}
+
+			m := claims.ToMap()
+
+			actual, ok := m[ClaimConfirmation]
+
+			assert.Equal(t, tc.present, ok)
+
+			if tc.present {
+				assert.Equal(t, tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestIDTokenClaims_ToMapConfirmationOverridesExtra(t *testing.T) {
+	claims := &IDTokenClaims{
+		Subject:      "sub",
+		Extra:        map[string]any{ClaimConfirmation: map[string]any{"jkt": "spoofed"}},
+		Confirmation: nil,
+	}
+
+	assert.NotContains(t, claims.ToMap(), ClaimConfirmation)
+}
+
+func TestIDTokenClaims_ConfirmationRoundTrip(t *testing.T) {
+	const raw = `{"sub":"peter","cnf":{"jwk":{"kty":"EC","crv":"P-256"}}}`
+
+	expected := map[string]any{ClaimConfirmationJWK: map[string]any{"kty": "EC", "crv": "P-256"}}
+
+	t.Run("ShouldDecodeConfirmationFromJSON", func(t *testing.T) {
+		var claims IDTokenClaims
+
+		require.NoError(t, json.Unmarshal([]byte(raw), &claims))
+
+		assert.Equal(t, expected, claims.Confirmation)
+		assert.NotContains(t, claims.Extra, ClaimConfirmation)
+	})
+
+	t.Run("ShouldSurviveJSONRoundTrip", func(t *testing.T) {
+		var claims IDTokenClaims
+
+		require.NoError(t, json.Unmarshal([]byte(raw), &claims))
+
+		assert.Equal(t, expected, claims.ToMap()[ClaimConfirmation])
+	})
+
+	t.Run("ShouldDecodeConfirmationFromMap", func(t *testing.T) {
+		var claims IDTokenClaims
+
+		claims.FromMap(map[string]any{ClaimSubject: "peter", ClaimConfirmation: expected})
+
+		assert.Equal(t, expected, claims.Confirmation)
+		assert.NotContains(t, claims.Extra, ClaimConfirmation)
+		assert.Equal(t, expected, claims.ToMap()[ClaimConfirmation])
+	})
+
+	t.Run("ShouldRejectNonObjectConfirmation", func(t *testing.T) {
+		var claims IDTokenClaims
+
+		assert.Error(t, json.Unmarshal([]byte(`{"sub":"peter","cnf":"not-an-object"}`), &claims))
+	})
+}

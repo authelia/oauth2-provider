@@ -63,6 +63,9 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if dh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointHandler); ok {
 			config.RFC8628DeviceAuthorizeEndpointHandlers.Append(dh)
 		}
+		if dbh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointBindingHandler); ok {
+			config.RFC8628DeviceAuthorizeEndpointBindingHandlers.Append(dbh)
+		}
 		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
 			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)
 		}
@@ -73,6 +76,9 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 			config.RFC7592ClientConfigurationEndpointHandlers.Append(ch)
 		}
 	}
+
+	mustOrderTokenEndpointBindingHandlers(config)
+	mustOrderRFC8628UserAuthorizeHandlers(config)
 
 	return f
 }

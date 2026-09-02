@@ -53,6 +53,16 @@ type DefaultSession struct {
 	// ClientCertificateThumbprint is the RFC 8705 X.509 SHA-256 certificate thumbprint (x5t#S256) this session's
 	// tokens are bound to, if any.
 	ClientCertificateThumbprint string `json:"client_certificate_thumbprint,omitempty"`
+
+	// PublicKeyJWK is the raw JWK JSON of the DPoP proof-of-possession public key this session's ID Tokens are
+	// bound to, if any.
+	PublicKeyJWK []byte `json:"public_key_jwk,omitempty"`
+
+	// RequestedJWKThumbprint is the RFC 9449 Section 10.1 'dpop_jkt' the authentication request carried, if any.
+	RequestedJWKThumbprint string `json:"requested_jwk_thumbprint,omitempty"`
+
+	// KeyBindingGranted records that the 'bound_key' scope was granted, so this grant's ID Tokens are key bound.
+	KeyBindingGranted bool `json:"key_binding_granted,omitempty"`
 }
 
 // SetExpiresAt sets the expiration time of the token identified by key.
@@ -150,6 +160,48 @@ func (s *DefaultSession) GetClientCertificateSHA256Thumbprint() string {
 	}
 
 	return s.ClientCertificateThumbprint
+}
+
+// SetDPoPPublicKeyJWK implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetDPoPPublicKeyJWK(jwk []byte) {
+	s.PublicKeyJWK = jwk
+}
+
+// GetDPoPPublicKeyJWK implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetDPoPPublicKeyJWK() (jwk []byte) {
+	if s == nil {
+		return nil
+	}
+
+	return s.PublicKeyJWK
+}
+
+// SetRequestedDPoPJWKThumbprint implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetRequestedDPoPJWKThumbprint(jkt string) {
+	s.RequestedJWKThumbprint = jkt
+}
+
+// GetRequestedDPoPJWKThumbprint implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetRequestedDPoPJWKThumbprint() (jkt string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.RequestedJWKThumbprint
+}
+
+// SetOIDCKeyBindingGranted implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetOIDCKeyBindingGranted(granted bool) {
+	s.KeyBindingGranted = granted
+}
+
+// GetOIDCKeyBindingGranted implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
+	if s == nil {
+		return false
+	}
+
+	return s.KeyBindingGranted
 }
 
 var (

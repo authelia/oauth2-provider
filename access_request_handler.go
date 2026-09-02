@@ -111,6 +111,11 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithDebugf("The client with id '%s' requested grant type '%s' which is invalid, unknown, not supported, or not configured to be handled.", requester.GetRequestForm().Get(consts.FormParameterClientID), strings.Join(requester.GetGrantTypes(), " ")))
 	}
 
+	// Created here rather than by a handler because context values do not propagate between the handlers in this
+	// loop: the container must exist before the first handler runs for a later one to observe what an earlier one
+	// published.
+	ctx = context.WithValue(ctx, DPoPProofContextKey, &DPoPProofHolder{})
+
 	// Binding handlers run only once a grant handler has accepted the request, so a binding handler needs neither a
 	// grant type claim nor a client authentication policy of its own: by this point the accepting grant handler has
 	// enforced whatever authentication it requires, or legitimately waived it.

@@ -27,6 +27,36 @@ func TestDefaultSessionMTLSBinding(t *testing.T) {
 	assert.Equal(t, "test-x5t", session.GetClientCertificateSHA256Thumbprint())
 }
 
+func TestDefaultSession_DPoPPublicKeyJWK(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Nil(t, session.GetDPoPPublicKeyJWK())
+
+	session = NewDefaultSession()
+
+	session.SetDPoPPublicKeyJWK([]byte(`{"kty":"EC"}`))
+
+	assert.Equal(t, []byte(`{"kty":"EC"}`), session.GetDPoPPublicKeyJWK())
+
+	var _ oauth2.DPoPBoundSession = session
+}
+
+func TestDefaultSession_RequestedDPoPJWKThumbprint(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Empty(t, session.GetRequestedDPoPJWKThumbprint())
+
+	session = NewDefaultSession()
+
+	session.SetRequestedDPoPJWKThumbprint("requested-jkt")
+	session.SetDPoPJWKThumbprint("bound-jkt")
+
+	assert.Equal(t, "requested-jkt", session.GetRequestedDPoPJWKThumbprint())
+	assert.Equal(t, "bound-jkt", session.GetDPoPJWKThumbprint())
+
+	var _ oauth2.DPoPBoundSession = session
+}
+
 func TestDefaultSessionConfirmationRoundTrip(t *testing.T) {
 	var source oauth2.MTLSBoundSession = NewDefaultSession()
 
@@ -37,7 +67,7 @@ func TestDefaultSessionConfirmationRoundTrip(t *testing.T) {
 	oauth2.ApplyConfirmation(context.Background(), &oauth2.Config{DPoPEnabled: true, MTLSEnabled: true}, claims, source.(oauth2.Session))
 
 	cnf, ok := claims[jwt.ClaimConfirmation].(map[string]any)
-	require.True(t, ok, "expected cnf to be present and a map, got %#v", claims[jwt.ClaimConfirmation])
+	require.Truef(t, ok, "cnf is absent or not a map, got %#v", claims[jwt.ClaimConfirmation])
 	assert.Equal(t, "round-trip-value", cnf[jwt.ClaimConfirmationX509SHA256Thumbprint])
 
 	restored := NewDefaultSession()

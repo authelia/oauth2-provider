@@ -5,7 +5,10 @@
 package openid
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -420,4 +423,108 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 			assert.Equal(t, tc.have, actual)
 		})
 	}
+}
+
+func TestDefaultStrategy_GenerateIDTokenConfirmation(t *testing.T) {
+	const rawJWK = `{"crv":"P-256","kty":"EC","x":"x","y":"y"}`
+
+	newSession := func(jwk []byte) *DefaultSession {
+		session := NewDefaultSession()
+		session.Claims.Subject = "peter"
+		session.SetDPoPJWKThumbprint("thumbprint")
+		session.SetRequestedDPoPJWKThumbprint("thumbprint")
+		session.SetOIDCKeyBindingGranted(true)
+
+		if jwk != nil {
+			session.SetDPoPPublicKeyJWK(jwk)
+		}
+
+		return session
+	}
+
+	t.Run("ShouldEmitConfirmationForBoundGrant", func(t *testing.T) {
+		strategy, config := newTestIDTokenStrategy(t)
+		config.OIDCKeyBindingEnabled = true
+		config.DPoPEnabled = true
+
+		session := newSession([]byte(rawJWK))
+
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{ID: "client"}
+		request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+		request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID, consts.ScopeBoundKey}
+
+		ctx := context.WithValue(t.Context(), oauth2.AccessRequestContextKey, oauth2.AccessRequester(request))
+
+		token, err := strategy.GenerateIDToken(ctx, time.Hour, request)
+		require.NoError(t, err)
+
+		assert.Equal(t, jwt.JSONWebTokenTypeDPoPIDToken, headerTypeOf(t, token))
+		assert.Contains(t, string(payloadOf(t, token)), `"cnf"`)
+	})
+
+	t.Run("ShouldNotEmitConfirmationWithoutAccessRequestInContext", func(t *testing.T) {
+		strategy, config := newTestIDTokenStrategy(t)
+		config.OIDCKeyBindingEnabled = true
+		config.DPoPEnabled = true
+
+		session := newSession([]byte(rawJWK))
+
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{ID: "client"}
+		request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+		request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID, consts.ScopeBoundKey}
+
+		token, err := strategy.GenerateIDToken(t.Context(), time.Hour, request)
+		require.NoError(t, err)
+
+		assert.NotContains(t, string(payloadOf(t, token)), `"cnf"`)
+	})
+}
+
+func headerTypeOf(t *testing.T, token string) string {
+	t.Helper()
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	header := map[string]any{}
+	require.NoError(t, json.Unmarshal(raw, &header))
+
+	typ, _ := header[jwt.JSONWebTokenHeaderType].(string)
+
+	return typ
+}
+
+func payloadOf(t *testing.T, token string) []byte {
+	t.Helper()
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	return raw
+}
+
+func newTestIDTokenStrategy(t *testing.T) (strategy *DefaultStrategy, config *oauth2.Config) {
+	t.Helper()
+
+	config = &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy = &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	return strategy, config
 }

@@ -6,8 +6,12 @@ package oauth2
 
 import (
 	"context"
+	"encoding/json"
 
+	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // confirmationMethod is one member of the RFC 7800 'cnf' claim paired with the accessors that move it between a session
@@ -158,6 +162,37 @@ func GetMTLSConfirmationX509SHA256Thumbprint(claims map[string]any) (x5t string)
 	return x5t
 }
 
+// GetOIDCKeyBindingConfirmationJWKThumbprint returns the RFC 7638 SHA-256 JWK Thumbprint of the public key carried by
+// the 'jwk' confirmation method of the RFC 7800 'cnf' claim in claims, or an empty string when the claim is absent, is
+// not a JSON object, or carries no key.
+//
+// OpenID Connect Key Binding 1.0 Section 4 puts the key itself into 'cnf' rather than its thumbprint, so a caller
+// comparing that confirmation against a DPoP proof must first reduce it to the thumbprint the proof is identified by.
+// GetDPoPConfirmationJWKThumbprint serves the 'jkt' method RFC 9449 Section 6.1 defines, which needs no reduction.
+//
+// It errors only when a key is present and cannot be read, which is a token asserting a confirmation that nothing can
+// be checked against; that is distinct from, and must not be conflated with, a token asserting no confirmation at all.
+func GetOIDCKeyBindingConfirmationJWKThumbprint(claims map[string]any) (jkt string, err error) {
+	value, ok := confirmationClaim(claims)[consts.ClaimConfirmationJWK]
+	if !ok {
+		return "", nil
+	}
+
+	var raw []byte
+
+	if raw, err = json.Marshal(value); err != nil {
+		return "", err
+	}
+
+	key := &jose.JSONWebKey{}
+
+	if err = key.UnmarshalJSON(raw); err != nil {
+		return "", err
+	}
+
+	return jwt.ThumbprintJWK(key)
+}
+
 // confirmationClaim returns the RFC 7800 'cnf' claim from claims, or nil when it is absent or is not a JSON object.
 // RFC 7800 Section 3.1 defines 'cnf' as a JSON object, so any other value asserts no confirmation method at all.
 func confirmationClaim(claims map[string]any) map[string]any {
@@ -168,5 +203,116 @@ func confirmationClaim(claims map[string]any) map[string]any {
 		return value
 	default:
 		return nil
+	}
+}
+
+// idTokenConfirmationGrants are the grant types that may produce a key-bound ID Token. OpenID Connect Key Binding 1.0
+// Section 1.4 defines key binding for the Authorization Code Flow and the Device Authorization Flow, and Section 5
+// extends it to a refresh of either; support for other flows is out of scope of that specification.
+var idTokenConfirmationGrants = []string{
+	consts.GrantTypeAuthorizationCode,
+	consts.GrantTypeOAuthDeviceCode,
+	consts.GrantTypeRefreshToken,
+}
+
+// ApplyIDTokenConfirmation writes the OpenID Connect Key Binding 1.0 Section 4 confirmation into an ID Token's claims
+// and protected header: the proof-of-possession public key as 'cnf.jwk', and a 'typ' of 'dpop+id_token'. It is the
+// only supported way to write that claim, and rebuilds rather than merges for the reason ApplyConfirmation does.
+//
+// The binding is resolved from the access request in ctx rather than from the requester the ID Token is generated
+// from. The Authorization Code and Device Authorization flows generate theirs from the request persisted at the
+// authorization endpoint, whose session necessarily predates the DPoP proof presented at the token endpoint, so that
+// session can never carry the key. It also supplies the grant type and granted scopes, neither of which is on a
+// session at all.
+//
+// It fails closed: an ID Token generated outside a token endpoint request carries no confirmation, which is what
+// keeps the Implicit and Hybrid flows unbound as Section 1.4 requires. Whenever it emits no confirmation it also
+// removes the 'typ' header, see clearIDTokenConfirmationHeader.
+func ApplyIDTokenConfirmation(ctx context.Context, config IDTokenConfirmationConfigProvider, claims *jwt.IDTokenClaims, headers *jwt.Headers) (err error) {
+	if claims == nil {
+		return nil
+	}
+
+	claims.Confirmation = nil
+
+	// The headers belong to the session rather than to a copy of it, so every path that leaves the confirmation
+	// empty must also take the header back off; a deferred cleanup keyed on the claim keeps a later early return
+	// from reintroducing the mismatch.
+	defer func() {
+		if len(claims.Confirmation) == 0 {
+			clearIDTokenConfirmationHeader(headers)
+		}
+	}()
+
+	// Both gates are required. A key recorded while DPoP was enabled survives on the session after it is turned off,
+	// and the handlers that would demand a proof for it no longer run, so asserting the confirmation would tell the
+	// Relying Party a proof of possession was checked when none was.
+	if config == nil || !config.GetOIDCKeyBindingEnabled(ctx) || !config.GetDPoPEnabled(ctx) {
+		return nil
+	}
+
+	requester, ok := ctx.Value(AccessRequestContextKey).(AccessRequester)
+	if !ok || requester == nil {
+		return nil
+	}
+
+	if !requester.GetGrantTypes().HasOneOf(idTokenConfirmationGrants...) {
+		return nil
+	}
+
+	session := requester.GetSession()
+
+	bound, ok := session.(DPoPBoundSession)
+	if !ok {
+		return nil
+	}
+
+	// The marker rather than the current request's granted scopes, so that Section 5 holds across a refresh that
+	// narrows 'bound_key' away: the refreshed ID Token's 'cnf' must equal the original's, and the grant is still
+	// bound to the key whatever the client asks for now.
+	if !bound.GetOIDCKeyBindingGranted() {
+		return nil
+	}
+
+	raw := bound.GetDPoPPublicKeyJWK()
+
+	if len(raw) == 0 {
+		// Section 2.3 requires the OP confirm the 'c_s256' claim of the DPoP proof, and no key is recorded unless
+		// that check passed. A grant that reached this point with 'bound_key' granted and a DPoP bound session
+		// therefore asked for a key-bound ID Token without proving possession.
+		if bound.GetDPoPJWKThumbprint() != "" {
+			return errorsx.WithStack(ErrInvalidDPoPProof.WithHint("The request requires a DPoP proof carrying the 'c_s256' claim because the 'bound_key' scope was granted, but none was provided."))
+		}
+
+		return nil
+	}
+
+	key := map[string]any{}
+
+	if err = json.Unmarshal(raw, &key); err != nil {
+		return errorsx.WithStack(ErrServerError.WithHint("The DPoP proof-of-possession key recorded on the session could not be read.").WithWrap(err).WithDebugError(err))
+	}
+
+	// Section 4 requires the 'cnf' claim and a 'typ' of 'dpop+id_token' together. A token carrying the claim without
+	// the type is not a key-bound ID Token, and Section 9.3 has the Relying Party reject it for the missing type, so
+	// the claim is not written at all when there is nowhere to record the type.
+	if headers == nil {
+		return errorsx.WithStack(ErrServerError.WithHint("The session did not provide ID Token headers to carry the key binding token type."))
+	}
+
+	claims.Confirmation = map[string]any{consts.ClaimConfirmationJWK: key}
+
+	headers.Add(consts.JSONWebTokenHeaderType, consts.JSONWebTokenTypeDPoPIDToken)
+
+	return nil
+}
+
+func clearIDTokenConfirmationHeader(headers *jwt.Headers) {
+	if headers == nil {
+		return
+	}
+
+	if typ, ok := headers.Get(consts.JSONWebTokenHeaderType).(string); ok && typ == consts.JSONWebTokenTypeDPoPIDToken {
+		delete(headers.Extra, consts.JSONWebTokenHeaderType)
 	}
 }

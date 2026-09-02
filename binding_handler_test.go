@@ -84,7 +84,7 @@ func TestAuthorizeBindingHandlerErrorAbortsTheRequest(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, responder)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-	assert.Zero(t, recorder.calls, "the authorize handlers ran despite the binding error")
+	assert.Zero(t, recorder.calls)
 }
 
 func TestTokenBindingHandlerRunsOnlyForAnAcceptedGrant(t *testing.T) {
@@ -166,6 +166,22 @@ func TestTokenBindingPopulateErrorAbortsTheResponse(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
 }
 
+func TestTokenBindingHandlersShareAPublishedDPoPProof(t *testing.T) {
+	reader := &proofReadingBinder{}
+
+	config := &oauth2.Config{}
+	config.TokenEndpointHandlers.Append(&grantHandler{handles: true})
+	config.TokenEndpointBindingHandlers.Append(&proofPublishingBinder{})
+	config.TokenEndpointBindingHandlers.Append(reader)
+
+	provider := oauth2.New(storage.NewMemoryStore(), config)
+
+	_, err := provider.NewAccessRequest(context.Background(), newBindingAccessRequest(t), &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	assert.Equal(t, "published", reader.saw)
+}
+
 type stubAuthorizeBinder struct {
 	err error
 }
@@ -223,17 +239,6 @@ func (g *grantHandler) CanHandleTokenEndpointRequest(context.Context, oauth2.Acc
 	return true
 }
 
-func newBindingAccessRequest(t *testing.T) *http.Request {
-	t.Helper()
-
-	form := url.Values{"grant_type": []string{"client_credentials"}}
-
-	r := httptest.NewRequest(http.MethodPost, "https://as.example.com/token", strings.NewReader(form.Encode()))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	return r
-}
-
 type countingTokenBinder struct {
 	calls int
 	err   error
@@ -269,4 +274,43 @@ func (s *subjectSettingBinder) BindAuthorizeRequest(_ context.Context, request o
 	request.GetSession().(*oauth2.DefaultSession).Subject = "bound-before-handlers"
 
 	return nil
+}
+
+type proofPublishingBinder struct{}
+
+func (b *proofPublishingBinder) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	oauth2.PublishDPoPProof(ctx, &oauth2.DPoPProof{Thumbprint: "published"})
+
+	return nil
+}
+
+func (b *proofPublishingBinder) PopulateBoundTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	return nil
+}
+
+type proofReadingBinder struct {
+	saw string
+}
+
+func (b *proofReadingBinder) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if proof := oauth2.GetDPoPProof(ctx); proof != nil {
+		b.saw = proof.Thumbprint
+	}
+
+	return nil
+}
+
+func (b *proofReadingBinder) PopulateBoundTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	return nil
+}
+
+func newBindingAccessRequest(t *testing.T) *http.Request {
+	t.Helper()
+
+	form := url.Values{"grant_type": []string{"client_credentials"}}
+
+	r := httptest.NewRequest(http.MethodPost, "https://as.example.com/token", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	return r
 }

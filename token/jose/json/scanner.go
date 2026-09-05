@@ -596,15 +596,5 @@ func (s *scanner) error(c byte, context string) int {
 
 // quoteChar formats c as a quoted character literal.
 func quoteChar(c byte) string {
-	// special cases - different from quoted strings
-	if c == '\'' {
-		return `'\''`
-	}
-	if c == '"' {
-		return `'"'`
-	}
-
-	// use quoted string with different quotation marks
-	s := strconv.Quote(string(c))
-	return "'" + s[1:len(s)-1] + "'"
+	return strconv.QuoteRune(rune(c))
 }

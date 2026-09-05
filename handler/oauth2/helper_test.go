@@ -44,17 +44,20 @@ func TestIssueAccessToken(t *testing.T) {
 	}
 
 	areq.Session = &oauth2.DefaultSession{}
-	for k, c := range []struct {
+	testCases := []struct {
+		name string
 		mock func()
 		err  error
 	}{
 		{
+			name: "ShouldFailWhenTheStrategyCannotGenerateTheToken",
 			mock: func() {
 				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("", "", errors.New(""))
 			},
 			err: errors.New(""),
 		},
 		{
+			name: "ShouldFailWhenTheSessionCannotBePersisted",
 			mock: func() {
 				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("token", "signature", nil)
 				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(errors.New(""))
@@ -62,21 +65,29 @@ func TestIssueAccessToken(t *testing.T) {
 			err: errors.New(""),
 		},
 		{
+			name: "ShouldIssueTheToken",
 			mock: func() {
 				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("token", "signature", nil)
 				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
-			err: nil,
 		},
-	} {
-		c.mock()
-		signature, err := helper.IssueAccessToken(t.Context(), helper.Config.GetAccessTokenLifespan(t.Context()), areq, aresp)
-		require.Equal(t, err == nil, c.err == nil)
-		if c.err != nil {
-			assert.EqualError(t, err, c.err.Error(), "Case %d", k)
-			assert.Empty(t, signature, "Case %d", k)
-		} else {
-			assert.Equal(t, "signature", signature, "Case %d", k)
-		}
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			signature, err := helper.IssueAccessToken(t.Context(), helper.Config.GetAccessTokenLifespan(t.Context()), areq, aresp)
+
+			if tc.err != nil {
+				assert.EqualError(t, err, tc.err.Error())
+				assert.Empty(t, signature)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "signature", signature)
+		})
 	}
 }

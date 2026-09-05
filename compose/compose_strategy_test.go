@@ -17,17 +17,64 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-// coreStrategyWithoutClientRegistration wraps a real hoauth2.CoreStrategy behind the bare interface, reproducing what
-// a consumer's own hoauth2.CoreStrategy implementation looks like from CommonStrategy's perspective: even though the
-// wrapped *hoauth2.HMACCoreStrategy genuinely has ClientRegistrationTokenSignature, GenerateClientRegistrationToken
-// and ValidateClientRegistrationToken, embedding it here as the hoauth2.CoreStrategy interface means none of those
-// three methods are promoted onto coreStrategyWithoutClientRegistration itself - only the methods hoauth2.CoreStrategy
-// declares are. This is the exact shape of a misconfigured CoreStrategy the tests below must catch at compose time.
-type coreStrategyWithoutClientRegistration struct {
-	hoauth2.CoreStrategy
+func TestComposePanicsWhenTheCoreStrategyCannotIssueClientRegistrationTokens(t *testing.T) {
+	testCases := []struct {
+		name     string
+		strategy func(config *oauth2.Config) any
+		factory  Factory
+		expected string
+	}{
+		{
+			name: "ShouldPanicForACoreStrategyMissingTheTokenMethods",
+			strategy: func(config *oauth2.Config) any {
+				return &CommonStrategy{CoreStrategy: coreStrategyWithoutClientRegistration{CoreStrategy: NewOAuth2HMACStrategy(config)}}
+			},
+			factory:  RFC7591ClientRegistrationFactory,
+			expected: "compose: CommonStrategy.CoreStrategy (compose.coreStrategyWithoutClientRegistration) does not implement rfc7591.ClientRegistrationTokenStrategy: missing ClientRegistrationTokenSignature, GenerateClientRegistrationToken, ValidateClientRegistrationToken; use *hoauth2.HMACCoreStrategy, *hoauth2.JWTProfileCoreStrategy, or implement these methods on your CoreStrategy",
+		},
+		{
+			name:     "ShouldPanicForANilCoreStrategy",
+			strategy: func(config *oauth2.Config) any { return &CommonStrategy{} },
+			factory:  RFC7592ClientConfigurationFactory,
+			expected: "compose: CommonStrategy.CoreStrategy (<nil>) does not implement rfc7591.ClientRegistrationTokenStrategy: missing ClientRegistrationTokenSignature, GenerateClientRegistrationToken, ValidateClientRegistrationToken; use *hoauth2.HMACCoreStrategy, *hoauth2.JWTProfileCoreStrategy, or implement these methods on your CoreStrategy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newRFC7591Config()
+
+			recovered := recoverPanic(func() {
+				Compose(config, storage.NewMemoryStore(), tc.strategy(config), tc.factory)
+			})
+
+			require.NotNil(t, recovered)
+
+			err, ok := recovered.(error)
+			require.Truef(t, ok, "panic value was %T", recovered)
+
+			assert.EqualError(t, err, tc.expected)
+		})
+	}
 }
 
-func rfc7591TestConfig() *oauth2.Config {
+func TestComposeAcceptsAValueCommonStrategy(t *testing.T) {
+	config := newRFC7591Config()
+
+	var provider oauth2.Provider
+
+	recovered := recoverPanic(func() {
+		provider = Compose(config, storage.NewMemoryStore(), CommonStrategy{CoreStrategy: NewOAuth2HMACStrategy(config)}, RFC7591ClientRegistrationFactory, RFC7592ClientConfigurationFactory)
+	})
+
+	require.Nil(t, recovered)
+	require.NotNil(t, provider)
+
+	assert.Len(t, config.GetRFC7591ClientRegistrationEndpointHandlers(context.Background()), 1)
+	assert.Len(t, config.GetRFC7592ClientConfigurationEndpointHandlers(context.Background()), 1)
+}
+
+func newRFC7591Config() *oauth2.Config {
 	return &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
@@ -37,7 +84,6 @@ func rfc7591TestConfig() *oauth2.Config {
 	}
 }
 
-// recoverPanic runs fn and returns what it recovered, or nil if fn did not panic.
 func recoverPanic(fn func()) (recovered any) {
 	defer func() { recovered = recover() }()
 
@@ -46,82 +92,6 @@ func recoverPanic(fn func()) (recovered any) {
 	return recovered
 }
 
-// TestClientRegistrationTokenStrategyFailsAtComposeForUnsupportedCoreStrategy is the regression test for the review
-// finding that RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory used to accept any
-// *CommonStrategy unconditionally - because forwarding methods on *CommonStrategy made the factory's outer type
-// assertion trivially succeed - deferring the real check on CoreStrategy to the first request that reached one of
-// those forwarding methods. A consumer supplying a CoreStrategy that does not implement
-// rfc7591.ClientRegistrationTokenStrategy must instead fail here, in Compose, with a message naming the CoreStrategy
-// field and the methods it lacks.
-func TestClientRegistrationTokenStrategyFailsAtComposeForUnsupportedCoreStrategy(t *testing.T) {
-	config := rfc7591TestConfig()
-	store := storage.NewMemoryStore()
-
-	strategy := &CommonStrategy{
-		CoreStrategy: coreStrategyWithoutClientRegistration{CoreStrategy: NewOAuth2HMACStrategy(config)},
-	}
-
-	recovered := recoverPanic(func() {
-		Compose(config, store, strategy, RFC7591ClientRegistrationFactory)
-	})
-
-	require.NotNil(t, recovered, "Compose must panic at compose time when CoreStrategy does not implement rfc7591.ClientRegistrationTokenStrategy")
-
-	err, ok := recovered.(error)
-	require.Truef(t, ok, "expected the panic value to be an error, got %T: %v", recovered, recovered)
-
-	msg := err.Error()
-	assert.Contains(t, msg, "CoreStrategy")
-	assert.Contains(t, msg, "ClientRegistrationTokenSignature")
-	assert.Contains(t, msg, "GenerateClientRegistrationToken")
-	assert.Contains(t, msg, "ValidateClientRegistrationToken")
-}
-
-// TestClientRegistrationTokenStrategyFailsAtComposeForNilCoreStrategy covers the same finding for the degenerate case
-// of a CommonStrategy left with a nil CoreStrategy entirely - it must fail identically to an unsupported one, not
-// panic with an unhelpful nil-dereference somewhere downstream.
-func TestClientRegistrationTokenStrategyFailsAtComposeForNilCoreStrategy(t *testing.T) {
-	config := rfc7591TestConfig()
-	store := storage.NewMemoryStore()
-
-	strategy := &CommonStrategy{}
-
-	recovered := recoverPanic(func() {
-		Compose(config, store, strategy, RFC7592ClientConfigurationFactory)
-	})
-
-	require.NotNil(t, recovered, "Compose must panic at compose time when CoreStrategy is nil")
-
-	err, ok := recovered.(error)
-	require.Truef(t, ok, "expected the panic value to be an error, got %T: %v", recovered, recovered)
-
-	msg := err.Error()
-	assert.Contains(t, msg, "CoreStrategy")
-	assert.Contains(t, msg, "ClientRegistrationTokenSignature")
-	assert.Contains(t, msg, "GenerateClientRegistrationToken")
-	assert.Contains(t, msg, "ValidateClientRegistrationToken")
-}
-
-// TestClientRegistrationTokenStrategySucceedsForValueCommonStrategy is the regression test for the review finding
-// that the (now removed) forwarding methods on *CommonStrategy had pointer receivers, so a CommonStrategy passed by
-// value silently stopped satisfying rfc7591.ClientRegistrationTokenStrategy and panicked at Compose. Resolution
-// happens by reaching into CoreStrategy directly (see mustClientRegistrationTokenStrategy), which works identically
-// whether CommonStrategy is held by value or by pointer, so both must succeed here.
-func TestClientRegistrationTokenStrategySucceedsForValueCommonStrategy(t *testing.T) {
-	config := rfc7591TestConfig()
-	store := storage.NewMemoryStore()
-
-	strategy := CommonStrategy{CoreStrategy: NewOAuth2HMACStrategy(config)}
-
-	var provider oauth2.Provider
-
-	recovered := recoverPanic(func() {
-		provider = Compose(config, store, strategy, RFC7591ClientRegistrationFactory, RFC7592ClientConfigurationFactory)
-	})
-
-	require.Nil(t, recovered, "Compose must not panic for a value CommonStrategy whose CoreStrategy is well-formed")
-	require.NotNil(t, provider)
-
-	assert.Len(t, config.GetRFC7591ClientRegistrationEndpointHandlers(context.Background()), 1)
-	assert.Len(t, config.GetRFC7592ClientConfigurationEndpointHandlers(context.Background()), 1)
+type coreStrategyWithoutClientRegistration struct {
+	hoauth2.CoreStrategy
 }

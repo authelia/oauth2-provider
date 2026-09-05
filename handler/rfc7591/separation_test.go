@@ -46,7 +46,7 @@ func TestClientRegistrationTokensAreNotAccessTokens(t *testing.T) {
 	_, err = store.GetAccessTokenSession(ctx, signature, &oauth2.DefaultSession{})
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 
-	assert.Empty(t, strategy.AccessTokenSignature(ctx, token), "a registration token must not yield an access token signature")
+	assert.Empty(t, strategy.AccessTokenSignature(ctx, token))
 }
 
 func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
@@ -61,7 +61,7 @@ func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
 	})
 
 	t.Run("ShouldAcceptARegistrationScopedToken", func(t *testing.T) {
@@ -86,6 +86,6 @@ func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
 			oauth2.BearerAuthorization{Audiences: []string{testEndpoint}, Scopes: []string{consts.ScopeIntrospection}})
 
 		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:token_introspection', at least one of which is required.")
 	})
 }

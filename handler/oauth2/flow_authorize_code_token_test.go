@@ -471,9 +471,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code has already been used.",
 		},
 		{
-			// RFC 8707 Section 2.2: resources requested at the token endpoint MUST be a subset
-			// of those granted at the authorization endpoint. Requesting a resource that was
-			// not granted at the authorize endpoint must result in an error.
+			// RFC 8707 §2.2: token-endpoint resources must be a subset of those granted at the authorize endpoint.
 			"ShouldFailWhenAccessRequestResourcesExceedAuthorizationRequest",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -507,8 +505,6 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			"The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://api.example.com/tenants' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			// When the access request resources are a proper subset of those granted at the
-			// authorize endpoint, the access request's requested audience is preserved.
 			"ShouldKeepAccessRequestResourcesWhenSubsetOfAuthorizationRequestGranted",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -545,9 +541,6 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			"",
 		},
 		{
-			// When the access request does not include any resource indicators, the authorize
-			// request's requested audience is used as a fallback (the previous override
-			// behavior).
 			"ShouldFallBackToAuthorizationRequestAudienceWhenAccessRequestHasNone",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -627,12 +620,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 	}
 }
 
-// TestAuthorizeCodeFlow_ResourceIndicatorSubset verifies the RFC 8707 Section 2.2 constraint
-// for the Authorization Code Grant: when the 'resource' parameter is present in both the
-// Authorization Request and Access (token) Request, the resources requested at the token
-// endpoint MUST be a subset of those granted at the authorize endpoint. Requesting a resource
-// at the token endpoint that was not granted at the authorize endpoint returns an error;
-// requesting a proper subset narrows the access token's audience accordingly.
+// RFC 8707 §2.2: token-endpoint resources must be a subset of those granted at the authorize endpoint.
 func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 	const (
 		resourceUsers   = "https://api.example.com/users"

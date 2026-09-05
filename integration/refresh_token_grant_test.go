@@ -25,17 +25,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-type introspectionResponse struct {
-	Active    bool     `json:"active"`
-	ClientID  string   `json:"client_id,omitempty"`
-	Scope     string   `json:"scope,omitempty"`
-	Audience  []string `json:"aud,omitempty"`
-	ExpiresAt int64    `json:"exp,omitempty"`
-	IssuedAt  int64    `json:"iat,omitempty"`
-	Subject   string   `json:"sub,omitempty"`
-	Username  string   `json:"username,omitempty"`
-}
-
 func TestRefreshTokenFlow(t *testing.T) {
 	session := &defaultSession{
 		DefaultSession: &openid.DefaultSession{
@@ -73,8 +62,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 	store.Clients["refresh-client"] = refreshCheckClient
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
-	for _, c := range []struct {
-		description   string
+	testCases := []struct {
+		name          string
 		setup         func(t *testing.T)
 		pass          bool
 		params        []xoauth2.AuthCodeOption
@@ -83,14 +72,14 @@ func TestRefreshTokenFlow(t *testing.T) {
 		mockServer    func(t *testing.T) *httptest.Server
 	}{
 		{
-			description: "should fail because refresh scope missing",
+			name: "should fail because refresh scope missing",
 			setup: func(t *testing.T) {
 				oauthClient.Scopes = []string{"oauth2"}
 			},
 			pass: false,
 		},
 		{
-			description: "should pass but not yield id token",
+			name: "should pass but not yield id token",
 			setup: func(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOffline}
 			},
@@ -102,8 +91,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 			},
 		},
 		{
-			description: "should pass and yield id token",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
+			name:   "should pass and yield id token",
+			params: []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
 				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
 			},
@@ -136,7 +125,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			},
 		},
 		{
-			description: "should fail because scope is no longer allowed",
+			name: "should fail because scope is no longer allowed",
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
 				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
@@ -147,8 +136,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 			pass: false,
 		},
 		{
-			description: "should fail because audience is no longer allowed",
-			params:      []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
+			name:   "should fail because audience is no longer allowed",
+			params: []xoauth2.AuthCodeOption{xoauth2.SetAuthURLParam("audience", "https://www.authelia.com/api")},
 			setup: func(t *testing.T) {
 				oauthClient.ClientID = refreshCheckClient.ID
 				oauthClient.Scopes = []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID}
@@ -160,7 +149,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			pass: false,
 		},
 		{
-			description: "should fail with expired refresh token",
+			name: "should fail with expired refresh token",
 			setup: func(t *testing.T) {
 				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Nanosecond
@@ -176,7 +165,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			pass: false,
 		},
 		{
-			description: "should pass with limited but not expired refresh token",
+			name: "should pass with limited but not expired refresh token",
 			setup: func(t *testing.T) {
 				fc = new(oauth2.Config)
 				fc.RefreshTokenLifespan = time.Minute
@@ -196,7 +185,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {},
 		},
 		{
-			description: "should deny access if original token was reused",
+			name: "should deny access if original token was reused",
 			setup: func(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOffline}
 			},
@@ -214,9 +203,11 @@ func TestRefreshTokenFlow(t *testing.T) {
 				require.Equal(t, http.StatusBadRequest, err.(*xoauth2.RetrieveError).Response.StatusCode)
 			},
 		},
-	} {
-		t.Run("case="+c.description, func(t *testing.T) {
-			c.setup(t)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(t)
 
 			var intro = func(token string, p any) {
 				req, err := http.NewRequest(http.MethodPost, ts.URL+"/introspect", strings.NewReader(url.Values{"token": {token}}.Encode()))
@@ -232,7 +223,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 				require.NoError(t, dec.Decode(p))
 			}
 
-			resp, err := http.Get(oauthClient.AuthCodeURL(state, c.params...))
+			resp, err := http.Get(oauthClient.AuthCodeURL(state, tc.params...))
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -249,8 +240,8 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 			token.Expiry = token.Expiry.Add(-time.Hour * 24)
 
-			if c.beforeRefresh != nil {
-				c.beforeRefresh(t)
+			if tc.beforeRefresh != nil {
+				tc.beforeRefresh(t)
 			}
 
 			tokenSource := oauthClient.TokenSource(t.Context(), token)
@@ -259,15 +250,26 @@ func TestRefreshTokenFlow(t *testing.T) {
 			time.Sleep(time.Second * 2)
 
 			refreshed, err := tokenSource.Token()
-			if c.pass {
+			if tc.pass {
 				require.NoError(t, err)
 
 				var rb introspectionResponse
 				intro(refreshed.AccessToken, &rb)
-				c.check(t, token, refreshed, &ob, &rb)
+				tc.check(t, token, refreshed, &ob, &rb)
 			} else {
 				require.Error(t, err)
 			}
 		})
 	}
+}
+
+type introspectionResponse struct {
+	Active    bool     `json:"active"`
+	ClientID  string   `json:"client_id,omitempty"`
+	Scope     string   `json:"scope,omitempty"`
+	Audience  []string `json:"aud,omitempty"`
+	ExpiresAt int64    `json:"exp,omitempty"`
+	IssuedAt  int64    `json:"iat,omitempty"`
+	Subject   string   `json:"sub,omitempty"`
+	Username  string   `json:"username,omitempty"`
 }

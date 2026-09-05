@@ -21,10 +21,10 @@ import (
 )
 
 func TestRegistrationTokenIntrospectionThroughComposedProvider(t *testing.T) {
-	provider, config, store := newRegistrationTokenIntrospectionFixture(t, true)
+	provider, config, memory := newRegistrationTokenIntrospectionFixture(t, true)
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
-	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, store, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
+	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
 	use, requester, err := provider.IntrospectToken(context.Background(), token, oauth2.AccessToken, &oauth2.DefaultSession{})
@@ -35,11 +35,11 @@ func TestRegistrationTokenIntrospectionThroughComposedProvider(t *testing.T) {
 }
 
 func TestRegistrationTokenIntrospectionDisabledByDefaultThroughComposedProvider(t *testing.T) {
-	provider, config, store := newRegistrationTokenIntrospectionFixture(t, false)
+	provider, config, memory := newRegistrationTokenIntrospectionFixture(t, false)
 
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
-	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, store, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
+	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
 	use, _, err := provider.IntrospectToken(context.Background(), token, oauth2.AccessToken, &oauth2.DefaultSession{})
@@ -49,7 +49,7 @@ func TestRegistrationTokenIntrospectionDisabledByDefaultThroughComposedProvider(
 }
 
 func TestExpiredAccessTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
-	provider, config, store := newRegistrationTokenIntrospectionFixture(t, true)
+	provider, config, memory := newRegistrationTokenIntrospectionFixture(t, true)
 
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
@@ -63,7 +63,7 @@ func TestExpiredAccessTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 
 	tokenString, signature, err := strategy.GenerateAccessToken(context.Background(), request)
 	require.NoError(t, err)
-	require.NoError(t, store.CreateAccessTokenSession(context.Background(), signature, request))
+	require.NoError(t, memory.CreateAccessTokenSession(context.Background(), signature, request))
 
 	_, _, err = provider.IntrospectToken(context.Background(), tokenString, oauth2.AccessToken, &oauth2.DefaultSession{})
 	require.Error(t, err)
@@ -72,7 +72,7 @@ func TestExpiredAccessTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 }
 
 func TestExpiredRefreshTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
-	provider, config, store := newRegistrationTokenIntrospectionFixture(t, true)
+	provider, config, memory := newRegistrationTokenIntrospectionFixture(t, true)
 
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
@@ -86,7 +86,7 @@ func TestExpiredRefreshTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 
 	tokenString, signature, err := strategy.GenerateRefreshToken(context.Background(), request)
 	require.NoError(t, err)
-	require.NoError(t, store.CreateRefreshTokenSession(context.Background(), signature, "", request))
+	require.NoError(t, memory.CreateRefreshTokenSession(context.Background(), signature, "", request))
 
 	_, _, err = provider.IntrospectToken(context.Background(), tokenString, "", &oauth2.DefaultSession{})
 	require.Error(t, err)
@@ -94,7 +94,7 @@ func TestExpiredRefreshTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 	assert.False(t, errors.Is(err, oauth2.ErrUnknownRequest), "an expired-but-present refresh token must not be silently reported as unrecognised")
 }
 
-func newRegistrationTokenIntrospectionFixture(t *testing.T, includeIntrospection bool) (provider oauth2.Provider, config *oauth2.Config, store *storage.MemoryStore) {
+func newRegistrationTokenIntrospectionFixture(t *testing.T, includeIntrospection bool) (provider oauth2.Provider, config *oauth2.Config, memory *storage.MemoryStore) {
 	t.Helper()
 
 	config = &oauth2.Config{
@@ -105,12 +105,12 @@ func newRegistrationTokenIntrospectionFixture(t *testing.T, includeIntrospection
 		TokenEntropy:                          32,
 	}
 
-	store = storage.NewMemoryStore()
-	provider = compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+	memory = storage.NewMemoryStore()
+	provider = compose.ComposeAllEnabled(config, memory, gen.MustRSAKey())
 
 	if includeIntrospection {
-		compose.Compose(config, store, compose.NewOAuth2HMACStrategy(config), compose.RFC7591ClientRegistrationTokenIntrospectionFactory)
+		compose.Compose(config, memory, compose.NewOAuth2HMACStrategy(config), compose.RFC7591ClientRegistrationTokenIntrospectionFactory)
 	}
 
-	return provider, config, store
+	return provider, config, memory
 }

@@ -44,14 +44,14 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 
 	oauthClient := newOAuth2Client(ts)
 
-	for k, c := range []struct {
-		description string
-		setup       func()
-		check       func(t *testing.T, token *xoauth2.Token)
-		err         bool
+	testCases := []struct {
+		name  string
+		setup func()
+		check func(t *testing.T, token *xoauth2.Token)
+		err   bool
 	}{
 		{
-			description: "should fail because invalid password",
+			name: "should fail because invalid password",
 			setup: func() {
 				username = "peter"
 				password = "something-wrong"
@@ -59,13 +59,13 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 			err: true,
 		},
 		{
-			description: "should pass",
+			name: "should pass",
 			setup: func() {
 				password = "secret"
 			},
 		},
 		{
-			description: "should pass with custom client token lifespans",
+			name: "should pass with custom client token lifespans",
 			setup: func() {
 				oauthClient = newOAuth2Client(ts)
 				oauthClient.ClientID = testClientIDLifespan
@@ -81,17 +81,19 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},
 		},
-	} {
-		c.setup()
+	}
+
+	for _, tc := range testCases {
+		tc.setup()
 
 		token, err := oauthClient.PasswordCredentialsToken(t.Context(), username, password)
-		require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
+		require.Equal(t, tc.err, err != nil)
 
-		if !c.err {
-			assert.NotEmpty(t, token.AccessToken, "(%d) %s\n%s", k, c.description, token)
+		if !tc.err {
+			assert.NotEmpty(t, token.AccessToken)
 
-			if c.check != nil {
-				c.check(t, token)
+			if tc.check != nil {
+				tc.check(t, token)
 			}
 		}
 	}

@@ -98,7 +98,7 @@ func TestDPoPJKTIsBoundBeforeTheAuthorizationCodeSessionIsPersisted(t *testing.T
 	_, err = provider.NewAuthorizeResponse(context.Background(), request, session)
 	require.NoError(t, err)
 
-	require.True(t, store.persisted, "the authorization code session was never persisted")
+	require.True(t, store.persisted)
 
 	assert.Equal(t, jkt, store.jkt)
 }
@@ -138,12 +138,10 @@ func TestUnknownGrantTypeIsNotSatisfiedByTheDPoPHandler(t *testing.T) {
 	_, err = provider.NewAccessRequest(context.Background(), r, &oauth2.DefaultSession{})
 	require.Error(t, err)
 
-	rfc := oauth2.ErrorToRFC6749Error(err)
+	assert.Equal(t, http.StatusBadRequest, oauth2.ErrorToRFC6749Error(err).CodeField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'urn:example:not-a-real-grant' which is invalid, unknown, not supported, or not configured to be handled.")
 
-	assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
-	assert.Equal(t, "invalid_request", rfc.ErrorField)
-
-	assert.Empty(t, store.DPoPProofJTIs, "an unauthenticated caller wrote a replay marker to the store")
+	assert.Empty(t, store.DPoPProofJTIs)
 }
 
 type snapshotStore struct {

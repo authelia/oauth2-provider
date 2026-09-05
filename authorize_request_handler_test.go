@@ -21,8 +21,6 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
-// Should pass
-//
 //   - https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
 //     The OAuth 2.0 specification allows for registration of space-separated response_type parameter values.
 //     If a Response Type contains one of more space characters (%20), it is compared as a space-delimited list of

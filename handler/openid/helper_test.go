@@ -11,6 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
@@ -19,61 +20,55 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-var strategy = &DefaultStrategy{
-	Strategy: &jwt.DefaultStrategy{
-		Config: &oauth2.Config{
-			MinParameterEntropy: oauth2.MinParameterEntropy,
-		},
-		Issuer: jwt.MustGenDefaultIssuer(),
-	},
-	Config: &oauth2.Config{
-		MinParameterEntropy: oauth2.MinParameterEntropy,
-	},
-}
-
-var fooErr = errors.New("foo")
-
 func TestGenerateIDToken(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	chgen := mock.NewMockOpenIDConnectTokenStrategy(ctrl)
-	defer ctrl.Finish()
-
-	requester := oauth2.NewAccessRequest(nil)
-	session := &DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject: testSubjectPeter,
-		},
-		Headers: &jwt.Headers{},
-	}
-	h := &IDTokenHandleHelper{IDTokenStrategy: chgen}
-
-	for k, c := range []struct {
-		description string
-		setup       func()
-		expectErr   error
+	testCases := []struct {
+		name     string
+		setup    func(t *testing.T, strategy *mock.MockOpenIDConnectTokenStrategy, requester oauth2.AccessRequester)
+		expected error
 	}{
 		{
-			description: "should fail because generator failed",
-			setup: func() {
-				requester.Form.Set("nonce", "11111111111111111111111111111111111")
-				requester.SetSession(session)
-				chgen.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).Return("", fooErr)
+			name: "ShouldReturnTheStrategyError",
+			setup: func(t *testing.T, strategy *mock.MockOpenIDConnectTokenStrategy, requester oauth2.AccessRequester) {
+				requester.GetRequestForm().Set(consts.FormParameterNonce, "11111111111111111111111111111111111")
+				strategy.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).Return("", fooErr)
 			},
-			expectErr: fooErr,
+			expected: fooErr,
 		},
 		{
-			description: "should pass",
-			setup: func() {
-				chgen.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).AnyTimes().Return("asdf", nil)
+			name: "ShouldReturnTheGeneratedToken",
+			setup: func(t *testing.T, strategy *mock.MockOpenIDConnectTokenStrategy, requester oauth2.AccessRequester) {
+				strategy.EXPECT().GenerateIDToken(t.Context(), time.Duration(0), requester).AnyTimes().Return("asdf", nil)
 			},
 		},
-	} {
-		c.setup()
-		token, err := h.generateIDToken(t.Context(), time.Duration(0), requester)
-		assert.True(t, err == c.expectErr, "(%d) %s\n%s\n%s", k, c.description, err, c.expectErr)
-		if err == nil {
-			assert.NotEmpty(t, token, "(%d) %s", k, c.description)
-		}
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			chgen := mock.NewMockOpenIDConnectTokenStrategy(ctrl)
+
+			requester := oauth2.NewAccessRequest(&DefaultSession{
+				Claims:  &jwt.IDTokenClaims{Subject: testSubjectPeter},
+				Headers: &jwt.Headers{},
+			})
+
+			tc.setup(t, chgen, requester)
+
+			h := &IDTokenHandleHelper{IDTokenStrategy: chgen}
+
+			token, err := h.generateIDToken(t.Context(), time.Duration(0), requester)
+
+			if tc.expected != nil {
+				assert.ErrorIs(t, err, tc.expected)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, token)
+		})
 	}
 }
 
@@ -168,3 +163,17 @@ func TestGetAccessTokenHash(t *testing.T) {
 func newIDTokenSignedClient(alg string) oauth2.Client {
 	return &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, IDTokenSignedResponseAlg: alg}
 }
+
+var strategy = &DefaultStrategy{
+	Strategy: &jwt.DefaultStrategy{
+		Config: &oauth2.Config{
+			MinParameterEntropy: oauth2.MinParameterEntropy,
+		},
+		Issuer: jwt.MustGenDefaultIssuer(),
+	},
+	Config: &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	},
+}
+
+var fooErr = errors.New("foo")

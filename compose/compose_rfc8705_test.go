@@ -41,7 +41,7 @@ func TestMTLSBindsAndEnforcesOnRefreshTokenRequests(t *testing.T) {
 	assert.Equal(t, oauth2.BearerAccessToken, response.GetTokenType())
 
 	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refreshToken, "no refresh token was issued")
+	require.NotEmpty(t, refreshToken)
 
 	t.Run("ShouldRejectRefreshWithoutACertificate", func(t *testing.T) {
 		_, err := mtlsTokenRequest(t, provider, url.Values{
@@ -50,7 +50,7 @@ func TestMTLSBindsAndEnforcesOnRefreshTokenRequests(t *testing.T) {
 		}, nil)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 	})
 
 	t.Run("ShouldRejectRefreshWithAnotherCertificate", func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestMTLSBindsAndEnforcesOnRefreshTokenRequests(t *testing.T) {
 		}, other)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_grant", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptRefreshWithTheBoundCertificateAndStayBound", func(t *testing.T) {
@@ -81,16 +81,9 @@ func TestMTLSBindsAndEnforcesOnRefreshTokenRequests(t *testing.T) {
 		}, nil)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 	})
 }
-
-const (
-	mtTokenEndpoint = "https://as.example.com/token"
-	mtClientID      = "mtls-client"
-	mtSecret        = "mtls-client-secret"
-	mtRedirectURI   = "https://rp.example.com/cb"
-)
 
 func newMTLSProvider(t *testing.T) (oauth2.Provider, *storage.MemoryStore) {
 	t.Helper()
@@ -162,3 +155,10 @@ func mtlsAuthorizeForCode(t *testing.T, provider oauth2.Provider) string {
 
 	return code
 }
+
+const (
+	mtTokenEndpoint = "https://as.example.com/token"
+	mtClientID      = "mtls-client"
+	mtSecret        = "mtls-client-secret"
+	mtRedirectURI   = "https://rp.example.com/cb"
+)

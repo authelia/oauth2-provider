@@ -6,12 +6,12 @@ package rfc7591
 
 import "errors"
 
-var (
-	errTestCreateSessionFailed = errors.New("create access token session failed")
-	errTestUpdateClientFailed  = errors.New("update client failed")
-)
-
 const (
 	testEndpoint = "https://auth.example.com/register"
 	testClientID = "abc"
+)
+
+var (
+	errTestCreateSessionFailed = errors.New("create access token session failed")
+	errTestUpdateClientFailed  = errors.New("update client failed")
 )

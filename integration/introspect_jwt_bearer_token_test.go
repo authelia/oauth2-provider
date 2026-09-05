@@ -22,6 +22,54 @@ import (
 	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
+func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
+	provider := compose.Compose(
+		&oauth2.Config{
+			GrantTypeJWTBearerCanSkipClientAuth:  true,
+			GrantTypeJWTBearerIDOptional:         true,
+			GrantTypeJWTBearerIssuedDateOptional: true,
+			AccessTokenLifespan:                  time.Hour,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
+			AllowedIntrospectionScopes:           []string{"oauth2"},
+			AllowedIntrospectionAudiences:        []string{tokenURL},
+		},
+		store,
+		jwtStrategy,
+		compose.OAuth2ClientCredentialsGrantFactory,
+		compose.RFC7523AssertionGrantFactory,
+		compose.OAuth2TokenIntrospectionFactory,
+	)
+	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
+	defer testServer.Close()
+
+	client := newJWTBearerAppClient(testServer)
+	if err := client.SetPrivateKey(secondKeyID, secondPrivateKey); err != nil {
+		assert.Nil(t, err)
+	}
+
+	token, err := client.GetToken(context.Background(), &clients.JWTBearerPayload{
+		Claims: &jwt.Claims{
+			Issuer:   secondJWTBearerIssuer,
+			Subject:  secondJWTBearerSubject,
+			Audience: []string{tokenURL},
+			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}, []string{"oauth2"})
+	if err != nil {
+		assert.Nil(t, err)
+	}
+
+	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
+		assert.Nil(t, err)
+	}
+
+	suite.Run(t, &introspectJWTBearerTokenSuite{
+		clientJWT:           client,
+		clientIntrospect:    clients.NewIntrospectClient(testServer.URL + "/introspect"),
+		authorizationHeader: "bearer " + token.AccessToken,
+	})
+}
+
 type introspectJWTBearerTokenSuite struct {
 	suite.Suite
 
@@ -225,52 +273,4 @@ func (s *introspectJWTBearerTokenSuite) assertUnauthorizedResponse(
 	retrieveError, ok := err.(*clients.RequestError)
 	assert.True(t, ok)
 	assert.Equal(t, http.StatusUnauthorized, retrieveError.Response.StatusCode)
-}
-
-func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
-	provider := compose.Compose(
-		&oauth2.Config{
-			GrantTypeJWTBearerCanSkipClientAuth:  true,
-			GrantTypeJWTBearerIDOptional:         true,
-			GrantTypeJWTBearerIssuedDateOptional: true,
-			AccessTokenLifespan:                  time.Hour,
-			AllowedJWTAssertionAudiences:         []string{tokenURL},
-			AllowedIntrospectionScopes:           []string{"oauth2"},
-			AllowedIntrospectionAudiences:        []string{tokenURL},
-		},
-		store,
-		jwtStrategy,
-		compose.OAuth2ClientCredentialsGrantFactory,
-		compose.RFC7523AssertionGrantFactory,
-		compose.OAuth2TokenIntrospectionFactory,
-	)
-	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
-	defer testServer.Close()
-
-	client := newJWTBearerAppClient(testServer)
-	if err := client.SetPrivateKey(secondKeyID, secondPrivateKey); err != nil {
-		assert.Nil(t, err)
-	}
-
-	token, err := client.GetToken(context.Background(), &clients.JWTBearerPayload{
-		Claims: &jwt.Claims{
-			Issuer:   secondJWTBearerIssuer,
-			Subject:  secondJWTBearerSubject,
-			Audience: []string{tokenURL},
-			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}, []string{"oauth2"})
-	if err != nil {
-		assert.Nil(t, err)
-	}
-
-	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
-		assert.Nil(t, err)
-	}
-
-	suite.Run(t, &introspectJWTBearerTokenSuite{
-		clientJWT:           client,
-		clientIntrospect:    clients.NewIntrospectClient(testServer.URL + "/introspect"),
-		authorizationHeader: "bearer " + token.AccessToken,
-	})
 }

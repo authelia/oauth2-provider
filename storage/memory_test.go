@@ -165,37 +165,49 @@ func TestMemoryStoreClientRegistrationManager(t *testing.T) {
 
 	require.NoError(t, store.CreateClient(ctx, client))
 
-	// Creating the same id twice must fail.
-	assert.ErrorIs(t, store.CreateClient(ctx, client), oauth2.ErrInvalidClientMetadata)
+	t.Run("ShouldRejectCreatingTheSameIdentifierTwice", func(t *testing.T) {
+		assert.ErrorIs(t, store.CreateClient(ctx, client), oauth2.ErrInvalidClientMetadata)
+	})
 
-	got, err := store.GetClient(ctx, "new-client")
-	require.NoError(t, err)
-	assert.Equal(t, oauth2.Arguments{"openid"}, got.GetScopes())
+	t.Run("ShouldReadBackTheCreatedClient", func(t *testing.T) {
+		got, err := store.GetClient(ctx, "new-client")
+		require.NoError(t, err)
 
-	require.NoError(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid", "profile"}}))
+		assert.Equal(t, oauth2.Arguments{"openid"}, got.GetScopes())
+	})
 
-	got, err = store.GetClient(ctx, "new-client")
-	require.NoError(t, err)
-	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes())
+	t.Run("ShouldUpdateTheStoredClient", func(t *testing.T) {
+		require.NoError(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "new-client", Scopes: []string{"openid", "profile"}}))
 
-	// Updating an unknown id must fail.
-	assert.ErrorIs(t, store.UpdateClient(ctx, "missing", client), oauth2.ErrNotFound)
+		got, err := store.GetClient(ctx, "new-client")
+		require.NoError(t, err)
 
-	// Updating with a client whose own id disagrees with the key must fail: the stored client would otherwise report
-	// an id no lookup would find it under.
-	assert.ErrorIs(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "other-client"}), oauth2.ErrInvalidClientMetadata)
+		assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes())
+	})
 
-	got, err = store.GetClient(ctx, "new-client")
-	require.NoError(t, err)
-	assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes(), "the rejected update must not have replaced the stored client")
+	t.Run("ShouldRejectUpdatingAnUnknownIdentifier", func(t *testing.T) {
+		assert.ErrorIs(t, store.UpdateClient(ctx, "missing", client), oauth2.ErrNotFound)
+	})
 
-	require.NoError(t, store.DeleteClient(ctx, "new-client"))
+	t.Run("ShouldRejectAnUpdateWhoseClientIdentifierDisagreesWithTheKey", func(t *testing.T) {
+		assert.ErrorIs(t, store.UpdateClient(ctx, "new-client", &oauth2.DefaultClient{ID: "other-client"}), oauth2.ErrInvalidClientMetadata)
 
-	_, err = store.GetClient(ctx, "new-client")
-	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+		got, err := store.GetClient(ctx, "new-client")
+		require.NoError(t, err)
 
-	// Deleting an unknown id must fail.
-	assert.ErrorIs(t, store.DeleteClient(ctx, "new-client"), oauth2.ErrNotFound)
+		assert.Equal(t, oauth2.Arguments{"openid", "profile"}, got.GetScopes())
+	})
+
+	t.Run("ShouldDeleteTheStoredClient", func(t *testing.T) {
+		require.NoError(t, store.DeleteClient(ctx, "new-client"))
+
+		_, err := store.GetClient(ctx, "new-client")
+		assert.ErrorIs(t, err, oauth2.ErrNotFound)
+	})
+
+	t.Run("ShouldRejectDeletingAnUnknownIdentifier", func(t *testing.T) {
+		assert.ErrorIs(t, store.DeleteClient(ctx, "new-client"), oauth2.ErrNotFound)
+	})
 }
 
 func TestExampleStoreSupportsDPoP(t *testing.T) {

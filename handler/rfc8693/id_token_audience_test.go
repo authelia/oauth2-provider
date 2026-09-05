@@ -68,15 +68,15 @@ func TestIDTokenSubjectTokenIsBoundToTheRequestingClient(t *testing.T) {
 	t.Run("ShouldRejectAnIDTokenIssuedToAnotherClient", func(t *testing.T) {
 		err := handler.HandleTokenEndpointRequest(t.Context(), newRequest(other.GetID(), ""))
 
-		require.Error(t, err, "an id_token whose audience is another client must not be exchangeable")
-		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "aud")
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'aud' from the id_token must include the OAuth 2.0 Client 'my-client'.")
 	})
 
 	t.Run("ShouldRejectAnIDTokenWhoseAuthorizedPartyIsAnotherClient", func(t *testing.T) {
 		err := handler.HandleTokenEndpointRequest(t.Context(), newRequest(requesting.GetID(), other.GetID()))
 
-		require.Error(t, err, "an id_token whose azp is another client must not be exchangeable")
-		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "azp")
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'azp' from the id_token must be the OAuth 2.0 Client 'my-client' when it is present.")
 	})
 
 	t.Run("ShouldAcceptAnIDTokenIssuedToTheRequestingClient", func(t *testing.T) {

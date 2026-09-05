@@ -72,9 +72,6 @@ func TestCause(t *testing.T) {
 
 			assert.Equal(t, tc.expected, actual)
 
-			// ErrorToDebugRFC6749Error renders the full description of the resolved cause,
-			// which is the short error code for an *RFC6749Error and the plain message
-			// otherwise.
 			assert.Equal(t, tc.expectedDebug, oauth2.ErrorToDebugRFC6749Error(actual).Error())
 		})
 	}
@@ -129,7 +126,6 @@ func TestWithStack(t *testing.T) {
 				assert.Equal(t, tc.have, causer.Cause())
 			}
 
-			// WithStack must be idempotent once a stack trace is present.
 			assert.Same(t, actual, errorsx.WithStack(actual))
 
 			assert.Equal(t, tc.expectedDebug, oauth2.ErrorToDebugRFC6749Error(actual).Error())
@@ -137,8 +133,7 @@ func TestWithStack(t *testing.T) {
 	}
 }
 
-// errPlain is a minimal error type with no stack trace and no Cause method, used to
-// exercise the branches that handle errors which do not implement the carrier interfaces.
+// errPlain implements neither the stack-trace nor the Cause carrier interface.
 type errPlain string
 
 func (e errPlain) Error() string { return string(e) }

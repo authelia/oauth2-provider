@@ -25,35 +25,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func initServerWithKey(t *testing.T) *httptest.Server {
-	var set *jose.JSONWebKeySet
-	var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewEncoder(w).Encode(set))
-	}
-	ts := httptest.NewServer(h)
-
-	set = &jose.JSONWebKeySet{
-		Keys: []jose.JSONWebKey{
-			{
-				KeyID: "bar",
-				Use:   "sig",
-				Key:   &gen.MustRSAKey().PublicKey,
-			},
-		},
-	}
-
-	t.Cleanup(ts.Close)
-	return ts
-}
-
-var errRoundTrip = errors.New("roundtrip error")
-
-type failingTripper struct{}
-
-func (r *failingTripper) RoundTrip(*http.Request) (*http.Response, error) {
-	return nil, errRoundTrip
-}
-
 func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 	fooKeySet := &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{{
@@ -88,13 +59,11 @@ func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 		{
 			name: "ShouldReturnCachedKeySetWhenRemoteChanges",
 			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
-				// Seed the cache with the foo key set.
 				served.Store(fooKeySet)
 				_, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 				s.(*DefaultJWKSFetcherStrategy).WaitForCache()
 
-				// Change the remote, then re-resolve without forcing a refresh.
 				served.Store(barKeySet)
 				actual, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
@@ -106,12 +75,10 @@ func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 		{
 			name: "ShouldBypassCacheWithIgnoreCache",
 			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
-				// Seed the cache with the foo key set.
 				served.Store(fooKeySet)
 				_, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-				// Change the remote and force a refresh.
 				served.Store(barKeySet)
 				actual, err := s.Resolve(context.Background(), ts.URL, true)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
@@ -281,10 +248,7 @@ func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
 	}
 }
 
-// TestDefaultJWKSFetcherStrategyHardening covers the controls a fetch of a client-supplied 'jwks_uri' needs. The
-// registrant chooses the location, so the fetch must not follow a redirect off it, must not read an unbounded body,
-// and must not report the origin's status code back to the caller, which would make the authorization server a probe
-// of a network the caller cannot otherwise reach.
+// A client-supplied 'jwks_uri' is registrant-chosen, so fetching it must not become an SSRF probe.
 func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 	t.Run("ShouldNotFollowRedirects", func(t *testing.T) {
 		var reached atomic.Bool
@@ -304,12 +268,11 @@ func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 		_, err := NewDefaultJWKSFetcherStrategy().Resolve(context.Background(), ts.URL, true)
 
 		require.Error(t, err)
-		assert.False(t, reached.Load(), "the redirect target must not be requested")
+		assert.False(t, reached.Load())
 	})
 
 	t.Run("ShouldBoundTheResponseBody", func(t *testing.T) {
-		// Valid, well-formed JSON, merely larger than the bound. Malformed JSON would fail to decode with or
-		// without a limit and would prove nothing.
+		// Well-formed JSON, merely larger than the bound; malformed JSON would fail to decode either way.
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 
@@ -352,3 +315,32 @@ func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 		assert.NotContains(t, rfc.HintField, "418", "the origin's status code must not reach the caller through the hint")
 	})
 }
+
+func initServerWithKey(t *testing.T) *httptest.Server {
+	var set *jose.JSONWebKeySet
+	var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewEncoder(w).Encode(set))
+	}
+	ts := httptest.NewServer(h)
+
+	set = &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				KeyID: "bar",
+				Use:   "sig",
+				Key:   &gen.MustRSAKey().PublicKey,
+			},
+		},
+	}
+
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+type failingTripper struct{}
+
+func (r *failingTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errRoundTrip
+}
+
+var errRoundTrip = errors.New("roundtrip error")

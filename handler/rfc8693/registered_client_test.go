@@ -18,9 +18,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// TestDefaultRegisteredClientImplementsClient covers the RFC 8693 per-client restrictions for a client created by
-// dynamic registration. Without them the token type checks in HandleTokenEndpointRequest are skipped entirely,
-// because they are gated on the client implementing this interface.
+// RFC 8693 §2.1: the per-client token type restrictions are gated on the client implementing Client.
 func TestDefaultRegisteredClientImplementsClient(t *testing.T) {
 	registered := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "registered"}}
 
@@ -61,8 +59,6 @@ func TestDefaultRegisteredClientImplementsClient(t *testing.T) {
 	})
 }
 
-// TestRegisteredClientTokenTypeRestrictionIsEnforced drives the restriction through the grant handler, which is
-// where it is gated on the client implementing Client.
 func TestRegisteredClientTokenTypeRestrictionIsEnforced(t *testing.T) {
 	handler := newTokenExchangeHandler()
 
@@ -95,6 +91,6 @@ func TestRegisteredClientTokenTypeRestrictionIsEnforced(t *testing.T) {
 	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), newRequest(permitted)))
 
 	err := handler.HandleTokenEndpointRequest(t.Context(), newRequest(forbidden))
-	require.Error(t, err, "a subject token type outside the client's registered set must be refused")
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "not allowed to use")
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 client is not allowed to use 'urn:ietf:params:oauth:token-type:access_token' as 'subject_token_type'.")
 }

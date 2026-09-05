@@ -26,9 +26,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// expose key to verify id_token
-var key = gen.MustRSAKey()
-
 func TestAccessTokenExchangeImpersonation(t *testing.T) {
 	store := storage.NewExampleStore()
 	jwtName := "urn:custom:jwt"
@@ -133,9 +130,9 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
 					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
-				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
+				require.NoError(t, err)
 
-				assert.EqualValues(t, "peter", req.GetSession().GetSubject(), "Subject did not match the expected value")
+				assert.EqualValues(t, "peter", req.GetSession().GetSubject())
 			},
 		},
 		{
@@ -166,9 +163,9 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 				assert.Equal(t, consts.TokenTypeRFC8693AccessToken, aresp.GetExtra(consts.FormParameterIssuedTokenType),
 					"RFC 8693 §2.2 requires 'issued_token_type' in the response")
 				req, err := introspectAccessToken(context.Background(), aresp.AccessToken, coreStrategy, store)
-				require.NoError(t, err, "Error occurred during introspection; err=%v", err)
+				require.NoError(t, err)
 
-				assert.EqualValues(t, "peter_for_jwt", req.GetSession().GetSubject(), "Subject did not match the expected value")
+				assert.EqualValues(t, "peter_for_jwt", req.GetSession().GetSubject())
 			},
 		},
 	}
@@ -223,7 +220,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
-				require.NoError(t, err, "Error received: %v", err)
+				require.NoError(t, err)
 			}
 
 			if tc.expect != nil {
@@ -274,3 +271,5 @@ func introspectAccessToken(ctx context.Context, token string, coreStrategy hoaut
 	or, err := storage.GetAccessTokenSession(ctx, sig, &oauth2.DefaultSession{})
 	return or, err
 }
+
+var key = gen.MustRSAKey()

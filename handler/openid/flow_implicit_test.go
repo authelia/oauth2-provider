@@ -272,7 +272,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				e := oauth2.ErrorToDebugRFC6749Error(err).(*oauth2.DebugRFC6749Error)
 
 				assert.EqualError(t, e, tc.expected)
-				assert.Equal(t, e.ErrorField, tc.expectedField)
+				assert.Equal(t, tc.expectedField, e.ErrorField)
 			} else {
 				assert.NoError(t, err)
 				if tc.check != nil {

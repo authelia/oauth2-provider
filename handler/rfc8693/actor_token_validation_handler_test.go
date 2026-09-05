@@ -65,7 +65,6 @@ func TestActorTokenValidationHandler_MayActWithoutActorTokenUsesClientAsActor(t 
 
 	client := newConfidentialClient()
 
-	// may_act says the actor's sub must equal the authenticated client's id.
 	req := newActorValidationRequest(t, client,
 		map[string]any{
 			consts.ClaimSubject: "alice",
@@ -80,54 +79,52 @@ func TestActorTokenValidationHandler_MayActWithoutActorTokenUsesClientAsActor(t 
 	require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), req))
 }
 
-// Regression: previously the may_act/actor comparison used interface == which panics when either side has a
-// dynamic type that is not comparable (slice, map, struct with unexportable fields). Real may_act payloads can
-// carry array/object values (e.g. aud lists, nested role objects). The handler must use a deep, comparison-safe
-// equality check and not panic.
 func TestActorTokenValidationHandler_HandlesNonScalarMayActWithoutPanic(t *testing.T) {
 	h := &ActorTokenValidationHandler{}
 
-	// Matching case: may_act constrains 'roles' to a slice, actor matches.
-	req := newActorValidationRequest(t, newConfidentialClient(),
-		map[string]any{
-			consts.ClaimSubject: "alice",
-			consts.ClaimAuthorizedActor: map[string]any{
+	t.Run("ShouldAcceptAMatchingNonScalarClaim", func(t *testing.T) {
+		req := newActorValidationRequest(t, newConfidentialClient(),
+			map[string]any{
+				consts.ClaimSubject: "alice",
+				consts.ClaimAuthorizedActor: map[string]any{
+					consts.ClaimSubject: "bob",
+					"roles":             []any{"admin", "editor"},
+				},
+			},
+			map[string]any{
 				consts.ClaimSubject: "bob",
 				"roles":             []any{"admin", "editor"},
 			},
-		},
-		map[string]any{
-			consts.ClaimSubject: "bob",
-			"roles":             []any{"admin", "editor"},
-		},
-	)
+		)
 
-	require.NotPanics(t, func() {
-		require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), req))
+		require.NotPanics(t, func() {
+			require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), req))
+		})
 	})
 
-	// Mismatched non-scalar: must reject cleanly (no panic), with invalid_grant.
-	reqMismatch := newActorValidationRequest(t, newConfidentialClient(),
-		map[string]any{
-			consts.ClaimSubject: "alice",
-			consts.ClaimAuthorizedActor: map[string]any{
-				consts.ClaimSubject: "bob",
-				"roles":             []any{"admin"},
+	t.Run("ShouldRejectAMismatchedNonScalarClaimWithoutPanicking", func(t *testing.T) {
+		reqMismatch := newActorValidationRequest(t, newConfidentialClient(),
+			map[string]any{
+				consts.ClaimSubject: "alice",
+				consts.ClaimAuthorizedActor: map[string]any{
+					consts.ClaimSubject: "bob",
+					"roles":             []any{"admin"},
+				},
 			},
-		},
-		map[string]any{
-			consts.ClaimSubject: "bob",
-			"roles":             []any{"viewer"},
-		},
-	)
+			map[string]any{
+				consts.ClaimSubject: "bob",
+				"roles":             []any{"viewer"},
+			},
+		)
 
-	var err error
-	require.NotPanics(t, func() {
-		err = h.HandleTokenEndpointRequest(context.Background(), reqMismatch)
+		var err error
+		require.NotPanics(t, func() {
+			err = h.HandleTokenEndpointRequest(context.Background(), reqMismatch)
+		})
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 	})
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
 func TestActorTokenValidationHandler_RejectsActorTokenWithoutMayAct(t *testing.T) {
@@ -141,7 +138,7 @@ func TestActorTokenValidationHandler_RejectsActorTokenWithoutMayAct(t *testing.T
 	err := h.HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "subject token does not authorize delegation")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The subject token does not authorize delegation: no 'may_act' claim is present. The OAuth 2.0 client supplied an 'actor_token' but the subject token does not contain a 'may_act' claim authorizing the actor to act on behalf of the subject. Either set the 'may_act' claim on the subject token, or configure the client to use an out-of-band authorization policy by implementing the ActorTokenPolicyClient interface.")
 }
 
 func TestActorTokenValidationHandler_AllowsActorTokenWithoutMayActWhenPolicyOptsIn(t *testing.T) {
@@ -171,10 +168,6 @@ func TestActorTokenValidationHandler_RejectsWhenPolicyClientReturnsFalse(t *test
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
-
-// =============================================================================
-// Test helpers
-// =============================================================================
 
 func newActorValidationRequest(t *testing.T, client oauth2.Client, subject, actor map[string]any) *oauth2.AccessRequest {
 	t.Helper()

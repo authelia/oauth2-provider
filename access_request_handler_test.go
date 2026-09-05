@@ -286,7 +286,6 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 				consts.FormParameterGrantType: {"foo"},
 			},
 			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
-				// despite error from storage, we should success, because client auth is not required
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(nil, errors.New("no client")).Times(1)
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -452,7 +451,6 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 	}
 }
 
-// In this test case one handler requires client auth and another handler not.
 func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 	client := &DefaultClient{}
 

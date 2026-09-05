@@ -23,9 +23,7 @@ import (
 func TestHandleTokenEndpointRequest(t *testing.T) {
 	h := &OpenIDConnectExplicitHandler{Config: &oauth2.Config{}}
 	areq := oauth2.NewAccessRequest(nil)
-	areq.Client = &oauth2.DefaultClient{
-		//ResponseTypes: oauth2.Arguments{"id_token"},
-	}
+	areq.Client = &oauth2.DefaultClient{}
 	assert.EqualError(t, h.HandleTokenEndpointRequest(t.Context(), areq), oauth2.ErrUnknownRequest.Error())
 }
 

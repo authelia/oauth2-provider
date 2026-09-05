@@ -111,7 +111,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 			setup:        func(t *testing.T, client *xoauth2.Config, server *httptest.Server) {},
 			check: func(t *testing.T, expectedState, actualState string, code string, token xoauth2.Token, iDToken string, cparam url.Values, err map[string]string) {
 				assert.Equal(t, expectedState, actualState)
-				assert.NotEmpty(t, err["ErrorField"])
+				assert.Equal(t, "unsupported_response_type", err["ErrorField"])
 				assert.NotEmpty(t, err["DescriptionField"])
 			},
 		},
@@ -248,10 +248,6 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 	}
 }
 
-// This test type provides an example implementation
-// of a custom response mode handler.
-// In this case it decorates the `form_post` response mode
-// with some additional custom parameters
 type DecoratedFormPostResponse struct{}
 
 func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {

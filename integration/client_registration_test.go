@@ -41,16 +41,16 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 		ClientCredentialsFlowImplicitGrantRequested: true,
 	}
 
-	store := storage.NewMemoryStore()
+	memory := storage.NewMemoryStore()
 
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	provider := compose.Compose(config, store, strategy,
+	provider := compose.Compose(config, memory, strategy,
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7591ClientRegistrationFactory,
 	)
 
-	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
+	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, memory, strategy, strategy)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/token", tokenEndpointHandler(t, provider))
@@ -73,9 +73,9 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 		}
 	}
 
-	store.Clients["onboarding"] = newClient("onboarding", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{registrationURL})
-	store.Clients["no-audience"] = newClient("no-audience", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{"https://api.example.com"})
-	store.Clients["no-scope"] = newClient("no-scope", []string{consts.ScopeOpenID}, []string{registrationURL})
+	memory.Clients["onboarding"] = newClient("onboarding", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{registrationURL})
+	memory.Clients["no-audience"] = newClient("no-audience", []string{consts.ScopeClientRegistration, consts.ScopeOpenID}, []string{"https://api.example.com"})
+	memory.Clients["no-scope"] = newClient("no-scope", []string{consts.ScopeOpenID}, []string{registrationURL})
 
 	token := func(t *testing.T, id string, scopes []string, audience string) (*xoauth2.Token, error) {
 		t.Helper()
@@ -137,13 +137,13 @@ func TestClientRegistration(t *testing.T) {
 		TokenEntropy:                          32,
 	}
 
-	store := storage.NewMemoryStore()
+	memory := storage.NewMemoryStore()
 
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	provider := compose.Compose(config, store, strategy, compose.RFC7591ClientRegistrationFactory, compose.RFC7592ClientConfigurationFactory)
+	provider := compose.Compose(config, memory, strategy, compose.RFC7591ClientRegistrationFactory, compose.RFC7592ClientConfigurationFactory)
 
-	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
+	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, memory, strategy, strategy)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/register", registrationEndpointHandler(provider))
@@ -168,7 +168,7 @@ func TestClientRegistration(t *testing.T) {
 
 	creationToken, creationSignature, err := strategy.GenerateAccessToken(ctx, creation)
 	require.NoError(t, err)
-	require.NoError(t, store.CreateAccessTokenSession(ctx, creationSignature, creation))
+	require.NoError(t, memory.CreateAccessTokenSession(ctx, creationSignature, creation))
 
 	var created dcrResponse
 
@@ -317,19 +317,6 @@ func configurationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
 	}
 }
 
-type dcrResponse struct {
-	ClientID                string `json:"client_id"`
-	ClientSecret            string `json:"client_secret"`
-	ClientName              string `json:"client_name"`
-	Scope                   string `json:"scope"`
-	RegistrationAccessToken string `json:"registration_access_token"`
-	RegistrationClientURI   string `json:"registration_client_uri"`
-}
-
-type dcrErrorResponse struct {
-	Error string `json:"error"`
-}
-
 func registrationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -350,4 +337,17 @@ func registrationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
 
 		provider.WriteRFC7591ClientRegistrationResponse(ctx, rw, requester, responder)
 	}
+}
+
+type dcrResponse struct {
+	ClientID                string `json:"client_id"`
+	ClientSecret            string `json:"client_secret"`
+	ClientName              string `json:"client_name"`
+	Scope                   string `json:"scope"`
+	RegistrationAccessToken string `json:"registration_access_token"`
+	RegistrationClientURI   string `json:"registration_client_uri"`
+}
+
+type dcrErrorResponse struct {
+	Error string `json:"error"`
 }

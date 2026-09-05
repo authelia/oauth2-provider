@@ -381,22 +381,12 @@ func TestSendBackChannelLogout_DoesNotFollowRedirects(t *testing.T) {
 	assert.Equal(t, http.StatusTemporaryRedirect, results[0].Status)
 	assert.Error(t, results[0].Err)
 
-	assert.Zero(t, atomic.LoadInt32(&secondContacted), "the redirect target must never be contacted")
+	assert.Zero(t, atomic.LoadInt32(&secondContacted))
 }
 
 func TestRetryableHTTPClientFieldCount(t *testing.T) {
 	assert.Equal(t, 13, reflect.TypeOf(retryablehttp.Client{}).NumField(),
 		"retryablehttp.Client's field count changed: review backChannelLogoutHTTPClient in backchannel_logout_request_handler.go")
-}
-
-const bclTestIssuer = "https://op.example/"
-
-var bclTestKey = gen.MustRSAKey()
-
-type stubFailingBackChannelLogoutTokenStrategy struct{}
-
-func (stubFailingBackChannelLogoutTokenStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
-	return "", errors.New("signing failed")
 }
 
 func newBCLProvider(t *testing.T) (*oauth2.Fosite, *oauth2.Config) {
@@ -480,3 +470,13 @@ func decodeLogoutTokenHeader(t *testing.T, token string) map[string]any {
 
 	return claims
 }
+
+type stubFailingBackChannelLogoutTokenStrategy struct{}
+
+func (stubFailingBackChannelLogoutTokenStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
+	return "", errors.New("signing failed")
+}
+
+const bclTestIssuer = "https://op.example/"
+
+var bclTestKey = gen.MustRSAKey()

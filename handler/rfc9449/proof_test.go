@@ -211,7 +211,7 @@ func TestParseProofRSAKeySize(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-				assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "RSA key but keys of at least")
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a 1024 bit RSA key but keys of at least 2048 bits are required.")
 
 				return
 			}
@@ -335,8 +335,6 @@ func TestParseProof_JWKAndCodeHash(t *testing.T) {
 	})
 }
 
-var testAlgs = []jose.SignatureAlgorithm{jose.ES256}
-
 func newTestProofKey(t *testing.T) *jose.JSONWebKey {
 	t.Helper()
 
@@ -407,3 +405,5 @@ func signProofNoneRaw(t *testing.T, key *jose.JSONWebKey, typ string, claims map
 
 	return base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + "."
 }
+
+var testAlgs = []jose.SignatureAlgorithm{jose.ES256}

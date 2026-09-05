@@ -204,7 +204,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				store.EXPECT().CreateAccessTokenSession(t.Context(), "bar", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "unexpected refresh token")
+				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
 			},
 		},
 		{
@@ -218,7 +218,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				store.EXPECT().CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
+				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
 			},
 		},
 		{
@@ -232,7 +232,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				store.EXPECT().CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
-				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken), "expected refresh token")
+				assert.NotNil(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
 			},
 		},
 	}

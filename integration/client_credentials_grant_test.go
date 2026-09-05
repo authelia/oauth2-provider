@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,31 +55,31 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 	oauthClient := newOAuth2AppClient(ts)
 	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 	store.Clients[testClientIDLifespan].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
-	for k, c := range []struct {
-		description string
-		setup       func()
-		err         bool
-		check       func(t *testing.T, token *xoauth2.Token)
-		params      url.Values
+	testCases := []struct {
+		name   string
+		setup  func()
+		err    bool
+		check  func(t *testing.T, token *xoauth2.Token)
+		params url.Values
 	}{
 		{
-			description: "should fail because of ungranted scopes",
+			name: "should fail because of ungranted scopes",
 			setup: func() {
 				oauthClient.Scopes = []string{"unknown"}
 			},
 			err: true,
 		},
 		{
-			description: "should fail because of ungranted audience",
-			params:      url.Values{"audience": {"https://www.authelia.com/not-api"}},
+			name:   "should fail because of ungranted audience",
+			params: url.Values{"audience": {"https://www.authelia.com/not-api"}},
 			setup: func() {
 				oauthClient.Scopes = []string{"oauth2"}
 			},
 			err: true,
 		},
 		{
-			params:      url.Values{"audience": {"https://www.authelia.com/api"}},
-			description: "should pass",
+			params: url.Values{"audience": {"https://www.authelia.com/api"}},
+			name:   "should pass",
 			setup: func() {
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
@@ -91,7 +90,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			},
 		},
 		{
-			description: "should pass",
+			name: "should pass",
 			setup: func() {
 			},
 			check: func(t *testing.T, token *xoauth2.Token) {
@@ -109,7 +108,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			},
 		},
 		{
-			description: "should pass with custom client token lifespans",
+			name: "should pass with custom client token lifespans",
 			setup: func() {
 				oauthClient.ClientID = testClientIDLifespan
 			},
@@ -130,19 +129,21 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 				internal.RequireEqualTime(t, time.Time{}, rtExp, time.Minute)
 			},
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
-			c.setup()
+	}
 
-			oauthClient.EndpointParams = c.params
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+
+			oauthClient.EndpointParams = tc.params
 			token, err := oauthClient.Token(t.Context())
-			require.Equal(t, c.err, err != nil, "(%d) %s\n%s\n%s", k, c.description, c.err, err)
-			if !c.err {
-				assert.NotEmpty(t, token.AccessToken, "(%d) %s\n%s", k, c.description, token)
+			require.Equal(t, tc.err, err != nil)
+			if !tc.err {
+				assert.NotEmpty(t, token.AccessToken)
 			}
 
-			if c.check != nil {
-				c.check(t, token)
+			if tc.check != nil {
+				tc.check(t, token)
 			}
 		})
 	}

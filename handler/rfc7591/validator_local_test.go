@@ -26,7 +26,7 @@ func TestLocalValidator(t *testing.T) {
 	testCases := []struct {
 		name     string
 		metadata *oauth2.ClientRegistrationMetadata
-		err      string
+		expected string
 	}{
 		{
 			name: "ShouldAcceptMinimalWebClient",
@@ -41,14 +41,14 @@ func TestLocalValidator(t *testing.T) {
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs: []string{"https://example.com/cb#frag"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb#frag' must not contain a fragment component.",
 		},
 		{
 			name: "ShouldRejectRelativeRedirectURI",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs: []string{"/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value '/cb' must be an absolute URI.",
 		},
 		{
 			name: "ShouldRejectInsecureRedirectURIForWebApplicationType",
@@ -56,7 +56,7 @@ func TestLocalValidator(t *testing.T) {
 				ApplicationType: "web",
 				RedirectURIs:    []string{"http://example.com/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'http://example.com/cb' must use the 'https' scheme.",
 		},
 		{
 			name: "ShouldRejectLocalhostRedirectURIForWebApplicationType",
@@ -64,17 +64,15 @@ func TestLocalValidator(t *testing.T) {
 				ApplicationType: "web",
 				RedirectURIs:    []string{"https://localhost:8080/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://localhost:8080/cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
-			// The 'localhost' name and the loopback IP literals are the same host: rejecting only the name leaves
-			// the rule bypassable by spelling it as an address.
 			name: "ShouldRejectLoopbackIPv4RedirectURIForWebApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "web",
 				RedirectURIs:    []string{"https://127.0.0.1:8080/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://127.0.0.1:8080/cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
 			name: "ShouldRejectLoopbackIPv6RedirectURIForWebApplicationType",
@@ -82,30 +80,27 @@ func TestLocalValidator(t *testing.T) {
 				ApplicationType: "web",
 				RedirectURIs:    []string{"https://[::1]:8080/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://[::1]:8080/cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
-			// 127.0.0.0/8 is loopback in its entirety, not just 127.0.0.1.
 			name: "ShouldRejectNonCanonicalLoopbackIPv4RedirectURIForWebApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "web",
 				RedirectURIs:    []string{"https://127.0.0.2:8080/cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://127.0.0.2:8080/cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
-			// RFC 6761 §6.3 reserves names under '.localhost' as loopback, and 'localhost.' is the same name fully
-			// qualified.
+			// RFC 6761 §6.3: names under '.localhost' are reserved as loopback.
 			name: "ShouldRejectLocalhostNamesForWebApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "web",
 				RedirectURIs:    []string{"https://app.LOCALHOST./cb"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://app.LOCALHOST./cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
-			// The loopback prohibition is scoped to web clients: it must not follow a native client to the loopback
-			// redirect RFC 8252 §7.3 requires of it.
+			// RFC 8252 §7.3: a native client requires the loopback redirect.
 			name: "ShouldAcceptLoopbackRedirectURIForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",
@@ -115,8 +110,7 @@ func TestLocalValidator(t *testing.T) {
 			},
 		},
 		{
-			// RFC 8252 §7.1 requires a private-use scheme be based on a domain the app controls, expressed in
-			// reverse order.
+			// RFC 8252 §7.1: a private-use scheme must be a domain the app controls, in reverse order.
 			name: "ShouldAcceptReverseDNSPrivateUseSchemeForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",
@@ -126,8 +120,6 @@ func TestLocalValidator(t *testing.T) {
 			},
 		},
 		{
-			// A single-label scheme is claimable by any other application on the device, so it is not a scheme the
-			// registrant can be said to control.
 			name: "ShouldRejectSingleLabelPrivateUseSchemeForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				ApplicationType: "native",
@@ -135,7 +127,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:      []string{"authorization_code"},
 				ResponseTypes:   []string{"code"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'myapp://cb' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.",
 		},
 		{
 			name: "ShouldRejectJavascriptSchemeForNativeApplicationType",
@@ -145,7 +137,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:      []string{"authorization_code"},
 				ResponseTypes:   []string{"code"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'javascript:alert(1)' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.",
 		},
 		{
 			name: "ShouldRejectDataSchemeForNativeApplicationType",
@@ -155,7 +147,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:      []string{"authorization_code"},
 				ResponseTypes:   []string{"code"},
 			},
-			err: "invalid_redirect_uri",
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'data:text/html,<script>alert(1)</script>' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.",
 		},
 		{
 			name: "ShouldRejectBothJWKSAndJWKSURI",
@@ -164,7 +156,7 @@ func TestLocalValidator(t *testing.T) {
 				JSONWebKeysURI: "https://example.com/jwks",
 				JSONWebKeys:    &jose.JSONWebKeySet{},
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' and 'jwks_uri' parameters are mutually exclusive.",
 		},
 		{
 			name: "ShouldRejectCodeResponseTypeWithoutAuthorizationCodeGrant",
@@ -173,7 +165,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:    []string{"client_credentials"},
 				ResponseTypes: []string{"code"},
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'code' response type requires the 'authorization_code' grant type to be present in 'grant_types'.",
 		},
 		{
 			name: "ShouldRejectUnknownApplicationType",
@@ -181,7 +173,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:    []string{"https://example.com/cb"},
 				ApplicationType: "desktop",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'application_type' value 'desktop' is not a recognized application type.",
 		},
 		{
 			name: "ShouldRejectUnknownSubjectType",
@@ -189,7 +181,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs: []string{"https://example.com/cb"},
 				SubjectType:  "sectoral",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'subject_type' value 'sectoral' is not a recognized subject type.",
 		},
 		{
 			name: "ShouldRejectNoneIDTokenSignedResponseAlg",
@@ -197,7 +189,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:             []string{"https://example.com/cb"},
 				IDTokenSignedResponseAlg: "none",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value must not be 'none'.",
 		},
 		{
 			name: "ShouldRejectNoneTokenEndpointAuthSigningAlg",
@@ -205,7 +197,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:                []string{"https://example.com/cb"},
 				TokenEndpointAuthSigningAlg: "none",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'token_endpoint_auth_signing_alg' value must not be 'none'.",
 		},
 		{
 			name: "ShouldRejectNoneIntrospectionEndpointAuthSigningAlg",
@@ -213,7 +205,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:                        []string{"https://example.com/cb"},
 				IntrospectionEndpointAuthSigningAlg: "none",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'introspection_endpoint_auth_signing_alg' value must not be 'none'.",
 		},
 		{
 			name: "ShouldRejectNoneRevocationEndpointAuthSigningAlg",
@@ -221,7 +213,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:                     []string{"https://example.com/cb"},
 				RevocationEndpointAuthSigningAlg: "none",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'revocation_endpoint_auth_signing_alg' value must not be 'none'.",
 		},
 		{
 			name: "ShouldAcceptNoneRequestObjectSigningAlg",
@@ -237,7 +229,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:    []string{"authorization_code"},
 				ResponseTypes: []string{"token"},
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. A 'token' or 'id_token' response type requires the 'implicit' grant type to be present in 'grant_types'.",
 		},
 		{
 			name: "ShouldRejectAuthorizationCodeGrantWithoutRedirectURI",
@@ -245,7 +237,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:    []string{"authorization_code"},
 				ResponseTypes: []string{"code"},
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'authorization_code' grant type requires at least one 'redirect_uris' value.",
 		},
 		{
 			name: "ShouldRejectWhitespaceInAlgorithmValue",
@@ -253,7 +245,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:                []string{"https://example.com/cb"},
 				IDTokenEncryptedResponseAlg: "RSA OAEP",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_encrypted_response_alg' value 'RSA OAEP' must be a non-empty token.",
 		},
 		{
 			name: "ShouldAcceptValidScope",
@@ -268,7 +260,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs: []string{"https://example.com/cb"},
 				Scope:        "profile \"quoted\"",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'scope' value ''quoted'' contains characters that are not permitted in a scope token.",
 		},
 		{
 			name: "ShouldAcceptTLSClientAuthWithExactlyOneSubject",
@@ -292,7 +284,7 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "tls_client_auth",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'tls_client_auth' authentication method requires exactly one of the 'tls_client_auth_subject_dn', 'tls_client_auth_san_dns', 'tls_client_auth_san_uri', 'tls_client_auth_san_ip', or 'tls_client_auth_san_email' values but 0 were registered.",
 		},
 		{
 			name: "ShouldRejectTLSClientAuthWithMultipleSubjects",
@@ -302,7 +294,7 @@ func TestLocalValidator(t *testing.T) {
 				TLSClientAuthSubjectDN:  "CN=client,O=Example",
 				TLSClientAuthSANEmail:   "client@example.com",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'tls_client_auth' authentication method requires exactly one of the 'tls_client_auth_subject_dn', 'tls_client_auth_san_dns', 'tls_client_auth_san_uri', 'tls_client_auth_san_ip', or 'tls_client_auth_san_email' values but 2 were registered.",
 		},
 		{
 			name: "ShouldRejectSubjectWithoutTLSClientAuth",
@@ -311,7 +303,7 @@ func TestLocalValidator(t *testing.T) {
 				TokenEndpointAuthMethod: "client_secret_basic",
 				TLSClientAuthSANDNS:     "client.example.com",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'tls_client_auth_san_dns' value is only permitted when an endpoint authentication method is 'tls_client_auth'.",
 		},
 		{
 			name: "ShouldRejectTLSClientAuthWithMalformedSANIP",
@@ -320,7 +312,7 @@ func TestLocalValidator(t *testing.T) {
 				TokenEndpointAuthMethod: "tls_client_auth",
 				TLSClientAuthSANIP:      "not-an-ip",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'tls_client_auth_san_ip' value 'not-an-ip' must be a valid IP address.",
 		},
 		{
 			name: "ShouldAcceptSelfSignedTLSClientAuthWithJSONWebKeysURI",
@@ -336,12 +328,12 @@ func TestLocalValidator(t *testing.T) {
 				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "self_signed_tls_client_auth",
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'self_signed_tls_client_auth' authentication method requires either the 'jwks' or 'jwks_uri' value to be registered.",
 		},
 		{
 			name:     "ShouldRejectOmittedGrantTypesWithoutRedirectURI",
 			metadata: &oauth2.ClientRegistrationMetadata{},
-			err:      "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'authorization_code' grant type, which applies by default when 'grant_types' is omitted, requires at least one 'redirect_uris' value.",
 		},
 		{
 			name: "ShouldAcceptOmittedGrantTypesWithRedirectURI",
@@ -361,7 +353,7 @@ func TestLocalValidator(t *testing.T) {
 				RedirectURIs:  []string{"https://example.com/cb"},
 				ResponseTypes: []string{"id_token"},
 			},
-			err: "invalid_client_metadata",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. A 'token' or 'id_token' response type requires the 'implicit' grant type to be present in 'grant_types'.",
 		},
 	}
 
@@ -369,21 +361,18 @@ func TestLocalValidator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validator.ValidateClientRegistrationMetadata(context.Background(), nil, tc.metadata)
 
-			if tc.err == "" {
+			if tc.expected == "" {
 				require.NoError(t, err)
 
 				return
 			}
 
 			require.Error(t, err)
-			assert.Equal(t, tc.err, oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
 
-// TestLocalValidatorURIs covers the client metadata URIs the authorization server itself dereferences. Nothing
-// constrained them, so a registrant could point the server at an internal service: 'jwks_uri' and 'request_uris' are
-// fetched, and 'backchannel_logout_uri' is issued a POST whose status code reaches the caller.
 func TestLocalValidatorURIs(t *testing.T) {
 	validator := NewLocalValidator(&oauth2.Config{
 		ScopeStrategy:    oauth2.ExactScopeStrategy,
@@ -399,9 +388,9 @@ func TestLocalValidatorURIs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name   string
-		mutate func(m *oauth2.ClientRegistrationMetadata)
-		err    string
+		name     string
+		mutate   func(m *oauth2.ClientRegistrationMetadata)
+		expected string
 	}{
 		{
 			name:   "ShouldAcceptSecureJSONWebKeysURI",
@@ -412,92 +401,89 @@ func TestLocalValidatorURIs(t *testing.T) {
 			mutate: func(m *oauth2.ClientRegistrationMetadata) {
 				m.JSONWebKeysURI = "http://169.254.169.254/latest/meta-data/"
 			},
-			err: "must use the 'https' scheme",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'http://169.254.169.254/latest/meta-data/' must use the 'https' scheme.",
 		},
 		{
-			name:   "ShouldRejectRelativeJSONWebKeysURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "/jwks.json" },
-			err:    "must be an absolute URI",
+			name:     "ShouldRejectRelativeJSONWebKeysURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "/jwks.json" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value '/jwks.json' must be an absolute URI.",
 		},
 		{
-			name:   "ShouldRejectJSONWebKeysURIWithFragment",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https://example.com/jwks.json#k" },
-			err:    "must not contain a fragment component",
+			name:     "ShouldRejectJSONWebKeysURIWithFragment",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https://example.com/jwks.json#k" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https://example.com/jwks.json#k' must not contain a fragment component.",
 		},
 		{
 			name:   "ShouldAcceptSecureRequestURIs",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt"} },
 		},
 		{
-			name:   "ShouldRejectInsecureRequestURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"http://127.0.0.1:6379/"} },
-			err:    "must use the 'https' scheme",
+			name:     "ShouldRejectInsecureRequestURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"http://127.0.0.1:6379/"} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'request_uris' value 'http://127.0.0.1:6379/' must use the 'https' scheme.",
 		},
 		{
 			name:   "ShouldAcceptSecureBackChannelLogoutURI",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https://example.com/logout" },
 		},
 		{
-			name:   "ShouldRejectInsecureBackChannelLogoutURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "http://169.254.169.254/" },
-			err:    "must use the 'https' scheme",
+			name:     "ShouldRejectInsecureBackChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "http://169.254.169.254/" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'backchannel_logout_uri' value 'http://169.254.169.254/' must use the 'https' scheme.",
 		},
 		{
-			name:   "ShouldRejectBackChannelLogoutURIWithFragment",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https://example.com/logout#f" },
-			err:    "must not contain a fragment component",
+			name:     "ShouldRejectBackChannelLogoutURIWithFragment",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https://example.com/logout#f" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'backchannel_logout_uri' value 'https://example.com/logout#f' must not contain a fragment component.",
 		},
 		{
-			name:   "ShouldRejectRelativePostLogoutRedirectURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"/after-logout"} },
-			err:    "must be an absolute URI",
+			name:     "ShouldRejectRelativePostLogoutRedirectURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"/after-logout"} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value '/after-logout' must be an absolute URI.",
 		},
 		{
 			name: "ShouldRejectPostLogoutRedirectURIWithFragment",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) {
 				m.PostLogoutRedirectURIs = []string{"https://example.com/o#f"}
 			},
-			err: "must not contain a fragment component",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'https://example.com/o#f' must not contain a fragment component.",
 		},
 		{
-			// Not fetched by the server, so the https requirement that closes the SSRF does not apply and a native
-			// client's private-use scheme stays registrable.
 			name: "ShouldAcceptPrivateUseSchemePostLogoutRedirectURI",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) {
 				m.PostLogoutRedirectURIs = []string{"com.example.app:/done"}
 			},
 		},
 		{
-			// url.Parse reports a bare scheme as absolute, so the absolute and https checks both pass and only the
-			// host check rejects it.
-			name:   "ShouldRejectHostlessJSONWebKeysURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:" },
-			err:    "must include a host component",
+			// url.Parse reports a bare scheme as absolute, so only the host check rejects it.
+			name:     "ShouldRejectHostlessJSONWebKeysURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https:' must include a host component.",
 		},
 		{
-			name:   "ShouldRejectOpaqueJSONWebKeysURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:example.com/jwks.json" },
-			err:    "must include a host component",
+			name:     "ShouldRejectOpaqueJSONWebKeysURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:example.com/jwks.json" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https:example.com/jwks.json' must include a host component.",
 		},
 		{
-			name:   "ShouldRejectSingleSlashJSONWebKeysURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:/jwks.json" },
-			err:    "must include a host component",
+			name:     "ShouldRejectSingleSlashJSONWebKeysURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:/jwks.json" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https:/jwks.json' must include a host component.",
 		},
 		{
-			name:   "ShouldRejectHostlessBackChannelLogoutURI",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https:/logout" },
-			err:    "must include a host component",
+			name:     "ShouldRejectHostlessBackChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelLogoutURI = "https:/logout" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'backchannel_logout_uri' value 'https:/logout' must include a host component.",
 		},
 		{
-			name:   "ShouldRejectEmptyRequestURIMember",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt", ""} },
-			err:    "must not contain an empty value",
+			name:     "ShouldRejectEmptyRequestURIMember",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt", ""} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'request_uris' values must not contain an empty value.",
 		},
 		{
-			name:   "ShouldRejectEmptyPostLogoutRedirectURIMember",
-			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{""} },
-			err:    "must not contain an empty value",
+			name:     "ShouldRejectEmptyPostLogoutRedirectURIMember",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{""} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' values must not contain an empty value.",
 		},
 	}
 
@@ -508,14 +494,14 @@ func TestLocalValidatorURIs(t *testing.T) {
 
 			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, metadata)
 
-			if tc.err == "" {
+			if tc.expected == "" {
 				assert.NoError(t, err)
 
 				return
 			}
 
 			require.Error(t, err)
-			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
@@ -533,7 +519,7 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 		name      string
 		permitted []string
 		metadata  *oauth2.ClientRegistrationMetadata
-		err       string
+		expected  string
 	}{
 		{
 			// Unset permits any grant, so that registering an mTLS client credentials client keeps working.
@@ -548,19 +534,19 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 			name:      "ShouldRejectClientCredentialsWhenNotPermitted",
 			permitted: []string{"authorization_code", "refresh_token"},
 			metadata:  base([]string{"client_credentials"}, nil),
-			err:       "client_credentials",
+			expected:  "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'client_credentials' is not permitted for registration.",
 		},
 		{
 			name:      "ShouldRejectResourceOwnerPasswordWhenNotPermitted",
 			permitted: []string{"authorization_code"},
 			metadata:  base([]string{"password"}, nil),
-			err:       "password",
+			expected:  "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'password' is not permitted for registration.",
 		},
 		{
 			name:      "ShouldRejectTokenExchangeWhenNotPermitted",
 			permitted: []string{"authorization_code"},
 			metadata:  base([]string{"urn:ietf:params:oauth:grant-type:token-exchange"}, nil),
-			err:       "token-exchange",
+			expected:  "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'urn:ietf:params:oauth:grant-type:token-exchange' is not permitted for registration.",
 		},
 		{
 			name:      "ShouldAcceptWhatTheDeploymentPermits",
@@ -571,7 +557,7 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 			name:      "ShouldRejectWhatTheDeploymentDoesNotPermit",
 			permitted: []string{"authorization_code"},
 			metadata:  base([]string{"authorization_code", "refresh_token"}, []string{"code"}),
-			err:       "refresh_token",
+			expected:  "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'refresh_token' is not permitted for registration.",
 		},
 	}
 
@@ -585,14 +571,14 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 
 			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
 
-			if tc.err == "" {
+			if tc.expected == "" {
 				assert.NoError(t, err)
 
 				return
 			}
 
 			require.Error(t, err)
-			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }

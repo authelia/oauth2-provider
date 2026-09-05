@@ -27,14 +27,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &oauth2.Config{
-		AccessTokenLifespan:   time.Hour * 24,
-		AuthorizeCodeLifespan: time.Hour * 24,
-	},
-}
-
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 	strategy := &o2hmacshaStrategy
 
@@ -259,7 +251,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err, "%+v", err)
 			} else {
-				require.NoError(t, err, "%+v", err)
+				require.NoError(t, err)
 			}
 
 			if tc.check != nil {
@@ -462,7 +454,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err, "%+v", err)
 			} else {
-				require.NoError(t, err, "%+v", err)
+				require.NoError(t, err)
 				if tc.check != nil {
 					tc.check(t, tc.requester, tc.deviceRequester)
 				}
@@ -769,11 +761,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 	}
 }
 
-// TestDeviceAuthorizeCode_ConcurrentReplay covers the device grant's half of the same window the authorization code
-// flow has: both racers clear HandleTokenEndpointRequest while the device code is live, and the loser reaches
-// PopulateTokenEndpointResponse after the winner consumed it. The loser must be refused with invalid_grant rather
-// than told the server failed.
-func TestDeviceAuthorizeCode_ConcurrentReplay(t *testing.T) {
+func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerError(t *testing.T) {
 	strategy := &o2hmacshaStrategy
 	store := storage.NewMemoryStore()
 
@@ -827,14 +815,19 @@ func TestDeviceAuthorizeCode_ConcurrentReplay(t *testing.T) {
 
 	requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 
-	// Both racers clear phase one while the device code is still live.
 	require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
-
-	// The winner completes phase two and consumes the device code.
 	require.NoError(t, store.InvalidateDeviceCodeSession(t.Context(), dSig))
 
-	// The loser reaches phase two.
 	err = h.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "a replayed device code must be refused with invalid_grant, not server_error")
+
+	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+}
+
+var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
+	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+	Config: &oauth2.Config{
+		AccessTokenLifespan:   time.Hour * 24,
+		AuthorizeCodeLifespan: time.Hour * 24,
+	},
 }

@@ -49,18 +49,18 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 	req.Client = &oauth2.DefaultClient{ID: "test-client"}
 
 	token, err := issueStrategy.GenerateIDToken(t.Context(), cfg.IDTokenLifespan, req)
-	require.NoError(t, err, "issuance must succeed when the jwt.Strategy is configured with a usable signing key")
+	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
 	claims, err := validationStrategy.ValidateIDToken(t.Context(), req, token)
-	require.NoError(t, err, "validation must succeed when the issuer key matches the signing key")
+	require.NoError(t, err)
 	require.NotNil(t, claims)
 
-	assert.Equal(t, subject, claims[jwt.ClaimSubject], "sub claim must round-trip intact")
-	assert.Equal(t, issuer, claims[jwt.ClaimIssuer], "iss claim must come from the AS configuration")
-	assert.NotEmpty(t, claims[jwt.ClaimJWTID], "jti claim must be auto-populated on issuance")
-	assert.NotNil(t, claims[jwt.ClaimExpirationTime], "exp claim must be present so the validator can enforce token lifetime")
-	assert.NotNil(t, claims[jwt.ClaimIssuedAt], "iat claim must be present per JWT BCP")
+	assert.Equal(t, subject, claims[jwt.ClaimSubject])
+	assert.Equal(t, issuer, claims[jwt.ClaimIssuer])
+	assert.NotEmpty(t, claims[jwt.ClaimJWTID])
+	assert.NotNil(t, claims[jwt.ClaimExpirationTime])
+	assert.NotNil(t, claims[jwt.ClaimIssuedAt])
 }
 
 func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
@@ -102,7 +102,8 @@ func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 	}
 
 	_, err = validationStrategy.ValidateIDToken(t.Context(), req, string(tampered))
-	require.Error(t, err, "validation must reject a token whose body has been altered after signing")
+	require.Error(t, err)
+	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 }
 
 func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *testing.T) {
@@ -136,11 +137,12 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 	req.Client = &oauth2.DefaultClient{ID: "test-client"}
 
 	token, err := issueStrategy.GenerateIDToken(t.Context(), cfg.IDTokenLifespan, req)
-	require.NoError(t, err, "issuance with the wrong key must succeed; the failure must surface at validation, not issuance")
+	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
 	_, err = validationStrategy.ValidateIDToken(t.Context(), req, token)
-	require.Error(t, err, "validator must reject a token whose signature does not chain to its configured Issuer key")
+	require.Error(t, err)
+	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
 }
 
 func TestDefaultIDTokenValidationStrategy_RejectsExpiredByDefault(t *testing.T) {
@@ -155,7 +157,8 @@ func TestDefaultIDTokenValidationStrategy_RejectsExpiredByDefault(t *testing.T) 
 	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
 
 	_, err := strategy.ValidateIDToken(t.Context(), req, token)
-	assert.Error(t, err, "an expired id_token must be rejected when no options are supplied")
+	assert.Error(t, err)
+	assert.EqualError(t, err, "Token is expired")
 }
 
 func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T) {
@@ -170,7 +173,7 @@ func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T)
 	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
 
 	claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowExpired())
-	require.NoError(t, err, "WithAllowExpired must permit an expired id_token")
+	require.NoError(t, err)
 	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
 }
 
@@ -189,14 +192,20 @@ func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithOption(t *testing
 
 	strategy := &DefaultIDTokenValidationStrategy{Strategy: validatingJWT}
 
-	_, err := strategy.ValidateIDToken(t.Context(), req, token)
-	require.Error(t, err, "the token must be rejected when no options are supplied")
+	t.Run("ShouldRejectWithoutTheOption", func(t *testing.T) {
+		_, err := strategy.ValidateIDToken(t.Context(), req, token)
 
-	claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowUnverified())
-	require.NoError(t, err, "WithAllowUnverified must decode a token which neither verifies nor validates")
-	assert.Equal(t, "alice", claims[jwt.ClaimSubject], "the untrusted claims must still be returned for client discovery")
+		require.Error(t, err)
+		assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
+	})
 
-	assert.Error(t, claims.Valid(), "the returned claims must be ones WithAllowUnverified bypassed rather than passed")
+	t.Run("ShouldReturnTheUnvalidatedClaimsWithTheOption", func(t *testing.T) {
+		claims, err := strategy.ValidateIDToken(t.Context(), req, token, oauth2.WithAllowUnverified())
+		require.NoError(t, err)
+
+		assert.Equal(t, "alice", claims[jwt.ClaimSubject])
+		assert.EqualError(t, claims.Valid(), "Token is expired")
+	})
 }
 
 func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *testing.T) {
@@ -208,7 +217,7 @@ func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *t
 	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
 
 	claims, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{}, token, oauth2.WithAllowUnverified())
-	require.NoError(t, err, "a Requester with no client must be accepted")
+	require.NoError(t, err)
 	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
 }
 

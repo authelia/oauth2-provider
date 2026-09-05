@@ -25,64 +25,6 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// introspectionJWTTestClient is a minimal IntrospectionJWTResponseClient used to exercise the signed
-// introspection response code paths.
-type introspectionJWTTestClient struct {
-	*DefaultClient
-
-	alg, kid       string
-	encAlg, encKid string
-	encEnc         string
-}
-
-func (c *introspectionJWTTestClient) GetIntrospectionSignedResponseKeyID() string {
-	return c.kid
-}
-
-func (c *introspectionJWTTestClient) GetIntrospectionSignedResponseAlg() string {
-	return c.alg
-}
-
-func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseKeyID() string {
-	return c.encKid
-}
-
-func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseAlg() string {
-	return c.encAlg
-}
-
-func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseEnc() string {
-	return c.encEnc
-}
-
-// stubIntrospectionStrategy is a jwt.Strategy stub used to drive the signed introspection response
-// code paths without setting up a real signing key.
-type stubIntrospectionStrategy struct {
-	token  string
-	err    error
-	claims jwt.MapClaims
-}
-
-func (s *stubIntrospectionStrategy) Encode(_ context.Context, claims jwt.Claims, _ ...jwt.StrategyOpt) (string, string, error) {
-	if mc, ok := claims.(jwt.MapClaims); ok {
-		s.claims = mc
-	}
-
-	return s.token, "", s.err
-}
-
-func (s *stubIntrospectionStrategy) Decrypt(_ context.Context, _ string, _ ...jwt.StrategyOpt) (string, string, *jose.JSONWebEncryption, error) {
-	return "", "", nil, nil
-}
-
-func (s *stubIntrospectionStrategy) Decode(_ context.Context, _ string, _ ...jwt.StrategyOpt) (*jwt.Token, error) {
-	return nil, nil
-}
-
-func (s *stubIntrospectionStrategy) Validate(_ context.Context, _ *jwt.Token, _ ...jwt.StrategyOpt) error {
-	return nil
-}
-
 func TestWriteIntrospectionError(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -798,4 +740,62 @@ func TestWriteIntrospectionResponseHandlesTheErrorResponder(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rw.Code)
 	assert.JSONEq(t, `{"active":false}`, rw.Body.String())
+}
+
+// introspectionJWTTestClient is a minimal IntrospectionJWTResponseClient used to exercise the signed
+// introspection response code paths.
+type introspectionJWTTestClient struct {
+	*DefaultClient
+
+	alg, kid       string
+	encAlg, encKid string
+	encEnc         string
+}
+
+func (c *introspectionJWTTestClient) GetIntrospectionSignedResponseKeyID() string {
+	return c.kid
+}
+
+func (c *introspectionJWTTestClient) GetIntrospectionSignedResponseAlg() string {
+	return c.alg
+}
+
+func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseKeyID() string {
+	return c.encKid
+}
+
+func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseAlg() string {
+	return c.encAlg
+}
+
+func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseEnc() string {
+	return c.encEnc
+}
+
+// stubIntrospectionStrategy is a jwt.Strategy stub used to drive the signed introspection response
+// code paths without setting up a real signing key.
+type stubIntrospectionStrategy struct {
+	token  string
+	err    error
+	claims jwt.MapClaims
+}
+
+func (s *stubIntrospectionStrategy) Encode(_ context.Context, claims jwt.Claims, _ ...jwt.StrategyOpt) (string, string, error) {
+	if mc, ok := claims.(jwt.MapClaims); ok {
+		s.claims = mc
+	}
+
+	return s.token, "", s.err
+}
+
+func (s *stubIntrospectionStrategy) Decrypt(_ context.Context, _ string, _ ...jwt.StrategyOpt) (string, string, *jose.JSONWebEncryption, error) {
+	return "", "", nil, nil
+}
+
+func (s *stubIntrospectionStrategy) Decode(_ context.Context, _ string, _ ...jwt.StrategyOpt) (*jwt.Token, error) {
+	return nil, nil
+}
+
+func (s *stubIntrospectionStrategy) Validate(_ context.Context, _ *jwt.Token, _ ...jwt.StrategyOpt) error {
+	return nil
 }

@@ -39,7 +39,7 @@ func TestBearerAuthorizationParity(t *testing.T) {
 			audience:  []string{"urn:aud"},
 			required:  []string{"urn:need"},
 			permitted: []string{"urn:aud"},
-			expected:  "insufficient_scope",
+			expected:  "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:need', at least one of which is required.",
 			code:      http.StatusForbidden,
 		},
 		{
@@ -48,7 +48,7 @@ func TestBearerAuthorizationParity(t *testing.T) {
 			audience:  []string{"urn:wrong"},
 			required:  []string{"urn:need"},
 			permitted: []string{"urn:aud"},
-			expected:  "invalid_token",
+			expected:  "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'urn:aud' but the audience had the values 'urn:wrong'.",
 			code:      http.StatusUnauthorized,
 		},
 		{
@@ -57,7 +57,7 @@ func TestBearerAuthorizationParity(t *testing.T) {
 			audience:  nil,
 			required:  []string{"urn:need"},
 			permitted: []string{"urn:aud"},
-			expected:  "invalid_token",
+			expected:  "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'urn:aud' but it does not have an audience.",
 			code:      http.StatusUnauthorized,
 		},
 		{
@@ -94,7 +94,7 @@ func TestBearerAuthorizationParity(t *testing.T) {
 
 			rfc := ErrorToRFC6749Error(err)
 
-			assert.Equal(t, tc.expected, rfc.ErrorField)
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
 			assert.Equal(t, tc.code, rfc.CodeField)
 		})
 	}
@@ -128,7 +128,7 @@ func TestBearerAuthorizationScopeDisclosesNothingElse(t *testing.T) {
 		BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:need"}})
 
 	require.Error(t, err)
-	assert.Equal(t, "insufficient_scope", ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:need', at least one of which is required.")
 }
 
 func TestBearerAuthorizationEnforcementPrecedesScope(t *testing.T) {
@@ -137,21 +137,28 @@ func TestBearerAuthorizationEnforcementPrecedesScope(t *testing.T) {
 	auth := BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:need"}}
 
 	for _, tc := range []struct {
-		name   string
-		config *Config
+		name     string
+		config   *Config
+		expected string
 	}{
-		{name: "DPoP", config: &Config{DPoPEnforce: true}},
-		{name: "MTLS", config: &Config{MTLSEnforce: true}},
+		{
+			name:     "ShouldRejectAnUnboundCredentialWhenDPoPEnforced",
+			config:   &Config{DPoPEnforce: true},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.",
+		},
+		{
+			name:     "ShouldRejectAnUnboundCredentialWhenMTLSEnforced",
+			config:   &Config{MTLSEnforce: true},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ValidateBearerAuthorization(ctx, tc.config, r, newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
 
 			require.Error(t, err)
 
-			rfc := ErrorToRFC6749Error(err)
-
-			assert.Equal(t, "invalid_token", rfc.ErrorField)
-			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+			assert.Equal(t, http.StatusUnauthorized, ErrorToRFC6749Error(err).CodeField)
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }

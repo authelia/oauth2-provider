@@ -83,10 +83,11 @@ In an effort to assist users who wish to use this library we aim to maintain the
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/be088375c5c0077f33976991cfbc056450fd6d58)</sup>
   - [x] [RFC8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693) support
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/add3cbecb9d35e2b7c29426cf5d898c9b1599e3b)</sup>
-  - [ ] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
+  - [x] [RFC8705: OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens](https://datatracker.ietf.org/doc/html/rfc8705)
         support
   - [x] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
         support
+  - [x] [OpenID Connect Key Binding 1.0](https://openid.net/specs/openid-connect-key-binding-1_0.html)
   - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
   - Claims:
     - [ ] Standard Claims Parameter
@@ -95,12 +96,12 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - Sessions:
     - [ ] [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)
     - [ ] [OpenID Connect Frontchannel Logout 1.0](https://openid.net/specs/openid-connect-frontchannel-1_0.html)
-    - [ ] [OpenID Connect Backchannel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)
-    - [ ] [OpenID Connect RP Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)]
+    - [x] [OpenID Connect Backchannel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)
+    - [x] [OpenID Connect RP Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)]
   - [x] [RFC8707: OAuth 2.0 Resource Indicators](https://www.rfc-editor.org/rfc/rfc8707.html)
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/36bbd39b4618d70ecd7849d5313c12c412d29dd0)
         [commit](https://github.com/authelia/oauth2-provider/commit/7a78d5fc376dfc4d0501bd17793290ca7c1c8deb)</sup>
-  - [ ] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
+  - [x] [OpenID Connect Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)
         support
   - Response Mode Rework:
     - [x] [JWT Secured Authorization Response Mode for OAuth 2.0 (JARM)](https://openid.net/specs/oauth-v2-jarm.html)

@@ -19,6 +19,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse_SessionBinding(t *testing.T) {
 		jkt       = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
 		requested = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
 		x5t       = "A4DtL2JmUMhAsvJj5tAtEqYFn7uHnaMbNKmoNcE7dnE"
+		other     = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
 	)
 
 	jwk := []byte(`{"kty":"EC","crv":"P-256","x":"x","y":"y"}`)
@@ -64,7 +65,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse_SessionBinding(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldNotOverwriteAValueTheReplacementSessionAlreadyCarries",
+			name: "ShouldLeaveAReplacementValueWhenTheRestoredSessionRecordedNothing",
 			restored: func() Session {
 				return new(DefaultSession)
 			},
@@ -73,6 +74,25 @@ func TestFosite_NewRFC8628UserAuthorizeResponse_SessionBinding(t *testing.T) {
 			},
 			expected: func(t *testing.T, session *DefaultSession) {
 				assert.Equal(t, jkt, session.GetDPoPJWKThumbprint())
+			},
+		},
+		{
+			name: "ShouldPreferTheRestoredBindingOverOneTheReplacementSessionCarries",
+			restored: func() Session {
+				session := new(DefaultSession)
+
+				session.SetDPoPJWKThumbprint(jkt)
+				session.SetClientCertificateSHA256Thumbprint(x5t)
+
+				return session
+			},
+			seed: func(session *DefaultSession) {
+				session.SetDPoPJWKThumbprint(other)
+				session.SetClientCertificateSHA256Thumbprint(other)
+			},
+			expected: func(t *testing.T, session *DefaultSession) {
+				assert.Equal(t, jkt, session.GetDPoPJWKThumbprint())
+				assert.Equal(t, x5t, session.GetClientCertificateSHA256Thumbprint())
 			},
 		},
 		{

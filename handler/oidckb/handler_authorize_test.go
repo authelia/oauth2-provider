@@ -84,9 +84,16 @@ func TestAuthorizeHandler_BindAuthorizeRequest(t *testing.T) {
 			err:           "'openid'",
 		},
 		{
-			name: "ShouldNotRejectImplicitFlowAccessTokenOnly", enabled: true, dpop: true,
+			name: "ShouldRejectImplicitFlowAccessTokenOnly", enabled: true, dpop: true,
 			scopes:        oauth2.Arguments{consts.ScopeOpenID, consts.ScopeBoundKey},
 			responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}, jkt: jkt,
+			err: "response type 'token'",
+		},
+		{
+			name: "ShouldRejectResponseTypeNone", enabled: true, dpop: true,
+			scopes:        oauth2.Arguments{consts.ScopeOpenID, consts.ScopeBoundKey},
+			responseTypes: oauth2.Arguments{consts.ResponseTypeNone}, jkt: jkt,
+			err: "response type 'none'",
 		},
 	}
 
@@ -107,7 +114,7 @@ func TestAuthorizeHandler_BindAuthorizeRequest(t *testing.T) {
 			err := handler.BindAuthorizeRequest(t.Context(), request)
 
 			if tc.err != "" {
-				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
 
 				return

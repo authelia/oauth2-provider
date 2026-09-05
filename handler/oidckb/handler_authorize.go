@@ -47,14 +47,13 @@ func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oau
 
 	types := request.GetResponseTypes()
 
-	// Section 1.4: the Implicit Flow and the Hybrid Flow MUST NOT be used to obtain a key-bound ID Token. Any
-	// response type carrying 'id_token' returns an ID Token from the authorization endpoint, which is issued without
-	// a Token Request and so has no proof of possession presented for it; 'code token' returns no ID Token there but
-	// is a Hybrid Flow response type all the same, and rfc9449.AuthorizeHandler records no thumbprint for it, so the
-	// ID Token from its Token Request could only be an unbound one.
-	if types.Has(consts.ResponseTypeImplicitFlowIDToken) ||
-		(types.Has(consts.ResponseTypeAuthorizationCodeFlow) && types.Has(consts.ResponseTypeImplicitFlowToken)) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The scope 'bound_key' must not be requested with the response type '%s' because the Implicit and Hybrid Flows cannot produce a key-bound ID Token.", strings.Join(types, " ")))
+	// Section 1.4: key binding is defined for the Authorization Code Flow and the Device Authorization Flow only, and
+	// the device flow binds at its own endpoint. The Implicit and Hybrid Flows MUST NOT be used to obtain a key-bound
+	// ID Token, and support for any other flow is out of scope, so exactly 'code' is required here: every other
+	// response type either returns an ID Token from this endpoint that no proof was presented for, or returns none
+	// that a Token Request could bind.
+	if !types.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The scope 'bound_key' must not be requested with the response type '%s' because only the Authorization Code Flow can produce a key-bound ID Token.", strings.Join(types, " ")))
 	}
 
 	// Section 2.1 and Section 3.1: the request MUST include the 'dpop_jkt' parameter.

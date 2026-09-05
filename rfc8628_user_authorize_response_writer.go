@@ -23,6 +23,14 @@ func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester 
 	return responder, nil
 }
 
+// carryRFC8628SessionBinding copies the proof-of-possession bindings the device authorization endpoint recorded onto
+// the session that replaces it here, which would otherwise drop them.
+//
+// A restored binding wins over one the replacement already carries. It is what rfc9449.DeviceAuthorizeHandler recorded
+// from 'dpop_jkt', so the client committed to that key, while this runs before SetSession and before any handler, so a
+// value on the replacement can only have come from the caller constructing it. Letting the caller's win would rebind
+// the device code to a key the client never asked for, which rfc9449.Handler.BindAccessRequest would then enforce at
+// the token endpoint.
 func carryRFC8628SessionBinding(restored, session Session) {
 	if restored == nil || session == nil {
 		return

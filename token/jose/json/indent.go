@@ -4,7 +4,10 @@
 
 package json
 
-import "bytes"
+import (
+	"bytes"
+	"math"
+)
 
 // HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
 // characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
@@ -104,6 +107,10 @@ func appendNewline(dst []byte, prefix, indent string, depth int) []byte {
 // A factor no higher than 2 ensures that wasted space never exceeds 50%.
 const indentGrowthFactor = 2
 
+// maxIndentHint bounds the input length for which a capacity hint scaled by
+// indentGrowthFactor is representable as an int.
+const maxIndentHint = math.MaxInt / indentGrowthFactor
+
 // Indent appends to dst an indented form of the JSON-encoded src.
 // Each element in a JSON object or array begins on a new,
 // indented line beginning with prefix followed by one or more
@@ -116,7 +123,11 @@ const indentGrowthFactor = 2
 // For example, if src has no trailing spaces, neither will dst;
 // if src ends in a trailing newline, so will dst.
 func Indent(dst *bytes.Buffer, src []byte, prefix, indent string) error {
-	dst.Grow(indentGrowthFactor * len(src))
+	// Skip the hint rather than overflowing it; Grow is only a reservation.
+	if len(src) <= maxIndentHint {
+		dst.Grow(indentGrowthFactor * len(src))
+	}
+
 	b := dst.AvailableBuffer()
 	b, err := appendIndent(b, src, prefix, indent)
 	dst.Write(b)

@@ -6,9 +6,12 @@ package json
 
 import (
 	"bytes"
+	"errors"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // This file covers the behaviour that makes this package a fork of the standard
@@ -142,5 +145,61 @@ func TestForkUseNumber(t *testing.T) {
 	}
 	if want := Number("2"); got != want {
 		t.Errorf("Decode = %#v, want %#v", got, want)
+	}
+}
+
+func TestForkUnquoteErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []byte
+		err  error
+	}{
+		{"plain", `"abc"`, []byte("abc"), nil},
+		{"escape", `"a\nb"`, []byte("a\nb"), nil},
+		{"unicode escape", `"aéb"`, []byte("aéb"), nil},
+		{"surrogate pair", `"😀"`, []byte("\U0001f600"), nil},
+		{"lone surrogate", `"\ud83d"`, []byte("�"), nil},
+		{"unterminated", `"abc`, nil, errPhase},
+		{"not a literal", `abc`, nil, errPhase},
+		{"bad escape", `"a\xb"`, nil, errPhase},
+		{"truncated escape", `"a\`, nil, errPhase},
+		{"short unicode escape", `"\u00"`, nil, errPhase},
+		{"raw control character", "\"a\x01b\"", nil, errPhase},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := unquoteBytes([]byte(tt.in))
+			if !errors.Is(err, tt.err) {
+				t.Fatalf("unquoteBytes(%q) error = %v, want %v", tt.in, err, tt.err)
+			}
+			if tt.err != nil {
+				return
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("unquoteBytes(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			s, err := unquote([]byte(tt.in))
+			if err != nil || s != string(tt.want) {
+				t.Errorf("unquote(%q) = %q, %v, want %q, nil", tt.in, s, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestForkUnquoteSizeBounds(t *testing.T) {
+	if sized := maxUnquoteInitial + 2*utf8.UTFMax; sized < 0 || sized > math.MaxInt {
+		t.Errorf("maxUnquoteInitial %d overflows when sized: got %d", maxUnquoteInitial, sized)
+	}
+
+	if grown := (maxUnquoteRegrow + utf8.UTFMax) * 2; grown < 0 || grown > math.MaxInt {
+		t.Errorf("maxUnquoteRegrow %d overflows when doubled: got %d", maxUnquoteRegrow, grown)
+	}
+}
+
+func TestForkIndentSizeBounds(t *testing.T) {
+	if factored := indentGrowthFactor * maxIndentHint; factored < 0 || factored > math.MaxInt {
+		t.Errorf("maxIndentHint %d overflows when multiplied: got %d", maxIndentHint, factored)
 	}
 }

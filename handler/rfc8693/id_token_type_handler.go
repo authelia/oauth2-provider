@@ -56,7 +56,13 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		token := form.Get(consts.FormParameterActorToken)
 
+		prior := bindingOf(request.GetSession())
+
 		if unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+			return err
+		}
+
+		if err = c.inherit(request, unpacked, tokenRoleActor, prior); err != nil {
 			return err
 		}
 
@@ -68,7 +74,13 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		token := form.Get(consts.FormParameterSubjectToken)
 
+		prior := bindingOf(request.GetSession())
+
 		if unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+			return err
+		}
+
+		if err = c.inherit(request, unpacked, tokenRoleSubject, prior); err != nil {
 			return err
 		}
 
@@ -178,6 +190,16 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 	}
 
 	return claims, nil
+}
+
+func (c *IDTokenTypeHandler) inherit(request oauth2.AccessRequester, claims map[string]any, role tokenRole, prior tokenBinding) (err error) {
+	var incoming tokenBinding
+
+	if incoming, err = bindingOfConfirmation(claims); err != nil {
+		return err
+	}
+
+	return inheritTokenBinding(request, incoming, role, prior)
 }
 
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

@@ -112,6 +112,10 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 
 	parsed.AccessTokenHash, _ = claims[consts.ClaimDPoPAccessTokenHash].(string)
 
+	parsed.CodeHash, _ = claims[consts.ClaimDPoPCodeHash].(string)
+
+	parsed.JWK = jwk
+
 	if parsed.Thumbprint, err = jwt.ThumbprintJWK(jwk); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof key thumbprint could not be computed.").WithWrap(err))
 	}

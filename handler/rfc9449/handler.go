@@ -37,7 +37,9 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	var bound string
 
 	if session != nil {
-		bound = session.GetDPoPJWKThumbprint()
+		if bound = session.GetDPoPJWKThumbprint(); bound == "" {
+			bound = session.GetRequestedDPoPJWKThumbprint()
+		}
 	}
 
 	// An existing binding makes a proof mandatory regardless of policy: a refresh token issued under a bound
@@ -80,6 +82,10 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	if bound != "" && bound != proof.Thumbprint {
 		return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof key does not match the key the grant is bound to."))
 	}
+
+	// Published only here, and only once every check above has passed, so a consumer may rely on a published proof
+	// having satisfied RFC 9449 Section 5 and matched any binding the grant already carried.
+	oauth2.PublishDPoPProof(ctx, proof)
 
 	session.SetDPoPJWKThumbprint(proof.Thumbprint)
 

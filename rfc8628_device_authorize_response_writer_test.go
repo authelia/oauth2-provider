@@ -115,3 +115,64 @@ func TestNewRFC862DeviceAuthorizeResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRFC862DeviceAuthorizeResponse_DispatchesBindingHandlers(t *testing.T) {
+	t.Run("ShouldRunBeforeEndpointHandlers", func(t *testing.T) {
+		binding := &testDeviceBindingHandler{}
+		endpoint := &testDeviceEndpointHandler{}
+
+		config := &Config{
+			RFC8628DeviceAuthorizeEndpointBindingHandlers: RFC8628DeviceAuthorizeEndpointBindingHandlers{binding},
+			RFC8628DeviceAuthorizeEndpointHandlers:        RFC8628DeviceAuthorizeEndpointHandlers{endpoint},
+		}
+		provider := &Fosite{Config: config}
+
+		session := &DefaultSession{}
+		request := NewDeviceAuthorizeRequest()
+
+		_, err := provider.NewRFC862DeviceAuthorizeResponse(t.Context(), request, session)
+		require.NoError(t, err)
+
+		assert.True(t, binding.called)
+		assert.Equal(t, "recorded", session.GetDPoPJWKThumbprint())
+		assert.Equal(t, "recorded", endpoint.sawThumbprint)
+	})
+
+	t.Run("ShouldPropagateBindingError", func(t *testing.T) {
+		binding := &testDeviceBindingHandler{err: ErrInvalidRequest}
+
+		config := &Config{RFC8628DeviceAuthorizeEndpointBindingHandlers: RFC8628DeviceAuthorizeEndpointBindingHandlers{binding}}
+		provider := &Fosite{Config: config}
+
+		_, err := provider.NewRFC862DeviceAuthorizeResponse(t.Context(), NewDeviceAuthorizeRequest(), &DefaultSession{})
+
+		assert.ErrorIs(t, err, ErrInvalidRequest)
+	})
+}
+
+type testDeviceBindingHandler struct {
+	called bool
+	err    error
+}
+
+func (h *testDeviceBindingHandler) BindRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error) {
+	h.called = true
+
+	if h.err != nil {
+		return h.err
+	}
+
+	request.GetSession().(*DefaultSession).SetDPoPJWKThumbprint("recorded")
+
+	return nil
+}
+
+type testDeviceEndpointHandler struct {
+	sawThumbprint string
+}
+
+func (h *testDeviceEndpointHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder) (err error) {
+	h.sawThumbprint = request.GetSession().(*DefaultSession).GetDPoPJWKThumbprint()
+
+	return nil
+}

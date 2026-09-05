@@ -84,6 +84,7 @@ func TestHandlerAuthorize(t *testing.T) {
 		responseTypes oauth2.Arguments
 		wantErr       error
 		wantJKT       string
+		wantRequested string
 	}{
 		{
 			name:          "RecordsDPoPJKT",
@@ -92,6 +93,7 @@ func TestHandlerAuthorize(t *testing.T) {
 			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 			wantJKT:       testAuthorizeJKT,
+			wantRequested: testAuthorizeJKT,
 		},
 		{
 			name:    "DisabledLeavesSessionUnchanged",
@@ -118,13 +120,15 @@ func TestHandlerAuthorize(t *testing.T) {
 			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 			wantJKT:       testAuthorizeJKT,
+			wantRequested: testAuthorizeJKT,
 		},
 		{
-			name:          "SkipsHybridFlowIssuingAnAccessTokenDirectly",
+			name:          "BindsOnlyTheCodeForHybridFlowIssuingAnAccessTokenDirectly",
 			enabled:       true,
 			session:       &oauth2.DefaultSession{},
 			jkt:           testAuthorizeJKT,
 			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
+			wantRequested: testAuthorizeJKT,
 		},
 		{
 			name:          "NonDPoPSessionReturnsServerError",
@@ -195,6 +199,7 @@ func TestHandlerAuthorize(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantJKT, tc.session.(*oauth2.DefaultSession).GetDPoPJWKThumbprint())
+			assert.Equal(t, tc.wantRequested, tc.session.(*oauth2.DefaultSession).GetRequestedDPoPJWKThumbprint())
 		})
 	}
 }
@@ -322,6 +327,149 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 }
 
+func TestAuthorizeHandler_RecordsTheRequestedThumbprint(t *testing.T) {
+	const jkt = "dnfb1T9jil_gOhti60baHs_WD_a4D8JN9VDJXbmBmGw"
+
+	handler := &AuthorizeHandler{Config: &oauth2.Config{DPoPEnabled: true}}
+
+	session := &oauth2.DefaultSession{}
+
+	request := oauth2.NewAuthorizeRequest()
+	request.Form = url.Values{consts.FormParameterDPoPJKT: []string{jkt}}
+	request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+	request.Session = session
+
+	require.NoError(t, handler.BindAuthorizeRequest(t.Context(), request))
+
+	assert.Equal(t, jkt, session.GetDPoPJWKThumbprint())
+	assert.Equal(t, jkt, session.GetRequestedDPoPJWKThumbprint())
+}
+
+// RFC 9449 Section 10 requires the token endpoint to reject a redemption whose proof key does not match the
+// 'dpop_jkt' the authentication request carried. A hybrid flow issuing an access token directly records only the
+// requested thumbprint, so enforcement must reach that and not only the grant binding.
+func TestHandlerEnforcesTheRequestedThumbprint(t *testing.T) {
+	const endpoint = "https://as.example.com/token"
+
+	newRequest := func(jkt string) *oauth2.AccessRequest {
+		session := &oauth2.DefaultSession{}
+		session.SetRequestedDPoPJWKThumbprint(jkt)
+
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
+
+		return request
+	}
+
+	t.Run("ShouldRejectARedemptionWithoutAProof", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+
+		err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, ""), newRequest(testAuthorizeJKT))
+
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+
+	t.Run("ShouldRejectARedemptionWithAnotherKey", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+
+		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "requested-other", jwt.ClaimHTTPMethod: http.MethodPost,
+			jwt.ClaimHTTPURI: endpoint, jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), newRequest(testAuthorizeJKT))
+
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+
+	t.Run("ShouldAcceptARedemptionWithTheRequestedKey", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+
+		key := newTestProofKey(t)
+
+		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "requested-ok", jwt.ClaimHTTPMethod: http.MethodPost,
+			jwt.ClaimHTTPURI: endpoint, jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		request := newRequest(thumbprint(t, key))
+
+		require.NoError(t, h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), request))
+
+		bound, ok := request.GetSession().(oauth2.DPoPBoundSession)
+		require.True(t, ok)
+
+		assert.Equal(t, thumbprint(t, key), bound.GetDPoPJWKThumbprint())
+	})
+}
+
+func TestHandlerPublishesTheValidatedProof(t *testing.T) {
+	newCtx := func(t *testing.T, raw string) context.Context {
+		t.Helper()
+
+		return context.WithValue(ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw), oauth2.DPoPProofContextKey, &oauth2.DPoPProofHolder{})
+	}
+
+	t.Run("ShouldPublishOnSuccess", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+		key := newTestProofKey(t)
+		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "pub-1", jwt.ClaimHTTPMethod: http.MethodPost,
+			jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		ctx := newCtx(t, raw)
+
+		request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+		request.Client = &oauth2.DefaultClient{}
+
+		require.NoError(t, h.BindAccessRequest(ctx, request))
+
+		published := oauth2.GetDPoPProof(ctx)
+		require.NotNil(t, published)
+		assert.NotEmpty(t, published.Thumbprint)
+	})
+
+	t.Run("ShouldPublishNothingWhenValidationFails", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+		key := newTestProofKey(t)
+
+		// 'htm' does not match the request method, so RFC 9449 Section 5 rejects it.
+		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "pub-2", jwt.ClaimHTTPMethod: http.MethodGet,
+			jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		ctx := newCtx(t, raw)
+
+		request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+		request.Client = &oauth2.DefaultClient{}
+
+		assert.Error(t, h.BindAccessRequest(ctx, request))
+		assert.Nil(t, oauth2.GetDPoPProof(ctx))
+	})
+
+	t.Run("ShouldPublishNothingWhenTheThumbprintDoesNotMatch", func(t *testing.T) {
+		h, _, _ := newTestHandler(false)
+		key := newTestProofKey(t)
+		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "pub-3", jwt.ClaimHTTPMethod: http.MethodPost,
+			jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		ctx := newCtx(t, raw)
+
+		session := &oauth2.DefaultSession{}
+		session.SetDPoPJWKThumbprint("a-different-thumbprint")
+
+		request := oauth2.NewAccessRequest(session)
+		request.Client = &oauth2.DefaultClient{}
+
+		assert.Error(t, h.BindAccessRequest(ctx, request))
+		assert.Nil(t, oauth2.GetDPoPProof(ctx))
+	})
+}
+
 const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
 
 type testHandlerConfig struct {
@@ -337,6 +485,18 @@ func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool { return c.enfo
 func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool { return c.nonceRequired }
 
 func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
+
+type nonDPoPSession struct{}
+
+func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
+
+func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time { return time.Time{} }
+
+func (nonDPoPSession) GetUsername() string { return "" }
+
+func (nonDPoPSession) GetSubject() string { return "" }
+
+func (nonDPoPSession) Clone() oauth2.Session { return nonDPoPSession{} }
 
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
@@ -366,15 +526,3 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 
 	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
 }
-
-type nonDPoPSession struct{}
-
-func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
-
-func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time { return time.Time{} }
-
-func (nonDPoPSession) GetUsername() string { return "" }
-
-func (nonDPoPSession) GetSubject() string { return "" }
-
-func (nonDPoPSession) Clone() oauth2.Session { return nonDPoPSession{} }

@@ -51,6 +51,9 @@ type DefaultSession struct {
 	Subject                     string                         `json:"subject,omitempty"`
 	JWKThumbprint               string                         `json:"jwk_thumbprint,omitempty"`
 	ClientCertificateThumbprint string                         `json:"client_certificate_thumbprint,omitempty"`
+	PublicKeyJWK                []byte                         `json:"public_key_jwk,omitempty"`
+	RequestedJWKThumbprint      string                         `json:"requested_jwk_thumbprint,omitempty"`
+	KeyBindingGranted           bool                           `json:"key_binding_granted,omitempty"`
 	RequestedAt                 time.Time                      `json:"requested_at"`
 }
 
@@ -142,6 +145,34 @@ func (s *DefaultSession) GetClientCertificateSHA256Thumbprint() string {
 	return s.ClientCertificateThumbprint
 }
 
+// SetDPoPPublicKeyJWK implements oauth2.DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetDPoPPublicKeyJWK(jwk []byte) {
+	s.PublicKeyJWK = jwk
+}
+
+// GetDPoPPublicKeyJWK implements oauth2.DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetDPoPPublicKeyJWK() (jwk []byte) {
+	if s == nil {
+		return nil
+	}
+
+	return s.PublicKeyJWK
+}
+
+// SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetRequestedDPoPJWKThumbprint(jkt string) {
+	s.RequestedJWKThumbprint = jkt
+}
+
+// GetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetRequestedDPoPJWKThumbprint() (jkt string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.RequestedJWKThumbprint
+}
+
 func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {
 	if s.Headers == nil {
 		s.Headers = &jwt.Headers{}
@@ -163,6 +194,7 @@ type DefaultStrategy struct {
 		oauth2.IDTokenIssuerProvider
 		oauth2.IDTokenLifespanProvider
 		oauth2.MinParameterEntropyProvider
+		oauth2.IDTokenConfirmationConfigProvider
 	}
 }
 
@@ -294,6 +326,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	claims.Audience = stringslice.Unique(append(claims.Audience, request.GetClient().GetID()))
 	claims.IssuedAt = jwt.Now()
 
+	// OpenID Connect Key Binding 1.0 Section 4. Applied last so the confirmation reflects the final claim set, and
+	// before the headers are read by Encode.
+	if err = oauth2.ApplyIDTokenConfirmation(ctx, h.Config, claims, session.IDTokenHeaders()); err != nil {
+		return "", err
+	}
+
 	token, _, err = h.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
@@ -328,6 +366,20 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	)
 
 	return token, err
+}
+
+// SetOIDCKeyBindingGranted implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) SetOIDCKeyBindingGranted(granted bool) {
+	s.KeyBindingGranted = granted
+}
+
+// GetOIDCKeyBindingGranted implements DPoPBoundSession for DefaultSession.
+func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
+	if s == nil {
+		return false
+	}
+
+	return s.KeyBindingGranted
 }
 
 var (

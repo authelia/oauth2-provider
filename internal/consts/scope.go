@@ -9,6 +9,7 @@ const (
 	ScopeOffline       = "offline"
 	ScopeOfflineAccess = "offline_access"
 	ScopeEmail         = "email"
+	ScopeBoundKey      = "bound_key"
 )
 
 // The following scopes are special scopes for particular purposes.

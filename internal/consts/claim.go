@@ -44,6 +44,8 @@ const (
 	ClaimHTTPMethod                          = "htm"
 	ClaimHTTPURI                             = "htu"
 	ClaimDPoPAccessTokenHash                 = "ath"
+	ClaimConfirmationJWK                     = "jwk"
+	ClaimDPoPCodeHash                        = "c_s256"
 )
 
 const (

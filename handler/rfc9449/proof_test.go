@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -173,32 +174,6 @@ func TestParseProof(t *testing.T) {
 	}
 }
 
-var testAlgs = []jose.SignatureAlgorithm{jose.ES256}
-
-func newTestProofKey(t *testing.T) *jose.JSONWebKey {
-	t.Helper()
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	return &jose.JSONWebKey{Key: priv, Algorithm: string(jose.ES256)}
-}
-
-func signProof(t *testing.T, key *jose.JSONWebKey, typ string, claims map[string]any) string {
-	t.Helper()
-
-	signer, err := jose.NewSigner(
-		jose.SigningKey{Algorithm: jose.SignatureAlgorithm(key.Algorithm), Key: key},
-		(&jose.SignerOptions{EmbedJWK: true}).WithType(jose.ContentType(typ)),
-	)
-	require.NoError(t, err)
-
-	raw, err := jwt.Signed(signer).Claims(claims).Serialize()
-	require.NoError(t, err)
-
-	return raw
-}
-
 func TestParseProofRSAKeySize(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -277,6 +252,115 @@ func TestParseProofAcceptsEllipticAndEdDSAKeys(t *testing.T) {
 	})
 }
 
+func TestParseProofRejectsUnsignedAndSymmetricProofs(t *testing.T) {
+	claims := map[string]any{
+		ijwt.ClaimJWTID:      "alg-1",
+		ijwt.ClaimHTTPMethod: http.MethodPost,
+		ijwt.ClaimHTTPURI:    "https://as.example.com/token",
+		ijwt.ClaimIssuedAt:   1000,
+	}
+
+	t.Run("ShouldRejectAlgNone", func(t *testing.T) {
+		raw := signProofNoneRaw(t, newTestProofKey(t), ijwt.JSONWebTokenTypeDPoP, claims)
+
+		for _, algs := range [][]jose.SignatureAlgorithm{
+			{jose.ES256},
+			{"none"},
+			{jose.ES256, "none"},
+		} {
+			_, err := ParseProof(raw, algs)
+
+			assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof, "the unsigned proof was accepted with the algorithms %v", algs)
+		}
+	})
+
+	t.Run("ShouldRejectASymmetricAlgorithm", func(t *testing.T) {
+		secret := []byte("0123456789abcdef0123456789abcdef")
+
+		signer, err := jose.NewSigner(
+			jose.SigningKey{Algorithm: jose.HS256, Key: secret},
+			(&jose.SignerOptions{}).
+				WithType(jose.ContentType(ijwt.JSONWebTokenTypeDPoP)).
+				WithHeader("jwk", map[string]any{"kty": "oct", "k": base64.RawURLEncoding.EncodeToString(secret)}),
+		)
+		require.NoError(t, err)
+
+		raw, err := jwt.Signed(signer).Claims(claims).Serialize()
+		require.NoError(t, err)
+
+		_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.HS256})
+
+		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	})
+}
+
+func TestParseProof_JWKAndCodeHash(t *testing.T) {
+	key := newTestProofKey(t)
+
+	t.Run("ShouldParseCodeHashAndJWK", func(t *testing.T) {
+		raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+			ijwt.ClaimJWTID:        "p1",
+			ijwt.ClaimHTTPMethod:   http.MethodPost,
+			ijwt.ClaimHTTPURI:      "https://as.example.com/token",
+			ijwt.ClaimIssuedAt:     time.Now().Unix(),
+			ijwt.ClaimDPoPCodeHash: "o1uBp9eSe3DsmScN0jYriFgKKFdK-BLywC9WRpV5GG8",
+		})
+
+		proof, err := ParseProof(raw, []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+
+		assert.Equal(t, "o1uBp9eSe3DsmScN0jYriFgKKFdK-BLywC9WRpV5GG8", proof.CodeHash)
+
+		require.NotNil(t, proof.JWK)
+		assert.True(t, proof.JWK.IsPublic())
+
+		thumbprint, err := ijwt.ThumbprintJWK(proof.JWK)
+		require.NoError(t, err)
+		assert.Equal(t, proof.Thumbprint, thumbprint)
+	})
+
+	t.Run("ShouldLeaveCodeHashEmptyWhenAbsent", func(t *testing.T) {
+		raw := signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{
+			ijwt.ClaimJWTID:      "p2",
+			ijwt.ClaimHTTPMethod: http.MethodPost,
+			ijwt.ClaimHTTPURI:    "https://as.example.com/token",
+			ijwt.ClaimIssuedAt:   time.Now().Unix(),
+		})
+
+		proof, err := ParseProof(raw, []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+
+		assert.Empty(t, proof.CodeHash)
+		assert.NotNil(t, proof.JWK)
+	})
+}
+
+var testAlgs = []jose.SignatureAlgorithm{jose.ES256}
+
+func newTestProofKey(t *testing.T) *jose.JSONWebKey {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	return &jose.JSONWebKey{Key: priv, Algorithm: string(jose.ES256)}
+}
+
+func signProof(t *testing.T, key *jose.JSONWebKey, typ string, claims map[string]any) string {
+	t.Helper()
+
+	signer, err := jose.NewSigner(
+		jose.SigningKey{Algorithm: jose.SignatureAlgorithm(key.Algorithm), Key: key},
+		(&jose.SignerOptions{EmbedJWK: true}).WithType(jose.ContentType(typ)),
+	)
+	require.NoError(t, err)
+
+	raw, err := jwt.Signed(signer).Claims(claims).Serialize()
+	require.NoError(t, err)
+
+	return raw
+}
+
 func signProofRSARaw(t *testing.T, priv *rsa.PrivateKey, typ string, claims map[string]any) string {
 	t.Helper()
 
@@ -301,4 +385,25 @@ func signProofRSARaw(t *testing.T, priv *rsa.PrivateKey, typ string, claims map[
 	require.NoError(t, err)
 
 	return signing + "." + base64.RawURLEncoding.EncodeToString(signature)
+}
+
+func signProofNoneRaw(t *testing.T, key *jose.JSONWebKey, typ string, claims map[string]any) string {
+	t.Helper()
+
+	public := key.Public()
+
+	jwk, err := public.MarshalJSON()
+	require.NoError(t, err)
+
+	header, err := json.Marshal(map[string]any{
+		"alg": "none",
+		"typ": typ,
+		"jwk": json.RawMessage(jwk),
+	})
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(claims)
+	require.NoError(t, err)
+
+	return base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + "."
 }

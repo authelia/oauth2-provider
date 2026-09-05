@@ -407,3 +407,106 @@ func (c *TokenExchangeGrantHandler) CanHandleTokenEndpointRequest(ctx context.Co
 	// grant_type REQUIRED.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
+
+type tokenBinding struct {
+	jkt string
+	x5t string
+}
+
+func (b tokenBinding) none() bool {
+	return b.jkt == "" && b.x5t == ""
+}
+
+func bindingOf(session oauth2.Session) (binding tokenBinding) {
+	if session == nil {
+		return binding
+	}
+
+	if bound, ok := session.(oauth2.DPoPBoundSession); ok {
+		binding.jkt = bound.GetDPoPJWKThumbprint()
+	}
+
+	if bound, ok := session.(oauth2.MTLSBoundSession); ok {
+		binding.x5t = bound.GetClientCertificateSHA256Thumbprint()
+	}
+
+	return binding
+}
+
+// bindingOfConfirmation reads the proof-of-possession binding a stateless presented token asserts in its own RFC 7800
+// 'cnf' claim.
+func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err error) {
+	var key string
+
+	if key, err = oauth2.GetOIDCKeyBindingConfirmationJWKThumbprint(claims); err != nil {
+		return tokenBinding{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'cnf' claim of the presented token carries a 'jwk' that could not be read as a JSON Web Key.").WithWrap(err).WithDebugError(err))
+	}
+
+	binding.jkt = oauth2.GetDPoPConfirmationJWKThumbprint(claims)
+	binding.x5t = oauth2.GetMTLSConfirmationX509SHA256Thumbprint(claims)
+
+	switch {
+	case binding.jkt == "":
+		binding.jkt = key
+	case key != "" && key != binding.jkt:
+		return tokenBinding{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'cnf' claim of the presented token carries a 'jkt' and a 'jwk' that identify different keys."))
+	}
+
+	return binding, nil
+}
+
+// clearInheritedKeyBinding removes the OpenID Connect Key Binding state a restored token session may have deposited on
+// the exchange request's session.
+func clearInheritedKeyBinding(session oauth2.Session) {
+	bound, ok := session.(oauth2.DPoPBoundSession)
+	if !ok {
+		return
+	}
+
+	bound.SetOIDCKeyBindingGranted(false)
+	bound.SetDPoPPublicKeyJWK(nil)
+	bound.SetRequestedDPoPJWKThumbprint("")
+}
+
+// inheritTokenBinding carries a subject or actor token's proof-of-possession binding onto the exchange request, so the
+// issued token inherits the sender constraint rather than silently shedding it.
+//
+// It records the binding only. Enforcement is left to the token endpoint binding phase, which already implements it:
+// both rfc9449.Handler and rfc8705.Handler treat a binding recorded on the session as making the corresponding proof
+// or certificate mandatory, reject one that does not match, and record the presented key onto the issued token. That
+// phase runs after every handler that calls this one, so recording here is enough.
+func inheritTokenBinding(request oauth2.AccessRequester, incoming tokenBinding, role tokenRole, prior tokenBinding) (err error) {
+	session := request.GetSession()
+
+	clearInheritedKeyBinding(session)
+
+	if incoming.none() {
+		return nil
+	}
+
+	// Section 2.2.2 mandates 'invalid_request' when a subject or actor token is unacceptable based on policy, which
+	// is what this is; it is not 'invalid_grant', despite the fault lying in the tokens rather than the syntax.
+	if !prior.none() && prior != incoming {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token and the actor token are bound to different keys or certificates, and the issued token can only carry one binding."))
+	}
+
+	if incoming.jkt != "" {
+		bound, ok := session.(oauth2.DPoPBoundSession)
+		if !ok {
+			return errorsx.WithStack(oauth2.ErrServerError.WithHintf("The session does not support DPoP binding, which is required to exchange %s bound to a DPoP proof-of-possession key.", role.hint()))
+		}
+
+		bound.SetDPoPJWKThumbprint(incoming.jkt)
+	}
+
+	if incoming.x5t != "" {
+		bound, ok := session.(oauth2.MTLSBoundSession)
+		if !ok {
+			return errorsx.WithStack(oauth2.ErrServerError.WithHintf("The session does not support mutual-TLS certificate binding, which is required to exchange %s bound to a client certificate.", role.hint()))
+		}
+
+		bound.SetClientCertificateSHA256Thumbprint(incoming.x5t)
+	}
+
+	return nil
+}

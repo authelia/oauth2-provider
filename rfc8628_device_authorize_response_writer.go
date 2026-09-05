@@ -15,6 +15,12 @@ func (f *Fosite) NewRFC862DeviceAuthorizeResponse(ctx context.Context, r DeviceA
 
 	var resp = NewDeviceAuthorizeResponse()
 
+	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx) {
+		if err := h.BindRFC8628DeviceAuthorizeRequest(ctx, r); err != nil {
+			return nil, err
+		}
+	}
+
 	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointHandlers(ctx) {
 		if err := h.HandleRFC8628DeviceAuthorizeEndpointRequest(ctx, r, resp); err != nil {
 			return nil, err

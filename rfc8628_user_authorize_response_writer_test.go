@@ -31,6 +31,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldPassWithSingleHandler",
 			handlers: 1,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 				handlers[0].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
 			},
@@ -39,6 +40,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldFailWhenHandlerReturnsError",
 			handlers: 1,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 				handlers[0].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(handlerErr)
 			},
@@ -48,6 +50,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldFailWhenHandlerReturnsRFC6749Error",
 			handlers: 1,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 				handlers[0].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(errorsx.WithStack(ErrInvalidRequest.WithHint("User authorize response failed.")))
 			},
@@ -57,6 +60,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldPassWithMultipleHandlers",
 			handlers: 2,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 				handlers[0].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
 				handlers[1].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
@@ -66,6 +70,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldFailWhenSecondHandlerReturnsError",
 			handlers: 2,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 				handlers[0].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(nil)
 				handlers[1].EXPECT().PopulateRFC8628UserAuthorizeEndpointResponse(gomock.Any(), gomock.Eq(dar), gomock.Any()).Return(handlerErr)
@@ -76,6 +81,7 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			name:     "ShouldPassWithNoHandlers",
 			handlers: 0,
 			mock: func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler, dar *mock.MockDeviceAuthorizeRequester) {
+				dar.EXPECT().GetSession().Return(nil)
 				dar.EXPECT().SetSession(gomock.Any())
 			},
 		},

@@ -17,7 +17,7 @@ import (
 
 func TestConfig_GetIDTokenValidationStrategy(t *testing.T) {
 	c := &Config{}
-	assert.Nil(t, c.GetIDTokenValidationStrategy(t.Context()), "must be nil when unconfigured")
+	assert.Nil(t, c.GetIDTokenValidationStrategy(t.Context()))
 
 	strategy := &testTokenValidationStrategy{}
 	c.IDTokenValidationStrategy = strategy
@@ -140,24 +140,12 @@ func TestConfigIntrospectionEndpointClientAuthDisabled(t *testing.T) {
 func TestConfigRFC7591ClientRegistrationMetadataStrategy(t *testing.T) {
 	config := &Config{}
 
-	assert.Nil(t, config.GetRFC7591ClientRegistrationMetadataStrategy(t.Context()), "must be nil when unconfigured")
+	assert.Nil(t, config.GetRFC7591ClientRegistrationMetadataStrategy(t.Context()))
 
 	strategy := &testClientRegistrationMetadataStrategy{}
 	config.RFC7591ClientRegistrationMetadataStrategy = strategy
 
 	assert.Same(t, strategy, config.GetRFC7591ClientRegistrationMetadataStrategy(t.Context()))
-}
-
-type testClientRegistrationMetadataStrategy struct{}
-
-func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
-	return nil
-}
-
-type testTokenValidationStrategy struct{}
-
-func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
-	return nil, nil
 }
 
 func TestConfig_LazyDefaultsAreConcurrencySafe(t *testing.T) {
@@ -258,4 +246,28 @@ func TestConfig_GetDPoPAllowedJWSAlgorithmsEdDSAValues(t *testing.T) {
 	assert.NotContains(t, algs, "Ed448", "registered by RFC 9864 but not implemented by token/jose")
 
 	assert.Equal(t, []string{"a"}, (&Config{DPoPAllowedJWSAlgorithms: []string{"a"}}).GetDPoPAllowedJWSAlgorithms(t.Context()))
+}
+
+func TestConfig_GetOIDCKeyBindingEnabled(t *testing.T) {
+	config := &Config{}
+
+	assert.False(t, config.GetOIDCKeyBindingEnabled(t.Context()))
+
+	config.OIDCKeyBindingEnabled = true
+
+	assert.True(t, config.GetOIDCKeyBindingEnabled(t.Context()))
+
+	var _ OIDCKeyBindingConfigProvider = config
+}
+
+type testClientRegistrationMetadataStrategy struct{}
+
+func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
+	return nil
+}
+
+type testTokenValidationStrategy struct{}
+
+func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
+	return nil, nil
 }

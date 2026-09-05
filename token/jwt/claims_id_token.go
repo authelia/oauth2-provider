@@ -33,6 +33,7 @@ type IDTokenClaims struct {
 	AccessTokenHash                     string         `json:"at_hash,omitempty"`
 	CodeHash                            string         `json:"c_hash,omitempty"`
 	StateHash                           string         `json:"s_hash,omitempty"`
+	Confirmation                        map[string]any `json:"cnf,omitempty"`
 	Extra                               map[string]any `json:"ext,omitempty"`
 }
 
@@ -229,6 +230,8 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 			c.CodeHash, ok = value.(string)
 		case ClaimStateHash:
 			c.StateHash, ok = value.(string)
+		case ClaimConfirmation:
+			c.Confirmation, ok = value.(map[string]any)
 		case ClaimExtra:
 			c.Extra, ok = value.(map[string]any)
 		default:
@@ -343,6 +346,12 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 		delete(ret, ClaimStateHash)
 	}
 
+	if len(c.Confirmation) > 0 {
+		ret[ClaimConfirmation] = c.Confirmation
+	} else {
+		delete(ret, ClaimConfirmation)
+	}
+
 	return ret
 }
 
@@ -411,6 +420,10 @@ func (c *IDTokenClaims) FromMap(m map[string]any) {
 		case ClaimStateHash:
 			if s, ok := v.(string); ok {
 				c.StateHash = s
+			}
+		case ClaimConfirmation:
+			if cnf, ok := v.(map[string]any); ok {
+				c.Confirmation = cnf
 			}
 		case ClaimExtra:
 			if extra, ok := v.(map[string]any); ok {

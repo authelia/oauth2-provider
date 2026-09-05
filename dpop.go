@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jose"
 )
 
 // DPoPJWKThumbprintLength is the length of a well-formed 'dpop_jkt' value, being the number of characters a 32 byte
@@ -78,6 +79,11 @@ type DPoPProof struct {
 	// Thumbprint is the RFC 7638 base64url SHA-256 JWK Thumbprint (jkt) of the proof's public key.
 	Thumbprint string
 
+	// JWK is the public key from the proof's 'jwk' header, of which Thumbprint is the RFC 7638 digest. It is
+	// required by OpenID Connect Key Binding 1.0 Section 4, which puts the key itself into the ID Token's 'cnf'
+	// claim rather than its thumbprint.
+	JWK *jose.JSONWebKey
+
 	// ID is the 'jti' claim.
 	ID string
 
@@ -93,8 +99,45 @@ type DPoPProof struct {
 	// AccessTokenHash is the 'ath' claim, if present. Unused on the authorization-server side.
 	AccessTokenHash string
 
+	// CodeHash is the 'c_s256' claim, if present. It is defined by OpenID Connect Key Binding 1.0 Section 2.3
+	// rather than by RFC 9449, and no RFC 9449 handler reads it; see handler/oidckb.
+	CodeHash string
+
 	// IssuedAt is the 'iat' claim.
 	IssuedAt time.Time
+}
+
+// DPoPProofHolder carries a validated RFC 9449 DPoP proof between the token endpoint binding handlers of a single
+// request.
+//
+// It is deliberately not part of any session. A proof's 'jti', 'iat' and 'nonce' are per-request values, so a session
+// field would persist replay detection state with the grant, where it means nothing once the request has ended.
+type DPoPProofHolder struct {
+	// Proof is the validated proof, or nil when no handler has published one.
+	Proof *DPoPProof
+}
+
+// PublishDPoPProof records a fully validated proof for the binding handlers that run after the caller in the same
+// request.
+//
+// It does nothing when the context carries no holder, which is every dispatch outside the token endpoint's binding
+// phase, because a handler cannot know which phase dispatched it and RFC 9449 handling must not depend on that.
+func PublishDPoPProof(ctx context.Context, proof *DPoPProof) {
+	if holder, ok := ctx.Value(DPoPProofContextKey).(*DPoPProofHolder); ok && holder != nil {
+		holder.Proof = proof
+	}
+}
+
+// GetDPoPProof returns the proof published for this request, or nil when none was published.
+//
+// A returned proof has passed every check RFC 9449 Section 5 requires and matched any binding the grant already
+// carried; see the publish site in handler/rfc9449.
+func GetDPoPProof(ctx context.Context) (proof *DPoPProof) {
+	if holder, ok := ctx.Value(DPoPProofContextKey).(*DPoPProofHolder); ok && holder != nil {
+		return holder.Proof
+	}
+
+	return nil
 }
 
 // DPoPStrategy validates DPoP proofs and manages server-provided nonces per RFC 9449.
@@ -122,12 +165,48 @@ type DPoPResourceStrategy interface {
 	ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *DPoPProof, err error)
 }
 
-// DPoPBoundSession is implemented by sessions that can be bound to a DPoP proof-of-possession key. The binding is the
-// RFC 7638 JWK SHA-256 Thumbprint (jkt) of the client's public key.
+// DPoPBoundSession is implemented by sessions that can be bound to a DPoP proof-of-possession key.
 type DPoPBoundSession interface {
-	// SetDPoPJWKThumbprint records the JWK thumbprint (jkt) the token is bound to.
+	// SetDPoPJWKThumbprint records the RFC 7638 JWK SHA-256 Thumbprint (jkt) the token is bound to.
 	SetDPoPJWKThumbprint(jkt string)
 
 	// GetDPoPJWKThumbprint returns the bound JWK thumbprint, or an empty string when the session is not DPoP bound.
 	GetDPoPJWKThumbprint() (jkt string)
+
+	// SetRequestedDPoPJWKThumbprint records the RFC 9449 Section 10.1 'dpop_jkt' the authentication request carried.
+	//
+	// Only the authorization and device authorization endpoints record it. The token endpoint must not, because
+	// OpenID Connect Key Binding 1.0 Section 2.3 distinguishes a grant whose authentication request asked to be
+	// bound from one that merely presented a proof, and SetDPoPJWKThumbprint cannot express that difference: RFC 9449
+	// binds an access token to the presented key either way.
+	SetRequestedDPoPJWKThumbprint(jkt string)
+
+	// GetRequestedDPoPJWKThumbprint returns the 'dpop_jkt' the authentication request carried, or an empty string
+	// when it carried none.
+	GetRequestedDPoPJWKThumbprint() (jkt string)
+
+	// SetDPoPPublicKeyJWK records the proof-of-possession public key an ID Token is bound to, as the raw JWK JSON
+	// from the proof's 'jwk' header.
+	//
+	// OpenID Connect Key Binding 1.0 Section 4 requires the key itself in the 'cnf' claim rather than its
+	// thumbprint, and a thumbprint is one-way, so the key cannot be recovered from SetDPoPJWKThumbprint's value.
+	SetDPoPPublicKeyJWK(jwk []byte)
+
+	// GetDPoPPublicKeyJWK returns the bound public key, or nil when the session is not key bound.
+	GetDPoPPublicKeyJWK() (jwk []byte)
+
+	// SetOIDCKeyBindingGranted records that the 'bound_key' scope was granted, so that the ID Tokens of this grant
+	// are key bound.
+	//
+	// It is recorded where consent has already decided it; the authorization endpoint, and for the device flow the
+	// user authorization endpoint; because the token endpoint's binding phase runs before the authorization code
+	// and device code grants copy their granted scopes onto the request.
+	//
+	// Neither thumbprint answers this. They record that DPoP is in play and that the authentication request asked
+	// to be bound; a grant that requested 'bound_key' and was granted only 'openid' carries both and is not key
+	// bound.
+	SetOIDCKeyBindingGranted(granted bool)
+
+	// GetOIDCKeyBindingGranted returns whether the 'bound_key' scope was granted for this grant.
+	GetOIDCKeyBindingGranted() (granted bool)
 }

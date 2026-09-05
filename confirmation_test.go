@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -213,7 +214,7 @@ func TestConfirmationRoundTrip(t *testing.T) {
 			ApplyConfirmation(context.Background(), &Config{DPoPEnabled: true, MTLSEnabled: true}, claims, source)
 
 			cnf, ok := claims[jwt.ClaimConfirmation].(map[string]any)
-			require.True(t, ok, "expected cnf to be present and a map, got %#v", claims[jwt.ClaimConfirmation])
+			require.Truef(t, ok, "cnf is absent or not a map, got %#v", claims[jwt.ClaimConfirmation])
 			assert.Equal(t, "round-trip-value", cnf[method.name])
 
 			restored := &DefaultSession{}
@@ -344,6 +345,212 @@ func TestDefaultSessionMTLSBinding(t *testing.T) {
 	assert.Equal(t, "test-x5t", session.GetClientCertificateSHA256Thumbprint())
 }
 
+func TestApplyIDTokenConfirmation(t *testing.T) {
+	const rawJWK = `{"crv":"P-256","kty":"EC","x":"x","y":"y"}`
+
+	newRequest := func(grant string, scopes []string, jwk []byte) *AccessRequest {
+		session := &DefaultSession{}
+
+		if jwk != nil {
+			session.SetDPoPJWKThumbprint("thumbprint")
+			session.SetRequestedDPoPJWKThumbprint("thumbprint")
+			session.SetDPoPPublicKeyJWK(jwk)
+		}
+
+		if Arguments(scopes).Has(consts.ScopeBoundKey) {
+			session.SetOIDCKeyBindingGranted(true)
+		}
+
+		request := NewAccessRequest(session)
+		request.GrantTypes = Arguments{grant}
+		request.GrantedScope = Arguments(scopes)
+
+		return request
+	}
+
+	testCases := []struct {
+		name     string
+		enabled  bool
+		request  *AccessRequest
+		expected bool
+		err      string
+	}{
+		{
+			name:     "ShouldEmitForAuthorizationCode",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeAuthorizationCode, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, []byte(rawJWK)),
+			expected: true,
+		},
+		{
+			name:     "ShouldEmitForDeviceCode",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeOAuthDeviceCode, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, []byte(rawJWK)),
+			expected: true,
+		},
+		{
+			name:     "ShouldEmitForRefreshToken",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeRefreshToken, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, []byte(rawJWK)),
+			expected: true,
+		},
+		{
+			name:     "ShouldNotEmitWhenDisabled",
+			enabled:  false,
+			request:  newRequest(consts.GrantTypeAuthorizationCode, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, []byte(rawJWK)),
+			expected: false,
+		},
+		{
+			name:     "ShouldNotEmitForTokenExchange",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeOAuthTokenExchange, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, []byte(rawJWK)),
+			expected: false,
+		},
+		{
+			name:     "ShouldNotEmitWhenBoundKeyNotGranted",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeAuthorizationCode, []string{consts.ScopeOpenID}, []byte(rawJWK)),
+			expected: false,
+		},
+		{
+			name:     "ShouldNotEmitWhenNoKeyRecordedAndNotBound",
+			enabled:  true,
+			request:  newRequest(consts.GrantTypeAuthorizationCode, []string{consts.ScopeOpenID}, nil),
+			expected: false,
+		},
+		{
+			name:    "ShouldErrorWhenBoundKeyGrantedButUnproven",
+			enabled: true,
+			request: func() *AccessRequest {
+				r := newRequest(consts.GrantTypeAuthorizationCode, []string{consts.ScopeOpenID, consts.ScopeBoundKey}, nil)
+				r.GetSession().(*DefaultSession).SetDPoPJWKThumbprint("thumbprint")
+
+				return r
+			}(),
+			expected: false,
+			err:      "The request requires a DPoP proof",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.WithValue(t.Context(), AccessRequestContextKey, AccessRequester(tc.request))
+
+			claims, headers := &jwt.IDTokenClaims{Subject: "sub"}, &jwt.Headers{}
+
+			err := ApplyIDTokenConfirmation(ctx, &Config{OIDCKeyBindingEnabled: tc.enabled, DPoPEnabled: true}, claims, headers)
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if !tc.expected {
+				assert.Empty(t, claims.Confirmation)
+				assert.Nil(t, headers.Get(jwt.JSONWebTokenHeaderType))
+
+				return
+			}
+
+			require.NotNil(t, claims.Confirmation)
+			assert.Equal(t, jwt.JSONWebTokenTypeDPoPIDToken, headers.Get(jwt.JSONWebTokenHeaderType))
+
+			key, ok := claims.Confirmation[jwt.ClaimConfirmationJWK].(map[string]any)
+			require.True(t, ok)
+			assert.Equal(t, "EC", key["kty"])
+		})
+	}
+}
+
+func TestApplyIDTokenConfirmation_NoAccessRequestInContext(t *testing.T) {
+	claims, headers := &jwt.IDTokenClaims{Subject: "sub"}, &jwt.Headers{}
+
+	require.NoError(t, ApplyIDTokenConfirmation(t.Context(), &Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}, claims, headers))
+
+	assert.Empty(t, claims.Confirmation)
+	assert.Nil(t, headers.Get(jwt.JSONWebTokenHeaderType))
+}
+
+func TestApplyIDTokenConfirmation_ClearsPreexistingConfirmation(t *testing.T) {
+	claims := &jwt.IDTokenClaims{Subject: "sub", Confirmation: map[string]any{"jkt": "spoofed"}}
+
+	require.NoError(t, ApplyIDTokenConfirmation(t.Context(), &Config{}, claims, &jwt.Headers{}))
+
+	assert.Empty(t, claims.Confirmation)
+}
+
+func TestApplyIDTokenConfirmation_ClearsPreexistingHeaderType(t *testing.T) {
+	t.Run("ShouldRemoveTheKeyBindingType", func(t *testing.T) {
+		claims := &jwt.IDTokenClaims{Subject: "sub"}
+		headers := &jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeDPoPIDToken}}
+
+		require.NoError(t, ApplyIDTokenConfirmation(t.Context(), &Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}, claims, headers))
+
+		assert.Empty(t, claims.Confirmation)
+		assert.Nil(t, headers.Get(jwt.JSONWebTokenHeaderType))
+	})
+
+	t.Run("ShouldPreserveADeploymentsOwnType", func(t *testing.T) {
+		claims := &jwt.IDTokenClaims{Subject: "sub"}
+		headers := &jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: "JWT"}}
+
+		require.NoError(t, ApplyIDTokenConfirmation(t.Context(), &Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}, claims, headers))
+
+		assert.Empty(t, claims.Confirmation)
+		assert.Equal(t, "JWT", headers.Get(jwt.JSONWebTokenHeaderType))
+	})
+}
+
+func TestApplyIDTokenConfirmation_NilHeaders(t *testing.T) {
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint("thumbprint")
+	session.SetRequestedDPoPJWKThumbprint("thumbprint")
+	session.SetOIDCKeyBindingGranted(true)
+	session.SetDPoPPublicKeyJWK([]byte(`{"crv":"P-256","kty":"EC","x":"x","y":"y"}`))
+
+	request := NewAccessRequest(session)
+	request.GrantTypes = Arguments{consts.GrantTypeAuthorizationCode}
+	request.GrantedScope = Arguments{consts.ScopeOpenID, consts.ScopeBoundKey}
+
+	ctx := context.WithValue(t.Context(), AccessRequestContextKey, AccessRequester(request))
+
+	claims := &jwt.IDTokenClaims{Subject: "peter"}
+
+	err := ApplyIDTokenConfirmation(ctx, &Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}, claims, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrServerError)
+	assert.Empty(t, claims.Confirmation)
+}
+
+func TestApplyIDTokenConfirmation_DPoPDisabled(t *testing.T) {
+	session := &DefaultSession{}
+	session.SetDPoPJWKThumbprint("thumbprint")
+	session.SetRequestedDPoPJWKThumbprint("thumbprint")
+	session.SetOIDCKeyBindingGranted(true)
+	session.SetDPoPPublicKeyJWK([]byte(`{"crv":"P-256","kty":"EC","x":"x","y":"y"}`))
+
+	request := NewAccessRequest(session)
+	request.GrantTypes = Arguments{consts.GrantTypeRefreshToken}
+	request.GrantedScope = Arguments{consts.ScopeOpenID, consts.ScopeBoundKey}
+
+	ctx := context.WithValue(t.Context(), AccessRequestContextKey, AccessRequester(request))
+
+	claims, headers := &jwt.IDTokenClaims{Subject: "peter"}, &jwt.Headers{}
+
+	require.NoError(t, ApplyIDTokenConfirmation(ctx, &Config{OIDCKeyBindingEnabled: true, DPoPEnabled: false}, claims, headers))
+
+	assert.Empty(t, claims.Confirmation)
+	assert.Nil(t, headers.Get(consts.JSONWebTokenHeaderType))
+}
+
+type plainSession struct {
+	Session
+}
+
 func confirmationSessionMTLS(jkt, x5t string) Session {
 	session := &DefaultSession{}
 	session.SetDPoPJWKThumbprint(jkt)
@@ -357,8 +564,4 @@ func confirmationSession(jkt string) Session {
 	session.SetDPoPJWKThumbprint(jkt)
 
 	return session
-}
-
-type plainSession struct {
-	Session
 }

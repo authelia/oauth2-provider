@@ -14,22 +14,6 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-type composeAuthorizeBinder struct{}
-
-func (c *composeAuthorizeBinder) BindAuthorizeRequest(context.Context, oauth2.AuthorizeRequester) error {
-	return nil
-}
-
-type composeTokenBinder struct{}
-
-func (c *composeTokenBinder) BindAccessRequest(context.Context, oauth2.AccessRequester) error {
-	return nil
-}
-
-func (c *composeTokenBinder) PopulateBoundTokenEndpointResponse(context.Context, oauth2.AccessRequester, oauth2.AccessResponder) error {
-	return nil
-}
-
 func TestComposeRegistersBindingHandlers(t *testing.T) {
 	config := &oauth2.Config{GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
 
@@ -46,4 +30,20 @@ func TestComposeRegistersBindingHandlers(t *testing.T) {
 
 	assert.Empty(t, config.GetAuthorizeEndpointHandlers(context.Background()))
 	assert.Empty(t, config.GetTokenEndpointHandlers(context.Background()))
+}
+
+type composeAuthorizeBinder struct{}
+
+func (c *composeAuthorizeBinder) BindAuthorizeRequest(context.Context, oauth2.AuthorizeRequester) error {
+	return nil
+}
+
+type composeTokenBinder struct{}
+
+func (c *composeTokenBinder) BindAccessRequest(context.Context, oauth2.AccessRequester) error {
+	return nil
+}
+
+func (c *composeTokenBinder) PopulateBoundTokenEndpointResponse(context.Context, oauth2.AccessRequester, oauth2.AccessResponder) error {
+	return nil
 }

@@ -263,6 +263,10 @@ type Config struct {
 	// an access request a grant handler has accepted.
 	TokenEndpointBindingHandlers TokenEndpointBindingHandlers
 
+	// RFC8628DeviceAuthorizeEndpointBindingHandlers is a list of handlers that record a proof-of-possession binding
+	// on a device authorization request before the device authorization endpoint handlers run.
+	RFC8628DeviceAuthorizeEndpointBindingHandlers RFC8628DeviceAuthorizeEndpointBindingHandlers
+
 	// TokenIntrospectionHandlers is a list of handlers that are called before the token introspection endpoint is served.
 	TokenIntrospectionHandlers TokenIntrospectionHandlers
 
@@ -350,6 +354,10 @@ type Config struct {
 
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
+
+	// OIDCKeyBindingEnabled enables OpenID Connect Key Binding 1.0, which issues an ID Token carrying the 'cnf'
+	// claim of a DPoP proof-of-possession key. Requires DPoPEnabled. Defaults to false.
+	OIDCKeyBindingEnabled bool
 
 	// MTLSEnabled enables RFC 8705 Mutual-TLS handling.
 	MTLSEnabled bool
@@ -460,6 +468,10 @@ func (c *Config) GetAuthorizeEndpointBindingHandlers(ctx context.Context) Author
 
 func (c *Config) GetTokenEndpointBindingHandlers(ctx context.Context) TokenEndpointBindingHandlers {
 	return c.TokenEndpointBindingHandlers
+}
+
+func (c *Config) GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx context.Context) RFC8628DeviceAuthorizeEndpointBindingHandlers {
+	return c.RFC8628DeviceAuthorizeEndpointBindingHandlers
 }
 
 func (c *Config) GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrospectionHandlers {
@@ -995,6 +1007,10 @@ func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {
 	return c.DPoPEnforce
 }
 
+func (c *Config) GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool) {
+	return c.OIDCKeyBindingEnabled
+}
+
 // GetDPoPAllowedJWSAlgorithms returns the asymmetric algorithms a DPoP proof may be signed with.
 //
 // Both Edwards-curve identifiers are listed: 'EdDSA' from RFC 8037 Section 3.1, and the fully-specified 'Ed25519'
@@ -1114,72 +1130,74 @@ func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes
 }
 
 var (
-	_ AuthorizeCodeLifespanProvider                      = (*Config)(nil)
-	_ RefreshTokenLifespanProvider                       = (*Config)(nil)
-	_ AccessTokenLifespanProvider                        = (*Config)(nil)
-	_ ScopeStrategyProvider                              = (*Config)(nil)
-	_ AudienceStrategyProvider                           = (*Config)(nil)
-	_ RedirectSecureCheckerProvider                      = (*Config)(nil)
-	_ RefreshTokenScopesProvider                         = (*Config)(nil)
-	_ DisableRefreshTokenValidationProvider              = (*Config)(nil)
-	_ AccessTokenIssuerProvider                          = (*Config)(nil)
-	_ JWTScopeFieldProvider                              = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeIssuerProvider      = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeStrategyProvider    = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeLifespanProvider    = (*Config)(nil)
-	_ JWTProfileAccessTokensProvider                     = (*Config)(nil)
-	_ AllowedPromptsProvider                             = (*Config)(nil)
-	_ OmitRedirectScopeParamProvider                     = (*Config)(nil)
-	_ MinParameterEntropyProvider                        = (*Config)(nil)
-	_ SanitationAllowedProvider                          = (*Config)(nil)
-	_ EnforcePKCEForPublicClientsProvider                = (*Config)(nil)
-	_ EnablePKCEPlainChallengeMethodProvider             = (*Config)(nil)
-	_ EnforcePKCEProvider                                = (*Config)(nil)
-	_ GrantTypeJWTBearerCanSkipClientAuthProvider        = (*Config)(nil)
-	_ GrantTypeJWTBearerIDOptionalProvider               = (*Config)(nil)
-	_ GrantTypeJWTBearerIssuedDateOptionalProvider       = (*Config)(nil)
-	_ GetJWTMaxDurationProvider                          = (*Config)(nil)
-	_ IDTokenLifespanProvider                            = (*Config)(nil)
-	_ IDTokenIssuerProvider                              = (*Config)(nil)
-	_ IDTokenValidationStrategyProvider                  = (*Config)(nil)
-	_ BackChannelLogoutTokenStrategyProvider             = (*Config)(nil)
-	_ BackChannelLogoutLifespanProvider                  = (*Config)(nil)
-	_ BackChannelLogoutConcurrencyProvider               = (*Config)(nil)
-	_ AuthorizationServerIssuerIdentificationProvider    = (*Config)(nil)
-	_ JWKSFetcherStrategyProvider                        = (*Config)(nil)
-	_ ClientAuthenticationStrategyProvider               = (*Config)(nil)
-	_ SendDebugMessagesToClientsProvider                 = (*Config)(nil)
-	_ ResponseModeHandlerProvider                        = (*Config)(nil)
-	_ MessageCatalogProvider                             = (*Config)(nil)
-	_ FormPostHTMLTemplateProvider                       = (*Config)(nil)
-	_ FormPostResponseProvider                           = (*Config)(nil)
-	_ AllowedJWTAssertionAudiencesProvider               = (*Config)(nil)
-	_ AllowedIntrospectionAudiencesProvider              = (*Config)(nil)
-	_ AllowedIntrospectionScopesProvider                 = (*Config)(nil)
-	_ HTTPClientProvider                                 = (*Config)(nil)
-	_ HMACHashingProvider                                = (*Config)(nil)
-	_ AuthorizeEndpointHandlersProvider                  = (*Config)(nil)
-	_ TokenEndpointHandlersProvider                      = (*Config)(nil)
-	_ AuthorizeEndpointBindingHandlersProvider           = (*Config)(nil)
-	_ TokenEndpointBindingHandlersProvider               = (*Config)(nil)
-	_ TokenIntrospectionHandlersProvider                 = (*Config)(nil)
-	_ RevocationHandlersProvider                         = (*Config)(nil)
-	_ PushedAuthorizeRequestHandlersProvider             = (*Config)(nil)
-	_ PushedAuthorizeRequestConfigProvider               = (*Config)(nil)
-	_ RFC8693ConfigProvider                              = (*Config)(nil)
-	_ RFC8628DeviceAuthorizeConfigProvider               = (*Config)(nil)
-	_ RFC8628DeviceAuthorizeEndpointHandlersProvider     = (*Config)(nil)
-	_ RFC8628UserAuthorizeEndpointHandlersProvider       = (*Config)(nil)
-	_ IntrospectionIssuerProvider                        = (*Config)(nil)
-	_ IntrospectionJWTResponseStrategyProvider           = (*Config)(nil)
-	_ AuthorizeErrorFieldResponseStrategyProvider        = (*Config)(nil)
-	_ TokenEndpointClientAuthStrategyProvider            = (*Config)(nil)
-	_ IntrospectionEndpointClientAuthStrategyProvider    = (*Config)(nil)
-	_ IntrospectionEndpointClientAuthDisabledProvider    = (*Config)(nil)
-	_ RevocationEndpointClientAuthStrategyProvider       = (*Config)(nil)
-	_ DPoPConfigProvider                                 = (*Config)(nil)
-	_ MTLSConfigProvider                                 = (*Config)(nil)
-	_ RFC7591ClientRegistrationConfigProvider            = (*Config)(nil)
-	_ RFC7591ClientRegistrationEndpointHandlersProvider  = (*Config)(nil)
-	_ RFC7592ClientConfigurationEndpointHandlersProvider = (*Config)(nil)
+	_ AuthorizeCodeLifespanProvider                         = (*Config)(nil)
+	_ RefreshTokenLifespanProvider                          = (*Config)(nil)
+	_ AccessTokenLifespanProvider                           = (*Config)(nil)
+	_ ScopeStrategyProvider                                 = (*Config)(nil)
+	_ AudienceStrategyProvider                              = (*Config)(nil)
+	_ RedirectSecureCheckerProvider                         = (*Config)(nil)
+	_ RefreshTokenScopesProvider                            = (*Config)(nil)
+	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
+	_ AccessTokenIssuerProvider                             = (*Config)(nil)
+	_ JWTScopeFieldProvider                                 = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeIssuerProvider         = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeStrategyProvider       = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeLifespanProvider       = (*Config)(nil)
+	_ JWTProfileAccessTokensProvider                        = (*Config)(nil)
+	_ AllowedPromptsProvider                                = (*Config)(nil)
+	_ OmitRedirectScopeParamProvider                        = (*Config)(nil)
+	_ MinParameterEntropyProvider                           = (*Config)(nil)
+	_ SanitationAllowedProvider                             = (*Config)(nil)
+	_ EnforcePKCEForPublicClientsProvider                   = (*Config)(nil)
+	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
+	_ EnforcePKCEProvider                                   = (*Config)(nil)
+	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
+	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)
+	_ GrantTypeJWTBearerIssuedDateOptionalProvider          = (*Config)(nil)
+	_ GetJWTMaxDurationProvider                             = (*Config)(nil)
+	_ IDTokenLifespanProvider                               = (*Config)(nil)
+	_ IDTokenIssuerProvider                                 = (*Config)(nil)
+	_ IDTokenValidationStrategyProvider                     = (*Config)(nil)
+	_ BackChannelLogoutTokenStrategyProvider                = (*Config)(nil)
+	_ BackChannelLogoutLifespanProvider                     = (*Config)(nil)
+	_ BackChannelLogoutConcurrencyProvider                  = (*Config)(nil)
+	_ AuthorizationServerIssuerIdentificationProvider       = (*Config)(nil)
+	_ JWKSFetcherStrategyProvider                           = (*Config)(nil)
+	_ ClientAuthenticationStrategyProvider                  = (*Config)(nil)
+	_ SendDebugMessagesToClientsProvider                    = (*Config)(nil)
+	_ ResponseModeHandlerProvider                           = (*Config)(nil)
+	_ MessageCatalogProvider                                = (*Config)(nil)
+	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)
+	_ FormPostResponseProvider                              = (*Config)(nil)
+	_ AllowedJWTAssertionAudiencesProvider                  = (*Config)(nil)
+	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
+	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
+	_ HTTPClientProvider                                    = (*Config)(nil)
+	_ HMACHashingProvider                                   = (*Config)(nil)
+	_ AuthorizeEndpointHandlersProvider                     = (*Config)(nil)
+	_ TokenEndpointHandlersProvider                         = (*Config)(nil)
+	_ AuthorizeEndpointBindingHandlersProvider              = (*Config)(nil)
+	_ TokenEndpointBindingHandlersProvider                  = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeEndpointBindingHandlersProvider = (*Config)(nil)
+	_ TokenIntrospectionHandlersProvider                    = (*Config)(nil)
+	_ RevocationHandlersProvider                            = (*Config)(nil)
+	_ PushedAuthorizeRequestHandlersProvider                = (*Config)(nil)
+	_ PushedAuthorizeRequestConfigProvider                  = (*Config)(nil)
+	_ RFC8693ConfigProvider                                 = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeConfigProvider                  = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeEndpointHandlersProvider        = (*Config)(nil)
+	_ RFC8628UserAuthorizeEndpointHandlersProvider          = (*Config)(nil)
+	_ IntrospectionIssuerProvider                           = (*Config)(nil)
+	_ IntrospectionJWTResponseStrategyProvider              = (*Config)(nil)
+	_ AuthorizeErrorFieldResponseStrategyProvider           = (*Config)(nil)
+	_ TokenEndpointClientAuthStrategyProvider               = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
+	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
+	_ DPoPConfigProvider                                    = (*Config)(nil)
+	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
+	_ MTLSConfigProvider                                    = (*Config)(nil)
+	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
+	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
+	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)
 )

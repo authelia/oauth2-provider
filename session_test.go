@@ -195,6 +195,41 @@ func TestDefaultSessionGetExtraClaims(t *testing.T) {
 	}
 }
 
+func TestDefaultSession_DPoPPublicKeyJWK(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Nil(t, session.GetDPoPPublicKeyJWK())
+
+	session = &DefaultSession{}
+
+	assert.Nil(t, session.GetDPoPPublicKeyJWK())
+
+	session.SetDPoPPublicKeyJWK([]byte(`{"kty":"EC"}`))
+
+	assert.Equal(t, []byte(`{"kty":"EC"}`), session.GetDPoPPublicKeyJWK())
+
+	var _ DPoPBoundSession = session
+}
+
+func TestDefaultSession_RequestedDPoPJWKThumbprint(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Empty(t, session.GetRequestedDPoPJWKThumbprint())
+
+	session = &DefaultSession{}
+
+	assert.Empty(t, session.GetRequestedDPoPJWKThumbprint())
+
+	session.SetRequestedDPoPJWKThumbprint("requested-jkt")
+
+	assert.Equal(t, "requested-jkt", session.GetRequestedDPoPJWKThumbprint())
+
+	session.SetDPoPJWKThumbprint("bound-jkt")
+
+	assert.Equal(t, "requested-jkt", session.GetRequestedDPoPJWKThumbprint())
+	assert.Equal(t, "bound-jkt", session.GetDPoPJWKThumbprint())
+}
+
 func TestDefaultSessionClone(t *testing.T) {
 	testCases := []struct {
 		name  string

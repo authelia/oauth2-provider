@@ -394,6 +394,13 @@ type TokenEndpointBindingHandlersProvider interface {
 	GetTokenEndpointBindingHandlers(ctx context.Context) (handlers TokenEndpointBindingHandlers)
 }
 
+// RFC8628DeviceAuthorizeEndpointBindingHandlersProvider returns the provider for configuring the device authorization
+// endpoint binding handlers.
+type RFC8628DeviceAuthorizeEndpointBindingHandlersProvider interface {
+	// GetRFC8628DeviceAuthorizeEndpointBindingHandlers returns the device authorization endpoint binding handlers.
+	GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx context.Context) (handlers RFC8628DeviceAuthorizeEndpointBindingHandlers)
+}
+
 // TokenIntrospectionHandlersProvider returns the provider for configuring the token introspection handlers.
 type TokenIntrospectionHandlersProvider interface {
 	// GetTokenIntrospectionHandlers returns the token introspection handlers.
@@ -697,4 +704,28 @@ type ConfirmationConfigProvider interface {
 
 	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.
 	GetMTLSEnabled(ctx context.Context) (enabled bool)
+}
+
+// IDTokenConfirmationConfigProvider is the configuration ApplyIDTokenConfirmation consults to decide whether the
+// OpenID Connect Key Binding 1.0 confirmation may be asserted in an ID Token.
+//
+// Both getters are required, for the reason documented on confirmationMethod.enabled: the 'cnf' claim tells a Relying
+// Party that a proof of possession was checked, and the handlers that check one run only while DPoP is enabled. A
+// session outlives a configuration change, so a key recorded while DPoP was enabled survives on it afterwards; without
+// the DPoP getter this claim would still be asserted for a refresh no proof was demanded on.
+//
+// It restates the getters rather than embedding the two providers, as ConfirmationConfigProvider does and for the same
+// reason: Go interfaces are structural, so any configuration already satisfying those providers satisfies this one.
+type IDTokenConfirmationConfigProvider interface {
+	// GetOIDCKeyBindingEnabled returns true if OpenID Connect Key Binding 1.0 handling is enabled.
+	GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool)
+
+	// GetDPoPEnabled returns true if DPoP handling is enabled.
+	GetDPoPEnabled(ctx context.Context) (enabled bool)
+}
+
+// OIDCKeyBindingConfigProvider is the configuration provider for OpenID Connect Key Binding 1.0.
+type OIDCKeyBindingConfigProvider interface {
+	// GetOIDCKeyBindingEnabled returns true if OpenID Connect Key Binding 1.0 handling is enabled.
+	GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool)
 }

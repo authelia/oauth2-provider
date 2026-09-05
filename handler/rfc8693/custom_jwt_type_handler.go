@@ -234,9 +234,19 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	claims.IssuedAt = jwt.Now()
 
+	// OpenID Connect Key Binding 1.0 Section 4 pairs the 'cnf' claim with a 'typ' of 'dpop+id_token', and Section 9.3
+	// has the Relying Party read that pair as the marker of a key-bound ID Token. The exchanged token is not an ID
+	// Token and no proof of possession is confirmed for it, so neither may be carried over from the ID Token state
+	// oauth2.ApplyIDTokenConfirmation leaves on the session.
+	mapped := claims.ToMapClaims()
+
+	delete(mapped, consts.ClaimConfirmation)
+
+	headers := stripIDTokenConfirmationHeader(session.IDTokenHeaders())
+
 	var token string
 
-	if token, _, err = c.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithIDTokenClient(request.GetClient())); err != nil {
+	if token, _, err = c.Encode(ctx, mapped, jwt.WithHeaders(headers), jwt.WithIDTokenClient(request.GetClient())); err != nil {
 		return err
 	}
 
@@ -249,7 +259,28 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	return nil
 }
 
-// type conversion according to jwt.MapClaims.toInt64 - ignore error
+func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {
+	if headers == nil {
+		return nil
+	}
+
+	if typ, ok := headers.Get(consts.JSONWebTokenHeaderType).(string); !ok || typ != consts.JSONWebTokenTypeDPoPIDToken {
+		return headers
+	}
+
+	stripped = &jwt.Headers{Extra: make(map[string]any, len(headers.Extra))}
+
+	for key, value := range headers.Extra {
+		if key == consts.JSONWebTokenHeaderType {
+			continue
+		}
+
+		stripped.Extra[key] = value
+	}
+
+	return stripped
+}
+
 func toInt64(claim any) int64 {
 	switch t := claim.(type) {
 	case float64:

@@ -59,7 +59,10 @@ type AuthorizeEndpointBindingHandler interface {
 // A binding handler augments a grant another handler owns; it never satisfies one by itself. It is dispatched only
 // for a request some TokenEndpointHandler accepted, so it needs neither a grant type claim nor a client
 // authentication policy of its own. Handlers in a binding list write disjoint session fields, so their order within
-// the list is not significant.
+// the list is not significant, with one exception: oidckb.Handler CONSUMES the validated *DPoPProof that
+// rfc9449.Handler PUBLISHES via PublishDPoPProof, so it must be registered after it, or a grant that asked to be key
+// bound fails with a server error on every token request. A handler added to this list that consumes what another
+// one publishes must state its own ordering requirement the same way.
 type TokenEndpointBindingHandler interface {
 	// BindAccessRequest records the binding presented with this request and enforces any binding the session
 	// already carries. It returns nil both when it records one and when there is nothing to record; any error
@@ -70,6 +73,18 @@ type TokenEndpointBindingHandler interface {
 	// TokenEndpointHandler has populated the response. Where two binding handlers write the same response field,
 	// list order applies and the last write wins.
 	PopulateBoundTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) (err error)
+}
+
+// RFC8628DeviceAuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of a device
+// authorization request before any handler persists that session.
+//
+// It is a distinct interface from AuthorizeEndpointBindingHandler because DeviceAuthorizeRequester embeds Requester
+// rather than AuthorizeRequester. Handlers in a binding list write disjoint session fields, so their order within the
+// list is not significant.
+type RFC8628DeviceAuthorizeEndpointBindingHandler interface {
+	// BindRFC8628DeviceAuthorizeRequest records any binding the request asserts. It returns nil both when it
+	// records one and when there is nothing to record; any error rejects the request.
+	BindRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error)
 }
 
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.

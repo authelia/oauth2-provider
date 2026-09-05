@@ -23,21 +23,25 @@ func TestAuthorizeRequest(t *testing.T) {
 		return u
 	}
 
-	for k, c := range []struct {
+	testCases := []struct {
+		name         string
 		ar           *AuthorizeRequest
 		isRedirValid bool
 	}{
 		{
+			name:         "ShouldRejectAnEmptyRequest",
 			ar:           NewAuthorizeRequest(),
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectARedirectURIWithNoClient",
 			ar: &AuthorizeRequest{
 				RedirectURI: urlparse("https://foobar"),
 			},
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectARedirectURIAgainstAnEmptyRegisteredURI",
 			ar: &AuthorizeRequest{
 				RedirectURI: urlparse("https://foobar"),
 				Request: Request{
@@ -47,6 +51,7 @@ func TestAuthorizeRequest(t *testing.T) {
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectAnEmptyRedirectURI",
 			ar: &AuthorizeRequest{
 				Request: Request{
 					Client: &DefaultClient{RedirectURIs: []string{""}},
@@ -56,6 +61,7 @@ func TestAuthorizeRequest(t *testing.T) {
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectAnEmptyRedirectURIWithAnEmptyRegisteredURI",
 			ar: &AuthorizeRequest{
 				Request: Request{
 					Client: &DefaultClient{RedirectURIs: []string{""}},
@@ -65,6 +71,7 @@ func TestAuthorizeRequest(t *testing.T) {
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectARegisteredRedirectURIWithAFragment",
 			ar: &AuthorizeRequest{
 				RedirectURI: urlparse("https://foobar.com#123"),
 				Request: Request{
@@ -74,6 +81,7 @@ func TestAuthorizeRequest(t *testing.T) {
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldRejectARequestedRedirectURIWithAFragment",
 			ar: &AuthorizeRequest{
 				Request: Request{
 					Client: &DefaultClient{RedirectURIs: []string{"https://foobar.com"}},
@@ -83,6 +91,7 @@ func TestAuthorizeRequest(t *testing.T) {
 			isRedirValid: false,
 		},
 		{
+			name: "ShouldAcceptAMatchingRedirectURI",
 			ar: &AuthorizeRequest{
 				Request: Request{
 					Client:         &DefaultClient{RedirectURIs: []string{"https://foobar.com/cb"}},
@@ -95,20 +104,25 @@ func TestAuthorizeRequest(t *testing.T) {
 			},
 			isRedirValid: true,
 		},
-	} {
-		assert.Equal(t, c.ar.Client, c.ar.GetClient(), "%d", k)
-		assert.Equal(t, c.ar.RedirectURI, c.ar.GetRedirectURI(), "%d", k)
-		assert.Equal(t, c.ar.RequestedAt, c.ar.GetRequestedAt(), "%d", k)
-		assert.Equal(t, c.ar.ResponseTypes, c.ar.GetResponseTypes(), "%d", k)
-		assert.Equal(t, c.ar.RequestedScope, c.ar.GetRequestedScopes(), "%d", k)
-		assert.Equal(t, c.ar.State, c.ar.GetState(), "%d", k)
-		assert.Equal(t, c.isRedirValid, c.ar.IsRedirectURIValid(), "%d", k)
+	}
 
-		c.ar.GrantScope("foo")
-		c.ar.SetSession(&DefaultSession{})
-		c.ar.SetRequestedScopes([]string{"foo"})
-		assert.True(t, c.ar.GetGrantedScopes().Has("foo"))
-		assert.True(t, c.ar.GetRequestedScopes().Has("foo"))
-		assert.Equal(t, &DefaultSession{}, c.ar.GetSession())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.ar.Client, tc.ar.GetClient())
+			assert.Equal(t, tc.ar.RedirectURI, tc.ar.GetRedirectURI())
+			assert.Equal(t, tc.ar.RequestedAt, tc.ar.GetRequestedAt())
+			assert.Equal(t, tc.ar.ResponseTypes, tc.ar.GetResponseTypes())
+			assert.Equal(t, tc.ar.RequestedScope, tc.ar.GetRequestedScopes())
+			assert.Equal(t, tc.ar.State, tc.ar.GetState())
+			assert.Equal(t, tc.isRedirValid, tc.ar.IsRedirectURIValid())
+
+			tc.ar.GrantScope("foo")
+			tc.ar.SetSession(&DefaultSession{})
+			tc.ar.SetRequestedScopes([]string{"foo"})
+
+			assert.True(t, tc.ar.GetGrantedScopes().Has("foo"))
+			assert.True(t, tc.ar.GetRequestedScopes().Has("foo"))
+			assert.Equal(t, &DefaultSession{}, tc.ar.GetSession())
+		})
 	}
 }

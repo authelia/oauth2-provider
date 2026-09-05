@@ -384,7 +384,6 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				tc.setup(t, config, store, responder)
 			}
 
-			// Configure the provided strategy or the fallback.
 			var strategy hoauth2.AuthorizeCodeStrategy
 
 			if tc.strategy == nil {
@@ -1246,7 +1245,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				tc.setup(t, config, store)
 			}
 
-			// Configure the provided strategy or the fallback.
 			var strategy hoauth2.AuthorizeCodeStrategy
 
 			if tc.strategy == nil {

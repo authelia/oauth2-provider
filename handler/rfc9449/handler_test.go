@@ -470,34 +470,6 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 	})
 }
 
-const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
-
-type testHandlerConfig struct {
-	testStrategyConfig
-	enabled, enforce, nonceRequired bool
-	strategy                        oauth2.DPoPStrategy
-}
-
-func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool { return c.enabled }
-
-func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool { return c.enforce }
-
-func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool { return c.nonceRequired }
-
-func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
-
-type nonDPoPSession struct{}
-
-func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
-
-func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time { return time.Time{} }
-
-func (nonDPoPSession) GetUsername() string { return "" }
-
-func (nonDPoPSession) GetSubject() string { return "" }
-
-func (nonDPoPSession) Clone() oauth2.Session { return nonDPoPSession{} }
-
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
 	cfg := &testHandlerConfig{
@@ -526,3 +498,31 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 
 	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
 }
+
+type testHandlerConfig struct {
+	testStrategyConfig
+	enabled, enforce, nonceRequired bool
+	strategy                        oauth2.DPoPStrategy
+}
+
+func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool { return c.enabled }
+
+func (c *testHandlerConfig) GetDPoPEnforce(context.Context) bool { return c.enforce }
+
+func (c *testHandlerConfig) GetDPoPNonceRequired(context.Context) bool { return c.nonceRequired }
+
+func (c *testHandlerConfig) GetDPoPStrategy(context.Context) oauth2.DPoPStrategy { return c.strategy }
+
+type nonDPoPSession struct{}
+
+func (nonDPoPSession) SetExpiresAt(oauth2.TokenType, time.Time) {}
+
+func (nonDPoPSession) GetExpiresAt(oauth2.TokenType) time.Time { return time.Time{} }
+
+func (nonDPoPSession) GetUsername() string { return "" }
+
+func (nonDPoPSession) GetSubject() string { return "" }
+
+func (nonDPoPSession) Clone() oauth2.Session { return nonDPoPSession{} }
+
+const testAuthorizeJKT = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"

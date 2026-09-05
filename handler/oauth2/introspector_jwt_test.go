@@ -271,33 +271,6 @@ func TestIntrospectJWTRecoversMTLSBinding(t *testing.T) {
 	}
 }
 
-func BenchmarkIntrospectJWT(b *testing.B) {
-	config := &oauth2.Config{}
-
-	strategy := &JWTProfileCoreStrategy{
-		Strategy: &jwt.DefaultStrategy{
-			Config: config,
-			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
-		},
-		Config: config,
-	}
-
-	v := &StatelessJWTValidator{
-		StatelessJWTStrategy: strategy,
-	}
-
-	jwt := jwtValidCase(oauth2.AccessToken)
-	token, _, err := strategy.GenerateAccessToken(b.Context(), jwt)
-	assert.NoError(b, err)
-	areq := oauth2.NewAccessRequest(nil)
-
-	for n := 0; n < b.N; n++ {
-		_, err = v.IntrospectToken(b.Context(), token, oauth2.AccessToken, areq, []string{})
-	}
-
-	assert.NoError(b, err)
-}
-
 // TestIntrospectJWTRecoversClientID pins the round trip: a stateless access token carries 'client_id', so the request
 // this validator reconstructs names the client the token was issued to rather than an empty one.
 func TestIntrospectJWTRecoversClientID(t *testing.T) {
@@ -335,4 +308,31 @@ func TestIntrospectJWTRecoversClientID(t *testing.T) {
 
 	require.NotNil(t, areq.GetClient())
 	assert.Equal(t, "client-abc", areq.GetClient().GetID())
+}
+
+func BenchmarkIntrospectJWT(b *testing.B) {
+	config := &oauth2.Config{}
+
+	strategy := &JWTProfileCoreStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
+		},
+		Config: config,
+	}
+
+	v := &StatelessJWTValidator{
+		StatelessJWTStrategy: strategy,
+	}
+
+	jwt := jwtValidCase(oauth2.AccessToken)
+	token, _, err := strategy.GenerateAccessToken(b.Context(), jwt)
+	assert.NoError(b, err)
+	areq := oauth2.NewAccessRequest(nil)
+
+	for n := 0; n < b.N; n++ {
+		_, err = v.IntrospectToken(b.Context(), token, oauth2.AccessToken, areq, []string{})
+	}
+
+	assert.NoError(b, err)
 }

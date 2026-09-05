@@ -116,25 +116,6 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	}
 }
 
-func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeImplicitGrantTypeHandler,
-	*mock.MockAccessTokenStorage, *mock.MockAccessTokenStrategy, *mock.MockAuthorizeResponder) {
-	store := mock.NewMockAccessTokenStorage(ctrl)
-	chgen := mock.NewMockAccessTokenStrategy(ctrl)
-	aresp := mock.NewMockAuthorizeResponder(ctrl)
-
-	h := AuthorizeImplicitGrantTypeHandler{
-		AccessTokenStorage:  store,
-		AccessTokenStrategy: chgen,
-		Config: &oauth2.Config{
-			AccessTokenLifespan: time.Hour,
-			ScopeStrategy:       oauth2.HierarchicScopeStrategy,
-			AudienceStrategy:    oauth2.DefaultAudienceStrategy,
-		},
-	}
-
-	return h, store, chgen, aresp
-}
-
 func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -167,4 +148,23 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 	assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
 
 	internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan), areq.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
+}
+
+func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeImplicitGrantTypeHandler,
+	*mock.MockAccessTokenStorage, *mock.MockAccessTokenStrategy, *mock.MockAuthorizeResponder) {
+	store := mock.NewMockAccessTokenStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+	aresp := mock.NewMockAuthorizeResponder(ctrl)
+
+	h := AuthorizeImplicitGrantTypeHandler{
+		AccessTokenStorage:  store,
+		AccessTokenStrategy: chgen,
+		Config: &oauth2.Config{
+			AccessTokenLifespan: time.Hour,
+			ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+		},
+	}
+
+	return h, store, chgen, aresp
 }

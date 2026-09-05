@@ -229,10 +229,6 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 }
 
-type unboundSession struct {
-	oauth2.Session
-}
-
 func newTestHandler(enabled, enforce bool) *Handler {
 	return &Handler{Config: &oauth2.Config{MTLSEnabled: enabled, MTLSEnforce: enforce}}
 }
@@ -245,4 +241,8 @@ func ctxWithCertificate(cert *x509.Certificate) context.Context {
 	}
 
 	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
+}
+
+type unboundSession struct {
+	oauth2.Session
 }

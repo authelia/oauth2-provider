@@ -20,18 +20,6 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// staticEndpointAuth is a minimal ClientRegistrationEndpointAuthStrategy test double that always returns the
-// configured requester and error, regardless of the request or id it is called with. It is shared by the RFC 7591
-// and RFC 7592 request handler tests in this package.
-type staticEndpointAuth struct {
-	requester Requester
-	err       error
-}
-
-func (s *staticEndpointAuth) AuthenticateClientRegistrationRequest(_ context.Context, _ *http.Request, _ string) (requester Requester, err error) {
-	return s.requester, s.err
-}
-
 func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 	ctx := context.Background()
 
@@ -87,7 +75,7 @@ func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 		_, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidClientMetadata)
-		assert.Equal(t, "The request body must be a JSON object.", ErrorToRFC6749Error(err).HintField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request body must be a JSON object.")
 	})
 
 	// A decoder stops at the end of the first value, so without an explicit end-of-input check a second document
@@ -99,7 +87,7 @@ func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 		_, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidClientMetadata)
-		assert.Equal(t, "The request body must contain a single JSON object.", ErrorToRFC6749Error(err).HintField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request body must contain a single JSON object.")
 	})
 
 	t.Run("ShouldRejectTrailingGarbage", func(t *testing.T) {
@@ -191,4 +179,16 @@ func TestFositeWriteRFC7591ClientRegistrationError(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rw.Code)
 	assert.Contains(t, rw.Body.String(), `"error":"invalid_client_metadata"`)
+}
+
+// staticEndpointAuth is a minimal ClientRegistrationEndpointAuthStrategy test double that always returns the
+// configured requester and error, regardless of the request or id it is called with. It is shared by the RFC 7591
+// and RFC 7592 request handler tests in this package.
+type staticEndpointAuth struct {
+	requester Requester
+	err       error
+}
+
+func (s *staticEndpointAuth) AuthenticateClientRegistrationRequest(_ context.Context, _ *http.Request, _ string) (requester Requester, err error) {
+	return s.requester, s.err
 }

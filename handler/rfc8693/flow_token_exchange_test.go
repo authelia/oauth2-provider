@@ -22,100 +22,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// rfc8693Client is an oauth2.Client that also exposes the rfc8693.Client interface,
-// letting tests assert RFC 8693 §2.1 client-level token-type restrictions.
-type rfc8693Client struct {
-	*oauth2.DefaultClient
-
-	subjectTokenTypes   []string
-	actorTokenTypes     []string
-	requestedTokenTypes []string
-	subjectTokenIssuers []string
-	actorTokenIssuers   []string
-	exchangePermitted   bool
-	allow               bool
-}
-
-func (c *rfc8693Client) GetSupportedSubjectTokenTypes() []string { return c.subjectTokenTypes }
-
-func (c *rfc8693Client) GetSupportedActorTokenTypes() []string { return c.actorTokenTypes }
-
-func (c *rfc8693Client) GetSupportedRequestTokenTypes() []string { return c.requestedTokenTypes }
-
-func (c *rfc8693Client) GetSupportedSubjectTokenIssuers() []string { return c.subjectTokenIssuers }
-
-func (c *rfc8693Client) GetSupportedActorTokenIssuers() []string { return c.actorTokenIssuers }
-
-func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client, _ oauth2.RFC8693TokenType) bool {
-	return c.exchangePermitted
-}
-
-func (c *rfc8693Client) GetAllowActorTokenWithoutMayAct() (allow bool) {
-	return c.allow
-}
-
-// newTokenExchangeHandler builds a TokenExchangeGrantHandler against a Config whose
-// supported token types include the standard RFC 8693 set.
-func newTokenExchangeHandler() *TokenExchangeGrantHandler {
-	config := &oauth2.Config{
-		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
-		AudienceStrategy: oauth2.ExactAudienceStrategy,
-		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
-			consts.TokenTypeRFC8693AccessToken:  &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
-			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},
-			consts.TokenTypeRFC8693IDToken:      &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
-		},
-		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
-	}
-
-	return &TokenExchangeGrantHandler{
-		Config:           config,
-		ScopeStrategy:    config.ScopeStrategy,
-		AudienceStrategy: config.AudienceStrategy,
-		ResourceStrategy: config.GetResourceStrategy(context.Background()),
-	}
-}
-
-// newConfidentialClient returns a confidential client that is allowed to perform token exchange.
-func newConfidentialClient() *oauth2.DefaultClient {
-	return &oauth2.DefaultClient{
-		ID:           "exchange-client",
-		ClientSecret: oauth2.NewPlainTextClientSecret("secret"),
-		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange},
-		Scopes:       []string{"openid", "offline_access"},
-		Audience:     []string{"https://api.example.com", "my-service"},
-	}
-}
-
-// baseRequest builds an AccessRequest with the token-exchange grant type already set,
-// the given client, and the supplied form values. Required RFC 8693 §2.1 params
-// (subject_token, subject_token_type) are seeded with valid defaults so individual
-// tests only need to override what they care about.
-func baseRequest(t *testing.T, client oauth2.Client, form url.Values) *oauth2.AccessRequest {
-	t.Helper()
-
-	merged := url.Values{
-		consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
-		consts.FormParameterSubjectToken:     {"opaque-subject-token"},
-		consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
-	}
-
-	for k, vs := range form {
-		merged[k] = vs
-	}
-
-	return &oauth2.AccessRequest{
-		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
-		Request: oauth2.Request{
-			Client:  client,
-			Form:    merged,
-			Session: &DefaultSession{},
-		},
-	}
-}
-
-// TestHandleTokenEndpointRequest_RequiredParameters exercises RFC 8693 §2.1's required
-// parameters: subject_token and subject_token_type must both be present.
+// RFC 8693 §2.1: 'subject_token' and 'subject_token_type' must both be present.
 func TestHandleTokenEndpointRequest_RequiredParameters(t *testing.T) {
 	handler := newTokenExchangeHandler()
 	client := newConfidentialClient()
@@ -128,7 +35,7 @@ func TestHandleTokenEndpointRequest_RequiredParameters(t *testing.T) {
 		err := handler.HandleTokenEndpointRequest(context.Background(), req)
 		require.Error(t, err)
 		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "subject_token")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Mandatory parameter 'subject_token' is missing.")
 	})
 
 	t.Run("ShouldFailWhenSubjectTokenTypeMissing", func(t *testing.T) {
@@ -143,9 +50,7 @@ func TestHandleTokenEndpointRequest_RequiredParameters(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_TokenTypeRegistration exercises RFC 8693 §3:
-// subject_token_type and requested_token_type values must be among the server's
-// supported token types.
+// RFC 8693 §3: 'subject_token_type' and 'requested_token_type' must be among the server's supported types.
 func TestHandleTokenEndpointRequest_TokenTypeRegistration(t *testing.T) {
 	handler := newTokenExchangeHandler()
 	client := newConfidentialClient()
@@ -178,8 +83,7 @@ func TestHandleTokenEndpointRequest_TokenTypeRegistration(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_ActorTokenPair exercises RFC 8693 §2.1's actor_token /
-// actor_token_type co-presence rule: each is REQUIRED when the other is present.
+// RFC 8693 §2.1: 'actor_token' and 'actor_token_type' are each REQUIRED when the other is present.
 func TestHandleTokenEndpointRequest_ActorTokenPair(t *testing.T) {
 	handler := newTokenExchangeHandler()
 	client := newConfidentialClient()
@@ -271,9 +175,7 @@ func TestHandleTokenEndpointRequest_ClientTokenTypeRestrictions(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_ClientEligibility exercises the OAuth 2.0 client
-// preconditions: public clients cannot use token exchange, and the client must be
-// registered for the token-exchange grant type.
+// RFC 8693 §4.4: token exchange requires client authentication and the registered grant type.
 func TestHandleTokenEndpointRequest_ClientEligibility(t *testing.T) {
 	handler := newTokenExchangeHandler()
 
@@ -298,9 +200,7 @@ func TestHandleTokenEndpointRequest_ClientEligibility(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_ScopeAudienceResource covers RFC 8693 §2.1's scope
-// constraint and the audience / resource parameter handling under our exact-string
-// audience strategy and URL-based resource strategy.
+// RFC 8693 §2.1: the scope constraint, and the 'audience' and RFC 8707 'resource' parameters.
 func TestHandleTokenEndpointRequest_ScopeAudienceResource(t *testing.T) {
 	handler := newTokenExchangeHandler()
 
@@ -366,17 +266,11 @@ func TestHandleTokenEndpointRequest_ScopeAudienceResource(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, oauth2.Arguments{"my-service"}, req.GetGrantedAudience())
 		assert.Equal(t, oauth2.Arguments{"https://api.example.com"}, req.GetGrantedResource())
-		// The merged set is what the access_token_type / refresh_token_type / custom_jwt
-		// handlers feed into the issued token's aud claim.
 		assert.Equal(t, oauth2.Arguments{"my-service", "https://api.example.com"},
 			oauth2.JoinGrantedAudienceAndResource(req.GetGrantedAudience(), req.GetGrantedResource()))
 	})
 }
 
-// TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd exercises the per-client
-// JWT issuer allow-list through the custom JWT subject-token validation path.
-// It composes TokenExchangeGrantHandler with CustomJWTTypeHandler and feeds a signed
-// JWT that should be accepted/rejected based on the client's GetSupportedSubjectTokenIssuers.
 func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 	const (
 		jwtType        = "urn:custom:jwt"
@@ -466,7 +360,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 		err := run(t, client, issuerRejected)
 		require.Error(t, err)
 		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "permitted issuer list")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list.")
 	})
 
 	t.Run("ShouldFallBackToTokenTypeIssuerWhenClientListEmpty", func(t *testing.T) {
@@ -482,9 +376,6 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 	})
 }
 
-// TestValidateIssuer covers the helper used by the JWT-based subject-token
-// validators: per-client allow-list takes precedence; otherwise fall back to a
-// single configured issuer.
 func TestValidateIssuer(t *testing.T) {
 	t.Run("ShouldMatchAgainstPerClientAllowList", func(t *testing.T) {
 		matched, ok := ValidateIssuer("https://b.example.com", "https://other.example.com",
@@ -496,7 +387,7 @@ func TestValidateIssuer(t *testing.T) {
 	t.Run("ShouldRejectIssuerNotInAllowList", func(t *testing.T) {
 		_, ok := ValidateIssuer("https://c.example.com", "https://c.example.com",
 			[]string{"https://a.example.com", "https://b.example.com"})
-		assert.False(t, ok, "client allow-list should override the fallback issuer")
+		assert.False(t, ok)
 	})
 
 	t.Run("ShouldFallBackToTokenTypeIssuerWhenAllowListEmpty", func(t *testing.T) {
@@ -517,9 +408,6 @@ func TestValidateIssuer(t *testing.T) {
 	})
 }
 
-// TestHandleTokenEndpointRequest_StrategyFallback verifies the
-// local-then-Config strategy resolution: handler fields, when nil, fall back
-// to the global Config strategies.
 func TestHandleTokenEndpointRequest_StrategyFallback(t *testing.T) {
 	config := &oauth2.Config{
 		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
@@ -537,6 +425,98 @@ func TestHandleTokenEndpointRequest_StrategyFallback(t *testing.T) {
 	req.RequestedAudience = oauth2.Arguments{"my-service"}
 
 	err := handler.HandleTokenEndpointRequest(context.Background(), req)
-	require.NoError(t, err, "handler should resolve strategies from Config when fields are nil")
+	require.NoError(t, err)
 	assert.Equal(t, oauth2.Arguments{"my-service"}, req.GetGrantedAudience())
+}
+
+// newTokenExchangeHandler builds a TokenExchangeGrantHandler against a Config whose
+// supported token types include the standard RFC 8693 set.
+func newTokenExchangeHandler() *TokenExchangeGrantHandler {
+	config := &oauth2.Config{
+		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
+		AudienceStrategy: oauth2.ExactAudienceStrategy,
+		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
+			consts.TokenTypeRFC8693AccessToken:  &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
+			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},
+			consts.TokenTypeRFC8693IDToken:      &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
+		},
+		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
+	}
+
+	return &TokenExchangeGrantHandler{
+		Config:           config,
+		ScopeStrategy:    config.ScopeStrategy,
+		AudienceStrategy: config.AudienceStrategy,
+		ResourceStrategy: config.GetResourceStrategy(context.Background()),
+	}
+}
+
+// newConfidentialClient returns a confidential client that is allowed to perform token exchange.
+func newConfidentialClient() *oauth2.DefaultClient {
+	return &oauth2.DefaultClient{
+		ID:           "exchange-client",
+		ClientSecret: oauth2.NewPlainTextClientSecret("secret"),
+		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange},
+		Scopes:       []string{"openid", "offline_access"},
+		Audience:     []string{"https://api.example.com", "my-service"},
+	}
+}
+
+// baseRequest builds an AccessRequest with the token-exchange grant type already set,
+// the given client, and the supplied form values. Required RFC 8693 §2.1 params
+// (subject_token, subject_token_type) are seeded with valid defaults so individual
+// tests only need to override what they care about.
+func baseRequest(t *testing.T, client oauth2.Client, form url.Values) *oauth2.AccessRequest {
+	t.Helper()
+
+	merged := url.Values{
+		consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+		consts.FormParameterSubjectToken:     {"opaque-subject-token"},
+		consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
+	}
+
+	for k, vs := range form {
+		merged[k] = vs
+	}
+
+	return &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+		Request: oauth2.Request{
+			Client:  client,
+			Form:    merged,
+			Session: &DefaultSession{},
+		},
+	}
+}
+
+// rfc8693Client is an oauth2.Client that also exposes the rfc8693.Client interface,
+// letting tests assert RFC 8693 §2.1 client-level token-type restrictions.
+type rfc8693Client struct {
+	*oauth2.DefaultClient
+
+	subjectTokenTypes   []string
+	actorTokenTypes     []string
+	requestedTokenTypes []string
+	subjectTokenIssuers []string
+	actorTokenIssuers   []string
+	exchangePermitted   bool
+	allow               bool
+}
+
+func (c *rfc8693Client) GetSupportedSubjectTokenTypes() []string { return c.subjectTokenTypes }
+
+func (c *rfc8693Client) GetSupportedActorTokenTypes() []string { return c.actorTokenTypes }
+
+func (c *rfc8693Client) GetSupportedRequestTokenTypes() []string { return c.requestedTokenTypes }
+
+func (c *rfc8693Client) GetSupportedSubjectTokenIssuers() []string { return c.subjectTokenIssuers }
+
+func (c *rfc8693Client) GetSupportedActorTokenIssuers() []string { return c.actorTokenIssuers }
+
+func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client, _ oauth2.RFC8693TokenType) bool {
+	return c.exchangePermitted
+}
+
+func (c *rfc8693Client) GetAllowActorTokenWithoutMayAct() (allow bool) {
+	return c.allow
 }

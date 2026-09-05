@@ -50,12 +50,10 @@ func TestNoBindingWorkForAGrantTypeNoHandlerOwns(t *testing.T) {
 	_, err = provider.NewAccessRequest(context.Background(), r, &oauth2.DefaultSession{})
 	require.Error(t, err)
 
-	rfc := oauth2.ErrorToRFC6749Error(err)
+	assert.Equal(t, http.StatusBadRequest, oauth2.ErrorToRFC6749Error(err).CodeField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id 'both-client' requested grant type 'urn:example:not-a-real-grant' which is invalid, unknown, not supported, or not configured to be handled.")
 
-	assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
-	assert.Equal(t, "invalid_request", rfc.ErrorField)
-
-	assert.Empty(t, store.DPoPProofJTIs, "an unauthenticated caller wrote a replay marker to the store")
+	assert.Empty(t, store.DPoPProofJTIs)
 }
 
 func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
@@ -81,7 +79,7 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 	assertBoundToBoth(t, granted, cert)
 
 	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refreshToken, "no refresh token was issued")
+	require.NotEmpty(t, refreshToken)
 
 	form := func() url.Values {
 		return url.Values{
@@ -94,21 +92,21 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 		_, _, err := bothTokenRequest(t, provider, form(), nil, bothDPoPProof(t, proofKey, "no-cert"))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 	})
 
 	t.Run("ShouldRejectARefreshMissingTheProof", func(t *testing.T) {
 		_, _, err := bothTokenRequest(t, provider, form(), cert, "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
 	t.Run("ShouldRejectARefreshWithAnotherCertificate", func(t *testing.T) {
 		_, _, err := bothTokenRequest(t, provider, form(), other, bothDPoPProof(t, proofKey, "wrong-cert"))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_grant", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
 	})
 
 	t.Run("ShouldRejectARefreshWithAnotherProofKey", func(t *testing.T) {
@@ -118,7 +116,7 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 		_, _, err = bothTokenRequest(t, provider, form(), cert, bothDPoPProof(t, rogue, "wrong-key"))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptARefreshSatisfyingBothAndStayBoundToBoth", func(t *testing.T) {
@@ -150,47 +148,41 @@ func TestBindingIsIndependentOfFactoryOrder(t *testing.T) {
 
 	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
 
-	// Neither bound-access-token flag is set on this client, which is what makes the refresh below discriminating.
-	// The DPoP key still binds, because a proof is something the client chose to send; the certificate does not,
-	// because a certificate may be incidental. See rfc8705.Handler.BindAccessRequest.
-	dpop, ok := granted.(oauth2.DPoPBoundSession)
-	require.True(t, ok)
-	assert.NotEmpty(t, dpop.GetDPoPJWKThumbprint(), "the DPoP proof should bind on presentation")
-
-	mtls, ok := granted.(oauth2.MTLSBoundSession)
-	require.True(t, ok)
-	assert.Empty(t, mtls.GetClientCertificateSHA256Thumbprint(), "an incidental certificate must not bind the grant")
-
 	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refreshToken, "no refresh token was issued")
+	require.NotEmpty(t, refreshToken)
 
 	form := url.Values{
 		consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
 		consts.FormParameterRefreshToken: []string{refreshToken},
 	}
 
-	// The factory-order proof. Nothing about this client's policy requires a DPoP proof, so the refresh can only be
-	// rejected because the binding recorded on the first leg was restored from the refresh token before the binding
-	// handler ran. With the binding factories registered ahead of the grant handlers and no phase to order them, the
-	// handler would see an empty session and let this through.
-	_, _, err = bothTokenRequest(t, provider, form, cert, "")
+	t.Run("ShouldBindThePresentedDPoPKeyEvenThoughTheClientRequiresNoProof", func(t *testing.T) {
+		dpop, ok := granted.(oauth2.DPoPBoundSession)
+		require.True(t, ok)
 
-	require.Error(t, err)
-	assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.NotEmpty(t, dpop.GetDPoPJWKThumbprint())
+	})
 
-	// The converse, documenting the incidental-certificate rule end to end: no certificate binding was ever
-	// recorded, so omitting the certificate is not an error.
-	_, _, err = bothTokenRequest(t, provider, form, nil, bothDPoPProof(t, proofKey, "order-no-cert"))
+	t.Run("ShouldNotBindAnIncidentalClientCertificate", func(t *testing.T) {
+		mtls, ok := granted.(oauth2.MTLSBoundSession)
+		require.True(t, ok)
 
-	require.NoError(t, err)
+		assert.Empty(t, mtls.GetClientCertificateSHA256Thumbprint())
+	})
+
+	t.Run("ShouldRejectARefreshThatOmitsTheProofTheGrantWasBoundTo", func(t *testing.T) {
+		_, _, err := bothTokenRequest(t, provider, form, cert, "")
+
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
+	})
+
+	t.Run("ShouldAcceptARefreshThatOmitsTheIncidentalCertificate", func(t *testing.T) {
+		_, _, err := bothTokenRequest(t, provider, form, nil, bothDPoPProof(t, proofKey, "order-no-cert"))
+
+		require.NoError(t, err)
+	})
 }
-
-const (
-	bothClientID    = "both-client"
-	bothSecret      = "both-client-secret"
-	bothRedirectURI = "https://rp.example.com/cb"
-	bothTokenURI    = "https://as.example.com/token"
-)
 
 func newBothProviderBindingFirst(t *testing.T) (oauth2.Provider, *storage.MemoryStore) {
 	t.Helper()
@@ -319,9 +311,7 @@ func bothTokenRequest(t *testing.T, provider oauth2.Provider, form url.Values, c
 		r.Header.Set(consts.HeaderDPoP, proof)
 	}
 
-	// Set explicitly rather than relying on what httptest.NewRequest leaves behind. A nil r.TLS would mean "not a TLS
-	// connection", which also flips the scheme oauth2.RequestURL derives and so breaks the DPoP 'htu' match; the
-	// connection here is TLS, the client simply presented no certificate.
+	// A nil r.TLS flips the scheme oauth2.RequestURL derives and so breaks the DPoP 'htu' match.
 	if cert != nil {
 		r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 	} else {
@@ -364,3 +354,10 @@ func bothAuthorizeForCode(t *testing.T, provider oauth2.Provider) string {
 
 	return code
 }
+
+const (
+	bothClientID    = "both-client"
+	bothSecret      = "both-client-secret"
+	bothRedirectURI = "https://rp.example.com/cb"
+	bothTokenURI    = "https://as.example.com/token"
+)

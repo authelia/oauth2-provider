@@ -23,10 +23,10 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 	config := &Config{}
 
 	testCases := []struct {
-		name      string
-		auth      BearerAuthorization
-		granted   []string
-		expectErr bool
+		name     string
+		auth     BearerAuthorization
+		granted  []string
+		expected string
 	}{
 		{
 			name:    "ShouldUseConfiguredListWhenPresent",
@@ -34,10 +34,10 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 			granted: []string{"urn:example:aud"},
 		},
 		{
-			name:      "ShouldIgnoreEndpointWhenListConfigured",
-			auth:      BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoint: "https://as.example.com/register"},
-			granted:   []string{"https://as.example.com/register"},
-			expectErr: true,
+			name:     "ShouldIgnoreEndpointWhenListConfigured",
+			auth:     BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoint: "https://as.example.com/register"},
+			granted:  []string{"https://as.example.com/register"},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'urn:example:aud' but the audience had the values 'https://as.example.com/register'.",
 		},
 		{
 			name:    "ShouldFallBackToEndpointWhenListEmpty",
@@ -45,10 +45,10 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 			granted: []string{"https://as.example.com/register"},
 		},
 		{
-			name:      "ShouldNotUseRequestURLWhenEndpointConfigured",
-			auth:      BearerAuthorization{Endpoint: "https://as.example.com/register"},
-			granted:   []string{"https://as.example.com/introspect"},
-			expectErr: true,
+			name:     "ShouldNotUseRequestURLWhenEndpointConfigured",
+			auth:     BearerAuthorization{Endpoint: "https://as.example.com/register"},
+			granted:  []string{"https://as.example.com/introspect"},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://as.example.com/register' but the audience had the values 'https://as.example.com/introspect'.",
 		},
 		{
 			name:    "ShouldFallBackToRequestURLWhenNeitherConfigured",
@@ -56,10 +56,10 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 			granted: []string{"https://as.example.com/introspect"},
 		},
 		{
-			name:      "ShouldRejectTokenWithNoAudience",
-			auth:      BearerAuthorization{},
-			granted:   nil,
-			expectErr: true,
+			name:     "ShouldRejectTokenWithNoAudience",
+			auth:     BearerAuthorization{},
+			granted:  nil,
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://as.example.com/introspect' but it does not have an audience.",
 		},
 		{
 			name:    "ShouldMatchAnyOfTheConfiguredList",
@@ -72,9 +72,9 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester(nil, tc.granted), "token", tc.auth)
 
-			if tc.expectErr {
+			if tc.expected != "" {
 				require.Error(t, err)
-				assert.Equal(t, "invalid_token", ErrorToRFC6749Error(err).ErrorField)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
 
 				return
 			}
@@ -99,7 +99,7 @@ func TestValidateBearerAuthorizationScope(t *testing.T) {
 		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
 
 		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:a', 'urn:b', at least one of which is required.")
 	})
 
 	t.Run("ShouldSkipCheckWhenNoScopesRequired", func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestValidateBearerAuthorizationScope(t *testing.T) {
 		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"*"}, []string{"urn:aud"}), "token", auth)
 
 		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:a', 'urn:b', at least one of which is required.")
 	})
 
 	t.Run("ShouldRecordTheRequiredScopesForTheChallenge", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestValidateBearerAuthorizationCheckOrder(t *testing.T) {
 		BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:required"}})
 
 	require.Error(t, err)
-	assert.Equal(t, "insufficient_scope", ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:required', at least one of which is required.")
 }
 
 func TestValidateBearerAuthorizationResourceIndicatorsCountAsAudience(t *testing.T) {
@@ -170,7 +170,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 
 		require.Error(t, err)
 		rfc := ErrorToRFC6749Error(err)
-		assert.Equal(t, "invalid_token", rfc.ErrorField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The access token is invalid or was not presented in the manner it is bound to. The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access.")
 		assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
 	})
 
@@ -212,7 +212,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 
 		require.Error(t, err)
 		rfc := ErrorToRFC6749Error(err)
-		assert.Equal(t, "invalid_token", rfc.ErrorField)
+		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The access token is bound to a client certificate but the request was not made over a mutually authenticated TLS connection.")
 		assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
 	})
 
@@ -248,55 +248,52 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 	auth := BearerAuthorization{Audiences: []string{"urn:aud"}}
 
 	testCases := []struct {
-		name    string
-		config  *Config
-		session Session
-		err     string
-		debug   string
+		name     string
+		config   *Config
+		session  Session
+		expected string
 	}{
 		{
-			name:    "ShouldRejectAnUnboundCredentialWhenDPoPEnforced",
-			config:  &Config{DPoPEnforce: true},
-			session: &DefaultSession{},
-			err:     "The credential used to authenticate the request is not bound to a DPoP key.",
-			debug:   "DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.",
+			name:     "ShouldRejectAnUnboundCredentialWhenDPoPEnforced",
+			config:   &Config{DPoPEnforce: true},
+			session:  &DefaultSession{},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldRejectAnUnboundCredentialWhenMTLSEnforced",
-			config:  &Config{MTLSEnforce: true},
-			session: &DefaultSession{},
-			err:     "The credential used to authenticate the request is not bound to a client certificate.",
-			debug:   "Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
+			name:     "ShouldRejectAnUnboundCredentialWhenMTLSEnforced",
+			config:   &Config{MTLSEnforce: true},
+			session:  &DefaultSession{},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldRejectANilSessionWhenDPoPEnforced",
-			config:  &Config{DPoPEnforce: true},
-			session: nil,
-			err:     "The credential used to authenticate the request is not bound to a DPoP key.",
+			name:     "ShouldRejectANilSessionWhenDPoPEnforced",
+			config:   &Config{DPoPEnforce: true},
+			session:  nil,
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldRejectANilSessionWhenMTLSEnforced",
-			config:  &Config{MTLSEnforce: true},
-			session: nil,
-			err:     "The credential used to authenticate the request is not bound to a client certificate.",
+			name:     "ShouldRejectANilSessionWhenMTLSEnforced",
+			config:   &Config{MTLSEnforce: true},
+			session:  nil,
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldRejectASessionThatCannotRecordTheEnforcedBinding",
-			config:  &Config{MTLSEnforce: true},
-			session: &bearerEnforcementSession{DefaultSession: &DefaultSession{ClientCertificateThumbprint: "some-x5t"}},
-			err:     "The credential used to authenticate the request is not bound to a client certificate.",
+			name:     "ShouldRejectASessionThatCannotRecordTheEnforcedBinding",
+			config:   &Config{MTLSEnforce: true},
+			session:  &bearerEnforcementSession{DefaultSession: &DefaultSession{ClientCertificateThumbprint: "some-x5t"}},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldReportDPoPFirstWhenBothEnforced",
-			config:  &Config{DPoPEnforce: true, MTLSEnforce: true},
-			session: &DefaultSession{},
-			err:     "The credential used to authenticate the request is not bound to a DPoP key.",
+			name:     "ShouldReportDPoPFirstWhenBothEnforced",
+			config:   &Config{DPoPEnforce: true, MTLSEnforce: true},
+			session:  &DefaultSession{},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.",
 		},
 		{
-			name:    "ShouldStillRequireMTLSWhenOnlyDPoPBound",
-			config:  &Config{DPoPEnforce: true, MTLSEnforce: true, DPoPStrategy: &bearerResourceStrategy{}},
-			session: &DefaultSession{JWKThumbprint: "some-jkt"},
-			err:     "The credential used to authenticate the request is not bound to a client certificate.",
+			name:     "ShouldStillRequireMTLSWhenOnlyDPoPBound",
+			config:   &Config{DPoPEnforce: true, MTLSEnforce: true, DPoPStrategy: &bearerResourceStrategy{}},
+			session:  &DefaultSession{JWKThumbprint: "some-jkt"},
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.",
 		},
 		{
 			name:    "ShouldNotEnforceADisabledMethod",
@@ -319,7 +316,7 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 
 			err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token", auth)
 
-			if tc.err == "" {
+			if tc.expected == "" {
 				assert.NoError(t, err)
 
 				return
@@ -327,15 +324,8 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 
 			require.Error(t, err)
 
-			rfc := ErrorToRFC6749Error(err)
-
-			assert.Equal(t, "invalid_token", rfc.ErrorField)
-			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
-			assert.Equal(t, tc.err, rfc.HintField)
-
-			if tc.debug != "" {
-				assert.Equal(t, tc.debug, rfc.DebugField)
-			}
+			assert.Equal(t, http.StatusUnauthorized, ErrorToRFC6749Error(err).CodeField)
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 

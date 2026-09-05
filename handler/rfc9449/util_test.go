@@ -163,10 +163,10 @@ func TestRequestURL(t *testing.T) {
 
 func TestNormalizeHTU(t *testing.T) {
 	testCases := []struct {
-		name    string
-		raw     string
-		want    string
-		wantErr bool
+		name     string
+		raw      string
+		want     string
+		expected string
 	}{
 		{
 			name: "NoChange",
@@ -254,27 +254,29 @@ func TestNormalizeHTU(t *testing.T) {
 			want: "https://as.example.com/",
 		},
 		{
-			name:    "ParseError",
-			raw:     "http://[::1",
-			wantErr: true,
+			name:     "ParseError",
+			raw:      "http://[::1",
+			expected: "parse \"http://[::1\": missing ']' in host",
 		},
 		{
-			name:    "RejectsRelativeURI",
-			raw:     "/token",
-			wantErr: true,
+			name:     "RejectsRelativeURI",
+			raw:      "/token",
+			expected: "the URI is not absolute",
 		},
 		{
-			name:    "RejectsMissingHost",
-			raw:     "https:///token",
-			wantErr: true,
+			name:     "RejectsMissingHost",
+			raw:      "https:///token",
+			expected: "the URI is not absolute",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := normalizeHTU(tc.raw)
-			if tc.wantErr {
-				assert.Error(t, err)
+
+			if tc.expected != "" {
+				assert.EqualError(t, err, tc.expected)
+
 				return
 			}
 

@@ -145,7 +145,6 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					Client: &oauth2.DefaultClientWithCustomTokenLifespans{
 						DefaultClient: &oauth2.DefaultClient{
 							GrantTypes: []string{consts.GrantTypeRefreshToken},
-							//ResponseTypes: []string{"id_token"},
 						},
 						TokenLifespans: &internal.TestLifespans,
 					},
@@ -179,7 +178,6 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					GrantedScope: []string{consts.ScopeOpenID},
 					Client: &oauth2.DefaultClient{
 						GrantTypes: []string{consts.GrantTypeRefreshToken},
-						//ResponseTypes: []string{"id_token"},
 					},
 					Session: &DefaultSession{
 						Subject: "foo",

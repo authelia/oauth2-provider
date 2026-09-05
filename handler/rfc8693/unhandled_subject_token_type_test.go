@@ -115,6 +115,7 @@ func TestExchangeRejectsUnclaimedSubjectTokenType(t *testing.T) {
 		}
 	}
 
-	require.Error(t, err, "an exchange whose subject token no handler validated must be refused")
-	assert.Empty(t, aresp.AccessToken, "no access token may be issued when the subject token was never validated")
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.")
+	assert.Empty(t, aresp.AccessToken)
 }

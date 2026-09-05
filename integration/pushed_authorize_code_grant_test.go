@@ -107,7 +107,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 				state = testState
 			},
 			tamperPAR: func(t *testing.T, requester oauth2.AuthorizeRequester) {
-				require.NotNil(t, requester, "PAR session should exist in the store")
+				require.NotNil(t, requester)
 				requester.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().Add(-time.Hour))
 			},
 			parStatusCode:  http.StatusCreated,
@@ -120,7 +120,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 				state = testState
 			},
 			tamperPAR: func(t *testing.T, requester oauth2.AuthorizeRequester) {
-				require.NotNil(t, requester, "PAR session should exist in the store")
+				require.NotNil(t, requester)
 				requester.SetSession(nil)
 			},
 			parStatusCode:  http.StatusCreated,

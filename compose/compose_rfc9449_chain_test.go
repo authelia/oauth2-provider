@@ -55,8 +55,8 @@ func TestDPoPIntrospectionReflectsTheBinding(t *testing.T) {
 
 		bound, present := confirmationJKT(t, body)
 
-		require.True(t, present, "the introspection response carried no 'cnf' claim, so a resource server has no way to know the token is bound")
-		assert.Equal(t, jkt, bound, "the introspected 'cnf.jkt' is not the key the grant was bound to")
+		require.True(t, present)
+		assert.Equal(t, jkt, bound)
 	})
 
 	t.Run("ShouldReportTheGrantTheChainCarried", func(t *testing.T) {
@@ -87,20 +87,32 @@ func TestDPoPIntrospectionReflectsTheBinding(t *testing.T) {
 		rotatedAccess := rotated.GetAccessToken()
 		rotatedRefresh, _ := rotated.ToMap()[consts.AccessResponseRefreshToken].(string)
 
-		for name, token := range map[string]string{"access": rotatedAccess, "refresh": rotatedRefresh} {
-			body, _ := chainIntrospect(t, provider, token)
-
-			assert.Equal(t, true, body["active"], "the rotated %s token introspected as inactive", name)
-
-			bound, present := confirmationJKT(t, body)
-
-			require.True(t, present, "the rotated %s token lost its confirmation claim", name)
-			assert.Equal(t, jkt, bound, "the rotated %s token reports a different key", name)
+		rotatedTokens := []struct {
+			name  string
+			token string
+		}{
+			{name: "ShouldKeepTheBindingOnTheRotatedAccessToken", token: rotatedAccess},
+			{name: "ShouldKeepTheBindingOnTheRotatedRefreshToken", token: rotatedRefresh},
 		}
 
-		body, _ := chainIntrospect(t, provider, refreshToken)
+		for _, rotatedToken := range rotatedTokens {
+			t.Run(rotatedToken.name, func(t *testing.T) {
+				body, _ := chainIntrospect(t, provider, rotatedToken.token)
 
-		assert.Equal(t, false, body["active"], "the superseded refresh token still introspects as active")
+				assert.Equal(t, true, body["active"])
+
+				bound, present := confirmationJKT(t, body)
+
+				require.True(t, present)
+				assert.Equal(t, jkt, bound)
+			})
+		}
+
+		t.Run("ShouldReportTheSupersededRefreshTokenAsInactive", func(t *testing.T) {
+			body, _ := chainIntrospect(t, provider, refreshToken)
+
+			assert.Equal(t, false, body["active"])
+		})
 	})
 }
 
@@ -123,7 +135,7 @@ func TestDPoPIntrospectionOmitsTheConfirmationWhenNotApplicable(t *testing.T) {
 
 		_, present := confirmationJKT(t, body)
 
-		assert.False(t, present, "an unbound token reported a confirmation claim")
+		assert.False(t, present)
 	})
 
 	t.Run("ShouldOmitItOnceDPoPIsDisabled", func(t *testing.T) {
@@ -145,7 +157,7 @@ func TestDPoPIntrospectionOmitsTheConfirmationWhenNotApplicable(t *testing.T) {
 
 		_, present = confirmationJKT(t, mustIntrospect(t, provider, accessToken))
 
-		assert.False(t, present, "the confirmation was still asserted after DPoP was disabled, telling the resource server a check was performed that no longer runs")
+		assert.False(t, present)
 	})
 }
 
@@ -169,14 +181,14 @@ func TestDPoPIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 		_, err := chainIntrospectAs(t, provider, subject, "Bearer", caller, "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The DPoP-bound access token was not presented using the DPoP authentication scheme. The access token must be presented via the DPoP scheme and match the introspected token (dpop scheme used: false, token matches: true).")
 	})
 
 	t.Run("ShouldRejectTheDPoPSchemeWithoutAProof", func(t *testing.T) {
 		_, err := chainIntrospectAs(t, provider, subject, "DPoP", caller, "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request to the protected resource requires a DPoP proof but none was provided.")
 	})
 
 	t.Run("ShouldRejectAProofFromAnotherKey", func(t *testing.T) {
@@ -184,7 +196,7 @@ func TestDPoPIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 			chainProofWithATH(t, newPARProofKey(t), "auth-2", chainIntrospectEndpoint, caller))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the access token is bound to.")
 	})
 
 	t.Run("ShouldRejectAProofWhoseATHNamesAnotherToken", func(t *testing.T) {
@@ -192,7 +204,7 @@ func TestDPoPIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 			chainProofWithATH(t, key, "auth-3", chainIntrospectEndpoint, subject))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof 'ath' claim does not match the access token.")
 	})
 
 	t.Run("ShouldRejectAProofMintedForAnotherURI", func(t *testing.T) {
@@ -200,25 +212,7 @@ func TestDPoPIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 			chainProofWithATH(t, key, "auth-4", rtTokenEndpoint, caller))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
-	})
-
-	t.Run("ShouldRejectWhenTheConfiguredStrategyCannotValidateResourceAccess", func(t *testing.T) {
-		provider, _, config := newDPoPChainProviderWithConfig(t)
-
-		key := newPARProofKey(t)
-
-		caller, _ := chainAccessToken(t, provider, key, "auth-noresource")
-		subject, _ := chainAccessToken(t, provider, nil, "auth-noresource-subject")
-
-		proof := chainProofWithATH(t, key, "auth-5", chainIntrospectEndpoint, caller)
-
-		config.DPoPStrategy = &proofOnlyChainDPoPStrategy{}
-
-		_, err := chainIntrospectAs(t, provider, subject, "DPoP", caller, proof)
-
-		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof 'htu' claim 'https://as.example.com/token' does not match the request URI 'https://as.example.com/introspect'.")
 	})
 
 	t.Run("ShouldStillAcceptAnUnboundBearerCredential", func(t *testing.T) {
@@ -229,6 +223,24 @@ func TestDPoPIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 		require.NoError(t, err)
 		assert.Equal(t, true, body["active"])
 	})
+}
+
+func TestIntrospectionRejectsABoundCredentialWhenTheStrategyCannotValidateResourceAccess(t *testing.T) {
+	provider, _, config := newDPoPChainProviderWithConfig(t)
+
+	key := newPARProofKey(t)
+
+	caller, _ := chainAccessToken(t, provider, key, "auth-noresource")
+	subject, _ := chainAccessToken(t, provider, nil, "auth-noresource-subject")
+
+	proof := chainProofWithATH(t, key, "auth-5", chainIntrospectEndpoint, caller)
+
+	config.DPoPStrategy = &proofOnlyChainDPoPStrategy{}
+
+	_, err := chainIntrospectAs(t, provider, subject, "DPoP", caller, proof)
+
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The access token is invalid or was not presented in the manner it is bound to. The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access.")
 }
 
 func TestMTLSIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T) {
@@ -251,14 +263,14 @@ func TestMTLSIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 		_, err := chainIntrospectAsWithCert(t, provider, subject, "Bearer", caller, "", nil)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The access token is bound to a client certificate but the request was not made over a mutually authenticated TLS connection.")
 	})
 
 	t.Run("ShouldRejectADifferentCertificate", func(t *testing.T) {
 		_, err := chainIntrospectAsWithCert(t, provider, subject, "Bearer", caller, "", other)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The client certificate does not match the certificate the access token is bound to.")
 	})
 
 	t.Run("ShouldReadTheConfiguredProxyHeader", func(t *testing.T) {
@@ -282,7 +294,7 @@ func TestMTLSIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The client certificate does not match the certificate the access token is bound to.")
 	})
 
 	t.Run("ShouldSkipOnceMTLSIsDisabled", func(t *testing.T) {
@@ -320,7 +332,7 @@ func TestBothBindingsAreEnforcedIndependentlyAtIntrospection(t *testing.T) {
 			chainProofWithATH(t, key, "both-2", chainIntrospectEndpoint, caller), other)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The client certificate does not match the certificate the access token is bound to.")
 	})
 
 	t.Run("ShouldRejectTheCorrectCertificateWithAProofFromAnotherKey", func(t *testing.T) {
@@ -328,7 +340,7 @@ func TestBothBindingsAreEnforcedIndependentlyAtIntrospection(t *testing.T) {
 			chainProofWithATH(t, newPARProofKey(t), "both-3", chainIntrospectEndpoint, caller), cert)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the access token is bound to.")
 	})
 }
 
@@ -348,7 +360,7 @@ func TestIntrospectionDoesNotDemandAProofForTheIntrospectedToken(t *testing.T) {
 
 		bound, present := confirmationJKT(t, body)
 
-		require.True(t, present, "the resource server was not told the token it introspected is bound")
+		require.True(t, present)
 		assert.Equal(t, thumbprintOf(t, key), bound)
 	})
 
@@ -389,7 +401,7 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 			_, err := chainTokenRequest(t, provider, newExchange(t, provider), "")
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 		})
 
 		t.Run("ShouldAcceptACodeExchangeWithAProofAndBindTheToken", func(t *testing.T) {
@@ -403,7 +415,7 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 
 			bound, present := confirmationJKT(t, mustIntrospect(t, provider, response.GetAccessToken()))
 
-			require.True(t, present, "enforcement issued a token carrying no confirmation")
+			require.True(t, present)
 			assert.Equal(t, thumbprintOf(t, key), bound)
 
 			refresh, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
@@ -411,14 +423,14 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 			_, err = chainTokenRequest(t, provider, chainRefreshForm(refresh), "")
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 		})
 
 		t.Run("ShouldRejectClientCredentialsWithNoProof", func(t *testing.T) {
 			_, err := chainTokenRequest(t, provider, chainClientCredentialsForm(t, store), "")
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 		})
 	})
 
@@ -430,7 +442,7 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 			_, err := chainTokenRequestWithCert(t, provider, newExchange(t, provider), "", nil)
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 		})
 
 		t.Run("ShouldAcceptACodeExchangeWithACertificateAndBindTheToken", func(t *testing.T) {
@@ -446,14 +458,14 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 			_, err = chainTokenRequestWithCert(t, provider, chainRefreshForm(refresh), "", nil)
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 		})
 
 		t.Run("ShouldRejectClientCredentialsWithNoCertificate", func(t *testing.T) {
 			_, err := chainTokenRequestWithCert(t, provider, chainClientCredentialsForm(t, store), "", nil)
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 		})
 	})
 
@@ -491,7 +503,7 @@ func TestRefreshRequiresTheMTLSBindingTheGrantCarries(t *testing.T) {
 	requireCertBound(t, provider, response.GetAccessToken(), cert)
 
 	refresh, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refresh, "no refresh token was issued")
+	require.NotEmpty(t, refresh)
 
 	client.TLSClientCertificateBoundAccessTokens = false
 
@@ -499,14 +511,14 @@ func TestRefreshRequiresTheMTLSBindingTheGrantCarries(t *testing.T) {
 		_, err := chainTokenRequestWithCert(t, provider, chainRefreshForm(refresh), "", nil)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 	})
 
 	t.Run("ShouldRejectTheRefreshWithAnotherCertificate", func(t *testing.T) {
 		_, err := chainTokenRequestWithCert(t, provider, chainRefreshForm(refresh), "", other)
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_grant", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptTheBoundCertificateAndStayBound", func(t *testing.T) {
@@ -516,12 +528,12 @@ func TestRefreshRequiresTheMTLSBindingTheGrantCarries(t *testing.T) {
 		requireCertBound(t, provider, response.GetAccessToken(), cert)
 
 		rotated, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-		require.NotEmpty(t, rotated, "no rotated refresh token was issued")
+		require.NotEmpty(t, rotated)
 
 		_, err = chainTokenRequestWithCert(t, provider, chainRefreshForm(rotated), "", nil)
 
-		require.Error(t, err, "the rotated refresh token lost the binding")
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
 	})
 
 	t.Run("ShouldGoDormantOnceMTLSIsDisabled", func(t *testing.T) {
@@ -565,11 +577,8 @@ func TestBindingIsRequiredAtIntrospectionWhenEnforced(t *testing.T) {
 
 			require.Error(t, err)
 
-			rfc := oauth2.ErrorToRFC6749Error(err)
-
-			assert.Equal(t, "invalid_token", rfc.ErrorField)
-			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
-			assert.Equal(t, "The credential used to authenticate the request is not bound to a DPoP key.", rfc.HintField)
+			assert.Equal(t, http.StatusUnauthorized, oauth2.ErrorToRFC6749Error(err).CodeField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.")
 		})
 
 		t.Run("ShouldAcceptABoundCredentialWithAValidProof", func(t *testing.T) {
@@ -616,18 +625,15 @@ func TestBindingIsRequiredAtIntrospectionWhenEnforced(t *testing.T) {
 
 			require.Error(t, err)
 
-			rfc := oauth2.ErrorToRFC6749Error(err)
-
-			assert.Equal(t, "invalid_token", rfc.ErrorField)
-			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
-			assert.Equal(t, "The credential used to authenticate the request is not bound to a client certificate.", rfc.HintField)
+			assert.Equal(t, http.StatusUnauthorized, oauth2.ErrorToRFC6749Error(err).CodeField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.")
 		})
 
 		t.Run("ShouldRejectAnUnboundCredentialEvenWithACertificate", func(t *testing.T) {
 			_, err := chainIntrospectAsWithCert(t, provider, subject, "Bearer", unbound, "", cert)
 
 			require.Error(t, err)
-			assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.")
 		})
 
 		t.Run("ShouldAcceptABoundCredentialWithTheCertificate", func(t *testing.T) {
@@ -681,7 +687,7 @@ func TestDPoPPARStepEnforcement(t *testing.T) {
 			chainPARRequest(form, signPARProof(t, newPARProofKey(t), "chain-par-2", parEndpoint, nil)))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'dpop_jkt' parameter does not match the thumbprint of the public key in the DPoP proof.")
 	})
 
 	t.Run("ShouldRejectAMalformedDPoPJKT", func(t *testing.T) {
@@ -693,7 +699,7 @@ func TestDPoPPARStepEnforcement(t *testing.T) {
 		_, err := provider.NewPushedAuthorizeRequest(context.Background(), chainPARRequest(form))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'dpop_jkt' parameter must be the base64url encoded SHA-256 JWK Thumbprint of the DPoP proof-of-possession public key, which is 43 characters long.")
 	})
 }
 
@@ -765,7 +771,7 @@ func TestDPoPAuthorizeStepEnforcement(t *testing.T) {
 		_, err = provider.NewAuthorizeResponse(ctx, requester, &oauth2.DefaultSession{Subject: "peter"})
 		require.Error(t, err)
 
-		assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'dpop_jkt' parameter must be the base64url encoded SHA-256 JWK Thumbprint of the DPoP proof-of-possession public key, which is 43 characters long.")
 	})
 }
 
@@ -778,7 +784,7 @@ func TestDPoPCodeExchangeStepEnforcement(t *testing.T) {
 		_, err := chainTokenRequest(t, provider, chainCodeExchangeForm(chainBoundCode(t, provider, key, "chain-code-1")), "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
 	t.Run("ShouldRejectTheCodeExchangeWithAnotherKey", func(t *testing.T) {
@@ -790,7 +796,7 @@ func TestDPoPCodeExchangeStepEnforcement(t *testing.T) {
 			signPARProof(t, newPARProofKey(t), "chain-code-2-other", rtTokenEndpoint, nil))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptTheCodeExchangeWithTheBoundKey", func(t *testing.T) {
@@ -816,57 +822,76 @@ func TestRefreshValidatesTheDPoPProofItself(t *testing.T) {
 	key := newPARProofKey(t)
 
 	exchangeProof := signPARProof(t, key, "refresh-proof-exchange", rtTokenEndpoint, nil)
-	response, err := chainTokenRequest(t, provider, chainCodeExchangeForm(chainBoundCode(t, provider, key, "refresh-proof-code")), exchangeProof)
+
+	exchanged, err := chainTokenRequest(t, provider, chainCodeExchangeForm(chainBoundCode(t, provider, key, "refresh-proof-code")), exchangeProof)
 	require.NoError(t, err)
 
-	refresh, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refresh, "no refresh token was issued")
+	refresh, _ := exchanged.ToMap()[consts.AccessResponseRefreshToken].(string)
+	require.NotEmpty(t, refresh)
 
-	refuse := func(t *testing.T, proof string) {
-		t.Helper()
-
-		_, err := chainTokenRequest(t, provider, chainRefreshForm(refresh), proof)
-
-		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	testCases := []struct {
+		name     string
+		proof    func(t *testing.T) string
+		expected string
+		pattern  string
+	}{
+		{
+			name:     "ShouldRejectTheProofAlreadySpentAtTheCodeExchange",
+			proof:    func(t *testing.T) string { return exchangeProof },
+			expected: "The DPoP proof is missing or invalid. The DPoP proof has already been used.",
+		},
+		{
+			name:     "ShouldRejectAProofMintedForAnotherEndpoint",
+			proof:    func(t *testing.T) string { return signPARProof(t, key, "refresh-proof-htu", parEndpoint, nil) },
+			expected: "The DPoP proof is missing or invalid. The DPoP proof 'htu' claim 'https://as.example.com/par' does not match the request URI 'https://as.example.com/token'.",
+		},
+		{
+			name: "ShouldRejectAProofForAnotherMethod",
+			proof: func(t *testing.T) string {
+				return signPARProof(t, key, "refresh-proof-htm", rtTokenEndpoint, map[string]any{consts.ClaimHTTPMethod: http.MethodGet})
+			},
+			expected: "The DPoP proof is missing or invalid. The DPoP proof 'htm' claim 'GET' does not match the request method 'POST'.",
+		},
+		{
+			name: "ShouldRejectAProofOutsideTheIssuedAtWindow",
+			proof: func(t *testing.T) string {
+				return signPARProof(t, key, "refresh-proof-iat", rtTokenEndpoint, map[string]any{consts.ClaimIssuedAt: time.Now().Add(-time.Hour).Unix()})
+			},
+			pattern: `^The DPoP proof is missing or invalid\. The DPoP proof 'iat' claim is outside of the acceptable time window\. The proof was issued at '[^']+' and expired at '[^']+', being its lifespan of 10s plus the permitted clock skew of 10s\.$`,
+		},
 	}
 
-	t.Run("ShouldRejectTheProofAlreadySpentAtTheCodeExchange", func(t *testing.T) {
-		refuse(t, exchangeProof)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := chainTokenRequest(t, provider, chainRefreshForm(refresh), tc.proof(t))
 
-		_, err := chainTokenRequest(t, provider, chainRefreshForm(refresh), exchangeProof)
+			require.Error(t, err)
 
-		require.Error(t, err)
-		assert.Equal(t, "The DPoP proof has already been used.", oauth2.ErrorToRFC6749Error(err).HintField)
-	})
+			if tc.pattern != "" {
+				assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())
 
-	t.Run("ShouldRejectAProofMintedForAnotherEndpoint", func(t *testing.T) {
-		refuse(t, signPARProof(t, key, "refresh-proof-htu", parEndpoint, nil))
-	})
+				return
+			}
 
-	t.Run("ShouldRejectAProofForAnotherMethod", func(t *testing.T) {
-		refuse(t, signPARProof(t, key, "refresh-proof-htm", rtTokenEndpoint, map[string]any{consts.ClaimHTTPMethod: http.MethodGet}))
-	})
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
 
-	t.Run("ShouldRejectAProofOutsideTheIssuedAtWindow", func(t *testing.T) {
-		refuse(t, signPARProof(t, key, "refresh-proof-iat", rtTokenEndpoint, map[string]any{consts.ClaimIssuedAt: time.Now().Add(-time.Hour).Unix()}))
-	})
-
-	t.Run("ShouldAcceptAFreshProofAndRotate", func(t *testing.T) {
+	t.Run("ShouldAcceptAFreshProofAndRejectItsReuseOnTheRotatedToken", func(t *testing.T) {
 		fresh := signPARProof(t, key, "refresh-proof-fresh", rtTokenEndpoint, nil)
 
-		response, err := chainTokenRequest(t, provider, chainRefreshForm(refresh), fresh)
+		rotatedResponse, err := chainTokenRequest(t, provider, chainRefreshForm(refresh), fresh)
 		require.NoError(t, err)
 
-		assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
+		assert.Equal(t, oauth2.DPoPAccessToken, rotatedResponse.GetTokenType())
 
-		rotated, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-		require.NotEmpty(t, rotated, "no rotated refresh token was issued")
+		rotated, _ := rotatedResponse.ToMap()[consts.AccessResponseRefreshToken].(string)
+		require.NotEmpty(t, rotated)
 
 		_, err = chainTokenRequest(t, provider, chainRefreshForm(rotated), fresh)
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
-		assert.Equal(t, "The DPoP proof has already been used.", oauth2.ErrorToRFC6749Error(err).HintField)
+
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof has already been used.")
 	})
 }
 
@@ -880,13 +905,13 @@ func TestDPoPRefreshStepEnforcement(t *testing.T) {
 	require.NoError(t, err)
 
 	refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-	require.NotEmpty(t, refreshToken, "no refresh token was issued")
+	require.NotEmpty(t, refreshToken)
 
 	t.Run("ShouldRejectTheRefreshWithoutAProof", func(t *testing.T) {
 		_, err := chainTokenRequest(t, provider, chainRefreshForm(refreshToken), "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
 	t.Run("ShouldRejectTheRefreshWithAnotherKey", func(t *testing.T) {
@@ -894,7 +919,7 @@ func TestDPoPRefreshStepEnforcement(t *testing.T) {
 			signPARProof(t, newPARProofKey(t), "chain-refresh-other", rtTokenEndpoint, nil))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptTheRefreshWithTheBoundKeyAndStayBound", func(t *testing.T) {
@@ -905,18 +930,18 @@ func TestDPoPRefreshStepEnforcement(t *testing.T) {
 		assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
 
 		rotated, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
-		require.NotEmpty(t, rotated, "no rotated refresh token was issued")
+		require.NotEmpty(t, rotated)
 
 		_, err = chainTokenRequest(t, provider, chainRefreshForm(rotated), "")
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 
 		_, err = chainTokenRequest(t, provider, chainRefreshForm(rotated),
 			signPARProof(t, newPARProofKey(t), "chain-refresh-rotated-other", rtTokenEndpoint, nil))
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_dpop_proof", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
 
 		response, err = chainTokenRequest(t, provider, chainRefreshForm(rotated),
 			signPARProof(t, key, "chain-refresh-3", rtTokenEndpoint, nil))
@@ -949,7 +974,7 @@ func TestIntrospectionClientAuthCanBeDisabled(t *testing.T) {
 		assert.NotContains(t, body, "active")
 
 		challenge := header.Get(consts.HeaderWWWAuthenticate)
-		require.NotEmpty(t, challenge, "a caller refused for using client authentication was told nothing about the scheme that would work")
+		require.NotEmpty(t, challenge)
 		assert.Contains(t, challenge, "Bearer")
 		assert.Contains(t, challenge, "DPoP")
 	})
@@ -968,7 +993,7 @@ func TestIntrospectionClientAuthCanBeDisabled(t *testing.T) {
 		_, err := chainIntrospectAs(t, provider, subject, "Bearer", caller, "")
 
 		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:not:granted', at least one of which is required.")
 	})
 }
 
@@ -1086,7 +1111,7 @@ func requireCertBound(t *testing.T, provider oauth2.Provider, token string, cert
 	t.Helper()
 
 	cnf, ok := mustIntrospect(t, provider, token)["cnf"].(map[string]any)
-	require.True(t, ok, "the token the fixture issued carries no confirmation claim, so it is not certificate bound")
+	require.True(t, ok, "the fixture issued a token with no confirmation claim")
 
 	assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(cert), cnf["x5t#S256"],
 		"the token the fixture issued is not bound to the certificate it presented")
@@ -1100,8 +1125,6 @@ func mustIntrospect(t *testing.T, provider oauth2.Provider, token string) map[st
 
 	return body
 }
-
-const chainIntrospectEndpoint = "https://as.example.com/introspect"
 
 func chainProofWithATH(t *testing.T, key *jose.JSONWebKey, jti, url, token string) string {
 	t.Helper()
@@ -1196,25 +1219,6 @@ func chainClientCredentialsForm(t *testing.T, store *storage.MemoryStore) url.Va
 		consts.FormParameterScope:     []string{consts.ScopeOffline},
 	}
 }
-
-type proofOnlyChainDPoPStrategy struct{}
-
-func (proofOnlyChainDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
-	return &oauth2.DPoPProof{}, nil
-}
-
-func (proofOnlyChainDPoPStrategy) NewDPoPNonce(_ context.Context) (nonce string, err error) {
-	return "", nil
-}
-
-func (proofOnlyChainDPoPStrategy) ValidateDPoPNonce(_ context.Context, _ string) (err error) {
-	return nil
-}
-
-const (
-	chainClientID = "dpop-chain-client"
-	chainSecret   = "dpop-chain-client-secret"
-)
 
 func newDPoPChainProvider(t *testing.T) (provider oauth2.Provider, store *storage.MemoryStore) {
 	t.Helper()
@@ -1399,3 +1403,23 @@ func chainRefreshForm(refreshToken string) url.Values {
 		consts.FormParameterRefreshToken: []string{refreshToken},
 	}
 }
+
+type proofOnlyChainDPoPStrategy struct{}
+
+func (proofOnlyChainDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
+	return &oauth2.DPoPProof{}, nil
+}
+
+func (proofOnlyChainDPoPStrategy) NewDPoPNonce(_ context.Context) (nonce string, err error) {
+	return "", nil
+}
+
+func (proofOnlyChainDPoPStrategy) ValidateDPoPNonce(_ context.Context, _ string) (err error) {
+	return nil
+}
+
+const (
+	chainClientID           = "dpop-chain-client"
+	chainSecret             = "dpop-chain-client-secret"
+	chainIntrospectEndpoint = "https://as.example.com/introspect"
+)

@@ -17,28 +17,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-type testStrategyConfig struct {
-	algs     []string
-	skew     time.Duration
-	lifespan time.Duration
-	nonceExp time.Duration
-}
-
-func (c *testStrategyConfig) GetDPoPAllowedJWSAlgorithms(context.Context) []string { return c.algs }
-
-func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration { return c.skew }
-
-func (c *testStrategyConfig) GetDPoPProofLifespan(context.Context) time.Duration { return c.lifespan }
-
-func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration { return c.nonceExp }
-
-func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
-	store := storage.NewMemoryStore()
-	cfg := &testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, lifespan: time.Minute, nonceExp: time.Minute}
-
-	return NewDefaultStrategy(cfg, store), store
-}
-
 func TestStrategyValidateProofAcceptsMatchingMethodURL(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)
@@ -58,17 +36,25 @@ func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
 	)
 
 	testCases := []struct {
-		name   string
-		offset time.Duration
-		ok     bool
+		name    string
+		offset  time.Duration
+		pattern string
 	}{
-		{name: "ShouldAcceptWellWithinTheSkewAhead", offset: 10 * time.Second, ok: true},
-		{name: "ShouldAcceptAtTheSkewAhead", offset: skew - time.Second, ok: true},
-		{name: "ShouldRejectBeyondTheSkewAhead", offset: skew + 5*time.Second},
-		{name: "ShouldAcceptWithinTheLifespan", offset: -10 * time.Second, ok: true},
-		{name: "ShouldAcceptPastTheLifespanButWithinTheSkew", offset: -(lifespan + 10*time.Second), ok: true},
-		{name: "ShouldAcceptJustInsideTheOuterBound", offset: -(lifespan + skew - 5*time.Second), ok: true},
-		{name: "ShouldRejectBeyondTheLifespanPlusSkew", offset: -(lifespan + skew + 5*time.Second)},
+		{name: "ShouldAcceptWellWithinTheSkewAhead", offset: 10 * time.Second},
+		{name: "ShouldAcceptAtTheSkewAhead", offset: skew - time.Second},
+		{
+			name:    "ShouldRejectBeyondTheSkewAhead",
+			offset:  skew + 5*time.Second,
+			pattern: `^The DPoP proof is missing or invalid\. The DPoP proof 'iat' claim is outside of the acceptable time window\. The proof was issued at '[^']+', which is further into the future than the permitted clock skew of 30s allows\.$`,
+		},
+		{name: "ShouldAcceptWithinTheLifespan", offset: -10 * time.Second},
+		{name: "ShouldAcceptPastTheLifespanButWithinTheSkew", offset: -(lifespan + 10*time.Second)},
+		{name: "ShouldAcceptJustInsideTheOuterBound", offset: -(lifespan + skew - 5*time.Second)},
+		{
+			name:    "ShouldRejectBeyondTheLifespanPlusSkew",
+			offset:  -(lifespan + skew + 5*time.Second),
+			pattern: `^The DPoP proof is missing or invalid\. The DPoP proof 'iat' claim is outside of the acceptable time window\. The proof was issued at '[^']+' and expired at '[^']+', being its lifespan of 15s plus the permitted clock skew of 30s\.$`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -83,7 +69,7 @@ func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
 
 			_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 
-			if tc.ok {
+			if tc.pattern == "" {
 				assert.NoError(t, err)
 
 				return
@@ -91,7 +77,7 @@ func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
-			assert.Equal(t, "The DPoP proof 'iat' claim is outside of the acceptable time window.", oauth2.ErrorToRFC6749Error(err).HintField)
+			assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())
 		})
 	}
 
@@ -107,6 +93,7 @@ func TestStrategyValidateProofIssuedAtWindow(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+		assert.Regexp(t, `^The DPoP proof is missing or invalid\. The DPoP proof 'iat' claim is outside of the acceptable time window\. The proof was issued at '[^']+', which is further into the future than the permitted clock skew of 30s allows\.$`, oauth2.ErrorToDebugRFC6749Error(err).Error())
 	})
 }
 
@@ -121,12 +108,12 @@ func TestStrategyValidateProofReplayMarkerCoversTheWholeWindow(t *testing.T) {
 	})
 
 	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
-	require.NoError(t, err, "a proof issued within the skew ahead should be accepted")
+	require.NoError(t, err)
 
 	_, err = s.ValidateDPoPProof(context.Background(), http.MethodPost, "https://as.example.com/token", raw, false)
 
 	require.Error(t, err)
-	assert.Equal(t, "The DPoP proof has already been used.", oauth2.ErrorToRFC6749Error(err).HintField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof has already been used.")
 }
 
 func TestStrategyValidateProofReplay(t *testing.T) {
@@ -238,7 +225,7 @@ func TestStrategyReplayMarkerCoversFullIATWindow(t *testing.T) {
 	require.NoError(t, err)
 
 	exp, ok := store.DPoPProofJTIs[storage.DPoPProofMarker{JTI: "future-iat", Method: http.MethodPost, URL: "https://as.example.com/token"}]
-	require.True(t, ok, "expected the proof jti to be recorded as used")
+	require.True(t, ok, "the proof jti was never recorded as used")
 
 	wantMin := time.Unix(iat.Unix(), 0).Add(time.Minute)
 	assert.Falsef(t, exp.Before(wantMin), "replay marker expiry %s is before the end of the iat acceptance window %s", exp, wantMin)
@@ -447,5 +434,27 @@ func TestStrategyValidateProofAgainstReconstructedRequestURI(t *testing.T) {
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
 }
+
+func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
+	store := storage.NewMemoryStore()
+	cfg := &testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, lifespan: time.Minute, nonceExp: time.Minute}
+
+	return NewDefaultStrategy(cfg, store), store
+}
+
+type testStrategyConfig struct {
+	algs     []string
+	skew     time.Duration
+	lifespan time.Duration
+	nonceExp time.Duration
+}
+
+func (c *testStrategyConfig) GetDPoPAllowedJWSAlgorithms(context.Context) []string { return c.algs }
+
+func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration { return c.skew }
+
+func (c *testStrategyConfig) GetDPoPProofLifespan(context.Context) time.Duration { return c.lifespan }
+
+func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration { return c.nonceExp }
 
 var _ = jose.ES256

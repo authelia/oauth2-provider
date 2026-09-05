@@ -21,6 +21,33 @@ import (
 	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
+func TestAuthorizeJWTBearerSuite(t *testing.T) {
+	provider := compose.Compose(
+		&oauth2.Config{
+			GrantTypeJWTBearerCanSkipClientAuth:  true,
+			GrantTypeJWTBearerIDOptional:         true,
+			GrantTypeJWTBearerIssuedDateOptional: true,
+			GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
+		},
+		store,
+		jwtStrategy,
+		compose.OAuth2ClientCredentialsGrantFactory,
+		compose.RFC7523AssertionGrantFactory,
+	)
+	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
+	defer testServer.Close()
+
+	client := newJWTBearerAppClient(testServer)
+	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
+		assert.Nil(t, err)
+	}
+
+	suite.Run(t, &authorizeJWTBearerSuite{
+		client: client,
+	})
+}
+
 type authorizeJWTBearerSuite struct {
 	suite.Suite
 
@@ -391,7 +418,7 @@ func (s *authorizeJWTBearerSuite) assertSuccessResponse(t *testing.T, token *cli
 	assert.Nil(t, err)
 	require.NotNil(t, token)
 
-	assert.Equal(t, token.TokenType, "bearer")
+	assert.Equal(t, "bearer", token.TokenType)
 	assert.Empty(t, token.RefreshToken)
 	assert.NotEmpty(t, token.ExpiresIn)
 	assert.NotEmpty(t, token.AccessToken)
@@ -404,31 +431,4 @@ func (s *authorizeJWTBearerSuite) assertBadResponse(t *testing.T, token *clients
 	retrieveError, ok := err.(*clients.RequestError)
 	assert.True(t, ok)
 	assert.Equal(t, retrieveError.Response.StatusCode, http.StatusBadRequest)
-}
-
-func TestAuthorizeJWTBearerSuite(t *testing.T) {
-	provider := compose.Compose(
-		&oauth2.Config{
-			GrantTypeJWTBearerCanSkipClientAuth:  true,
-			GrantTypeJWTBearerIDOptional:         true,
-			GrantTypeJWTBearerIssuedDateOptional: true,
-			GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
-			AllowedJWTAssertionAudiences:         []string{tokenURL},
-		},
-		store,
-		jwtStrategy,
-		compose.OAuth2ClientCredentialsGrantFactory,
-		compose.RFC7523AssertionGrantFactory,
-	)
-	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
-	defer testServer.Close()
-
-	client := newJWTBearerAppClient(testServer)
-	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
-		assert.Nil(t, err)
-	}
-
-	suite.Run(t, &authorizeJWTBearerSuite{
-		client: client,
-	})
 }

@@ -130,7 +130,6 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
-			//expectErr: oauth2.ErrInvalidGrant,
 			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'nonce' must be set when requesting an ID Token using the OpenID Connect Hybrid Flow.",
 			expectedField: "invalid_request",
 		},
@@ -436,14 +435,6 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
-var hmacStrategy = &hoauth2.HMACCoreStrategy{
-	Enigma: &hmac.HMACStrategy{
-		Config: &oauth2.Config{
-			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
-		},
-	},
-}
-
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
 	config := &oauth2.Config{
 		ScopeStrategy:         oauth2.HierarchicScopeStrategy,
@@ -517,4 +508,12 @@ func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 		s.Claims = &jwt.IDTokenClaims{}
 	}
 	return s.Claims
+}
+
+var hmacStrategy = &hoauth2.HMACCoreStrategy{
+	Enigma: &hmac.HMACStrategy{
+		Config: &oauth2.Config{
+			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
+		},
+	},
 }

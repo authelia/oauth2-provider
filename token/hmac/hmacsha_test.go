@@ -15,13 +15,6 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-const (
-	validSecret   = "1234567890123456789012345678901234567890"
-	otherSecret   = "abcdefgh90123456789012345678901234567890"
-	rotatedSecret = "0000000090123456789012345678901234567890"
-	shortSecret   = "abcdefgh90123456789012345678901"
-)
-
 func TestHMACStrategyGenerate(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -72,7 +65,7 @@ func TestHMACStrategyGenerate(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, token)
 			assert.NotEmpty(t, signature)
-			assert.Equal(t, signature, cg.Signature(token), "Signature() must extract the same signature")
+			assert.Equal(t, signature, cg.Signature(token))
 
 			require.NoError(t, cg.Validate(context.Background(), token))
 		})
@@ -349,3 +342,10 @@ func TestHMACStrategySignature(t *testing.T) {
 		})
 	}
 }
+
+const (
+	validSecret   = "1234567890123456789012345678901234567890"
+	otherSecret   = "abcdefgh90123456789012345678901234567890"
+	rotatedSecret = "0000000090123456789012345678901234567890"
+	shortSecret   = "abcdefgh90123456789012345678901"
+)

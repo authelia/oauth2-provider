@@ -218,11 +218,20 @@ func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
 	authenticated.GrantScope("read")
 
 	testCases := []struct {
-		name  string
-		scope string
+		name     string
+		scope    string
+		expected string
 	}{
-		{"ShouldRejectPrimaryRegistrationScope", "authelia:oauth2:client_registration"},
-		{"ShouldRejectSecondaryRegistrationScope", "urn:example:register"},
+		{
+			name:     "ShouldRejectPrimaryRegistrationScope",
+			scope:    "authelia:oauth2:client_registration",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes 'authelia:oauth2:client_registration' which the presented Client Registration Token is not permitted to grant.",
+		},
+		{
+			name:     "ShouldRejectSecondaryRegistrationScope",
+			scope:    "urn:example:register",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes 'urn:example:register' which the presented Client Registration Token is not permitted to grant.",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -230,7 +239,7 @@ func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
 			err := CheckGrantableScopes(ctx, config, authenticated, &oauth2.ClientRegistrationMetadata{Scope: tc.scope})
 
 			require.Error(t, err)
-			assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, tc.scope)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 

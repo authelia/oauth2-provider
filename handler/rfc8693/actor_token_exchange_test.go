@@ -2,12 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// These tests cover the differing treatment of the 'subject_token' and 'actor_token' in the handlers that resolve a
-// token back to the request it was issued for: AccessTokenTypeHandler and RefreshTokenTypeHandler.
-//
-// A subject token issued to the requesting client is a self-exchange and is refused. An actor token issued to the
-// requesting client identifies that client as the acting party, which per RFC 8693 §2.1 is the ordinary delegation
-// case. Appendix A.2 illustrates it, with an actor token holding no scopes of its own.
+// RFC 8693 §2.1 and Appendix A.2: an actor token issued to the requesting client is the ordinary delegation case,
+// whereas a subject token issued to it is a self-exchange and is refused.
 
 package rfc8693_test
 
@@ -63,9 +59,8 @@ func TestSpec_2_1_ActorToken_RefreshTokenIssuedToRequestingClientIsAccepted(t *t
 
 	session := newSpecSession("alice")
 	req := newExchangeRequest(t, client, session, url.Values{
-		consts.FormParameterActorTokenType: {consts.TokenTypeRFC8693RefreshToken},
-		consts.FormParameterActorToken:     {createExchangeRefreshToken(t, strategy, store, client, "bob")},
-		// An access-token subject token keeps this handler's subject branch out of the test.
+		consts.FormParameterActorTokenType:   {consts.TokenTypeRFC8693RefreshToken},
+		consts.FormParameterActorToken:       {createExchangeRefreshToken(t, strategy, store, client, "bob")},
 		consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
 		consts.FormParameterSubjectToken:     {"opaque-subject-token"},
 	})
@@ -91,8 +86,7 @@ func TestSpec_2_4_Errors_RefreshTokenSelfSubjectExchangeReturnsInvalidGrant(t *t
 	err := newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(),
-		"Clients are not allowed to perform a token exchange on their own tokens.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Clients are not allowed to perform a token exchange on their own tokens.")
 }
 
 // A client's own exchange policy is not consulted for its own actor token, otherwise it would have to list itself
@@ -137,8 +131,7 @@ func TestSpec_2_1_ActorToken_ForeignTokenStillGatedByExchangePolicy(t *testing.T
 	err := newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(),
-		"The OAuth 2.0 client is not permitted to exchange an actor token issued to client actor-token-client")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 client is not permitted to exchange an actor token issued to client actor-token-client")
 }
 
 // So is a subject token issued to another client.
@@ -162,8 +155,7 @@ func TestSpec_2_1_SubjectToken_ForeignTokenStillGatedByExchangePolicy(t *testing
 	err := newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(),
-		"The OAuth 2.0 client is not permitted to exchange a subject token issued to client subject-token-client")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 client is not permitted to exchange a subject token issued to client subject-token-client")
 }
 
 // The actor token's granted scopes do not constrain the requested scopes. The actor token in the Appendix A.2
@@ -203,10 +195,6 @@ func TestSpec_2_4_Errors_SubjectTokenMissingRequestedScopeReturnsInvalidScope(t 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidScope)
 }
-
-// =============================================================================
-// Test helpers
-// =============================================================================
 
 // newExchangeFixture returns a spec config, an example store and the HMAC core strategy wired to that config.
 func newExchangeFixture(t *testing.T) (cfg *oauth2.Config, store *storage.MemoryStore, strategy hoauth2.CoreStrategy) {

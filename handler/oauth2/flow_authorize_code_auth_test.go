@@ -18,11 +18,6 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-func parseUrl(uu string) *url.URL {
-	u, _ := url.Parse(uu)
-	return u
-}
-
 func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -203,4 +198,9 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			}
 		})
 	}
+}
+
+func parseUrl(uu string) *url.URL {
+	u, _ := url.Parse(uu)
+	return u
 }

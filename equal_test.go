@@ -28,7 +28,7 @@ func TestAssertObjectsAreEqualByKeys(t *testing.T) {
 }
 
 func AssertObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
-	assert.True(t, len(keys) > 0, "No key provided.")
+	assert.True(t, len(keys) > 0)
 	for _, k := range keys {
 		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
@@ -39,7 +39,7 @@ func AssertObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 }
 
 func AssertObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
-	assert.True(t, len(keys) > 0, "No key provided.")
+	assert.True(t, len(keys) > 0)
 	for _, k := range keys {
 		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
@@ -50,7 +50,7 @@ func AssertObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
 }
 
 func RequireObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
-	assert.True(t, len(keys) > 0, "No key provided.")
+	assert.True(t, len(keys) > 0)
 	for _, k := range keys {
 		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)
@@ -61,7 +61,7 @@ func RequireObjectKeysEqual(t *testing.T, a, b any, keys ...string) {
 }
 
 func RequireObjectKeysNotEqual(t *testing.T, a, b any, keys ...string) {
-	assert.True(t, len(keys) > 0, "No key provided.")
+	assert.True(t, len(keys) > 0)
 	for _, k := range keys {
 		c, err := reflection.GetField(a, k)
 		assert.NoError(t, err)

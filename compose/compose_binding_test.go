@@ -14,7 +14,7 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-func TestComposeRegistersBindingHandlers(t *testing.T) {
+func TestComposeRegistersBindingHandlersWithoutRegisteringThemAsEndpointHandlers(t *testing.T) {
 	config := &oauth2.Config{GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
 
 	Compose(

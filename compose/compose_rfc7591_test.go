@@ -144,6 +144,6 @@ func TestComposeAllEnabledOmitsRegistrationTokenIntrospection(t *testing.T) {
 
 	for _, introspector := range config.GetTokenIntrospectionHandlers(context.Background()) {
 		_, ok := introspector.(*rfc7591.ClientRegistrationTokenIntrospector)
-		assert.False(t, ok, "ComposeAllEnabled must not register the RFC 7591 registration token introspector")
+		assert.False(t, ok)
 	}
 }

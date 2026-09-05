@@ -151,9 +151,7 @@ func TestGetLangFromRequest(t *testing.T) {
 			expected: language.English,
 		},
 		{
-			// The 'lang' cookie is serialized through http.Cookie.String() ("lang=es") before
-			// it reaches the matcher, so it never parses as a language tag. This asserts the
-			// current behaviour: a 'lang' cookie has no effect on language detection.
+			// http.Cookie.String() yields "lang=es", which never parses as a language tag.
 			name:     "ShouldNotDetectLanguageFromLangCookie",
 			catalog:  catalog,
 			request:  newLangRequest("es", ""),

@@ -19,11 +19,6 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-func parseURL(uu string) *url.URL {
-	u, _ := url.Parse(uu)
-	return u
-}
-
 func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 	requestURIPrefix := "urn:ietf:params:oauth:request_uri_diff:"
 
@@ -188,6 +183,11 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func parseURL(uu string) *url.URL {
+	u, _ := url.Parse(uu)
+	return u
 }
 
 type PARCTestClient struct {

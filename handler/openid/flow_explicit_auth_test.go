@@ -169,9 +169,6 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
-// expose key to verify id_token
-var key = gen.MustRSAKey()
-
 //nolint:unparam
 func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {
 	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
@@ -196,3 +193,5 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 		Config:                        config,
 	}, store
 }
+
+var key = gen.MustRSAKey()

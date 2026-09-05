@@ -6,8 +6,10 @@ package rfc7591
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -66,7 +68,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' document does not contain the 'redirect_uris' value 'https://example.com/elsewhere'.")
 	})
 
 	t.Run("ShouldRejectNonArrayDocument", func(t *testing.T) {
@@ -76,7 +78,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value '%s/bad-json' did not return a JSON array of redirect URI strings. json: cannot unmarshal object into Go value of type []string", server.URL))
 	})
 
 	t.Run("ShouldRejectNonOKStatus", func(t *testing.T) {
@@ -88,7 +90,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value '%s/missing' returned HTTP status code 404 instead of the expected 200.", server.URL))
 	})
 
 	t.Run("ShouldRejectTransportFailure", func(t *testing.T) {
@@ -101,7 +103,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value '%[1]s/unreachable' could not be fetched. GET %[1]s/unreachable giving up after 1 attempt(s): Get '%[1]s/unreachable': dial tcp %[2]s: connect: connection refused", closedServer.URL, strings.TrimPrefix(closedServer.URL, "https://")))
 	})
 
 	t.Run("ShouldRejectNonHTTPSSectorIdentifierURI", func(t *testing.T) {
@@ -111,7 +113,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'ftp://example.com/sector' must use the 'https' scheme.")
 	})
 
 	t.Run("ShouldRejectPlainHTTPLoopbackSectorIdentifierURI", func(t *testing.T) {
@@ -121,8 +123,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
-		assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "must use the 'https' scheme")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'http://127.0.0.1:8080/sector' must use the 'https' scheme.")
 	})
 
 	t.Run("ShouldRejectUnparseableSectorIdentifierURI", func(t *testing.T) {
@@ -132,7 +133,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'https://example.com:abc/sector' could not be parsed as a URI. parse 'https://example.com:abc/sector': invalid port ':abc' after host")
 	})
 
 	t.Run("ShouldRejectRedirect", func(t *testing.T) {
@@ -142,6 +143,6 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value '%s/redirect' returned HTTP status code 302 instead of the expected 200.", server.URL))
 	})
 }

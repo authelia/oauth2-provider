@@ -80,10 +80,7 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, which makes a PUT carrying none a
-// shape the interface itself admits. It must be answered with an error rather than dereferenced - without the guard
-// the nil reaches the validator chain and the handler panics - and the target client must be left untouched, since
-// RFC 7592 §2.2 replacement semantics would otherwise read an empty PUT as "replace everything with nothing".
+// RFC 7592 §2.2: replacement semantics would read a PUT carrying no metadata as "replace everything with nothing".
 func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, config, store := newConfigurationHandler(t)
@@ -99,19 +96,11 @@ func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request did not contain any client metadata.")
 
 	client, gerr := store.GetClient(ctx, id)
 	require.NoError(t, gerr)
 	assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs())
-}
-
-type failingUpdateClientStore struct {
-	Storage
-}
-
-func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
-	return errTestUpdateClientFailed
 }
 
 func TestClientConfigurationHandlerUpdateLeavesClientIntactWhenStoreFails(t *testing.T) {
@@ -132,7 +121,7 @@ func TestClientConfigurationHandlerUpdateLeavesClientIntactWhenStoreFails(t *tes
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "server_error", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. update client failed")
 
 	client, gerr := store.GetClient(ctx, id)
 	require.NoError(t, gerr)
@@ -161,7 +150,7 @@ func TestClientConfigurationHandlerUpdateRejectsClientIDMismatch(t *testing.T) {
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'client_id' in the request body, if present, must match the client_id in the request path.")
 
 	client, gerr := store.GetClient(ctx, id)
 	require.NoError(t, gerr)
@@ -185,7 +174,7 @@ func TestClientConfigurationHandlerUpdateRejectsWrongClientSecret(t *testing.T) 
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'client_secret' in the request body does not match the client's current secret. secrets don't match")
 
 	client, gerr := store.GetClient(ctx, id)
 	require.NoError(t, gerr)
@@ -268,7 +257,7 @@ func TestClientConfigurationHandlerRejectsUnsupportedMethod(t *testing.T) {
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_request", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The client configuration endpoint does not support the 'PATCH' method.")
 }
 
 func TestClientConfigurationHandlerEnforcesScopeCeiling(t *testing.T) {
@@ -591,60 +580,6 @@ func TestClientConfigurationHandlerIgnoresDisabledFeatureMetadataOnUpdate(t *tes
 	assert.False(t, registered.DPoPBoundAccessTokens)
 }
 
-func newConfigurationHandler(t *testing.T) (*ClientConfigurationHandler, *ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {
-	t.Helper()
-
-	config := &oauth2.Config{
-		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
-		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
-		TokenEntropy:                          32,
-	}
-
-	store := storage.NewMemoryStore()
-	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-
-	return &ClientConfigurationHandler{Store: store, Strategy: tokens, Config: config},
-		&ClientRegistrationHandler{Store: store, Strategy: tokens, Config: config},
-		config, store
-}
-
-func registerClient(t *testing.T, ctx context.Context, handler *ClientRegistrationHandler) map[string]any {
-	t.Helper()
-
-	requester := oauth2.NewClientRegistrationRequest()
-	requester.Metadata = &oauth2.ClientRegistrationMetadata{
-		RedirectURIs:  []string{"https://example.com/cb"},
-		GrantTypes:    []string{"authorization_code"},
-		ResponseTypes: []string{"code"},
-		ClientName:    "Example",
-		Contacts:      []string{"ops@example.com"},
-	}
-
-	responder := oauth2.NewClientRegistrationResponse()
-
-	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
-
-	return responder.ToMap()
-}
-
-type scopeStrategyClient struct {
-	oauth2.Client
-}
-
-func (c *scopeStrategyClient) GetScopeStrategy(_ context.Context) (strategy oauth2.ScopeStrategy) {
-	return func(haystack []string, needle string) bool { return true }
-}
-
-type audienceStrategyClient struct {
-	oauth2.Client
-}
-
-func (c *audienceStrategyClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
-	return func(haystack, needle []string) error { return nil }
-}
-
 func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, config, store := newConfigurationHandler(t)
@@ -698,4 +633,66 @@ func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
 				"reporting 0 would state the secret does not expire when it does")
 		})
 	}
+}
+
+func newConfigurationHandler(t *testing.T) (*ClientConfigurationHandler, *ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {
+	t.Helper()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
+		TokenEntropy:                          32,
+	}
+
+	store := storage.NewMemoryStore()
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	return &ClientConfigurationHandler{Store: store, Strategy: tokens, Config: config},
+		&ClientRegistrationHandler{Store: store, Strategy: tokens, Config: config},
+		config, store
+}
+
+func registerClient(t *testing.T, ctx context.Context, handler *ClientRegistrationHandler) map[string]any {
+	t.Helper()
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+		ClientName:    "Example",
+		Contacts:      []string{"ops@example.com"},
+	}
+
+	responder := oauth2.NewClientRegistrationResponse()
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
+
+	return responder.ToMap()
+}
+
+type failingUpdateClientStore struct {
+	Storage
+}
+
+func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
+	return errTestUpdateClientFailed
+}
+
+type scopeStrategyClient struct {
+	oauth2.Client
+}
+
+func (c *scopeStrategyClient) GetScopeStrategy(_ context.Context) (strategy oauth2.ScopeStrategy) {
+	return func(haystack []string, needle string) bool { return true }
+}
+
+type audienceStrategyClient struct {
+	oauth2.Client
+}
+
+func (c *audienceStrategyClient) GetAudienceStrategy(_ context.Context) (strategy oauth2.AudienceStrategy) {
+	return func(haystack, needle []string) error { return nil }
 }

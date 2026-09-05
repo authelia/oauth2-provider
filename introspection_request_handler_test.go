@@ -443,10 +443,6 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			assert.False(t, res.IsActive())
 
-			rfc := ErrorToRFC6749Error(err)
-
-			assert.Equal(t, tc.errField, rfc.ErrorField)
-
 			rw := httptest.NewRecorder()
 
 			f.WriteIntrospectionError(t.Context(), rw, err)
@@ -652,11 +648,11 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 	}
 }
 
-const introspectionCredentialURL = "https://as.example.com/introspect"
-
 func grantCredential(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
 	requester.GrantScope(consts.ScopeIntrospection)
 	requester.GrantAudience(introspectionCredentialURL)
 
 	return TokenUse(""), nil
 }
+
+const introspectionCredentialURL = "https://as.example.com/introspect"

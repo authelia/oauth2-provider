@@ -88,7 +88,7 @@ func TestClientRegistrationHandlerRejectsNilMetadata(t *testing.T) {
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, oauth2.NewClientRegistrationRequest(), oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request did not contain any client metadata.")
 	assert.Empty(t, store.Clients)
 }
 
@@ -105,7 +105,7 @@ func TestClientRegistrationHandlerRunsValidators(t *testing.T) {
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb#frag' must not contain a fragment component.")
 	assert.Empty(t, store.Clients)
 }
 
@@ -122,7 +122,7 @@ func TestClientRegistrationHandlerValidatesByDefault(t *testing.T) {
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb#frag' must not contain a fragment component.")
 	assert.Empty(t, store.Clients)
 }
 
@@ -185,7 +185,7 @@ func TestClientRegistrationHandlerNilStrategy(t *testing.T) {
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 	require.Error(t, err)
-	assert.Equal(t, oauth2.ErrServerError.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. No RFC 7591 client registration strategy is configured.")
 
 	assert.Empty(t, store.Clients)
 }
@@ -206,7 +206,7 @@ func TestClientRegistrationHandlerCompensatingDelete(t *testing.T) {
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder)
 	require.Error(t, err)
-	assert.Equal(t, oauth2.ErrServerError.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. create access token session failed")
 	assert.Empty(t, responder.ClientID)
 	require.NotEmpty(t, wrapped.createdID)
 
@@ -440,42 +440,6 @@ func TestClientRegistrationHandlerPropagatesMetadataStrategyError(t *testing.T) 
 	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
 }
 
-func newRegistrationHandler(t *testing.T) (*ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {
-	t.Helper()
-
-	config := &oauth2.Config{
-		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
-		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
-		TokenEntropy:                          32,
-	}
-
-	store := storage.NewMemoryStore()
-
-	return &ClientRegistrationHandler{
-		Store:    store,
-		Strategy: hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"),
-		Config:   config,
-	}, config, store
-}
-
-type failingSessionStore struct {
-	Storage
-
-	createdID string
-}
-
-func (f *failingSessionStore) CreateClient(ctx context.Context, client oauth2.Client) (err error) {
-	f.createdID = client.GetID()
-
-	return f.Storage.CreateClient(ctx, client)
-}
-
-func (f *failingSessionStore) CreateClientRegistrationTokenSession(ctx context.Context, signature string, requester oauth2.Requester) (err error) {
-	return errTestCreateSessionFailed
-}
-
 func TestClientRegistrationHandlerPersistsClientSecretExpiry(t *testing.T) {
 	ctx := context.Background()
 	handler, config, store := newRegistrationHandler(t)
@@ -511,4 +475,40 @@ func TestClientRegistrationHandlerPersistsClientSecretExpiry(t *testing.T) {
 	assert.False(t, registered.ClientSecretExpiresAt.IsZero(),
 		"the expiry advertised in the response must be persisted on the client, or the response promises an expiry nothing enforces")
 	assert.Equal(t, expiresAt, registered.ClientSecretExpiresAt.Unix())
+}
+
+func newRegistrationHandler(t *testing.T) (*ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {
+	t.Helper()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
+		TokenEntropy:                          32,
+	}
+
+	store := storage.NewMemoryStore()
+
+	return &ClientRegistrationHandler{
+		Store:    store,
+		Strategy: hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"),
+		Config:   config,
+	}, config, store
+}
+
+type failingSessionStore struct {
+	Storage
+
+	createdID string
+}
+
+func (f *failingSessionStore) CreateClient(ctx context.Context, client oauth2.Client) (err error) {
+	f.createdID = client.GetID()
+
+	return f.Storage.CreateClient(ctx, client)
+}
+
+func (f *failingSessionStore) CreateClientRegistrationTokenSession(ctx context.Context, signature string, requester oauth2.Requester) (err error) {
+	return errTestCreateSessionFailed
 }

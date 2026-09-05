@@ -207,7 +207,7 @@ func TestAuthRequiresABoundTokenWhenBindingIsEnforced(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-		assert.Equal(t, "The credential used to authenticate the request is not bound to a DPoP key.", oauth2.ErrorToRFC6749Error(err).HintField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding.")
 	})
 
 	t.Run("ShouldRejectAnUnboundTokenWhenMTLSIsEnforced", func(t *testing.T) {
@@ -220,7 +220,7 @@ func TestAuthRequiresABoundTokenWhenBindingIsEnforced(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-		assert.Equal(t, "The credential used to authenticate the request is not bound to a client certificate.", oauth2.ErrorToRFC6749Error(err).HintField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.")
 	})
 
 	t.Run("ShouldRejectATokenSatisfyingOnlyOneOfTwoEnforcedBindings", func(t *testing.T) {
@@ -236,7 +236,7 @@ func TestAuthRequiresABoundTokenWhenBindingIsEnforced(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-		assert.Equal(t, "The credential used to authenticate the request is not bound to a client certificate.", oauth2.ErrorToRFC6749Error(err).HintField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a client certificate. Mutual-TLS client certificate bound access tokens are enforced, so every credential presented to authenticate a request must be bound to a client certificate, but this credential records no binding.")
 	})
 
 	t.Run("ShouldAcceptATokenSatisfyingBothEnforcedBindings", func(t *testing.T) {
@@ -270,7 +270,7 @@ func TestAuthRejectsTheDPoPSchemeAtTheConfigurationEndpoint(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "must use the Bearer scheme")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The Authorization header must use the Bearer scheme.")
 }
 
 func TestAuthEnforcesBothBindingsIndependentlyAtTheRegistrationEndpoint(t *testing.T) {
@@ -377,7 +377,7 @@ func TestAuthRejectsAMisdirectedOrSubstitutedDPoPProof(t *testing.T) {
 		proof := signDPoPProof(t, key, "sub-4", http.MethodPost, testEndpoint, token)
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
-		require.NoError(t, err, "the first presentation of the proof should have been accepted")
+		require.NoError(t, err)
 
 		_, err = auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("DPoP", token, proof, nil), "")
 
@@ -427,20 +427,6 @@ func TestAuthRequiresANonceWhenConfigured(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
-}
-
-type proofOnlyDPoPStrategy struct{}
-
-func (proofOnlyDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
-	return &oauth2.DPoPProof{}, nil
-}
-
-func (proofOnlyDPoPStrategy) NewDPoPNonce(_ context.Context) (nonce string, err error) {
-	return "", nil
-}
-
-func (proofOnlyDPoPStrategy) ValidateDPoPNonce(_ context.Context, _ string) (err error) {
-	return nil
 }
 
 func newBindingFixtures(t *testing.T) (auth *DefaultEndpointAuthStrategy, config *oauth2.Config, store *storage.MemoryStore, access *hoauth2.HMACCoreStrategy) {
@@ -547,4 +533,18 @@ func bindingRequest(scheme, token, proof string, peer *x509.Certificate) *http.R
 	}
 
 	return r
+}
+
+type proofOnlyDPoPStrategy struct{}
+
+func (proofOnlyDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
+	return &oauth2.DPoPProof{}, nil
+}
+
+func (proofOnlyDPoPStrategy) NewDPoPNonce(_ context.Context) (nonce string, err error) {
+	return "", nil
+}
+
+func (proofOnlyDPoPStrategy) ValidateDPoPNonce(_ context.Context, _ string) (err error) {
+	return nil
 }

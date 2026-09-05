@@ -33,12 +33,10 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// =============================================================================
 // §4.1 - "act" (Actor) Claim
 //
 // The act claim MUST identify the actor when delegation occurs; nested act
 // claims express a chain of delegation, outermost = most recent actor.
-// =============================================================================
 
 // §4.1: Pure impersonation (no actor_token) MUST NOT add an act claim.
 func TestSpec_4_1_ActClaim_ImpersonationOmitsActClaim(t *testing.T) {
@@ -108,7 +106,6 @@ func TestSpec_4_1_ActClaim_ChainsDelegationViaNestedAct(t *testing.T) {
 	assert.Equal(t, "carol", nested[consts.ClaimSubject], "nested actor must be the prior actor from the subject_token's act claim")
 }
 
-// Regression guard for the previous broken implementation: the helper must not mutate any subject_token map members.
 func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")
@@ -231,13 +228,11 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 	assert.Equal(t, "client-bob", act[consts.ClaimClientIdentifier], "act.client_id must come from the actor_token when present")
 }
 
-// =============================================================================
 // §2.2 - Successful Response
 //
 // REQUIRED:  access_token, issued_token_type, token_type
 // REQUIRED conditionally:  scope (when issued differs from requested)
 // RECOMMENDED:  expires_in
-// =============================================================================
 
 // §2.2: access-token response carries access_token, token_type=Bearer, expires_in, scope, issued_token_type.
 func TestSpec_2_2_ResponseShape_AccessToken(t *testing.T) {
@@ -284,12 +279,10 @@ func TestSpec_2_2_ResponseShape_CustomJWT(t *testing.T) {
 	assert.Equal(t, "urn:spec:jwt", resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 
-// =============================================================================
 // §2.4 - Error Response (uses RFC 6749 §5.2 codes)
 //
 // The error response uses invalid_grant for grant problems and invalid_target
 // for unresolvable audience/resource per RFC 8707 §2.
-// =============================================================================
 
 // §5.2 'invalid_grant': self-exchange (client exchanges its own subject token) MUST fail.
 func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
@@ -534,10 +527,6 @@ func TestSpec_2_1_Errors_ClientWithoutGrantReturnsUnauthorizedClient(t *testing.
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrUnauthorizedClient)
 }
-
-// =============================================================================
-// Test helpers
-// =============================================================================
 
 // newSpecConfig builds a Config that registers all four spec token types plus a custom JWT type at "urn:spec:jwt".
 // Tests can mutate the returned config to remove a type or tweak defaults.

@@ -21,6 +21,7 @@ package rfc7591
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestSpec_RFC7591_3_2_2_ErrorResponseShape(t *testing.T) {
 
 		rfc := oauth2.ErrorToRFC6749Error(err)
 		assert.Equal(t, http.StatusBadRequest, rfc.CodeField, "RFC 7591 §3.2.2: a rejected registration MUST be a 400")
-		assert.Equal(t, "invalid_client_metadata", rfc.ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes 'profile' which the presented Client Registration Token is not permitted to grant.")
 	})
 
 	t.Run("InvalidRedirectURI", func(t *testing.T) {
@@ -130,7 +131,7 @@ func TestSpec_RFC7591_3_2_2_ErrorResponseShape(t *testing.T) {
 
 		rfc := oauth2.ErrorToRFC6749Error(err)
 		assert.Equal(t, http.StatusBadRequest, rfc.CodeField, "RFC 7591 §3.2.2: a rejected registration MUST be a 400")
-		assert.Equal(t, "invalid_redirect_uri", rfc.ErrorField)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb#frag' must not contain a fragment component.")
 	})
 }
 
@@ -270,7 +271,7 @@ func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
 
 	err := validator.ValidateClientRegistrationMetadata(context.Background(), nil, metadata)
 	require.Error(t, err, "an omitted 'application_type' must default to 'web' and therefore reject a non-https redirect URI")
-	assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'http://127.0.0.1:8080/cb' must use the 'https' scheme.")
 }
 
 // OIDC DCR §2: "Web Clients [...] MUST only register URLs using the https scheme as redirect_uris; they MUST NOT
@@ -287,12 +288,24 @@ func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
 	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
 	validator := NewLocalValidator(config)
 
-	for _, uri := range []string{"https://localhost/cb", "https://127.0.0.1/cb", "https://[::1]/cb"} {
-		metadata := &oauth2.ClientRegistrationMetadata{ApplicationType: "web", RedirectURIs: []string{uri}}
+	loopback := []struct {
+		name string
+		uri  string
+	}{
+		{name: "ShouldRejectTheLoopbackHostname", uri: "https://localhost/cb"},
+		{name: "ShouldRejectTheIPv4LoopbackLiteral", uri: "https://127.0.0.1/cb"},
+		{name: "ShouldRejectTheIPv6LoopbackLiteral", uri: "https://[::1]/cb"},
+	}
 
-		err := validator.ValidateClientRegistrationMetadata(ctx, nil, metadata)
-		require.Error(t, err, "a 'web' client must not register the loopback redirect URI '%s'", uri)
-		assert.Equal(t, "invalid_redirect_uri", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	for _, tc := range loopback {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := &oauth2.ClientRegistrationMetadata{ApplicationType: "web", RedirectURIs: []string{tc.uri}}
+
+			err := validator.ValidateClientRegistrationMetadata(ctx, nil, metadata)
+
+			require.Error(t, err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one or more redirection URIs is invalid. The 'redirect_uris' value '%s' must not target the loopback interface for the 'web' 'application_type'.", tc.uri))
+		})
 	}
 
 	native := &oauth2.ClientRegistrationMetadata{
@@ -318,7 +331,7 @@ func TestSpec_RFC7591_2_OmittedGrantTypesDefaultToAuthorizationCode(t *testing.T
 
 	err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{})
 	require.Error(t, err, "an omitted 'grant_types' must default to 'authorization_code' and therefore require a redirect URI")
-	assert.Equal(t, "invalid_client_metadata", oauth2.ErrorToRFC6749Error(err).ErrorField)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'authorization_code' grant type, which applies by default when 'grant_types' is omitted, requires at least one 'redirect_uris' value.")
 
 	client := &oauth2.DefaultClient{}
 	assert.Equal(t, oauth2.Arguments{"authorization_code"}, client.GetGrantTypes(), "the rejection above must match the default the client applies at request time")

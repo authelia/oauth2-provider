@@ -486,82 +486,6 @@ func TestAuthenticateClientSelfSignedMTLS(t *testing.T) {
 	})
 }
 
-type mtlsClientStore struct {
-	clients map[string]Client
-}
-
-func newMTLSClientStore() *mtlsClientStore {
-	return &mtlsClientStore{clients: make(map[string]Client)}
-}
-
-func (s *mtlsClientStore) GetClient(_ context.Context, id string) (Client, error) {
-	client, ok := s.clients[id]
-	if !ok {
-		return nil, ErrNotFound
-	}
-
-	return client, nil
-}
-
-func (s *mtlsClientStore) ClientAssertionJWTValid(_ context.Context, _ string) error {
-	return nil
-}
-
-func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
-	return nil
-}
-
-// The mutual-TLS tests exercise authentication, not dynamic registration, so this store implements the
-// ClientRegistrationManager half of ClientManager as unsupported.
-
-func (s *mtlsClientStore) CreateClient(_ context.Context, _ Client) error {
-	return ErrNotFound
-}
-
-func (s *mtlsClientStore) UpdateClient(_ context.Context, _ string, _ Client) error {
-	return ErrNotFound
-}
-
-func (s *mtlsClientStore) DeleteClient(_ context.Context, _ string) error {
-	return ErrNotFound
-}
-
-type mtlsJWKSClient struct {
-	*DefaultJARClient
-}
-
-func newMTLSJWKSClient(certs []*x509.Certificate, uri string) *mtlsJWKSClient {
-	var keys []jose.JSONWebKey
-
-	for _, cert := range certs {
-		keys = append(keys, jose.JSONWebKey{Key: cert.PublicKey, Certificates: []*x509.Certificate{cert}, KeyID: cert.Subject.CommonName})
-	}
-
-	client := &mtlsJWKSClient{DefaultJARClient: &DefaultJARClient{DefaultClient: &DefaultClient{ID: "test"}, JSONWebKeysURI: uri}}
-
-	if len(keys) != 0 {
-		client.JSONWebKeys = &jose.JSONWebKeySet{Keys: keys}
-	}
-
-	return client
-}
-
-type staticJWKSFetcher struct {
-	jwks     *jose.JSONWebKeySet
-	err      error
-	location string
-}
-
-func (f *staticJWKSFetcher) Resolve(_ context.Context, location string, _ bool) (*jose.JSONWebKeySet, error) {
-	f.location = location
-
-	if f.err != nil {
-		return nil, f.err
-	}
-
-	return f.jwks, nil
-}
-
 func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
 
@@ -625,4 +549,77 @@ func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 		require.NotNil(t, client)
 		assert.Equal(t, consts.ClientAuthMethodSelfSignedTLSClientAuth, method)
 	})
+}
+
+func newMTLSClientStore() *mtlsClientStore {
+	return &mtlsClientStore{clients: make(map[string]Client)}
+}
+
+func newMTLSJWKSClient(certs []*x509.Certificate, uri string) *mtlsJWKSClient {
+	var keys []jose.JSONWebKey
+
+	for _, cert := range certs {
+		keys = append(keys, jose.JSONWebKey{Key: cert.PublicKey, Certificates: []*x509.Certificate{cert}, KeyID: cert.Subject.CommonName})
+	}
+
+	client := &mtlsJWKSClient{DefaultJARClient: &DefaultJARClient{DefaultClient: &DefaultClient{ID: "test"}, JSONWebKeysURI: uri}}
+
+	if len(keys) != 0 {
+		client.JSONWebKeys = &jose.JSONWebKeySet{Keys: keys}
+	}
+
+	return client
+}
+
+type mtlsClientStore struct {
+	clients map[string]Client
+}
+
+func (s *mtlsClientStore) GetClient(_ context.Context, id string) (Client, error) {
+	client, ok := s.clients[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return client, nil
+}
+
+func (s *mtlsClientStore) ClientAssertionJWTValid(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
+	return nil
+}
+
+func (s *mtlsClientStore) CreateClient(_ context.Context, _ Client) error {
+	return ErrNotFound
+}
+
+func (s *mtlsClientStore) UpdateClient(_ context.Context, _ string, _ Client) error {
+	return ErrNotFound
+}
+
+func (s *mtlsClientStore) DeleteClient(_ context.Context, _ string) error {
+	return ErrNotFound
+}
+
+type mtlsJWKSClient struct {
+	*DefaultJARClient
+}
+
+type staticJWKSFetcher struct {
+	jwks     *jose.JSONWebKeySet
+	err      error
+	location string
+}
+
+func (f *staticJWKSFetcher) Resolve(_ context.Context, location string, _ bool) (*jose.JSONWebKeySet, error) {
+	f.location = location
+
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	return f.jwks, nil
 }

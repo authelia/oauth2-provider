@@ -113,7 +113,7 @@ func TestAuthRejectsMintedAudienceMismatchingClientID(t *testing.T) {
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, ClientConfigurationURL("https://auth.example.com/register", "client-b"), token), "client-b")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "is not permitted to manage the client with id")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request could not be authorized. The provided Client Registration Token is not permitted to manage the client with id 'client-b'.")
 }
 
 func TestAuthRejectsUnknownToken(t *testing.T) {
@@ -221,7 +221,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			name:     "ShouldRejectATokenAudiencedElsewhereWhenFallingBack",
 			granted:  "https://elsewhere.example.com/register",
 			url:      testEndpoint,
-			expected: "does not have an audience which is permitted at this endpoint",
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/register' but the audience had the values 'https://elsewhere.example.com/register'.",
 		},
 		{
 			name:       "ShouldAcceptTheConfiguredAudience",
@@ -231,13 +231,11 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			expected:   "",
 		},
 		{
-			// The configured audience replaces the request URL rather than supplementing it: a token audienced only
-			// at the URL the request happens to arrive on is not enough once a deployment names the audience.
 			name:       "ShouldRejectTheRequestURLWhenAnAudienceIsConfigured",
 			configured: "https://auth.example.com/api/register",
 			granted:    testEndpoint,
 			url:        testEndpoint,
-			expected:   "does not have an audience which is permitted at this endpoint",
+			expected:   "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/api/register' but the audience had the values 'https://auth.example.com/register'.",
 		},
 	}
 
@@ -276,7 +274,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-			assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, tc.expected)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
@@ -302,7 +300,7 @@ func TestAuthHydratesTheAccessTokenSession(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "onboarding", requester.GetClient().GetID())
-	assert.False(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken).IsZero(), "the session handed to the store must have been hydrated with the token's expiry")
+	assert.False(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken).IsZero())
 }
 
 func TestAuthRejectsAWildcardScopeAtTheRegistrationEndpoint(t *testing.T) {
@@ -319,7 +317,7 @@ func TestAuthRejectsAWildcardScopeAtTheRegistrationEndpoint(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "at least one of which is required")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
 }
 
 func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -336,7 +334,7 @@ func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *tes
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "does not have an audience which is permitted at this endpoint")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/register' but the audience had the values 'https://elsewhere.example.com/register'.")
 }
 
 func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -361,7 +359,7 @@ func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "does not have an audience which is permitted at this endpoint")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/register' but the audience had the values 'https://elsewhere.example.com/register'.")
 }
 
 func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -386,7 +384,158 @@ func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "at least one of which is required")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+}
+
+func TestAuthAcceptsAManagementTokenBehindAProxy(t *testing.T) {
+	ctx := context.Background()
+	auth, config, store, tokens := newAuthFixtures(t)
+
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
+	require.NoError(t, err)
+
+	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://backend.internal:8080/oauth2/register/client-a", token), "client-a")
+	require.NoError(t, err)
+	assert.Equal(t, "client-a", requester.GetClient().GetID())
+}
+
+func TestAuthFallsBackToTheRequestURLWithoutAConfiguredEndpoint(t *testing.T) {
+	ctx := context.Background()
+
+	config := &oauth2.Config{
+		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+	}
+
+	store := storage.NewMemoryStore()
+	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+	auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
+
+	session := &oauth2.DefaultSession{}
+	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
+
+	req := oauth2.NewRequest()
+	req.Client = &oauth2.DefaultClient{ID: "client-a"}
+	req.Session = session
+	req.GrantAudience("https://auth.example.com/register/client-a")
+
+	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
+
+	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/client-a", token), "client-a")
+	require.NoError(t, err)
+
+	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://elsewhere.example.com/register/client-a", token), "client-a")
+	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+}
+
+func TestAuthRejectsASessionWithoutAClient(t *testing.T) {
+	ctx := context.Background()
+	auth, config, store, tokens := newAuthFixtures(t)
+
+	session := &oauth2.DefaultSession{}
+	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
+
+	req := oauth2.NewRequest()
+	req.Client = nil
+	req.Session = session
+	req.GrantAudience(ClientConfigurationURL(config.GetRFC7591ClientRegistrationEndpointURL(ctx), "client-a"))
+
+	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
+
+	require.NotPanics(t, func() {
+		_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, ClientConfigurationURL(testEndpoint, "client-a"), token), "client-a")
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request could not be authorized. The provided Client Registration Token is not permitted to manage the client with id 'client-a'.")
+}
+
+func TestAuthAcceptsExtraSpacesAfterTheScheme(t *testing.T) {
+	ctx := context.Background()
+	auth, config, store, tokens := newAuthFixtures(t)
+
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodGet, ClientConfigurationURL(testEndpoint, "client-a"), nil)
+	r.Header.Set("Authorization", "Bearer   "+token)
+
+	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "client-a")
+	require.NoError(t, err)
+
+	assert.Equal(t, "client-a", requester.GetClient().GetID())
+}
+
+func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ShouldReportInsufficientScopeAt403", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{testEndpoint})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+		assert.Equal(t, http.StatusForbidden, rfc.CodeField)
+	})
+
+	t.Run("ShouldReportInvalidTokenForWrongAudience", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"urn:wrong"})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/register' but the audience had the values 'urn:wrong'.")
+		assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+	})
+
+	t.Run("ShouldReportInsufficientScopeWhenBothScopeAndAudienceFail", func(t *testing.T) {
+		auth, config, store, _ := newAuthFixtures(t)
+		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{"urn:wrong"})
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+	})
+
+	t.Run("ShouldReportInvalidTokenForUnknownToken", func(t *testing.T) {
+		auth, _, _, _ := newAuthFixtures(t)
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, "authelia_at_notreal.notreal"), "")
+
+		require.Error(t, err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The provided Access Token is not valid. Could not find the requested resource(s).")
+	})
+
+	t.Run("ShouldReportInvalidRequestAt400ForMultipleAuthorizationHeaders", func(t *testing.T) {
+		auth, _, _, _ := newAuthFixtures(t)
+
+		r := authRequest(t, http.MethodPost, testEndpoint, "one")
+		r.Header.Add("Authorization", "Bearer two")
+
+		_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
+
+		require.Error(t, err)
+		rfc := oauth2.ErrorToRFC6749Error(err)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Multiple methods used to include access token.")
+		assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
+	})
 }
 
 func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
@@ -534,155 +683,4 @@ func (s *hydratingAccessTokenStore) GetAccessTokenSession(ctx context.Context, s
 	}
 
 	return request, nil
-}
-
-func TestAuthAcceptsAManagementTokenBehindAProxy(t *testing.T) {
-	ctx := context.Background()
-	auth, config, store, tokens := newAuthFixtures(t)
-
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
-	require.NoError(t, err)
-
-	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://backend.internal:8080/oauth2/register/client-a", token), "client-a")
-	require.NoError(t, err)
-	assert.Equal(t, "client-a", requester.GetClient().GetID())
-}
-
-func TestAuthFallsBackToTheRequestURLWithoutAConfiguredEndpoint(t *testing.T) {
-	ctx := context.Background()
-
-	config := &oauth2.Config{
-		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
-		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-	}
-
-	store := storage.NewMemoryStore()
-	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-	auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
-
-	session := &oauth2.DefaultSession{}
-	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
-
-	req := oauth2.NewRequest()
-	req.Client = &oauth2.DefaultClient{ID: "client-a"}
-	req.Session = session
-	req.GrantAudience("https://auth.example.com/register/client-a")
-
-	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
-	require.NoError(t, err)
-	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
-
-	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/client-a", token), "client-a")
-	require.NoError(t, err)
-
-	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://elsewhere.example.com/register/client-a", token), "client-a")
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-}
-
-func TestAuthRejectsASessionWithoutAClient(t *testing.T) {
-	ctx := context.Background()
-	auth, config, store, tokens := newAuthFixtures(t)
-
-	session := &oauth2.DefaultSession{}
-	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
-
-	req := oauth2.NewRequest()
-	req.Client = nil
-	req.Session = session
-	req.GrantAudience(ClientConfigurationURL(config.GetRFC7591ClientRegistrationEndpointURL(ctx), "client-a"))
-
-	token, signature, err := tokens.GenerateClientRegistrationToken(ctx, req)
-	require.NoError(t, err)
-	require.NoError(t, store.CreateClientRegistrationTokenSession(ctx, signature, req))
-
-	require.NotPanics(t, func() {
-		_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, ClientConfigurationURL(testEndpoint, "client-a"), token), "client-a")
-	})
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
-	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "is not permitted to manage the client with id")
-}
-
-func TestAuthAcceptsExtraSpacesAfterTheScheme(t *testing.T) {
-	ctx := context.Background()
-	auth, config, store, tokens := newAuthFixtures(t)
-
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
-	require.NoError(t, err)
-
-	r := httptest.NewRequest(http.MethodGet, ClientConfigurationURL(testEndpoint, "client-a"), nil)
-	r.Header.Set("Authorization", "Bearer   "+token)
-
-	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "client-a")
-	require.NoError(t, err)
-
-	assert.Equal(t, "client-a", requester.GetClient().GetID())
-}
-
-func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("ShouldReportInsufficientScopeAt403", func(t *testing.T) {
-		auth, config, store, _ := newAuthFixtures(t)
-		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-
-		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{testEndpoint})
-
-		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
-
-		require.Error(t, err)
-		rfc := oauth2.ErrorToRFC6749Error(err)
-		assert.Equal(t, "insufficient_scope", rfc.ErrorField)
-		assert.Equal(t, http.StatusForbidden, rfc.CodeField)
-	})
-
-	t.Run("ShouldReportInvalidTokenForWrongAudience", func(t *testing.T) {
-		auth, config, store, _ := newAuthFixtures(t)
-		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-
-		token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"urn:wrong"})
-
-		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
-
-		require.Error(t, err)
-		rfc := oauth2.ErrorToRFC6749Error(err)
-		assert.Equal(t, "invalid_token", rfc.ErrorField)
-		assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
-	})
-
-	t.Run("ShouldReportInsufficientScopeWhenBothScopeAndAudienceFail", func(t *testing.T) {
-		auth, config, store, _ := newAuthFixtures(t)
-		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
-
-		token := mintAccessToken(t, ctx, store, access, []string{"read"}, []string{"urn:wrong"})
-
-		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
-
-		require.Error(t, err)
-		assert.Equal(t, "insufficient_scope", oauth2.ErrorToRFC6749Error(err).ErrorField)
-	})
-
-	t.Run("ShouldReportInvalidTokenForUnknownToken", func(t *testing.T) {
-		auth, _, _, _ := newAuthFixtures(t)
-
-		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, "authelia_at_notreal.notreal"), "")
-
-		require.Error(t, err)
-		assert.Equal(t, "invalid_token", oauth2.ErrorToRFC6749Error(err).ErrorField)
-	})
-
-	t.Run("ShouldReportInvalidRequestAt400ForMultipleAuthorizationHeaders", func(t *testing.T) {
-		auth, _, _, _ := newAuthFixtures(t)
-
-		r := authRequest(t, http.MethodPost, testEndpoint, "one")
-		r.Header.Add("Authorization", "Bearer two")
-
-		_, err := auth.AuthenticateClientRegistrationRequest(ctx, r, "")
-
-		require.Error(t, err)
-		rfc := oauth2.ErrorToRFC6749Error(err)
-		assert.Equal(t, "invalid_request", rfc.ErrorField)
-		assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
-	})
 }

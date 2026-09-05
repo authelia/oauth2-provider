@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -34,28 +33,30 @@ func TestIntrospectToken(t *testing.T) {
 		Issuer: jwt.NewDefaultIssuerRS256Unverified(defaultRSAKey),
 	}
 
-	for _, c := range []struct {
-		description string
-		strategy    hoauth2.AccessTokenStrategy
-		factory     compose.Factory
+	testCases := []struct {
+		name     string
+		strategy hoauth2.AccessTokenStrategy
+		factory  compose.Factory
 	}{
 		{
-			description: "HMAC strategy with OAuth2TokenIntrospectionFactory",
-			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", nil),
-			factory:     compose.OAuth2TokenIntrospectionFactory,
+			name:     "HMAC strategy with OAuth2TokenIntrospectionFactory",
+			strategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", nil),
+			factory:  compose.OAuth2TokenIntrospectionFactory,
 		},
 		{
-			description: "JWT strategy with OAuth2TokenIntrospectionFactory",
-			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
-			factory:     compose.OAuth2TokenIntrospectionFactory,
+			name:     "JWT strategy with OAuth2TokenIntrospectionFactory",
+			strategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
+			factory:  compose.OAuth2TokenIntrospectionFactory,
 		},
 		{
-			description: "JWT strategy with OAuth2StatelessJWTIntrospectionFactory",
-			strategy:    hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
-			factory:     compose.OAuth2StatelessJWTIntrospectionFactory,
+			name:     "JWT strategy with OAuth2StatelessJWTIntrospectionFactory",
+			strategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", strategy),
+			factory:  compose.OAuth2StatelessJWTIntrospectionFactory,
 		},
-	} {
-		runIntrospectTokenTest(t, c.strategy, c.factory)
+	}
+
+	for _, tc := range testCases {
+		runIntrospectTokenTest(t, tc.strategy, tc.factory)
 	}
 }
 
@@ -74,12 +75,14 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 	b, err := oauthClient.Token(t.Context())
 	require.NoError(t, err)
 
-	for k, c := range []struct {
+	testCases := []struct {
+		name     string
 		prepare  func(r *http.Request)
 		isActive bool
 		scopes   string
 	}{
 		{
+			name: "ShouldReportActiveForClientBasicAuth",
 			prepare: func(r *http.Request) {
 				r.SetBasicAuth(oauthClient.ClientID, oauthClient.ClientSecret)
 			},
@@ -87,6 +90,7 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			scopes:   "",
 		},
 		{
+			name: "ShouldReportActiveForABearerCallerAskingForAGrantedScope",
 			prepare: func(r *http.Request) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
@@ -94,6 +98,7 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			scopes:   "oauth2",
 		},
 		{
+			name: "ShouldReportActiveForABearerCallerAskingForNoScope",
 			prepare: func(r *http.Request) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
@@ -101,6 +106,7 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			scopes:   "",
 		},
 		{
+			name: "ShouldReportInactiveForAScopeTheTokenWasNotGranted",
 			prepare: func(r *http.Request) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer "+a.AccessToken)
 			},
@@ -108,14 +114,17 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			scopes:   "foo",
 		},
 		{
+			name: "ShouldReportInactiveForATokenIssuedToAnotherClient",
 			prepare: func(r *http.Request) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer "+b.AccessToken)
 			},
 			isActive: false,
 			scopes:   "",
 		},
-	} {
-		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			res := struct {
 				Active    bool    `json:"active"`
 				ClientId  string  `json:"client_id"`
@@ -126,14 +135,14 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 
 			data := url.Values{
 				consts.FormParameterToken: {b.AccessToken},
-				consts.FormParameterScope: {c.scopes},
+				consts.FormParameterScope: {tc.scopes},
 			}
 
 			req, err := http.NewRequest(http.MethodPost, ts.URL+"/introspect", strings.NewReader(data.Encode()))
 			require.NoError(t, err)
 
 			req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
-			c.prepare(req)
+			tc.prepare(req)
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
@@ -144,8 +153,8 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 
 			require.NoError(t, json.Unmarshal(body, &res))
 
-			assert.Equal(t, c.isActive, res.Active)
-			if c.isActive {
+			assert.Equal(t, tc.isActive, res.Active)
+			if tc.isActive {
 				assert.Equal(t, "oauth2", res.Scope)
 				assert.True(t, res.ExpiresAt > 0)
 				assert.True(t, res.IssuedAt > 0)

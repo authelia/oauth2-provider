@@ -21,6 +21,32 @@ import (
 	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
+func TestAuthorizeJWTBearerRequiredIATSuite(t *testing.T) {
+	provider := compose.Compose(
+		&oauth2.Config{
+			GrantTypeJWTBearerCanSkipClientAuth:  true,
+			GrantTypeJWTBearerIDOptional:         true,
+			GrantTypeJWTBearerIssuedDateOptional: false,
+			AllowedJWTAssertionAudiences:         []string{tokenURL},
+		},
+		store,
+		jwtStrategy,
+		compose.OAuth2ClientCredentialsGrantFactory,
+		compose.RFC7523AssertionGrantFactory,
+	)
+	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
+	defer testServer.Close()
+
+	client := newJWTBearerAppClient(testServer)
+	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
+		assert.Nil(t, err)
+	}
+
+	suite.Run(t, &authorizeJWTBearerRequiredIATSuite{
+		client: client,
+	})
+}
+
 type authorizeJWTBearerRequiredIATSuite struct {
 	suite.Suite
 
@@ -70,7 +96,7 @@ func (s *authorizeJWTBearerRequiredIATSuite) assertSuccessResponse(t *testing.T,
 	require.NoError(t, err)
 	require.NotNil(t, token)
 
-	assert.Equal(t, token.TokenType, "bearer")
+	assert.Equal(t, "bearer", token.TokenType)
 	assert.Empty(t, token.RefreshToken)
 	assert.NotEmpty(t, token.ExpiresIn)
 	assert.NotEmpty(t, token.AccessToken)
@@ -83,30 +109,4 @@ func (s *authorizeJWTBearerRequiredIATSuite) assertBadResponse(t *testing.T, tok
 	retrieveError, ok := err.(*clients.RequestError)
 	assert.True(t, ok)
 	assert.Equal(t, retrieveError.Response.StatusCode, http.StatusBadRequest)
-}
-
-func TestAuthorizeJWTBearerRequiredIATSuite(t *testing.T) {
-	provider := compose.Compose(
-		&oauth2.Config{
-			GrantTypeJWTBearerCanSkipClientAuth:  true,
-			GrantTypeJWTBearerIDOptional:         true,
-			GrantTypeJWTBearerIssuedDateOptional: false,
-			AllowedJWTAssertionAudiences:         []string{tokenURL},
-		},
-		store,
-		jwtStrategy,
-		compose.OAuth2ClientCredentialsGrantFactory,
-		compose.RFC7523AssertionGrantFactory,
-	)
-	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
-	defer testServer.Close()
-
-	client := newJWTBearerAppClient(testServer)
-	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
-		assert.Nil(t, err)
-	}
-
-	suite.Run(t, &authorizeJWTBearerRequiredIATSuite{
-		client: client,
-	})
 }

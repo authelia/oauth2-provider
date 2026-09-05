@@ -122,7 +122,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 		request   func(t *testing.T, key *jose.JSONWebKey) *http.Request
 		boundJKT  func(t *testing.T, key *jose.JSONWebKey) string
 		wantErr   error
-		wantHint  string
+		expected  string
 		wantDebug string
 	}{
 		{
@@ -135,7 +135,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 			},
 			boundJKT: func(t *testing.T, key *jose.JSONWebKey) string { return "" },
 			wantErr:  oauth2.ErrInvalidToken,
-			wantHint: "The access token is not bound to a DPoP key.",
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The access token is not bound to a DPoP key.",
 		},
 		{
 			name: "BearerDowngrade",
@@ -147,9 +147,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				r.Header.Set(consts.HeaderAuthorization, "Bearer "+token)
 				return r
 			},
-			wantErr:   oauth2.ErrInvalidToken,
-			wantHint:  "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
-			wantDebug: "dpop scheme used: false, token matches: true",
+			wantErr:  oauth2.ErrInvalidToken,
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The DPoP-bound access token was not presented using the DPoP authentication scheme. The access token must be presented via the DPoP scheme and match the introspected token (dpop scheme used: false, token matches: true).",
 		},
 		{
 			name: "PresentedTokenMismatch",
@@ -159,9 +158,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				})
 				return newResourceRequest(http.MethodPost, resourceURL, "some-other-token", proof)
 			},
-			wantErr:   oauth2.ErrInvalidToken,
-			wantHint:  "The DPoP-bound access token was not presented using the DPoP authentication scheme.",
-			wantDebug: "dpop scheme used: true, token matches: false",
+			wantErr:  oauth2.ErrInvalidToken,
+			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The DPoP-bound access token was not presented using the DPoP authentication scheme. The access token must be presented via the DPoP scheme and match the introspected token (dpop scheme used: true, token matches: false).",
 		},
 		{
 			name: "MultipleDPoPHeaders",
@@ -174,7 +172,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				return r
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The request contains more than one DPoP proof but only one is allowed.",
+			expected: "The DPoP proof is missing or invalid. The request contains more than one DPoP proof but only one is allowed.",
 		},
 		{
 			name: "MissingProof",
@@ -182,7 +180,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				return newResourceRequest(http.MethodPost, resourceURL, token, "")
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The request to the protected resource requires a DPoP proof but none was provided.",
+			expected: "The DPoP proof is missing or invalid. The request to the protected resource requires a DPoP proof but none was provided.",
 		},
 		{
 			name: "MissingAth",
@@ -193,7 +191,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The DPoP proof is missing the required 'ath' claim.",
+			expected: "The DPoP proof is missing or invalid. The DPoP proof is missing the required 'ath' claim.",
 		},
 		{
 			name: "AthMismatch",
@@ -204,7 +202,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The DPoP proof 'ath' claim does not match the access token.",
+			expected: "The DPoP proof is missing or invalid. The DPoP proof 'ath' claim does not match the access token.",
 		},
 		{
 			name: "KeyMismatch",
@@ -216,7 +214,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 			},
 			boundJKT: func(t *testing.T, key *jose.JSONWebKey) string { return thumbprint(t, newTestProofKey(t)) },
 			wantErr:  oauth2.ErrInvalidDPoPProof,
-			wantHint: "The DPoP proof key does not match the key the access token is bound to.",
+			expected: "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the access token is bound to.",
 		},
 	}
 
@@ -232,10 +230,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 
 			_, err := s.ValidateResourceAccess(context.Background(), tc.request(t, key), token, jkt, false)
 			assert.ErrorIs(t, err, tc.wantErr)
-			assert.Equal(t, tc.wantHint, oauth2.ErrorToRFC6749Error(err).HintField)
-			if tc.wantDebug != "" {
-				assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, tc.wantDebug)
-			}
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
@@ -254,8 +249,6 @@ func TestValidateResourceAccessRequiresNonce(t *testing.T) {
 	_, err := s.ValidateResourceAccess(context.Background(), r, token, thumbprint(t, key), true)
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 }
-
-const resourceURL = "https://rs.example.com/userinfo"
 
 func athClaim(token string) string {
 	sum := sha256.Sum256([]byte(token))
@@ -291,3 +284,5 @@ func newResourceRequest(method, rawURL, token, proof string) *http.Request {
 
 	return r
 }
+
+const resourceURL = "https://rs.example.com/userinfo"

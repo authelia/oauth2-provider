@@ -16,42 +16,6 @@ import (
 	"authelia.com/provider/oauth2/i18n"
 )
 
-func newTestCatalog() i18n.MessageCatalog {
-	return i18n.NewDefaultMessageCatalog([]*i18n.DefaultLocaleBundle{
-		{
-			LangTag: "en",
-			Messages: []*i18n.DefaultMessage{
-				{
-					ID:               "badRequestMethod",
-					FormattedMessage: "HTTP method is '%s', expected 'POST'.",
-				},
-				{
-					ID:               "invalid_request",
-					FormattedMessage: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.",
-				},
-			},
-		},
-		{
-			LangTag: "es",
-			Messages: []*i18n.DefaultMessage{
-				{
-					ID:               "badRequestMethod",
-					FormattedMessage: "El método HTTP es '%s', esperado 'POST'.",
-				},
-				{
-					ID:               "invalid_request",
-					FormattedMessage: "A la solicitud le falta un parámetro obligatorio, incluye un valor de parámetro no válido, incluye un parámetro más de una vez o tiene un formato incorrecto.",
-				},
-			},
-		},
-	})
-}
-
-const (
-	expectedEnglish = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'GET', expected 'POST'."
-	expectedSpanish = "A la solicitud le falta un parámetro obligatorio, incluye un valor de parámetro no válido, incluye un parámetro más de una vez o tiene un formato incorrecto. El método HTTP es 'GET', esperado 'POST'."
-)
-
 func TestErrorTranslation(t *testing.T) {
 	catalog := newTestCatalog()
 
@@ -238,6 +202,37 @@ func TestGetLangFromRequester(t *testing.T) {
 	}
 }
 
+func newTestCatalog() i18n.MessageCatalog {
+	return i18n.NewDefaultMessageCatalog([]*i18n.DefaultLocaleBundle{
+		{
+			LangTag: "en",
+			Messages: []*i18n.DefaultMessage{
+				{
+					ID:               "badRequestMethod",
+					FormattedMessage: "HTTP method is '%s', expected 'POST'.",
+				},
+				{
+					ID:               "invalid_request",
+					FormattedMessage: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.",
+				},
+			},
+		},
+		{
+			LangTag: "es",
+			Messages: []*i18n.DefaultMessage{
+				{
+					ID:               "badRequestMethod",
+					FormattedMessage: "El método HTTP es '%s', esperado 'POST'.",
+				},
+				{
+					ID:               "invalid_request",
+					FormattedMessage: "A la solicitud le falta un parámetro obligatorio, incluye un valor de parámetro no válido, incluye un parámetro más de una vez o tiene un formato incorrecto.",
+				},
+			},
+		},
+	})
+}
+
 // nonG11NRequester is a Requester that intentionally does not implement G11NContext
 // (no GetLang method) so that getLangFromRequester falls back to the default language.
 type nonG11NRequester struct {
@@ -254,3 +249,8 @@ type causeOnlyError struct {
 func (e *causeOnlyError) Error() string { return "cause-only wrapper" }
 
 func (e *causeOnlyError) Cause() error { return e.cause }
+
+const (
+	expectedEnglish = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is 'GET', expected 'POST'."
+	expectedSpanish = "A la solicitud le falta un parámetro obligatorio, incluye un valor de parámetro no válido, incluye un parámetro más de una vez o tiene un formato incorrecto. El método HTTP es 'GET', esperado 'POST'."
+)

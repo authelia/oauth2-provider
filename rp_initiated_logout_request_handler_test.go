@@ -41,7 +41,7 @@ func TestNewRPInitiatedLogoutRequest_AcceptsGetAndPost(t *testing.T) {
 	t.Run("GET", func(t *testing.T) {
 		requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{}))
 		require.NoError(t, err)
-		assert.Nil(t, requester.GetClient(), "no client_id and no id_token_hint means no client")
+		assert.Nil(t, requester.GetClient())
 	})
 
 	t.Run("POST", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNewRPInitiatedLogoutRequest_ParsesSimpleParameters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "opaque-state", requester.GetState())
 	assert.Equal(t, "alice@example.com", requester.GetLogoutHint())
-	assert.Equal(t, oauth2.Arguments{"en-AU", "en"}, requester.GetUILocales(), "ui_locales splits on spaces, dropping empties")
+	assert.Equal(t, oauth2.Arguments{"en-AU", "en"}, requester.GetUILocales())
 }
 
 func TestNewRPInitiatedLogoutRequest_ResolvesClientByClientID(t *testing.T) {
@@ -145,7 +145,7 @@ func TestNewRPInitiatedLogoutRequest_RejectsNotYetValidIDTokenHint(t *testing.T)
 		"id_token_hint": []string{hint},
 	}))
 
-	require.Error(t, err, "nbf in the future must still be rejected")
+	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }
 
@@ -189,7 +189,7 @@ func TestNewRPInitiatedLogoutRequest_RejectsTamperedIDTokenHint(t *testing.T) {
 	hint := mintIDToken(t, jwtStrategy, baseHintClaims("test-client"))
 
 	segments := strings.SplitN(hint, ".", 3)
-	require.Len(t, segments, 3, "id_token_hint must be a compact JWS with header, payload and signature segments")
+	require.Len(t, segments, 3)
 
 	signature := []byte(segments[2])
 	if signature[0] == 'A' {
@@ -293,13 +293,6 @@ func TestNewRPInitiatedLogoutRequest_AcceptsAuthorizedPartyMatchingClient(t *tes
 	assert.Equal(t, "test-client", requester.GetClient().GetID())
 }
 
-func newLogoutClient(id string, uris ...string) *oauth2.DefaultRPInitiatedLogoutClient {
-	return &oauth2.DefaultRPInitiatedLogoutClient{
-		DefaultClient:          &oauth2.DefaultClient{ID: id},
-		PostLogoutRedirectURIs: uris,
-	}
-}
-
 func TestNewRPInitiatedLogoutRequest_AcceptsRegisteredPostLogoutRedirectURI(t *testing.T) {
 	client := newLogoutClient("test-client", "https://rp.example/logged-out")
 	f, _, _ := newLogoutProviderWithJWT(t, client)
@@ -388,9 +381,12 @@ func TestNewRPInitiatedLogoutRequest_RejectsHintWhenIssuerUnconfigured(t *testin
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
 }
 
-const logoutTestIssuer = "https://issuer.example/"
-
-var logoutTestKey = gen.MustRSAKey()
+func newLogoutClient(id string, uris ...string) *oauth2.DefaultRPInitiatedLogoutClient {
+	return &oauth2.DefaultRPInitiatedLogoutClient{
+		DefaultClient:          &oauth2.DefaultClient{ID: id},
+		PostLogoutRedirectURIs: uris,
+	}
+}
 
 func newLogoutProviderWithJWT(t *testing.T, clients ...oauth2.Client) (*oauth2.Fosite, jwt.Strategy, *oauth2.Config) {
 	t.Helper()
@@ -443,3 +439,7 @@ func newLogoutProvider(t *testing.T, clients ...oauth2.Client) *oauth2.Fosite {
 func newLogoutGet(query url.Values) *http.Request {
 	return httptest.NewRequest(http.MethodGet, "https://op.example/logout?"+query.Encode(), nil)
 }
+
+const logoutTestIssuer = "https://issuer.example/"
+
+var logoutTestKey = gen.MustRSAKey()

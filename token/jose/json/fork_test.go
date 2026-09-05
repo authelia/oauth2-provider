@@ -9,6 +9,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -201,5 +202,32 @@ func TestForkUnquoteSizeBounds(t *testing.T) {
 func TestForkIndentSizeBounds(t *testing.T) {
 	if factored := indentGrowthFactor * maxIndentHint; factored < 0 || factored > math.MaxInt {
 		t.Errorf("maxIndentHint %d overflows when multiplied: got %d", maxIndentHint, factored)
+	}
+}
+
+func TestForkQuoteChar(t *testing.T) {
+	stdlib := func(c byte) string {
+		// special cases - different from quoted strings
+		if c == '\'' {
+			return `'\''`
+		}
+		if c == '"' {
+			return `'"'`
+		}
+
+		// use quoted string with different quotation marks
+		s := strconv.Quote(string(c))
+		return "'" + s[1:len(s)-1] + "'"
+	}
+
+	for i := 0; i < 256; i++ {
+		c := byte(i)
+		got, want := quoteChar(c), stdlib(c)
+		if got != want {
+			t.Errorf("quoteChar(%#02x) = %s, want %s", c, got, want)
+		}
+		if body := got[1 : len(got)-1]; strings.Count(body, `'`) != strings.Count(body, `\'`) {
+			t.Errorf("quoteChar(%#02x) = %s contains an unescaped quote", c, got)
+		}
 	}
 }

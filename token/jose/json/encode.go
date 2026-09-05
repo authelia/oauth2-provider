@@ -220,7 +220,14 @@ func MarshalIndent(v any, prefix, indent string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	b2 := make([]byte, 0, indentGrowthFactor*len(b))
+	// Grow only when the factored capacity is representable; appendIndent
+	// allocates what it needs either way.
+	c := 0
+	if len(b) <= maxIndentHint {
+		c = indentGrowthFactor * len(b)
+	}
+
+	b2 := make([]byte, 0, c)
 	b2, err = appendIndent(b2, b, prefix, indent)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ package json
 import (
 	"encoding"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -243,6 +244,18 @@ func (d *decodeState) readIndex() int {
 // shouldn't happen. It can indicate a bug in the JSON decoder, or that
 // something is editing the data slice while the decoder executes.
 const phasePanicMsg = "JSON decoder out of sync - data changing underfoot?"
+
+var (
+	errPhase         = errors.New(phasePanicMsg)
+	errStringTooLong = errors.New("json: string literal too long to decode")
+)
+
+// maxUnquoteInitial and maxUnquoteRegrow bound the two buffer sizes computed in
+// unquoteBytes, so that neither size arithmetic can overflow int.
+const (
+	maxUnquoteInitial = math.MaxInt - 2*utf8.UTFMax
+	maxUnquoteRegrow  = math.MaxInt/2 - utf8.UTFMax
+)
 
 func (d *decodeState) init(data []byte) *decodeState {
 	d.data = data
@@ -701,8 +714,11 @@ func (d *decodeState) object(v reflect.Value) error {
 		start := d.readIndex()
 		d.rescanLiteral()
 		item := d.data[start:d.readIndex()]
-		key, ok := unquoteBytes(item)
-		if !ok {
+		key, err := unquoteBytes(item)
+		if err != nil {
+			if errors.Is(err, errStringTooLong) {
+				return err
+			}
 			panic(phasePanicMsg)
 		}
 
@@ -928,10 +944,13 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			d.saveError(&UnmarshalTypeError{Value: val, Type: v.Type(), Offset: int64(d.readIndex())})
 			return nil
 		}
-		s, ok := unquoteBytes(item)
-		if !ok {
+		s, err := unquoteBytes(item)
+		if err != nil {
 			if fromQuoted {
 				return fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type())
+			}
+			if errors.Is(err, errStringTooLong) {
+				return err
 			}
 			panic(phasePanicMsg)
 		}
@@ -979,10 +998,13 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		}
 
 	case '"': // string
-		s, ok := unquoteBytes(item)
-		if !ok {
+		s, err := unquoteBytes(item)
+		if err != nil {
 			if fromQuoted {
 				return fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type())
+			}
+			if errors.Is(err, errStringTooLong) {
+				return err
 			}
 			panic(phasePanicMsg)
 		}
@@ -1152,8 +1174,11 @@ func (d *decodeState) objectInterface() (map[string]any, error) {
 		start := d.readIndex()
 		d.rescanLiteral()
 		item := d.data[start:d.readIndex()]
-		key, ok := unquote(item)
-		if !ok {
+		key, err := unquote(item)
+		if err != nil {
+			if errors.Is(err, errStringTooLong) {
+				return nil, err
+			}
 			panic(phasePanicMsg)
 		}
 
@@ -1211,9 +1236,12 @@ func (d *decodeState) literalInterface() any {
 		return c == 't'
 
 	case '"': // string
-		s, ok := unquote(item)
-		if !ok {
-			panic(phasePanicMsg)
+		s, err := unquote(item)
+		if err != nil {
+			if !errors.Is(err, errStringTooLong) {
+				panic(phasePanicMsg)
+			}
+			d.saveError(err)
 		}
 		return s
 
@@ -1254,15 +1282,15 @@ func getu4(s []byte) rune {
 
 // unquote converts a quoted JSON string literal s into an actual string t.
 // The rules are different than for Go, so cannot use strconv.Unquote.
-func unquote(s []byte) (t string, ok bool) {
-	s, ok = unquoteBytes(s)
-	t = string(s)
+func unquote(s []byte) (t string, err error) {
+	b, err := unquoteBytes(s)
+	t = string(b)
 	return
 }
 
-func unquoteBytes(s []byte) (t []byte, ok bool) {
+func unquoteBytes(s []byte) (t []byte, err error) {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
-		return
+		return nil, errPhase
 	}
 	s = s[1 : len(s)-1]
 
@@ -1282,7 +1310,11 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 		r += size
 	}
 	if r == len(s) {
-		return s, true
+		return s, nil
+	}
+
+	if len(s) > maxUnquoteInitial {
+		return nil, errStringTooLong
 	}
 
 	b := make([]byte, len(s)+2*utf8.UTFMax)
@@ -1292,6 +1324,10 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 		// malformed UTF-8 and we're replacing each
 		// byte with RuneError.
 		if w >= len(b)-2*utf8.UTFMax {
+			if len(b) > maxUnquoteRegrow {
+				return nil, errStringTooLong
+			}
+
 			nb := make([]byte, (len(b)+utf8.UTFMax)*2)
 			copy(nb, b[0:w])
 			b = nb
@@ -1300,11 +1336,11 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 		case c == '\\':
 			r++
 			if r >= len(s) {
-				return
+				return nil, errPhase
 			}
 			switch s[r] {
 			default:
-				return
+				return nil, errPhase
 			case '"', '\\', '/', '\'':
 				b[w] = s[r]
 				r++
@@ -1333,7 +1369,7 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 				r--
 				rr := getu4(s[r:])
 				if rr < 0 {
-					return
+					return nil, errPhase
 				}
 				r += 6
 				if utf16.IsSurrogate(rr) {
@@ -1352,7 +1388,7 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 
 		// Quote, control characters are invalid.
 		case c == '"', c < ' ':
-			return
+			return nil, errPhase
 
 		// ASCII
 		case c < utf8.RuneSelf:
@@ -1367,5 +1403,5 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 			w += utf8.EncodeRune(b[w:], rr)
 		}
 	}
-	return b[0:w], true
+	return b[0:w], nil
 }

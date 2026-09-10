@@ -6,9 +6,10 @@ package openid
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"time"
 
-	"github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
@@ -70,7 +71,14 @@ func (s *DefaultSession) Clone() oauth2.Session {
 		return nil
 	}
 
-	return deepcopy.Copy(s).(oauth2.Session)
+	cloned := *s
+
+	cloned.Claims = s.Claims.Clone()
+	cloned.Headers = s.Headers.Clone()
+	cloned.ExpiresAt = maps.Clone(s.ExpiresAt)
+	cloned.PublicKeyJWK = slices.Clone(s.PublicKeyJWK)
+
+	return &cloned
 }
 
 func (s *DefaultSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {

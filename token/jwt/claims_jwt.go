@@ -6,11 +6,13 @@ package jwt
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
@@ -61,6 +63,21 @@ type JWTClaims struct {
 	Scope      []string
 	Extra      map[string]any
 	ScopeField JWTScopeFieldEnum
+}
+
+// Clone returns a deep copy of the claims, or nil if c is nil.
+func (c *JWTClaims) Clone() *JWTClaims {
+	if c == nil {
+		return nil
+	}
+
+	cloned := *c
+
+	cloned.Audience = slices.Clone(c.Audience)
+	cloned.Scope = slices.Clone(c.Scope)
+	cloned.Extra = clone.Map(c.Extra)
+
+	return &cloned
 }
 
 func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsContainer {

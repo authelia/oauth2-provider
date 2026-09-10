@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/internal/clone/clonetest"
 )
 
 func TestDefaultSessionNil(t *testing.T) {
@@ -251,6 +253,24 @@ func TestDefaultSessionClone(t *testing.T) {
 				newExpiry := time.Now().Add(48 * time.Hour).Truncate(time.Second)
 				s.SetExpiresAt(AccessToken, newExpiry)
 				assert.Equal(t, expiry, cloned.GetExpiresAt(AccessToken))
+			},
+		},
+		{
+			name: "ShouldDeepCopyEveryField",
+			check: func(t *testing.T) {
+				s := &DefaultSession{
+					ExpiresAt:                   map[TokenType]time.Time{AccessToken: time.Unix(1700000000, 0).UTC()},
+					Username:                    "alice@example",
+					Subject:                     "alice",
+					Extra:                       map[string]any{"act": map[string]any{"sub": "bob"}, "groups": []any{"admin"}},
+					JWKThumbprint:               "jkt",
+					ClientCertificateThumbprint: "x5t",
+					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
+					RequestedJWKThumbprint:      "requested-jkt",
+					KeyBindingGranted:           true,
+				}
+
+				clonetest.AssertDeepCopy(t, s, s.Clone())
 			},
 		},
 	}

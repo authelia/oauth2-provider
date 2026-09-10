@@ -143,6 +143,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] `github.com/dgrijalva/jwt-go`
   - [x] `github.com/golang-jwt/jwt`
   - [x] `github.com/parnurzeal/gorequest`
+  - [x] `github.com/mohae/deepcopy`
 - Migration of the following dependencies:
   - [x] `github.com/go-jose/go-jose/v3` => `github.com/go-jose/go-jose/v4`
   - [x] `github.com/golang/mock` => `github.com/uber-go/mock`

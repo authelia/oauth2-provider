@@ -27,9 +27,19 @@ func assertPopulated(t *testing.T, v reflect.Value, path string) {
 	t.Helper()
 
 	switch v.Kind() {
-	case reflect.Pointer:
+	case reflect.Pointer, reflect.Interface:
 		if !v.IsNil() {
 			assertPopulated(t, v.Elem(), path)
+		}
+	case reflect.Map:
+		iter := v.MapRange()
+
+		for iter.Next() {
+			assertPopulated(t, iter.Value(), path+"["+iter.Key().String()+"]")
+		}
+	case reflect.Slice:
+		for i := range v.Len() {
+			assertPopulated(t, v.Index(i), path+"[]")
 		}
 	case reflect.Struct:
 		for i := range v.NumField() {

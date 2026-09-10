@@ -4,6 +4,10 @@
 
 package jwt
 
+import (
+	"authelia.com/provider/oauth2/internal/clone"
+)
+
 // Headers is the jwt headers
 type Headers struct {
 	Extra map[string]any `json:"extra"`
@@ -11,6 +15,15 @@ type Headers struct {
 
 func NewHeaders() *Headers {
 	return &Headers{Extra: map[string]any{}}
+}
+
+// Clone returns a deep copy of the headers, or nil if h is nil.
+func (h *Headers) Clone() *Headers {
+	if h == nil {
+		return nil
+	}
+
+	return &Headers{Extra: clone.Map(h.Extra)}
 }
 
 // ToMap will transform the headers to a map structure

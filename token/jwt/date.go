@@ -26,6 +26,16 @@ func NewNumericDate(t time.Time) *NumericDate {
 	return &NumericDate{t.UTC().Truncate(TimePrecision)}
 }
 
+func (date *NumericDate) clone() *NumericDate {
+	if date == nil {
+		return nil
+	}
+
+	cloned := *date
+
+	return &cloned
+}
+
 func newNumericDateFromSeconds(f float64) *NumericDate {
 	round, frac := math.Modf(f)
 

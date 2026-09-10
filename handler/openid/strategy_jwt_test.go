@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/clone/clonetest"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -43,6 +44,72 @@ func TestDefaultSession_GetRequestedAt(t *testing.T) {
 			assert.Equal(t, tc.zero, have.IsZero())
 			assert.Equal(t, tc.zero, tc.expected.IsZero())
 		})
+	}
+}
+
+func TestDefaultSession_Clone(t *testing.T) {
+	testCases := []struct {
+		name  string
+		check func(t *testing.T)
+	}{
+		{
+			name: "ShouldReturnNilForNilReceiver",
+			check: func(t *testing.T) {
+				var s *DefaultSession
+
+				assert.Nil(t, s.Clone())
+			},
+		},
+		{
+			name: "ShouldPreserveNilFields",
+			check: func(t *testing.T) {
+				assert.Equal(t, &DefaultSession{}, (&DefaultSession{}).Clone())
+			},
+		},
+		{
+			name: "ShouldDeepCopyEveryField",
+			check: func(t *testing.T) {
+				now := time.Unix(1700000000, 0).UTC()
+
+				s := &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						JTI:                                 "jti",
+						Issuer:                              "https://auth.example.com",
+						Subject:                             "alice",
+						Audience:                            []string{"client"},
+						ExpirationTime:                      jwt.NewNumericDate(now.Add(time.Hour)),
+						IssuedAt:                            jwt.NewNumericDate(now),
+						AuthTime:                            jwt.NewNumericDate(now),
+						Nonce:                               "nonce",
+						SessionID:                           "sid",
+						AuthenticationContextClassReference: "acr",
+						AuthenticationMethodsReferences:     []string{"pwd"},
+						AuthorizedParty:                     "client",
+						AccessTokenHash:                     "at_hash",
+						CodeHash:                            "c_hash",
+						StateHash:                           "s_hash",
+						Confirmation:                        map[string]any{"jwk": map[string]any{"kty": "EC"}},
+						Extra:                               map[string]any{"act": map[string]any{"sub": "bob"}},
+					},
+					Headers:                     &jwt.Headers{Extra: map[string]any{"typ": "JWT"}},
+					ExpiresAt:                   map[oauth2.TokenType]time.Time{oauth2.IDToken: now.Add(time.Hour)},
+					Username:                    "alice@example",
+					Subject:                     "alice",
+					JWKThumbprint:               "jkt",
+					ClientCertificateThumbprint: "x5t",
+					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
+					RequestedJWKThumbprint:      "requested-jkt",
+					KeyBindingGranted:           true,
+					RequestedAt:                 now,
+				}
+
+				clonetest.AssertDeepCopy(t, s, s.Clone())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.check)
 	}
 }
 

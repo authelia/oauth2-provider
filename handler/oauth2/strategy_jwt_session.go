@@ -5,9 +5,9 @@
 package oauth2
 
 import (
+	"maps"
+	"slices"
 	"time"
-
-	"github.com/mohae/deepcopy"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -171,7 +171,14 @@ func (j *JWTSession) Clone() oauth2.Session {
 		return nil
 	}
 
-	return deepcopy.Copy(j).(oauth2.Session)
+	cloned := *j
+
+	cloned.JWTClaims = j.JWTClaims.Clone()
+	cloned.JWTHeader = j.JWTHeader.Clone()
+	cloned.ExpiresAt = maps.Clone(j.ExpiresAt)
+	cloned.PublicKeyJWK = slices.Clone(j.PublicKeyJWK)
+
+	return &cloned
 }
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.

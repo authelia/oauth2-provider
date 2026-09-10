@@ -5,9 +5,11 @@
 package oauth2
 
 import (
+	"maps"
+	"slices"
 	"time"
 
-	"github.com/mohae/deepcopy"
+	"authelia.com/provider/oauth2/internal/clone"
 )
 
 // Session is an interface that is used to store session data between OAuth2 requests. It can be used to look up
@@ -110,7 +112,13 @@ func (s *DefaultSession) Clone() Session {
 		return nil
 	}
 
-	return deepcopy.Copy(s).(Session)
+	cloned := *s
+
+	cloned.ExpiresAt = maps.Clone(s.ExpiresAt)
+	cloned.Extra = clone.Map(s.Extra)
+	cloned.PublicKeyJWK = slices.Clone(s.PublicKeyJWK)
+
+	return &cloned
 }
 
 // ExtraClaimsSession provides an interface for session to store any extra claims.

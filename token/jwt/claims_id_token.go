@@ -8,10 +8,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
 
+	"authelia.com/provider/oauth2/internal/clone"
 	jjson "authelia.com/provider/oauth2/token/jose/json"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -35,6 +37,25 @@ type IDTokenClaims struct {
 	StateHash                           string         `json:"s_hash,omitempty"`
 	Confirmation                        map[string]any `json:"cnf,omitempty"`
 	Extra                               map[string]any `json:"ext,omitempty"`
+}
+
+// Clone returns a deep copy of the claims, or nil if c is nil.
+func (c *IDTokenClaims) Clone() *IDTokenClaims {
+	if c == nil {
+		return nil
+	}
+
+	cloned := *c
+
+	cloned.Audience = slices.Clone(c.Audience)
+	cloned.ExpirationTime = c.ExpirationTime.clone()
+	cloned.IssuedAt = c.IssuedAt.clone()
+	cloned.AuthTime = c.AuthTime.clone()
+	cloned.AuthenticationMethodsReferences = slices.Clone(c.AuthenticationMethodsReferences)
+	cloned.Confirmation = clone.Map(c.Confirmation)
+	cloned.Extra = clone.Map(c.Extra)
+
+	return &cloned
 }
 
 func (c *IDTokenClaims) GetExpirationTime() (exp *NumericDate, err error) {

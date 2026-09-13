@@ -26,6 +26,8 @@ const (
 	defaultBackChannelLogoutConcurrency = 10
 	defaultDPoPClockSkew                = 10 * time.Second
 	defaultDPoPProofLifespan            = 10 * time.Second
+	defaultJWTClockSkew                 = 10 * time.Second
+	maxJWTClockSkew                     = 60 * time.Second
 )
 
 type Config struct {
@@ -320,6 +322,13 @@ type Config struct {
 	RFC8693TokenTypes map[string]RFC8693TokenType
 
 	DefaultRequestedTokenType string
+
+	// JWTClockSkew is how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client: a client
+	// assertion, a request object, or an RFC 7523 authorization grant. Defaults to 10 seconds when zero, is disabled
+	// when negative, and is capped at 60 seconds.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	JWTClockSkew time.Duration
 
 	// DPoPEnabled enables RFC 9449 DPoP handling.
 	DPoPEnabled bool
@@ -878,6 +887,21 @@ func (c *Config) GetJWTMaxDuration(_ context.Context) time.Duration {
 	return c.GrantTypeJWTBearerMaxDuration
 }
 
+// GetJWTClockSkew returns how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client.
+// Defaults to 10 seconds when zero, is disabled when negative, and is capped at 60 seconds.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func (c *Config) GetJWTClockSkew(_ context.Context) time.Duration {
+	switch {
+	case c.JWTClockSkew == 0:
+		return defaultJWTClockSkew
+	case c.JWTClockSkew < 0:
+		return 0
+	default:
+		return min(c.JWTClockSkew, maxJWTClockSkew)
+	}
+}
+
 // GetClientAuthenticationStrategy returns the configured client authentication strategy.
 // Defaults to nil.
 // Note that on a nil strategy `oauth2.Fosite` fallbacks to its default client authentication strategy
@@ -1155,6 +1179,7 @@ var (
 	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)
 	_ GrantTypeJWTBearerIssuedDateOptionalProvider          = (*Config)(nil)
 	_ GetJWTMaxDurationProvider                             = (*Config)(nil)
+	_ JWTClockSkewProvider                                  = (*Config)(nil)
 	_ IDTokenLifespanProvider                               = (*Config)(nil)
 	_ IDTokenIssuerProvider                                 = (*Config)(nil)
 	_ IDTokenValidationStrategyProvider                     = (*Config)(nil)

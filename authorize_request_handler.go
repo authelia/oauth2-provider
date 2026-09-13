@@ -399,6 +399,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		jwt.ValidateTimeFunc(func() time.Time {
 			return time.Now().UTC()
 		}),
+		jwt.ValidateClockSkew(f.Config.GetJWTClockSkew(ctx)),
 		jwt.ValidateIssuer(client.GetID()),
 		jwt.ValidateDoNotRequireIssuer(),
 		jwt.ValidateAudienceAny(issuer),

@@ -107,12 +107,14 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorExpired
 	}
 
-	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now, vopts.iatRequired, date, err) {
+	skewed := now + int64(vopts.clockSkew/time.Second)
+
+	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, skewed, vopts.iatRequired, date, err) {
 		vErr.Inner = errors.New("Token used before issued")
 		vErr.Errors |= ValidationErrorIssuedAt
 	}
 
-	if date, err = c.GetNotBefore(); !validDate(validInt64Past, now, vopts.nbfRequired, date, err) {
+	if date, err = c.GetNotBefore(); !validDate(validInt64Past, skewed, vopts.nbfRequired, date, err) {
 		vErr.Inner = errors.New("Token is not valid yet")
 		vErr.Errors |= ValidationErrorNotValidYet
 	}

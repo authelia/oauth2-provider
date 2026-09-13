@@ -28,6 +28,7 @@ type Handler struct {
 		oauth2.GrantTypeJWTBearerIDOptionalProvider
 		oauth2.GrantTypeJWTBearerIssuedDateOptionalProvider
 		oauth2.GetJWTMaxDurationProvider
+		oauth2.JWTClockSkewProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ScopeStrategyProvider
 	}
@@ -278,16 +279,21 @@ verify:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain an 'exp' (expiration time) claim."))
 	}
 
-	if claims.Expiry.Time().Before(time.Now()) {
+	now := time.Now()
+
+	if claims.Expiry.Time().Before(now) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT provided in the 'assertion' request parameter is expired."))
 	}
 
-	if claims.NotBefore != nil && !claims.NotBefore.Time().Before(time.Now()) {
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	skewed := now.Add(max(c.Config.GetJWTClockSkew(ctx), 0))
+
+	if claims.NotBefore != nil && claims.NotBefore.Time().After(skewed) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains an 'nbf' (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.", claims.NotBefore.Time().Format(time.RFC3339)))
 	}
 
 	if claims.IssuedAt != nil {
-		if !claims.IssuedAt.Time().Before(time.Now()) {
+		if claims.IssuedAt.Time().After(skewed) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains an 'iat' (issued at) claim, that identifies the time '%s' which is after the current time", claims.IssuedAt.Time().Format(time.RFC3339)))
 		}
 	} else if !c.Config.GetGrantTypeJWTBearerIssuedDateOptional(ctx) {

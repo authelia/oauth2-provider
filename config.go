@@ -251,6 +251,13 @@ type GetJWTMaxDurationProvider interface {
 	GetJWTMaxDuration(ctx context.Context) (max time.Duration)
 }
 
+// JWTClockSkewProvider returns the provider for configuring the clock skew permitted when validating a JWT.
+type JWTClockSkewProvider interface {
+	// GetJWTClockSkew returns how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client,
+	// such as a client assertion, a request object, or an RFC 7523 authorization grant.
+	GetJWTClockSkew(ctx context.Context) (skew time.Duration)
+}
+
 // TokenEntropyProvider returns the provider for configuring the token entropy.
 type TokenEntropyProvider interface {
 	// GetTokenEntropy returns the token entropy.

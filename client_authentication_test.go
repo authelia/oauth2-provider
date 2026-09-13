@@ -576,6 +576,27 @@ func TestAuthenticateClient(t *testing.T) {
 			errRegexp: regexp.MustCompile(`^Client authentication failed \(e\.g\., unknown client, no client authentication included, or unsupported authentication method\)\. The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect\. OAuth 2\.0 client with id 'bar' provided a client assertion that was issued in the future\. The client assertion was issued at \d+\.$`),
 		},
 		{
+			name: "ShouldPassBecauseIssuedWithinClockSkew",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, TokenEndpointAuthSigningAlg: "ES256"}
+			},
+			form: url.Values{
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuedAt:       time.Now().Add(time.Second * 5).Unix(),
+						consts.ClaimNotBefore:      time.Now().Add(time.Second * 5).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyECDSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r: new(http.Request),
+		},
+		{
 			name: "ShouldFailBecauseNoKeys",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: nil, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, TokenEndpointAuthSigningAlg: "ES256"}

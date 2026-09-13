@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	jjson "authelia.com/provider/oauth2/token/jose/json"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -256,6 +257,8 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		now = TimeFunc().UTC().Unix()
 	}
 
+	skewed := now + int64(vopts.clockSkew/time.Second)
+
 	vErr := new(ValidationError)
 
 	if !vopts.expIgnored && !m.VerifyExpirationTime(now, vopts.expRequired) {
@@ -263,12 +266,12 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorExpired
 	}
 
-	if !m.VerifyIssuedAt(now, vopts.iatRequired) {
+	if !m.VerifyIssuedAt(skewed, vopts.iatRequired) {
 		vErr.Inner = errors.New("Token used before issued")
 		vErr.Errors |= ValidationErrorIssuedAt
 	}
 
-	if !m.VerifyNotBefore(now, vopts.nbfRequired) {
+	if !m.VerifyNotBefore(skewed, vopts.nbfRequired) {
 		vErr.Inner = errors.New("Token is not valid yet")
 		vErr.Errors |= ValidationErrorNotValidYet
 	}

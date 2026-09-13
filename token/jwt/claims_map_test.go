@@ -743,6 +743,35 @@ func TestMapClaims_Valid(t *testing.T) {
 			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateClockSkew(time.Second * 10)},
 		},
 		{
+			name: "ShouldPassWithinMaximumLifetime",
+			have: MapClaims{consts.ClaimNotBefore: 400, consts.ClaimExpirationTime: 4000},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateMaximumLifetime(time.Hour)},
+		},
+		{
+			name: "ShouldPassMaximumLifetimeWithoutNotBefore",
+			have: MapClaims{consts.ClaimExpirationTime: 999999},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateMaximumLifetime(time.Hour)},
+		},
+		{
+			name: "ShouldFailNotBeforeBeyondMaximumLifetime",
+			have: MapClaims{consts.ClaimNotBefore: 399},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(4000, 0) }), ValidateMaximumLifetime(time.Hour)},
+			errs: []uint32{ValidationErrorLifetime},
+			err:  "Token exceeds the maximum lifetime",
+		},
+		{
+			name: "ShouldFailExpiryBeyondMaximumLifetime",
+			have: MapClaims{consts.ClaimNotBefore: 1000, consts.ClaimExpirationTime: 4601},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateMaximumLifetime(time.Hour)},
+			errs: []uint32{ValidationErrorLifetime},
+			err:  "Token exceeds the maximum lifetime",
+		},
+		{
+			name: "ShouldNotApplyZeroMaximumLifetime",
+			have: MapClaims{consts.ClaimNotBefore: 1, consts.ClaimExpirationTime: 999999},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateMaximumLifetime(0)},
+		},
+		{
 			name: "ShouldFailIssuedBeyondClockSkew",
 			have: MapClaims{consts.ClaimIssuedAt: 1011},
 			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) }), ValidateClockSkew(time.Second * 10)},

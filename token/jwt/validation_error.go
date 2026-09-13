@@ -29,6 +29,7 @@ const (
 	ValidationErrorSubject                                             // Claim SUB validation failed.
 	ValidationErrorAuthorizedParty                                     // Claim SUB validation failed.
 	ValidationErrorClaimsInvalid                                       // Generic claims validation error.
+	ValidationErrorLifetime                                            // Claim NBF or EXP exceeds the maximum lifetime.
 )
 
 // The ValidationError is an error implementation from Parse if token is not valid.

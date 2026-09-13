@@ -403,7 +403,17 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		jwt.ValidateIssuer(client.GetID()),
 		jwt.ValidateDoNotRequireIssuer(),
 		jwt.ValidateAudienceAny(issuer),
-		jwt.ValidateDoNotRequireAudience(),
+	}
+
+	// FAPI 2.0 Message Signing Section 5.3.1. RFC 9101 requires none of these claims, so they are opt-in.
+	if f.Config.GetRequireRequestObjectAudienceAndLifetime(ctx) {
+		optsValidClaims = append(optsValidClaims,
+			jwt.ValidateRequireNotBefore(),
+			jwt.ValidateRequireExpiresAt(),
+			jwt.ValidateMaximumLifetime(f.Config.GetRequestObjectMaximumLifetime(ctx)),
+		)
+	} else {
+		optsValidClaims = append(optsValidClaims, jwt.ValidateDoNotRequireAudience())
 	}
 
 	if err = claims.Valid(optsValidClaims...); err != nil {
@@ -718,7 +728,9 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid signature.", hintRequestObjectPrefix(openid), client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
 			exp, err := token.Claims.GetExpirationTime()
-			if err == nil {
+			if err == nil && exp == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object without the required 'exp' claim.", hintRequestObjectPrefix(openid), client.GetID())
+			} else if err == nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object expired at %d.", hintRequestObjectPrefix(openid), client.GetID(), exp.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was expired. The request object does not have an 'exp' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
@@ -732,7 +744,9 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
 			nbf, err := token.Claims.GetNotBefore()
-			if err == nil {
+			if err == nil && nbf == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object without the required 'nbf' claim.", hintRequestObjectPrefix(openid), client.GetID())
+			} else if err == nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object is not valid before %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'nbf' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
@@ -746,11 +760,18 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorAudience):
 			aud, err := token.Claims.GetAudience()
-			if err == nil {
+			if err == nil && len(aud) == 0 {
+				return outer.WithDebugf("%s client with id '%s' provided a request object without the required 'aud' claim.", hintRequestObjectPrefix(openid), client.GetID())
+			} else if err == nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object was expected to have an 'aud' claim which matches the issuer value of '%s' but the 'aud' claim had the values '%s'.", hintRequestObjectPrefix(openid), client.GetID(), issuer, strings.Join(aud, "', '"))
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that has an invalid audience. The request object does not have an 'aud' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
 			}
+		case errJWTValidation.Has(jwt.ValidationErrorLifetime):
+			nbf, _ := token.Claims.GetNotBefore()
+			exp, _ := token.Claims.GetExpirationTime()
+
+			return outer.WithDebugf("%s client with id '%s' provided a request object that exceeds the maximum lifetime. The 'nbf' claim was %d and the 'exp' claim was %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf.Int64(), exp.Int64())
 		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):
 			return outer.WithDebugf("%s client with id '%s' provided a request object that had one or more invalid claims. Error occurred trying to validate the request objects claims: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		default:

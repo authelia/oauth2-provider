@@ -276,6 +276,16 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorNotValidYet
 	}
 
+	if vopts.maxLifetime > 0 {
+		nbf, _ := m.GetNotBefore()
+		exp, _ := m.GetExpirationTime()
+
+		if !validLifetime(nbf, exp, now, vopts.maxLifetime) {
+			vErr.Inner = errors.New("Token exceeds the maximum lifetime")
+			vErr.Errors |= ValidationErrorLifetime
+		}
+	}
+
 	if len(vopts.iss) != 0 {
 		if !m.VerifyIssuer(vopts.iss, !vopts.issNotRequired) {
 			vErr.Inner = errors.New("Token has invalid issuer")

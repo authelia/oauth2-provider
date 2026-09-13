@@ -28,6 +28,7 @@ const (
 	defaultDPoPProofLifespan            = 10 * time.Second
 	defaultJWTClockSkew                 = 10 * time.Second
 	maxJWTClockSkew                     = 60 * time.Second
+	defaultRequestObjectMaximumLifetime = 60 * time.Minute
 )
 
 type Config struct {
@@ -322,6 +323,18 @@ type Config struct {
 	// requests made directly to the Pushed Authorization Request endpoint. This applies to the requirement from both
 	// the authorization server and client metadata values.
 	RequireSignedRequestObjectSkipPushedAuthorizationRequests bool
+
+	// RequireRequestObjectAudienceAndLifetime requires a Request Object to contain the 'aud', 'nbf' and 'exp' claims,
+	// and bounds its lifetime to RequestObjectMaximumLifetime. This is required by FAPI 2.0 Message Signing Section
+	// 5.3.1.
+	RequireRequestObjectAudienceAndLifetime bool
+
+	// RequestObjectMaximumLifetime bounds a Request Object's 'nbf' and 'exp' claims when
+	// RequireRequestObjectAudienceAndLifetime is enabled. Defaults to 60 minutes when zero, and is disabled when
+	// negative.
+	//
+	// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+	RequestObjectMaximumLifetime time.Duration
 
 	RFC8693TokenTypes map[string]RFC8693TokenType
 
@@ -967,6 +980,27 @@ func (c *Config) GetRequireSignedRequestObject(ctx context.Context) bool {
 // skipped for requests made directly to the Pushed Authorization Request endpoint.
 func (c *Config) GetRequireSignedRequestObjectSkipPushedAuthorizationRequests(ctx context.Context) bool {
 	return c.RequireSignedRequestObjectSkipPushedAuthorizationRequests
+}
+
+// GetRequireRequestObjectAudienceAndLifetime indicates if a Request Object must contain the 'aud', 'nbf' and 'exp'
+// claims, and have a lifetime of no more than 60 minutes.
+func (c *Config) GetRequireRequestObjectAudienceAndLifetime(ctx context.Context) bool {
+	return c.RequireRequestObjectAudienceAndLifetime
+}
+
+// GetRequestObjectMaximumLifetime returns the bound applied to a Request Object's 'nbf' and 'exp' claims. Defaults to
+// 60 minutes when zero, and is disabled when negative.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+func (c *Config) GetRequestObjectMaximumLifetime(_ context.Context) time.Duration {
+	switch {
+	case c.RequestObjectMaximumLifetime == 0:
+		return defaultRequestObjectMaximumLifetime
+	case c.RequestObjectMaximumLifetime < 0:
+		return 0
+	default:
+		return c.RequestObjectMaximumLifetime
+	}
 }
 
 func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {

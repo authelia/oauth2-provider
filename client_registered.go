@@ -144,6 +144,7 @@ type DefaultRegisteredClient struct {
 	RequireRedirectURIPushedAuthorizationRequests bool          `json:"-"`
 	RequireRequestObjectAudienceAndLifetime       bool          `json:"-"`
 	RequestObjectMaximumLifetime                  time.Duration `json:"-"`
+	DisableRefreshTokenRotation                   bool          `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
@@ -378,6 +379,10 @@ func (c *DefaultRegisteredClient) GetRequestObjectMaximumLifetime() time.Duratio
 	return c.RequestObjectMaximumLifetime
 }
 
+func (c *DefaultRegisteredClient) GetDisableRefreshTokenRotation() bool {
+	return c.DisableRefreshTokenRotation
+}
+
 func (c *DefaultRegisteredClient) GetPostLogoutRedirectURIs() (uris []string) {
 	return c.PostLogoutRedirectURIs
 }
@@ -427,6 +432,7 @@ var (
 	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
 	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
 	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
+	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
 	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)

@@ -203,6 +203,33 @@ func TestRefreshTokenFlow(t *testing.T) {
 				require.Equal(t, http.StatusBadRequest, err.(*xoauth2.RetrieveError).Response.StatusCode)
 			},
 		},
+		{
+			name: "should keep the refresh token when rotation is disabled",
+			setup: func(t *testing.T) {
+				fc = new(oauth2.Config)
+				fc.RefreshTokenLifespan = time.Minute
+				fc.DisableRefreshTokenRotation = true
+				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
+				fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
+				f = compose.ComposeAllEnabled(fc, store, gen.MustRSAKey())
+				ts = mockServer(t, f, session)
+
+				oauthClient = newOAuth2Client(ts)
+				oauthClient.Scopes = []string{consts.ScopeOffline}
+				store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
+			},
+			pass: true,
+			check: func(t *testing.T, original, refreshed *xoauth2.Token, or, rr *introspectionResponse) {
+				assert.Equal(t, original.RefreshToken, refreshed.RefreshToken)
+				assert.NotEqual(t, original.AccessToken, refreshed.AccessToken)
+
+				refreshed.Expiry = refreshed.Expiry.Add(-time.Hour * 24)
+				again, err := oauthClient.TokenSource(t.Context(), refreshed).Token()
+				require.NoError(t, err)
+				assert.Equal(t, original.RefreshToken, again.RefreshToken)
+				assert.NotEqual(t, refreshed.AccessToken, again.AccessToken)
+			},
+		},
 	}
 
 	for _, tc := range testCases {

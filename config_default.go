@@ -87,6 +87,11 @@ type Config struct {
 	// DisableRefreshTokenValidation sets the introspection endpoint to disable refresh token validation.
 	DisableRefreshTokenValidation bool
 
+	// DisableRefreshTokenRotation keeps the presented refresh token during the refresh token grant rather than issuing
+	// a new one. The refresh token keeps the expiry it was issued with, and access tokens previously issued for the
+	// grant are revoked. FAPI 2.0 Security Profile Section 5.3.2.1 permits rotation only in extraordinary circumstances.
+	DisableRefreshTokenRotation bool
+
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive
 	// data may be exposed, depending on your implementation of Fosite. Such sensitive data might include database error
 	// codes or other information. Proceed with caution!
@@ -932,6 +937,11 @@ func (c *Config) GetDisableRefreshTokenValidation(_ context.Context) bool {
 	return c.DisableRefreshTokenValidation
 }
 
+// GetDisableRefreshTokenRotation returns whether the refresh token grant keeps the presented refresh token.
+func (c *Config) GetDisableRefreshTokenRotation(_ context.Context) bool {
+	return c.DisableRefreshTokenRotation
+}
+
 // GetPushedAuthorizeEndpointHandlers returns the handlers.
 func (c *Config) GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers {
 	return c.PushedAuthorizeEndpointHandlers
@@ -1206,6 +1216,7 @@ var (
 	_ RedirectSecureCheckerProvider                         = (*Config)(nil)
 	_ RefreshTokenScopesProvider                            = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
+	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)
 	_ AccessTokenIssuerProvider                             = (*Config)(nil)
 	_ JWTScopeFieldProvider                                 = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeIssuerProvider         = (*Config)(nil)

@@ -238,6 +238,7 @@ type Configurator interface {
 	JWTProfileAccessTokensProvider
 	AccessTokenIssuerProvider
 	DisableRefreshTokenValidationProvider
+	DisableRefreshTokenRotationProvider
 	RefreshTokenScopesProvider
 	AccessTokenLifespanProvider
 	RefreshTokenLifespanProvider
@@ -319,6 +320,28 @@ func (f *Fosite) GetMinParameterEntropy(ctx context.Context) int {
 	default:
 		return MinParameterEntropy
 	}
+}
+
+// DisableRefreshTokenRotation determines if the refresh token grant keeps the presented refresh token. Rotation is
+// disabled when either the provider-wide option or the client's own policy is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func (f *Fosite) DisableRefreshTokenRotation(ctx context.Context, client Client) (disable bool) {
+	return IsRefreshTokenRotationDisabled(ctx, f.Config, client)
+}
+
+// IsRefreshTokenRotationDisabled determines if the refresh token grant keeps the presented refresh token. Rotation is
+// disabled when either the provider-wide option or the client's own policy is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTokenRotationProvider, client Client) (disable bool) {
+	if config != nil && config.GetDisableRefreshTokenRotation(ctx) {
+		return true
+	}
+
+	rc, ok := client.(RefreshTokenRotationClient)
+
+	return ok && rc.GetDisableRefreshTokenRotation()
 }
 
 var (

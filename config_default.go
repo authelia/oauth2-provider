@@ -309,6 +309,10 @@ type Config struct {
 	// RequirePushedAuthorizationRequests requires pushed authorization request for /authorize
 	RequirePushedAuthorizationRequests bool
 
+	// RequireRedirectURIPushedAuthorizationRequests requires the 'redirect_uri' parameter in Pushed Authorization
+	// Requests. This is required by FAPI 2.0 Security Profile Section 5.3.2.2.
+	RequireRedirectURIPushedAuthorizationRequests bool
+
 	// RequireSignedRequestObject requires all authorization requests be protected as a signed Request Object provided
 	// by either the 'request' or 'request_uri' parameter. This is equivalent to the 'require_signed_request_object'
 	// authorization server metadata value.
@@ -944,6 +948,12 @@ func (c *Config) GetPushedAuthorizeContextLifespan(ctx context.Context) time.Dur
 // must contain the PAR request_uri.
 func (c *Config) GetRequirePushedAuthorizationRequests(ctx context.Context) bool {
 	return c.RequirePushedAuthorizationRequests
+}
+
+// GetRequireRedirectURIPushedAuthorizationRequests indicates if the 'redirect_uri' parameter is required in Pushed
+// Authorization Requests.
+func (c *Config) GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) bool {
+	return c.RequireRedirectURIPushedAuthorizationRequests
 }
 
 // GetRequireSignedRequestObject indicates if JWT-Secured Authorization Requests are enforced. In this mode, a client

@@ -69,6 +69,12 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return frequest, err
 	}
 
+	// FAPI 2.0 Security Profile Section 5.3.2.2. The form includes parameters from a Request Object, and is checked
+	// rather than the resolved redirect URI because a client with a single registered redirect URI may omit it.
+	if f.Config.GetRequireRedirectURIPushedAuthorizationRequests(ctx) && frequest.GetRequestForm().Get(consts.FormParameterRedirectURI) == "" {
+		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required for Pushed Authorization Requests."))
+	}
+
 	if frequest.GetRequestedScopes().Has(consts.ScopeOpenID) && r.Form.Get(consts.FormParameterRedirectURI) == "" {
 		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Query parameter 'redirect_uri' is required when performing an OpenID Connect flow."))
 	}

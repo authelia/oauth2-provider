@@ -31,6 +31,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 		r      *http.Request
 		query  url.Values
 		err    string
+		config func(config *Config)
 		mock   func(store *mock.MockStorage)
 		expect *AuthorizeRequest
 	}{
@@ -518,6 +519,71 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldPassRedirectURIOmittedNotRequired",
+			query: url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{"code", "token"},
+				State:         "strong-state",
+				Request: Request{
+					Client:         &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
+					RequestedScope: []string{"foo", "bar"},
+				},
+			},
+		},
+		{
+			name: "ShouldFailRedirectURIOmittedRequired",
+			query: url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			config: func(config *Config) {
+				config.RequireRedirectURIPushedAuthorizationRequests = true
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+			},
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required for Pushed Authorization Requests.",
+		},
+		{
+			name: "ShouldPassRedirectURIProvidedRequired",
+			query: url.Values{
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			config: func(config *Config) {
+				config.RequireRedirectURIPushedAuthorizationRequests = true
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{"code", "token"},
+				State:         "strong-state",
+				Request: Request{
+					Client:         &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
+					RequestedScope: []string{"foo", "bar"},
+				},
+			},
+		},
+		{
 			name: "ShouldFailRequestURIProvided",
 			query: url.Values{
 				consts.FormParameterRequestURI:   {"https://foo.bar/ru"},
@@ -562,6 +628,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			config := &Config{
 				ScopeStrategy:    ExactScopeStrategy,
 				AudienceStrategy: DefaultAudienceStrategy,
+			}
+			if tc.config != nil {
+				tc.config(config)
 			}
 			provider := &Fosite{
 				Store:  store,

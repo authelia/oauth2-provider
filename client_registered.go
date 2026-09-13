@@ -141,6 +141,10 @@ type DefaultRegisteredClient struct {
 	PKCEChallengeMethod               string        `json:"-"`
 	PushedAuthorizeContextLifespan    time.Duration `json:"-"`
 
+	RequireRedirectURIPushedAuthorizationRequests bool          `json:"-"`
+	RequireRequestObjectAudienceAndLifetime       bool          `json:"-"`
+	RequestObjectMaximumLifetime                  time.Duration `json:"-"`
+
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
 	// ClientRegistrationMetadata.Extra is not this type's responsibility.
@@ -362,6 +366,18 @@ func (c *DefaultRegisteredClient) GetPushedAuthorizeContextLifespan() time.Durat
 	return c.PushedAuthorizeContextLifespan
 }
 
+func (c *DefaultRegisteredClient) GetRequireRedirectURIPushedAuthorizationRequests() bool {
+	return c.RequireRedirectURIPushedAuthorizationRequests
+}
+
+func (c *DefaultRegisteredClient) GetRequireRequestObjectAudienceAndLifetime() bool {
+	return c.RequireRequestObjectAudienceAndLifetime
+}
+
+func (c *DefaultRegisteredClient) GetRequestObjectMaximumLifetime() time.Duration {
+	return c.RequestObjectMaximumLifetime
+}
+
 func (c *DefaultRegisteredClient) GetPostLogoutRedirectURIs() (uris []string) {
 	return c.PostLogoutRedirectURIs
 }
@@ -395,24 +411,26 @@ func (c *DefaultRegisteredClient) GetTLSClientAuthSANEmail() (email string) {
 }
 
 var (
-	_ Client                           = (*DefaultRegisteredClient)(nil)
-	_ RotatedClientSecretsClient       = (*DefaultRegisteredClient)(nil)
-	_ JSONWebKeysClient                = (*DefaultRegisteredClient)(nil)
-	_ JARClient                        = (*DefaultRegisteredClient)(nil)
-	_ IDTokenClient                    = (*DefaultRegisteredClient)(nil)
-	_ UserInfoClient                   = (*DefaultRegisteredClient)(nil)
-	_ JARMClient                       = (*DefaultRegisteredClient)(nil)
-	_ AuthenticationMethodClient       = (*DefaultRegisteredClient)(nil)
-	_ ResponseModeClient               = (*DefaultRegisteredClient)(nil)
-	_ DPoPClient                       = (*DefaultRegisteredClient)(nil)
-	_ JWTProfileClient                 = (*DefaultRegisteredClient)(nil)
-	_ IntrospectionJWTResponseClient   = (*DefaultRegisteredClient)(nil)
-	_ ProofKeyCodeExchangeClient       = (*DefaultRegisteredClient)(nil)
-	_ PushedAuthorizationRequestClient = (*DefaultRegisteredClient)(nil)
-	_ RPInitiatedLogoutClient          = (*DefaultRegisteredClient)(nil)
-	_ BackChannelLogoutClient          = (*DefaultRegisteredClient)(nil)
-	_ TLSClientAuthClient              = (*DefaultRegisteredClient)(nil)
-	_ MTLSClient                       = (*DefaultRegisteredClient)(nil)
+	_ Client                                      = (*DefaultRegisteredClient)(nil)
+	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
+	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
+	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
+	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)
+	_ UserInfoClient                              = (*DefaultRegisteredClient)(nil)
+	_ JARMClient                                  = (*DefaultRegisteredClient)(nil)
+	_ AuthenticationMethodClient                  = (*DefaultRegisteredClient)(nil)
+	_ ResponseModeClient                          = (*DefaultRegisteredClient)(nil)
+	_ DPoPClient                                  = (*DefaultRegisteredClient)(nil)
+	_ JWTProfileClient                            = (*DefaultRegisteredClient)(nil)
+	_ IntrospectionJWTResponseClient              = (*DefaultRegisteredClient)(nil)
+	_ ProofKeyCodeExchangeClient                  = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
+	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
+	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
+	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
+	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
+	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
 )
 
 // GetClientIDIssuedAt returns the time the client identifier was issued, or the zero time when it is not recorded.

@@ -235,6 +235,22 @@ type JARClient interface {
 	JSONWebKeysClient
 }
 
+// RequestObjectLifetimeClient is a JARClient which requires the 'aud', 'nbf' and 'exp' claims in its own Request
+// Objects. The requirement applies when either this or the provider-wide option is set.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+type RequestObjectLifetimeClient interface {
+	// GetRequireRequestObjectAudienceAndLifetime should return true if this client's Request Objects MUST contain the
+	// 'aud', 'nbf' and 'exp' claims.
+	GetRequireRequestObjectAudienceAndLifetime() (require bool)
+
+	// GetRequestObjectMaximumLifetime should return a custom bound for this client's Request Object 'nbf' and 'exp'
+	// claims, or a duration of 0 seconds to utilize the global lifetime.
+	GetRequestObjectMaximumLifetime() (lifetime time.Duration)
+
+	JARClient
+}
+
 // AuthenticationMethodClient represents a client which has specific authentication methods.
 type AuthenticationMethodClient interface {
 	// GetTokenEndpointAuthMethod is equivalent to the 'token_endpoint_auth_method' client metadata value which
@@ -333,6 +349,18 @@ type PushedAuthorizationRequestClient interface {
 	// GetPushedAuthorizeContextLifespan should return a custom lifespan or a duration of 0 seconds to utilize the
 	// global lifespan.
 	GetPushedAuthorizeContextLifespan() (lifespan time.Duration)
+
+	Client
+}
+
+// PushedAuthorizationRequestRedirectURIClient is a client which requires the 'redirect_uri' parameter in its own Pushed
+// Authorization Requests. The requirement applies when either this or the provider-wide option is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+type PushedAuthorizationRequestRedirectURIClient interface {
+	// GetRequireRedirectURIPushedAuthorizationRequests should return true if this client MUST include the
+	// 'redirect_uri' parameter in a Pushed Authorization Request.
+	GetRequireRedirectURIPushedAuthorizationRequests() (require bool)
 
 	Client
 }
@@ -565,6 +593,9 @@ type DefaultJARClient struct {
 	IntrospectionEndpointAuthSigningAlg string              `json:"introspection_endpoint_auth_signing_alg"`
 	RevocationEndpointAuthSigningAlg    string              `json:"revocation_endpoint_auth_signing_alg"`
 
+	RequireRequestObjectAudienceAndLifetime bool          `json:"-"`
+	RequestObjectMaximumLifetime            time.Duration `json:"-"`
+
 	*DefaultClient
 }
 
@@ -749,6 +780,14 @@ func (c *DefaultJARClient) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
+func (c *DefaultJARClient) GetRequireRequestObjectAudienceAndLifetime() bool {
+	return c.RequireRequestObjectAudienceAndLifetime
+}
+
+func (c *DefaultJARClient) GetRequestObjectMaximumLifetime() time.Duration {
+	return c.RequestObjectMaximumLifetime
+}
+
 func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
@@ -786,12 +825,13 @@ func (c *DefaultMTLSClient) GetTLSClientAuthSANEmail() string {
 }
 
 var (
-	_ Client                     = (*DefaultClient)(nil)
-	_ ResponseModeClient         = (*DefaultResponseModeClient)(nil)
-	_ JARClient                  = (*DefaultJARClient)(nil)
-	_ RPInitiatedLogoutClient    = (*DefaultRPInitiatedLogoutClient)(nil)
-	_ BackChannelLogoutClient    = (*DefaultBackChannelLogoutClient)(nil)
-	_ TLSClientAuthClient        = (*DefaultMTLSClient)(nil)
-	_ MTLSClient                 = (*DefaultMTLSClient)(nil)
-	_ AuthenticationMethodClient = (*DefaultMTLSClient)(nil)
+	_ Client                      = (*DefaultClient)(nil)
+	_ ResponseModeClient          = (*DefaultResponseModeClient)(nil)
+	_ JARClient                   = (*DefaultJARClient)(nil)
+	_ RequestObjectLifetimeClient = (*DefaultJARClient)(nil)
+	_ RPInitiatedLogoutClient     = (*DefaultRPInitiatedLogoutClient)(nil)
+	_ BackChannelLogoutClient     = (*DefaultBackChannelLogoutClient)(nil)
+	_ TLSClientAuthClient         = (*DefaultMTLSClient)(nil)
+	_ MTLSClient                  = (*DefaultMTLSClient)(nil)
+	_ AuthenticationMethodClient  = (*DefaultMTLSClient)(nil)
 )

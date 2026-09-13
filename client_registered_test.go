@@ -26,21 +26,42 @@ func TestDefaultRegisteredClientImplementsInterfaces(t *testing.T) {
 	assert.Equal(t, []ResponseModeType{ResponseModeQuery}, client.GetResponseModes())
 
 	var (
-		_ Client                           = client
-		_ RotatedClientSecretsClient       = client
-		_ JSONWebKeysClient                = client
-		_ JARClient                        = client
-		_ IDTokenClient                    = client
-		_ UserInfoClient                   = client
-		_ JARMClient                       = client
-		_ AuthenticationMethodClient       = client
-		_ ResponseModeClient               = client
-		_ DPoPClient                       = client
-		_ JWTProfileClient                 = client
-		_ IntrospectionJWTResponseClient   = client
-		_ ProofKeyCodeExchangeClient       = client
-		_ PushedAuthorizationRequestClient = client
+		_ Client                                      = client
+		_ RotatedClientSecretsClient                  = client
+		_ JSONWebKeysClient                           = client
+		_ JARClient                                   = client
+		_ IDTokenClient                               = client
+		_ UserInfoClient                              = client
+		_ JARMClient                                  = client
+		_ AuthenticationMethodClient                  = client
+		_ ResponseModeClient                          = client
+		_ DPoPClient                                  = client
+		_ JWTProfileClient                            = client
+		_ IntrospectionJWTResponseClient              = client
+		_ ProofKeyCodeExchangeClient                  = client
+		_ PushedAuthorizationRequestClient            = client
+		_ PushedAuthorizationRequestRedirectURIClient = client
+		_ RequestObjectLifetimeClient                 = client
 	)
+}
+
+func TestDefaultRegisteredClientFAPIPolicy(t *testing.T) {
+	unset := &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "abc"}}
+
+	assert.False(t, unset.GetRequireRedirectURIPushedAuthorizationRequests())
+	assert.False(t, unset.GetRequireRequestObjectAudienceAndLifetime())
+	assert.Equal(t, time.Duration(0), unset.GetRequestObjectMaximumLifetime())
+
+	set := &DefaultRegisteredClient{
+		DefaultClient: &DefaultClient{ID: "abc"},
+		RequireRedirectURIPushedAuthorizationRequests: true,
+		RequireRequestObjectAudienceAndLifetime:       true,
+		RequestObjectMaximumLifetime:                  time.Minute * 30,
+	}
+
+	assert.True(t, set.GetRequireRedirectURIPushedAuthorizationRequests())
+	assert.True(t, set.GetRequireRequestObjectAudienceAndLifetime())
+	assert.Equal(t, time.Minute*30, set.GetRequestObjectMaximumLifetime())
 }
 
 func TestDefaultRegisteredClientDefaults(t *testing.T) {

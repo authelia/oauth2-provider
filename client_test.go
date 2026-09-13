@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -35,6 +36,20 @@ func TestDefaultClient(t *testing.T) {
 	assert.Equal(t, consts.GrantTypeAuthorizationCode, sc.GetGrantTypes()[0])
 
 	var _ RotatedClientSecretsClient = sc
+}
+
+func TestDefaultJARClientRequestObjectLifetime(t *testing.T) {
+	unset := &DefaultJARClient{DefaultClient: &DefaultClient{ID: "abc"}}
+
+	assert.False(t, unset.GetRequireRequestObjectAudienceAndLifetime())
+	assert.Zero(t, unset.GetRequestObjectMaximumLifetime())
+
+	set := &DefaultJARClient{DefaultClient: &DefaultClient{ID: "abc"}, RequireRequestObjectAudienceAndLifetime: true, RequestObjectMaximumLifetime: time.Minute * 30}
+
+	assert.True(t, set.GetRequireRequestObjectAudienceAndLifetime())
+	assert.Equal(t, time.Minute*30, set.GetRequestObjectMaximumLifetime())
+
+	var _ RequestObjectLifetimeClient = set
 }
 
 func TestDefaultResponseModeClient_GetResponseMode(t *testing.T) {

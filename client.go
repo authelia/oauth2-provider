@@ -295,6 +295,18 @@ type RefreshFlowScopeClient interface {
 	Client
 }
 
+// RefreshTokenRotationClient is a client which keeps its refresh token during its own refresh token grants. Rotation
+// is disabled when either this or the provider-wide option is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+type RefreshTokenRotationClient interface {
+	// GetDisableRefreshTokenRotation should return true if the refresh token grant should keep this client's refresh
+	// token rather than issue a new one.
+	GetDisableRefreshTokenRotation() (disable bool)
+
+	Client
+}
+
 // RevokeFlowRevokeRefreshTokensExplicitClient is a client which can be customized to only revoke Refresh Tokens
 // explicitly.
 type RevokeFlowRevokeRefreshTokensExplicitClient interface {

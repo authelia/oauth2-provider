@@ -90,6 +90,15 @@ type DisableRefreshTokenValidationProvider interface {
 	GetDisableRefreshTokenValidation(ctx context.Context) bool
 }
 
+// DisableRefreshTokenRotationProvider returns the provider for configuring refresh token rotation.
+type DisableRefreshTokenRotationProvider interface {
+	// GetDisableRefreshTokenRotation returns true if the refresh token grant should keep the presented refresh token
+	// rather than issue a new one.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	GetDisableRefreshTokenRotation(ctx context.Context) (disable bool)
+}
+
 // AccessTokenIssuerProvider returns the provider for configuring the JWT issuer.
 type AccessTokenIssuerProvider interface {
 	// GetAccessTokenIssuer returns the access token issuer.

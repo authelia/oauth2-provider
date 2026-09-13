@@ -319,6 +319,27 @@ type Provider interface {
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken (everything MUST be implemented)
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented)
 	SendBackChannelLogout(ctx context.Context, requester BackChannelLogoutRequester) (results []BackChannelLogoutResult, err error)
+
+	// RequireRedirectURIPushedAuthorizationRequest determines if the 'redirect_uri' parameter is required in a Pushed
+	// Authorization Request, being when either the provider-wide option or the client's own policy is set.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+	RequireRedirectURIPushedAuthorizationRequest(ctx context.Context, client Client) (require bool)
+
+	// RequestObjectAudienceAndLifetime determines if a Request Object must contain the 'aud', 'nbf' and 'exp' claims,
+	// and the lifetime bounding them, from the provider-wide options and the client's own policy.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+	RequestObjectAudienceAndLifetime(ctx context.Context, client JARClient) (require bool, lifetime time.Duration)
+
+	// DisableRefreshTokenRotation determines if the refresh token grant keeps the presented refresh token, being when
+	// either the provider-wide option or the client's own policy is set.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	DisableRefreshTokenRotation(ctx context.Context, client Client) (disable bool)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

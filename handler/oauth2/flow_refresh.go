@@ -30,6 +30,7 @@ type RefreshTokenGrantHandler struct {
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
+		oauth2.DisableRefreshTokenRotationProvider
 	}
 }
 
@@ -164,8 +165,9 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
+	// An unrotated refresh token keeps the expiry it was issued with.
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 {
+	if rtLifespan > -1 && !oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, client) {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
@@ -185,6 +187,10 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 	if accessToken, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, request.GetClient()) {
+		return c.populateTokenEndpointResponseWithoutRotation(ctx, request, response, accessToken, accessSignature)
 	}
 
 	if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
@@ -229,10 +235,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return err
 	}
 
-	response.SetAccessToken(accessToken)
-	response.SetTokenType(oauth2.BearerAccessToken)
-	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
-	response.SetScopes(request.GetGrantedScopes())
+	c.setAccessTokenResponse(ctx, request, response, accessToken)
 	response.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
 
 	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
@@ -240,6 +243,44 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	}
 
 	return nil
+}
+
+// populateTokenEndpointResponseWithoutRotation issues an access token while the presented refresh token stays valid.
+// Access tokens previously issued for the grant are revoked, and the response omits 'refresh_token' so the client
+// keeps the one it has.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder, accessToken, accessSignature string) (err error) {
+	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	defer func() {
+		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+	}()
+
+	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, request.GetID()); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
+		return err
+	}
+
+	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize(nil)); err != nil {
+		return err
+	}
+
+	c.setAccessTokenResponse(ctx, request, response, accessToken)
+
+	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *RefreshTokenGrantHandler) setAccessTokenResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder, accessToken string) {
+	response.SetAccessToken(accessToken)
+	response.SetTokenType(oauth2.BearerAccessToken)
+	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
+	response.SetScopes(request.GetGrantedScopes())
 }
 
 // Reference: https://datatracker.ietf.org/doc/html/rfc6819#section-5.2.2.3

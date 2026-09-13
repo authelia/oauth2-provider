@@ -288,6 +288,35 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'iat' \(issued at\) claim, that identifies the time '[^']+' which is after the current time$`,
 		},
 		{
+			name: "ShouldAcceptAnIssuedAtAndNotBeforeWithinTheClockSkew",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				pubKey := f.createJWK(f.privateKey.Public(), keyID)
+				cl := f.createStandardClaim()
+				cl.IssuedAt = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
+				cl.NotBefore = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+			},
+		},
+		{
+			name: "ShouldRejectAnIssuedAtInTheNearFutureWhenClockSkewIsDisabled",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				pubKey := f.createJWK(f.privateKey.Public(), keyID)
+				cl := f.createStandardClaim()
+				cl.IssuedAt = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
+				f.handler.Config.(*oauth2.Config).JWTClockSkew = -1
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+			},
+			err:     oauth2.ErrInvalidGrant,
+			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'iat' \(issued at\) claim, that identifies the time '[^']+' which is after the current time$`,
+		},
+		{
 			name: "ShouldRejectAnIssuedAtFarInThePast",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}

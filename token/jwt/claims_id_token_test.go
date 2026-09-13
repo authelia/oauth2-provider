@@ -401,6 +401,18 @@ func TestIDTokenClaims_Valid(t *testing.T) {
 			err:  "Token is not valid yet",
 		},
 		{
+			name: "ShouldPassIATAndNBFWithinClockSkew",
+			have: &IDTokenClaims{IssuedAt: NewNumericDate(fixedTime.Add(time.Second * 10)), Extra: map[string]any{ClaimNotBefore: fixedTime.Add(time.Second * 10).Unix()}},
+			opts: []ClaimValidationOption{ValidateTimeFunc(timeFunc), ValidateClockSkew(time.Second * 10)},
+		},
+		{
+			name: "ShouldFailIATBeyondClockSkew",
+			have: &IDTokenClaims{IssuedAt: NewNumericDate(fixedTime.Add(time.Second * 11))},
+			opts: []ClaimValidationOption{ValidateTimeFunc(timeFunc), ValidateClockSkew(time.Second * 10)},
+			errs: ValidationErrorIssuedAt,
+			err:  "Token used before issued",
+		},
+		{
 			name: "ShouldFailRequireEXP",
 			have: &IDTokenClaims{},
 			opts: []ClaimValidationOption{ValidateTimeFunc(timeFunc), ValidateRequireExpiresAt()},

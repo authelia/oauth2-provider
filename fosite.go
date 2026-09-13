@@ -224,6 +224,7 @@ type Configurator interface {
 	GrantTypeJWTBearerIDOptionalProvider
 	GrantTypeJWTBearerIssuedDateOptionalProvider
 	GetJWTMaxDurationProvider
+	JWTClockSkewProvider
 	ScopeStrategyProvider
 	AudienceStrategyProvider
 	ClientCredentialsImplicitProvider

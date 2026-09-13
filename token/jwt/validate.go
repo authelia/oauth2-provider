@@ -13,6 +13,7 @@ type ClaimValidationOption func(opts *ClaimValidationOptions)
 
 type ClaimValidationOptions struct {
 	timef          func() time.Time
+	clockSkew      time.Duration
 	iss            string
 	aud            []string
 	audAll         []string
@@ -29,6 +30,16 @@ type ClaimValidationOptions struct {
 func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.timef = timef
+	}
+}
+
+// ValidateClockSkew accepts an 'iat' or 'nbf' claim up to skew in the future. It does not apply to 'exp'. A negative
+// skew is treated as zero.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func ValidateClockSkew(skew time.Duration) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.clockSkew = max(skew, 0)
 	}
 }
 

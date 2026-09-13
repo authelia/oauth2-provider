@@ -95,7 +95,7 @@ func (c LogoutTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 		vErr.Errors |= ValidationErrorExpired
 	}
 
-	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now, vopts.iatRequired, date, err) {
+	if date, err = c.GetIssuedAt(); !validDate(validInt64Past, now+int64(vopts.clockSkew/time.Second), vopts.iatRequired, date, err) {
 		vErr.Inner = errors.New("Token used before issued")
 		vErr.Errors |= ValidationErrorIssuedAt
 	}

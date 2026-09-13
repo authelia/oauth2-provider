@@ -608,6 +608,19 @@ type JWTSecuredAuthorizationRequestConfigProvider interface {
 	// deployments may consider it a sufficient substitute. This does not affect requests made to the authorization
 	// endpoint.
 	GetRequireSignedRequestObjectSkipPushedAuthorizationRequests(ctx context.Context) (skip bool)
+
+	// GetRequireRequestObjectAudienceAndLifetime indicates if a Request Object must contain the 'aud', 'nbf' and 'exp'
+	// claims, with an 'nbf' claim no more than GetRequestObjectMaximumLifetime in the past and an 'exp' claim no more
+	// than GetRequestObjectMaximumLifetime after it. RFC 9101 requires none of these claims.
+	//
+	// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+	GetRequireRequestObjectAudienceAndLifetime(ctx context.Context) (require bool)
+
+	// GetRequestObjectMaximumLifetime returns the bound applied to a Request Object's 'nbf' and 'exp' claims when
+	// GetRequireRequestObjectAudienceAndLifetime is enabled. A zero or negative value disables the bound.
+	//
+	// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+	GetRequestObjectMaximumLifetime(ctx context.Context) (lifetime time.Duration)
 }
 
 // AuthorizeErrorFieldResponseStrategyProvider returns the provider for the strategy used to write authorization

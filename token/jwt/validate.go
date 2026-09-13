@@ -14,6 +14,7 @@ type ClaimValidationOption func(opts *ClaimValidationOptions)
 type ClaimValidationOptions struct {
 	timef          func() time.Time
 	clockSkew      time.Duration
+	maxLifetime    time.Duration
 	iss            string
 	aud            []string
 	audAll         []string
@@ -40,6 +41,16 @@ func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
 func ValidateClockSkew(skew time.Duration) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.clockSkew = max(skew, 0)
+	}
+}
+
+// ValidateMaximumLifetime rejects an 'nbf' claim more than lifetime in the past, and an 'exp' claim more than lifetime
+// after the 'nbf' claim. It does not require either claim. A zero or negative lifetime disables the check.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+func ValidateMaximumLifetime(lifetime time.Duration) ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.maxLifetime = lifetime
 	}
 }
 
@@ -180,6 +191,27 @@ func validInt64Past(value, now int64, required bool) bool {
 	}
 
 	return now >= value
+}
+
+// validLifetime ensures nbf is no more than lifetime before now, and exp is no more than lifetime after nbf.
+func validLifetime(nbf, exp *NumericDate, now int64, lifetime time.Duration) bool {
+	if lifetime <= 0 || nbf == nil {
+		return true
+	}
+
+	seconds, n := uint64(lifetime/time.Second), nbf.Int64()
+
+	if now > n && uint64(now)-uint64(n) > seconds {
+		return false
+	}
+
+	if exp == nil {
+		return true
+	}
+
+	e := exp.Int64()
+
+	return e <= n || uint64(e)-uint64(n) <= seconds
 }
 
 func validString(value, cmp string, required bool) bool {

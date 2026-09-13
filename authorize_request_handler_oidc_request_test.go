@@ -133,6 +133,14 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	assertionRequestObjectInvalidNotValidYet := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: time.Now().Add(time.Hour).UTC().Unix(), consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
 	skewed := time.Now().Add(time.Second * 5).UTC().Unix()
 	assertionRequestObjectValidWithinClockSkew := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimIssuedAt: skewed, consts.ClaimNotBefore: skewed, consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	windowNow := time.Now().UTC()
+	windowNBF, windowEXP := windowNow.Add(-time.Minute).Unix(), windowNow.Add(time.Minute*5).Unix()
+	assertionRequestObjectWindowValid := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: windowNBF, consts.ClaimExpirationTime: windowEXP, consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectWindowWithoutAudience := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: windowNBF, consts.ClaimExpirationTime: windowEXP, consts.ClaimClientIdentifier: "foo", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectWindowWithoutNBF := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimExpirationTime: windowEXP, consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectWindowWithoutEXP := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: windowNBF, consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectWindowNBFOver60 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: windowNow.Add(-time.Minute * 61).Unix(), consts.ClaimExpirationTime: windowEXP, consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
+	assertionRequestObjectWindowEXPOver60 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimNotBefore: windowNow.Unix(), consts.ClaimExpirationTime: windowNow.Add(time.Minute * 61).Unix(), consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectValidNumericAndStructured := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: consts.ScopeOpenID, consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterMaximumAge: 86400, "claims": map[string]any{"id_token": map[string]any{"acr": map[string]any{"essential": true}}}}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectInvalidSignature := mangleSig(assertionRequestObjectValid)
 	assertionRequestObjectInvalidKID := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA384)
@@ -193,6 +201,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 		err       error
 		errString string
 		errRegex  *regexp.Regexp
+		config    func(config *Config)
 	}{
 		{
 			name:     "ShouldPassWithoutRequestObject",
@@ -409,6 +418,96 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
 			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'foo' expects request objects to be encrypted with the 'enc' header value 'abc' due to the client registration 'request_object_encryption_enc' value but the request object was encrypted with the 'enc' header value 'A128GCM'.",
+		},
+		{
+			name:     "ShouldPassRequestObjectWindowsNotRequired",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowWithoutAudience}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectWindowWithoutAudience}, consts.ClaimNotBefore: {fmt.Sprint(windowNBF)}, consts.ClaimExpirationTime: {fmt.Sprint(windowEXP)}},
+		},
+		{
+			name:     "ShouldPassRequestObjectWindowsRequired",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowValid}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectWindowValid}, consts.ClaimNotBefore: {fmt.Sprint(windowNBF)}, consts.ClaimExpirationTime: {fmt.Sprint(windowEXP)}},
+		},
+		{
+			name:     "ShouldFailRequestObjectWindowsRequiredWithoutAudience",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowWithoutAudience}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object without the required 'aud' claim\.$`),
+		},
+		{
+			name:     "ShouldFailRequestObjectWindowsRequiredWithoutNBF",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowWithoutNBF}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object without the required 'nbf' claim\.$`),
+		},
+		{
+			name:     "ShouldFailRequestObjectWindowsRequiredWithoutEXP",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowWithoutEXP}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object without the required 'exp' claim\.$`),
+		},
+		{
+			name:     "ShouldFailRequestObjectWindowsRequiredNBFOver60Minutes",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowNBFOver60}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that exceeds the maximum lifetime\. `),
+		},
+		{
+			name:     "ShouldFailRequestObjectWindowsRequiredEXPOver60Minutes",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowEXPOver60}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config:   func(config *Config) { config.RequireRequestObjectAudienceAndLifetime = true },
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that exceeds the maximum lifetime\. `),
+		},
+		{
+			name:   "ShouldPassRequestObjectWindowsRequiredLifetimeOverridden",
+			have:   url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowEXPOver60}},
+			client: &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config: func(config *Config) {
+				config.RequireRequestObjectAudienceAndLifetime = true
+				config.RequestObjectMaximumLifetime = time.Hour * 2
+			},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectWindowEXPOver60}, consts.ClaimNotBefore: {fmt.Sprint(windowNow.Unix())}, consts.ClaimExpirationTime: {fmt.Sprint(windowNow.Add(time.Minute * 61).Unix())}},
+		},
+		{
+			name:   "ShouldPassRequestObjectWindowsRequiredLifetimeDisabled",
+			have:   url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowEXPOver60}},
+			client: &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config: func(config *Config) {
+				config.RequireRequestObjectAudienceAndLifetime = true
+				config.RequestObjectMaximumLifetime = -1
+			},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectWindowEXPOver60}, consts.ClaimNotBefore: {fmt.Sprint(windowNow.Unix())}, consts.ClaimExpirationTime: {fmt.Sprint(windowNow.Add(time.Minute * 61).Unix())}},
+		},
+		{
+			name:   "ShouldFailRequestObjectWindowsRequiredLifetimeShortened",
+			have:   url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectWindowValid}},
+			client: &DefaultJARClient{JSONWebKeys: jwksPublic, DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			config: func(config *Config) {
+				config.RequireRequestObjectAudienceAndLifetime = true
+				config.RequestObjectMaximumLifetime = time.Minute * 5
+			},
+			expected: url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
+			err:      ErrInvalidRequestObject,
+			errRegex: regexp.MustCompile(`^The request parameter contains an invalid Request Object\. OpenID Connect 1\.0 request object could not be decoded or validated\. OpenID Connect 1\.0 client with id 'foo' provided a request object that exceeds the maximum lifetime\. The 'nbf' claim was \d+ and the 'exp' claim was \d+\.$`),
 		},
 		{
 			name:     "ShouldFailExpired",
@@ -640,7 +739,12 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwksPrivate),
 			}
 
-			provider := &Fosite{Config: &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}}
+			providerConfig := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), IDTokenIssuer: "https://auth.example.com", JWTStrategy: strategy}
+			if tc.config != nil {
+				tc.config(providerConfig)
+			}
+
+			provider := &Fosite{Config: providerConfig}
 
 			actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
 

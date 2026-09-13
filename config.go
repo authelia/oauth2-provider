@@ -581,6 +581,13 @@ type PushedAuthorizeRequestConfigProvider interface {
 	// In this mode, a client cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 	// must contain the PAR request_uri.
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)
+
+	// GetRequireRedirectURIPushedAuthorizationRequests indicates if the 'redirect_uri' parameter is required in
+	// Pushed Authorization Requests, even when the client has a single registered redirect URI which would otherwise
+	// be used as the default.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+	GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) (require bool)
 }
 
 // JWTSecuredAuthorizationRequestConfigProvider is the configuration provider for JWT-Secured Authorization

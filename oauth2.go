@@ -301,6 +301,24 @@ type Provider interface {
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented)
 	WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error)
+
+	// NewRPInitiatedLogoutRequest parses and validates a request to the OpenID Connect end session endpoint. It does
+	// not authenticate the client, end any session, or write a response; on error the returned requester carries no
+	// post logout redirect URI.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ValidationAndErrorHandling (everything MUST be implemented)
+	NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Request) (requester RPInitiatedLogoutRequester, err error)
+
+	// SendBackChannelLogout delivers a Logout Token to each client supplied by the requester. Delivery is best effort:
+	// a result is returned for every client, in the order supplied, and only whole-operation failures are returned as
+	// err.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented)
+	SendBackChannelLogout(ctx context.Context, requester BackChannelLogoutRequester) (results []BackChannelLogoutResult, err error)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

@@ -406,11 +406,11 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	}
 
 	// FAPI 2.0 Message Signing Section 5.3.1. RFC 9101 requires none of these claims, so they are opt-in.
-	if f.Config.GetRequireRequestObjectAudienceAndLifetime(ctx) {
+	if require, lifetime := f.RequestObjectAudienceAndLifetime(ctx, client); require {
 		optsValidClaims = append(optsValidClaims,
 			jwt.ValidateRequireNotBefore(),
 			jwt.ValidateRequireExpiresAt(),
-			jwt.ValidateMaximumLifetime(f.Config.GetRequestObjectMaximumLifetime(ctx)),
+			jwt.ValidateMaximumLifetime(lifetime),
 		)
 	} else {
 		optsValidClaims = append(optsValidClaims, jwt.ValidateDoNotRequireAudience())
@@ -496,6 +496,25 @@ func requestObjectFormValue(v any) (value string, err error) {
 
 		return string(data), nil
 	}
+}
+
+// RequestObjectAudienceAndLifetime determines if a Request Object must contain the 'aud', 'nbf' and 'exp' claims, and
+// the lifetime bounding them. The claims are required when either the provider-wide option or the client's own policy
+// is set, and a positive client lifetime overrides the provider-wide lifetime.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.3.1
+func (f *Fosite) RequestObjectAudienceAndLifetime(ctx context.Context, client JARClient) (require bool, lifetime time.Duration) {
+	require, lifetime = f.Config.GetRequireRequestObjectAudienceAndLifetime(ctx), f.Config.GetRequestObjectMaximumLifetime(ctx)
+
+	if roc, ok := client.(RequestObjectLifetimeClient); ok {
+		require = require || roc.GetRequireRequestObjectAudienceAndLifetime()
+
+		if clientLifetime := roc.GetRequestObjectMaximumLifetime(); clientLifetime > 0 {
+			lifetime = clientLifetime
+		}
+	}
+
+	return require, lifetime
 }
 
 // requireSignedRequestObject determines if the 'require_signed_request_object' policy applies to this request. It

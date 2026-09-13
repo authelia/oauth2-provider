@@ -71,7 +71,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 	// FAPI 2.0 Security Profile Section 5.3.2.2. The form includes parameters from a Request Object, and is checked
 	// rather than the resolved redirect URI because a client with a single registered redirect URI may omit it.
-	if f.Config.GetRequireRedirectURIPushedAuthorizationRequests(ctx) && frequest.GetRequestForm().Get(consts.FormParameterRedirectURI) == "" {
+	if f.RequireRedirectURIPushedAuthorizationRequest(ctx, frequest.GetClient()) && frequest.GetRequestForm().Get(consts.FormParameterRedirectURI) == "" {
 		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required for Pushed Authorization Requests."))
 	}
 
@@ -84,6 +84,20 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	}
 
 	return frequest, nil
+}
+
+// RequireRedirectURIPushedAuthorizationRequest determines if the 'redirect_uri' parameter is required in a Pushed
+// Authorization Request. It is required when either the provider-wide option or the client's own policy is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+func (f *Fosite) RequireRedirectURIPushedAuthorizationRequest(ctx context.Context, client Client) (require bool) {
+	if f.Config.GetRequireRedirectURIPushedAuthorizationRequests(ctx) {
+		return true
+	}
+
+	parc, ok := client.(PushedAuthorizationRequestRedirectURIClient)
+
+	return ok && parc.GetRequireRedirectURIPushedAuthorizationRequests()
 }
 
 // handlePushedAuthorizeRequestDPoP implements RFC 9449 Section 10.1 at the pushed authorization request endpoint. A

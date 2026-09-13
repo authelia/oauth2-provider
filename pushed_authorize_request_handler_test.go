@@ -584,6 +584,65 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldFailRedirectURIOmittedRequiredByClient",
+			query: url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+			},
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required for Pushed Authorization Requests.",
+		},
+		{
+			name: "ShouldPassRedirectURIProvidedRequiredByClient",
+			query: url.Values{
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{"code", "token"},
+				State:         "strong-state",
+				Request: Request{
+					Client:         &testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
+					RequestedScope: []string{"foo", "bar"},
+				},
+			},
+		},
+		{
+			name: "ShouldPassRedirectURIOmittedNotRequiredByClient",
+			query: url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterClientSecret: []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{"code", "token"},
+				State:         "strong-state",
+				Request: Request{
+					Client:         &testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
+					RequestedScope: []string{"foo", "bar"},
+				},
+			},
+		},
+		{
 			name: "ShouldFailRequestURIProvided",
 			query: url.Values{
 				consts.FormParameterRequestURI:   {"https://foo.bar/ru"},
@@ -663,4 +722,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+type testRedirectURIPushedAuthorizationRequestClient struct {
+	Require bool
+
+	*DefaultClient
+}
+
+func (c *testRedirectURIPushedAuthorizationRequestClient) GetRequireRedirectURIPushedAuthorizationRequests() bool {
+	return c.Require
 }

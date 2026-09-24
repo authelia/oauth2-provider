@@ -5,6 +5,7 @@
 package oauth2_test
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -44,6 +45,20 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {},
 		},
 		{
+			name: "ShouldFailClientIDMismatchAuthenticatedClient",
+			query: url.Values{
+				consts.FormParameterClientID:     {"victim"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterState:        {"strong-state"},
+			},
+			config: func(config *Config) {
+				config.ClientAuthenticationStrategy = &staticClientAuthenticationStrategy{client: &DefaultClient{ID: "attacker", RedirectURIs: []string{"https://foo.bar/cb"}}}
+			},
+			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The 'client_id' parameter does not identify the authenticated client. The 'client_id' parameter has the value 'victim' but the client authenticated as 'attacker'.",
+			mock: func(store *mock.MockStorage) {},
+		},
+		{
 			name:  "ShouldFailInvalidRedirectURI",
 			query: url.Values{consts.FormParameterRedirectURI: []string{"invalid"}},
 			err:   "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The Client ID was missing from the request but it is required when there is no client assertion.",
@@ -61,9 +76,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterClientSecret: []string{"1234"},
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '1234' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		{
@@ -73,9 +88,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterClientSecret: []string{"1234"},
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '1234' did not match 'redirect_uri' value '' because the only registered 'redirect_uri' is not a valid value.",
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		{
@@ -85,9 +100,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterClientSecret: []string{"1234"},
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'https://foo.bar/cb'.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '1234' did not match 'redirect_uri' value 'https://foo.bar/cb'.",
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"invalid"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		{
@@ -100,7 +115,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		{
@@ -114,7 +129,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 		},
 		{
@@ -128,7 +143,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar baz"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
@@ -144,7 +159,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"},
 					Audience:     []string{"https://cloud.authelia.com/api"},
 					ClientSecret: testClientSecret1234,
@@ -164,7 +179,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
@@ -177,7 +192,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				ResponseTypes: []string{"code", "token"},
 				State:         "strong-state",
 				Request: Request{
-					Client: &DefaultClient{
+					Client: &DefaultClient{ID: "1234",
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:       []string{"foo", "bar"},
 						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -200,7 +215,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
@@ -213,7 +228,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
-					Client: &DefaultClient{
+					Client: &DefaultClient{ID: "1234",
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:       []string{"foo", "bar"},
 						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -236,7 +251,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://test/value", ""},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
@@ -249,7 +264,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
-					Client: &DefaultClient{
+					Client: &DefaultClient{ID: "1234",
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:       []string{"foo", "bar"},
 						Audience:     []string{"https://test/value"},
@@ -272,7 +287,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api https://www.authelia.com/api"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"web+application://callback"},
 					Scopes:        []string{"foo", "bar"},
@@ -285,7 +300,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
-					Client: &DefaultClient{
+					Client: &DefaultClient{ID: "1234",
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"web+application://callback"},
 						Scopes:       []string{"foo", "bar"},
 						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -308,7 +323,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterAudience:     {"https://cloud.authelia.com/api  https://www.authelia.com/api"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234",
 					ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
 					RedirectURIs:  []string{"https://foo.bar/cb"},
 					Scopes:        []string{"foo", "bar"},
@@ -321,7 +336,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
 				State:         "strong-state",
 				Request: Request{
-					Client: &DefaultClient{
+					Client: &DefaultClient{ID: "1234",
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, RedirectURIs: []string{"https://foo.bar/cb"},
 						Scopes:       []string{"foo", "bar"},
 						Audience:     []string{"https://cloud.authelia.com/api", "https://www.authelia.com/api"},
@@ -344,7 +359,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {"unknown"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			err: "The authorization server does not support obtaining a response using this response mode. Request with unsupported response_mode 'unknown'.",
 		},
@@ -360,9 +375,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
-			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '' does not the 'response_mode' type 'form_post', as it's not registered to support any.",
+			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '1234' does not the 'response_mode' type 'form_post', as it's not registered to support any.",
 		},
 		{
 			name: "ShouldFailRequestedResponseModeNotAllowed",
@@ -377,7 +392,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
-					DefaultClient: &DefaultClient{
+					DefaultClient: &DefaultClient{ID: "1234",
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
@@ -386,7 +401,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 					ResponseModes: []ResponseModeType{ResponseModeQuery},
 				}, nil).MaxTimes(2)
 			},
-			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '' does not the 'response_mode' type 'form_post'.",
+			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '1234' does not the 'response_mode' type 'form_post'.",
 		},
 		{
 			name: "ShouldPassWithResponseModeFormPost",
@@ -402,7 +417,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
-					DefaultClient: &DefaultClient{
+					DefaultClient: &DefaultClient{ID: "1234",
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
@@ -418,7 +433,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
-						DefaultClient: &DefaultClient{
+						DefaultClient: &DefaultClient{ID: "1234",
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
@@ -445,7 +460,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
-					DefaultClient: &DefaultClient{
+					DefaultClient: &DefaultClient{ID: "1234",
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
@@ -461,7 +476,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
-						DefaultClient: &DefaultClient{
+						DefaultClient: &DefaultClient{ID: "1234",
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
@@ -488,7 +503,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultResponseModeClient{
-					DefaultClient: &DefaultClient{
+					DefaultClient: &DefaultClient{ID: "1234",
 						RedirectURIs:  []string{"https://foo.bar/cb"},
 						Scopes:        []string{"foo", "bar"},
 						ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
@@ -504,7 +519,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				State:         "strong-state",
 				Request: Request{
 					Client: &DefaultResponseModeClient{
-						DefaultClient: &DefaultClient{
+						DefaultClient: &DefaultClient{ID: "1234",
 							RedirectURIs:  []string{"https://foo.bar/cb"},
 							Scopes:        []string{"foo", "bar"},
 							ResponseTypes: []string{consts.ResponseTypeHybridFlowToken},
@@ -528,14 +543,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
 				ResponseTypes: []string{"code", "token"},
 				State:         "strong-state",
 				Request: Request{
-					Client:         &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
+					Client:         &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
 					RequestedScope: []string{"foo", "bar"},
 				},
 			},
@@ -553,7 +568,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				config.RequireRedirectURIPushedAuthorizationRequests = true
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required for Pushed Authorization Requests.",
 		},
@@ -571,14 +586,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				config.RequireRedirectURIPushedAuthorizationRequests = true
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
 				ResponseTypes: []string{"code", "token"},
 				State:         "strong-state",
 				Request: Request{
-					Client:         &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
+					Client:         &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234},
 					RequestedScope: []string{"foo", "bar"},
 				},
 			},
@@ -593,7 +608,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
 			},
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required for Pushed Authorization Requests.",
 		},
@@ -608,14 +623,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
 				ResponseTypes: []string{"code", "token"},
 				State:         "strong-state",
 				Request: Request{
-					Client:         &testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
+					Client:         &testRedirectURIPushedAuthorizationRequestClient{Require: true, DefaultClient: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
 					RequestedScope: []string{"foo", "bar"},
 				},
 			},
@@ -630,14 +645,14 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterScope:        {"foo bar"},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}}, nil).MaxTimes(2)
 			},
 			expect: &AuthorizeRequest{
 				RedirectURI:   redir,
 				ResponseTypes: []string{"code", "token"},
 				State:         "strong-state",
 				Request: Request{
-					Client:         &testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
+					Client:         &testRedirectURIPushedAuthorizationRequestClient{DefaultClient: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}},
 					RequestedScope: []string{"foo", "bar"},
 				},
 			},
@@ -655,7 +670,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request must not contain 'request_uri'.",
 		},
@@ -672,7 +687,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseMode: {consts.ResponseModeFormPost},
 			},
 			mock: func(store *mock.MockStorage) {
-				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
 			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
@@ -732,4 +747,12 @@ type testRedirectURIPushedAuthorizationRequestClient struct {
 
 func (c *testRedirectURIPushedAuthorizationRequestClient) GetRequireRedirectURIPushedAuthorizationRequests() bool {
 	return c.Require
+}
+
+type staticClientAuthenticationStrategy struct {
+	client Client
+}
+
+func (s *staticClientAuthenticationStrategy) AuthenticateClient(_ context.Context, _ *http.Request, _ url.Values, _ EndpointClientAuthStrategy) (Client, string, error) {
+	return s.client, consts.ClientAuthMethodPrivateKeyJWT, nil
 }

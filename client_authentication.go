@@ -162,6 +162,13 @@ func getClientCredentialsClientIDValid(post, header string, assertion *ClientAss
 		id = header
 	}
 
+	// RFC 7521 Section 4.2: if present, the 'client_id' parameter MUST identify the same client as the client assertion.
+	if len(id) != 0 && assertion != nil && len(assertion.ID) != 0 && id != assertion.ID {
+		return "", errorsx.WithStack(ErrInvalidClient.
+			WithHint(hintClientCredentialsInvalid).
+			WithDebugf("The request specified the 'client_id' value '%s' but the client assertion identifies the client '%s'. Per RFC 7521 Section 4.2 the 'client_id' parameter MUST identify the same client as the client assertion.", id, assertion.ID))
+	}
+
 	if len(id) == 0 {
 		if assertion != nil {
 			return assertion.ID, nil

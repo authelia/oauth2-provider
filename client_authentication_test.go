@@ -440,6 +440,48 @@ func TestAuthenticateClient(t *testing.T) {
 			r: new(http.Request),
 		},
 		{
+			name: "ShouldFailWithProperRSAAssertionWhenClientIdInTheRequestDoesNotMatchTheAssertion",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			form: url.Values{
+				consts.FormParameterClientID: {"victim"},
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request specified the 'client_id' value 'victim' but the client assertion identifies the client 'bar'. Per RFC 7521 Section 4.2 the 'client_id' parameter MUST identify the same client as the client assertion.",
+		},
+		{
+			name: "ShouldPassWithProperRSAAssertionWhenClientIdInTheRequestMatchesTheAssertion",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			form: url.Values{
+				consts.FormParameterClientID: {"bar"},
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r: new(http.Request),
+		},
+		{
 			name: "ShouldPassWithProperECDSAAssertionWhenJWKsAreSetWithinTheClientAndClientIdIsNotSetInTheRequest",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, TokenEndpointAuthSigningAlg: "ES256"}
@@ -969,7 +1011,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			r:         new(http.Request),
 			expectErr: ErrInvalidClient,
-			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The client assertion had invalid claims. Claim 'sub' from 'client_assertion' must match the 'client_id' of the OAuth 2.0 Client.",
+			err:       "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. The request specified the 'client_id' value 'bar' but the client assertion identifies the client 'not-bar'. Per RFC 7521 Section 4.2 the 'client_id' parameter MUST identify the same client as the client assertion.",
 		},
 		{
 			name: "ShouldFailBecauseClientAssertionIssDoesNotMatchClient",

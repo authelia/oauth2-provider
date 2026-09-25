@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -85,13 +86,15 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		requester.Client = client
 	}
 
+	presented := hasClientCredentials(r, r.PostForm)
+
 	var found = false
 	for _, loader := range f.Config.GetTokenEndpointHandlers(ctx) {
 		if !loader.CanHandleTokenEndpointRequest(ctx, requester) {
 			continue
 		}
 
-		if !loader.CanSkipClientAuth(ctx, requester) && clientErr != nil {
+		if clientErr != nil && (presented || !loader.CanSkipClientAuth(ctx, requester)) {
 			return requester, clientErr
 		}
 
@@ -126,4 +129,18 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	}
 
 	return requester, nil
+}
+
+func hasClientCredentials(r *http.Request, form url.Values) bool {
+	if len(r.Header.Get(consts.HeaderAuthorization)) != 0 {
+		return true
+	}
+
+	for _, parameter := range []string{consts.FormParameterClientID, consts.FormParameterClientSecret, consts.FormParameterClientAssertion, consts.FormParameterClientAssertionType} {
+		if len(form.Get(parameter)) != 0 {
+			return true
+		}
+	}
+
+	return false
 }

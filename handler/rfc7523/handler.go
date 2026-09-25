@@ -156,7 +156,7 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 	//   relies on the parameter is used.
 
 	// if client is authenticated, check grant types
-	if !c.CanSkipClientAuth(ctx, request) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
+	if (!c.CanSkipClientAuth(ctx, request) || isAuthenticatedClient(request.GetClient())) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
@@ -345,3 +345,7 @@ func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extende
 var (
 	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
 )
+
+func isAuthenticatedClient(client oauth2.Client) bool {
+	return client != nil && len(client.GetID()) != 0
+}

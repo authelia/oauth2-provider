@@ -278,7 +278,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			handlers: TokenEndpointHandlers{},
 		},
 		{
-			name: "ShouldPassHandlerSkipsClientAuthAndIgnoresMissingClient",
+			name: "ShouldFailHandlerSkipsClientAuthWithPresentedCredentialsForMissingClient",
 			header: http.Header{
 				consts.HeaderAuthorization: {basicAuth("foo", "bar")},
 			},
@@ -287,15 +287,22 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			},
 			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
 				store.EXPECT().GetClient(gomock.Any(), "foo").Return(nil, errors.New("no client")).Times(1)
-				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method: http.MethodPost,
-			expect: &AccessRequest{
-				GrantTypes: Arguments{"foo"},
-				Request: Request{
-					Client: client,
-				},
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. no client",
+		},
+		{
+			name: "ShouldFailHandlerSkipsClientAuthWithPresentedFormCredentials",
+			form: url.Values{
+				consts.FormParameterGrantType:    {"foo"},
+				consts.FormParameterClientID:     {"another"},
+				consts.FormParameterClientSecret: {"wrong"},
 			},
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
+				store.EXPECT().GetClient(gomock.Any(), "another").Return(anotherClient, nil).Times(1)
+			},
+			method: http.MethodPost,
+			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
 			name: "ShouldPassNoAuthHeaderCanSkip",
@@ -475,7 +482,6 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
-				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			method: http.MethodPost,
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",

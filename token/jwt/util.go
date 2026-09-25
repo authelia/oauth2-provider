@@ -268,6 +268,10 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 		return nil, &JWKLookupError{Description: "The client is not configured with a client secret"}
 	}
 
+	if isClientSecretExpired(client) {
+		return nil, &JWKLookupError{Description: "The client secret has expired"}
+	}
+
 	return NewClientSecretJWK(ctx, secret, kid, alg, enc, use)
 }
 

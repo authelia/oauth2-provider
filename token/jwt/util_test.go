@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -194,6 +195,45 @@ func TestNewClientSecretJWKFromClient(t *testing.T) {
 		assert.Equal(t, "kid", key.KeyID)
 		assert.Equal(t, string(jose.HS256), key.Algorithm)
 	})
+}
+
+func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
+	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
+
+	testCases := []struct {
+		name     string
+		expires  time.Time
+		decorate bool
+		err      bool
+	}{
+		{name: "ShouldAcceptWhenTheSecretDoesNotExpire", expires: time.Time{}},
+		{name: "ShouldAcceptWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour)},
+		{name: "ShouldRejectWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), err: true},
+		{name: "ShouldAcceptDecoratedWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour), decorate: true},
+		{name: "ShouldRejectDecoratedWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), decorate: true, err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var client BaseClient = &expiringSecretJARClient{secret: secret, expires: tc.expires}
+
+			if tc.decorate {
+				client = NewJARClient(client)
+			}
+
+			key, err := NewClientSecretJWKFromClient(t.Context(), client, "", string(jose.HS256), "", JSONWebTokenUseSignature)
+
+			if tc.err {
+				assert.EqualError(t, err, "Error occurred retrieving the JSON Web Key. The client secret has expired")
+				assert.Nil(t, key)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotNil(t, key)
+		})
+	}
 }
 
 func TestNewClientSecretJWK(t *testing.T) {
@@ -575,4 +615,19 @@ func TestNewClientSecretJWKSignatureUsesTheSecretOctets(t *testing.T) {
 		require.True(t, ok, "got %T", key.Key)
 		assert.NotEqual(t, secret, raw, "Section 10.2 derives the encryption key by truncated SHA-2, unlike Section 10.1")
 	})
+}
+
+type expiringSecretJARClient struct {
+	stubJARClient
+
+	secret  []byte
+	expires time.Time
+}
+
+func (c *expiringSecretJARClient) GetClientSecretPlainText() ([]byte, bool, error) {
+	return c.secret, true, nil
+}
+
+func (c *expiringSecretJARClient) GetClientSecretExpiresAt() time.Time {
+	return c.expires
 }

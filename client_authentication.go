@@ -243,6 +243,16 @@ func (c *EndpointClientAuthJWTClient) GetClientSecretPlainText() (secret []byte,
 	return c.client.GetClientSecretPlainText()
 }
 
+// GetClientSecretExpiresAt returns the time the underlying client's secret expires, or the zero time when it does not
+// or the client does not record an expiry. See jwt.ExpiringClientSecretClient.
+func (c *EndpointClientAuthJWTClient) GetClientSecretExpiresAt() (expires time.Time) {
+	if expiring, ok := c.client.(ExpiringClientSecretClient); ok {
+		return expiring.GetClientSecretExpiresAt()
+	}
+
+	return time.Time{}
+}
+
 // GetJSONWebKeys returns the underlying client's registered JSON Web Key Set used to verify 'private_key_jwt'
 // assertions.
 func (c *EndpointClientAuthJWTClient) GetJSONWebKeys() (jwks *jose.JSONWebKeySet) {

@@ -35,30 +35,21 @@ type DeviceAuthorizeHandler struct {
 func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester, response oauth2.DeviceAuthorizeResponder) (err error) {
 	session := request.GetSession()
 
-	var (
-		deviceCode, userCode                   string
-		deviceCodeSignature, userCodeSignature string
-	)
+	var deviceCode, deviceCodeSignature, userCode string
 
 	if deviceCode, deviceCodeSignature, err = d.Strategy.GenerateRFC8628DeviceCode(ctx); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if userCode, userCodeSignature, err = d.generateUniqueUserCode(ctx, session); err != nil {
-		return err
-	}
-
 	request.SetStatus(oauth2.DeviceAuthorizeStatusNew)
-
 	request.SetDeviceCodeSignature(deviceCodeSignature)
-	request.SetUserCodeSignature(userCodeSignature)
 
 	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 
-	if err = d.Storage.CreateDeviceCodeSession(ctx, deviceCodeSignature, request); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	if userCode, err = d.createWithUniqueUserCode(ctx, deviceCodeSignature, request); err != nil {
+		return err
 	}
 
 	raw := d.Config.GetRFC8628UserVerificationURL(ctx)
@@ -89,25 +80,37 @@ var (
 	_ oauth2.RFC8628DeviceAuthorizeEndpointHandler = (*DeviceAuthorizeHandler)(nil)
 )
 
-func (d *DeviceAuthorizeHandler) generateUniqueUserCode(ctx context.Context, session oauth2.Session) (code, signature string, err error) {
+func (d *DeviceAuthorizeHandler) createWithUniqueUserCode(ctx context.Context, deviceCodeSignature string, request oauth2.DeviceAuthorizeRequester) (code string, err error) {
+	var signature string
+
 	for range userCodeGenerationAttempts {
 		if code, signature, err = d.Strategy.GenerateRFC8628UserCode(ctx); err != nil {
-			return "", "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+			return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 
-		_, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, session.Clone())
+		_, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession().Clone())
 
 		switch {
 		case errors.Is(err, oauth2.ErrNotFound):
-			return code, signature, nil
 		case err == nil, errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
 			continue
 		default:
-			return "", "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+			return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		request.SetUserCodeSignature(signature)
+
+		switch err = d.Storage.CreateDeviceCodeSession(ctx, deviceCodeSignature, request); {
+		case err == nil:
+			return code, nil
+		case errors.Is(err, oauth2.ErrDuplicateUserCode):
+			continue
+		default:
+			return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
-	return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebugf("Failed to generate a unique user code after %d attempts.", userCodeGenerationAttempts))
+	return "", errorsx.WithStack(oauth2.ErrServerError.WithDebugf("Failed to generate a unique user code after %d attempts.", userCodeGenerationAttempts))
 }
 
 const userCodeGenerationAttempts = 3

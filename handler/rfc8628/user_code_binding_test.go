@@ -20,25 +20,13 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-type userCodeBindingStore interface {
-	Storage
-	hoauth2.CoreStorage
-}
-
-func userCodeBindingStores() map[string]func() userCodeBindingStore {
-	return map[string]func() userCodeBindingStore{
-		"MemoryStore":          func() userCodeBindingStore { return storage.NewMemoryStore() },
-		"HydratingMemoryStore": func() userCodeBindingStore { return storage.NewHydratingMemoryStore() },
-	}
-}
-
 // RFC 8628 Section 3.2 requires a unique end-user code per grant, so the approval found by user code must belong to
 // the device code being redeemed.
 func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testing.T) {
 	for name, newStore := range userCodeBindingStores() {
 		t.Run(name, func(t *testing.T) {
 			strategy := &o2hmacshaStrategy
-			store := newStore()
+			store, memory := newStore()
 
 			config := &oauth2.Config{
 				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
@@ -80,7 +68,9 @@ func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testin
 				r.SetUserCodeSignature(uSig)
 				r.SetStatus(oauth2.DeviceAuthorizeStatusNew)
 
-				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), sig, r))
+				// CreateDeviceCodeSession rejects a shared user code, so seed the collision directly.
+				memory.DeviceCodes[sig] = r
+				memory.UserCodes[uSig] = r
 
 				return code
 			}
@@ -99,12 +89,10 @@ func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testin
 			newAccessRequest := func(code string) *oauth2.AccessRequest {
 				return &oauth2.AccessRequest{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
-					Request: oauth2.Request{
 						Client:      client,
 						Form:        url.Values{consts.FormParameterDeviceCode: {code}},
 						Session:     &oauth2.DefaultSession{},
 						RequestedAt: time.Now().UTC(),
-					},
 				}
 			}
 
@@ -148,7 +136,7 @@ func TestDeviceAuthorizeHandlerDoesNotReuseALiveUserCode(t *testing.T) {
 	for name, newStore := range userCodeBindingStores() {
 		for _, tc := range testCases {
 			t.Run(name+"/"+tc.name, func(t *testing.T) {
-				store := newStore()
+				store, _ := newStore()
 				strategy := &fixedUserCodeStrategy{CodeStrategy: &o2hmacshaStrategy, codes: tc.codes}
 
 				takenSig, err := strategy.RFC8628UserCodeSignature(t.Context(), taken)
@@ -197,6 +185,77 @@ func TestDeviceAuthorizeHandlerDoesNotReuseALiveUserCode(t *testing.T) {
 	}
 }
 
+func TestDeviceAuthorizeHandlerRegeneratesUserCodeClaimedConcurrently(t *testing.T) {
+	const taken = "BCDFGHJK"
+
+	for name, newStore := range userCodeBindingStores() {
+		t.Run(name, func(t *testing.T) {
+			store, _ := newStore()
+			strategy := &fixedUserCodeStrategy{CodeStrategy: &o2hmacshaStrategy, codes: []string{taken}}
+
+			takenSig, err := strategy.RFC8628UserCodeSignature(t.Context(), taken)
+			require.NoError(t, err)
+
+			_, ownerSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			owner := oauth2.NewDeviceAuthorizeRequest()
+			owner.SetSession(&oauth2.DefaultSession{})
+			owner.SetDeviceCodeSignature(ownerSig)
+			owner.SetUserCodeSignature(takenSig)
+			owner.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+
+			handler := DeviceAuthorizeHandler{
+				Storage:  &racingUserCodeStore{userCodeBindingStore: store, owner: owner},
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:        time.Minute,
+					RFC8628UserVerificationURL: "https://www.test.com",
+				},
+			}
+
+			request := oauth2.NewDeviceAuthorizeRequest()
+			request.SetSession(&oauth2.DefaultSession{})
+
+			response := oauth2.NewDeviceAuthorizeResponse()
+
+			require.NoError(t, handler.HandleRFC8628DeviceAuthorizeEndpointRequest(t.Context(), request, response))
+			assert.Equal(t, 2, strategy.calls)
+			assert.NotEqual(t, taken, response.GetUserCode())
+			assert.NotEqual(t, takenSig, request.GetUserCodeSignature())
+
+			found, err := store.GetDeviceCodeSessionByUserCode(t.Context(), takenSig, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+			assert.Equal(t, ownerSig, found.GetDeviceCodeSignature())
+
+			found, err = store.GetDeviceCodeSessionByUserCode(t.Context(), request.GetUserCodeSignature(), &oauth2.DefaultSession{})
+			require.NoError(t, err)
+			assert.Equal(t, request.GetDeviceCodeSignature(), found.GetDeviceCodeSignature())
+		})
+	}
+}
+
+type racingUserCodeStore struct {
+	userCodeBindingStore
+
+	owner oauth2.DeviceAuthorizeRequester
+	raced bool
+}
+
+func (s *racingUserCodeStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+	request, err := s.userCodeBindingStore.GetDeviceCodeSessionByUserCode(ctx, signature, session)
+
+	if !s.raced {
+		s.raced = true
+
+		if cerr := s.CreateDeviceCodeSession(ctx, s.owner.GetDeviceCodeSignature(), s.owner); cerr != nil {
+			return nil, cerr
+		}
+	}
+
+	return request, err
+}
+
 type fixedUserCodeStrategy struct {
 	CodeStrategy
 
@@ -217,4 +276,24 @@ func (s *fixedUserCodeStrategy) GenerateRFC8628UserCode(ctx context.Context) (co
 	s.calls++
 
 	return s.CodeStrategy.GenerateRFC8628UserCode(ctx)
+}
+
+type userCodeBindingStore interface {
+	Storage
+	hoauth2.CoreStorage
+}
+
+func userCodeBindingStores() map[string]func() (userCodeBindingStore, *storage.MemoryStore) {
+	return map[string]func() (userCodeBindingStore, *storage.MemoryStore){
+		"MemoryStore": func() (userCodeBindingStore, *storage.MemoryStore) {
+			store := storage.NewMemoryStore()
+
+			return store, store
+		},
+		"HydratingMemoryStore": func() (userCodeBindingStore, *storage.MemoryStore) {
+			store := storage.NewHydratingMemoryStore()
+
+			return store, store.MemoryStore
+		},
+	}
 }

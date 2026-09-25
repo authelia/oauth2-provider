@@ -31,6 +31,10 @@ var (
 	// ErrInvalidatedUserCode is an error indicating that a user code has been used previously.
 	ErrInvalidatedUserCode = errors.New("user code has been invalidated")
 
+	// ErrDuplicateUserCode is an error indicating that a user code signature is already held by another device code
+	// session.
+	ErrDuplicateUserCode = errors.New("user code is already in use")
+
 	// ErrSerializationFailure is an error indicating that the transactional capable storage could not guarantee
 	// consistency of Update & Delete operations on the same rows between multiple sessions.
 	ErrSerializationFailure = errors.New("The request could not be completed due to concurrent access")

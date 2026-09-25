@@ -282,3 +282,26 @@ func TestMemoryStore_RevokeRefreshTokenSynchronisesRefreshTokens(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestMemoryStore_CreateDeviceCodeSessionRejectsDuplicateUserCode(t *testing.T) {
+	store := NewMemoryStore()
+
+	newRequest := func(deviceCodeSignature string) *oauth2.DeviceAuthorizeRequest {
+		r := oauth2.NewDeviceAuthorizeRequest()
+		r.SetSession(&oauth2.DefaultSession{})
+		r.SetDeviceCodeSignature(deviceCodeSignature)
+		r.SetUserCodeSignature("user")
+
+		return r
+	}
+
+	require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "first", newRequest("first")))
+	require.ErrorIs(t, store.CreateDeviceCodeSession(t.Context(), "second", newRequest("second")), oauth2.ErrDuplicateUserCode)
+
+	found, err := store.GetDeviceCodeSessionByUserCode(t.Context(), "user", &oauth2.DefaultSession{})
+	require.NoError(t, err)
+	assert.Equal(t, "first", found.GetDeviceCodeSignature())
+
+	_, err = store.GetDeviceCodeSession(t.Context(), "second", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrNotFound)
+}

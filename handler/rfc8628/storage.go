@@ -11,7 +11,8 @@ import (
 )
 
 type Storage interface {
-	// CreateDeviceCodeSession stores the device request for a given device code.
+	// CreateDeviceCodeSession stores the device request for a given device code. It must atomically reject a user code
+	// signature already held by another session with oauth2.ErrDuplicateUserCode.
 	CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 
 	// UpdateDeviceCodeSession update in store the device code session for a given device code.

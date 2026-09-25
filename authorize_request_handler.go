@@ -343,6 +343,10 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	claims := token.Claims
 
+	if !openid || isPARRequest || required {
+		request.Form = requestObjectSyntaxForm(request.Form)
+	}
+
 	var (
 		k, value string
 		v        any
@@ -445,6 +449,18 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 
 	return nil
+}
+
+func requestObjectSyntaxForm(form url.Values) (syntax url.Values) {
+	syntax = url.Values{}
+
+	for _, k := range []string{consts.FormParameterClientID, consts.FormParameterResponseType, consts.FormParameterRequest, consts.FormParameterRequestURI} {
+		if values, ok := form[k]; ok {
+			syntax[k] = values
+		}
+	}
+
+	return syntax
 }
 
 // requestObjectFormValue renders a Request Object claim value as the string the equivalent OAuth 2.0 request syntax
@@ -623,11 +639,11 @@ func (f *Fosite) validateResponseTypes(_ context.Context, r *http.Request, reque
 	return nil
 }
 
-// ParseResponseMode reads the 'response_mode' query parameter from r and, if a configured ResponseModeHandler supports
-// it, records it on the request. It returns ErrInsufficientEntropy if the form parameter has insufficient entropy and
-// ErrUnsupportedResponseMode for unrecognized values.
-func (f *Fosite) ParseResponseMode(ctx context.Context, r *http.Request, request *AuthorizeRequest) error {
-	m := r.Form.Get(consts.FormParameterResponseMode)
+// ParseResponseMode reads the 'response_mode' parameter from the request form and, if a configured
+// ResponseModeHandler supports it, records it on the request. It returns ErrInsufficientEntropy if the form parameter
+// has insufficient entropy and ErrUnsupportedResponseMode for unrecognized values.
+func (f *Fosite) ParseResponseMode(ctx context.Context, _ *http.Request, request *AuthorizeRequest) error {
+	m := request.Form.Get(consts.FormParameterResponseMode)
 
 	for _, handler := range f.Config.GetResponseModeHandlers(ctx) {
 		mode := ResponseModeType(m)
@@ -692,6 +708,15 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrServerError.WithHint("OAuth 2.0 request could not be processed due to an authorization server configuration issue.").WithDebug("The Pushed Authorization Request is nil."))
 	}
 
+	if client := par.GetClient(); client == nil || clientID != client.GetID() {
+		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'client_id' must match the one sent in the pushed authorization request."))
+	}
+
+	request.Form = url.Values{
+		consts.FormParameterClientID:   {clientID},
+		consts.FormParameterRequestURI: {requestURI},
+	}
+
 	request.Merge(par)
 	request.RedirectURI = par.GetRedirectURI()
 	request.ResponseTypes = par.GetResponseTypes()
@@ -704,10 +729,6 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 
 	if session := par.GetSession(); session == nil || session.GetExpiresAt(PushedAuthorizeRequestContext).Before(time.Now()) {
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithDebug("The Pushed Authorization Request session is expired."))
-	}
-
-	if clientID != request.GetClient().GetID() {
-		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'client_id' must match the one sent in the pushed authorization request."))
 	}
 
 	return true, nil

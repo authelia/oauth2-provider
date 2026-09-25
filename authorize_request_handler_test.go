@@ -67,6 +67,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		mock   func(store *mock.MockStorage)
 		par    func(store *mock.MockPARStorage)
 		expect *AuthorizeRequest
+		form   url.Values
 	}{
 		{
 			name:   "ShouldFailEmptyRequest",
@@ -664,7 +665,6 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {},
 			par: func(store *mock.MockPARStorage) {
 				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:client-mismatch").Return(newPARSession(&DefaultClient{ID: "a-different-client"}, parSessionValid), nil)
-				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:client-mismatch").Return(nil)
 			},
 		},
 		{
@@ -688,6 +688,43 @@ func TestNewAuthorizeRequest(t *testing.T) {
 					RequestedScope:    []string{"foo", "bar"},
 					RequestedAudience: []string{"https://cloud.authelia.com/api"},
 				},
+			},
+		},
+		{
+			name:   "ShouldPassPARWithOnlyPushedParameters",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI:    {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:      {"1234"},
+				consts.FormParameterPrompt:        {consts.PromptTypeNone},
+				consts.FormParameterCodeChallenge: {"injected-challenge"},
+				consts.FormParameterNonce:         {"injected-nonce"},
+			},
+			mock: func(store *mock.MockStorage) {},
+			par: func(store *mock.MockPARStorage) {
+				par := newPARSession(parClient, parSessionValid)
+				par.Form = url.Values{
+					consts.FormParameterClientID: {"1234"},
+					consts.FormParameterNonce:    {"pushed-nonce"},
+				}
+
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(par, nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				State:         "strong-enough-state",
+				Request: Request{
+					Client:            parClient,
+					RequestedScope:    []string{"foo", "bar"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api"},
+				},
+			},
+			form: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterNonce:      {"pushed-nonce"},
 			},
 		},
 	}
@@ -726,6 +763,10 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			require.NoError(t, ErrorToDebugRFC6749Error(err))
 			AssertObjectKeysEqual(t, tc.expect, actual, "ResponseTypes", "RequestedAudience", "RequestedScope", "Client", "RedirectURI", "State")
 			assert.NotNil(t, actual.GetRequestedAt())
+
+			if tc.form != nil {
+				assert.Equal(t, tc.form, actual.GetRequestForm())
+			}
 		})
 	}
 }

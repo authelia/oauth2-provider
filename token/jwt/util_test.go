@@ -201,23 +201,25 @@ func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
 	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
 
 	testCases := []struct {
-		name     string
-		expires  time.Time
-		decorate bool
-		err      bool
+		name        string
+		expires     time.Time
+		decorations int
+		err         bool
 	}{
 		{name: "ShouldAcceptWhenTheSecretDoesNotExpire", expires: time.Time{}},
 		{name: "ShouldAcceptWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour)},
 		{name: "ShouldRejectWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), err: true},
-		{name: "ShouldAcceptDecoratedWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour), decorate: true},
-		{name: "ShouldRejectDecoratedWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), decorate: true, err: true},
+		{name: "ShouldAcceptDecoratedWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour), decorations: 1},
+		{name: "ShouldRejectDecoratedWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), decorations: 1, err: true},
+		{name: "ShouldAcceptRepeatedlyDecoratedWhenTheSecretHasNotExpired", expires: time.Now().Add(time.Hour), decorations: 3},
+		{name: "ShouldRejectRepeatedlyDecoratedWhenTheSecretHasExpired", expires: time.Now().Add(-time.Hour), decorations: 3, err: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var client BaseClient = &expiringSecretJARClient{secret: secret, expires: tc.expires}
 
-			if tc.decorate {
+			for range tc.decorations {
 				client = NewJARClient(client)
 			}
 

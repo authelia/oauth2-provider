@@ -511,19 +511,24 @@ func (r *decoratedIntrospectionClient) IsClientSigned() (is bool) {
 func isClientSecretExpired(client BaseClient) bool {
 	var inner any = client
 
-	switch c := client.(type) {
-	case *decoratedJARClient:
-		inner = c.JARClient
-	case *decoratedIDTokenClient:
-		inner = c.IDTokenClient
-	case *decoratedJARMClient:
-		inner = c.JARMClient
-	case *decoratedUserInfoClient:
-		inner = c.UserInfoClient
-	case *decoratedJWTProfileAccessTokenClient:
-		inner = c.JWTProfileAccessTokenClient
-	case *decoratedIntrospectionClient:
-		inner = c.IntrospectionClient
+unwrap:
+	for {
+		switch c := inner.(type) {
+		case *decoratedJARClient:
+			inner = c.JARClient
+		case *decoratedIDTokenClient:
+			inner = c.IDTokenClient
+		case *decoratedJARMClient:
+			inner = c.JARMClient
+		case *decoratedUserInfoClient:
+			inner = c.UserInfoClient
+		case *decoratedJWTProfileAccessTokenClient:
+			inner = c.JWTProfileAccessTokenClient
+		case *decoratedIntrospectionClient:
+			inner = c.IntrospectionClient
+		default:
+			break unwrap
+		}
 	}
 
 	expiring, ok := inner.(ExpiringClientSecretClient)

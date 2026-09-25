@@ -30,11 +30,11 @@ type JWTSession struct {
 	ExpiresAt                   map[oauth2.TokenType]time.Time
 	Username                    string
 	Subject                     string
-	JWKThumbprint               string
-	ClientCertificateThumbprint string
-	RequestedJWKThumbprint      string
-	PublicKeyJWK                []byte
-	KeyBindingGranted           bool
+	JWKThumbprint               string `json:",omitempty"`
+	ClientCertificateThumbprint string `json:",omitempty"`
+	RequestedJWKThumbprint      string `json:",omitempty"`
+	PublicKeyJWK                []byte `json:",omitempty"`
+	KeyBindingGranted           bool   `json:",omitempty"`
 }
 
 // SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.

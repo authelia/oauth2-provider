@@ -6,6 +6,7 @@ package rfc8628
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"time"
 
@@ -43,8 +44,8 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if userCode, userCodeSignature, err = d.Strategy.GenerateRFC8628UserCode(ctx); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	if userCode, userCodeSignature, err = d.generateUniqueUserCode(ctx, session); err != nil {
+		return err
 	}
 
 	request.SetStatus(oauth2.DeviceAuthorizeStatusNew)
@@ -87,3 +88,26 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 var (
 	_ oauth2.RFC8628DeviceAuthorizeEndpointHandler = (*DeviceAuthorizeHandler)(nil)
 )
+
+func (d *DeviceAuthorizeHandler) generateUniqueUserCode(ctx context.Context, session oauth2.Session) (code, signature string, err error) {
+	for range userCodeGenerationAttempts {
+		if code, signature, err = d.Strategy.GenerateRFC8628UserCode(ctx); err != nil {
+			return "", "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		_, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, session.Clone())
+
+		switch {
+		case errors.Is(err, oauth2.ErrNotFound):
+			return code, signature, nil
+		case err == nil, errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
+			continue
+		default:
+			return "", "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebugf("Failed to generate a unique user code after %d attempts.", userCodeGenerationAttempts))
+}
+
+const userCodeGenerationAttempts = 3

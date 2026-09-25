@@ -29,6 +29,9 @@ type Storage interface {
 	// oauth2.ErrInvalidatedDeviceCode error.
 	//
 	// Make sure to also return the oauth2.Requester value when returning the oauth2.ErrInvalidatedDeviceCode error.
+	//
+	// If no request holds the user code, this method must return the oauth2.ErrNotFound error. The device authorization
+	// endpoint relies on this to issue a user code that no other request holds.
 	GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error)
 
 	// InvalidateDeviceCodeSession is called when a device code is being used. The state of the user

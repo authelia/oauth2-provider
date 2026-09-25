@@ -84,6 +84,12 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 		return code, signature, deviceAuthReq, err
 	}
 
+	// RFC 8628 Section 3.2: the user code identifies one grant, so its record must be the one for this device code.
+	if userAuthReq.GetDeviceCodeSignature() != signature {
+		return "", "", nil, errorsx.WithStack(oauth2.ErrInvalidGrant.
+			WithHint("The user code for this device code is associated with another device authorization request."))
+	}
+
 	if userAuthReq.GetStatus() == oauth2.DeviceAuthorizeStatusNew {
 		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
 

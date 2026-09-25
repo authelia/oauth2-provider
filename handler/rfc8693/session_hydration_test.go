@@ -183,8 +183,8 @@ func createSessionAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStra
 
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"password"},
-			Session: session,
-			Client:  client,
+		Session:    session,
+		Client:     client,
 	}
 
 	token, signature, err := coreStrategy.GenerateAccessToken(ctx, request)

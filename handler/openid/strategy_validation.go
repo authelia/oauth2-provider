@@ -21,6 +21,10 @@ import (
 //   - This strategy enforces JWS/JWE structural validation, signature verification and signature algorithm
 //     enforcement via jwt.Strategy.Decode, then validates the time-based claims ('exp', 'nbf', 'iat') itself via
 //     jwt.MapClaims.Valid. Note that jwt.Strategy.Decode does NOT validate time-based claims.
+//   - The 'typ' header must be absent, 'JWT', or 'dpop+id_token', so that another kind of JWT signed by the same
+//     issuer, such as an RFC9068 access token or a Logout Token, is not accepted as an ID Token. The check is
+//     skipped when unverified tokens are allowed.
+//     See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
 //   - Application-specific claim checks, most notably 'iss' (issuer) and 'aud' (audience), are intentionally
 //     LEFT TO THE CALLER. RFC 8693 ID tokens may originate from federated identity providers, so the AS-specific
 //     issuer/audience policy lives one layer up (e.g. rfc8693.IDTokenTypeHandler.validate enforces 'iss' against
@@ -71,6 +75,10 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 
 	if o.AllowUnverified {
 		return claims, nil
+	}
+
+	if err = decoded.Valid(jwt.ValidateTypes(jwt.JSONWebTokenTypeJWT, jwt.JSONWebTokenTypeDPoPIDToken), jwt.ValidateAllowEmptyType(true)); err != nil {
+		return nil, errorsx.WithStack(err)
 	}
 
 	var copts []jwt.ClaimValidationOption

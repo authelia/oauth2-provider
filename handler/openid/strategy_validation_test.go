@@ -221,6 +221,58 @@ func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *t
 	assert.Equal(t, "alice", claims[jwt.ClaimSubject])
 }
 
+func TestDefaultIDTokenValidationStrategy_ExplicitType(t *testing.T) {
+	cfg := &oauth2.Config{
+		IDTokenIssuer:   "https://issuer.example/",
+		IDTokenLifespan: 5 * time.Minute,
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: cfg,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	testCases := []struct {
+		name   string
+		typ    string
+		reject bool
+	}{
+		{"ShouldAcceptJWT", jwt.JSONWebTokenTypeJWT, false},
+		{"ShouldAcceptJWTMediaType", "application/jwt", false},
+		{"ShouldAcceptKeyBoundIDToken", jwt.JSONWebTokenTypeDPoPIDToken, false},
+		{"ShouldRejectAccessToken", jwt.JSONWebTokenTypeAccessToken, true},
+		{"ShouldRejectLogoutToken", jwt.JSONWebTokenTypeLogoutToken, true},
+		{"ShouldRejectIntrospectionResponse", jwt.JSONWebTokenTypeTokenIntrospection, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := jwt.MapClaims{
+				jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+				jwt.ClaimSubject:        "alice",
+				jwt.ClaimAudience:       []string{"test-client"},
+				jwt.ClaimIssuedAt:       jwt.Now(),
+				jwt.ClaimExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			}
+
+			token, _, err := jwtStrategy.Encode(t.Context(), claims, jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: tc.typ}}))
+			require.NoError(t, err)
+
+			actual, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{Client: &oauth2.DefaultClient{ID: "test-client"}}, token)
+
+			if tc.reject {
+				assert.EqualError(t, err, "token was signed with an invalid typ")
+				assert.Nil(t, actual)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "alice", actual[jwt.ClaimSubject])
+			}
+		})
+	}
+}
+
 func newExpiredIDToken(t *testing.T, cfg *oauth2.Config, strategy jwt.Strategy) string {
 	t.Helper()
 

@@ -87,3 +87,84 @@ func TestIDTokenSubjectTokenIsBoundToTheRequestingClient(t *testing.T) {
 		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), newRequest(requesting.GetID(), requesting.GetID())))
 	})
 }
+
+func TestIDTokenTypeHandlerRejectsOtherJWTTypes(t *testing.T) {
+	store := storage.NewExampleStore()
+	cfg := newSpecConfig(t)
+
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	client := store.Clients["my-client"]
+
+	handler := &IDTokenTypeHandler{
+		Config:             cfg,
+		Strategy:           jwtStrategy,
+		IssueStrategy:      &openid.DefaultStrategy{Strategy: jwtStrategy, Config: cfg},
+		ValidationStrategy: &openid.DefaultIDTokenValidationStrategy{Strategy: jwtStrategy},
+		Storage:            store,
+	}
+
+	newToken := func(t *testing.T, typ string) string {
+		claims := jwt.MapClaims{
+			consts.ClaimSubject:        "peter",
+			consts.ClaimAudience:       []string{client.GetID()},
+			consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+			consts.ClaimIssuedAt:       time.Now().Unix(),
+		}
+
+		token, _, err := jwtStrategy.Encode(t.Context(), claims, jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: typ}}))
+		require.NoError(t, err)
+
+		return token
+	}
+
+	newRequest := func(tokenTypeParameter, tokenParameter, token string) *oauth2.AccessRequest {
+		return &oauth2.AccessRequest{
+			GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+			Request: oauth2.Request{
+				ID:     uuid.New().String(),
+				Client: client,
+				Form: url.Values{
+					consts.FormParameterGrantType: {consts.GrantTypeOAuthTokenExchange},
+					tokenTypeParameter:            {consts.TokenTypeRFC8693IDToken},
+					tokenParameter:                {token},
+				},
+				Session: newSpecSession("peter"),
+			},
+		}
+	}
+
+	roles := []struct {
+		name           string
+		tokenTypeParam string
+		tokenParam     string
+	}{
+		{"Subject", consts.FormParameterSubjectTokenType, consts.FormParameterSubjectToken},
+		{"Actor", consts.FormParameterActorTokenType, consts.FormParameterActorToken},
+	}
+
+	for _, role := range roles {
+		t.Run(role.name, func(t *testing.T) {
+			rejected := []struct {
+				name string
+				typ  string
+			}{
+				{"ShouldRejectAccessToken", consts.JSONWebTokenTypeAccessToken},
+				{"ShouldRejectLogoutToken", consts.JSONWebTokenTypeLogoutToken},
+			}
+
+			for _, tc := range rejected {
+				t.Run(tc.name, func(t *testing.T) {
+					err := handler.HandleTokenEndpointRequest(t.Context(), newRequest(role.tokenTypeParam, role.tokenParam, newToken(t, tc.typ)))
+
+					require.Error(t, err)
+					assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse the id_token token was signed with an invalid typ")
+				})
+			}
+
+			t.Run("ShouldAcceptJWT", func(t *testing.T) {
+				require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), newRequest(role.tokenTypeParam, role.tokenParam, newToken(t, consts.JSONWebTokenTypeJWT))))
+			})
+		})
+	}
+}

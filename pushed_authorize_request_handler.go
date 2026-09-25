@@ -83,7 +83,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter is required for Pushed Authorization Requests."))
 	}
 
-	if frequest.GetRequestedScopes().Has(consts.ScopeOpenID) && r.Form.Get(consts.FormParameterRedirectURI) == "" {
+	if frequest.GetRequestedScopes().Has(consts.ScopeOpenID) && frequest.GetRequestForm().Get(consts.FormParameterRedirectURI) == "" {
 		return frequest, errorsx.WithStack(ErrInvalidRequest.WithHint("Query parameter 'redirect_uri' is required when performing an OpenID Connect flow."))
 	}
 

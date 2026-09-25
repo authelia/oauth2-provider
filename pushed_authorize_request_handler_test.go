@@ -6,6 +6,8 @@ package oauth2_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"net/http"
 	"net/url"
 	"testing"
@@ -17,6 +19,8 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 //   - https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
@@ -737,6 +741,74 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewPushedAuthorizeRequestWithRequestObject(t *testing.T) {
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwkPrivateSigRSA := jose.JSONWebKey{Key: keyRSA, KeyID: "rs256-sig", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+	jwkPublicSigRSA := jose.JSONWebKey{Key: keyRSA.Public(), KeyID: "rs256-sig", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+
+	client := &DefaultJARClient{
+		JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPublicSigRSA}},
+		RequestObjectSigningAlg: string(jose.RS256),
+		DefaultClient: &DefaultClient{
+			ID:            "foo",
+			RedirectURIs:  []string{"https://foo.bar/cb", "https://foo.bar/other"},
+			Scopes:        []string{consts.ScopeOpenID},
+			ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mock.NewMockStorage(ctrl)
+	store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil).AnyTimes()
+
+	config := &Config{
+		ScopeStrategy:                ExactScopeStrategy,
+		AudienceStrategy:             DefaultAudienceStrategy,
+		IDTokenIssuer:                "https://auth.example.com",
+		JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
+		ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{client: client},
+	}
+
+	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPrivateSigRSA}})}
+	config.JWTStrategy = strategy
+
+	assertion, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
+		consts.ClaimIssuer:               "foo",
+		consts.ClaimAudience:             []string{"https://auth.example.com"},
+		consts.FormParameterClientID:     "foo",
+		consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow,
+		consts.FormParameterScope:        consts.ScopeOpenID,
+		consts.FormParameterState:        "strong-enough-state",
+		consts.FormParameterRedirectURI:  "https://foo.bar/cb",
+	})
+	require.NoError(t, err)
+
+	provider := &Fosite{Store: store, Config: config}
+
+	query := url.Values{
+		consts.FormParameterClientID:     {"foo"},
+		consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterScope:        {consts.ScopeOpenID},
+		consts.FormParameterRequest:      {assertion},
+		consts.FormParameterPrompt:       {consts.PromptTypeNone},
+		consts.FormParameterResponseMode: {string(ResponseModeFragment)},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodPost, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	assert.Equal(t, "https://foo.bar/cb", ar.GetRedirectURI().String())
+	assert.Equal(t, ResponseModeQuery, ar.GetResponseMode())
+	assert.Equal(t, "strong-enough-state", ar.GetState())
+	assert.NotContains(t, ar.GetRequestForm(), consts.FormParameterPrompt)
 }
 
 type testRedirectURIPushedAuthorizationRequestClient struct {

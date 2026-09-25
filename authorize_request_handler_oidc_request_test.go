@@ -158,6 +158,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	assertionRequestObjectInvalidIssuer := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "not-foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectValidWithoutKID := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz"}, nil, &jose.JSONWebKey{Key: keyRSA, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature})
 	assertionRequestObjectValidNone := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, jwkNone)
+	assertionRequestObjectValidWithoutScope := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow, consts.FormParameterState: "some-state"}, nil, jwkPrivateSigRSA)
 	assertionRequestObjectValidHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.FormParameterScope: "foo", "foo": "bar", "baz": "baz", consts.FormParameterState: "some-state", consts.ClaimIssuer: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}}, nil, jwkSigHS)
 
 	mux := http.NewServeMux()
@@ -231,6 +232,31 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			name:     "ShouldNotMergeOuterScopeIntoRequestObjectScope",
 			have:     url.Values{consts.FormParameterScope: {"foo openid admin"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}},
 			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldRetainOuterOnlyParametersForOpenIDConnect",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}, consts.FormParameterResponseMode: {consts.ResponseModeQuery}, consts.FormParameterPrompt: {consts.PromptTypeNone}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, consts.FormParameterPrompt: {consts.PromptTypeNone}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldDiscardOuterOnlyParametersForOAuth2",
+			have:     url.Values{consts.FormParameterScope: {"admin"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidWithoutScope}, consts.FormParameterPrompt: {consts.PromptTypeNone}, consts.FormParameterRedirectURI: {"https://attacker.example.com/cb"}, consts.FormParameterState: {"outer-state"}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			expected: url.Values{consts.FormParameterScope: {""}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}, consts.FormParameterRequest: {assertionRequestObjectValidWithoutScope}, consts.FormParameterState: {"some-state"}},
+		},
+		{
+			name:     "ShouldDiscardOuterOnlyParametersForPushedAuthorizationRequest",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}, consts.FormParameterPrompt: {consts.PromptTypeNone}, consts.FormParameterClientSecret: {"secret"}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo"}},
+			par:      true,
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldDiscardOuterOnlyParametersWhenSignedRequestObjectRequired",
+			have:     url.Values{consts.FormParameterScope: {consts.ScopeOpenID}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValid}, consts.FormParameterPrompt: {consts.PromptTypeNone}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", RequireSignedRequestObject: true, DefaultClient: &DefaultClient{ID: "foo"}},
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValid}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{

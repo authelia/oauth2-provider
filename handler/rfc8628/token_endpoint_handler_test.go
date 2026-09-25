@@ -717,9 +717,10 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					RequestedAt:  time.Now().UTC(),
 				},
 			}
-			token, _, err := deviceStrategy.GenerateRFC8628DeviceCode(t.Context())
+			token, signature, err := deviceStrategy.GenerateRFC8628DeviceCode(t.Context())
 			require.NoError(t, err)
 			request.Form = url.Values{consts.FormParameterDeviceCode: {token}}
+			deviceAuthReq.SetDeviceCodeSignature(signature)
 			response := oauth2.NewAccessResponse()
 
 			tc.setup(propagatedContext, mockTransactional, mockCoreStore, mockDeviceStore)

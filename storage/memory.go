@@ -685,6 +685,10 @@ func (s *MemoryStore) CreateDeviceCodeSession(ctx context.Context, signature str
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
 
+	if _, exists := s.UserCodes[request.GetUserCodeSignature()]; exists {
+		return oauth2.ErrDuplicateUserCode
+	}
+
 	s.DeviceCodes[request.GetDeviceCodeSignature()] = request
 	s.UserCodes[request.GetUserCodeSignature()] = request
 

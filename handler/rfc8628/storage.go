@@ -11,7 +11,8 @@ import (
 )
 
 type Storage interface {
-	// CreateDeviceCodeSession stores the device request for a given device code.
+	// CreateDeviceCodeSession stores the device request for a given device code. It must atomically reject a user code
+	// signature already held by another session with oauth2.ErrDuplicateUserCode.
 	CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 
 	// UpdateDeviceCodeSession update in store the device code session for a given device code.
@@ -29,6 +30,9 @@ type Storage interface {
 	// oauth2.ErrInvalidatedDeviceCode error.
 	//
 	// Make sure to also return the oauth2.Requester value when returning the oauth2.ErrInvalidatedDeviceCode error.
+	//
+	// If no request holds the user code, this method must return the oauth2.ErrNotFound error. The device authorization
+	// endpoint relies on this to issue a user code that no other request holds.
 	GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error)
 
 	// InvalidateDeviceCodeSession is called when a device code is being used. The state of the user

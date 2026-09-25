@@ -88,11 +88,11 @@ func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testin
 
 			newAccessRequest := func(code string) *oauth2.AccessRequest {
 				return &oauth2.AccessRequest{
-					GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
-						Client:      client,
-						Form:        url.Values{consts.FormParameterDeviceCode: {code}},
-						Session:     &oauth2.DefaultSession{},
-						RequestedAt: time.Now().UTC(),
+					GrantTypes:  oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					Client:      client,
+					Form:        url.Values{consts.FormParameterDeviceCode: {code}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
 				}
 			}
 

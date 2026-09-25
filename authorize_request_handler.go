@@ -206,7 +206,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterClientID).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'client_id' parameter.", request.GetClient().GetID(), parameter))
 	}
 
-	if openid && request.Form.Get(consts.FormParameterResponseType) == "" {
+	if openid && !isPARRequest && request.Form.Get(consts.FormParameterResponseType) == "" {
 		// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
 		// parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
@@ -383,7 +383,9 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.FormParameterResponseType, v, rsyntax, v))
 			}
 
-			if rsyntax != value {
+			if rsyntax == "" {
+				request.Form.Set(consts.FormParameterResponseType, value)
+			} else if rsyntax != value {
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
 			}
 		default:
@@ -610,13 +612,13 @@ func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Req
 	return nil
 }
 
-func (f *Fosite) validateResponseTypes(_ context.Context, r *http.Request, request *AuthorizeRequest) error {
+func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
 	// https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	// Extension response types MAY contain a space-delimited (%x20) list of
 	// values, where the order of values does not matter (e.g., response
 	// type "a b" is the same as "b a").  The meaning of such composite
 	// response types is defined by their respective specifications.
-	responseTypes := RemoveEmpty(strings.Split(r.Form.Get(consts.FormParameterResponseType), " "))
+	responseTypes := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " "))
 	if len(responseTypes) == 0 {
 		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The request is missing the 'response_type' parameter."))
 	}
@@ -631,7 +633,7 @@ func (f *Fosite) validateResponseTypes(_ context.Context, r *http.Request, reque
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", r.Form.Get(consts.FormParameterResponseType)))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
 	}
 
 	request.ResponseTypes = responseTypes

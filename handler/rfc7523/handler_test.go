@@ -55,6 +55,16 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			expected: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:jwt-bearer'.",
 		},
 		{
+			name: "ShouldRejectAnAuthenticatedClientNotRegisteredForTheGrantTypeWhenClientAuthenticationMayBeSkipped",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				f.requester.Client = &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeAuthorizationCode}}
+				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = true
+			},
+			err:      oauth2.ErrUnauthorizedClient,
+			expected: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:jwt-bearer'.",
+		},
+		{
 			name: "ShouldRejectARequestWithoutAnAssertion",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}

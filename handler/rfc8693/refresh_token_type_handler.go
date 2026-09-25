@@ -138,8 +138,7 @@ func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Contex
 }
 
 func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (s oauth2.Session, claims map[string]any, err error) {
-	session, _ := request.GetSession().(Session)
-	if session == nil {
+	if session, _ := request.GetSession().(Session); session == nil {
 		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
@@ -149,7 +148,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 
 	var or oauth2.Requester
 
-	if or, err = c.GetRefreshTokenSession(ctx, signature, request.GetSession()); err != nil {
+	if or, err = c.GetRefreshTokenSession(ctx, signature, newTokenSession(request.GetSession())); err != nil {
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	} else if err = c.ValidateRefreshToken(ctx, or, token); err != nil {
 		return nil, nil, err
@@ -160,7 +159,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	}
 
 	// Convert to flat session with only access token claims.
-	claims = session.AccessTokenClaimsMap()
+	claims = tokenClaimsMap(or.GetSession())
 
 	claims[consts.ClaimClientIdentifier] = or.GetClient().GetID()
 	claims[consts.ClaimScope] = or.GetGrantedScopes()

@@ -6,6 +6,8 @@ package rfc8693
 
 import (
 	"context"
+	"maps"
+	"reflect"
 
 	"github.com/pkg/errors"
 
@@ -433,8 +435,33 @@ func bindingOf(session oauth2.Session) (binding tokenBinding) {
 	return binding
 }
 
-// bindingOfConfirmation reads the proof-of-possession binding a stateless presented token asserts in its own RFC 7800
-// 'cnf' claim.
+func newTokenSession(session oauth2.Session) oauth2.Session {
+	if t := reflect.TypeOf(session); t != nil && t.Kind() == reflect.Pointer {
+		if s, ok := reflect.New(t.Elem()).Interface().(oauth2.Session); ok {
+			return s
+		}
+	}
+
+	return session.Clone()
+}
+
+func tokenClaimsMap(session oauth2.Session) map[string]any {
+	if s, ok := session.(Session); ok && s != nil {
+		return s.AccessTokenClaimsMap()
+	}
+
+	claims := map[string]any{}
+
+	if s, ok := session.(oauth2.ExtraClaimsSession); ok && s != nil {
+		maps.Copy(claims, s.GetExtraClaims())
+	}
+
+	claims[consts.ClaimSubject] = session.GetSubject()
+	claims[consts.ClaimUsername] = session.GetUsername()
+
+	return claims
+}
+
 func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err error) {
 	var key string
 
@@ -455,8 +482,6 @@ func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err err
 	return binding, nil
 }
 
-// clearInheritedKeyBinding removes the OpenID Connect Key Binding state a restored token session may have deposited on
-// the exchange request's session.
 func clearInheritedKeyBinding(session oauth2.Session) {
 	bound, ok := session.(oauth2.DPoPBoundSession)
 	if !ok {
@@ -468,13 +493,6 @@ func clearInheritedKeyBinding(session oauth2.Session) {
 	bound.SetRequestedDPoPJWKThumbprint("")
 }
 
-// inheritTokenBinding carries a subject or actor token's proof-of-possession binding onto the exchange request, so the
-// issued token inherits the sender constraint rather than silently shedding it.
-//
-// It records the binding only. Enforcement is left to the token endpoint binding phase, which already implements it:
-// both rfc9449.Handler and rfc8705.Handler treat a binding recorded on the session as making the corresponding proof
-// or certificate mandatory, reject one that does not match, and record the presented key onto the issued token. That
-// phase runs after every handler that calls this one, so recording here is enough.
 func inheritTokenBinding(request oauth2.AccessRequester, incoming tokenBinding, role tokenRole, prior tokenBinding) (err error) {
 	session := request.GetSession()
 

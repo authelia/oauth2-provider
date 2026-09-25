@@ -77,8 +77,9 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		}
 	}
 
-	mustOrderTokenEndpointBindingHandlers(config)
-	mustOrderRFC8628UserAuthorizeHandlers(config)
+	if err := ValidateHandlerOrder(config); err != nil {
+		panic(err)
+	}
 
 	return f
 }

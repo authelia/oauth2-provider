@@ -97,6 +97,7 @@ func TestValidateResponseTypes(t *testing.T) {
 
 			r := &http.Request{Form: form}
 			ar := NewAuthorizeRequest()
+			ar.Form = form
 			ar.Client = &DefaultClient{ResponseTypes: tc.art}
 
 			actual := provider.validateResponseTypes(t.Context(), r, ar)

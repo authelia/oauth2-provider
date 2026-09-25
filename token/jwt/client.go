@@ -5,6 +5,8 @@
 package jwt
 
 import (
+	"time"
+
 	"authelia.com/provider/oauth2/token/jose"
 )
 
@@ -117,6 +119,15 @@ type BaseClient interface {
 	// GetJSONWebKeysURI returns the URL for lookup of JSON Web Key Set containing the
 	// public key used by the client to authenticate.
 	GetJSONWebKeysURI() (uri string)
+}
+
+// ExpiringClientSecretClient represents a client whose secret expires. A zero time means the secret does not expire,
+// which RFC 7591 Section 3.2.1 also assigns to a 'client_secret_expires_at' of 0. A secret past its expiry is not used
+// as key material.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1
+type ExpiringClientSecretClient interface {
+	GetClientSecretExpiresAt() (expires time.Time)
 }
 
 // JARClient represents the implementation for any JWT Authorization Request compatible client.
@@ -495,4 +506,37 @@ func (r *decoratedIntrospectionClient) GetEncryptionEnc() (enc string) {
 
 func (r *decoratedIntrospectionClient) IsClientSigned() (is bool) {
 	return false
+}
+
+func isClientSecretExpired(client BaseClient) bool {
+	var inner any = client
+
+unwrap:
+	for {
+		switch c := inner.(type) {
+		case *decoratedJARClient:
+			inner = c.JARClient
+		case *decoratedIDTokenClient:
+			inner = c.IDTokenClient
+		case *decoratedJARMClient:
+			inner = c.JARMClient
+		case *decoratedUserInfoClient:
+			inner = c.UserInfoClient
+		case *decoratedJWTProfileAccessTokenClient:
+			inner = c.JWTProfileAccessTokenClient
+		case *decoratedIntrospectionClient:
+			inner = c.IntrospectionClient
+		default:
+			break unwrap
+		}
+	}
+
+	expiring, ok := inner.(ExpiringClientSecretClient)
+	if !ok {
+		return false
+	}
+
+	expires := expiring.GetClientSecretExpiresAt()
+
+	return !expires.IsZero() && !expires.After(time.Now())
 }

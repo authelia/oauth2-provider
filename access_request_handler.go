@@ -136,7 +136,7 @@ func hasClientCredentials(r *http.Request, form url.Values) bool {
 		return true
 	}
 
-	for _, parameter := range []string{consts.FormParameterClientID, consts.FormParameterClientSecret, consts.FormParameterClientAssertion, consts.FormParameterClientAssertionType} {
+	for _, parameter := range []string{consts.FormParameterClientSecret, consts.FormParameterClientAssertion, consts.FormParameterClientAssertionType} {
 		if len(form.Get(parameter)) != 0 {
 			return true
 		}

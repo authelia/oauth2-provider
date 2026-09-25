@@ -305,6 +305,24 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			err:    "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
+			name: "ShouldPassHandlerSkipsClientAuthWithOnlyAClientIdentifier",
+			form: url.Values{
+				consts.FormParameterGrantType: {"foo"},
+				consts.FormParameterClientID:  {"another"},
+			},
+			mock: func(store *mock.MockStorage, handler *mock.MockTokenEndpointHandler) {
+				store.EXPECT().GetClient(gomock.Any(), "another").Return(anotherClient, nil).Times(1)
+				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+			},
+			method: http.MethodPost,
+			expect: &AccessRequest{
+				GrantTypes: Arguments{"foo"},
+				Request: Request{
+					Client: client,
+				},
+			},
+		},
+		{
 			name: "ShouldPassNoAuthHeaderCanSkip",
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},

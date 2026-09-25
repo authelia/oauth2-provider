@@ -49,12 +49,10 @@ func TestTokenExchangeKeepsSubjectAndActorClaimsApart(t *testing.T) {
 
 			request := &oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
-				Request: oauth2.Request{
-					ID:      uuid.New().String(),
-					Client:  client,
-					Form:    form,
-					Session: session,
-				},
+				ID:         uuid.New().String(),
+				Client:     client,
+				Form:       form,
+				Session:    session,
 			}
 
 			handler := &AccessTokenTypeHandler{
@@ -104,12 +102,10 @@ func TestTokenExchangeReadsMayActFromTheSubjectToken(t *testing.T) {
 
 			request := &oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
-				Request: oauth2.Request{
-					ID:      uuid.New().String(),
-					Client:  client,
-					Form:    form,
-					Session: session,
-				},
+				ID:         uuid.New().String(),
+				Client:     client,
+				Form:       form,
+				Session:    session,
 			}
 
 			handler := &AccessTokenTypeHandler{
@@ -132,15 +128,63 @@ func TestTokenExchangeReadsMayActFromTheSubjectToken(t *testing.T) {
 	}
 }
 
+func TestTokenExchangeReadsExtraClaimsFromAForeignSession(t *testing.T) {
+	store := bindingExchangeStores()[0].newStore()
+	config, coreStrategy := newBindingExchangeConfig()
+
+	client := store.GetClients()["my-client"]
+
+	subject := &oauth2.DefaultSession{
+		Subject:  "u2",
+		Username: "user2",
+		Extra: map[string]any{
+			consts.ClaimAuthorizedActor: map[string]any{consts.ClaimClientIdentifier: "my-client"},
+			consts.ClaimSubject:         "u1",
+			consts.ClaimUsername:        "user1",
+		},
+	}
+
+	form := url.Values{
+		consts.FormParameterGrantType:        []string{consts.GrantTypeOAuthTokenExchange},
+		consts.FormParameterSubjectTokenType: []string{consts.TokenTypeRFC8693AccessToken},
+		consts.FormParameterSubjectToken:     []string{createSessionAccessToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], subject)},
+	}
+
+	session := &DefaultSession{DefaultSession: &openid.DefaultSession{}}
+
+	request := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+		ID:         uuid.New().String(),
+		Client:     client,
+		Form:       form,
+		Session:    session,
+	}
+
+	handler := &AccessTokenTypeHandler{
+		Config:               config,
+		AccessTokenLifespan:  5 * time.Minute,
+		RefreshTokenLifespan: 5 * time.Minute,
+		CoreStrategy:         coreStrategy,
+		ScopeStrategy:        config.ScopeStrategy,
+		Storage:              store,
+	}
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+	claims := session.GetSubjectToken()
+
+	assert.Equal(t, map[string]any{consts.ClaimClientIdentifier: "my-client"}, claims[consts.ClaimAuthorizedActor])
+	assert.Equal(t, "u2", claims[consts.ClaimSubject])
+	assert.Equal(t, "user2", claims[consts.ClaimUsername])
+}
+
 func createSessionAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, store hoauth2.AccessTokenStorage, client oauth2.Client, session oauth2.Session) string {
 	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(10*time.Minute))
 
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"password"},
-		Request: oauth2.Request{
 			Session: session,
 			Client:  client,
-		},
 	}
 
 	token, signature, err := coreStrategy.GenerateAccessToken(ctx, request)

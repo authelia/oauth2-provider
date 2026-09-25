@@ -6,6 +6,7 @@ package rfc8693
 
 import (
 	"context"
+	"maps"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -449,10 +450,16 @@ func tokenClaimsMap(session oauth2.Session) map[string]any {
 		return s.AccessTokenClaimsMap()
 	}
 
-	return map[string]any{
-		consts.ClaimSubject:  session.GetSubject(),
-		consts.ClaimUsername: session.GetUsername(),
+	claims := map[string]any{}
+
+	if s, ok := session.(oauth2.ExtraClaimsSession); ok && s != nil {
+		maps.Copy(claims, s.GetExtraClaims())
 	}
+
+	claims[consts.ClaimSubject] = session.GetSubject()
+	claims[consts.ClaimUsername] = session.GetUsername()
+
+	return claims
 }
 
 func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err error) {

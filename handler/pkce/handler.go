@@ -168,10 +168,6 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	nc := len(challenge)
 
 	if !c.Config.GetEnforcePKCE(ctx) && nc == 0 && nv == 0 {
-		if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
-		}
-
 		return nil
 	}
 
@@ -188,10 +184,6 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	case nv > 128:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be no more than 128 characters."))
 	case nc == 0:
-		if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
-		}
-
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
 	case verifierWrongFormat.MatchString(verifier):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
@@ -237,14 +229,29 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		}
 	}
 
-	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
-	}
-
 	return nil
 }
 
+// PopulateTokenEndpointResponse implements oauth2.TokenEndpointHandler. The PKCE request session is removed only once
+// the request has been accepted, as removing it while the authorization code is still redeemable would let the code
+// be redeemed without the 'code_verifier' RFC 7636 Section 4.6 requires.
+//
+// This handler must be registered after the authorization code grant handler, as compose.ComposeAllEnabled does, so
+// the authorization code is invalidated before the PKCE request session is removed. A configuration which supplies
+// its own token endpoint handlers or factory order must preserve this order.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
 func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if !c.CanHandleTokenEndpointRequest(ctx, request) {
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
+	}
+
+	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, request.GetRequestForm().Get(consts.FormParameterAuthorizationCode))
+
+	if err = c.Storage.DeletePKCERequestSession(ctx, signature); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting delete PKCE request session: %w.", err)))
+	}
+
 	return nil
 }
 

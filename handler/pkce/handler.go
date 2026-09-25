@@ -236,6 +236,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 // the request has been accepted, as removing it while the authorization code is still redeemable would let the code
 // be redeemed without the 'code_verifier' RFC 7636 Section 4.6 requires.
 //
+// This handler must be registered after the authorization code grant handler, as compose.ComposeAllEnabled does, so
+// the authorization code is invalidated before the PKCE request session is removed. A configuration which supplies
+// its own token endpoint handlers or factory order must preserve this order.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
 func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {

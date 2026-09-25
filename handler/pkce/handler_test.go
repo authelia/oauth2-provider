@@ -5,10 +5,17 @@
 package pkce
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +24,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -535,42 +543,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting get PKCE request session: bad connection.",
 		},
 		{
-			"ShouldFailStorageDeleteError",
-			&oauth2.AccessRequest{
-				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-				Request: oauth2.Request{
-					Client:  &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
-					Session: &oauth2.DefaultSession{},
-					Form: url.Values{
-						consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"},
-						consts.FormParameterCodeVerifier:      []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abc"},
-					},
-				},
-			},
-			nil,
-			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
-				config.EnablePKCEPlainChallengeMethod = true
-				gomock.InOrder(
-					store.
-						EXPECT().
-						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
-						Return(&oauth2.Request{
-							Client: &TestPKCEClient{DefaultClient: &oauth2.DefaultClient{ID: "test"}},
-							Form: url.Values{
-								consts.FormParameterCodeChallenge:       []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abc"},
-								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-							},
-						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(errors.New("bad connection")),
-				)
-			},
-			oauth2.ErrServerError,
-			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting delete PKCE request session: bad connection.",
-		},
-		{
 			"ShouldFailMissingOriginalCodeChallenge",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
@@ -616,10 +588,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						EXPECT().
 						GetPKCERequestSession(t.Context(), "sig", gomock.Any()).
 						Return(&oauth2.Request{}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			nil,
@@ -863,10 +831,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test"}},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			oauth2.ErrInvalidGrant,
@@ -1083,10 +1047,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallenge: []string{"abcabcabc9abcabcabc9abcabcabc9abcabcabc9abcabcabc9"},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			nil,
@@ -1119,10 +1079,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			nil,
@@ -1218,10 +1174,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
-					store.
-						EXPECT().
-						DeletePKCERequestSession(t.Context(), "sig").
-						Return(nil),
 				)
 			},
 			nil,
@@ -1292,7 +1244,157 @@ func TestMiscellaneous(t *testing.T) {
 	}
 
 	assert.False(t, handler.CanSkipClientAuth(t.Context(), oauth2.NewAccessRequest(&oauth2.DefaultSession{})))
-	assert.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), oauth2.NewAccessRequest(&oauth2.DefaultSession{}), oauth2.NewAccessResponse()))
+	assert.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), oauth2.NewAccessRequest(&oauth2.DefaultSession{}), oauth2.NewAccessResponse()), oauth2.ErrUnknownRequest)
+}
+
+func TestHandler_PopulateTokenEndpointResponse(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func(t *testing.T, store *mock.MockPKCERequestStorage)
+		expected string
+	}{
+		{
+			"ShouldDeletePKCERequestSession",
+			func(t *testing.T, store *mock.MockPKCERequestStorage) {
+				store.EXPECT().DeletePKCERequestSession(t.Context(), "sig").Return(nil)
+			},
+			"",
+		},
+		{
+			"ShouldPassPKCERequestSessionNotFound",
+			func(t *testing.T, store *mock.MockPKCERequestStorage) {
+				store.EXPECT().DeletePKCERequestSession(t.Context(), "sig").Return(oauth2.ErrNotFound)
+			},
+			"",
+		},
+		{
+			"ShouldFailStorageDeleteError",
+			func(t *testing.T, store *mock.MockPKCERequestStorage) {
+				store.EXPECT().DeletePKCERequestSession(t.Context(), "sig").Return(errors.New("bad connection"))
+			},
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting delete PKCE request session: bad connection.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockPKCERequestStorage(ctrl)
+			config := &oauth2.Config{GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo")}
+
+			tc.setup(t, store)
+
+			handler := &Handler{
+				AuthorizeCodeStrategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", nil),
+				Storage:               store,
+				Config:                config,
+			}
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Form: url.Values{consts.FormParameterAuthorizationCode: []string{"authelia_ac_abc123.sig"}},
+				},
+			}
+
+			err := handler.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
+
+			if tc.expected == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			} else {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+			}
+		})
+	}
+}
+
+func TestPKCERequestSessionSurvivesAFailedTokenRequest(t *testing.T) {
+	config := &oauth2.Config{
+		GlobalSecret:          []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+		AccessTokenLifespan:   time.Hour,
+		AuthorizeCodeLifespan: time.Minute,
+		ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+		AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+	}
+
+	store := storage.NewMemoryStore()
+	client := &oauth2.DefaultClient{ID: "app", Public: true, GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}}
+	store.Clients[client.ID] = client
+
+	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+	config.TokenEndpointHandlers = oauth2.TokenEndpointHandlers{
+		&hoauth2.AuthorizeExplicitGrantHandler{
+			CoreStorage:            store,
+			TokenRevocationStorage: store,
+			AuthorizeCodeStrategy:  strategy,
+			AccessTokenStrategy:    strategy,
+			RefreshTokenStrategy:   strategy,
+			Config:                 config,
+		},
+		&Handler{AuthorizeCodeStrategy: strategy, Storage: store, Config: config},
+	}
+	config.TokenEndpointBindingHandlers = oauth2.TokenEndpointBindingHandlers{&failOnceBindingHandler{}}
+
+	provider := oauth2.New(store, config)
+
+	verifier := strings.Repeat("a", 50)
+	sum := sha256.Sum256([]byte(verifier))
+
+	code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+	require.NoError(t, err)
+
+	authorizeRequest := &oauth2.AuthorizeRequest{
+		Request: oauth2.Request{
+			ID:     "req-id",
+			Client: client,
+			Form: url.Values{
+				consts.FormParameterCodeChallenge:       {base64.RawURLEncoding.EncodeToString(sum[:])},
+				consts.FormParameterCodeChallengeMethod: {consts.PKCEChallengeMethodSHA256},
+			},
+			Session:     &oauth2.DefaultSession{},
+			RequestedAt: time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, authorizeRequest))
+	require.NoError(t, store.CreatePKCERequestSession(t.Context(), signature, authorizeRequest))
+
+	post := func(verifier string) (oauth2.AccessRequester, error) {
+		form := url.Values{
+			consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
+			consts.FormParameterAuthorizationCode: {code},
+			consts.FormParameterClientID:          {client.ID},
+		}
+
+		if verifier != "" {
+			form.Set(consts.FormParameterCodeVerifier, verifier)
+		}
+
+		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/token", strings.NewReader(form.Encode()))
+		r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
+		return provider.NewAccessRequest(t.Context(), r, &oauth2.DefaultSession{})
+	}
+
+	// RFC 9449 Section 8 asks the client to retry with a nonce after the binding phase rejects the first request.
+	_, err = post(verifier)
+	require.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
+
+	_, err = post("")
+	require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+
+	requester, err := post(verifier)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+	response, err := provider.NewAccessResponse(t.Context(), requester)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	assert.NotEmpty(t, response.GetAccessToken())
+
+	_, err = store.GetPKCERequestSession(t.Context(), signature, nil)
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
 type TestPKCEClient struct {
@@ -1312,4 +1414,22 @@ func (c *TestPKCEClient) GetEnforcePKCEChallengeMethod() (enforce bool) {
 
 func (c *TestPKCEClient) GetPKCEChallengeMethod() (method string) {
 	return c.PKCEChallengeMethod
+}
+
+type failOnceBindingHandler struct {
+	failed bool
+}
+
+func (h *failOnceBindingHandler) BindAccessRequest(_ context.Context, _ oauth2.AccessRequester) error {
+	if !h.failed {
+		h.failed = true
+
+		return oauth2.ErrUseDPoPNonce
+	}
+
+	return nil
+}
+
+func (h *failOnceBindingHandler) PopulateBoundTokenEndpointResponse(_ context.Context, _ oauth2.AccessRequester, _ oauth2.AccessResponder) error {
+	return nil
 }

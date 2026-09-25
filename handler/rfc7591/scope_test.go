@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestCheckGrantableScopes(t *testing.T) {
@@ -272,6 +273,87 @@ func TestExcludeRegistrationScopeFromMetadataStripsEveryConfiguredScope(t *testi
 	ExcludeRegistrationScopeFromMetadata(ctx, config, metadata)
 
 	assert.Equal(t, "read write", metadata.Scope)
+}
+
+func TestExcludeRegistrationScopeStripsScopesMatchingARegistrationScope(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name         string
+		strategy     oauth2.ScopeStrategy
+		registration []string
+		scopes       oauth2.Arguments
+		expected     oauth2.Arguments
+	}{
+		{
+			name:         "ShouldStripWildcardUnderWildcardStrategy",
+			strategy:     oauth2.WildcardScopeStrategy,
+			registration: []string{consts.ScopeClientRegistration},
+			scopes:       oauth2.Arguments{"*", "read"},
+			expected:     oauth2.Arguments{"read"},
+		},
+		{
+			name:         "ShouldStripParentUnderHierarchicStrategy",
+			strategy:     oauth2.HierarchicScopeStrategy,
+			registration: []string{"urn.example.register"},
+			scopes:       oauth2.Arguments{"urn.example", "read"},
+			expected:     oauth2.Arguments{"read"},
+		},
+		{
+			name:         "ShouldKeepWildcardUnderExactStrategy",
+			strategy:     oauth2.ExactScopeStrategy,
+			registration: []string{consts.ScopeClientRegistration},
+			scopes:       oauth2.Arguments{"*", "read"},
+			expected:     oauth2.Arguments{"*", "read"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{ScopeStrategy: tc.strategy, RFC7591ClientRegistrationScopes: tc.registration}
+
+			assert.Equal(t, tc.expected, ExcludeRegistrationScope(ctx, config, tc.scopes))
+		})
+	}
+}
+
+func TestCheckGrantableScopesRejectsAScopeMatchingARegistrationScope(t *testing.T) {
+	ctx := context.Background()
+	config := &oauth2.Config{
+		ScopeStrategy:                   oauth2.WildcardScopeStrategy,
+		RFC7591ClientRegistrationScopes: []string{consts.ScopeClientRegistration},
+	}
+
+	authenticated := oauth2.NewRequest()
+	authenticated.GrantScope(consts.ScopeClientRegistration)
+	authenticated.GrantScope("*")
+
+	err := CheckGrantableScopes(ctx, config, authenticated, &oauth2.ClientRegistrationMetadata{Scope: "*"})
+
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes '*' which the presented Client Registration Token is not permitted to grant.")
+}
+
+func TestOpenRegistrationDoesNotGrantTheRegistrationScopeByWildcard(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+	config.ScopeStrategy = oauth2.WildcardScopeStrategy
+
+	request := oauth2.NewClientRegistrationRequest()
+	request.Metadata = &oauth2.ClientRegistrationMetadata{
+		GrantTypes: []string{consts.GrantTypeClientCredentials},
+		Scope:      "* read",
+	}
+
+	response := oauth2.NewClientRegistrationResponse()
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, request, response))
+
+	client, err := store.GetClient(ctx, response.ToMap()[consts.FormParameterClientID].(string))
+	require.NoError(t, err)
+
+	assert.Equal(t, oauth2.Arguments{"read"}, client.GetScopes())
+	assert.False(t, oauth2.GetScopeStrategy(ctx, config, client)(client.GetScopes(), consts.ScopeClientRegistration))
 }
 
 func grantableFixture(clientID string, scopes oauth2.Arguments) oauth2.Requester {

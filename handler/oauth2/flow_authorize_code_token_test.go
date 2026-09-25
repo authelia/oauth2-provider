@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"testing"
 	"time"
@@ -1191,4 +1192,125 @@ func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
 
 	_, err = store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
 	assert.ErrorIs(t, err, oauth2.ErrInactiveToken, "the refresh token issued from the replayed code must be revoked")
+}
+
+func TestAuthorizeCodeFlow_PopulateTokenEndpointResponseKeepsBinding(t *testing.T) {
+	const (
+		jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+		x5t = "A4DtL2JmUMhAsvJj5tAtEqYFn7uHnaMbNKmoNcE7dnE"
+	)
+
+	testCases := []struct {
+		name    string
+		session func() oauth2.Session
+	}{
+		{"DefaultSession", func() oauth2.Session { return &oauth2.DefaultSession{} }},
+		{"JWTSession", func() oauth2.Session { return &JWTSession{} }},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &hydratingAuthorizeCodeStore{MemoryStore: storage.NewMemoryStore(), sessions: map[string][]byte{}}
+			strategy := &hmacshaStrategy
+
+			client := &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			}
+
+			handler := AuthorizeExplicitGrantHandler{
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+				AuthorizeCodeStrategy:  strategy,
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+					AccessTokenLifespan:   time.Minute,
+					AuthorizeCodeLifespan: time.Minute,
+				},
+			}
+
+			code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, &oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					ID:             "req-id",
+					Client:         client,
+					Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+					RequestedScope: oauth2.Arguments{"foo"},
+					GrantedScope:   oauth2.Arguments{"foo"},
+					Session:        tc.session(),
+					RequestedAt:    time.Now().UTC(),
+				},
+			}))
+
+			accessRequest := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client: client,
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{code},
+						consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+					},
+					Session:     tc.session(),
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+			// RFC 9449 Section 5 and RFC 8705 Section 3 binding, recorded between the two phases.
+			accessRequest.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(jkt)
+			accessRequest.GetSession().(oauth2.MTLSBoundSession).SetClientCertificateSHA256Thumbprint(x5t)
+
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+
+			assert.Equal(t, jkt, accessRequest.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
+			assert.Equal(t, x5t, accessRequest.GetSession().(oauth2.MTLSBoundSession).GetClientCertificateSHA256Thumbprint())
+
+			stored, err := store.GetAccessTokenSession(t.Context(), strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, jkt, stored.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
+			assert.Equal(t, x5t, stored.GetSession().(oauth2.MTLSBoundSession).GetClientCertificateSHA256Thumbprint())
+		})
+	}
+}
+
+type hydratingAuthorizeCodeStore struct {
+	*storage.MemoryStore
+
+	sessions map[string][]byte
+}
+
+func (s *hydratingAuthorizeCodeStore) CreateAuthorizeCodeSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	var data []byte
+
+	if data, err = json.Marshal(request.GetSession()); err != nil {
+		return err
+	}
+
+	s.sessions[signature] = data
+
+	return s.MemoryStore.CreateAuthorizeCodeSession(ctx, signature, request)
+}
+
+func (s *hydratingAuthorizeCodeStore) GetAuthorizeCodeSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
+	if request, err = s.MemoryStore.GetAuthorizeCodeSession(ctx, signature, session); err != nil || session == nil {
+		return request, err
+	}
+
+	if err = json.Unmarshal(s.sessions[signature], session); err != nil {
+		return nil, err
+	}
+
+	clone := *request.(*oauth2.AuthorizeRequest)
+	clone.Session = session
+
+	return &clone, nil
 }

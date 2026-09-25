@@ -177,7 +177,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
 	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
 	// mandates. That is precisely the window an attacker racing the legitimate client with a stolen code exploits.
-	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession()); err != nil {
+	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession().Clone()); err != nil {
 		switch {
 		case errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
 			if ar == nil {

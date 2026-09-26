@@ -247,7 +247,11 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		srtrequester.SetSession(request.GetSession().Clone())
 	}
 
-	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); err != nil {
+	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); errors.Is(err, oauth2.ErrInactiveToken) {
+		replayed = err
+
+		return err
+	} else if err != nil {
 		return err
 	}
 

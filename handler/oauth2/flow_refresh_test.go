@@ -1132,6 +1132,52 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRevokeTheGrantWhenRotateRefreshTokenReturnsErrInactiveToken",
+			err:  "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Token is inactive because it is malformed, expired or otherwise invalid. Token validation failed.",
+			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
+				request.ID = "req-id"
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				gomock.InOrder(
+					mockTransactional.
+						EXPECT().
+						BeginTX(propagatedContext).
+						Return(propagatedContext, nil),
+					mockRevocationStore.
+						EXPECT().
+						GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
+						Return(request, nil),
+					mockRevocationStore.
+						EXPECT().
+						RotateRefreshToken(propagatedContext, "req-id", gomock.Any()).
+						Return(oauth2.ErrInactiveToken),
+					mockTransactional.
+						EXPECT().
+						Rollback(propagatedContext).
+						Return(nil),
+					mockTransactional.
+						EXPECT().
+						BeginTX(propagatedContext).
+						Return(propagatedContext, nil),
+					mockRevocationStore.
+						EXPECT().
+						DeleteRefreshTokenSession(propagatedContext, gomock.Any()).
+						Return(nil),
+					mockRevocationStore.
+						EXPECT().
+						RevokeRefreshToken(propagatedContext, "req-id").
+						Return(nil),
+					mockRevocationStore.
+						EXPECT().
+						RevokeAccessToken(propagatedContext, "req-id").
+						Return(nil),
+					mockTransactional.
+						EXPECT().
+						Commit(propagatedContext).
+						Return(nil),
+				)
+			},
+		},
+		{
 			name: "ShouldRollbackWhenRotateRefreshTokenReturnsError",
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {

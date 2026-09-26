@@ -9,6 +9,7 @@ go 1.27.0
 toolchain go1.27.1
 
 require (
+	authelia.com/provider/jose v0.0.0-20260926022314-3056c5b86602
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1

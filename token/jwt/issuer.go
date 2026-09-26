@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 
-	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/jose"
 )
 
 // NewDefaultIssuer returns a new issuer and verifies that one RS256 key exists.

@@ -7,8 +7,8 @@ package jwt
 import (
 	"context"
 
-	"authelia.com/provider/oauth2/token/jose"
-	"authelia.com/provider/oauth2/token/jose/jwt"
+	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
 )
 
 type StrategyOpts struct {

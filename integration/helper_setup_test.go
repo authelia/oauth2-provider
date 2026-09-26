@@ -16,6 +16,8 @@ import (
 	xoauth2 "golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -25,7 +27,6 @@ import (
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
-	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 

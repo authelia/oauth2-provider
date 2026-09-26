@@ -21,12 +21,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+	josejwt "authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/jose"
-	josejwt "authelia.com/provider/oauth2/token/jose/jwt"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 

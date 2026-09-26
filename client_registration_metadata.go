@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/jose"
 )
 
 // ClientRegistrationMetadata is the client metadata wire format used by OAuth 2.0 Dynamic Client Registration

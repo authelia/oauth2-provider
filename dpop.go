@@ -11,8 +11,9 @@ import (
 	"net/http"
 	"time"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jose"
 )
 
 // DPoPJWKThumbprintLength is the length of a well-formed 'dpop_jkt' value, being the number of characters a 32 byte

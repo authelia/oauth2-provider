@@ -443,6 +443,71 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			name: "ShouldFailDeviceCodeExpired",
 			err:  fmt.Sprintf("The device_code has expired, and the device authorization session has concluded. Device Code expired at '%s'.", expiredAt),
 		},
+		{
+			requester: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
+				device := oauth2.NewDeviceAuthorizeRequest()
+				device.SetSession(openid.NewDefaultSession())
+				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
+				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
+				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+				require.NoError(t, err)
+				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+				require.NoError(t, err)
+				device.SetDeviceCodeSignature(dSig)
+				device.SetUserCodeSignature(uSig)
+				device.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+				device.SetLastChecked(requester.GetRequestedAt())
+				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, device))
+
+				requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+			},
+			name: "ShouldFailPendingDeviceCodeExpired",
+			err:  fmt.Sprintf("The device_code has expired, and the device authorization session has concluded. Device Code expired at '%s'.", expiredAt),
+		},
+		{
+			requester: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					GrantedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
+				device := oauth2.NewDeviceAuthorizeRequest()
+				device.SetSession(openid.NewDefaultSession())
+				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
+				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
+				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+				require.NoError(t, err)
+				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+				require.NoError(t, err)
+				device.SetDeviceCodeSignature(dSig)
+				device.SetUserCodeSignature(uSig)
+				device.SetStatus(oauth2.DeviceAuthorizeStatusDenied)
+				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, device))
+
+				requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+			},
+			name: "ShouldFailDeniedDeviceCodeExpired",
+			err:  fmt.Sprintf("The device_code has expired, and the device authorization session has concluded. Device Code expired at '%s'.", expiredAt),
+		},
 	}
 
 	for _, tc := range testCases {

@@ -446,6 +446,87 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 	}
 }
 
+func TestJWTStrategy_GenerateIDTokenAuthTime(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	j := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	const errAuthTimeMissing = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Unable to determine validity of prompt parameter because auth_time is missing in ID Token claims."
+
+	now := time.Now().UTC().Truncate(time.Second)
+
+	testCases := []struct {
+		name     string
+		prompt   string
+		grant    string
+		authTime *jwt.NumericDate
+		expected any
+		err      string
+	}{
+		{name: "ShouldOmitAnUnknownAuthTime", expected: nil},
+		{name: "ShouldOmitAnUnknownAuthTimeOnRefresh", grant: consts.GrantTypeRefreshToken, expected: nil},
+		{name: "ShouldOmitAnUnknownAuthTimeWithPromptConsent", prompt: consts.PromptTypeConsent, expected: nil},
+		{name: "ShouldOmitAnUnknownAuthTimeWithPromptSelectAccount", prompt: consts.PromptTypeSelectAccount, expected: nil},
+		{name: "ShouldKeepAKnownAuthTime", authTime: jwt.NewNumericDate(now.Add(-time.Minute)), expected: float64(now.Add(-time.Minute).Unix())},
+		{
+			name:   "ShouldFailPromptNoneWithAnUnknownAuthTime",
+			prompt: consts.PromptTypeNone,
+			err:    errAuthTimeMissing,
+		},
+		{
+			name:   "ShouldFailPromptLoginWithAnUnknownAuthTime",
+			prompt: consts.PromptTypeLogin + " " + consts.PromptTypeConsent,
+			err:    errAuthTimeMissing,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requester := oauth2.NewAccessRequest(&DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:  testSubjectPeter,
+					AuthTime: tc.authTime,
+				},
+				Headers:     &jwt.Headers{},
+				RequestedAt: now,
+			})
+
+			if tc.grant != "" {
+				requester.GrantTypes = oauth2.Arguments{tc.grant}
+			}
+
+			if tc.prompt != "" {
+				requester.Form.Set(consts.FormParameterPrompt, tc.prompt)
+			}
+
+			token, err := j.GenerateIDToken(t.Context(), time.Hour, requester)
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			claims := map[string]any{}
+
+			_, err = jwt.UnsafeParseSignedAny(token, &claims)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationTime])
+		})
+	}
+}
+
 func TestJWTStrategy_GenerateIDTokenRefreshExemption(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,

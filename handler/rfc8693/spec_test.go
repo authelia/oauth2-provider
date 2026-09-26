@@ -355,7 +355,7 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
 			Session: newValidatedSpecSession("alice"),
@@ -392,7 +392,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
 			Session: newValidatedSpecSession("alice"),
@@ -683,6 +683,13 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 
 	handlers := []oauth2.TokenEndpointHandler{grant, access, refresh, idt, cjt}
 
+	subjectTokenType, subjectToken := consts.TokenTypeRFC8693AccessToken, createAccessToken(context.Background(), coreStrategy, store, store.Clients["custom-lifespan-client"])
+
+	// RFC 8693 Section 2.2.1: a refresh token is only issued in exchange for a refresh token.
+	if requestedType == consts.TokenTypeRFC8693RefreshToken {
+		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], time.Now().UTC().Add(10*time.Minute))
+	}
+
 	req := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
@@ -690,8 +697,8 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 			Client: store.Clients["my-client"],
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
-				consts.FormParameterSubjectToken:       {createAccessToken(context.Background(), coreStrategy, store, store.Clients["custom-lifespan-client"])},
+				consts.FormParameterSubjectTokenType:   {subjectTokenType},
+				consts.FormParameterSubjectToken:       {subjectToken},
 				consts.FormParameterRequestedTokenType: {requestedType},
 			},
 			Session: newSpecSession("peter"),

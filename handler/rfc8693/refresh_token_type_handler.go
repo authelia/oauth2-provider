@@ -19,6 +19,12 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// RefreshTokenTypeHandler validates a refresh token 'subject_token' or 'actor_token' and issues refresh tokens.
+//
+// A refresh token is only issued when the 'subject_token' is itself a refresh token, the case RFC 8693 Section 2.2.1
+// describes of a client that needs access once the original credential is no longer valid, and never outlives it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 type RefreshTokenTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -163,6 +169,11 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 
 	claims[consts.ClaimClientIdentifier] = or.GetClient().GetID()
 	claims[consts.ClaimScope] = or.GetGrantedScopes()
+
+	if expires := or.GetSession().GetExpiresAt(oauth2.RefreshToken); !expires.IsZero() {
+		claims[consts.ClaimExpirationTime] = expires.Unix()
+	}
+
 	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
 	return or.GetSession(), claims, nil
@@ -176,6 +187,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	// Apply the same refresh-token gating that AccessTokenTypeHandler.canIssueRefreshToken applies, but as an error
 	// rather than a silent skip: when a client EXPLICITLY requests a refresh token via 'requested_token_type', the
 	// AS must refuse with the spec-appropriate code if policy disallows it rather than silently downgrading.
+	if !isRefreshTokenSubject(request) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("A refresh token can only be issued by a token exchange whose '%s' is a refresh token.", consts.FormParameterSubjectToken))
+	}
+
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
 		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not registered for the '%s' grant type and so cannot be issued a refresh token via token exchange.", consts.GrantTypeRefreshToken))
 	}
@@ -184,7 +199,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The token exchange request was not granted any of the scopes (%s) required by the authorization server to issue a refresh token.", strings.Join(c.RefreshTokenScopes, ", ")))
 	}
 
-	request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.RefreshToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(c.RefreshTokenLifespan)).Truncate(jwt.TimePrecision))
 
 	var token, signature string
 

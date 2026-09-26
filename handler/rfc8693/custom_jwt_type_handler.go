@@ -226,6 +226,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
 	}
 
+	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
+
 	if claims.Issuer == "" {
 		claims.Issuer = jwtType.Issuer
 	}

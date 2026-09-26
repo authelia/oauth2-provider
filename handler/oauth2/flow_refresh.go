@@ -167,7 +167,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	// An unrotated refresh token keeps the expiry it was issued with.
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 && !oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, client) {
+	if rtLifespan > -1 && !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request) {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
 	}
 
@@ -189,7 +189,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, request.GetClient()) {
+	if oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request) {
 		return c.populateTokenEndpointResponseWithoutRotation(ctx, request, response, accessToken, accessSignature)
 	}
 

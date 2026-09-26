@@ -297,7 +297,8 @@ type RefreshFlowScopeClient interface {
 }
 
 // RefreshTokenRotationClient is a client which keeps its refresh token during its own refresh token grants. Rotation
-// is disabled when either this or the provider-wide option is set.
+// is disabled when either this or the provider-wide option is set, except for a public client whose refresh token is
+// not sender-constrained by an enabled DPoP or mTLS binding; see IsRefreshTokenRotationDisabledForRequest.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 type RefreshTokenRotationClient interface {

@@ -143,6 +143,11 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		BackChannelLogoutURI:             registered.BackChannelLogoutURI,
 		BackChannelLogoutSessionRequired: registered.BackChannelLogoutSessionRequired,
 
+		TokenExchangeSubjectTokenTypes:  registered.TokenExchangeSubjectTokenTypes,
+		TokenExchangeActorTokenTypes:    registered.TokenExchangeActorTokenTypes,
+		TokenExchangeRequestTokenTypes:  registered.TokenExchangeRequestTokenTypes,
+		TokenExchangePermittedClientIDs: registered.TokenExchangePermittedClientIDs,
+
 		TLSClientAuthSubjectDN:                registered.TLSClientAuthSubjectDN,
 		TLSClientAuthSANDNS:                   registered.TLSClientAuthSANDNS,
 		TLSClientAuthSANURI:                   registered.TLSClientAuthSANURI,

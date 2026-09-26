@@ -257,13 +257,29 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder, accessToken, accessSignature string) (err error) {
+	var revoked error
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+
+		if revoked != nil {
+			err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The refresh token has been revoked.").WithWrap(revoked).WithDebugError(revoked))
+		}
 	}()
+
+	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
+
+	if _, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) || errors.Is(err, oauth2.ErrNotFound) {
+		revoked = err
+
+		return err
+	} else if err != nil {
+		return err
+	}
 
 	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, request.GetID()); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err

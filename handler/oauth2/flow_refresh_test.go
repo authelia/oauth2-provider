@@ -915,6 +915,31 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldReportARollbackFailureWithoutRotationWhenTheRefreshTokenWasRevoked",
+			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. error: invalid_request; rollback error: Whoops, the rollback failed!",
+			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
+				request.ID = "req-id"
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DisableRefreshTokenRotation: true}
+
+				mockTransactional.
+					EXPECT().
+					BeginTX(propagatedContext).
+					Return(propagatedContext, nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
+					Return(nil, oauth2.ErrInactiveToken).
+					Times(1)
+				mockTransactional.
+					EXPECT().
+					Rollback(propagatedContext).
+					Return(errors.New("Whoops, the rollback failed!")).
+					Times(1)
+			},
+		},
+		{
 			name: "ShouldCommitTransactionWhenNoErrors",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}

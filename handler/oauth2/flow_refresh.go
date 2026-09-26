@@ -266,7 +266,7 @@ func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
 
-		if revoked != nil {
+		if revoked != nil && !errors.Is(err, oauth2.ErrServerError) {
 			err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The refresh token has been revoked.").WithWrap(revoked).WithDebugError(revoked))
 		}
 	}()

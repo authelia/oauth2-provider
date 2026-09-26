@@ -260,6 +260,27 @@ func TestConfig_GetOIDCKeyBindingEnabled(t *testing.T) {
 	var _ OIDCKeyBindingConfigProvider = config
 }
 
+func TestConfigJWEPBES2Count(t *testing.T) {
+	testCases := []struct {
+		name             string
+		config           *Config
+		minimum, maximum int
+	}{
+		{"ShouldReturnDefaults", &Config{}, jwt.DefaultJWEPBES2CountMinimum, jwt.DefaultJWEPBES2CountMaximum},
+		{"ShouldReturnDefaultsWhenNotPositive", &Config{JWEPBES2CountMinimum: -1, JWEPBES2CountMaximum: -1}, jwt.DefaultJWEPBES2CountMinimum, jwt.DefaultJWEPBES2CountMaximum},
+		{"ShouldReturnConfigured", &Config{JWEPBES2CountMinimum: 1000, JWEPBES2CountMaximum: 300000}, 1000, 300000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var provider jwt.JWEPBES2CountProvider = tc.config
+
+			assert.Equal(t, tc.minimum, provider.GetJWEPBES2CountMinimum(t.Context()))
+			assert.Equal(t, tc.maximum, provider.GetJWEPBES2CountMaximum(t.Context()))
+		})
+	}
+}
+
 type testClientRegistrationMetadataStrategy struct{}
 
 func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {

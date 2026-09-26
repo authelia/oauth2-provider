@@ -208,6 +208,41 @@ func TestConfig_LazyDefaultsAreConcurrencySafe(t *testing.T) {
 	}
 }
 
+func TestConfig_GetJWTSecuredAuthorizeResponseModeIssuer(t *testing.T) {
+	const (
+		jarmIssuer = "https://jarm.example.com"
+		idIssuer   = "https://id.example.com"
+	)
+
+	testCases := []struct {
+		name     string
+		config   *Config
+		expected string
+	}{
+		{
+			name:     "ShouldReturnTheJARMIssuerWhenSet",
+			config:   &Config{JWTSecuredAuthorizeResponseModeIssuer: jarmIssuer, IDTokenIssuer: idIssuer},
+			expected: jarmIssuer,
+		},
+		{
+			name:     "ShouldFallBackToTheIDTokenIssuerWhenUnset",
+			config:   &Config{IDTokenIssuer: idIssuer},
+			expected: idIssuer,
+		},
+		{
+			name:     "ShouldReturnEmptyWithoutEitherIssuer",
+			config:   &Config{},
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.config.GetJWTSecuredAuthorizeResponseModeIssuer(t.Context()))
+		})
+	}
+}
+
 func TestConfig_GetAccessTokenIssuer(t *testing.T) {
 	testCases := []struct {
 		name     string

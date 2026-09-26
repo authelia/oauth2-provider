@@ -81,6 +81,10 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		panic(err)
 	}
 
+	if err := ValidateJWTSecuredAuthorizeResponseMode(config); err != nil {
+		panic(err)
+	}
+
 	return f
 }
 

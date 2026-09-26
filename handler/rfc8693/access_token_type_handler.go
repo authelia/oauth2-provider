@@ -18,6 +18,14 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// AccessTokenTypeHandler validates an access token 'subject_token' or 'actor_token' and issues access tokens.
+//
+// An issued access token, and any refresh token issued with it, never outlives the 'subject_token', as RFC 8693
+// Section 5 suggests a limited token lifetime to mitigate abuse of delegated rights. A refresh token is only issued
+// with the access token when the 'subject_token' is itself a refresh token: RFC 8693 Section 2.2.1 states one will
+// typically not be issued when a temporary credential is exchanged for another.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 type AccessTokenTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -161,6 +169,11 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 
 	claims[consts.ClaimClientIdentifier] = original.GetClient().GetID()
 	claims[consts.ClaimScope] = original.GetGrantedScopes()
+
+	if expires := original.GetSession().GetExpiresAt(oauth2.AccessToken); !expires.IsZero() {
+		claims[consts.ClaimExpirationTime] = expires.Unix()
+	}
+
 	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
 	return original.GetSession(), claims, nil
@@ -171,7 +184,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(c.AccessTokenLifespan))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(c.AccessTokenLifespan)))
 
 	var token, signature string
 
@@ -186,7 +199,8 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	if issueRefreshToken {
 		var refresh, refreshSignature string
 
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
+		recordSubjectTokenDeadline(request)
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(c.RefreshTokenLifespan)).Truncate(jwt.TimePrecision))
 		if refresh, refreshSignature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}
@@ -213,6 +227,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 }
 
 func (c *AccessTokenTypeHandler) canIssueRefreshToken(request oauth2.Requester) bool {
+	if !isRefreshTokenSubject(request) {
+		return false
+	}
+
 	// Require one of the refresh token scopes, if set.
 	if len(c.RefreshTokenScopes) > 0 && !request.GetGrantedScopes().HasOneOf(c.RefreshTokenScopes...) {
 		return false

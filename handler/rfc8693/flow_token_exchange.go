@@ -9,6 +9,7 @@ import (
 	"maps"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -574,4 +575,40 @@ func requireSubjectToken(request oauth2.AccessRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrInvalidRequest.
 		WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType).
 		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
+}
+
+func isRefreshTokenSubject(request oauth2.Requester) bool {
+	return request.GetRequestForm().Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken
+}
+
+func subjectTokenExpiry(request oauth2.Requester) time.Time {
+	session, ok := request.GetSession().(Session)
+	if !ok || session == nil {
+		return time.Time{}
+	}
+
+	if subject := toInt64(session.GetSubjectToken()[consts.ClaimExpirationTime]); subject > 0 {
+		return time.Unix(subject, 0).UTC()
+	}
+
+	return time.Time{}
+}
+
+func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
+	if limit := subjectTokenExpiry(request); !limit.IsZero() && limit.Before(expires) {
+		return limit
+	}
+
+	return expires
+}
+
+func recordSubjectTokenDeadline(request oauth2.Requester) {
+	session, ok := request.GetSession().(interface{ SetExpiryDeadline(deadline time.Time) })
+	if !ok {
+		return
+	}
+
+	if deadline := subjectTokenExpiry(request); !deadline.IsZero() {
+		session.SetExpiryDeadline(deadline)
+	}
 }

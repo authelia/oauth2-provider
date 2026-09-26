@@ -337,8 +337,9 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 			hasher = sha256.New()
 		case jose.PBES2_HS384_A192KW:
 			hasher = sha512.New384()
-		case jose.PBES2_HS512_A256KW, jose.DIRECT:
+		case jose.PBES2_HS512_A256KW:
 			hasher = sha512.New()
+		case jose.DIRECT:
 		default:
 			return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported algorithm '%s'", alg)}
 		}
@@ -358,8 +359,25 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 				bits = aes.BlockSize * 3
 			case jose.A256CBC_HS512:
 				bits = aes.BlockSize * 4
+			case jose.A128GCM:
+				bits = aes.BlockSize
+			case jose.A192GCM:
+				bits = aes.BlockSize * 1.5
+			case jose.A256GCM:
+				bits = aes.BlockSize * 2
 			default:
 				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorthm '%s'", enc)}
+			}
+
+			// OpenID Connect Core 1.0 Section 10.2: SHA-256 for keys of 256 or fewer bits, SHA-384 for 257-384 bits and
+			// SHA-512 for 385-512 bits.
+			switch {
+			case bits <= sha256.Size:
+				hasher = sha256.New()
+			case bits <= sha512.Size384:
+				hasher = sha512.New384()
+			default:
+				hasher = sha512.New()
 			}
 		}
 

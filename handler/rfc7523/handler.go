@@ -7,6 +7,7 @@ package rfc7523
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"strings"
 	"time"
 
@@ -97,7 +98,9 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	}
 
 	if claims.ID != "" {
-		if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
+		if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); errors.Is(err, oauth2.ErrJTIKnown) {
+			return errorsx.WithStack(errJWTUsed.WithWrap(err))
+		} else if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
@@ -322,7 +325,7 @@ verify:
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 		if used {
-			return errorsx.WithStack(oauth2.ErrJTIKnown)
+			return errorsx.WithStack(errJWTUsed)
 		}
 	}
 
@@ -350,3 +353,5 @@ var (
 func isAuthenticatedClient(client oauth2.Client) bool {
 	return client != nil && len(client.GetID()) != 0
 }
+
+var errJWTUsed = oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter has already been used and its 'jti' (JWT ID) claim can not be used again until it expires.")

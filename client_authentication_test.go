@@ -1231,6 +1231,25 @@ func TestAuthenticateClientTwice(t *testing.T) {
 				assert.Nil(t, actual)
 			},
 		},
+		{
+			name: "ShouldFailReplayedAuthenticationCaughtWhenMarkingTheJTI",
+			check: func(t *testing.T) {
+				provider, _, formValues := newFixture(t)
+
+				store, ok := provider.Store.(*storage.MemoryStore)
+				require.True(t, ok)
+
+				provider.Store = &racingClientAssertionStore{MemoryStore: store}
+
+				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.ErrorIs(t, err, ErrInvalidClient)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Claim 'jti' from 'client_assertion' MUST only be used once.")
+				assert.Nil(t, actual)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1317,3 +1336,11 @@ var (
 	testClientSecret1234    = mustNewBCryptClientSecretPlain("1234")
 	testClientSecretComplex = mustNewBCryptClientSecretPlain("foo %66%6F%6F@$<§!✓") // "foo %66%6F%6F@$<§!✓"
 )
+
+type racingClientAssertionStore struct {
+	*storage.MemoryStore
+}
+
+func (s *racingClientAssertionStore) ClientAssertionJWTValid(_ context.Context, _ string) error {
+	return nil
+}

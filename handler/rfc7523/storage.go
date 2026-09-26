@@ -32,5 +32,8 @@ type Storage interface {
 	// ensure that JWTs are not replayed by maintaining the set of used (issuer, jti) pairs for
 	// the length of time for which the JWT would be considered valid based on the applicable
 	// "exp" instant. (https://datatracker.ietf.org/doc/html/rfc7523#section-3)
+	//
+	// The mark MUST be atomic and MUST return an error matching oauth2.ErrJTIKnown when the pair is already marked
+	// and has not expired, as IsRFC7523JWTUsed alone can not prevent two concurrent requests using the same JWT.
 	MarkRFC7523JWTUsedForTime(ctx context.Context, issuer, jti string, exp time.Time) (err error)
 }

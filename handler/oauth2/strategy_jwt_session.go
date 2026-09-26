@@ -98,8 +98,8 @@ func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 				jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeAccessToken,
 			},
 		}
-	} else if j.JWTHeader.Extra[jwt.JSONWebTokenHeaderType] == nil {
-		j.JWTHeader.Extra[jwt.JSONWebTokenHeaderType] = jwt.JSONWebTokenTypeAccessToken
+	} else if j.JWTHeader.Get(jwt.JSONWebTokenHeaderType) == nil {
+		j.JWTHeader.Add(jwt.JSONWebTokenHeaderType, jwt.JSONWebTokenTypeAccessToken)
 	}
 
 	return j.JWTHeader

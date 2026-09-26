@@ -237,7 +237,7 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 		if alg == JSONWebTokenAlgNone {
 			validate = o.client != nil && o.client.GetSigningAlg() == JSONWebTokenAlgNone
 		} else if err = j.validate(ctx, t, &claims, o); err != nil {
-			return nil, errorsx.WithStack(err)
+			return token, errorsx.WithStack(err)
 		}
 	}
 

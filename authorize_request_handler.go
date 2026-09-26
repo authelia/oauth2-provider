@@ -740,6 +740,10 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer string, openid bool, inner error) (outer *RFC6749Error) {
 	outer = ErrInvalidRequestObject.WithWrap(inner).WithHintf("%s request object could not be decoded or validated.", hintRequestObjectPrefix(openid))
 
+	if token == nil {
+		token = &jwt.Token{Claims: jwt.MapClaims{}}
+	}
+
 	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
@@ -779,7 +783,7 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
 			iat, err := token.Claims.GetIssuedAt()
-			if err == nil {
+			if err == nil && iat != nil {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object was issued at %d.", hintRequestObjectPrefix(openid), client.GetID(), iat.Int64())
 			} else {
 				return outer.WithDebugf("%s client with id '%s' provided a request object that was issued in the future. The request object does not have an 'iat' claim or it has an invalid type.", hintRequestObjectPrefix(openid), client.GetID())
@@ -812,6 +816,10 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		case errJWTValidation.Has(jwt.ValidationErrorLifetime):
 			nbf, _ := token.Claims.GetNotBefore()
 			exp, _ := token.Claims.GetExpirationTime()
+
+			if nbf == nil || exp == nil {
+				return outer.WithDebugf("%s client with id '%s' provided a request object that exceeds the maximum lifetime. The request object does not have both an 'nbf' and an 'exp' claim.", hintRequestObjectPrefix(openid), client.GetID())
+			}
 
 			return outer.WithDebugf("%s client with id '%s' provided a request object that exceeds the maximum lifetime. The 'nbf' claim was %d and the 'exp' claim was %d.", hintRequestObjectPrefix(openid), client.GetID(), nbf.Int64(), exp.Int64())
 		case errJWTValidation.Has(jwt.ValidationErrorClaimsInvalid):

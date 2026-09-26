@@ -826,6 +826,72 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
+func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t *testing.T) {
+	strategy := &o2hmacshaStrategy
+	store := storage.NewMemoryStore()
+
+	config := &oauth2.Config{
+		ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+		AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+		AccessTokenLifespan:         time.Minute,
+		RefreshTokenScopes:          []string{consts.ScopeOffline},
+		RFC8628TokenPollingInterval: time.Minute,
+	}
+
+	h := hoauth2.GenericCodeTokenEndpointHandler{
+		CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+			Strategy: strategy,
+			Storage:  store,
+			Config:   config,
+		},
+		AccessTokenStrategy:    strategy,
+		RefreshTokenStrategy:   strategy,
+		Config:                 config,
+		CoreStorage:            store,
+		TokenRevocationStorage: store,
+	}
+
+	requester := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+			},
+			Form:         url.Values{},
+			GrantedScope: oauth2.Arguments{"foo"},
+			Session:      &oauth2.DefaultSession{},
+			RequestedAt:  time.Now().UTC(),
+		},
+	}
+
+	deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+	deviceRequester.Merge(requester)
+
+	dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+	require.NoError(t, err)
+
+	_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+	require.NoError(t, err)
+
+	deviceRequester.SetDeviceCodeSignature(dSig)
+	deviceRequester.SetUserCodeSignature(uSig)
+	deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+	require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+	requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+
+	require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+	deviceRequester.SetLastChecked(time.Now().UTC())
+	require.NoError(t, store.UpdateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+	err = h.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
+	require.Error(t, err)
+
+	assert.Equal(t, oauth2.ErrSlowDown.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+}
+
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testing.T) {
 	const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
 

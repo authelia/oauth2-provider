@@ -179,6 +179,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 			}
 
 			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+		case errors.Is(err, oauth2.ErrAuthorizationPending), errors.Is(err, oauth2.ErrAccessDenied),
+			errors.Is(err, oauth2.ErrDeviceExpiredToken), errors.Is(err, oauth2.ErrSlowDown),
+			errors.Is(err, oauth2.ErrInvalidGrant):
+			return errorsx.WithStack(err)
 		case errors.Is(err, oauth2.ErrNotFound):
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 		default:

@@ -18,6 +18,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CustomJWTTypeHandler handles the token types configured as a *JWTType.
+//
+// A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
+// either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
+// when the token has no such claim.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
 type CustomJWTTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -172,6 +179,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
+	if err = validateCustomJWTScope(request, role, claims); err != nil {
+		return nil, err
+	}
+
 	// Validate the JTI is unique if required.
 	if jwtType.ValidateJTI {
 		jti, _ := claims[consts.ClaimJWTID].(string)
@@ -299,4 +310,12 @@ func toInt64(claim any) int64 {
 		return int64(vf)
 	}
 	return 0
+}
+
+func validateCustomJWTScope(request oauth2.AccessRequester, role tokenRole, claims map[string]any) (err error) {
+	if role != tokenRoleSubject {
+		return nil
+	}
+
+	return validateSubjectTokenScope(request, scopeClaim(claims))
 }

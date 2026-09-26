@@ -484,6 +484,22 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Token is inactive because it is malformed, expired or otherwise invalid. Token validation failed.",
 		},
+		{
+			name: "ShouldFailWithServerErrorWhenAnInactiveTokenHasNoRequester",
+			setup: func(ctx context.Context, request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				request.Client = &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
+				}
+				mockRevocationStore.
+					EXPECT().
+					GetRefreshTokenSession(ctx, gomock.Any(), gomock.Any()).
+					Return(nil, oauth2.ErrInactiveToken).
+					Times(1)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request. GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'.",
+		},
 	}
 
 	for _, tc := range testCases {

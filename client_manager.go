@@ -43,6 +43,9 @@ type ClientManager interface {
 	// expiry time. Before inserting the new JTI, it will clean
 	// up any existing JTIs that have expired as those tokens can
 	// not be replayed due to the expiry.
+	//
+	// The mark MUST be atomic and MUST return an error matching ErrJTIKnown when the JTI is already known and has not
+	// expired, as ClientAssertionJWTValid alone can not prevent two concurrent requests using the same JTI.
 	SetClientAssertionJWT(ctx context.Context, jti string, exp time.Time) (err error)
 
 	ClientRegistrationManager

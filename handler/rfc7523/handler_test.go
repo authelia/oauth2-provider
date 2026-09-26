@@ -30,6 +30,8 @@ import (
 )
 
 func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
+	const errJWTUsedMessage = "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter has already been used and its 'jti' (JWT ID) claim can not be used again until it expires."
+
 	testCases := []struct {
 		name     string
 		setup    func(f *jwtBearerFixture)
@@ -398,8 +400,23 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(true, nil)
 			},
-			err:      oauth2.ErrJTIKnown,
-			expected: "The jti was already used.",
+			err:      oauth2.ErrInvalidGrant,
+			expected: errJWTUsedMessage,
+		},
+		{
+			name: "ShouldRejectAnAssertionMarkedUsedByAConcurrentRequest",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				pubKey := f.createJWK(f.privateKey.Public(), keyID)
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrJTIKnown)
+			},
+			err:      oauth2.ErrInvalidGrant,
+			expected: errJWTUsedMessage,
 		},
 		{
 			name: "ShouldRejectWhenTheUsedCheckFails",

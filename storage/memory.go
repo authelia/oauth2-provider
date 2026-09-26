@@ -524,6 +524,10 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
+	return s.deactivateRefreshToken(requestID)
+}
+
+func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
 	if signature, exists := s.RefreshTokenRequestIDs[requestID]; exists {
 		rel, ok := s.RefreshTokens[signature]
 		if !ok {
@@ -535,16 +539,31 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	return nil
 }
 
-// RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request. The
-// refresh token signature is unused here because the request ID is enough to locate both; it exists for stores that
-// track individual tokens. A grace period is not implemented by the memory store; implementations that need one should
-// mark the refresh token as expiring after the grace period instead of deactivating it here.
+// RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request, which
+// the request ID locates. It returns oauth2.ErrInactiveToken when the refresh token with the given signature is
+// already inactive, as it is when a concurrent request rotated it first. A grace period is not implemented by the
+// memory store; implementations that need one should mark the refresh token as expiring after the grace period instead
+// of deactivating it here.
 func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, signature string) error {
-	if err := s.RevokeRefreshToken(ctx, requestID); err != nil {
+	if err := s.rotateRefreshToken(requestID, signature); err != nil {
 		return err
 	}
 
 	return s.RevokeAccessToken(ctx, requestID)
+}
+
+func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
+	s.refreshTokenRequestIDsMutex.Lock()
+	defer s.refreshTokenRequestIDsMutex.Unlock()
+
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
+	if rel, exists := s.RefreshTokens[signature]; exists && !rel.active {
+		return oauth2.ErrInactiveToken
+	}
+
+	return s.deactivateRefreshToken(requestID)
 }
 
 func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) error {

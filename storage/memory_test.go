@@ -137,6 +137,17 @@ func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
 	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "live", Method: "POST", URL: "https://as.example.com/token"})
 }
 
+func TestMemoryStoreRotateRefreshTokenReportsAnInactiveToken(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := &oauth2.Request{ID: "rotated-request", Client: &oauth2.DefaultClient{ID: "client"}, Session: &oauth2.DefaultSession{}}
+
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "", request))
+	require.NoError(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"))
+
+	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"), oauth2.ErrInactiveToken)
+}
+
 func TestMemoryStore_RotateRefreshToken(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()

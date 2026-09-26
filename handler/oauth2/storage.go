@@ -73,6 +73,10 @@ type RefreshTokenStorage interface {
 	// associated with the given request ID. Consecutive requests to GetRefreshTokenSession for that signature should
 	// return the oauth2.ErrInactiveToken error.
 	//
+	// This method should return the oauth2.ErrInactiveToken error when the refresh token was already deactivated, for
+	// example by a concurrent request that rotated it first. The refresh token grant handler treats that as a reused
+	// refresh token and revokes every token derived from the same authorization grant.
+	//
 	// Implementations that support a refresh token grace period should instead mark the refresh token as expiring
 	// after the grace period rather than deactivating it immediately, so that concurrent requests made by the same
 	// client within that window continue to succeed.

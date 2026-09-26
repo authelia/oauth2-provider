@@ -234,6 +234,25 @@ func TestHandleTokenEndpointRequest_ScopeAudienceResource(t *testing.T) {
 		require.ErrorIs(t, err, oauth2.ErrInvalidTarget)
 	})
 
+	t.Run("ShouldGrantTheRequestedScopes", func(t *testing.T) {
+		client := newConfidentialClient()
+		req := baseRequest(t, client, url.Values{})
+		req.RequestedScope = oauth2.Arguments{"openid", "offline_access"}
+
+		err := handler.HandleTokenEndpointRequest(context.Background(), req)
+		require.NoError(t, err)
+		assert.Equal(t, oauth2.Arguments{"openid", "offline_access"}, req.GetGrantedScopes())
+	})
+
+	t.Run("ShouldGrantNoScopeWhenNoneIsRequested", func(t *testing.T) {
+		client := newConfidentialClient()
+		req := baseRequest(t, client, url.Values{})
+
+		err := handler.HandleTokenEndpointRequest(context.Background(), req)
+		require.NoError(t, err)
+		assert.Empty(t, req.GetGrantedScopes())
+	})
+
 	t.Run("ShouldPassWithOnlyAudience", func(t *testing.T) {
 		client := newConfidentialClient()
 		req := baseRequest(t, client, url.Values{})

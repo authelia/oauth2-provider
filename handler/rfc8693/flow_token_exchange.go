@@ -248,7 +248,7 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 		return strategy
 	}
 
-	return oauth2.DefaultResourceStrategy
+	return oauth2.DefaultAudienceStrategy
 }
 
 // PopulateTokenEndpointResponse implements https://tools.ietf.org/html/rfc6749#section-4.3.3.

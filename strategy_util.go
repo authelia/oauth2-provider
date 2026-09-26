@@ -54,6 +54,20 @@ func GetResourcesParameter(parameter string, form url.Values) (resources []strin
 	}
 }
 
+func hasDotOrEncodedSlashSegment(escapedPath string) bool {
+	for _, segment := range strings.Split(escapedPath, "/") {
+		if strings.Contains(strings.ToLower(segment), "%2f") {
+			return true
+		}
+
+		if decoded, err := url.PathUnescape(segment); err != nil || decoded == "." || decoded == ".." {
+			return true
+		}
+	}
+
+	return false
+}
+
 // isPathOrSubpath reports whether needlePath equals haystackPath or is a sub-path of it,
 // after normalizing trailing slashes. A sub-path must break on a path-segment boundary
 // so that '/users' does NOT match '/users123' but DOES match '/users/123'.

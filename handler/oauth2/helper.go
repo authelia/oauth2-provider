@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -49,4 +50,8 @@ func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time
 		return defaultLifespan
 	}
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
+}
+
+func isIntactToken(err error) bool {
+	return err == nil || errors.Is(err, oauth2.ErrTokenExpired) || errors.Is(err, oauth2.ErrDeviceExpiredToken)
 }

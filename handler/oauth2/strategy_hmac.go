@@ -237,17 +237,15 @@ func (s *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Re
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be a Refresh Token."))
 	}
 
-	var exp = r.GetSession().GetExpiresAt(oauth2.RefreshToken)
-
-	if exp.IsZero() {
-		return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
+	if err = s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken)); err != nil {
+		return err
 	}
 
-	if exp.Before(time.Now().UTC()) {
+	if exp := r.GetSession().GetExpiresAt(oauth2.RefreshToken); !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Refresh Token expired at '%s'.", exp))
 	}
 
-	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartRefreshToken))
+	return nil
 }
 
 // IsOpaqueAuthorizeCode implements oauth2.AuthorizeCodeStrategy.
@@ -279,6 +277,10 @@ func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.R
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be an Authorization Code."))
 	}
 
+	if err = s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAuthorizeCode)); err != nil {
+		return err
+	}
+
 	var exp = r.GetSession().GetExpiresAt(oauth2.AuthorizeCode)
 
 	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAuthorizeCodeLifespan(ctx)).Before(time.Now().UTC()) {
@@ -289,7 +291,7 @@ func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.R
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Authorize Code expired at '%s'.", exp))
 	}
 
-	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAuthorizeCode))
+	return nil
 }
 
 func (s *HMACCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
@@ -358,6 +360,10 @@ func (s *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oaut
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be a Device Code."))
 	}
 
+	if err = s.Enigma.Validate(ctx, s.trimPrefix(code, tokenPrefixPartDeviceCode)); err != nil {
+		return err
+	}
+
 	var exp = r.GetSession().GetExpiresAt(oauth2.DeviceCode)
 
 	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetRFC8628CodeLifespan(ctx)).Before(time.Now().UTC()) {
@@ -368,7 +374,7 @@ func (s *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oaut
 		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Device Code expired at '%s'.", exp))
 	}
 
-	return s.Enigma.Validate(ctx, s.trimPrefix(code, tokenPrefixPartDeviceCode))
+	return nil
 }
 
 func (s *HMACCoreStrategy) hasPrefix(tokenString, part string) (has bool) {

@@ -354,6 +354,11 @@ func TestValidateResourceIndicators(t *testing.T) {
 			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that do not contain a fragment but 'https://api.example.com/users#section' contains a fragment.",
 		},
 		{
+			name:     "ShouldFailResourceWithEmptyFragment",
+			form:     url.Values{consts.FormParameterResource: {"https://api.example.com/users#"}},
+			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that do not contain a fragment but 'https://api.example.com/users#' contains a fragment.",
+		},
+		{
 			name:     "ShouldFailUnparseableResource",
 			form:     url.Values{consts.FormParameterResource: {"\x7f"}},
 			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Unable to parse resource indicator '\x7f' from the 'resource' parameter.",

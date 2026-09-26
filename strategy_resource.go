@@ -3,6 +3,7 @@ package oauth2
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -130,7 +131,7 @@ func ValidateResourceIndicatorURI(resource string) (err error) {
 		return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The 'resource' parameter must contain resource indicators that are absolute URIs but '%s' is not absolute.", resource))
 	}
 
-	if uri.Fragment != "" {
+	if strings.Contains(resource, "#") {
 		return errorsx.WithStack(ErrInvalidTarget.WithDebugf("The 'resource' parameter must contain resource indicators that do not contain a fragment but '%s' contains a fragment.", resource))
 	}
 

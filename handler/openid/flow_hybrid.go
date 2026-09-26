@@ -106,6 +106,10 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
 		}
 
+		if client.IsPublic() && !c.AuthorizeExplicitGrantHandler.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+		}
+
 		var (
 			code, signature string
 		)

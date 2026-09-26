@@ -709,6 +709,26 @@ func (s *MemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature str
 	return nil
 }
 
+// DecideDeviceCodeSession implements rfc8628.DecisionStorage.
+func (s *MemoryStore) DecideDeviceCodeSession(_ context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	stored, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	if stored.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+		return oauth2.ErrDeviceAuthorizeDecided
+	}
+
+	s.DeviceCodes[signature] = request
+	s.UserCodes[request.GetUserCodeSignature()] = request
+
+	return nil
+}
+
 func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	s.deviceCodesMutex.RLock()
 	defer s.deviceCodesMutex.RUnlock()

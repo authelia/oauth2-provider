@@ -37,7 +37,16 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 
 	response.SetStatus(oauth2.DeviceAuthorizeStatusToString(status))
 
-	if err = d.Storage.UpdateDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), request); err != nil {
+	if decider, ok := d.Storage.(DecisionStorage); ok {
+		err = decider.DecideDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), request)
+	} else {
+		err = d.Storage.UpdateDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), request)
+	}
+
+	switch {
+	case errors.Is(err, oauth2.ErrDeviceAuthorizeDecided), errors.Is(err, oauth2.ErrNotFound):
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired.").WithWrap(err).WithDebugError(err))
+	case err != nil:
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

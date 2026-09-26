@@ -46,7 +46,13 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 		code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
 		require.NoError(t, err)
 		dar.SetUserCodeSignature(sig)
-		err = f.Storage.CreateDeviceCodeSession(a.ctx, sig, dar)
+
+		stored := oauth2.NewDeviceAuthorizeRequest()
+		stored.Merge(dar)
+		stored.SetUserCodeSignature(sig)
+		stored.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+
+		err = f.Storage.CreateDeviceCodeSession(a.ctx, sig, stored)
 		require.NoError(t, err)
 
 		dar.GetRequestForm().Set("user_code", code)
@@ -208,6 +214,69 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 			if tt.check != nil {
 				tt.check(t, tt.args.resp, &tt.args)
 			}
+		})
+	}
+}
+
+func TestUserAuthorizeHandlerConcurrentDecisionsKeepTheFirst(t *testing.T) {
+	testCases := []struct {
+		name     string
+		newStore func() Storage
+	}{
+		{name: "ShouldKeepTheFirstDecisionWithMemoryStore", newStore: func() Storage { return storage.NewMemoryStore() }},
+		{name: "ShouldKeepTheFirstDecisionWithHydratingMemoryStore", newStore: func() Storage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{RFC8628CodeLifespan: time.Minute * 10}
+			strategy := hoauth2.NewHMACCoreStrategy(&oauth2.Config{
+				GlobalSecret:        []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+				RFC8628CodeLifespan: time.Minute * 10,
+			}, "authelia_%s_")
+
+			store := tc.newStore()
+			handler := &UserAuthorizeHandler{Storage: store, Strategy: strategy, Config: config}
+
+			_, deviceSignature, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			code, userSignature, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			stored := oauth2.NewDeviceAuthorizeRequest()
+			stored.Client = &oauth2.DefaultClient{ID: "device-client", GrantTypes: oauth2.Arguments{string(oauth2.GrantTypeDeviceCode)}}
+			stored.SetSession(openid.NewDefaultSession())
+			stored.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().UTC().Add(time.Minute).Truncate(jwt.TimePrecision))
+			stored.SetDeviceCodeSignature(deviceSignature)
+			stored.SetUserCodeSignature(userSignature)
+			stored.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), deviceSignature, stored))
+
+			newSubmission := func() *oauth2.DeviceAuthorizeRequest {
+				submission := oauth2.NewDeviceAuthorizeRequest()
+				submission.SetSession(openid.NewDefaultSession())
+				submission.GetRequestForm().Set("user_code", code)
+
+				return submission
+			}
+
+			first, second := newSubmission(), newSubmission()
+
+			require.NoError(t, handler.HandleRFC8628UserAuthorizeEndpointRequest(t.Context(), first))
+			require.NoError(t, handler.HandleRFC8628UserAuthorizeEndpointRequest(t.Context(), second))
+
+			first.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+			require.NoError(t, handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), first, oauth2.NewRFC8628UserAuthorizeResponse()))
+
+			second.SetStatus(oauth2.DeviceAuthorizeStatusDenied)
+			err = handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), second, oauth2.NewRFC8628UserAuthorizeResponse())
+			require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+
+			decided, err := store.GetDeviceCodeSession(t.Context(), deviceSignature, openid.NewDefaultSession())
+			require.NoError(t, err)
+			assert.Equal(t, oauth2.DeviceAuthorizeStatusApproved, decided.GetStatus())
 		})
 	}
 }

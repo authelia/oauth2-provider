@@ -202,7 +202,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	claims := session.IDTokenClaims()
 
-	if claims.Subject == "" {
+	if claims.Subject = session.GetSubject(); claims.Subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.
 			WithDebug("Failed to generate the JSON Web Token because the session subject is empty. The token exchange handler chain must populate the subject from the subject_token before the custom JWT handler runs."))
 	}

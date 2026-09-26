@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -43,9 +44,24 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 		return nil, errorsx.WithStack(ErrUnsupportedResponseType)
 	}
 
-	if request.GetDefaultResponseMode() == ResponseModeFragment && request.GetResponseMode() == ResponseModeQuery {
-		return nil, ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", request.GetResponseMode(), request.GetResponseTypes())
+	if request.GetDefaultResponseMode() == ResponseModeFragment {
+		switch mode := request.GetResponseMode(); {
+		case mode == ResponseModeQuery:
+			return nil, ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s'.", mode, request.GetResponseTypes())
+		case mode == ResponseModeQueryJWT && !isEncryptedJARMClient(request.GetClient()):
+			// JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) Section 2.3.1: 'query.jwt' MUST NOT be used
+			// with response types containing 'token' or 'id_token' unless the response JWT is encrypted.
+			return nil, ErrUnsupportedResponseMode.WithHintf("Insecure response_mode '%s' for the response_type '%s' unless the authorization response is encrypted.", mode, request.GetResponseTypes())
+		}
 	}
 
 	return response, nil
+}
+
+func isEncryptedJARMClient(client Client) bool {
+	if c, ok := client.(jwt.JARMClient); ok {
+		return c.GetAuthorizationEncryptedResponseAlg() != ""
+	}
+
+	return false
 }

@@ -97,10 +97,46 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				handlers[1].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
 				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
-				ar.EXPECT().GetResponseMode().Return(ResponseModeQuery).Times(2)
+				ar.EXPECT().GetResponseMode().Return(ResponseModeQuery)
 				ar.EXPECT().GetResponseTypes().Return(Arguments{"token", "code"})
 			},
 			expected: "The authorization server does not support obtaining a response using this response mode. Insecure response_mode 'query' for the response_type '[token code]'.",
+		},
+		{
+			name:     "ShouldFailWhenUnencryptedQueryJWTModeForFragmentDefault",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
+				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
+				ar.EXPECT().GetResponseMode().Return(ResponseModeQueryJWT)
+				ar.EXPECT().GetClient().Return(&DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, AuthorizationSignedResponseAlg: "RS256"})
+				ar.EXPECT().GetResponseTypes().Return(Arguments{"token", "code"})
+			},
+			expected: "The authorization server does not support obtaining a response using this response mode. Insecure response_mode 'query.jwt' for the response_type '[token code]' unless the authorization response is encrypted.",
+		},
+		{
+			name:     "ShouldPassWithEncryptedQueryJWTModeForFragmentDefault",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
+				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeFragment)
+				ar.EXPECT().GetResponseMode().Return(ResponseModeQueryJWT)
+				ar.EXPECT().GetClient().Return(&DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, AuthorizationSignedResponseAlg: "RS256", AuthorizationEncryptedResponseAlg: "RSA-OAEP-256"})
+			},
+		},
+		{
+			name:     "ShouldPassWithQueryJWTModeForQueryDefault",
+			handlers: 1,
+			mock: func(handlers []*mock.MockAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
+				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeQuery)
+			},
 		},
 		{
 			name:     "ShouldPassWithNoHandlers",

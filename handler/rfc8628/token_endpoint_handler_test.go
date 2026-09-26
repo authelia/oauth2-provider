@@ -861,7 +861,15 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testin
 				TokenRevocationStorage: store,
 			}
 
-			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}}
+			authorizationCodeLifespan, deviceCodeLifespan := 5*time.Hour, 10*time.Minute
+
+			client := &oauth2.DefaultClientWithCustomTokenLifespans{
+				DefaultClient: &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}},
+				TokenLifespans: &oauth2.ClientLifespanConfig{
+					AuthorizationCodeGrantAccessTokenLifespan: &authorizationCodeLifespan,
+					DeviceCodeGrantAccessTokenLifespan:        &deviceCodeLifespan,
+				},
+			}
 
 			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 			require.NoError(t, err)
@@ -903,6 +911,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testin
 
 			assert.Equal(t, jkt, requester.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
 			assert.Equal(t, expected, requester.GetSession().GetExpiresAt(oauth2.AccessToken))
+			assert.InDelta(t, int64(deviceCodeLifespan/time.Second), response.GetExtra(consts.AccessResponseExpiresIn), 2)
 
 			stored, err := store.GetAccessTokenSession(t.Context(), strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), nil)
 			require.NoError(t, err)

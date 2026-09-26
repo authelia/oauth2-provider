@@ -7,6 +7,7 @@ package rfc9449
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -92,8 +93,10 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	return nil
 }
 
-// PopulateBoundTokenEndpointResponse overrides the token type set by the grant handler, because RFC 9449 Section 7.1
-// requires a DPoP bound access token to be presented under the DPoP scheme rather than as a bearer token.
+// PopulateBoundTokenEndpointResponse overrides a bearer token type set by the grant handler, because RFC 9449 Section 7.1
+// requires a DPoP bound access token to be presented under the DPoP scheme rather than as a bearer token. Any other
+// token type is kept, such as the 'N_A' token type RFC 8693 Section 2.2.1 requires for an issued token that is not an
+// access token.
 func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !h.Config.GetDPoPEnabled(ctx) {
 		return nil
@@ -104,7 +107,10 @@ func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, reques
 		return nil
 	}
 
-	// Override the token type set by the grant handler; a DPoP-bound token is of type "DPoP".
+	if tokenType := response.GetTokenType(); tokenType != "" && !strings.EqualFold(tokenType, oauth2.BearerAccessToken) {
+		return nil
+	}
+
 	response.SetTokenType(oauth2.DPoPAccessToken)
 
 	return nil

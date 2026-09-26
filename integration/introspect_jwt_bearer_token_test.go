@@ -55,6 +55,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 			Audience: []string{tokenURL},
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
+		RequestedAudience: []string{tokenURL},
 	}, []string{"oauth2"})
 	if err != nil {
 		assert.Nil(t, err)
@@ -95,6 +96,7 @@ func (s *introspectJWTBearerTokenSuite) SetupTest() {
 			Audience: s.audience,
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
+		RequestedAudience: s.audience,
 	}
 
 	s.appTokenPayload = &clients.JWTBearerPayload{
@@ -104,6 +106,7 @@ func (s *introspectJWTBearerTokenSuite) SetupTest() {
 			Audience: s.audience,
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
+		RequestedAudience: s.audience,
 	}
 }
 

@@ -34,7 +34,7 @@ func newDefaultSession() *defaultSession {
 	return &defaultSession{DefaultSession: &openid.DefaultSession{}}
 }
 
-func createIssuerPublicKey(issuer, subject, keyID string, key crypto.PublicKey, scopes []string) storage.IssuerPublicKeys {
+func createIssuerPublicKey(issuer, subject, keyID string, key crypto.PublicKey, scopes, audience []string) storage.IssuerPublicKeys {
 	return storage.IssuerPublicKeys{
 		Issuer: issuer,
 		KeysBySub: map[string]storage.SubjectPublicKeys{
@@ -48,7 +48,8 @@ func createIssuerPublicKey(issuer, subject, keyID string, key crypto.PublicKey, 
 							Use:       "sig",
 							KeyID:     keyID,
 						},
-						Scopes: scopes,
+						Scopes:   scopes,
+						Audience: audience,
 					},
 				},
 			},
@@ -166,6 +167,7 @@ var store = &storage.MemoryStore{
 			firstKeyID,
 			firstPrivateKey.Public(),
 			[]string{"oauth2", "gitlab", "example.com", "docker"},
+			[]string{tokenURL, "https://example.com"},
 		),
 		secondJWTBearerIssuer: createIssuerPublicKey(
 			secondJWTBearerIssuer,
@@ -173,6 +175,7 @@ var store = &storage.MemoryStore{
 			secondKeyID,
 			secondPrivateKey.Public(),
 			[]string{"oauth2"},
+			[]string{tokenURL, "https://example.com"},
 		),
 	},
 	BlacklistedJTIs:        map[string]time.Time{},

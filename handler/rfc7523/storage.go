@@ -34,3 +34,13 @@ type Storage interface {
 	// "exp" instant. (https://datatracker.ietf.org/doc/html/rfc7523#section-3)
 	MarkRFC7523JWTUsedForTime(ctx context.Context, issuer, jti string, exp time.Time) (err error)
 }
+
+// AudienceStorage is optionally implemented by a Storage to register the audience a public key may request. RFC 7523
+// Section 3 defines the 'aud' claim of an assertion as identifying the authorization server, so the audience of the
+// issued access token is the requested 'audience' or 'resource' values, each of which must be registered for the key.
+// When the Storage does not implement it, no audience or resource can be granted.
+type AudienceStorage interface {
+	// GetRFC7523PublicKeyAudience returns the audience the public key, issued by 'issuer' and assigned for the subject,
+	// may request.
+	GetRFC7523PublicKeyAudience(ctx context.Context, issuer, subject, keyId string) (audience []string, err error)
+}

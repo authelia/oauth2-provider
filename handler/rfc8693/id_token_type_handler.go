@@ -212,11 +212,13 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because session must be of type 'openid.Session'."))
 	}
 
-	claims := session.IDTokenClaims()
+	subject := session.GetSubject()
 
-	if claims.Subject == "" {
+	if subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because subject is an empty string."))
 	}
+
+	session.IDTokenClaims().Subject = subject
 
 	var token string
 

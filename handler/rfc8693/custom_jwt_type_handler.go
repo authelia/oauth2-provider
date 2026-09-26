@@ -18,6 +18,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CustomJWTTypeHandler handles the token types configured as a *JWTType.
+//
+// A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
+// either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
+// when the token has no such claim.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
 type CustomJWTTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -63,6 +70,10 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 		token := form.Get(consts.FormParameterSubjectToken)
 
 		if unpacked, err = c.validate(ctx, request, subjectTokenType, token, tokenRoleSubject); err != nil {
+			return err
+		}
+
+		if err = validateSubjectTokenScope(ctx, request, c.Config, scopeClaim(unpacked)); err != nil {
 			return err
 		}
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"maps"
 	"reflect"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -367,13 +368,38 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 		return nil
 	}
 
+	return validateRequestedScopes(request, strategy, original.GetGrantedScopes())
+}
+
+func validateSubjectTokenScope(ctx context.Context, request oauth2.AccessRequester, config oauth2.ScopeStrategyProvider, granted []string) (err error) {
+	return validateRequestedScopes(request, oauth2.GetScopeStrategy(ctx, config, request.GetClient()), granted)
+}
+
+func validateRequestedScopes(request oauth2.AccessRequester, strategy oauth2.ScopeStrategy, granted []string) (err error) {
 	for _, scope := range request.GetRequestedScopes() {
-		if !strategy(original.GetGrantedScopes(), scope) {
+		if !strategy(granted, scope) {
 			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The subject token is not granted '%s' and so this scope cannot be requested.", scope))
 		}
 	}
 
 	return nil
+}
+
+func scopeClaim(claims map[string]any) (scopes []string) {
+	switch value := claims[consts.ClaimScope].(type) {
+	case string:
+		return strings.Fields(value)
+	case []string:
+		return value
+	case []any:
+		for _, item := range value {
+			if scope, ok := item.(string); ok {
+				scopes = append(scopes, scope)
+			}
+		}
+	}
+
+	return scopes
 }
 
 // copyClaimMap returns a deep copy of the supplied claim map so the caller can mutate or store the result without

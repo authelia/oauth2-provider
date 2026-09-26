@@ -17,6 +17,9 @@ import (
 // IDTokenTypeHandler is a response handler for the ID Token grant using the implicit grant type
 // as defined in RFC8693.
 //
+// An ID Token represents an authentication rather than an authorization and grants no scope, so a token exchange
+// with an ID Token as the 'subject_token' cannot request a scope.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
 	Config oauth2.Configurator
@@ -77,6 +80,10 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 		prior := bindingOf(request.GetSession())
 
 		if unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+			return err
+		}
+
+		if err = validateSubjectTokenScope(ctx, request, c.Config, nil); err != nil {
 			return err
 		}
 

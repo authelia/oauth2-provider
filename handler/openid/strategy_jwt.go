@@ -8,6 +8,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -270,24 +271,22 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			}
 		}
 
-		prompt := request.GetRequestForm().Get(consts.FormParameterPrompt)
-		if prompt != "" {
+		prompts := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+
+		if stringslice.Has(prompts, consts.PromptTypeNone) || stringslice.Has(prompts, consts.PromptTypeLogin) {
 			if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in ID Token claims."))
 			}
 		}
 
-		switch prompt {
-		case consts.PromptTypeNone:
-			if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
-				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate ID Token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
-			}
-		case consts.PromptTypeLogin:
-			if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().Before(rat) {
-				return "", errorsx.WithStack(oauth2.ErrServerError.
-					WithDebugf("Failed to generate ID Token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
-			}
+		if stringslice.Has(prompts, consts.PromptTypeNone) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
+			return "", errorsx.WithStack(oauth2.ErrServerError.
+				WithDebugf("Failed to generate ID Token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
+		}
+
+		if stringslice.Has(prompts, consts.PromptTypeLogin) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().Before(rat) {
+			return "", errorsx.WithStack(oauth2.ErrServerError.
+				WithDebugf("Failed to generate ID Token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}
 
 		// If acr_values was requested but no acr value was provided in the ID token, fall back to level 0 which means least
@@ -324,10 +323,6 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	if claims.ExpirationTime.Before(time.Now().UTC()) {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because expiry claim can not be in the past."))
-	}
-
-	if claims.AuthTime == nil || claims.AuthTime.IsZero() {
-		claims.AuthTime = jwt.Now()
 	}
 
 	if claims.Issuer == "" {

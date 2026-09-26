@@ -111,16 +111,16 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 		return
 	case ResponseModeQuery, ResponseModeDefault, ResponseModeQueryJWT, ResponseModeJWT:
-		for key, values := range redirectURI.Query() {
-			for _, value := range values {
-				parameters.Add(key, value)
-			}
-		}
-
 		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
 			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
 
 			return
+		}
+
+		for key, values := range redirectURI.Query() {
+			for _, value := range values {
+				form.Add(key, value)
+			}
 		}
 
 		redirectURI.RawQuery = form.Encode()

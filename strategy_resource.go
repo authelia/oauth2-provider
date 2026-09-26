@@ -9,12 +9,12 @@ import (
 )
 
 // ResourceStrategy matches requested RFC 8707 resource indicators against the client's
-// allowed audience list. Defaults to DefaultAudienceStrategy (URL-based matching).
+// allowed audience list. Defaults to DefaultAudienceStrategy, which requires an exact match.
 type ResourceStrategy func(haystack, needle []string) (err error)
 
 // GetResourceStrategy resolves the ResourceStrategy to use for a request. If the client implements
 // ResourceStrategyProvider and returns a non-nil strategy, the client's strategy is preferred over the global
-// configuration. Otherwise the strategy from the provided config is used, falling back to DefaultResourceStrategy
+// configuration. Otherwise the strategy from the provided config is used, falling back to DefaultAudienceStrategy
 // when neither source supplies one.
 func GetResourceStrategy(ctx context.Context, config ResourceStrategyProvider, client Client) (strategy ResourceStrategy) {
 	if client != nil {
@@ -27,15 +27,16 @@ func GetResourceStrategy(ctx context.Context, config ResourceStrategyProvider, c
 		strategy = config.GetResourceStrategy(ctx)
 
 		if strategy == nil {
-			strategy = DefaultResourceStrategy
+			strategy = DefaultAudienceStrategy
 		}
 	}
 
 	return strategy
 }
 
-// DefaultResourceStrategy matches requested RFC 8707 resource indicators against the client's
-// allowed audience list.
+// DefaultResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed audience list,
+// accepting a requested resource at or below a registered one as IsMatchingResourceIndicator describes. It is not the
+// default; it applies only when configured as the ResourceStrategy.
 func DefaultResourceStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {
 		return nil
@@ -69,9 +70,20 @@ func DefaultResourceStrategy(haystack, needle []string) (err error) {
 	return nil
 }
 
-// IsMatchingResourceIndicator returns true if needleURL is a subpath of haystackURL.
+// IsMatchingResourceIndicator returns true if needleURL is haystackURL or a path below it. The scheme, host, opaque part
+// and query must be identical, and a needle carrying userinfo or a fragment never matches. A needle path with a dot
+// segment or an encoded slash never matches either: RFC 3986 Section 6.2.2.3 makes a dot segment equivalent to the path
+// it resolves to, which can lie outside haystackURL, and a decoded encoded slash would hide one.
 func IsMatchingResourceIndicator(haystackURL, needleURL *url.URL) bool {
-	if needleURL.Scheme != haystackURL.Scheme || needleURL.Host != haystackURL.Host {
+	if needleURL.Scheme != haystackURL.Scheme || needleURL.Host != haystackURL.Host || needleURL.Opaque != haystackURL.Opaque {
+		return false
+	}
+
+	if needleURL.User != nil || needleURL.Fragment != "" || needleURL.RawQuery != haystackURL.RawQuery {
+		return false
+	}
+
+	if hasDotOrEncodedSlashSegment(needleURL.EscapedPath()) {
 		return false
 	}
 

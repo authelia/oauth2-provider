@@ -772,7 +772,7 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceStrategy {
 }
 
 // GetResourceStrategy returns the RFC 8707 resource indicator matching strategy. Defaults to
-// DefaultAudienceStrategy (URL-based matching against the client's allowed audience list).
+// DefaultAudienceStrategy, which requires an exact match against the client's allowed audience list.
 func (c *Config) GetResourceStrategy(_ context.Context) ResourceStrategy {
 	c.resourceStrategyOnce.Do(func() {
 		if c.ResourceStrategy == nil {

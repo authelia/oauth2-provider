@@ -155,11 +155,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 	} else if IsEncryptedJWTClientSecretAlgStr(alg) {
-		if o.client == nil {
-			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: fmt.Errorf("failed to link client to the request")})
-		}
-
-		if key, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
+		if key, err = decryptClientSecretJWK(ctx, o.client, kid, alg, enc); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
 	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
@@ -244,6 +240,18 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	token.valid = validate
 
 	return token, nil
+}
+
+func decryptClientSecretJWK(ctx context.Context, client Client, kid, alg, enc string) (key *jose.JSONWebKey, err error) {
+	if client == nil {
+		return nil, fmt.Errorf("failed to link client to the request")
+	}
+
+	if IsEncryptedJWTPasswordBasedAlg(jose.KeyAlgorithm(alg)) && client.GetEncryptionAlg() != alg {
+		return nil, fmt.Errorf("jwe header 'alg' value '%s' is a password based algorithm the client has not registered", alg)
+	}
+
+	return NewClientSecretJWKFromClient(ctx, client, kid, alg, enc, JSONWebTokenUseEncryption)
 }
 
 // Validate handles validation of JWT's.

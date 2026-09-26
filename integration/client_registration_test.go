@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	xoauth2 "golang.org/x/oauth2"
@@ -52,7 +51,7 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 
 	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, memory, strategy, strategy)
 
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	router.HandleFunc("/token", tokenEndpointHandler(t, provider))
 	router.HandleFunc("/register", registrationEndpointHandler(provider))
 
@@ -145,7 +144,7 @@ func TestClientRegistration(t *testing.T) {
 
 	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, memory, strategy, strategy)
 
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	router.HandleFunc("/register", registrationEndpointHandler(provider))
 	router.HandleFunc("/register/{id}", configurationEndpointHandler(provider))
 

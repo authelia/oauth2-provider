@@ -8,11 +8,11 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	xoauth2 "golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
@@ -84,7 +84,7 @@ func newJWTBearerAppClient(ts *httptest.Server) *clients.JWTBearer {
 }
 
 func mockServer(t *testing.T, f oauth2.Provider, session oauth2.Session) *httptest.Server {
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	router.HandleFunc("/auth", authEndpointHandler(t, f, session))
 	router.HandleFunc(tokenRelativePath, tokenEndpointHandler(t, f))
 	router.HandleFunc("/callback", authCallbackHandler(t))

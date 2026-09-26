@@ -13,7 +13,9 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/pkce"
+	"authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -46,6 +48,42 @@ func TestValidateHandlerOrderPKCE(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrHandlerOrder)
 			assert.Contains(t, err.Error(), "pkce.Handler")
+		})
+	}
+}
+
+func TestValidateHandlerOrderOpenIDConnect(t *testing.T) {
+	testCases := []struct {
+		name  string
+		grant oauth2.TokenEndpointHandler
+		oidc  oauth2.TokenEndpointHandler
+		kind  string
+	}{
+		{name: "AuthorizationCode", grant: &hoauth2.AuthorizeExplicitGrantHandler{}, oidc: &openid.OpenIDConnectExplicitHandler{}, kind: "openid.OpenIDConnectExplicitHandler"},
+		{name: "RefreshToken", grant: &hoauth2.RefreshTokenGrantHandler{}, oidc: &openid.OpenIDConnectRefreshHandler{}, kind: "openid.OpenIDConnectRefreshHandler"},
+		{name: "DeviceCode", grant: &rfc8628.DeviceAuthorizeTokenEndpointHandler{}, oidc: &openid.OpenIDConnectDeviceAuthorizeHandler{}, kind: "openid.OpenIDConnectDeviceAuthorizeHandler"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ShouldPassInTheDocumentedOrder", func(t *testing.T) {
+				assert.NoError(t, ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: oauth2.TokenEndpointHandlers{tc.grant, tc.oidc}}))
+			})
+
+			t.Run("ShouldPassWithTheOpenIDConnectHandlerAlone", func(t *testing.T) {
+				assert.NoError(t, ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: oauth2.TokenEndpointHandlers{tc.oidc}}))
+			})
+
+			t.Run("ShouldPassWithTheGrantHandlerAlone", func(t *testing.T) {
+				assert.NoError(t, ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: oauth2.TokenEndpointHandlers{tc.grant}}))
+			})
+
+			t.Run("ShouldFailWhenTheOpenIDConnectHandlerIsRegisteredFirst", func(t *testing.T) {
+				err := ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: oauth2.TokenEndpointHandlers{tc.oidc, tc.grant}})
+
+				require.ErrorIs(t, err, ErrHandlerOrder)
+				assert.Contains(t, err.Error(), tc.kind)
+			})
 		})
 	}
 }

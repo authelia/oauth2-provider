@@ -506,6 +506,10 @@ func resolveJWTErrorToRFCError(err error) (rfc error) {
 func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethodClient, strategy EndpointClientAuthStrategy, audience []string, inner error) (outer *RFC6749Error) {
 	outer = ErrInvalidClient.WithWrap(inner).WithHint(hintClientCredentialsInvalid)
 
+	if token == nil {
+		token = &jwt.Token{Claims: jwt.MapClaims{}}
+	}
+
 	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):

@@ -740,6 +740,10 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer string, openid bool, inner error) (outer *RFC6749Error) {
 	outer = ErrInvalidRequestObject.WithWrap(inner).WithHintf("%s request object could not be decoded or validated.", hintRequestObjectPrefix(openid))
 
+	if token == nil {
+		token = &jwt.Token{Claims: jwt.MapClaims{}}
+	}
+
 	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):

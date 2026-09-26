@@ -529,8 +529,9 @@ func TestNestedJWTEncodeDecode(t *testing.T) {
 
 	token, err = clientStrategy.Decode(t.Context(), tokenString, WithClient(decodeClientECDSA))
 
-	assert.Nil(t, token)
 	assert.EqualError(t, err, "go-jose/go-jose: error in cryptographic primitive")
+	require.NotNil(t, token)
+	assert.False(t, token.IsSignatureValid())
 
 	clientStrategy = &DefaultStrategy{
 		Config: &testConfig{},

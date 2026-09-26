@@ -121,6 +121,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: testSubjectPeter,
@@ -278,6 +279,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID},
 				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				request.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: testSubjectPeter,
@@ -322,6 +324,68 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
 				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAccessToken))
 				internal.RequireEqualTime(t, time.Now().Add(time.Hour).UTC(), request.GetSession().GetExpiresAt(oauth2.AuthorizeCode), time.Second)
+			},
+		},
+		{
+			name: "ShouldFailWhenTheOpenIDScopeIsNotRequested",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+				request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID, testScopeProfile},
+				}
+				request.RequestedScope = oauth2.Arguments{testScopeProfile}
+				request.GrantedScope = oauth2.Arguments{testScopeProfile}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: testSubjectPeter,
+					},
+					Headers: &jwt.Headers{},
+					Subject: testSubjectPeter,
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			expectedField: "invalid_scope",
+			expected:      "The requested scope is invalid, unknown, or malformed. The 'id_token' response type requires the 'openid' scope.",
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+				assert.False(t, request.HandledResponseTypes.Has(consts.ResponseTypeImplicitFlowIDToken))
+			},
+		},
+		{
+			name: "ShouldFailWhenTheOpenIDScopeIsNotGranted",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+				request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID, testScopeProfile},
+				}
+				request.RequestedScope = oauth2.Arguments{consts.ScopeOpenID, testScopeProfile}
+				request.GrantedScope = oauth2.Arguments{testScopeProfile}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: testSubjectPeter,
+					},
+					Headers: &jwt.Headers{},
+					Subject: testSubjectPeter,
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			expectedField: "access_denied",
+			expected:      "The resource owner or authorization server denied the request. The 'id_token' response type requires the 'openid' scope, which was not granted.",
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+				assert.False(t, request.HandledResponseTypes.Has(consts.ResponseTypeImplicitFlowIDToken))
 			},
 		},
 		{

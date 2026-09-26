@@ -146,6 +146,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] `github.com/mohae/deepcopy`
 - Migration of the following dependencies:
   - [x] `github.com/go-jose/go-jose/v3` => `github.com/go-jose/go-jose/v4`
+  - [x] `github.com/go-jose/go-jose/v4` => `authelia.com/provider/jose`
   - [x] `github.com/golang/mock` => `github.com/uber-go/mock`
   - [x] `github.com/cristalhq/jwt/v4` => `github.com/golang-jwt/jwt/v5`
 

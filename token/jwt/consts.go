@@ -30,11 +30,11 @@ var (
 
 	// SignatureAlgorithms contain all algorithms excluding 'none'.
 	//
-	// The Edwards-curve values are those the specifications register and token/jose implements: 'EdDSA' is the
-	// polymorphic identifier of RFC 8037 Section 3.1, and 'Ed25519' the fully-specified identifier RFC 9864 Table 2
-	// adds for the parameter set of RFC 8032 Section 5.1, mirroring the COSE algorithm RFC 9053 defines. RFC 9864
-	// registers 'Ed448' alongside it, which is deliberately absent: token/jose has no Ed448 implementation, and
-	// listing it here would accept a header this signer cannot verify.
+	// The Edwards-curve values are those the specifications register and authelia.com/provider/jose implements:
+	// 'EdDSA' is the polymorphic identifier of RFC 8037 Section 3.1, and 'Ed25519' the fully-specified identifier RFC
+	// 9864 Table 2 adds for the parameter set of RFC 8032 Section 5.1, mirroring the COSE algorithm RFC 9053 defines.
+	// RFC 9864 registers 'Ed448' alongside it, which is deliberately absent: authelia.com/provider/jose has no Ed448
+	// implementation, and listing it here would accept a header this signer cannot verify.
 	SignatureAlgorithms = []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512, jose.EdDSA, jose.Ed25519}
 
 	// EncryptionKeyAlgorithms contains all valid JWE's for OAuth 2.0 and OpenID Connect 1.0.

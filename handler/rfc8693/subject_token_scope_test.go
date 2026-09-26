@@ -5,6 +5,7 @@
 package rfc8693_test
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -187,5 +188,151 @@ func TestCustomJWTSubjectTokenScope(t *testing.T) {
 			require.ErrorIs(t, err, oauth2.ErrInvalidScope)
 			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 		})
+	}
+}
+
+func TestSubjectTokenScopeIgnoresTheClientScopeStrategy(t *testing.T) {
+	store := storage.NewExampleStore()
+	cfg := newSpecConfig(t)
+
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	client := &testPermissiveScopeClient{DefaultClient: store.Clients["my-client"].(*oauth2.DefaultClient)}
+
+	idTokenHandler := &IDTokenTypeHandler{
+		Config:             cfg,
+		Strategy:           jwtStrategy,
+		IssueStrategy:      &openid.DefaultStrategy{Strategy: jwtStrategy, Config: cfg},
+		ValidationStrategy: &openid.DefaultIDTokenValidationStrategy{Strategy: jwtStrategy},
+		Storage:            store,
+	}
+
+	customHandler := &CustomJWTTypeHandler{
+		Config:   cfg,
+		Strategy: jwtStrategy,
+		Storage:  store,
+	}
+
+	testCases := []struct {
+		name    string
+		handler oauth2.TokenEndpointHandler
+		typ     string
+		claims  jwt.MapClaims
+		scopes  oauth2.Arguments
+		err     string
+	}{
+		{
+			name:    "ShouldRejectAScopeForAnIDToken",
+			handler: idTokenHandler,
+			typ:     consts.TokenTypeRFC8693IDToken,
+			claims:  jwt.MapClaims{consts.ClaimAudience: []string{client.GetID()}},
+			scopes:  oauth2.Arguments{"offline"},
+			err:     "The requested scope is invalid, unknown, or malformed. The subject token is not granted 'offline' and so this scope cannot be requested.",
+		},
+		{
+			name:    "ShouldRejectAScopeNotInTheCustomJWTScopeClaim",
+			handler: customHandler,
+			typ:     "urn:spec:jwt",
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter", consts.ClaimScope: "foo"},
+			scopes:  oauth2.Arguments{"bar"},
+			err:     "The requested scope is invalid, unknown, or malformed. The subject token is not granted 'bar' and so this scope cannot be requested.",
+		},
+		{
+			name:    "ShouldMatchTheCustomJWTScopeClaimExactly",
+			handler: customHandler,
+			typ:     "urn:spec:jwt",
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter", consts.ClaimScope: "foo"},
+			scopes:  oauth2.Arguments{"foo.bar"},
+			err:     "The requested scope is invalid, unknown, or malformed. The subject token is not granted 'foo.bar' and so this scope cannot be requested.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := jwt.MapClaims{
+				consts.ClaimSubject:        "peter",
+				consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+				consts.ClaimIssuedAt:       time.Now().Unix(),
+			}
+
+			for k, v := range tc.claims {
+				claims[k] = v
+			}
+
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+				Request: oauth2.Request{
+					ID:             uuid.New().String(),
+					Client:         client,
+					RequestedScope: tc.scopes,
+					Form: url.Values{
+						consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+						consts.FormParameterSubjectTokenType: {tc.typ},
+						consts.FormParameterSubjectToken:     {createJWT(t.Context(), client, jwtStrategy, claims)},
+					},
+					Session: newSpecSession("peter"),
+				},
+			}
+
+			err := tc.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidScope)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+		})
+	}
+}
+
+func TestCustomJWTSubjectTokenScopeDoesNotConsumeTheJTI(t *testing.T) {
+	store := storage.NewExampleStore()
+	cfg := newSpecConfig(t)
+	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ValidateJTI = true
+
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	client := store.Clients["my-client"]
+
+	handler := &CustomJWTTypeHandler{
+		Config:   cfg,
+		Strategy: jwtStrategy,
+		Storage:  store,
+	}
+
+	token := createJWT(t.Context(), client, jwtStrategy, jwt.MapClaims{
+		consts.ClaimIssuer:         "https://as.example.com",
+		consts.ClaimSubject:        "peter",
+		consts.ClaimJWTID:          uuid.New().String(),
+		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+		consts.ClaimIssuedAt:       time.Now().Unix(),
+		"subject":                  "peter",
+	})
+
+	newRequest := func(scopes oauth2.Arguments) *oauth2.AccessRequest {
+		return &oauth2.AccessRequest{
+			GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+			Request: oauth2.Request{
+				ID:             uuid.New().String(),
+				Client:         client,
+				RequestedScope: scopes,
+				Form: url.Values{
+					consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {token},
+				},
+				Session: newSpecSession("peter"),
+			},
+		}
+	}
+
+	require.ErrorIs(t, handler.HandleTokenEndpointRequest(t.Context(), newRequest(oauth2.Arguments{"foo"})), oauth2.ErrInvalidScope)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), newRequest(nil))))
+}
+
+type testPermissiveScopeClient struct {
+	*oauth2.DefaultClient
+}
+
+func (c *testPermissiveScopeClient) GetScopeStrategy(_ context.Context) oauth2.ScopeStrategy {
+	return func(_ []string, _ string) bool {
+		return true
 	}
 }

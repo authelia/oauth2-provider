@@ -371,8 +371,8 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 	return validateRequestedScopes(request, strategy, original.GetGrantedScopes())
 }
 
-func validateSubjectTokenScope(ctx context.Context, request oauth2.AccessRequester, config oauth2.ScopeStrategyProvider, granted []string) (err error) {
-	return validateRequestedScopes(request, oauth2.GetScopeStrategy(ctx, config, request.GetClient()), granted)
+func validateSubjectTokenScope(request oauth2.AccessRequester, granted []string) (err error) {
+	return validateRequestedScopes(request, oauth2.ExactScopeStrategy, granted)
 }
 
 func validateRequestedScopes(request oauth2.AccessRequester, strategy oauth2.ScopeStrategy, granted []string) (err error) {

@@ -83,7 +83,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		if err = validateSubjectTokenScope(ctx, request, c.Config, nil); err != nil {
+		if err = validateSubjectTokenScope(request, nil); err != nil {
 			return err
 		}
 

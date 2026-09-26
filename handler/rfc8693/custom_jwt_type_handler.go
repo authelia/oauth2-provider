@@ -73,10 +73,6 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 			return err
 		}
 
-		if err = validateSubjectTokenScope(ctx, request, c.Config, scopeClaim(unpacked)); err != nil {
-			return err
-		}
-
 		session.SetSubjectToken(unpacked)
 
 		var subject string
@@ -181,6 +177,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		}
 
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
+	}
+
+	if err = validateCustomJWTScope(request, role, claims); err != nil {
+		return nil, err
 	}
 
 	// Validate the JTI is unique if required.
@@ -310,4 +310,12 @@ func toInt64(claim any) int64 {
 		return int64(vf)
 	}
 	return 0
+}
+
+func validateCustomJWTScope(request oauth2.AccessRequester, role tokenRole, claims map[string]any) (err error) {
+	if role != tokenRoleSubject {
+		return nil
+	}
+
+	return validateSubjectTokenScope(request, scopeClaim(claims))
 }

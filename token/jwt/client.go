@@ -427,7 +427,11 @@ func (r *decoratedJWTProfileAccessTokenClient) GetSigningKeyID() (kid string) {
 }
 
 func (r *decoratedJWTProfileAccessTokenClient) GetSigningAlg() (alg string) {
-	return r.GetAccessTokenSignedResponseAlg()
+	if alg = r.GetAccessTokenSignedResponseAlg(); alg == "" {
+		return string(jose.RS256)
+	}
+
+	return alg
 }
 
 func (r *decoratedJWTProfileAccessTokenClient) GetEncryptionKeyID() (kid string) {

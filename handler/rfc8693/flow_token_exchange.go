@@ -165,6 +165,12 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
+	// Grant the validated scopes. The token type handlers reject any scope the subject token does not grant, so what
+	// remains is the intersection of the client's and the subject token's scopes.
+	for _, scope := range request.GetRequestedScopes() {
+		request.GrantScope(scope)
+	}
+
 	// Grant the validated audience and resource so the issued token's 'aud' claim reflects
 	// the exchange request's RFC 8693 audience and RFC 8707 resource parameters.
 	for _, audience := range request.GetRequestedAudience() {

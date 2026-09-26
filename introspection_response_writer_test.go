@@ -773,6 +773,14 @@ func (c *introspectionJWTTestClient) GetIntrospectionEncryptedResponseEnc() stri
 	return c.encEnc
 }
 
+func (c *introspectionJWTTestClient) GetJSONWebKeys() *jose.JSONWebKeySet {
+	return nil
+}
+
+func (c *introspectionJWTTestClient) GetJSONWebKeysURI() string {
+	return ""
+}
+
 // stubIntrospectionStrategy is a jwt.Strategy stub used to drive the signed introspection response
 // code paths without setting up a real signing key.
 type stubIntrospectionStrategy struct {

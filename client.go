@@ -351,7 +351,7 @@ type JARMClient interface {
 	// also be provided.
 	GetAuthorizationEncryptedResponseEnc() (alg string)
 
-	Client
+	JSONWebKeysClient
 }
 
 // PushedAuthorizationRequestClient is a client with custom requirements for Pushed Authorization requests.
@@ -451,7 +451,7 @@ type JWTProfileClient interface {
 	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
 	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
 
-	Client
+	JSONWebKeysClient
 }
 
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
@@ -553,7 +553,7 @@ type IntrospectionJWTResponseClient interface {
 	// be specified without setting introspection_encrypted_response_alg.
 	GetIntrospectionEncryptedResponseEnc() (enc string)
 
-	Client
+	JSONWebKeysClient
 }
 
 // ClientAssertionJWTValidationOptionsClient allows extending the client assertion validation and strengthening the

@@ -22,8 +22,9 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 	return url.Values{consts.FormParameterResponse: []string{token}}, nil
 }
 
-// Generate generates the token and signature for a JARM response.
-func Generate(ctx context.Context, config Configurator, client Client, session any, parameters url.Values) (token, signature string, err error) {
+// Generate generates the token and signature for a JARM response. The issuer is always the configured JARM issuer, and
+// the session argument is not used.
+func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
 	if alg := client.GetAuthorizationSignedResponseAlg(); len(alg) > 0 {
@@ -34,31 +35,10 @@ func Generate(ctx context.Context, config Configurator, client Client, session a
 		headers[jwt.JSONWebTokenHeaderKeyIdentifier] = kid
 	}
 
-	var issuer string
-
-	issuer = config.GetJWTSecuredAuthorizeResponseModeIssuer(ctx)
-
+	// JARM Section 2.1: every response, including an error response issued before a session exists, carries 'iss'.
+	issuer := config.GetJWTSecuredAuthorizeResponseModeIssuer(ctx)
 	if len(issuer) == 0 {
-		var (
-			src   jwt.MapClaims
-			value any
-			ok    bool
-		)
-
-		switch s := session.(type) {
-		case nil:
-			return "", "", errors.New("The JARM response modes require the Authorize Requester session to be set but it wasn't.")
-		case OpenIDSession:
-			src = s.IDTokenClaims().ToMapClaims()
-		case JWTSessionContainer:
-			src = s.GetJWTClaims().ToMapClaims()
-		default:
-			return "", "", errors.New("The JARM response modes require the Authorize Requester session to implement either the openid.Session or oauth2.JWTSessionContainer interfaces but it doesn't.")
-		}
-
-		if value, ok = src[jwt.ClaimIssuer]; ok {
-			issuer, _ = value.(string)
-		}
+		return "", "", errors.New("the JARM response modes require the JWTSecuredAuthorizeResponseModeIssuerProvider to return an issuer but it didn't")
 	}
 
 	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))

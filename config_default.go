@@ -238,7 +238,8 @@ type Config struct {
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
 	JWTScopeClaimKey jwt.JWTScopeFieldEnum
 
-	// JWTSecuredAuthorizeResponseModeIssuer sets the default issuer for the JWT Secured Authorization Response Mode.
+	// JWTSecuredAuthorizeResponseModeIssuer sets the issuer for the JWT Secured Authorization Response Mode. Defaults to
+	// IDTokenIssuer. JARM Section 2.1 requires every response, including an error response, to carry the issuer.
 	JWTSecuredAuthorizeResponseModeIssuer string
 
 	// JWTSecuredAuthorizeResponseModeLifespan sets the default lifetime for the tokens issued in the
@@ -720,7 +721,13 @@ func (c *Config) GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum {
 	return c.JWTScopeClaimKey
 }
 
+// GetJWTSecuredAuthorizeResponseModeIssuer returns JWTSecuredAuthorizeResponseModeIssuer if set. Defaults to
+// IDTokenIssuer.
 func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string {
+	if c.JWTSecuredAuthorizeResponseModeIssuer != "" {
+		return c.JWTSecuredAuthorizeResponseModeIssuer
+	}
+
 	return c.IDTokenIssuer
 }
 

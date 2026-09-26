@@ -117,7 +117,9 @@ func TestOpenIDConnectKeyBindingRequiresBindingHandlerOrdering(t *testing.T) {
 				if tc.handlers != nil {
 					config.TokenEndpointBindingHandlers = tc.handlers
 
-					mustOrderTokenEndpointBindingHandlers(config)
+					if err := ValidateHandlerOrder(config); err != nil {
+						panic(err)
+					}
 
 					return
 				}
@@ -197,7 +199,11 @@ func TestOpenIDConnectKeyBindingRequiresUserAuthorizeHandlerOrdering(t *testing.
 			config := &oauth2.Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}
 			config.RFC8628UserAuthorizeEndpointHandlers = tc.handlers
 
-			run := func() { mustOrderRFC8628UserAuthorizeHandlers(config) }
+			run := func() {
+				if err := ValidateHandlerOrder(config); err != nil {
+					panic(err)
+				}
+			}
 
 			if tc.panics {
 				require.Panics(t, run)

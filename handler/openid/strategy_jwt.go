@@ -206,6 +206,14 @@ type DefaultStrategy struct {
 	}
 }
 
+func isRefreshTokenGrant(request oauth2.Requester) bool {
+	if requester, ok := request.(oauth2.AccessRequester); ok {
+		return requester.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
+	}
+
+	return false
+}
+
 // GenerateIDToken returns a JWT string.
 //
 // lifespan is ignored if requester.GetSession().IDTokenClaims().ExpirationTime is not zero.
@@ -230,7 +238,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	jwtClient := jwt.NewIDTokenClient(request.GetClient())
 
-	if request.GetRequestForm().Get(consts.FormParameterGrantType) != consts.GrantTypeRefreshToken {
+	// OpenID Connect Core 1.0 Section 12.2: an ID Token issued for a refresh carries the auth_time of the original
+	// authentication, so the authentication request parameters are not evaluated again. The grant type is read from
+	// the token request itself, as the request form of a stored authorization or device request is supplied by the
+	// user agent and may carry any parameter.
+	if !isRefreshTokenGrant(request) {
 		var (
 			maxAge    int64
 			hasMaxAge bool

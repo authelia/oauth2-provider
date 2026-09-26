@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -295,6 +296,7 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				})
 				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)
 				requester.Form.Set(consts.FormParameterGrantType, consts.GrantTypeRefreshToken)
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 
 				return requester
 			},
@@ -440,6 +442,101 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 				assert.NotEmpty(t, token)
 			}
+		})
+	}
+}
+
+func TestJWTStrategy_GenerateIDTokenRefreshExemption(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	newSession := func() *DefaultSession {
+		return &DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:  testSubjectPeter,
+				AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+			},
+			Headers:     &jwt.Headers{},
+			RequestedAt: time.Now().Add(-time.Minute),
+		}
+	}
+
+	stale := url.Values{
+		consts.FormParameterMaximumAge: {"60"},
+		consts.FormParameterGrantType:  {consts.GrantTypeRefreshToken},
+	}
+
+	testCases := []struct {
+		name  string
+		setup func() oauth2.Requester
+		err   string
+	}{
+		{
+			name: "ShouldEnforceMaxAgeForAuthorizeRequestWithRefreshGrantTypeParameter",
+			setup: func() oauth2.Requester {
+				requester := oauth2.NewAuthorizeRequest()
+				requester.Session = newSession()
+				requester.Form = stale
+
+				return requester
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time does not satisfy max_age time.",
+		},
+		{
+			name: "ShouldEnforceMaxAgeForDeviceAuthorizeRequestWithRefreshGrantTypeParameter",
+			setup: func() oauth2.Requester {
+				requester := oauth2.NewDeviceAuthorizeRequest()
+				requester.Session = newSession()
+				requester.Form = stale
+
+				return requester
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time does not satisfy max_age time.",
+		},
+		{
+			name: "ShouldEnforceMaxAgeForAccessRequestWithoutRefreshGrantType",
+			setup: func() oauth2.Requester {
+				requester := oauth2.NewAccessRequest(newSession())
+				requester.Form = stale
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+
+				return requester
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time does not satisfy max_age time.",
+		},
+		{
+			name: "ShouldSkipFreshnessChecksForRefreshGrant",
+			setup: func() oauth2.Requester {
+				requester := oauth2.NewAccessRequest(newSession())
+				requester.Form = stale
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
+				return requester
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, err := strategy.GenerateIDToken(t.Context(), time.Duration(0), tc.setup())
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, token)
 		})
 	}
 }

@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	xoauth2 "golang.org/x/oauth2"
@@ -300,7 +299,7 @@ func oidckbUserAuthorizeHandler(provider oauth2.Provider, session oauth2.Session
 func oidckbServer(t *testing.T, provider oauth2.Provider, session oauth2.Session) *httptest.Server {
 	t.Helper()
 
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	router.HandleFunc("/auth", oidckbAuthEndpointHandler(provider, session))
 	router.HandleFunc(tokenRelativePath, tokenEndpointHandler(t, provider))
 	router.HandleFunc("/callback", authCallbackHandler(t))

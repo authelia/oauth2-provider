@@ -452,8 +452,62 @@ func TestLocalValidatorURIs(t *testing.T) {
 		{
 			name: "ShouldAcceptPrivateUseSchemePostLogoutRedirectURI",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.ApplicationType = "native"
 				m.PostLogoutRedirectURIs = []string{"com.example.app:/done"}
 			},
+		},
+		{
+			name: "ShouldAcceptLoopbackPostLogoutRedirectURIForNative",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.ApplicationType = "native"
+				m.PostLogoutRedirectURIs = []string{"http://127.0.0.1:8080/done"}
+			},
+		},
+		{
+			name: "ShouldAcceptSecurePostLogoutRedirectURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.PostLogoutRedirectURIs = []string{"https://example.com/done"}
+			},
+		},
+		{
+			name: "ShouldRejectPrivateUseSchemePostLogoutRedirectURIForWeb",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.PostLogoutRedirectURIs = []string{"com.example.app:/done"}
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'com.example.app:/done' must use the 'https' scheme.",
+		},
+		{
+			name: "ShouldRejectInsecurePostLogoutRedirectURIForWeb",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.PostLogoutRedirectURIs = []string{"http://example.com/done"}
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'http://example.com/done' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectJavaScriptPostLogoutRedirectURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"javascript:alert(1)"} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'javascript:alert(1)' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectDataPostLogoutRedirectURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"data:text/html,x"} },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'data:text/html,x' must use the 'https' scheme.",
+		},
+		{
+			name: "ShouldRejectJavaScriptPostLogoutRedirectURIForNative",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.ApplicationType = "native"
+				m.PostLogoutRedirectURIs = []string{"javascript:alert(1)"}
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'javascript:alert(1)' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.",
+		},
+		{
+			name: "ShouldRejectVBScriptPostLogoutRedirectURIForNative",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.ApplicationType = "native"
+				m.PostLogoutRedirectURIs = []string{"vbscript:msgbox(1)"}
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value 'vbscript:msgbox(1)' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.",
 		},
 		{
 			// url.Parse reports a bare scheme as absolute, so only the host check rejects it.

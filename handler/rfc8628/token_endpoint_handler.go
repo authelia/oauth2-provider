@@ -6,6 +6,7 @@ package rfc8628
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -56,6 +57,12 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 	if deviceAuthReq.GetClient().GetID() != request.GetClient().GetID() {
 		return "", "", nil, errorsx.WithStack(oauth2.ErrInvalidGrant.
 			WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
+	}
+
+	// RFC 8628 Section 3.5: once the device code has expired the device is told so with 'expired_token', whatever the
+	// user has or has not decided.
+	if verr := c.Strategy.ValidateRFC8628DeviceCode(ctx, deviceAuthReq, code); errors.Is(verr, oauth2.ErrDeviceExpiredToken) {
+		return "", "", nil, verr
 	}
 
 	requestedAt := request.GetRequestedAt()

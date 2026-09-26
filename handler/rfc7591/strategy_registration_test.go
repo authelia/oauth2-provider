@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 )
 
@@ -388,4 +390,53 @@ func TestDefaultClientRegistrationStrategyPreservesDefaultMaxAgePresence(t *test
 			}
 		})
 	}
+}
+
+func TestDefaultClientRegistrationStrategyRoundTripsEveryMetadataField(t *testing.T) {
+	ctx := context.Background()
+	strategy := NewDefaultClientRegistrationStrategy()
+
+	in := &oauth2.ClientRegistrationMetadata{}
+
+	value := reflect.ValueOf(in).Elem()
+
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Field(i)
+		name := value.Type().Field(i).Name
+
+		switch field.Interface().(type) {
+		case string:
+			field.SetString("value-" + name)
+		case []string:
+			field.Set(reflect.ValueOf([]string{"value-" + name}))
+		case bool:
+			field.SetBool(true)
+		case *int64:
+			v := int64(i)
+			field.Set(reflect.ValueOf(&v))
+		case *jose.JSONWebKeySet:
+			field.Set(reflect.ValueOf(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "value-" + name}}}))
+		case map[string]any:
+			field.Set(reflect.ValueOf(map[string]any{"value": name}))
+		default:
+			t.Fatalf("field '%s' has type %s which this test does not populate", name, field.Type())
+		}
+	}
+
+	client, err := strategy.NewClient(ctx, "abc", nil, in)
+	require.NoError(t, err)
+
+	out, err := strategy.MetadataFromClient(ctx, client)
+	require.NoError(t, err)
+
+	assert.Equal(t, in, out)
+
+	// RFC 7592 Section 2.2: an update carries every field returned by a read, so a read followed by an update is a no-op.
+	patched, err := strategy.PatchClient(ctx, client, nil, out)
+	require.NoError(t, err)
+
+	out, err = strategy.MetadataFromClient(ctx, patched)
+	require.NoError(t, err)
+
+	assert.Equal(t, in, out)
 }

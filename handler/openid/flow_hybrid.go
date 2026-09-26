@@ -47,6 +47,16 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	request.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
+	// OpenID Connect Core 1.0 Section 3.3.2.1: the 'id_token' response type issues an ID Token, which needs the
+	// 'openid' scope; checked before any code or token is issued.
+	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) && !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
+		if request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+			return errorsx.WithStack(oauth2.ErrAccessDenied.WithHint("The 'id_token' response type requires the 'openid' scope, which was not granted."))
+		}
+
+		return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The 'id_token' response type requires the 'openid' scope."))
+	}
+
 	// There is no requirement to check response types here as they are validated in the AuthorizeRequestHandler.
 
 	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
@@ -166,9 +176,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		response.AddParameter(consts.FormParameterState, request.GetState())
 	}
 
-	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) || !request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
-		request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
-
+	if !request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
 		return nil
 	}
 

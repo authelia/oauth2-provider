@@ -1132,6 +1132,28 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldNotRevokeTheGrantWhenTheRollbackAfterAReplayFails",
+			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. error: invalid_request; rollback error: Whoops, the rollback failed!",
+			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
+				request.ID = "req-id"
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				gomock.InOrder(
+					mockTransactional.
+						EXPECT().
+						BeginTX(propagatedContext).
+						Return(propagatedContext, nil),
+					mockRevocationStore.
+						EXPECT().
+						GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
+						Return(nil, oauth2.ErrInactiveToken),
+					mockTransactional.
+						EXPECT().
+						Rollback(propagatedContext).
+						Return(errors.New("Whoops, the rollback failed!")),
+				)
+			},
+		},
+		{
 			name: "ShouldRevokeTheGrantWhenRotateRefreshTokenReturnsErrInactiveToken",
 			err:  "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Token is inactive because it is malformed, expired or otherwise invalid. Token validation failed.",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {

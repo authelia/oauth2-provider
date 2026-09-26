@@ -218,7 +218,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 		// RFC 9700 Section 4.14.2: a refresh token that another request already rotated is a replay, so the grant is
 		// revoked once this request's transaction has been rolled back.
-		if replayed != nil {
+		if replayed != nil && !errors.Is(err, oauth2.ErrServerError) {
 			if e := c.handleRefreshTokenReuse(parent, signature, request); e != nil {
 				err = errorsx.WithStack(e)
 			} else {

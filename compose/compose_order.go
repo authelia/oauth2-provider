@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/handler/rfc9449"
@@ -30,6 +31,11 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //   - Every pkce.Handler must follow the hoauth2.AuthorizeExplicitGrantHandler in the token endpoint handlers. The
 //     PKCE request session is removed once the token request succeeds, so the authorization code must already be
 //     invalidated; otherwise a request failing in between leaves the code redeemable without its PKCE binding.
+//   - Every openid.OpenIDConnectExplicitHandler must follow the hoauth2.AuthorizeExplicitGrantHandler, every
+//     openid.OpenIDConnectRefreshHandler must follow the hoauth2.RefreshTokenGrantHandler, and every
+//     openid.OpenIDConnectDeviceAuthorizeHandler must follow the rfc8628.DeviceAuthorizeTokenEndpointHandler in the
+//     token endpoint handlers. Each computes the ID Token 'at_hash' claim from the access token the OAuth 2.0 grant
+//     handler adds to the response, so registered first it hashes an empty access token.
 //   - Every oidckb.Handler must follow the rfc9449.Handler in the token endpoint binding handlers, as it consumes the
 //     DPoP proof rfc9449.Handler publishes.
 //   - Every oidckb.UserAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628 user authorize
@@ -45,24 +51,39 @@ func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 }
 
 func validateTokenEndpointHandlerOrder(config *oauth2.Config) (err error) {
-	var explicit, unordered bool
+	handlers := config.TokenEndpointHandlers
 
-	for _, handler := range config.TokenEndpointHandlers {
-		switch handler.(type) {
-		case *hoauth2.AuthorizeExplicitGrantHandler:
-			explicit = true
-		case *pkce.Handler:
-			if !explicit {
-				unordered = true
-			}
+	if tokenEndpointHandlerPrecedes[*pkce.Handler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it removes the PKCE request session which must outlive the authorization code", ErrHandlerOrder))
+	}
+
+	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectExplicitHandler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectExplicitHandler (OpenIDConnectExplicitFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it computes the ID Token 'at_hash' claim from the access token the hoauth2.AuthorizeExplicitGrantHandler issues", ErrHandlerOrder))
+	}
+
+	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectRefreshHandler, *hoauth2.RefreshTokenGrantHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectRefreshHandler (OpenIDConnectRefreshFactory) must be registered after the hoauth2.RefreshTokenGrantHandler (OAuth2RefreshTokenGrantFactory), as it computes the ID Token 'at_hash' claim from the access token the hoauth2.RefreshTokenGrantHandler issues", ErrHandlerOrder))
+	}
+
+	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectDeviceAuthorizeHandler, *rfc8628.DeviceAuthorizeTokenEndpointHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectDeviceAuthorizeHandler (OpenIDConnectDeviceAuthorizeFactory) must be registered after the rfc8628.DeviceAuthorizeTokenEndpointHandler (RFC8628DeviceAuthorizeTokenFactory), as it computes the ID Token 'at_hash' claim from the access token the rfc8628.DeviceAuthorizeTokenEndpointHandler issues", ErrHandlerOrder))
+	}
+
+	return err
+}
+
+func tokenEndpointHandlerPrecedes[Dependent, Dependency oauth2.TokenEndpointHandler](handlers oauth2.TokenEndpointHandlers) bool {
+	var dependency, unordered bool
+
+	for _, handler := range handlers {
+		if _, ok := handler.(Dependency); ok {
+			dependency = true
+		} else if _, ok = handler.(Dependent); ok && !dependency {
+			unordered = true
 		}
 	}
 
-	if !unordered || !explicit {
-		return nil
-	}
-
-	return fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it removes the PKCE request session which must outlive the authorization code", ErrHandlerOrder)
+	return unordered && dependency
 }
 
 // validateTokenEndpointBindingHandlerOrder returns an error when both key binding token endpoint binding handlers are

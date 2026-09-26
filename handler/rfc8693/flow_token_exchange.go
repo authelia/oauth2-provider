@@ -54,6 +54,9 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
+	// Only a subject token validated by a token type handler for this request may be issued against.
+	session.SetSubjectToken(nil)
+
 	form := request.GetRequestForm()
 	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
 

@@ -614,8 +614,20 @@ func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest
 		ResourceStrategy: cfg.GetResourceStrategy(context.Background()),
 	}
 
+	session, _ := req.GetSession().(Session)
+
+	var subjectToken map[string]any
+
+	if session != nil {
+		subjectToken = session.GetSubjectToken()
+	}
+
 	if err := h.HandleTokenEndpointRequest(context.Background(), req); err != nil {
 		return err
+	}
+
+	if subjectToken != nil {
+		session.SetSubjectToken(subjectToken)
 	}
 
 	return h.PopulateTokenEndpointResponse(context.Background(), req, oauth2.NewAccessResponse())
@@ -727,10 +739,6 @@ func newConfidentialClientWithRefresh() *oauth2.DefaultClient {
 func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSession) *oauth2.AccessResponse {
 	t.Helper()
 
-	if session.GetSubjectToken() == nil {
-		session.SetSubjectToken(map[string]any{consts.ClaimSubject: session.GetSubject()})
-	}
-
 	store := storage.NewExampleStore()
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
@@ -764,7 +772,16 @@ func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSess
 	ctx := context.Background()
 	resp := oauth2.NewAccessResponse()
 
+	subjectToken := session.GetSubjectToken()
+
 	require.NoError(t, grant.HandleTokenEndpointRequest(ctx, req))
+
+	if subjectToken == nil {
+		subjectToken = map[string]any{consts.ClaimSubject: session.GetSubject()}
+	}
+
+	session.SetSubjectToken(subjectToken)
+
 	require.NoError(t, grant.PopulateTokenEndpointResponse(ctx, req, resp))
 	require.NoError(t, cjt.PopulateTokenEndpointResponse(ctx, req, resp))
 

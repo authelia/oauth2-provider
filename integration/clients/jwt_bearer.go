@@ -44,6 +44,8 @@ type JWTBearerPayload struct {
 	*jwt.Claims
 
 	PrivateClaims map[string]any
+
+	RequestedAudience []string
 }
 
 func (c *JWTBearer) SetPrivateKey(keyID string, privateKey *rsa.PrivateKey) error {
@@ -75,7 +77,7 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 		return nil, err
 	}
 
-	requestBodyReader, err := c.getRequestBodyReader(assertion, scope)
+	requestBodyReader, err := c.getRequestBodyReader(assertion, scope, payloadData.RequestedAudience)
 	if err != nil {
 		return nil, err
 	}
@@ -116,13 +118,17 @@ func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload,
 }
 
 //nolint:unparam
-func (c *JWTBearer) getRequestBodyReader(assertion string, scope []string) (io.Reader, error) {
+func (c *JWTBearer) getRequestBodyReader(assertion string, scope, audience []string) (io.Reader, error) {
 	data := url.Values{}
 	data.Set(consts.FormParameterGrantType, consts.GrantTypeOAuthJWTBearer)
 	data.Set(consts.FormParameterAssertion, assertion)
 
 	if len(scope) != 0 {
 		data.Set(consts.FormParameterScope, strings.Join(scope, " "))
+	}
+
+	for _, value := range audience {
+		data.Add(consts.FormParameterAudience, value)
 	}
 
 	return strings.NewReader(data.Encode()), nil

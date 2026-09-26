@@ -90,7 +90,7 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 
 			// reflect.DeepEqual handles non-comparable dynamic types (slices, maps, nested objects) which
 			// interface == would panic on per Go spec; may_act values are not constrained to scalars.
-			if !reflect.DeepEqual(actor[k], v) {
+			if value, ok := actor[k]; !ok || !reflect.DeepEqual(value, v) {
 				return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The actor or client is not authorized to act on behalf of the subject."))
 			}
 		}
@@ -141,15 +141,29 @@ func authorizedActor(subject map[string]any) (mayAct map[string]any, present boo
 		mayAct = v
 	}
 
-	for k := range mayAct {
-		if !isUnusedAuthorizedActorClaim(k) {
-			return mayAct, true, nil
+	var identifying bool
+
+	for k, v := range mayAct {
+		if isUnusedAuthorizedActorClaim(k) {
+			continue
 		}
+
+		if v == nil {
+			identifying = false
+
+			break
+		}
+
+		identifying = true
+	}
+
+	if identifying {
+		return mayAct, true, nil
 	}
 
 	return nil, true, errorsx.WithStack(oauth2.ErrInvalidRequest.
 		WithHint("The subject token's 'may_act' claim does not identify the party authorized to act on behalf of the subject.").
-		WithDebug("The 'may_act' claim must be a JSON object with at least one member identifying the authorized actor."))
+		WithDebug("The 'may_act' claim must be a JSON object with at least one member identifying the authorized actor, and no identifying member may be null."))
 }
 
 func isUnusedAuthorizedActorClaim(claim string) bool {

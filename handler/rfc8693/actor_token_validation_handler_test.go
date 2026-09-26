@@ -183,6 +183,8 @@ func TestActorTokenValidationHandler_MayActFormat(t *testing.T) {
 		{name: "ShouldRejectAnEmptyObject", mayAct: map[string]any{}, actor: map[string]any{consts.ClaimSubject: "eve"}, err: true},
 		{name: "ShouldRejectAnEmptyObjectWithoutAnActorToken", mayAct: map[string]any{}, err: true},
 		{name: "ShouldRejectAnObjectWithOnlyUnusedClaims", mayAct: map[string]any{consts.ClaimExpirationTime: 1, consts.ClaimNotBefore: 1, consts.ClaimAudience: "x"}, actor: map[string]any{consts.ClaimSubject: "eve"}, err: true},
+		{name: "ShouldRejectANullIdentifyingMember", mayAct: map[string]any{consts.ClaimSubject: nil}, actor: map[string]any{consts.ClaimClientIdentifier: "eve"}, err: true},
+		{name: "ShouldRejectANullMemberTheActorLacks", mayAct: map[string]any{consts.ClaimSubject: "bob", consts.ClaimPreferredEmail: nil}, actor: map[string]any{consts.ClaimSubject: "bob"}, err: true},
 		{name: "ShouldIgnoreTheUnusedClaims", mayAct: map[string]any{consts.ClaimSubject: "bob", consts.ClaimExpirationTime: 1, consts.ClaimNotBefore: 1, consts.ClaimAudience: "x"}, actor: map[string]any{consts.ClaimSubject: "bob", consts.ClaimExpirationTime: 2}},
 		{name: "ShouldAcceptMapClaims", mayAct: jwt.MapClaims{consts.ClaimSubject: "bob"}, actor: map[string]any{consts.ClaimSubject: "bob"}},
 	}

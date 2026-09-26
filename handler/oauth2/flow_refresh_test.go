@@ -694,6 +694,74 @@ func TestRefreshFlow_WithoutRotation(t *testing.T) {
 	}
 }
 
+func TestRefreshFlow_RotatesUnboundPublicClientTokens(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	for _, s := range []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	} {
+		t.Run(s.name, func(t *testing.T) {
+			store := s.new()
+
+			client := &oauth2.DefaultClient{ID: "foo", Public: true, GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{"foo", consts.ScopeOffline}}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   strategy,
+				AccessTokenStrategy:    strategy,
+				Config: &oauth2.Config{
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{consts.ScopeOffline},
+					DisableRefreshTokenRotation: true,
+				},
+			}
+
+			original := &oauth2.Request{
+				ID:             "req-id",
+				Client:         client,
+				RequestedAt:    time.Now().UTC(),
+				GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+				RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+				Session:        &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.RefreshToken: time.Now().UTC().Add(time.Minute * 30)}},
+				Form:           url.Values{},
+			}
+
+			refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+			requester.Client = client
+			requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), requester)))
+
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), requester, response)))
+
+			// RFC 9700 Section 4.14.2: the refresh token of a public client is rotated unless it is sender-constrained.
+			assert.Contains(t, response.ToMap(), consts.AccessResponseRefreshToken)
+
+			_, err = store.GetRefreshTokenSession(t.Context(), refreshSignature, &oauth2.DefaultSession{})
+			assert.Error(t, err)
+		})
+	}
+}
+
 func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 	propagatedContext := context.Background()
 

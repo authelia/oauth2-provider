@@ -192,7 +192,7 @@ func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
 
 	if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
 		if errors.Is(err, oauth2.ErrJTIKnown) {
-			return errorsx.WithStack(oauth2.ErrJTIKnown)
+			return errorsx.WithStack(errJWTUsed.WithWrap(err))
 		}
 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -399,7 +399,7 @@ verify:
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 		if used {
-			return errorsx.WithStack(oauth2.ErrJTIKnown)
+			return errorsx.WithStack(errJWTUsed)
 		}
 	}
 

@@ -210,6 +210,10 @@ func (c *IDTokenTypeHandler) inherit(request oauth2.AccessRequester, claims map[
 }
 
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if err = requireSubjectToken(request); err != nil {
+		return err
+	}
+
 	var (
 		session openid.Session
 		ok      bool

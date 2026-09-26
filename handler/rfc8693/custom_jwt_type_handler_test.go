@@ -37,7 +37,8 @@ func TestCustomJWTTypeHandler_OmitsIDTokenKeyBindingConfirmation(t *testing.T) {
 			}},
 			Subject: "alice",
 		},
-		Extra: map[string]any{},
+		SubjectToken: map[string]any{consts.ClaimSubject: "alice"},
+		Extra:        map[string]any{},
 	}
 
 	handler := &CustomJWTTypeHandler{

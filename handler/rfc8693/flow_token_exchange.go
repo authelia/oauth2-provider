@@ -554,3 +554,15 @@ func inheritTokenBinding(request oauth2.AccessRequester, incoming tokenBinding, 
 
 	return nil
 }
+
+func requireSubjectToken(request oauth2.AccessRequester) (err error) {
+	if session, ok := request.GetSession().(Session); ok && session != nil && session.GetSubjectToken() != nil {
+		return nil
+	}
+
+	subjectTokenType := request.GetRequestForm().Get(consts.FormParameterSubjectTokenType)
+
+	return errorsx.WithStack(oauth2.ErrInvalidRequest.
+		WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType).
+		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
+}

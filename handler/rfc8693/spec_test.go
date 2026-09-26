@@ -163,7 +163,8 @@ func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 			Headers: &jwt.Headers{},
 			Subject: "alice",
 		},
-		Extra: map[string]any{},
+		SubjectToken: map[string]any{consts.ClaimSubject: "alice"},
+		Extra:        map[string]any{},
 	}
 
 	store := storage.NewExampleStore()
@@ -357,7 +358,7 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
-			Session: newSpecSession("alice"),
+			Session: newValidatedSpecSession("alice"),
 		},
 	}
 
@@ -394,7 +395,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
-			Session: newSpecSession("alice"),
+			Session: newValidatedSpecSession("alice"),
 		},
 	}
 
@@ -417,6 +418,7 @@ func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 	// resolution didn't write the subject onto the session.
 	session := &DefaultSession{
 		DefaultSession: &openid.DefaultSession{Claims: &jwt.IDTokenClaims{}, Headers: &jwt.Headers{}},
+		SubjectToken:   map[string]any{},
 		Extra:          map[string]any{},
 	}
 
@@ -565,6 +567,13 @@ func newSpecSession(subject string) *DefaultSession {
 		},
 		Extra: map[string]any{},
 	}
+}
+
+func newValidatedSpecSession(subject string) *DefaultSession {
+	session := newSpecSession(subject)
+	session.SetSubjectToken(map[string]any{consts.ClaimSubject: subject})
+
+	return session
 }
 
 // newSpecRequest produces a baseline RFC 8693 access request with grant_type and the minimum required form params.
@@ -717,6 +726,10 @@ func newConfidentialClientWithRefresh() *oauth2.DefaultClient {
 // after the grant handler so the act claim set by the grant handler is in place before issuance runs.
 func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSession) *oauth2.AccessResponse {
 	t.Helper()
+
+	if session.GetSubjectToken() == nil {
+		session.SetSubjectToken(map[string]any{consts.ClaimSubject: session.GetSubject()})
+	}
 
 	store := storage.NewExampleStore()
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}

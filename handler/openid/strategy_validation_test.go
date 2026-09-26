@@ -273,6 +273,54 @@ func TestDefaultIDTokenValidationStrategy_ExplicitType(t *testing.T) {
 	}
 }
 
+func TestDefaultIDTokenValidationStrategy_RequiresTimeClaims(t *testing.T) {
+	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	testCases := []struct {
+		name string
+		omit string
+		opts []oauth2.IDTokenValidationOpt
+		err  string
+	}{
+		{"ShouldAcceptWithExpirationAndIssuedAt", "", nil, ""},
+		{"ShouldRejectWithoutExpiration", jwt.ClaimExpirationTime, nil, "Token is expired"},
+		{"ShouldRejectWithoutIssuedAt", jwt.ClaimIssuedAt, nil, "Token used before issued"},
+		{"ShouldAcceptWithoutExpirationWhenExpiredIsAllowed", jwt.ClaimExpirationTime, []oauth2.IDTokenValidationOpt{oauth2.WithAllowExpired()}, ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := jwt.MapClaims{
+				jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+				jwt.ClaimSubject:        "alice",
+				jwt.ClaimAudience:       []string{"test-client"},
+				jwt.ClaimIssuedAt:       jwt.Now(),
+				jwt.ClaimExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			}
+
+			delete(claims, tc.omit)
+
+			token, _, err := jwtStrategy.Encode(t.Context(), claims)
+			require.NoError(t, err)
+
+			actual, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{Client: &oauth2.DefaultClient{ID: "test-client"}}, token, tc.opts...)
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.Equal(t, "alice", actual[jwt.ClaimSubject])
+
+				return
+			}
+
+			assert.EqualError(t, err, tc.err)
+			assert.Nil(t, actual)
+		})
+	}
+}
+
 func newExpiredIDToken(t *testing.T, cfg *oauth2.Config, strategy jwt.Strategy) string {
 	t.Helper()
 

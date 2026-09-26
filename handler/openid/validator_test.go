@@ -5,6 +5,7 @@
 package openid
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestValidatePrompt(t *testing.T) {
 			name:        "ShouldFailPromptNoneWithPublicClientInsecureLocalhost",
 			prompt:      "none",
 			isPublic:    true,
-			err:         "The Authorization Server requires End-User consent. OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested.",
+			err:         errPromptNoneIdentityNotAssured,
 			redirectURL: "http://foo-bar/",
 			session: &DefaultSession{
 				Subject: "foo",
@@ -67,11 +68,41 @@ func TestValidatePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "ShouldPassPromptNonePublicClientAndLocalhost",
+			name:        "ShouldFailPromptNonePublicClientAndLocalhost",
 			prompt:      "none",
 			isPublic:    true,
-			err:         "",
+			err:         errPromptNoneIdentityNotAssured,
 			redirectURL: "http://localhost/",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:        "ShouldFailPromptNonePublicClientAndLoopbackAddress",
+			prompt:      "none",
+			isPublic:    true,
+			err:         errPromptNoneIdentityNotAssured,
+			redirectURL: testLoopbackRedirectURI,
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:        "ShouldFailPromptNonePublicClientAndPrivateUseScheme",
+			prompt:      "none",
+			isPublic:    true,
+			err:         errPromptNoneIdentityNotAssured,
+			redirectURL: "com.example.app:/callback",
 			session: &DefaultSession{
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
@@ -356,7 +387,70 @@ func TestValidatePrompt(t *testing.T) {
 	}
 }
 
+func TestValidatePromptPublicClientIdentityChecker(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assured     bool
+		redirectURL string
+		err         string
+	}{
+		{
+			name:        "ShouldPassWhenTheCheckerAssuresALoopbackRedirect",
+			assured:     true,
+			redirectURL: testLoopbackRedirectURI,
+		},
+		{
+			name:        "ShouldFailWhenTheCheckerRejectsAnHTTPSRedirect",
+			assured:     false,
+			redirectURL: "https://foo-bar/",
+			err:         errPromptNoneIdentityNotAssured,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				MinParameterEntropy: oauth2.MinParameterEntropy,
+				PublicClientIdentityChecker: func(_ context.Context, _ oauth2.AuthorizeRequester) bool {
+					return tc.assured
+				},
+			}
+
+			v := NewOpenIDConnectRequestValidator(&jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}, config)
+
+			session, err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Form:   url.Values{"prompt": {"none"}},
+					Client: &oauth2.DefaultClient{Public: true},
+					Session: &DefaultSession{
+						Subject: "foo",
+						Claims: &jwt.IDTokenClaims{
+							Subject:  "foo",
+							AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+						},
+						RequestedAt: time.Now(),
+					},
+				},
+				RedirectURI: parse(tc.redirectURL),
+			})
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+				assert.Nil(t, session)
+			} else {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.NotNil(t, session)
+			}
+		})
+	}
+}
+
 func parse(u string) *url.URL {
 	o, _ := url.Parse(u)
 	return o
 }
+
+const (
+	errPromptNoneIdentityNotAssured = "The Authorization Server requires End-User consent. OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."
+	testLoopbackRedirectURI         = "http://127.0.0.1:8080/callback"
+)

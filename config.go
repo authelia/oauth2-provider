@@ -72,6 +72,13 @@ type ClientCredentialsImplicitProvider interface {
 	GetClientCredentialsFlowImplicitGrantRequested(ctx context.Context) (implicit bool)
 }
 
+// PublicClientIdentityCheckerProvider returns the provider for configuring the public client identity validator.
+type PublicClientIdentityCheckerProvider interface {
+	// GetPublicClientIdentityChecker returns the validator which reports whether an authorization request assures the
+	// identity of a public client, as required to process it without user interaction.
+	GetPublicClientIdentityChecker(ctx context.Context) func(context.Context, AuthorizeRequester) bool
+}
+
 // RedirectSecureCheckerProvider returns the provider for configuring the redirect URL security validator.
 type RedirectSecureCheckerProvider interface {
 	// GetRedirectSecureChecker returns the redirect URL security validator.

@@ -26,7 +26,6 @@ var defaultPrompts = []string{
 }
 
 type openIDConnectRequestValidatorConfigProvider interface {
-	oauth2.RedirectSecureCheckerProvider
 	oauth2.AllowedPromptsProvider
 }
 
@@ -40,6 +39,16 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnec
 		Strategy: strategy,
 		Config:   config,
 	}
+}
+
+func (v *OpenIDConnectRequestValidator) getPublicClientIdentityChecker(ctx context.Context) (checker func(context.Context, oauth2.AuthorizeRequester) bool) {
+	if provider, ok := v.Config.(oauth2.PublicClientIdentityCheckerProvider); ok {
+		if checker = provider.GetPublicClientIdentityChecker(ctx); checker != nil {
+			return checker
+		}
+	}
+
+	return oauth2.IsPublicClientIdentityAssured
 }
 
 func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
@@ -85,11 +94,8 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		//  unless the identity of the client can be proven, the request SHOULD
 		//  be processed as if no previous request had been approved.
 
-		checker := v.Config.GetRedirectSecureChecker(ctx)
-		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-			if !checker(ctx, request.GetRedirectURI()) {
-				return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested."))
-			}
+		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
+			return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
 		}
 	}
 

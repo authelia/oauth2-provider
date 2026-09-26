@@ -161,6 +161,10 @@ type Config struct {
 	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants
 	RFC8628TokenPollingInterval time.Duration
 
+	// PublicClientIdentityChecker is a function that returns true if the authorization request assures the identity of
+	// a public client, which is required to process a 'prompt' of 'none' for a public client.
+	PublicClientIdentityChecker func(context.Context, AuthorizeRequester) bool
+
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
 
@@ -898,6 +902,16 @@ func (c *Config) GetTokenEntropy(_ context.Context) int {
 	return c.TokenEntropy
 }
 
+// GetPublicClientIdentityChecker returns the checker to check if an authorization request assures the identity of a
+// public client. Defaults to oauth2.IsPublicClientIdentityAssured.
+func (c *Config) GetPublicClientIdentityChecker(_ context.Context) func(context.Context, AuthorizeRequester) bool {
+	if c.PublicClientIdentityChecker == nil {
+		return IsPublicClientIdentityAssured
+	}
+
+	return c.PublicClientIdentityChecker
+}
+
 // GetRedirectSecureChecker returns the checker to check if redirect URI is secure. Defaults to oauth2.IsRedirectURISecure.
 func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Context, *url.URL) bool {
 	if c.RedirectSecureChecker == nil {
@@ -1242,6 +1256,7 @@ var (
 	_ ScopeStrategyProvider                                 = (*Config)(nil)
 	_ AudienceStrategyProvider                              = (*Config)(nil)
 	_ RedirectSecureCheckerProvider                         = (*Config)(nil)
+	_ PublicClientIdentityCheckerProvider                   = (*Config)(nil)
 	_ RefreshTokenScopesProvider                            = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
 	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)

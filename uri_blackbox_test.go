@@ -580,6 +580,41 @@ func TestIsRedirectURISecureStrict(t *testing.T) {
 	}
 }
 
+func TestIsPublicClientIdentityAssured(t *testing.T) {
+	testCases := []struct {
+		name     string
+		url      string
+		expected bool
+	}{
+		{"ShouldPassHTTPS", "https://app.example.com/callback", true},
+		{"ShouldFailHTTP", "http://app.example.com/callback", false},
+		{"ShouldFailLocalHost", "http://localhost:8080/callback", false},
+		{"ShouldFailIPv4Loopback", "http://127.0.0.1:8080/callback", false},
+		{"ShouldFailIPv6Loopback", "http://[::1]:8080/callback", false},
+		{"ShouldFailPrivateUseScheme", "com.example.app:/callback", false},
+		{"ShouldFailNoRedirectURI", "", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := oauth2.NewAuthorizeRequest()
+
+			if tc.url != "" {
+				uri, err := url.Parse(tc.url)
+				require.NoError(t, err)
+
+				request.RedirectURI = uri
+			}
+
+			assert.Equal(t, tc.expected, oauth2.IsPublicClientIdentityAssured(t.Context(), request))
+
+			config := &oauth2.Config{}
+
+			assert.Equal(t, tc.expected, config.GetPublicClientIdentityChecker(t.Context())(t.Context(), request))
+		})
+	}
+}
+
 func ParseURLFragment(fragment string) url.Values {
 	r := url.Values{}
 

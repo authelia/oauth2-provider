@@ -111,6 +111,12 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 		return
 	case ResponseModeQuery, ResponseModeDefault, ResponseModeQueryJWT, ResponseModeJWT:
+		if rm == ResponseModeQueryJWT && redirectURI.Query().Has(consts.FormParameterResponse) {
+			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrInvalidRequest.WithHintf("The 'redirect_uri' must not contain the '%s' query parameter when using the '%s' response mode.", consts.FormParameterResponse, ResponseModeQueryJWT))
+
+			return
+		}
+
 		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
 			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
 

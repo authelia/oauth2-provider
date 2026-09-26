@@ -40,10 +40,7 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQuery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{IDTokenIssuer: "https://auth.example.com"}
-			config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
-
-			handler := &DefaultResponseModeHandler{Config: config}
+			handler := testNewJARMResponseModeHandler()
 
 			redirectURI, err := url.Parse("https://client.example.com/callback?sub=victim&foo=bar")
 			require.NoError(t, err)
@@ -84,6 +81,78 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQuery(t *testing.T) {
 			assert.NotContains(t, claims, "foo")
 		})
 	}
+}
+
+func TestDefaultResponseModeHandlerJWTRedirectURIQueryResponseParameter(t *testing.T) {
+	testCases := []struct {
+		name     string
+		mode     ResponseModeType
+		expected int
+	}{
+		{
+			name:     "ShouldRejectQueryJWT",
+			mode:     ResponseModeQueryJWT,
+			expected: http.StatusBadRequest,
+		},
+		{
+			name:     "ShouldRejectJWT",
+			mode:     ResponseModeJWT,
+			expected: http.StatusBadRequest,
+		},
+		{
+			name:     "ShouldAllowFragmentJWT",
+			mode:     ResponseModeFragmentJWT,
+			expected: http.StatusSeeOther,
+		},
+		{
+			name:     "ShouldAllowQuery",
+			mode:     ResponseModeQuery,
+			expected: http.StatusSeeOther,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := testNewJARMResponseModeHandler()
+
+			redirectURI, err := url.Parse("https://client.example.com/callback?response=forged&foo=bar")
+			require.NoError(t, err)
+
+			request := NewAuthorizeRequest()
+			request.RedirectURI = redirectURI
+			request.ResponseMode = tc.mode
+			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, AuthorizationSignedResponseAlg: "RS256"}
+
+			response := NewAuthorizeResponse()
+			response.AddParameter(consts.FormParameterAuthorizationCode, "code-value")
+
+			rw := httptest.NewRecorder()
+
+			handler.WriteAuthorizeResponse(context.Background(), rw, request, response)
+
+			assert.Equal(t, tc.expected, rw.Code)
+
+			if tc.expected != http.StatusSeeOther {
+				assert.Empty(t, rw.Header().Get(consts.HeaderLocation))
+
+				return
+			}
+
+			location, err := url.Parse(rw.Header().Get(consts.HeaderLocation))
+			require.NoError(t, err)
+
+			assert.Equal(t, []string{"forged"}, location.Query()[consts.FormParameterResponse])
+			assert.Equal(t, "bar", location.Query().Get("foo"))
+		})
+	}
+}
+
+func testNewJARMResponseModeHandler() *DefaultResponseModeHandler {
+	config := &Config{IDTokenIssuer: "https://auth.example.com"}
+	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	return &DefaultResponseModeHandler{Config: config}
 }
 
 func testDecodeJWTPayload(t *testing.T, token string) map[string]any {

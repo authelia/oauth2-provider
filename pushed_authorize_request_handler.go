@@ -34,13 +34,13 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
-	request.Form = r.Form
+	request.Form = withoutClientCredentials(r.Form)
 	request.State = request.Form.Get(consts.FormParameterState)
 
 	var client Client
 
 	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
-	if client, _, err = f.AuthenticateClient(ctx, r, r.Form); err != nil {
+	if client, _, err = f.AuthenticateClient(ctx, r, r.PostForm); err != nil {
 		var rfcerr *RFC6749Error
 		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
 			return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err))
@@ -58,6 +58,8 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	}
 
 	request.Client = client
+
+	r.Form = withoutClientCredentials(r.Form)
 
 	// Reject the request if the "request_uri" authorization request parameter is provided.
 	if r.Form.Get(consts.FormParameterRequestURI) != "" {

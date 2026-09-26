@@ -9,6 +9,7 @@ import (
 	"crypto"
 	"encoding/base64"
 	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -458,4 +459,14 @@ func (s *RevocationEndpointClientAuthStrategy) AllowMethodNone() bool {
 type PrivateKey interface {
 	Public() crypto.PublicKey
 	Equal(x crypto.PrivateKey) bool
+}
+
+func withoutClientCredentials(form url.Values) url.Values {
+	form = maps.Clone(form)
+
+	delete(form, consts.FormParameterClientSecret)
+	delete(form, consts.FormParameterClientAssertion)
+	delete(form, consts.FormParameterClientAssertionType)
+
+	return form
 }

@@ -43,7 +43,8 @@ func (s *DefaultClientRegistrationStrategy) NewClient(ctx context.Context, id st
 // full replacement semantics of RFC 7592 Section 2.2: client metadata absent from the update is removed, not
 // merged. Values which are not client metadata - registration bookkeeping (id, issuance time, secret expiry,
 // rotated secrets) and locally administered server policy that has no ClientRegistrationMetadata source (PKCE
-// enforcement, JWT profile access tokens, PAR context lifespan) - are preserved across the replacement, since RFC
+// enforcement, JWT profile access tokens, PAR context lifespan and redirect URI requirement, request object audience
+// and lifetime requirements, refresh token rotation) - are preserved across the replacement, since RFC
 // 7592's replacement semantics govern client metadata, not server policy the client does not control. Public is
 // deliberately NOT preserved: it is derived from TokenEndpointAuthMethod by apply on every call, so a client
 // switching to or from "none" is reflected correctly rather than fighting a stale preserved value. A nil secret
@@ -77,6 +78,10 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.PKCEChallengeMethod = registered.PKCEChallengeMethod
 	replacement.EnableJWTProfileOAuthAccessTokens = registered.EnableJWTProfileOAuthAccessTokens
 	replacement.PushedAuthorizeContextLifespan = registered.PushedAuthorizeContextLifespan
+	replacement.RequireRedirectURIPushedAuthorizationRequests = registered.RequireRedirectURIPushedAuthorizationRequests
+	replacement.RequireRequestObjectAudienceAndLifetime = registered.RequireRequestObjectAudienceAndLifetime
+	replacement.RequestObjectMaximumLifetime = registered.RequestObjectMaximumLifetime
+	replacement.DisableRefreshTokenRotation = registered.DisableRefreshTokenRotation
 
 	if secret == nil {
 		replacement.ClientSecret = registered.ClientSecret

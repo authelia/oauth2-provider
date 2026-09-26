@@ -6,7 +6,9 @@ package rfc7591
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,6 +96,10 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	registered.PKCEChallengeMethod = "S256"
 	registered.EnableJWTProfileOAuthAccessTokens = true
 	registered.PushedAuthorizeContextLifespan = 5 * 60 * 1e9 // 5m in time.Duration nanoseconds
+	registered.RequireRedirectURIPushedAuthorizationRequests = true
+	registered.RequireRequestObjectAudienceAndLifetime = true
+	registered.RequestObjectMaximumLifetime = 10 * time.Minute
+	registered.DisableRefreshTokenRotation = true
 	registered.ClientSecretExpiresAt = registered.ClientIDIssuedAt.Add(24 * 60 * 60 * 1e9)
 	rotatedSecret := oauth2.NewPlainTextClientSecret("rotated-out")
 	registered.RotatedClientSecrets = []oauth2.ClientSecret{rotatedSecret}
@@ -113,10 +119,70 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	assert.Equal(t, "S256", result.PKCEChallengeMethod)
 	assert.True(t, result.EnableJWTProfileOAuthAccessTokens)
 	assert.Equal(t, 5*60*int64(1e9), int64(result.PushedAuthorizeContextLifespan))
+	assert.True(t, result.RequireRedirectURIPushedAuthorizationRequests)
+	assert.True(t, result.RequireRequestObjectAudienceAndLifetime)
+	assert.Equal(t, 10*time.Minute, result.RequestObjectMaximumLifetime)
+	assert.True(t, result.DisableRefreshTokenRotation)
 	assert.Equal(t, expiresAt, result.ClientSecretExpiresAt)
 	assert.Equal(t, []oauth2.ClientSecret{rotatedSecret}, result.RotatedClientSecrets)
 	assert.Empty(t, result.ClientName)
 	assert.Equal(t, []string{"https://example.com/other"}, result.GetRedirectURIs())
+}
+
+func TestDefaultClientRegistrationStrategyPatchClientPreservesEveryUnregisteredField(t *testing.T) {
+	ctx := context.Background()
+	strategy := NewDefaultClientRegistrationStrategy()
+
+	issued := time.Unix(1700000000, 0).UTC()
+
+	registered := &oauth2.DefaultRegisteredClient{
+		DefaultClient: &oauth2.DefaultClient{
+			ID:                   "abc",
+			ClientSecret:         oauth2.NewPlainTextClientSecret("the-secret"),
+			RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewPlainTextClientSecret("rotated-out")},
+		},
+		ClientIDIssuedAt:                              issued,
+		ClientSecretExpiresAt:                         issued.Add(time.Hour),
+		EnableJWTProfileOAuthAccessTokens:             true,
+		EnforcePKCE:                                   true,
+		EnforcePKCEChallengeMethod:                    true,
+		PKCEChallengeMethod:                           "S256",
+		PushedAuthorizeContextLifespan:                time.Minute,
+		RequireRedirectURIPushedAuthorizationRequests: true,
+		RequireRequestObjectAudienceAndLifetime:       true,
+		RequestObjectMaximumLifetime:                  time.Minute,
+		DisableRefreshTokenRotation:                   true,
+	}
+
+	patched, err := strategy.PatchClient(ctx, registered, nil, &oauth2.ClientRegistrationMetadata{})
+	require.NoError(t, err)
+
+	result, ok := patched.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok)
+
+	unregistered := func(field reflect.StructField) bool {
+		tag, ok := field.Tag.Lookup("json")
+
+		return !ok || tag == "-"
+	}
+
+	for _, pair := range []struct{ expected, actual reflect.Value }{
+		{reflect.ValueOf(registered).Elem(), reflect.ValueOf(result).Elem()},
+		{reflect.ValueOf(registered.DefaultClient).Elem(), reflect.ValueOf(result.DefaultClient).Elem()},
+	} {
+		for i := range pair.expected.NumField() {
+			field := pair.expected.Type().Field(i)
+
+			if field.Anonymous || field.Name == "Extra" || !unregistered(field) {
+				continue
+			}
+
+			t.Run(field.Name, func(t *testing.T) {
+				require.False(t, pair.expected.Field(i).IsZero(), "the fixture must set every field without a metadata source")
+				assert.Equal(t, pair.expected.Field(i).Interface(), pair.actual.Field(i).Interface())
+			})
+		}
+	}
 }
 
 func TestDefaultClientRegistrationStrategyNewClientDerivesPublic(t *testing.T) {

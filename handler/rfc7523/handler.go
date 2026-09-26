@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -105,7 +106,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	claims := jwt.Claims{}
 
 	if err = token.Claims(key, &claims); err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to verify the integrity of the 'assertion' value.").WithWrap(err).WithDebugError(err))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithWrap(err).WithDebugError(err))
 	}
 
 	if err = c.validateTokenClaims(ctx, claims, key); err != nil {
@@ -286,19 +287,20 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 		}
 	}
 
-	keyNotFoundErr := oauth2.ErrInvalidGrant.WithHintf("No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.", unverifiedClaims.Issuer, unverifiedClaims.Subject)
+	keyNotFound := fmt.Sprintf("No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.", unverifiedClaims.Issuer, unverifiedClaims.Subject)
+	keyNotFoundErr := oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithDebug(keyNotFound)
 
 	if keyID != "" {
 		key, err := c.Storage.GetRFC7523PublicKey(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject, keyID)
 		if err != nil {
-			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
+			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
 		}
 		return key, nil
 	}
 
 	keys, err := c.Storage.GetRFC7523PublicKeys(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject)
 	if err != nil {
-		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
 	}
 
 	claims := jwt.Claims{}
@@ -433,3 +435,5 @@ func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.Acces
 func isAuthenticatedClient(client oauth2.Client) bool {
 	return client != nil && len(client.GetID()) != 0
 }
+
+const hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."

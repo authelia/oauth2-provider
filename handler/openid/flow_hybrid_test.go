@@ -325,6 +325,64 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldFailBecausePublicClientUsesAnInsecureRedirectURI",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterRedirectURI, "http://example.com")
+				request.RedirectURI, _ = url.ParseRequestURI("http://example.com")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					Public:        true,
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: testSubjectPeter,
+					},
+					Headers: &jwt.Headers{},
+					Subject: testSubjectPeter,
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			expectedField: "invalid_request",
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+			},
+		},
+		{
+			name: "ShouldPassWhenPublicClientUsesALocalhostRedirectURI",
+			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
+				request.Form.Set(consts.FormParameterNonce, testNonce)
+				request.Form.Set(consts.FormParameterRedirectURI, "http://localhost:8080/callback")
+				request.RedirectURI, _ = url.ParseRequestURI("http://localhost:8080/callback")
+				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+				request.Client = &oauth2.DefaultClient{
+					Public:        true,
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				}
+				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+				request.Session = &DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: testSubjectPeter,
+					},
+					Headers: &jwt.Headers{},
+					Subject: testSubjectPeter,
+				}
+
+				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			},
+			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
+				assert.NotEmpty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
+			},
+		},
+		{
 			name: "ShouldPassWithCustomLifespan",
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Set(consts.FormParameterNonce, testNonce)

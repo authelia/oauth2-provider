@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/par"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -96,6 +97,25 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 				requestURI := aresp.RequestURI
 				assert.NotEmpty(t, requestURI)
 				assert.True(t, strings.HasPrefix(requestURI, requestURIPrefix), "requestURI does not match: %s", requestURI)
+			},
+		},
+		{
+			name: "ShouldPassForResponseTypeNone",
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
+						RedirectURIs:  []string{"https://asdf.de/cb"},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+				State:       "superstate",
+				RedirectURI: parseURL("https://asdf.de/cb"),
+			},
+			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.PushedAuthorizeResponse) {
+				assert.True(t, strings.HasPrefix(aresp.RequestURI, requestURIPrefix), "requestURI does not match: %s", aresp.RequestURI)
 			},
 		},
 		{

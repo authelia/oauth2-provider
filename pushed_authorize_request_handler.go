@@ -19,6 +19,7 @@ const (
 	DebugPARStorageInvalid         = "The Pushed Authorization Request storage is not implemented"
 	DebugPARConfigMissing          = "'PushedAuthorizeRequestConfigProvider' not implemented"
 	DebugPARRequestsHandlerMissing = "'PushedAuthorizeRequestHandlersProvider' not implemented"
+	DebugPARRequestURIMissing      = "No pushed authorize endpoint handler stored the request and set the 'request_uri'."
 )
 
 // NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored

@@ -61,11 +61,24 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 			expected: "handler failed",
 		},
 		{
-			name:  "ShouldPassWhenHandlerSucceeds",
+			name:  "ShouldFailWhenNoHandlerSetsARequestURI",
 			count: 1,
 			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
 				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
+			},
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. No pushed authorize endpoint handler stored the request and set the 'request_uri'.",
+		},
+		{
+			name:  "ShouldPassWhenAHandlerSetsARequestURI",
+			count: 1,
+			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
+				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
+				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).DoAndReturn(func(_ context.Context, _ AuthorizeRequester, response PushedAuthorizeResponder) error {
+					response.SetRequestURI("urn:ietf:params:oauth:request_uri:example")
+
+					return nil
+				})
 			},
 		},
 	}

@@ -41,7 +41,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint(oauth2.ErrorPARNotSupported).WithDebug(oauth2.DebugPARStorageInvalid))
 	}
 
-	if !request.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken) {
+	if !request.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeNone) {
 		return nil
 	}
 

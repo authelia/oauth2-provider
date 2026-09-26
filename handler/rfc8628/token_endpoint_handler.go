@@ -6,6 +6,7 @@ package rfc8628
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -49,7 +50,9 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 
 	var deviceAuthReq oauth2.DeviceAuthorizeRequester
 
-	if deviceAuthReq, err = c.Storage.GetDeviceCodeSession(ctx, signature, request.GetSession()); err != nil {
+	if deviceAuthReq, err = c.Storage.GetDeviceCodeSession(ctx, signature, request.GetSession()); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
+		return code, signature, deviceAuthReq, err
+	} else if err != nil {
 		return "", "", nil, err
 	}
 

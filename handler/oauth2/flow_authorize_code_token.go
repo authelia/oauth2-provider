@@ -225,6 +225,10 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		}
 	}
 
+	var replayed bool
+
+	parent := ctx
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -233,11 +237,15 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
+			} else if replayed {
+				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
 			}
 		}
 	}()
 
 	if err = c.CoreStorage.InvalidateAuthorizeCodeSession(ctx, signature); errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+		replayed = true
+
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The authorization code has already been exchanged.").WithWrap(err))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

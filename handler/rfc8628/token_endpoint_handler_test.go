@@ -826,6 +826,97 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
+func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
+	testCases := []struct {
+		name   string
+		lookup bool
+	}{
+		{name: "ShouldRevokeWhenTheLookupReportsTheCodeInvalidated", lookup: true},
+		{name: "ShouldRevokeWhenTheInvalidationReportsTheCodeInvalidated"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &o2hmacshaStrategy
+			store := &invalidatedDeviceCodeStore{MemoryStore: storage.NewMemoryStore()}
+
+			config := &oauth2.Config{
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan: time.Minute,
+				RefreshTokenScopes:  []string{consts.ScopeOffline},
+			}
+
+			h := hoauth2.GenericCodeTokenEndpointHandler{
+				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+					Strategy: strategy,
+					Storage:  store,
+					Config:   config,
+				},
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config:                 config,
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+			}
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					Form:         url.Values{},
+					GrantedScope: oauth2.Arguments{"foo"},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+			}
+
+			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+			deviceRequester.Merge(requester)
+			deviceRequester.SetID("device-req")
+
+			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			deviceRequester.SetDeviceCodeSignature(dSig)
+			deviceRequester.SetUserCodeSignature(uSig)
+			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+			require.NoError(t, store.CreateAccessTokenSession(t.Context(), "at-sig", deviceRequester))
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", deviceRequester))
+
+			requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+
+			if tc.lookup {
+				store.lookupInvalidated = true
+
+				err = h.HandleTokenEndpointRequest(t.Context(), requester)
+			} else {
+				store.invalidationInvalidated = true
+
+				require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+				err = h.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
+			}
+
+			require.Error(t, err)
+			assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+			_, err = store.GetAccessTokenSession(t.Context(), "at-sig", nil)
+			assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+			_, err = store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
+			assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+		})
+	}
+}
+
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testing.T) {
 	const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
 
@@ -977,4 +1068,28 @@ func (s *hydratingDeviceCodeStore) hydrate(request oauth2.DeviceAuthorizeRequest
 	clone.Session = session
 
 	return &clone, nil
+}
+
+type invalidatedDeviceCodeStore struct {
+	*storage.MemoryStore
+
+	lookupInvalidated       bool
+	invalidationInvalidated bool
+}
+
+func (s *invalidatedDeviceCodeStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+	request, err := s.MemoryStore.GetDeviceCodeSession(ctx, signature, session)
+	if err == nil && s.lookupInvalidated {
+		return request, oauth2.ErrInvalidatedDeviceCode
+	}
+
+	return request, err
+}
+
+func (s *invalidatedDeviceCodeStore) InvalidateDeviceCodeSession(ctx context.Context, signature string) error {
+	if s.invalidationInvalidated {
+		return oauth2.ErrInvalidatedDeviceCode
+	}
+
+	return s.MemoryStore.InvalidateDeviceCodeSession(ctx, signature)
 }

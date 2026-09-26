@@ -20,7 +20,8 @@ import (
 //
 //   - This strategy enforces JWS/JWE structural validation, signature verification and signature algorithm
 //     enforcement via jwt.Strategy.Decode, then validates the time-based claims ('exp', 'nbf', 'iat') itself via
-//     jwt.MapClaims.Valid. Note that jwt.Strategy.Decode does NOT validate time-based claims.
+//     jwt.MapClaims.Valid. Note that jwt.Strategy.Decode does NOT validate time-based claims. The 'exp' and 'iat'
+//     claims OpenID Connect Core 1.0 Section 2 requires must be present unless oauth2.WithAllowExpired is used.
 //   - The 'typ' header must be absent, 'JWT', or 'dpop+id_token', so that another kind of JWT signed by the same
 //     issuer, such as an RFC9068 access token or a Logout Token, is not accepted as an ID Token. The check is
 //     skipped when unverified tokens are allowed.
@@ -83,8 +84,11 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 
 	var copts []jwt.ClaimValidationOption
 
+	// OpenID Connect Core 1.0 Section 2: the 'exp' and 'iat' claims are REQUIRED.
 	if o.AllowExpired {
 		copts = append(copts, jwt.ValidateIgnoreExpiration())
+	} else {
+		copts = append(copts, jwt.ValidateRequireExpiresAt(), jwt.ValidateRequireIssuedAt())
 	}
 
 	if err = claims.Valid(copts...); err != nil {

@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/jose"
 )
 
 // TestSignatureAlgorithmsEdDSAValues pins the Edwards-curve 'alg' values the signer accepts against the identifiers
 // the specifications register. RFC 8037 Section 3.1 registers the polymorphic 'EdDSA'; RFC 9864 Table 2 registers the
-// fully-specified 'Ed25519' and 'Ed448', the latter of which token/jose does not implement and which must therefore
-// not be advertised here.
+// fully-specified 'Ed25519' and 'Ed448', the latter of which authelia.com/provider/jose does not implement and which
+// must therefore not be advertised here.
 func TestSignatureAlgorithmsEdDSAValues(t *testing.T) {
 	edDSA := func(algs []jose.SignatureAlgorithm) (out []string) {
 		for _, alg := range algs {
@@ -44,7 +44,7 @@ func TestSignatureAlgorithmsEdDSAValues(t *testing.T) {
 
 			for _, alg := range tc.have {
 				assert.NotEqual(t, jose.SignatureAlgorithm("Ed448"), alg,
-					"Ed448 is registered by RFC 9864 but token/jose does not implement it")
+					"Ed448 is registered by RFC 9864 but authelia.com/provider/jose does not implement it")
 			}
 		})
 	}

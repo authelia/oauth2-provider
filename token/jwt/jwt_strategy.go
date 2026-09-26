@@ -8,8 +8,9 @@ import (
 	"context"
 	"fmt"
 
-	"authelia.com/provider/oauth2/token/jose"
-	"authelia.com/provider/oauth2/token/jose/jwt"
+	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

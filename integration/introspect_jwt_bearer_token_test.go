@@ -15,11 +15,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/integration/clients"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jose/jwt"
 )
 
 func TestIntrospectJWTBearerTokenSuite(t *testing.T) {

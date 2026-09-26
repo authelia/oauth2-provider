@@ -13,8 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
+	jjson "authelia.com/provider/jose/json"
+
 	"authelia.com/provider/oauth2/internal/clone"
-	jjson "authelia.com/provider/oauth2/token/jose/json"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

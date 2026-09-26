@@ -13,8 +13,9 @@ import (
 	"slices"
 	"strings"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )

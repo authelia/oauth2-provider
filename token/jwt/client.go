@@ -7,7 +7,7 @@ package jwt
 import (
 	"time"
 
-	"authelia.com/provider/oauth2/token/jose"
+	"authelia.com/provider/jose"
 )
 
 // NewJARClient converts a type into a Client provided it implements the JARClient.

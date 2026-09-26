@@ -10,8 +10,9 @@ import (
 	"encoding/base64"
 	"time"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/token/jose"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

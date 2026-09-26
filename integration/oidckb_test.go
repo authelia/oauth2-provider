@@ -26,14 +26,15 @@ import (
 	"github.com/stretchr/testify/require"
 	xoauth2 "golang.org/x/oauth2"
 
+	"authelia.com/provider/jose"
+	josejwt "authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/oidckb"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/jose"
-	josejwt "authelia.com/provider/oauth2/token/jose/jwt"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 

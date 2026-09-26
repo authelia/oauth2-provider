@@ -10,7 +10,8 @@ import (
 	"fmt"
 	"time"
 
-	jjson "authelia.com/provider/oauth2/token/jose/json"
+	jjson "authelia.com/provider/jose/json"
+
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 

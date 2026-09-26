@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -22,9 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/token/jose"
-	"authelia.com/provider/oauth2/token/jose/jwt"
 	ijwt "authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -277,18 +279,22 @@ func TestParseProofRejectsUnsignedAndSymmetricProofs(t *testing.T) {
 	t.Run("ShouldRejectASymmetricAlgorithm", func(t *testing.T) {
 		secret := []byte("0123456789abcdef0123456789abcdef")
 
-		signer, err := jose.NewSigner(
-			jose.SigningKey{Algorithm: jose.HS256, Key: secret},
-			(&jose.SignerOptions{}).
-				WithType(jose.ContentType(ijwt.JSONWebTokenTypeDPoP)).
-				WithHeader("jwk", map[string]any{"kty": "oct", "k": base64.RawURLEncoding.EncodeToString(secret)}),
-		)
+		header, err := json.Marshal(struct {
+			Algorithm string         `json:"alg"`
+			Type      string         `json:"typ"`
+			Key       map[string]any `json:"jwk"`
+		}{string(jose.HS256), ijwt.JSONWebTokenTypeDPoP, map[string]any{"kty": "oct", "k": base64.RawURLEncoding.EncodeToString(secret)}})
 		require.NoError(t, err)
 
-		raw, err := jwt.Signed(signer).Claims(claims).Serialize()
+		payload, err := json.Marshal(claims)
 		require.NoError(t, err)
 
-		_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.HS256})
+		input := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
+
+		mac := hmac.New(sha256.New, secret)
+		mac.Write([]byte(input))
+
+		_, err = ParseProof(input+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), []jose.SignatureAlgorithm{jose.HS256})
 
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})

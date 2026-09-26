@@ -8,8 +8,9 @@ import (
 	"slices"
 	"time"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jose"
 )
 
 // DefaultRegisteredClient is a Client implementation capable of holding every client metadata value defined by

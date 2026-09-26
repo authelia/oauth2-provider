@@ -722,11 +722,9 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			r := tc.r
 			if r == nil {
 				r = &http.Request{
-					Header: http.Header{},
-					Method: http.MethodPost,
-				}
-				if tc.query != nil {
-					r.URL = &url.URL{RawQuery: tc.query.Encode()}
+					Header:   http.Header{},
+					Method:   http.MethodPost,
+					PostForm: tc.query,
 				}
 			}
 
@@ -810,6 +808,56 @@ func TestNewPushedAuthorizeRequestWithRequestObject(t *testing.T) {
 	assert.Equal(t, ResponseModeQuery, ar.GetResponseMode())
 	assert.Equal(t, "strong-enough-state", ar.GetState())
 	assert.NotContains(t, ar.GetRequestForm(), consts.FormParameterPrompt)
+}
+
+func TestNewPushedAuthorizeRequestClientCredentials(t *testing.T) {
+	client := &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow}, Scopes: []string{}, ClientSecret: testClientSecret1234}
+
+	parameters := url.Values{
+		consts.FormParameterClientID:     {"1234"},
+		consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+		consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterState:        {"strong-state"},
+	}
+
+	t.Run("ShouldIgnoreCredentialsInTheQuery", func(t *testing.T) {
+		store := mock.NewMockStorage(gomock.NewController(t))
+		store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).AnyTimes()
+
+		provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+		r := &http.Request{
+			Header:   http.Header{},
+			Method:   http.MethodPost,
+			URL:      &url.URL{RawQuery: url.Values{consts.FormParameterClientSecret: {"1234"}}.Encode()},
+			PostForm: parameters,
+		}
+
+		_, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+
+		require.ErrorIs(t, err, ErrInvalidClient)
+	})
+
+	t.Run("ShouldNotRetainCredentialsInTheRequestForm", func(t *testing.T) {
+		store := mock.NewMockStorage(gomock.NewController(t))
+		store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).AnyTimes()
+
+		provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+		form := url.Values{consts.FormParameterClientSecret: {"1234"}}
+
+		for k, v := range parameters {
+			form[k] = v
+		}
+
+		r := &http.Request{Header: http.Header{}, Method: http.MethodPost, PostForm: form}
+
+		ar, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+		require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+		assert.NotContains(t, ar.GetRequestForm(), consts.FormParameterClientSecret)
+		assert.Equal(t, "1234", ar.GetRequestForm().Get(consts.FormParameterClientID))
+	})
 }
 
 type testRedirectURIPushedAuthorizationRequestClient struct {

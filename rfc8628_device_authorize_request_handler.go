@@ -29,10 +29,10 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
-	request.Form = r.PostForm
+	request.Form = withoutClientCredentials(r.PostForm)
 
 	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
-	client, _, err := f.AuthenticateClient(ctx, r, r.Form)
+	client, _, err := f.AuthenticateClient(ctx, r, r.PostForm)
 	if err != nil {
 		var rfcerr *RFC6749Error
 		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {

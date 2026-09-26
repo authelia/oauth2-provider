@@ -127,11 +127,47 @@ func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 		Config: config,
 	}
 
+	second := time.Now().UTC().Truncate(time.Second).Add(-10 * time.Second)
+
 	testCases := []struct {
 		name  string
 		setup func() (requester *oauth2.AccessRequest)
 		err   string
 	}{
+		{
+			name: "ShouldPassPromptLoginWithReauthenticationInTheSameSecond",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject:  testSubjectPeter,
+						AuthTime: jwt.NewNumericDate(second.Add(800 * time.Millisecond)),
+					},
+					Headers:     &jwt.Headers{},
+					RequestedAt: second.Add(300 * time.Millisecond),
+				})
+
+				requester.Form.Set(consts.FormParameterPrompt, consts.PromptTypeLogin)
+
+				return requester
+			},
+		},
+		{
+			name: "ShouldPassMaxAgeZeroWithReauthenticationInTheSameSecond",
+			setup: func() (requester *oauth2.AccessRequest) {
+				requester = oauth2.NewAccessRequest(&DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject:  testSubjectPeter,
+						AuthTime: jwt.NewNumericDate(second.Add(800 * time.Millisecond)),
+					},
+					Headers:     &jwt.Headers{},
+					RequestedAt: second.Add(300 * time.Millisecond),
+				})
+
+				requester.Form.Set(consts.FormParameterMaximumAge, "0")
+
+				return requester
+			},
+		},
 		{
 			name: "ShouldHandleNonce",
 			setup: func() (requester *oauth2.AccessRequest) {

@@ -313,6 +313,39 @@ func TestGenerateJWTIncludesClientID(t *testing.T) {
 	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
 }
 
+func TestGenerateJWTDefaultsTheSigningAlgorithm(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client-abc"}}
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3, "%s - %v", token, parts)
+
+	rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	var header map[string]any
+
+	require.NoError(t, json.Unmarshal(rawHeader, &header))
+
+	assert.Equal(t, "RS256", header["alg"])
+	assert.NoError(t, strategy.ValidateAccessToken(t.Context(), r, token))
+}
+
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
 }

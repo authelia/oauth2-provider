@@ -58,12 +58,8 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 	// the identity the issued token represents, so there is nothing to issue against.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
-	if subjectTokenObject == nil {
-		subjectTokenType := request.GetRequestForm().Get(consts.FormParameterSubjectTokenType)
-
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.
-			WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType).
-			WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
+	if err = requireSubjectToken(request); err != nil {
+		return err
 	}
 
 	mayAct, _ := subjectTokenObject[consts.ClaimAuthorizedActor].(map[string]any)

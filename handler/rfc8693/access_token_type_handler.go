@@ -167,6 +167,10 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 }
 
 func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
+	if err = requireSubjectToken(request); err != nil {
+		return err
+	}
+
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(c.AccessTokenLifespan))
 
 	var token, signature string

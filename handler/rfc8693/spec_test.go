@@ -163,7 +163,8 @@ func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 			Headers: &jwt.Headers{},
 			Subject: "alice",
 		},
-		Extra: map[string]any{},
+		SubjectToken: map[string]any{consts.ClaimSubject: "alice"},
+		Extra:        map[string]any{},
 	}
 
 	store := storage.NewExampleStore()
@@ -357,7 +358,7 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
-			Session: newSpecSession("alice"),
+			Session: newValidatedSpecSession("alice"),
 		},
 	}
 
@@ -394,7 +395,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
-			Session: newSpecSession("alice"),
+			Session: newValidatedSpecSession("alice"),
 		},
 	}
 
@@ -417,6 +418,7 @@ func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 	// resolution didn't write the subject onto the session.
 	session := &DefaultSession{
 		DefaultSession: &openid.DefaultSession{Claims: &jwt.IDTokenClaims{}, Headers: &jwt.Headers{}},
+		SubjectToken:   map[string]any{},
 		Extra:          map[string]any{},
 	}
 
@@ -567,6 +569,13 @@ func newSpecSession(subject string) *DefaultSession {
 	}
 }
 
+func newValidatedSpecSession(subject string) *DefaultSession {
+	session := newSpecSession(subject)
+	session.SetSubjectToken(map[string]any{consts.ClaimSubject: subject})
+
+	return session
+}
+
 // newSpecRequest produces a baseline RFC 8693 access request with grant_type and the minimum required form params.
 func newSpecRequest(t *testing.T, client oauth2.Client, session *DefaultSession, form url.Values) *oauth2.AccessRequest {
 	t.Helper()
@@ -605,8 +614,20 @@ func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest
 		ResourceStrategy: cfg.GetResourceStrategy(context.Background()),
 	}
 
+	session, _ := req.GetSession().(Session)
+
+	var subjectToken map[string]any
+
+	if session != nil {
+		subjectToken = session.GetSubjectToken()
+	}
+
 	if err := h.HandleTokenEndpointRequest(context.Background(), req); err != nil {
 		return err
+	}
+
+	if subjectToken != nil {
+		session.SetSubjectToken(subjectToken)
 	}
 
 	return h.PopulateTokenEndpointResponse(context.Background(), req, oauth2.NewAccessResponse())
@@ -751,7 +772,16 @@ func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSess
 	ctx := context.Background()
 	resp := oauth2.NewAccessResponse()
 
+	subjectToken := session.GetSubjectToken()
+
 	require.NoError(t, grant.HandleTokenEndpointRequest(ctx, req))
+
+	if subjectToken == nil {
+		subjectToken = map[string]any{consts.ClaimSubject: session.GetSubject()}
+	}
+
+	session.SetSubjectToken(subjectToken)
+
 	require.NoError(t, grant.PopulateTokenEndpointResponse(ctx, req, resp))
 	require.NoError(t, cjt.PopulateTokenEndpointResponse(ctx, req, resp))
 

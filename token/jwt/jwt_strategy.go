@@ -37,6 +37,28 @@ type StrategyConfig interface {
 	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
 }
 
+const (
+	// DefaultJWEPBES2CountMinimum is the default smallest accepted 'p2c' header value of a JWE using a password based
+	// key algorithm.
+	DefaultJWEPBES2CountMinimum = 200000
+
+	// DefaultJWEPBES2CountMaximum is the default largest accepted 'p2c' header value of a JWE using a password based
+	// key algorithm. The value is chosen by the sender and sets the number of PBKDF2 iterations performed before the
+	// JWE can be authenticated, so it is bounded to limit the work a party that is not yet authenticated can cause.
+	DefaultJWEPBES2CountMaximum = 600000
+)
+
+// JWEPBES2CountProvider is optionally implemented by a StrategyConfig to bound the 'p2c' header value of a JWE using a
+// password based key algorithm. A value of zero or less selects DefaultJWEPBES2CountMinimum or
+// DefaultJWEPBES2CountMaximum respectively. The JOSE implementation rejects values above 1,000,000 regardless.
+type JWEPBES2CountProvider interface {
+	// GetJWEPBES2CountMinimum returns the smallest accepted 'p2c' header value.
+	GetJWEPBES2CountMinimum(ctx context.Context) (count int)
+
+	// GetJWEPBES2CountMaximum returns the largest accepted 'p2c' header value.
+	GetJWEPBES2CountMaximum(ctx context.Context) (count int)
+}
+
 type JWKSFetcherStrategy interface {
 	// Resolve returns the JSON Web Key Set, or an error if something went wrong. The forceRefresh, if true, forces
 	// the strategy to fetch the key from the remote. If forceRefresh is false, the strategy may use a caching strategy
@@ -146,7 +168,9 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		kid, alg, enc string
 	)
 
-	if kid, alg, enc, _, err = headerValidateJWE(jwe.Header); err != nil {
+	minimum, maximum := pbes2CountBounds(ctx, j.Config)
+
+	if kid, alg, enc, _, err = headerValidateJWE(jwe.Header, minimum, maximum); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
@@ -240,6 +264,22 @@ func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts .
 	token.valid = validate
 
 	return token, nil
+}
+
+func pbes2CountBounds(ctx context.Context, config StrategyConfig) (minimum, maximum int) {
+	minimum, maximum = DefaultJWEPBES2CountMinimum, DefaultJWEPBES2CountMaximum
+
+	if provider, ok := config.(JWEPBES2CountProvider); ok {
+		if value := provider.GetJWEPBES2CountMinimum(ctx); value > 0 {
+			minimum = value
+		}
+
+		if value := provider.GetJWEPBES2CountMaximum(ctx); value > 0 {
+			maximum = value
+		}
+	}
+
+	return minimum, maximum
 }
 
 func decryptClientSecretJWK(ctx context.Context, client Client, kid, alg, enc string) (key *jose.JSONWebKey, err error) {

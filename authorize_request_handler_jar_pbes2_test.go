@@ -23,13 +23,15 @@ import (
 
 func TestRequestObjectPasswordBasedEncryption(t *testing.T) {
 	testCases := []struct {
-		name   string
-		encAlg string
-		err    bool
+		name    string
+		encAlg  string
+		maximum int
+		err     string
 	}{
-		{"ShouldRejectWhenNotRegistered", "", true},
-		{"ShouldRejectWhenAnotherAlgorithmIsRegistered", string(jose.A128KW), true},
-		{"ShouldAcceptWhenRegistered", string(jose.PBES2_HS256_A128KW), false},
+		{"ShouldRejectWhenNotRegistered", "", 0, "jwe header 'alg' value 'PBES2-HS256+A128KW' is a password based algorithm the client has not registered"},
+		{"ShouldRejectWhenAnotherAlgorithmIsRegistered", string(jose.A128KW), 0, "jwe header 'alg' value 'PBES2-HS256+A128KW' is a password based algorithm the client has not registered"},
+		{"ShouldRejectAboveConfiguredMaximum", string(jose.PBES2_HS256_A128KW), 300000, "jwe header 'p2c' has an invalid value '600000': more than 300000"},
+		{"ShouldAcceptWhenRegistered", string(jose.PBES2_HS256_A128KW), 0, ""},
 	}
 
 	for _, tc := range testCases {
@@ -47,7 +49,7 @@ func TestRequestObjectPasswordBasedEncryption(t *testing.T) {
 				RequestObjectEncryptionAlg: tc.encAlg,
 			}
 
-			config := &oauth2.Config{IDTokenIssuer: "https://auth.example.com"}
+			config := &oauth2.Config{IDTokenIssuer: "https://auth.example.com", JWEPBES2CountMaximum: tc.maximum}
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}
 
 			provider := &oauth2.Fosite{Store: store, Config: config}
@@ -65,14 +67,14 @@ func TestRequestObjectPasswordBasedEncryption(t *testing.T) {
 
 			_, err := provider.NewAuthorizeRequest(t.Context(), r)
 
-			if !tc.err {
+			if tc.err == "" {
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 
 				return
 			}
 
 			require.ErrorIs(t, err, oauth2.ErrInvalidRequestObject)
-			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "jwe header 'alg' value 'PBES2-HS256+A128KW' is a password based algorithm the client has not registered")
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
 		})
 	}
 }

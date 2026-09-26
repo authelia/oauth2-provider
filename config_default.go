@@ -251,6 +251,16 @@ type Config struct {
 	// JWTStrategy handles less specific jwt.Strategy cases.
 	JWTStrategy jwt.Strategy
 
+	// JWEPBES2CountMinimum is the smallest accepted 'p2c' header value of a JWE using a password based key algorithm.
+	// Defaults to jwt.DefaultJWEPBES2CountMinimum.
+	JWEPBES2CountMinimum int
+
+	// JWEPBES2CountMaximum is the largest accepted 'p2c' header value of a JWE using a password based key algorithm.
+	// The value is chosen by the sender and the client identifier it names may be supplied by a party that is not yet
+	// authenticated, so it bounds the PBKDF2 iterations such a party can cause. Defaults to
+	// jwt.DefaultJWEPBES2CountMaximum. The JOSE implementation rejects values above 1,000,000 regardless.
+	JWEPBES2CountMaximum int
+
 	// EnforceJWTProfileAccessTokens forces the issuer to return JWT Profile Access Tokens to all clients.
 	EnforceJWTProfileAccessTokens bool
 
@@ -848,6 +858,24 @@ func (c *Config) GetBCryptCost(_ context.Context) int {
 	}
 
 	return c.HashCost
+}
+
+// GetJWEPBES2CountMinimum returns JWEPBES2CountMinimum if positive. Defaults to jwt.DefaultJWEPBES2CountMinimum.
+func (c *Config) GetJWEPBES2CountMinimum(_ context.Context) int {
+	if c.JWEPBES2CountMinimum <= 0 {
+		return jwt.DefaultJWEPBES2CountMinimum
+	}
+
+	return c.JWEPBES2CountMinimum
+}
+
+// GetJWEPBES2CountMaximum returns JWEPBES2CountMaximum if positive. Defaults to jwt.DefaultJWEPBES2CountMaximum.
+func (c *Config) GetJWEPBES2CountMaximum(_ context.Context) int {
+	if c.JWEPBES2CountMaximum <= 0 {
+		return jwt.DefaultJWEPBES2CountMaximum
+	}
+
+	return c.JWEPBES2CountMaximum
 }
 
 // GetJWKSFetcherStrategy returns the jwt.JWKSFetcherStrategy.

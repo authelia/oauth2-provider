@@ -103,7 +103,7 @@ func headerValidateJWS(headers []jose.Header) (kid, alg string, err error) {
 	return headers[0].KeyID, headers[0].Algorithm, nil
 }
 
-func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error) {
+func headerValidateJWE(header jose.Header, minimum, maximum int) (kid, alg, enc, cty string, err error) {
 	if header.KeyID == "" && !IsEncryptedJWTClientSecretAlgStr(header.Algorithm) {
 		return "", "", "", "", fmt.Errorf("jwe header 'kid' value is missing or empty")
 	}
@@ -121,10 +121,10 @@ func headerValidateJWE(header jose.Header) (kid, alg, enc, cty string, err error
 		if value, ok = header.ExtraHeaders[JSONWebTokenHeaderPBES2Count]; ok {
 			switch p2c := value.(type) {
 			case float64:
-				if p2c > 5000000 {
-					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': more than 5,000,000", int(p2c))
-				} else if p2c < 200000 {
-					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': less than 200,000", int(p2c))
+				if p2c > float64(maximum) {
+					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': more than %d", int(p2c), maximum)
+				} else if p2c < float64(minimum) {
+					return "", "", "", "", fmt.Errorf("jwe header 'p2c' has an invalid value '%d': less than %d", int(p2c), minimum)
 				}
 			default:
 				return "", "", "", "", fmt.Errorf("jwe header 'p2c' value has invalid type %T", p2c)

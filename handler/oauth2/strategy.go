@@ -62,7 +62,8 @@ type RefreshTokenStrategy interface {
 	// GenerateRefreshToken generates a new Refresh Token.
 	GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
-	// ValidateRefreshToken validates the provided Refresh Token.
+	// ValidateRefreshToken validates the provided Refresh Token. The integrity of the token MUST be verified before
+	// its expiry, so that oauth2.ErrTokenExpired is only returned for a genuine token.
 	ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
@@ -78,7 +79,8 @@ type AuthorizeCodeStrategy interface {
 	// GenerateAuthorizeCode generates a new Authorize Code.
 	GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
-	// ValidateAuthorizeCode validates the provided Authorize Code.
+	// ValidateAuthorizeCode validates the provided Authorize Code. The integrity of the code MUST be verified before
+	// its expiry, so that oauth2.ErrTokenExpired is only returned for a genuine code.
 	ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
@@ -94,7 +96,8 @@ type DeviceCodeStrategy interface {
 	// GenerateRFC8628DeviceCode generates a new RFC8628 Device Code.
 	GenerateRFC8628DeviceCode(ctx context.Context) (code string, signature string, err error)
 
-	// ValidateRFC8628DeviceCode validates the provided RFC8628 Device Code.
+	// ValidateRFC8628DeviceCode validates the provided RFC8628 Device Code. The integrity of the code MUST be verified
+	// before its expiry, so that oauth2.ErrDeviceExpiredToken is only returned for a genuine code.
 	ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }
 

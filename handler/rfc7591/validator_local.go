@@ -190,45 +190,50 @@ func validateTLSClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err err
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	for _, raw := range metadata.RedirectURIs {
-		var parsed *url.URL
-
-		if parsed, err = url.Parse(raw); err != nil || !parsed.IsAbs() {
-			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must be an absolute URI.", consts.ClientMetadataRedirectURIs, raw))
+		if err = validateRedirectURI(oauth2.ErrInvalidRedirectURI, consts.ClientMetadataRedirectURIs, raw, metadata.ApplicationType); err != nil {
+			return err
 		}
+	}
 
-		if parsed.Fragment != "" {
-			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not contain a fragment component.", consts.ClientMetadataRedirectURIs, raw))
-		}
+	return nil
+}
 
-		if metadata.ApplicationType == consts.ApplicationTypeNative {
-			if parsed.Scheme == consts.SchemeHTTPS {
-				continue
+func validateRedirectURI(rfc *oauth2.RFC6749Error, name, raw, applicationType string) (err error) {
+	var parsed *url.URL
+
+	if parsed, err = url.Parse(raw); err != nil || !parsed.IsAbs() {
+		return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must be an absolute URI.", name, raw))
+	}
+
+	if parsed.Fragment != "" {
+		return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must not contain a fragment component.", name, raw))
+	}
+
+	if applicationType == consts.ApplicationTypeNative {
+		switch {
+		case parsed.Scheme == consts.SchemeHTTPS:
+			return nil
+		case parsed.Scheme != consts.SchemeHTTP:
+			// A private-use URI scheme is permitted for native clients, but only in the reverse-DNS form RFC 8252
+			// Section 7.1 requires.
+			if !isPrivateUseURIScheme(parsed.Scheme) {
+				return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.", name, raw))
 			}
 
-			if parsed.Scheme != consts.SchemeHTTP {
-				// A private-use URI scheme is permitted for native clients, but only in the reverse-DNS form RFC 8252
-				// Section 7.1 requires.
-				if !isPrivateUseURIScheme(parsed.Scheme) {
-					return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must use a private-use URI scheme based on a domain name under the client's control, expressed in reverse order.", consts.ClientMetadataRedirectURIs, raw))
-				}
-
-				continue
-			}
-
-			if !isLoopbackHost(parsed.Hostname()) {
-				return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must use the 'https' scheme, a loopback address (127.0.0.1 or [::1]), or a non-HTTP custom scheme for the 'native' '%s'.", consts.ClientMetadataRedirectURIs, raw, consts.ClientMetadataApplicationType))
-			}
-
-			continue
+			return nil
+		case !isLoopbackHost(parsed.Hostname()):
+			return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must use the 'https' scheme, a loopback address (127.0.0.1 or [::1]), or a non-HTTP custom scheme for the 'native' '%s'.", name, raw, consts.ClientMetadataApplicationType))
+		default:
+			return nil
 		}
+	}
 
-		if parsed.Scheme != consts.SchemeHTTPS {
-			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must use the 'https' scheme.", consts.ClientMetadataRedirectURIs, raw))
-		}
+	if parsed.Scheme != consts.SchemeHTTPS {
+		return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must use the 'https' scheme.", name, raw))
+	}
 
-		if isLoopbackRedirect(parsed.Hostname()) {
-			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", consts.ClientMetadataRedirectURIs, raw, consts.ClientMetadataApplicationType))
-		}
+	if isLoopbackRedirect(parsed.Hostname()) {
+		return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", name, raw, consts.ClientMetadataApplicationType))
 	}
 
 	return nil
@@ -266,8 +271,13 @@ func validateGrantTypesPermitted(ctx context.Context, config LocalValidatorConfi
 // define each as an https URL. The scheme is what keeps a registrant from naming an internal service and reading the
 // outcome through an error message or a delivery status.
 //
-// 'post_logout_redirect_uris' is a browser redirect target rather than something this server fetches, so only the
-// absolute and fragment rules apply to it and a native client's private-use scheme stays registrable.
+// 'post_logout_redirect_uris' is a browser redirect target rather than something this server fetches, so it takes the
+// 'redirect_uris' scheme rules for the declared 'application_type' instead. OpenID Connect RP-Initiated Logout 1.0
+// Section 3.1 states these URLs SHOULD use the https scheme, permits http only where the OP allows it, and permits an
+// alternate scheme to call back into a native application, so a native client's private-use scheme stays registrable
+// and a scheme a user agent would execute, such as 'javascript', never is.
+//
+// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ClientMetadata
 //
 // See: https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRegistration
 func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
@@ -283,8 +293,14 @@ func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 		return err
 	}
 
-	if err = validateURIList(consts.ClientMetadataPostLogoutRedirectURIs, metadata.PostLogoutRedirectURIs, false); err != nil {
-		return err
+	for _, raw := range metadata.PostLogoutRedirectURIs {
+		if raw == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' values must not contain an empty value.", consts.ClientMetadataPostLogoutRedirectURIs))
+		}
+
+		if err = validateRedirectURI(oauth2.ErrInvalidClientMetadata, consts.ClientMetadataPostLogoutRedirectURIs, raw, metadata.ApplicationType); err != nil {
+			return err
+		}
 	}
 
 	return nil

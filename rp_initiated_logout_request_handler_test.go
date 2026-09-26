@@ -312,6 +312,7 @@ func TestNewRPInitiatedLogoutRequest_AcceptsRegisteredPostLogoutRedirectURI(t *t
 func TestNewRPInitiatedLogoutRequest_PostLogoutRedirectURIRejections(t *testing.T) {
 	registered := newLogoutClient("test-client", "https://rp.example/logged-out")
 	plain := &oauth2.DefaultClient{ID: "plain-client"}
+	script := newLogoutClient("script-client", "javascript:alert(1)", "data:text/html,x", "vbscript:msgbox(1)", "JavaScript:alert(1)")
 
 	testCases := []struct {
 		name  string
@@ -329,11 +330,27 @@ func TestNewRPInitiatedLogoutRequest_PostLogoutRedirectURIRejections(t *testing.
 			name:  "ClientWithoutMetadata",
 			query: url.Values{"client_id": {"plain-client"}, "post_logout_redirect_uri": {"https://rp.example/logged-out"}},
 		},
+		{
+			name:  "RegisteredJavaScriptScheme",
+			query: url.Values{"client_id": {"script-client"}, "post_logout_redirect_uri": {"javascript:alert(1)"}},
+		},
+		{
+			name:  "RegisteredDataScheme",
+			query: url.Values{"client_id": {"script-client"}, "post_logout_redirect_uri": {"data:text/html,x"}},
+		},
+		{
+			name:  "RegisteredVBScriptScheme",
+			query: url.Values{"client_id": {"script-client"}, "post_logout_redirect_uri": {"vbscript:msgbox(1)"}},
+		},
+		{
+			name:  "RegisteredMixedCaseJavaScriptScheme",
+			query: url.Values{"client_id": {"script-client"}, "post_logout_redirect_uri": {"JavaScript:alert(1)"}},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f, _, _ := newLogoutProviderWithJWT(t, registered, plain)
+			f, _, _ := newLogoutProviderWithJWT(t, registered, plain, script)
 
 			requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(tc.query))
 

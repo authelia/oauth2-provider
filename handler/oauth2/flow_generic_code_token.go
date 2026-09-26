@@ -59,16 +59,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		deviceRequester oauth2.Requester
 	)
 
-	if code, _, deviceRequester, err = c.GetCodeAndSession(ctx, request); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
-		if deviceRequester == nil {
-			return oauth2.ErrServerError.
-				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
-				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
-		}
-
-		hint := "The authorization code has already been used."
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint))
-	} else if errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+	if code, _, deviceRequester, err = c.GetCodeAndSession(ctx, request); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
 		if deviceRequester == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
@@ -169,9 +160,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	if err != nil {
 		switch {
-		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The authorization code has already been used."))
-		case errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
+		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode), errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
 			if ar == nil {
 				return errorsx.WithStack(oauth2.ErrServerError.
 					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
@@ -216,6 +205,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		}
 	}
 
+	var replayed bool
+
+	parent := ctx
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -224,11 +217,17 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
+			} else if replayed {
+				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
 			}
 		}
 	}()
 
-	if err = c.InvalidateSession(ctx, signature, ar); err != nil {
+	if err = c.InvalidateSession(ctx, signature, ar); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+		replayed = true
+
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
+	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

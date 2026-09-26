@@ -1194,6 +1194,73 @@ func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInactiveToken, "the refresh token issued from the replayed code must be revoked")
 }
 
+func TestAuthorizeCodeFlow_ConcurrentReplayCaughtAtInvalidation(t *testing.T) {
+	store := &invalidatedCodeStore{MemoryStore: storage.NewMemoryStore()}
+	strategy := &hmacshaStrategy
+
+	client := &oauth2.DefaultClient{
+		ID:         "foo",
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+	}
+
+	handler := AuthorizeExplicitGrantHandler{
+		CoreStorage:            store,
+		TokenRevocationStorage: store,
+		AuthorizeCodeStrategy:  strategy,
+		AccessTokenStrategy:    strategy,
+		RefreshTokenStrategy:   strategy,
+		Config: &oauth2.Config{
+			ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+			AccessTokenLifespan:   time.Minute,
+			AuthorizeCodeLifespan: time.Minute,
+		},
+	}
+
+	code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+	require.NoError(t, err)
+
+	authorizeRequest := &oauth2.AuthorizeRequest{
+		Request: oauth2.Request{
+			ID:             "req-id",
+			Client:         client,
+			Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+			RequestedScope: oauth2.Arguments{"foo"},
+			GrantedScope:   oauth2.Arguments{"foo"},
+			Session:        &oauth2.DefaultSession{},
+			RequestedAt:    time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, authorizeRequest))
+	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "at-sig", authorizeRequest))
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", authorizeRequest))
+
+	accessRequest := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+		Request: oauth2.Request{
+			Client: client,
+			Form: url.Values{
+				consts.FormParameterAuthorizationCode: []string{code},
+				consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+			},
+			Session:     &oauth2.DefaultSession{},
+			RequestedAt: time.Now().UTC(),
+		},
+	}
+
+	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+	err = handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, oauth2.NewAccessResponse())
+	require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+
+	_, err = store.GetAccessTokenSession(t.Context(), "at-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+	_, err = store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+}
+
 func TestAuthorizeCodeFlow_PopulateTokenEndpointResponseKeepsBinding(t *testing.T) {
 	const (
 		jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
@@ -1313,4 +1380,12 @@ func (s *hydratingAuthorizeCodeStore) GetAuthorizeCodeSession(ctx context.Contex
 	clone.Session = session
 
 	return &clone, nil
+}
+
+type invalidatedCodeStore struct {
+	*storage.MemoryStore
+}
+
+func (s *invalidatedCodeStore) InvalidateAuthorizeCodeSession(_ context.Context, _ string) error {
+	return oauth2.ErrInvalidatedAuthorizeCode
 }

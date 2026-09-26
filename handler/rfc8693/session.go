@@ -5,7 +5,9 @@
 package rfc8693
 
 import (
+	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -52,6 +54,26 @@ func NewDefaultSession() *DefaultSession {
 		DefaultSession: openid.NewDefaultSession(),
 		Extra:          map[string]any{},
 	}
+}
+
+// Clone returns a deep copy of the session, or nil if the receiver is nil. The copy keeps this type, so the actor and
+// subject tokens and the Extra claims such as 'act' and 'may_act' survive a refresh.
+func (s *DefaultSession) Clone() oauth2.Session {
+	if s == nil {
+		return nil
+	}
+
+	cloned := &DefaultSession{
+		ActorToken:   clone.Map(s.ActorToken),
+		SubjectToken: clone.Map(s.SubjectToken),
+		Extra:        clone.Map(s.Extra),
+	}
+
+	if s.DefaultSession != nil {
+		cloned.DefaultSession, _ = s.DefaultSession.Clone().(*openid.DefaultSession)
+	}
+
+	return cloned
 }
 
 func (s *DefaultSession) SetActorToken(token map[string]any) {

@@ -30,12 +30,18 @@ import (
 )
 
 func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
+	const (
+		hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."
+		errKeyNotFoundMessage   = "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s)."
+	)
+
 	testCases := []struct {
 		name     string
 		setup    func(f *jwtBearerFixture)
 		err      error
 		expected string
 		pattern  string
+		hint     string
 	}{
 		{
 			name: "ShouldRejectAnInvalidGrantType",
@@ -113,7 +119,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(nil, oauth2.ErrNotFound)
 			},
 			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s).",
+			expected: errKeyNotFoundMessage,
+			hint:     hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectWhenNoPublicKeysAreRegistered",
@@ -125,7 +132,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
 			},
 			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s).",
+			expected: errKeyNotFoundMessage,
+			hint:     hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectWhenThePublicKeyDoesNotVerify",
@@ -139,6 +147,7 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. go-jose/go-jose: error in cryptographic primitive",
+			hint:     hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectWhenNoneOfThePublicKeysVerify",
@@ -150,7 +159,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(f.createJWS(f.createRandomTestJWK(), f.createRandomTestJWK()), nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter.",
+			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter.",
+			hint:     hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectAnAssertionWithoutAnAudience",
@@ -546,6 +556,10 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.err)
+
+			if tc.hint != "" {
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			}
 
 			if tc.pattern != "" {
 				assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())

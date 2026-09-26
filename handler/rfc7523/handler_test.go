@@ -647,6 +647,109 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 
 // newJWTBearerFixture builds the mocks, requester and handler a single case runs against. gomock.NewController
 // registers its own cleanup, so the controller is finished when the subtest ends.
+func TestAuthorizeJWTGrantAudience(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func(f *jwtBearerFixture)
+		storage  bool
+		audience []string
+		resource []string
+		err      string
+	}{
+		{
+			name:    "ShouldNotGrantTheAssertionAudience",
+			storage: true,
+		},
+		{
+			name:    "ShouldGrantARequestedAudienceTheKeyHas",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})
+			},
+			audience: []string{"https://leela.example.com"},
+		},
+		{
+			name:    "ShouldGrantARequestedResourceTheKeyHas",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com"})
+			},
+			resource: []string{"https://leela.example.com"},
+		},
+		{
+			name:    "ShouldRejectARequestedAudienceTheKeyDoesNotHave",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:    "ShouldRejectARequestedResourceTheKeyDoesNotHave",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.requester.SetRequestedResource(oauth2.Arguments{"https://fry.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:    "ShouldRejectARequestedAudienceOnlyTheClientHas",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.requester.Client = &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Audience: []string{"https://fry.example.com"}}
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name: "ShouldRejectARequestedAudienceWithoutAudienceStorage",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://leela.example.com' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newJWTBearerFixture(t)
+			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+
+			if tc.storage {
+				f.handler.Storage = &testAudienceStorage{MockRFC7523Storage: f.mockStore, audience: []string{"https://leela.example.com"}}
+			}
+
+			if tc.setup != nil {
+				tc.setup(f)
+			}
+
+			pubKey := f.createJWK(f.privateKey.Public(), keyID)
+			cl := f.createStandardClaim()
+			f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+
+			if tc.err == "" {
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+			}
+
+			err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+
+			if tc.err != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidTarget)
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.ElementsMatch(t, tc.audience, f.requester.GetGrantedAudience())
+			assert.ElementsMatch(t, tc.resource, f.requester.GetGrantedResource())
+		})
+	}
+}
+
 func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 	t.Helper()
 
@@ -768,3 +871,13 @@ var jwtBearerKey = func() *rsa.PrivateKey {
 
 	return key
 }()
+
+type testAudienceStorage struct {
+	*mock.MockRFC7523Storage
+
+	audience []string
+}
+
+func (s *testAudienceStorage) GetRFC7523PublicKeyAudience(_ context.Context, _, _, _ string) ([]string, error) {
+	return s.audience, nil
+}

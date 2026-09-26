@@ -27,6 +27,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
@@ -244,6 +245,34 @@ func TestSpec_2_2_ResponseShape_AccessToken(t *testing.T) {
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope (and AS sets unconditionally)")
 	assert.Equal(t, consts.TokenTypeRFC8693AccessToken, resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
+}
+
+// §2.2.1: a DPoP bound exchange keeps token_type 'N_A' for an issued token that is not an access token.
+func TestSpec_2_2_1_TokenType_DPoPBoundExchange(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requested string
+		expected  string
+	}{
+		{name: "ShouldRelabelAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken, expected: oauth2.DPoPAccessToken},
+		{name: "ShouldKeepNotApplicableForARefreshToken", requested: consts.TokenTypeRFC8693RefreshToken, expected: oauth2.RFC8693NAToken},
+		{name: "ShouldKeepNotApplicableForAnIDToken", requested: consts.TokenTypeRFC8693IDToken, expected: oauth2.RFC8693NAToken},
+		{name: "ShouldKeepNotApplicableForACustomJWT", requested: "urn:spec:jwt", expected: oauth2.RFC8693NAToken},
+	}
+
+	binder := &rfc9449.Handler{Config: &oauth2.Config{DPoPEnabled: true}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := runTokenExchange(t, tc.requested)
+
+			session := newSpecSession("peter")
+			session.SetDPoPJWKThumbprint("some-thumbprint")
+
+			require.NoError(t, binder.PopulateBoundTokenEndpointResponse(t.Context(), oauth2.NewAccessRequest(session), resp))
+			assert.Equal(t, tc.expected, resp.GetTokenType())
+		})
+	}
 }
 
 // §2.2: refresh-token response carries access_token (carrying the refresh token), token_type=N_A, expires_in, scope, issued_token_type.

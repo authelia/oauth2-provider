@@ -248,6 +248,36 @@ func TestHandlerPopulateBoundTokenEndpointResponseSetsDPoPTokenType(t *testing.T
 	assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
 }
 
+func TestHandlerPopulateBoundTokenEndpointResponseTokenType(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     string
+		expected string
+	}{
+		{name: "ShouldRelabelAnUnsetTokenType", have: "", expected: oauth2.DPoPAccessToken},
+		{name: "ShouldRelabelABearerTokenType", have: oauth2.BearerAccessToken, expected: oauth2.DPoPAccessToken},
+		{name: "ShouldRelabelABearerTokenTypeIgnoringCase", have: "Bearer", expected: oauth2.DPoPAccessToken},
+		{name: "ShouldKeepTheRFC8693NotApplicableTokenType", have: oauth2.RFC8693NAToken, expected: oauth2.RFC8693NAToken},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, _ := newTestHandler(false)
+
+			session := &oauth2.DefaultSession{}
+			session.SetDPoPJWKThumbprint("some-thumbprint")
+			request := oauth2.NewAccessRequest(session)
+			request.Client = &oauth2.DefaultClient{}
+
+			response := oauth2.NewAccessResponse()
+			response.SetTokenType(tc.have)
+
+			require.NoError(t, h.PopulateBoundTokenEndpointResponse(context.Background(), request, response))
+			assert.Equal(t, tc.expected, response.GetTokenType())
+		})
+	}
+}
+
 func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	h, _, _ := newTestHandler(false)
 	key := newTestProofKey(t)

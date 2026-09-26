@@ -540,21 +540,21 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that has an invalid signature. %s.", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		case errJWTValidation.Has(jwt.ValidationErrorExpired):
 			exp, err := token.Claims.GetExpirationTime()
-			if err == nil {
+			if err == nil && exp != nil {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion expired at %d.", client.GetID(), exp.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was expired. The client assertion does not have an 'exp' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorIssuedAt):
 			iat, err := token.Claims.GetIssuedAt()
-			if err == nil {
+			if err == nil && iat != nil {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion was issued at %d.", client.GetID(), iat.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'iat' claim or it has an invalid type.", client.GetID())
 			}
 		case errJWTValidation.Has(jwt.ValidationErrorNotValidYet):
 			nbf, err := token.Claims.GetNotBefore()
-			if err == nil {
+			if err == nil && nbf != nil {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion is not valid before %d.", client.GetID(), nbf.Int64())
 			} else {
 				return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was issued in the future. The client assertion does not have an 'nbf' claim or it has an invalid type.", client.GetID())

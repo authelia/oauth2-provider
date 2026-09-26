@@ -12,6 +12,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -62,13 +63,16 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		return err
 	}
 
-	mayAct, _ := subjectTokenObject[consts.ClaimAuthorizedActor].(map[string]any)
+	mayAct, present, err := authorizedActor(subjectTokenObject)
+	if err != nil {
+		return err
+	}
 
 	switch {
-	case actorTokenObject == nil && mayAct == nil:
+	case actorTokenObject == nil && !present:
 		// Impersonation. No authorization check required at this layer.
 		return nil
-	case mayAct != nil:
+	case present:
 		// may_act constraint present. Build a virtual actor from the authenticated client when no actor_token was
 		// supplied, then enforce that the actor satisfies every may_act member.
 		actor := actorTokenObject
@@ -80,10 +84,14 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		}
 
 		for k, v := range mayAct {
+			if isUnusedAuthorizedActorClaim(k) {
+				continue
+			}
+
 			// reflect.DeepEqual handles non-comparable dynamic types (slices, maps, nested objects) which
 			// interface == would panic on per Go spec; may_act values are not constrained to scalars.
 			if !reflect.DeepEqual(actor[k], v) {
-				return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("The actor or client is not authorized to act on behalf of the subject."))
+				return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The actor or client is not authorized to act on behalf of the subject."))
 			}
 		}
 
@@ -97,7 +105,7 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 			return nil
 		}
 
-		return errors.WithStack(oauth2.ErrInvalidGrant.
+		return errors.WithStack(oauth2.ErrInvalidRequest.
 			WithHint("The subject token does not authorize delegation: no 'may_act' claim is present.").
 			WithDebug("The OAuth 2.0 client supplied an 'actor_token' but the subject token does not contain a 'may_act' claim authorizing the actor to act on behalf of the subject. Either set the 'may_act' claim on the subject token, or configure the client to use an out-of-band authorization policy by implementing the ActorTokenPolicyClient interface."))
 	}
@@ -117,4 +125,38 @@ func (c *ActorTokenValidationHandler) CanSkipClientAuth(ctx context.Context, req
 func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+}
+
+func authorizedActor(subject map[string]any) (mayAct map[string]any, present bool, err error) {
+	var value any
+
+	if value, present = subject[consts.ClaimAuthorizedActor]; !present {
+		return nil, false, nil
+	}
+
+	switch v := value.(type) {
+	case map[string]any:
+		mayAct = v
+	case jwt.MapClaims:
+		mayAct = v
+	}
+
+	for k := range mayAct {
+		if !isUnusedAuthorizedActorClaim(k) {
+			return mayAct, true, nil
+		}
+	}
+
+	return nil, true, errorsx.WithStack(oauth2.ErrInvalidRequest.
+		WithHint("The subject token's 'may_act' claim does not identify the party authorized to act on behalf of the subject.").
+		WithDebug("The 'may_act' claim must be a JSON object with at least one member identifying the authorized actor."))
+}
+
+func isUnusedAuthorizedActorClaim(claim string) bool {
+	switch claim {
+	case consts.ClaimExpirationTime, consts.ClaimNotBefore, consts.ClaimAudience:
+		return true
+	default:
+		return false
+	}
 }

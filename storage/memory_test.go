@@ -157,6 +157,47 @@ func TestMemoryStore_RotateRefreshToken(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestMemoryStoreDecideDeviceCodeSession(t *testing.T) {
+	newRequest := func(status oauth2.DeviceAuthorizeStatus) *oauth2.DeviceAuthorizeRequest {
+		request := oauth2.NewDeviceAuthorizeRequest()
+		request.SetDeviceCodeSignature("device-sig")
+		request.SetUserCodeSignature("user-sig")
+		request.SetStatus(status)
+
+		return request
+	}
+
+	t.Run("ShouldFailWithoutAStoredSession", func(t *testing.T) {
+		store := NewMemoryStore()
+
+		assert.ErrorIs(t, store.DecideDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusApproved)), oauth2.ErrNotFound)
+	})
+
+	t.Run("ShouldRecordTheFirstDecision", func(t *testing.T) {
+		store := NewMemoryStore()
+
+		require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusNew)))
+		require.NoError(t, store.DecideDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusApproved)))
+
+		stored, err := store.GetDeviceCodeSession(t.Context(), "device-sig", nil)
+		require.NoError(t, err)
+		assert.Equal(t, oauth2.DeviceAuthorizeStatusApproved, stored.GetStatus())
+	})
+
+	t.Run("ShouldRefuseASecondDecision", func(t *testing.T) {
+		store := NewMemoryStore()
+
+		require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusNew)))
+		require.NoError(t, store.DecideDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusApproved)))
+
+		assert.ErrorIs(t, store.DecideDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusDenied)), oauth2.ErrDeviceAuthorizeDecided)
+
+		stored, err := store.GetDeviceCodeSession(t.Context(), "device-sig", nil)
+		require.NoError(t, err)
+		assert.Equal(t, oauth2.DeviceAuthorizeStatusApproved, stored.GetStatus())
+	})
+}
+
 func TestMemoryStoreClientRegistrationManager(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

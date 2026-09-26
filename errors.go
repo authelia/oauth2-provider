@@ -31,6 +31,10 @@ var (
 	// ErrInvalidatedUserCode is an error indicating that a user code has been used previously.
 	ErrInvalidatedUserCode = errors.New("user code has been invalidated")
 
+	// ErrDeviceAuthorizeDecided is an error indicating that the user already approved or denied a device authorization
+	// request.
+	ErrDeviceAuthorizeDecided = errors.New("device authorization has already been decided")
+
 	// ErrDuplicateUserCode is an error indicating that a user code signature is already held by another device code
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")

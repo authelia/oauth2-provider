@@ -27,7 +27,9 @@ type ScopeCeilingConfig interface {
 // administrator approving the descendants.
 //
 // Every configured registration scope is refused, not merely the first. Refusing only one would let a caller
-// authorised by a different registration scope grant that scope onward, which is the same hole by another route.
+// authorised by a different registration scope grant that scope onward, which is the same hole by another route. A
+// scope which the configured oauth2.ScopeStrategy would match against a registration scope, such as '*' under the
+// oauth2.WildcardScopeStrategy, is refused as the registration scope itself would be.
 //
 // A request with no authenticated requester has no ceiling to enforce: RFC 7591 permits an open registration
 // endpoint, and such a deployment has no creation token from which a ceiling could come. Deployments wanting a
@@ -60,7 +62,7 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 	for _, scope := range requested {
 		// No registration scope is ever grantable onward, even though every client creation token holds one of them.
 		// Granting one would let the registered client obtain creation tokens of its own.
-		if slices.Contains(registration, scope) || !strategy(grantable, scope) {
+		if isRegistrationScope(ctx, config, registration, scope) || !strategy(grantable, scope) {
 			excess = append(excess, scope)
 		}
 	}
@@ -72,7 +74,8 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 	return nil
 }
 
-// ExcludeRegistrationScope removes every configured client registration scope from scopes. It is the ceiling-side
+// ExcludeRegistrationScope removes every configured client registration scope from scopes, along with any scope the
+// configured oauth2.ScopeStrategy would match against one when config provides it. It is the ceiling-side
 // counterpart to the exclusion CheckGrantableScopes enforces on requested scopes: every legitimate creation token
 // carries one of them by design, so without this the management token minted at registration - and every
 // one minted at a later rotation - would carry it forward permanently, letting the registered client obtain creation
@@ -90,7 +93,7 @@ func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRe
 	registration := config.GetRFC7591ClientRegistrationScopes(ctx)
 
 	for _, scope := range scopes {
-		if !slices.Contains(registration, scope) {
+		if !isRegistrationScope(ctx, config, registration, scope) {
 			filtered = append(filtered, scope)
 		}
 	}
@@ -148,4 +151,25 @@ func CheckGrantableAudience(ctx context.Context, config oauth2.AudienceStrategyP
 	}
 
 	return nil
+}
+
+func isRegistrationScope(ctx context.Context, config any, registration []string, scope string) bool {
+	if slices.Contains(registration, scope) {
+		return true
+	}
+
+	provider, ok := config.(oauth2.ScopeStrategyProvider)
+	if !ok {
+		return false
+	}
+
+	strategy := oauth2.GetScopeStrategy(ctx, provider, nil)
+
+	for _, value := range registration {
+		if strategy([]string{scope}, value) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -15,6 +15,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"testing"
@@ -339,6 +341,51 @@ func TestParseProof_JWKAndCodeHash(t *testing.T) {
 		assert.Empty(t, proof.CodeHash)
 		assert.NotNil(t, proof.JWK)
 	})
+}
+
+func TestParseProofRSAKeySizeMaximum(t *testing.T) {
+	testCases := []struct {
+		name     string
+		bits     int
+		expected string
+	}{
+		{"ShouldRejectAboveTheMaximum", RSAMaximumKeySize + 8, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at most %d bits are accepted.", RSAMaximumKeySize+8, RSAMaximumKeySize)},
+		{"ShouldRejectFarAboveTheMaximum", 262144, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a 262144 bit RSA key but keys of at most %d bits are accepted.", RSAMaximumKeySize)},
+		{"ShouldCheckTheSignatureAtTheMaximum", RSAMaximumKeySize, "The DPoP proof is missing or invalid. The DPoP proof signature is invalid."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := new(big.Int).Lsh(big.NewInt(1), uint(tc.bits-1))
+			n.Add(n, big.NewInt(1))
+
+			header, err := json.Marshal(map[string]any{
+				"alg": string(jose.RS256),
+				"typ": ijwt.JSONWebTokenTypeDPoP,
+				"jwk": map[string]any{
+					"kty": "RSA",
+					"n":   base64.RawURLEncoding.EncodeToString(n.Bytes()),
+					"e":   "AQAB",
+				},
+			})
+			require.NoError(t, err)
+
+			payload, err := json.Marshal(map[string]any{
+				ijwt.ClaimJWTID:      "rsa-1",
+				ijwt.ClaimHTTPMethod: http.MethodPost,
+				ijwt.ClaimHTTPURI:    "https://as.example.com/token",
+				ijwt.ClaimIssuedAt:   1000,
+			})
+			require.NoError(t, err)
+
+			raw := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(make([]byte, len(n.Bytes())))
+
+			_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.RS256})
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
 }
 
 func newTestProofKey(t *testing.T) *jose.JSONWebKey {

@@ -35,6 +35,11 @@ const NonceMaxLength = 255
 // proof of possession. The client chooses this key freely, so the check costs a conforming client nothing.
 const RSAMinimumKeySize = 2048
 
+// RSAMaximumKeySize is the largest accepted modulus for an RSA DPoP proof key. Neither the JOSE layer nor crypto/rsa
+// bounds the modulus, and the proof key is supplied by the client on every request, so without this check a proof
+// carrying a very large key costs the server a modular exponentiation over that key before the signature is rejected.
+const RSAMaximumKeySize = 16384
+
 // ParseProof parses a compact DPoP proof JWT, validates its structural requirements (typ, alg, embedded public jwk,
 // signature, and required claims), and returns the validated proof. Request-contextual checks (htm/htu/iat/nonce and
 // replay) are performed by the strategy.
@@ -124,7 +129,8 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 	return parsed, nil
 }
 
-// validateProofKeyStrength rejects a proof key too weak for the proof-of-possession binding to be meaningful.
+// validateProofKeyStrength rejects a proof key too weak for the proof-of-possession binding to be meaningful, or too
+// large to verify at a bounded cost.
 //
 // Only RSA needs checking. The elliptic curve and Ed25519 key types the JOSE layer will accept as a public key all
 // carry a fixed, adequate strength: go-jose parses an 'EC' JWK only for P-256, P-384 and P-521, and its ECDSA verifier
@@ -132,8 +138,11 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 // algorithm cannot be smuggled in.
 func validateProofKeyStrength(jwk *jose.JSONWebKey) (err error) {
 	if key, ok := jwk.Key.(*rsa.PublicKey); ok {
-		if bits := key.N.BitLen(); bits < RSAMinimumKeySize {
+		switch bits := key.N.BitLen(); {
+		case bits < RSAMinimumKeySize:
 			return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at least %d bits are required.", bits, RSAMinimumKeySize))
+		case bits > RSAMaximumKeySize:
+			return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at most %d bits are accepted.", bits, RSAMaximumKeySize))
 		}
 	}
 

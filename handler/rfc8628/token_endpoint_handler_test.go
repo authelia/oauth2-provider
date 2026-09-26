@@ -6,6 +6,7 @@ package rfc8628_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -825,10 +826,155 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
+func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testing.T) {
+	const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+
+	testCases := []struct {
+		name    string
+		session func() oauth2.Session
+	}{
+		{"DefaultSession", func() oauth2.Session { return &oauth2.DefaultSession{} }},
+		{"JWTSession", func() oauth2.Session { return &hoauth2.JWTSession{} }},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &o2hmacshaStrategy
+			store := &hydratingDeviceCodeStore{MemoryStore: storage.NewMemoryStore(), sessions: map[string][]byte{}}
+
+			config := &oauth2.Config{
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan: time.Minute,
+			}
+
+			h := hoauth2.GenericCodeTokenEndpointHandler{
+				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+					Strategy: strategy,
+					Storage:  store,
+					Config:   config,
+				},
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config:                 config,
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+			}
+
+			authorizationCodeLifespan, deviceCodeLifespan := 5*time.Hour, 10*time.Minute
+
+			client := &oauth2.DefaultClientWithCustomTokenLifespans{
+				DefaultClient: &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}},
+				TokenLifespans: &oauth2.ClientLifespanConfig{
+					AuthorizationCodeGrantAccessTokenLifespan: &authorizationCodeLifespan,
+					DeviceCodeGrantAccessTokenLifespan:        &deviceCodeLifespan,
+				},
+			}
+
+			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+			deviceRequester.Client = client
+			deviceRequester.Session = tc.session()
+			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.SetDeviceCodeSignature(dSig)
+			deviceRequester.SetUserCodeSignature(uSig)
+			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Client:      client,
+					Form:        url.Values{consts.FormParameterDeviceCode: {dCode}},
+					Session:     tc.session(),
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+			expected := requester.GetSession().GetExpiresAt(oauth2.AccessToken)
+			require.False(t, expected.IsZero())
+
+			// RFC 9449 Section 5 binding, recorded between the two phases.
+			requester.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(jkt)
+
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, h.PopulateTokenEndpointResponse(t.Context(), requester, response))
+
+			assert.Equal(t, jkt, requester.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
+			assert.Equal(t, expected, requester.GetSession().GetExpiresAt(oauth2.AccessToken))
+			assert.InDelta(t, int64(deviceCodeLifespan/time.Second), response.GetExtra(consts.AccessResponseExpiresIn), 2)
+
+			stored, err := store.GetAccessTokenSession(t.Context(), strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, jkt, stored.GetSession().(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
+			assert.Equal(t, expected, stored.GetSession().GetExpiresAt(oauth2.AccessToken))
+		})
+	}
+}
+
 var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
 		AccessTokenLifespan:   time.Hour * 24,
 		AuthorizeCodeLifespan: time.Hour * 24,
 	},
+}
+
+type hydratingDeviceCodeStore struct {
+	*storage.MemoryStore
+
+	sessions map[string][]byte
+}
+
+func (s *hydratingDeviceCodeStore) CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error) {
+	var data []byte
+
+	if data, err = json.Marshal(request.GetSession()); err != nil {
+		return err
+	}
+
+	s.sessions[signature] = data
+
+	return s.MemoryStore.CreateDeviceCodeSession(ctx, signature, request)
+}
+
+func (s *hydratingDeviceCodeStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
+	if request, err = s.MemoryStore.GetDeviceCodeSession(ctx, signature, session); err != nil {
+		return request, err
+	}
+
+	return s.hydrate(request, session)
+}
+
+func (s *hydratingDeviceCodeStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
+	if request, err = s.MemoryStore.GetDeviceCodeSessionByUserCode(ctx, signature, session); err != nil {
+		return request, err
+	}
+
+	return s.hydrate(request, session)
+}
+
+func (s *hydratingDeviceCodeStore) hydrate(request oauth2.DeviceAuthorizeRequester, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
+	if session == nil {
+		return request, nil
+	}
+
+	if err := json.Unmarshal(s.sessions[request.GetDeviceCodeSignature()], session); err != nil {
+		return nil, err
+	}
+
+	clone := *request.(*oauth2.DeviceAuthorizeRequest)
+	clone.Session = session
+
+	return &clone, nil
 }

@@ -159,7 +159,14 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
 	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
 	// mandates.
+	session := request.GetSession()
+
+	request.SetSession(session.Clone())
+
 	code, signature, ar, err := c.GetCodeAndSession(ctx, request)
+
+	request.SetSession(session)
+
 	if err != nil {
 		switch {
 		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
@@ -233,9 +240,15 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		}
 	}
 
+	gt := oauth2.GrantTypeAuthorizationCode
+
+	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+		gt = oauth2.GrantTypeDeviceCode
+	}
+
 	response.SetAccessToken(access)
 	response.SetTokenType(oauth2.BearerAccessToken)
-	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 

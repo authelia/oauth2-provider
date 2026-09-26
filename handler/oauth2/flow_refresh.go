@@ -205,12 +205,26 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
+	var replayed error
+
+	parent := ctx
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+
+		// RFC 9700 Section 4.14.2: a refresh token that another request already rotated is a replay, so the grant is
+		// revoked once this request's transaction has been rolled back.
+		if replayed != nil {
+			if e := c.handleRefreshTokenReuse(parent, signature, request); e != nil {
+				err = errorsx.WithStack(e)
+			} else {
+				err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(replayed).WithDebugError(replayed))
+			}
+		}
 	}()
 
 	srequester, srtrequester := request.Sanitize(nil), request.Sanitize(nil)
@@ -221,7 +235,11 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
 		var orequest oauth2.Requester
 
-		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
+		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) {
+			replayed = err
+
+			return err
+		} else if err != nil {
 			return err
 		}
 

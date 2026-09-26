@@ -44,6 +44,15 @@ func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
 	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
 }
 
+// IsPublicClientIdentityAssured reports whether the redirect URI of an authorization request assures the identity of a
+// public client. Only a claimed 'https' redirect URI does, as a private-use URI scheme or a loopback redirect URI can be
+// claimed by any application on the device. See RFC 8252 Section 8.6.
+func IsPublicClientIdentityAssured(_ context.Context, request AuthorizeRequester) (assured bool) {
+	uri := request.GetRedirectURI()
+
+	return uri != nil && uri.Scheme == consts.SchemeHTTPS
+}
+
 // IsRedirectURISecureStrict is stricter than IsRedirectURISecure and it does not allow custom-scheme
 // URLs because they can be hijacked for native apps. Use claimed HTTPS redirects instead.
 // See discussion in https://github.com/ory/fosite/pull/489.

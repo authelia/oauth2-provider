@@ -199,6 +199,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The token exchange request was not granted any of the scopes (%s) required by the authorization server to issue a refresh token.", strings.Join(c.RefreshTokenScopes, ", ")))
 	}
 
+	recordSubjectTokenDeadline(request)
 	request.GetSession().SetExpiresAt(oauth2.RefreshToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(c.RefreshTokenLifespan)).Truncate(jwt.TimePrecision))
 
 	var token, signature string

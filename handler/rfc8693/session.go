@@ -5,6 +5,8 @@
 package rfc8693
 
 import (
+	"time"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/clone"
@@ -42,9 +44,10 @@ type Session interface {
 type DefaultSession struct {
 	*openid.DefaultSession
 
-	ActorToken   map[string]any `json:"-"`
-	SubjectToken map[string]any `json:"-"`
-	Extra        map[string]any `json:"extra,omitempty"`
+	ActorToken     map[string]any `json:"-"`
+	SubjectToken   map[string]any `json:"-"`
+	Extra          map[string]any `json:"extra,omitempty"`
+	ExpiryDeadline time.Time      `json:"expiry_deadline,omitzero"`
 }
 
 // NewDefaultSession returns a *DefaultSession with the embedded OpenID Connect session and the Extra map SetClaimActor
@@ -64,9 +67,10 @@ func (s *DefaultSession) Clone() oauth2.Session {
 	}
 
 	cloned := &DefaultSession{
-		ActorToken:   clone.Map(s.ActorToken),
-		SubjectToken: clone.Map(s.SubjectToken),
-		Extra:        clone.Map(s.Extra),
+		ActorToken:     clone.Map(s.ActorToken),
+		SubjectToken:   clone.Map(s.SubjectToken),
+		Extra:          clone.Map(s.Extra),
+		ExpiryDeadline: s.ExpiryDeadline,
 	}
 
 	if s.DefaultSession != nil {
@@ -74,6 +78,21 @@ func (s *DefaultSession) Clone() oauth2.Session {
 	}
 
 	return cloned
+}
+
+// SetExpiryDeadline sets the latest time a token issued for the session may expire, which a refresh of the session
+// keeps.
+func (s *DefaultSession) SetExpiryDeadline(deadline time.Time) {
+	s.ExpiryDeadline = deadline
+}
+
+// GetExpiryDeadline implements oauth2.ExpiryDeadlineSession.
+func (s *DefaultSession) GetExpiryDeadline() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+
+	return s.ExpiryDeadline
 }
 
 func (s *DefaultSession) SetActorToken(token map[string]any) {

@@ -581,20 +581,34 @@ func isRefreshTokenSubject(request oauth2.Requester) bool {
 	return request.GetRequestForm().Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken
 }
 
-func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
+func subjectTokenExpiry(request oauth2.Requester) time.Time {
 	session, ok := request.GetSession().(Session)
 	if !ok || session == nil {
-		return expires
+		return time.Time{}
 	}
 
-	subject := toInt64(session.GetSubjectToken()[consts.ClaimExpirationTime])
-	if subject <= 0 {
-		return expires
+	if subject := toInt64(session.GetSubjectToken()[consts.ClaimExpirationTime]); subject > 0 {
+		return time.Unix(subject, 0).UTC()
 	}
 
-	if limit := time.Unix(subject, 0).UTC(); limit.Before(expires) {
+	return time.Time{}
+}
+
+func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
+	if limit := subjectTokenExpiry(request); !limit.IsZero() && limit.Before(expires) {
 		return limit
 	}
 
 	return expires
+}
+
+func recordSubjectTokenDeadline(request oauth2.Requester) {
+	session, ok := request.GetSession().(interface{ SetExpiryDeadline(deadline time.Time) })
+	if !ok {
+		return
+	}
+
+	if deadline := subjectTokenExpiry(request); !deadline.IsZero() {
+		session.SetExpiryDeadline(deadline)
+	}
 }

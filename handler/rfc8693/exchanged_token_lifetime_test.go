@@ -89,6 +89,64 @@ func TestExchangedTokenLifetime(t *testing.T) {
 				assert.WithinDuration(t, expires, request.GetSession().GetExpiresAt(oauth2.RefreshToken), time.Second)
 			})
 
+			t.Run("ShouldKeepTheSubjectTokenDeadlineWhenTheExchangedRefreshTokenIsRefreshed", func(t *testing.T) {
+				testCases := []struct {
+					name      string
+					requested string
+					refresh   func(response *oauth2.AccessResponse) string
+				}{
+					{
+						name:      "AccessTokenType",
+						requested: "",
+						refresh: func(response *oauth2.AccessResponse) string {
+							token, _ := response.GetExtra(consts.FormParameterRefreshToken).(string)
+
+							return token
+						},
+					},
+					{
+						name:      "RefreshTokenType",
+						requested: consts.TokenTypeRFC8693RefreshToken,
+						refresh: func(response *oauth2.AccessResponse) string {
+							return response.GetAccessToken()
+						},
+					},
+				}
+
+				for _, tc := range testCases {
+					t.Run(tc.name, func(t *testing.T) {
+						store := sc.newStore()
+						config, coreStrategy := newBindingExchangeConfig()
+						config.RefreshTokenScopes = []string{}
+
+						expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
+
+						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], expires), tc.requested)
+
+						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(refreshHandler.HandleTokenEndpointRequest(t.Context(), request)))
+
+						var issuer oauth2.TokenEndpointHandler = newLifetimeAccessTokenHandler(config, coreStrategy, store)
+						if tc.requested == consts.TokenTypeRFC8693RefreshToken {
+							issuer = refreshHandler
+						}
+
+						response := oauth2.NewAccessResponse()
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(issuer.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+						token := tc.refresh(response)
+						require.NotEmpty(t, token)
+
+						refreshed := redeemLifetimeRefreshToken(t, config, coreStrategy, store, token)
+
+						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.AccessToken).After(expires))
+						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.RefreshToken).After(expires))
+					})
+				}
+			})
+
 			t.Run("ShouldRejectAnExplicitRefreshTokenForAnAccessTokenSubject", func(t *testing.T) {
 				store := sc.newStore()
 				config, coreStrategy := newBindingExchangeConfig()
@@ -191,6 +249,30 @@ func TestExchangedJWTLifetime(t *testing.T) {
 			assert.LessOrEqual(t, response.ToMap()[consts.AccessResponseExpiresIn], int64((2 * time.Minute).Seconds()))
 		})
 	}
+}
+
+func redeemLifetimeRefreshToken(t *testing.T, config *oauth2.Config, coreStrategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, token string) *oauth2.AccessRequest {
+	t.Helper()
+
+	revocation, ok := store.(hoauth2.TokenRevocationStorage)
+	require.True(t, ok)
+
+	handler := &hoauth2.RefreshTokenGrantHandler{
+		AccessTokenStrategy:    coreStrategy,
+		RefreshTokenStrategy:   coreStrategy,
+		TokenRevocationStorage: revocation,
+		Config:                 config,
+	}
+
+	request := oauth2.NewAccessRequest(NewDefaultSession())
+	request.Client = store.GetClients()["my-client"]
+	request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+	request.Form.Set(consts.FormParameterRefreshToken, token)
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+
+	return request
 }
 
 func newLifetimeExchangeRequest(store rfc8693ExchangeStore, subjectTokenType, subjectToken, requestedTokenType string) *oauth2.AccessRequest {

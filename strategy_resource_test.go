@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/url"
 	"testing"
 
@@ -139,6 +140,13 @@ func TestDefaultResourceMatchingStrategy(t *testing.T) {
 }
 
 func TestIsMatchingResourceIndicator(t *testing.T) {
+	const (
+		scopedResource   = "https://api.example.com/users?tenant=a"
+		allowedResource  = "https://api.example.com/allowed"
+		urnResource      = "urn:example:api"
+		urnOtherResource = "urn:example:admin"
+	)
+
 	mustParse := func(s string) *url.URL {
 		u, err := url.Parse(s)
 		require.NoError(t, err, "test bug: unparseable url %q", s)
@@ -187,15 +195,41 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 			haystack: "https://api.example.com", needle: "https://api.example.com", match: true,
 		},
 
-		{name: "ShouldMatchIgnoringNeedleQueryString",
-			haystack: "https://api.example.com/users", needle: "https://api.example.com/users?token=foo", match: true,
+		{name: "ShouldNotMatchNeedleQueryStringTheHaystackLacks",
+			haystack: "https://api.example.com/users", needle: "https://api.example.com/users?token=foo", match: false,
 		},
-		{name: "ShouldMatchIgnoringNeedleFragment",
-			haystack: "https://api.example.com/users", needle: "https://api.example.com/users#frag", match: true,
+		{name: "ShouldMatchEqualQueryString",
+			haystack: scopedResource, needle: scopedResource, match: true,
+		},
+		{name: "ShouldNotMatchDifferentQueryString",
+			haystack: scopedResource, needle: "https://api.example.com/users?tenant=b", match: false,
+		},
+		{name: "ShouldNotMatchNeedleFragment",
+			haystack: "https://api.example.com/users", needle: "https://api.example.com/users#frag", match: false,
 		},
 
-		{name: "ShouldMatchIgnoringUserinfo",
-			haystack: "https://api.example.com/users", needle: "https://alice:secret@api.example.com/users", match: true,
+		{name: "ShouldNotMatchUserinfo",
+			haystack: "https://api.example.com/users", needle: "https://alice@api.example.com/users", match: false,
+		},
+
+		{name: "ShouldNotMatchDotSegmentTraversal",
+			haystack: allowedResource, needle: "https://api.example.com/allowed/../admin", match: false,
+		},
+		{name: "ShouldNotMatchEncodedDotSegmentTraversal",
+			haystack: allowedResource, needle: "https://api.example.com/allowed/%2e%2e/admin", match: false,
+		},
+		{name: "ShouldNotMatchEncodedSlashTraversal",
+			haystack: allowedResource, needle: "https://api.example.com/allowed/..%2Fadmin", match: false,
+		},
+		{name: "ShouldNotMatchSingleDotSegment",
+			haystack: allowedResource, needle: "https://api.example.com/allowed/./x", match: false,
+		},
+
+		{name: "ShouldMatchEqualURN",
+			haystack: urnResource, needle: urnResource, match: true,
+		},
+		{name: "ShouldNotMatchDifferentURN",
+			haystack: urnResource, needle: urnOtherResource, match: false,
 		},
 
 		{name: "ShouldNotMatchPathCaseDifference",
@@ -344,4 +378,17 @@ func TestValidateResourceIndicators(t *testing.T) {
 			require.NoError(t, ErrorToDebugRFC6749Error(actual))
 		})
 	}
+}
+
+func TestGetResourceStrategyFallsBackToExactMatching(t *testing.T) {
+	strategy := GetResourceStrategy(t.Context(), nilResourceStrategyProvider{}, &DefaultClient{})
+
+	assert.NoError(t, strategy([]string{"https://api.example.com/users"}, []string{"https://api.example.com/users"}))
+	assert.ErrorIs(t, strategy([]string{"https://api.example.com/users"}, []string{"https://api.example.com/users/123"}), ErrInvalidTarget)
+}
+
+type nilResourceStrategyProvider struct{}
+
+func (nilResourceStrategyProvider) GetResourceStrategy(_ context.Context) ResourceStrategy {
+	return nil
 }

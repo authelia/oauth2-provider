@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -114,7 +114,7 @@ func TestDefaultJWKSFetcherStrategyOptions(t *testing.T) {
 			check: func(t *testing.T) {
 				ts := initServerWithKey(t)
 
-				cache, _ := ristretto.NewCache(&ristretto.Config{NumCounters: 10 * 1000, MaxCost: 1000, BufferItems: 64})
+				cache, _ := ristretto.NewCache(&ristretto.Config[string, *jose.JSONWebKeySet]{NumCounters: 10 * 1000, MaxCost: 1000, BufferItems: 64})
 				expected := &jose.JSONWebKeySet{}
 				require.True(t, cache.Set(defaultJWKSFetcherStrategyCachePrefix+ts.URL, expected, 1))
 				cache.Wait()

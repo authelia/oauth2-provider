@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/hashicorp/go-retryablehttp"
 
 	"authelia.com/provider/jose"
@@ -25,19 +25,19 @@ const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.Defa
 // DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy interface.
 type DefaultJWKSFetcherStrategy struct {
 	client           *retryablehttp.Client
-	cache            *ristretto.Cache
+	cache            *ristretto.Cache[string, *jose.JSONWebKeySet]
 	ttl              time.Duration
 	clientSourceFunc func(ctx context.Context) *retryablehttp.Client
 }
 
 // NewDefaultJWKSFetcherStrategy returns a new instance of the DefaultJWKSFetcherStrategy.
 func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) jwt.JWKSFetcherStrategy {
-	dc, err := ristretto.NewCache(&ristretto.Config{
+	dc, err := ristretto.NewCache(&ristretto.Config[string, *jose.JSONWebKeySet]{
 		NumCounters: 10000 * 10,
 		MaxCost:     10000,
 		BufferItems: 64,
 		Metrics:     false,
-		Cost: func(value any) int64 {
+		Cost: func(value *jose.JSONWebKeySet) int64 {
 			return 1
 		},
 	})
@@ -66,7 +66,7 @@ func JKWKSFetcherWithDefaultTTL(ttl time.Duration) func(*DefaultJWKSFetcherStrat
 }
 
 // JWKSFetcherWithCache sets the cache to use.
-func JWKSFetcherWithCache(cache *ristretto.Cache) func(*DefaultJWKSFetcherStrategy) {
+func JWKSFetcherWithCache(cache *ristretto.Cache[string, *jose.JSONWebKeySet]) func(*DefaultJWKSFetcherStrategy) {
 	return func(s *DefaultJWKSFetcherStrategy) {
 		s.cache = cache
 	}
@@ -128,7 +128,7 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 		return &set, nil
 	}
 
-	return key.(*jose.JSONWebKeySet), nil
+	return key, nil
 }
 
 // WaitForCache blocks until the in-flight JWKS fetch (if any) has completed and the cache is consistent. It is intended

@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -105,4 +106,53 @@ func TestJWTSessionClone(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.check)
 	}
+}
+
+func TestJWTSessionOmitsEmptyBindingFields(t *testing.T) {
+	bindings := []string{"JWKThumbprint", "ClientCertificateThumbprint", "RequestedJWKThumbprint", "PublicKeyJWK", "KeyBindingGranted"}
+
+	t.Run("ShouldOmitWhenUnbound", func(t *testing.T) {
+		data, err := json.Marshal(&JWTSession{Subject: "peter"})
+		require.NoError(t, err)
+
+		var raw map[string]any
+
+		require.NoError(t, json.Unmarshal(data, &raw))
+
+		for _, key := range bindings {
+			assert.NotContains(t, raw, key)
+		}
+	})
+
+	t.Run("ShouldKeepTheFieldNamesWhenBound", func(t *testing.T) {
+		data, err := json.Marshal(&JWTSession{
+			JWKThumbprint:               "jkt",
+			ClientCertificateThumbprint: "x5t",
+			RequestedJWKThumbprint:      "dpop_jkt",
+			PublicKeyJWK:                []byte(`{"kty":"EC"}`),
+			KeyBindingGranted:           true,
+		})
+		require.NoError(t, err)
+
+		var raw map[string]any
+
+		require.NoError(t, json.Unmarshal(data, &raw))
+
+		for _, key := range bindings {
+			assert.Contains(t, raw, key)
+		}
+	})
+
+	t.Run("ShouldNotClearABindingWhenHydratingAnUnboundSession", func(t *testing.T) {
+		data, err := json.Marshal(&JWTSession{Subject: "peter"})
+		require.NoError(t, err)
+
+		session := &JWTSession{JWKThumbprint: "jkt", ClientCertificateThumbprint: "x5t"}
+
+		require.NoError(t, json.Unmarshal(data, session))
+
+		assert.Equal(t, "peter", session.Subject)
+		assert.Equal(t, "jkt", session.JWKThumbprint)
+		assert.Equal(t, "x5t", session.ClientCertificateThumbprint)
+	})
 }

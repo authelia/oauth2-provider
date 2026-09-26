@@ -62,6 +62,12 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
+		if orequest == nil {
+			return errorsx.WithStack(oauth2.ErrServerError.
+				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+				WithDebug("GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'."))
+		}
+
 		if e := c.handleRefreshTokenReuse(ctx, signature, orequest); e != nil {
 			return errorsx.WithStack(e)
 		}

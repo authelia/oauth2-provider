@@ -127,7 +127,8 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because authentication time is in the future."))
 	}
 
-	rat := session.GetRequestedAt()
+	// The auth_time claim has jwt.TimePrecision, so the request time is compared at the same precision.
+	rat := session.GetRequestedAt().Truncate(jwt.TimePrecision)
 
 	if hasMaxAge {
 		switch {

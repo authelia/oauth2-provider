@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -41,6 +42,8 @@ func TestValidatePrompt(t *testing.T) {
 
 	now := time.Unix(1000000000, 0).UTC()
 
+	second := time.Now().UTC().Truncate(time.Second).Add(-10 * time.Second)
+
 	testCases := []struct {
 		name        string
 		prompt      string
@@ -51,6 +54,31 @@ func TestValidatePrompt(t *testing.T) {
 		idTokenHint string
 		session     *DefaultSession
 	}{
+		{
+			name:   "ShouldPassPromptLoginWhenReauthenticatedWithinTheRequestSecond",
+			prompt: consts.PromptTypeLogin,
+			session: &DefaultSession{
+				Subject: testSubjectPeter,
+				Claims: &jwt.IDTokenClaims{
+					Subject:  testSubjectPeter,
+					AuthTime: jwt.NewNumericDate(second.Add(800 * time.Millisecond)),
+				},
+				RequestedAt: second.Add(300 * time.Millisecond),
+			},
+		},
+		{
+			name:   "ShouldPassMaxAgeZeroWhenReauthenticatedWithinTheRequestSecond",
+			prompt: "",
+			maxAge: []string{"0"},
+			session: &DefaultSession{
+				Subject: testSubjectPeter,
+				Claims: &jwt.IDTokenClaims{
+					Subject:  testSubjectPeter,
+					AuthTime: jwt.NewNumericDate(second.Add(800 * time.Millisecond)),
+				},
+				RequestedAt: second.Add(300 * time.Millisecond),
+			},
+		},
 		{
 			name:        "ShouldFailPromptNoneWithPublicClientInsecureLocalhost",
 			prompt:      "none",

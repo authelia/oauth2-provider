@@ -334,8 +334,9 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		claims.Issuer = h.Config.GetIDTokenIssuer(ctx)
 	}
 
-	// OPTIONAL. String value used to associate a Client session with an ID Token, and to mitigate replay attacks.
-	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
+	// OPTIONAL. String value used to associate a Client session with an ID Token, and to mitigate replay attacks. The
+	// nonce is an authentication request parameter, so a token request for a refresh never sets it.
+	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 || isRefreshTokenGrant(request) {
 	} else if len(nonce) > 0 && len(nonce) < h.Config.GetMinParameterEntropy(ctx) {
 		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
 		return "", errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))

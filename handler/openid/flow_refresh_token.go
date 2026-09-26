@@ -77,6 +77,9 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, request, response)
 	claims.JTI = uuid.New().String()
 	claims.CodeHash = ""
+
+	// OpenID Connect Core 1.0 Section 12.2: a refreshed ID Token SHOULD NOT have a nonce claim.
+	claims.Nonce = ""
 	claims.IssuedAt = jwt.Now()
 
 	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))

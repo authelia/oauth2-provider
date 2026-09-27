@@ -136,6 +136,9 @@ func TestNewAuthorizeResponse(t *testing.T) {
 				handlers[0].EXPECT().HandleAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(nil)
 				ar.EXPECT().DidHandleAllResponseTypes().Return(true)
 				ar.EXPECT().GetDefaultResponseMode().Return(ResponseModeQuery)
+				ar.EXPECT().GetResponseMode().Return(ResponseModeQueryJWT).AnyTimes()
+				ar.EXPECT().GetClient().Return(&DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}}).AnyTimes()
+				ar.EXPECT().GetResponseTypes().Return(Arguments{"code"}).AnyTimes()
 			},
 		},
 		{

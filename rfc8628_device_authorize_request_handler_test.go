@@ -231,3 +231,44 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestNewDeviceAuthorizeRequestClientCredentials(t *testing.T) {
+	client := &DefaultClient{ID: "1234", ClientSecret: testClientSecretFoo, Scopes: []string{"foo", "bar"}, GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}}
+
+	t.Run("ShouldIgnoreCredentialsInTheQuery", func(t *testing.T) {
+		store := mock.NewMockStorage(gomock.NewController(t))
+		store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).AnyTimes()
+
+		provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+		r := &http.Request{
+			Header:   http.Header{},
+			Method:   http.MethodPost,
+			URL:      &url.URL{RawQuery: url.Values{consts.FormParameterClientSecret: {"foo"}}.Encode()},
+			PostForm: url.Values{consts.FormParameterClientID: {"1234"}, consts.FormParameterScope: {"foo bar"}},
+		}
+
+		_, err := provider.NewRFC862DeviceAuthorizeRequest(context.Background(), r)
+
+		require.ErrorIs(t, err, ErrInvalidClient)
+	})
+
+	t.Run("ShouldNotRetainCredentialsInTheRequestForm", func(t *testing.T) {
+		store := mock.NewMockStorage(gomock.NewController(t))
+		store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).AnyTimes()
+
+		provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+		r := &http.Request{
+			Header:   http.Header{},
+			Method:   http.MethodPost,
+			PostForm: url.Values{consts.FormParameterClientID: {"1234"}, consts.FormParameterClientSecret: {"foo"}, consts.FormParameterScope: {"foo bar"}},
+		}
+
+		ar, err := provider.NewRFC862DeviceAuthorizeRequest(context.Background(), r)
+		require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+		assert.NotContains(t, ar.GetRequestForm(), consts.FormParameterClientSecret)
+		assert.Equal(t, "1234", ar.GetRequestForm().Get(consts.FormParameterClientID))
+	})
+}

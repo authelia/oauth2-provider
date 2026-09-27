@@ -524,6 +524,12 @@ func TestJWTStrategy_GenerateIDTokenAuthTime(t *testing.T) {
 			_, err = jwt.UnsafeParseSignedAny(token, &claims)
 			require.NoError(t, err)
 
+			if tc.expected == nil {
+				assert.NotContains(t, claims, consts.ClaimAuthenticationTime)
+
+				return
+			}
+
 			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationTime])
 		})
 	}

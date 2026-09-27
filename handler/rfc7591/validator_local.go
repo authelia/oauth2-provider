@@ -183,7 +183,7 @@ func validateTLSClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err err
 // hostname", and in the same sentence defines the loopback URLs reserved for native clients as those using
 // "localhost or the IP loopback literals 127.0.0.1 or [::1] as the hostname". The prohibition is therefore on the
 // loopback interface, not on one spelling of it: a redirect to the resource owner's own machine is a host the web
-// client does not control however it is written, so isLoopbackRedirect rejects the name and the literals alike.
+// client does not control however it is written, so oauth2.IsLocalhost rejects the name and the literals alike.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
@@ -226,7 +226,7 @@ func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err erro
 			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must use the 'https' scheme.", consts.ClientMetadataRedirectURIs, raw))
 		}
 
-		if isLoopbackRedirect(parsed.Hostname()) {
+		if oauth2.IsLocalhost(parsed) {
 			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", consts.ClientMetadataRedirectURIs, raw, consts.ClientMetadataApplicationType))
 		}
 	}
@@ -387,32 +387,6 @@ func isLoopbackHost(host string) bool {
 	}
 
 	return ip.Equal(net.IPv4(127, 0, 0, 1)) || ip.Equal(net.IPv6loopback)
-}
-
-// isLoopbackRedirect reports whether host addresses the loopback interface, whether by the special-use 'localhost'
-// name (RFC 6761 Section 6.3, which reserves 'localhost' and any name under '.localhost') or by any loopback IP
-// address (127.0.0.0/8 or ::1).
-//
-// It is deliberately broader than isLoopbackHost. That function is an allow list: it gates the loopback redirect a
-// native client may register, where RFC 8252 Section 7.3 names the two literals exactly and admitting no more than
-// those is the conservative reading. This one is a deny list, where the conservative reading is the opposite: every
-// host that reaches the resource owner's own machine must be caught, since anything missed is not a stricter rule
-// but a way around the rule.
-//
-// See: https://datatracker.ietf.org/doc/html/rfc6761#section-6.3
-func isLoopbackRedirect(host string) bool {
-	// A trailing dot makes the name fully qualified and resolves identically.
-	name := strings.ToLower(strings.TrimSuffix(host, "."))
-
-	if name == "localhost" || strings.HasSuffix(name, ".localhost") {
-		return true
-	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-
-	return false
 }
 
 // validateApplicationType implements the OpenID Connect Dynamic Client Registration 1.0 'application_type'

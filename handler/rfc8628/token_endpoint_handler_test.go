@@ -828,11 +828,13 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 
 func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 	testCases := []struct {
-		name   string
-		lookup bool
+		name     string
+		lookup   bool
+		redeemed bool
 	}{
 		{name: "ShouldRevokeWhenTheLookupReportsTheCodeInvalidated", lookup: true},
 		{name: "ShouldRevokeWhenTheInvalidationReportsTheCodeInvalidated"},
+		{name: "ShouldRevokeWhenTheCodeIsPresentedAgainAfterRedemption", redeemed: true},
 	}
 
 	for _, tc := range testCases {
@@ -887,17 +889,50 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 			deviceRequester.SetUserCodeSignature(uSig)
 			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
+			if tc.redeemed {
+				client := requester.Client.(*oauth2.DefaultClient)
+				client.GrantTypes = append(client.GrantTypes, consts.GrantTypeRefreshToken)
+				deviceRequester.GrantScope(consts.ScopeOffline)
+			}
+
 			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
-			require.NoError(t, store.CreateAccessTokenSession(t.Context(), "at-sig", deviceRequester))
-			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", deviceRequester))
+
+			atSig, rtSig := "at-sig", "rt-sig"
+
+			if !tc.redeemed {
+				require.NoError(t, store.CreateAccessTokenSession(t.Context(), atSig, deviceRequester))
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), rtSig, atSig, deviceRequester))
+			}
 
 			requester.Form.Add(consts.FormParameterDeviceCode, dCode)
 
-			if tc.lookup {
+			switch {
+			case tc.redeemed:
+				response := oauth2.NewAccessResponse()
+
+				require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+				require.NoError(t, h.PopulateTokenEndpointResponse(t.Context(), requester, response))
+
+				atSig = strategy.AccessTokenSignature(t.Context(), response.GetAccessToken())
+				rtSig = strategy.RefreshTokenSignature(t.Context(), response.GetExtra(consts.AccessResponseRefreshToken).(string))
+
+				replay := &oauth2.AccessRequest{
+					GrantTypes: requester.GrantTypes,
+					Request: oauth2.Request{
+						Client:       requester.Client,
+						Form:         url.Values{consts.FormParameterDeviceCode: {dCode}},
+						GrantedScope: oauth2.Arguments{"foo"},
+						Session:      &oauth2.DefaultSession{},
+						RequestedAt:  time.Now().UTC(),
+					},
+				}
+
+				err = h.HandleTokenEndpointRequest(t.Context(), replay)
+			case tc.lookup:
 				store.lookupInvalidated = true
 
 				err = h.HandleTokenEndpointRequest(t.Context(), requester)
-			} else {
+			default:
 				store.invalidationInvalidated = true
 
 				require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
@@ -908,10 +943,10 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
 
-			_, err = store.GetAccessTokenSession(t.Context(), "at-sig", nil)
+			_, err = store.GetAccessTokenSession(t.Context(), atSig, nil)
 			assert.ErrorIs(t, err, oauth2.ErrNotFound)
 
-			_, err = store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
+			_, err = store.GetRefreshTokenSession(t.Context(), rtSig, nil)
 			assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
 		})
 	}

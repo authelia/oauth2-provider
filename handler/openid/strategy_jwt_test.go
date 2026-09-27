@@ -473,6 +473,8 @@ func TestJWTStrategy_GenerateIDTokenAuthTime(t *testing.T) {
 	}{
 		{name: "ShouldOmitAnUnknownAuthTime", expected: nil},
 		{name: "ShouldOmitAnUnknownAuthTimeOnRefresh", grant: consts.GrantTypeRefreshToken, expected: nil},
+		{name: "ShouldOmitAZeroAuthTime", authTime: &jwt.NumericDate{}, expected: nil},
+		{name: "ShouldOmitAZeroAuthTimeOnRefresh", grant: consts.GrantTypeRefreshToken, authTime: &jwt.NumericDate{}, expected: nil},
 		{name: "ShouldOmitAnUnknownAuthTimeWithPromptConsent", prompt: consts.PromptTypeConsent, expected: nil},
 		{name: "ShouldOmitAnUnknownAuthTimeWithPromptSelectAccount", prompt: consts.PromptTypeSelectAccount, expected: nil},
 		{name: "ShouldKeepAKnownAuthTime", authTime: jwt.NewNumericDate(now.Add(-time.Minute)), expected: float64(now.Add(-time.Minute).Unix())},

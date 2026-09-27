@@ -325,6 +325,10 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because expiry claim can not be in the past."))
 	}
 
+	if claims.AuthTime != nil && claims.AuthTime.IsZero() {
+		claims.AuthTime = nil
+	}
+
 	if claims.Issuer == "" {
 		claims.Issuer = h.Config.GetIDTokenIssuer(ctx)
 	}

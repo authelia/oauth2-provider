@@ -316,3 +316,29 @@ func TestMemoryStore_CreateDeviceCodeSessionRejectsDuplicateUserCode(t *testing.
 	_, err = store.GetDeviceCodeSession(t.Context(), "second", &oauth2.DefaultSession{})
 	require.ErrorIs(t, err, oauth2.ErrNotFound)
 }
+
+func TestMemoryStore_InvalidateDeviceCodeSessionKeepsTheRequester(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := oauth2.NewDeviceAuthorizeRequest()
+	request.SetID("request")
+	request.SetSession(&oauth2.DefaultSession{})
+	request.SetDeviceCodeSignature("device")
+	request.SetUserCodeSignature("user")
+
+	require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "device", request))
+	require.NoError(t, store.InvalidateDeviceCodeSession(t.Context(), "device"))
+
+	found, err := store.GetDeviceCodeSession(t.Context(), "device", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrInvalidatedDeviceCode)
+	require.NotNil(t, found)
+	assert.Equal(t, "request", found.GetID())
+
+	found, err = store.GetDeviceCodeSessionByUserCode(t.Context(), "user", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrInvalidatedDeviceCode)
+	require.NotNil(t, found)
+	assert.Equal(t, "request", found.GetID())
+
+	require.ErrorIs(t, store.InvalidateDeviceCodeSession(t.Context(), "device"), oauth2.ErrInvalidatedDeviceCode)
+	require.ErrorIs(t, store.CreateDeviceCodeSession(t.Context(), "other", request), oauth2.ErrDuplicateUserCode)
+}

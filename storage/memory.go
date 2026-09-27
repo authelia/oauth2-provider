@@ -64,6 +64,7 @@ type MemoryStore struct {
 	RefreshTokens            map[string]StoreRefreshToken
 	DeviceCodes              map[string]oauth2.Requester
 	UserCodes                map[string]oauth2.Requester
+	InvalidatedDeviceCodes   map[string]bool
 	PKCES                    map[string]oauth2.Requester
 	Users                    map[string]MemoryUserRelation
 	BlacklistedJTIs          map[string]time.Time
@@ -102,6 +103,7 @@ func NewMemoryStore() *MemoryStore {
 		RefreshTokens:            make(map[string]StoreRefreshToken),
 		DeviceCodes:              make(map[string]oauth2.Requester),
 		UserCodes:                make(map[string]oauth2.Requester),
+		InvalidatedDeviceCodes:   make(map[string]bool),
 		PKCES:                    make(map[string]oauth2.Requester),
 		Users:                    make(map[string]MemoryUserRelation),
 		AccessTokenRequestIDs:    make(map[string]string),
@@ -737,6 +739,10 @@ func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string
 		return nil, oauth2.ErrNotFound
 	}
 
+	if s.InvalidatedDeviceCodes[signature] {
+		return rel, oauth2.ErrInvalidatedDeviceCode
+	}
+
 	return rel, nil
 }
 
@@ -749,6 +755,10 @@ func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signat
 		return nil, oauth2.ErrNotFound
 	}
 
+	if s.InvalidatedDeviceCodes[rel.GetDeviceCodeSignature()] {
+		return rel, oauth2.ErrInvalidatedDeviceCode
+	}
+
 	return rel, nil
 }
 
@@ -756,13 +766,19 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
 
-	rel, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
-	if !ok {
+	if _, ok := s.DeviceCodes[signature]; !ok {
 		return oauth2.ErrNotFound
 	}
 
-	delete(s.DeviceCodes, rel.GetDeviceCodeSignature())
-	delete(s.UserCodes, rel.GetUserCodeSignature())
+	if s.InvalidatedDeviceCodes[signature] {
+		return oauth2.ErrInvalidatedDeviceCode
+	}
+
+	if s.InvalidatedDeviceCodes == nil {
+		s.InvalidatedDeviceCodes = make(map[string]bool)
+	}
+
+	s.InvalidatedDeviceCodes[signature] = true
 
 	return nil
 }

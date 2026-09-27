@@ -68,6 +68,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 				WithDebug("GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'."))
 		}
 
+		if verr := c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); !isIntactToken(verr) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
+		}
+
 		if e := c.handleRefreshTokenReuse(ctx, signature, orequest); e != nil {
 			return errorsx.WithStack(e)
 		}

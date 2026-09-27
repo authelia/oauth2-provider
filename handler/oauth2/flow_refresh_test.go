@@ -451,6 +451,12 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					ID:         "foo",
 					GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 				}
+
+				token, _, err := hmacshaStrategy.GenerateRefreshToken(ctx, nil)
+				require.NoError(t, err)
+
+				request.Form.Set(consts.FormParameterRefreshToken, token)
+
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(ctx, gomock.Any(), gomock.Any()).

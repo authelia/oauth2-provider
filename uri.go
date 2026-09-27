@@ -8,6 +8,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -44,6 +45,16 @@ func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
 	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
 }
 
+// IsPublicClientIdentityAssured reports whether the redirect URI of an authorization request assures the identity of a
+// public client. Only a claimed 'https' redirect URI in a domain the app controls does, as a private-use URI scheme or a
+// loopback or localhost redirect URI, over 'https' or not, can be claimed by any application on the device. See RFC
+// 8252 Sections 7.2 and 8.6.
+func IsPublicClientIdentityAssured(_ context.Context, request AuthorizeRequester) (assured bool) {
+	uri := request.GetRedirectURI()
+
+	return uri != nil && uri.Scheme == consts.SchemeHTTPS && !IsLocalhost(uri)
+}
+
 // IsRedirectURISecureStrict is stricter than IsRedirectURISecure and it does not allow custom-scheme
 // URLs because they can be hijacked for native apps. Use claimed HTTPS redirects instead.
 // See discussion in https://github.com/ory/fosite/pull/489.
@@ -51,12 +62,28 @@ func IsRedirectURISecureStrict(uri *url.URL) bool {
 	return uri.Scheme == consts.SchemeHTTPS || (uri.Scheme == consts.SchemeHTTP && IsLocalhost(uri))
 }
 
-// IsLocalhost reports whether the given URI's hostname is a localhost or loopback address. The check covers the literal
-// hostname "localhost", any subdomain of ".localhost", and IPv4/IPv6 loopback IP literals.
+// IsLocalhost reports whether the given URI's hostname addresses the loopback interface. The check covers the name
+// "localhost" and any name under ".localhost" compared case-insensitively (RFC 6761 Section 6.3), IPv6 loopback
+// literals, and IPv4 loopback addresses in any form the WHATWG URL Standard host parser normalizes to 127.0.0.0/8, such
+// as 127.1, 0x7f.0.0.1 and 2130706433. A trailing dot is ignored.
 func IsLocalhost(uri *url.URL) bool {
-	hostname := uri.Hostname()
+	if uri == nil {
+		return false
+	}
 
-	return strings.HasSuffix(hostname, ".localhost") || hostname == "localhost" || isLoopbackAddress(uri)
+	hostname := strings.ToLower(strings.TrimSuffix(uri.Hostname(), "."))
+
+	if hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") {
+		return true
+	}
+
+	if ip := net.ParseIP(hostname); ip != nil {
+		return ip.IsLoopback()
+	}
+
+	ipv4, ok := parseWHATWGIPv4(hostname)
+
+	return ok && ipv4>>24 == 127
 }
 
 // MatchRedirectURIWithClientRedirectURIs if the given uri is a registered redirect uri. Does not perform
@@ -287,4 +314,63 @@ func isLoopbackAddress(uri *url.URL) bool {
 	ip := net.ParseIP(uri.Hostname())
 
 	return ip != nil && ip.IsLoopback()
+}
+
+func parseWHATWGIPv4(host string) (ipv4 uint64, ok bool) {
+	parts := strings.Split(host, ".")
+	if len(parts) > 4 {
+		return 0, false
+	}
+
+	for i, part := range parts {
+		n, ok := parseWHATWGIPv4Number(part)
+		if !ok {
+			return 0, false
+		}
+
+		if i < len(parts)-1 {
+			if n > 255 {
+				return 0, false
+			}
+
+			ipv4 += n << (8 * (3 - i))
+
+			continue
+		}
+
+		if n >= 1<<(8*(5-len(parts))) {
+			return 0, false
+		}
+
+		ipv4 += n
+	}
+
+	return ipv4, true
+}
+
+func parseWHATWGIPv4Number(part string) (n uint64, ok bool) {
+	if part == "" {
+		return 0, false
+	}
+
+	base := 10
+
+	switch {
+	case strings.HasPrefix(part, "0x"):
+		part, base = part[2:], 16
+	case len(part) > 1 && part[0] == '0':
+		part, base = part[1:], 8
+	}
+
+	if part == "" {
+		return 0, true
+	}
+
+	var err error
+
+	if n, err = strconv.ParseUint(part, base, 64); err != nil {
+		return 0, false
+	}
+
+	return n, true
 }

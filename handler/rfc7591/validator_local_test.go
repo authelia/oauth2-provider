@@ -101,6 +101,22 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://app.LOCALHOST./cb' must not target the loopback interface for the 'web' 'application_type'.",
 		},
 		{
+			name: "ShouldRejectShorthandLoopbackIPv4RedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://127.1/cb"},
+			},
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://127.1/cb' must not target the loopback interface for the 'web' 'application_type'.",
+		},
+		{
+			name: "ShouldRejectHexadecimalLoopbackIPv4RedirectURIForWebApplicationType",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: "web",
+				RedirectURIs:    []string{"https://0x7f.0.0.1/cb"},
+			},
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://0x7f.0.0.1/cb' must not target the loopback interface for the 'web' 'application_type'.",
+		},
+		{
 			// RFC 8252 §7.3: a native client requires the loopback redirect.
 			name: "ShouldAcceptLoopbackRedirectURIForNativeApplicationType",
 			metadata: &oauth2.ClientRegistrationMetadata{

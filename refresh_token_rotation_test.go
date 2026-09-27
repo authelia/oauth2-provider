@@ -67,3 +67,18 @@ func TestIsRefreshTokenRotationDisabledForRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRefreshTokenRotationDisabledForRequestKeepsTheFirstDecision(t *testing.T) {
+	config := &Config{DPoPEnabled: true}
+	session := &DefaultSession{}
+
+	request := NewAccessRequest(session)
+	request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "public", Public: true}, DisableRefreshTokenRotation: true}
+
+	assert.False(t, IsRefreshTokenRotationDisabledForRequest(t.Context(), config, request))
+
+	session.SetDPoPJWKThumbprint("jkt")
+
+	assert.False(t, IsRefreshTokenRotationDisabledForRequest(t.Context(), config, request))
+	assert.True(t, IsRefreshTokenRotationDisabledForRequest(t.Context(), config, &request.Request))
+}

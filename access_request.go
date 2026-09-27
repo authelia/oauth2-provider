@@ -9,6 +9,20 @@ type AccessRequest struct {
 	HandledGrantType Arguments `json:"handledGrantType" gorethink:"handledGrantType"`
 
 	Request
+
+	refreshTokenRotationDisabled *bool
+}
+
+func (a *AccessRequest) getRefreshTokenRotationDisabled() (disable, ok bool) {
+	if a.refreshTokenRotationDisabled == nil {
+		return false, false
+	}
+
+	return *a.refreshTokenRotationDisabled, true
+}
+
+func (a *AccessRequest) setRefreshTokenRotationDisabled(disable bool) {
+	a.refreshTokenRotationDisabled = &disable
 }
 
 // NewAccessRequest returns an empty AccessRequest seeded with the given session.

@@ -175,9 +175,12 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision)))
 
-	// An unrotated refresh token keeps the expiry it was issued with.
+	// Decided here, before the token endpoint binding handlers can bind the restored session, so the decision reflects
+	// the presented refresh token. An unrotated refresh token keeps the expiry it was issued with.
+	rotate := !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request)
+
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 && !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request) {
+	if rtLifespan > -1 && rotate {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision)))
 	}
 

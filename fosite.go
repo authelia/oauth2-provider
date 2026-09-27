@@ -349,8 +349,34 @@ func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTo
 // refresh token is not sender-constrained by an enabled DPoP or mTLS binding: RFC 9700 Section 4.14.2 requires the
 // refresh tokens of public clients to be sender-constrained or rotated so that a replay can be detected.
 //
+// The binding is that of the presented refresh token, not one a token endpoint binding handler records on the session
+// for this request, so an *AccessRequest keeps the result of the first call and returns it on every later call. The
+// refresh token grant makes that call from HandleTokenEndpointRequest, before any binding handler runs.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
+	recorder, ok := request.(refreshTokenRotationRecorder)
+	if ok {
+		if disable, ok = recorder.getRefreshTokenRotationDisabled(); ok {
+			return disable
+		}
+	}
+
+	disable = isRefreshTokenRotationDisabledForRequest(ctx, config, request)
+
+	if recorder != nil {
+		recorder.setRefreshTokenRotationDisabled(disable)
+	}
+
+	return disable
+}
+
+type refreshTokenRotationRecorder interface {
+	getRefreshTokenRotationDisabled() (disable, ok bool)
+	setRefreshTokenRotationDisabled(disable bool)
+}
+
+func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
 	client := request.GetClient()
 
 	if !IsRefreshTokenRotationDisabled(ctx, config, client) {

@@ -630,6 +630,54 @@ func TestJWTStrategy_GenerateIDTokenRefreshExemption(t *testing.T) {
 	}
 }
 
+func TestJWTStrategy_GenerateIDTokenRefreshNonce(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	testCases := []struct {
+		name     string
+		grant    string
+		expected any
+	}{
+		{"ShouldOmitNonceForRefreshGrant", consts.GrantTypeRefreshToken, nil},
+		{"ShouldSetNonceForAuthorizationCodeGrant", consts.GrantTypeAuthorizationCode, "request-form-nonce"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requester := oauth2.NewAccessRequest(&DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject: testSubjectPeter,
+					Nonce:   "original-authentication-nonce",
+				},
+				Headers: &jwt.Headers{},
+			})
+
+			requester.GrantTypes = oauth2.Arguments{tc.grant}
+			requester.Form.Set(consts.FormParameterNonce, "request-form-nonce")
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Duration(0), requester)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			decoded, err := jwt.Parse(token, func(token *jwt.Token) (any, error) {
+				return key.PublicKey, nil
+			})
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, decoded.Claims.ToMapClaims()[consts.ClaimNonce])
+		})
+	}
+}
+
 func TestDefaultSession_MarshalJSON(t *testing.T) {
 	testCases := []struct {
 		name     string

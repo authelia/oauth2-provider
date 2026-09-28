@@ -491,6 +491,19 @@ type TLSClientAuthClient interface {
 	Client
 }
 
+// MTLSStrictRefreshTokenBindingClient is a client whose certificate-bound refresh tokens may only be redeemed with
+// the certificate they are bound to, even though it is confidential. Strict binding applies when either this or the
+// provider-wide option is set; see MTLSStrictRefreshTokenBindingProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+type MTLSStrictRefreshTokenBindingClient interface {
+	// GetMTLSStrictRefreshTokenBinding returns true if this client's refresh tokens stay bound to the certificate they
+	// were issued for.
+	GetMTLSStrictRefreshTokenBinding() (strict bool)
+
+	Client
+}
+
 // MTLSClient represents a client that can advertise the 'tls_client_certificate_bound_access_tokens' metadata value
 // per RFC 8705 Section 3.4.
 type MTLSClient interface {

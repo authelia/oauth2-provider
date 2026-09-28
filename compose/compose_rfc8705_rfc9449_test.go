@@ -103,11 +103,23 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
-	t.Run("ShouldRejectARefreshWithAnotherCertificate", func(t *testing.T) {
-		_, _, err := bothTokenRequest(t, provider, form(), other, bothDPoPProof(t, proofKey, "wrong-cert"))
+	t.Run("ShouldRebindARefreshWithAnotherCertificate", func(t *testing.T) {
+		response, _, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+			consts.FormParameterAuthorizationCode: []string{bothAuthorizeForCode(t, provider)},
+			consts.FormParameterRedirectURI:       []string{bothRedirectURI},
+		}, cert, bothDPoPProof(t, proofKey, "rebind-cert-initial"))
+		require.NoError(t, err)
 
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
+		refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+
+		_, granted, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+			consts.FormParameterRefreshToken: []string{refreshToken},
+		}, other, bothDPoPProof(t, proofKey, "rebind-cert"))
+		require.NoError(t, err)
+
+		assertBoundToBoth(t, granted, other)
 	})
 
 	t.Run("ShouldRejectARefreshWithAnotherProofKey", func(t *testing.T) {

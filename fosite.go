@@ -291,6 +291,7 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthDisabledProvider
 	DPoPConfigProvider
 	MTLSConfigProvider
+	MTLSStrictRefreshTokenBindingProvider
 	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider
 	RFC7591ClientRegistrationEndpointHandlersProvider

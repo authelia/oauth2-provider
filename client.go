@@ -468,6 +468,19 @@ type DPoPStrictRefreshTokenBindingClient interface {
 	Client
 }
 
+// IntrospectionTokenTypeClient is a client which, when it calls the introspection endpoint, decides whether the
+// response includes the RFC 7662 Section 2.2 'token_type' member. When implemented it overrides
+// IntrospectionTokenTypeEnabledProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+type IntrospectionTokenTypeClient interface {
+	// GetIntrospectionTokenTypeEnabled returns true if introspection responses sent to this client include the
+	// 'token_type' member.
+	GetIntrospectionTokenTypeEnabled() (enabled bool)
+
+	Client
+}
+
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
 type DPoPClient interface {
 	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is

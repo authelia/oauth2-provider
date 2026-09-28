@@ -208,6 +208,10 @@ type Config struct {
 	// which permits both. See IntrospectionEndpointClientAuthDisabledProvider for why a deployment would set it.
 	IntrospectionEndpointClientAuthDisabled bool
 
+	// IntrospectionTokenTypeEnabled includes the RFC 7662 Section 2.2 'token_type' member in the response for an
+	// active access token. Defaults to false, which omits it. See IntrospectionTokenTypeEnabledProvider.
+	IntrospectionTokenTypeEnabled bool
+
 	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
 	RevocationEndpointClientAuthStrategy EndpointClientAuthStrategy
@@ -1145,6 +1149,11 @@ func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context)
 	return c.IntrospectionEndpointClientAuthDisabled
 }
 
+// GetIntrospectionTokenTypeEnabled returns whether the introspection response includes the 'token_type' member.
+func (c *Config) GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool) {
+	return c.IntrospectionTokenTypeEnabled
+}
+
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	c.revocationEndpointClientAuthStrategyOnce.Do(func() {
 		if c.RevocationEndpointClientAuthStrategy == nil {
@@ -1364,6 +1373,7 @@ var (
 	_ TokenEndpointClientAuthStrategyProvider               = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
+	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)
 	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)

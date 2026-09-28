@@ -289,6 +289,7 @@ type Configurator interface {
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthDisabledProvider
+	IntrospectionTokenTypeEnabledProvider
 	DPoPConfigProvider
 	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider

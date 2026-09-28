@@ -277,6 +277,14 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())
 
+	if f.isIntrospectionTokenTypeEnabled(ctx, caller) {
+		if tokenType := r.GetAccessTokenType(); tokenType != "" {
+			response[consts.AccessResponseTokenType] = tokenType
+		} else {
+			delete(response, consts.AccessResponseTokenType)
+		}
+	}
+
 	f.writeIntrospectionResponse(ctx, rw, r, caller, response, alg, kid)
 }
 
@@ -348,4 +356,12 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 
 		_ = json.NewEncoder(rw).Encode(response)
 	}
+}
+
+func (f *Fosite) isIntrospectionTokenTypeEnabled(ctx context.Context, caller Client) (enabled bool) {
+	if client, ok := caller.(IntrospectionTokenTypeClient); ok {
+		return client.GetIntrospectionTokenTypeEnabled()
+	}
+
+	return f.Config != nil && f.Config.GetIntrospectionTokenTypeEnabled(ctx)
 }

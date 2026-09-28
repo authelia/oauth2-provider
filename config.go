@@ -689,6 +689,17 @@ type RevocationEndpointClientAuthStrategyProvider interface {
 	GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
 }
 
+// DPoPStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 9449 refresh token binding of
+// confidential clients.
+type DPoPStrictRefreshTokenBindingProvider interface {
+	// GetDPoPStrictRefreshTokenBinding returns true if a confidential client's DPoP bound refresh token may only be
+	// redeemed with a proof for the key it is bound to. When false the grant is re-bound to the key of the presented
+	// proof, as RFC 9449 Section 5 does not bind the refresh tokens of confidential clients to the proof key.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-5
+	GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool)
+}
+
 // DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
 type DPoPConfigProvider interface {
 	// GetDPoPEnabled returns true if DPoP handling is enabled.

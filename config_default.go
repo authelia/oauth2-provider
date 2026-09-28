@@ -403,6 +403,12 @@ type Config struct {
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
 
+	// DPoPStrictRefreshTokenBinding keeps a confidential client's DPoP bound refresh token bound to the key it was
+	// issued for, so a refresh with a proof for another key is rejected. Defaults to false, which re-binds the grant
+	// to the key of the presented proof, as RFC 9449 Section 5 does not bind the refresh tokens of confidential
+	// clients to the proof key. Public clients are always strictly bound.
+	DPoPStrictRefreshTokenBinding bool
+
 	// OIDCKeyBindingEnabled enables OpenID Connect Key Binding 1.0, which issues an ID Token carrying the 'cnf'
 	// claim of a DPoP proof-of-possession key. Requires DPoPEnabled. Defaults to false.
 	OIDCKeyBindingEnabled bool
@@ -1185,6 +1191,12 @@ func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 	return c.DPoPStrategy
 }
 
+// GetDPoPStrictRefreshTokenBinding returns whether a confidential client's DPoP bound refresh token stays bound to
+// the key it was issued for.
+func (c *Config) GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool) {
+	return c.DPoPStrictRefreshTokenBinding
+}
+
 func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
 	return c.MTLSEnabled || c.MTLSEnforce
 }
@@ -1327,6 +1339,7 @@ var (
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)
+	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)

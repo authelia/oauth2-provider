@@ -336,6 +336,12 @@ type Config struct {
 	// Requests. This is required by FAPI 2.0 Security Profile Section 5.3.2.2.
 	RequireRedirectURIPushedAuthorizationRequests bool
 
+	// DisablePushedAuthorizationRequestClientRefetch disables fetching the current client registration when a Pushed
+	// Authorization Request 'request_uri' is redeemed at the 'authorize' endpoint, so the client stored with the
+	// pushed request is used as is. RFC 9126 Section 7.4 recommends the pushed request is checked against the current
+	// client policy.
+	DisablePushedAuthorizationRequestClientRefetch bool
+
 	// RequireSignedRequestObject requires all authorization requests be protected as a signed Request Object provided
 	// by either the 'request' or 'request_uri' parameter. This is equivalent to the 'require_signed_request_object'
 	// authorization server metadata value.
@@ -1028,6 +1034,14 @@ func (c *Config) GetRequirePushedAuthorizationRequests(ctx context.Context) bool
 // Authorization Requests.
 func (c *Config) GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) bool {
 	return c.RequireRedirectURIPushedAuthorizationRequests
+}
+
+// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization Request
+// is used as is when its 'request_uri' is redeemed, instead of the current client registration.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+func (c *Config) GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) bool {
+	return c.DisablePushedAuthorizationRequestClientRefetch
 }
 
 // GetRequireSignedRequestObject indicates if JWT-Secured Authorization Requests are enforced. In this mode, a client

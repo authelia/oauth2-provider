@@ -14,4 +14,5 @@ const (
 var (
 	errTestCreateSessionFailed = errors.New("create access token session failed")
 	errTestUpdateClientFailed  = errors.New("update client failed")
+	errTestGetClientFailed     = errors.New("get client failed")
 )

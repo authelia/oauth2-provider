@@ -290,6 +290,7 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthDisabledProvider
 	DPoPConfigProvider
+	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider
 	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider

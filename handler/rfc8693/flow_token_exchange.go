@@ -56,8 +56,11 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	// Only a subject token validated by a token type handler for this request may be issued against.
+	// Only a subject or actor token validated by a token type handler for this request may be issued against, and only
+	// an 'act' claim derived from them may be issued.
 	session.SetSubjectToken(nil)
+	session.SetActorToken(nil)
+	session.SetClaimActor(nil)
 
 	form := request.GetRequestForm()
 	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
@@ -585,6 +588,24 @@ func requireSubjectToken(request oauth2.AccessRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrInvalidRequest.
 		WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType).
 		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
+}
+
+func requireActorToken(request oauth2.AccessRequester) (err error) {
+	form := request.GetRequestForm()
+
+	if form.Get(consts.FormParameterActorToken) == "" {
+		return nil
+	}
+
+	if session, ok := request.GetSession().(Session); ok && session != nil && session.GetActorToken() != nil {
+		return nil
+	}
+
+	actorTokenType := form.Get(consts.FormParameterActorTokenType)
+
+	return errorsx.WithStack(oauth2.ErrInvalidRequest.
+		WithHintf("The '%s' token type is not supported as a '%s'.", actorTokenType, consts.FormParameterActorTokenType).
+		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated an actor token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterActorTokenType, actorTokenType, consts.FormParameterActorToken))
 }
 
 func isRefreshTokenSubject(request oauth2.Requester) bool {

@@ -186,6 +186,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return err
 	}
 
+	if err = requireActorToken(request); err != nil {
+		return err
+	}
+
 	// Apply the same refresh-token gating that AccessTokenTypeHandler.canIssueRefreshToken applies, but as an error
 	// rather than a silent skip: when a client EXPLICITLY requests a refresh token via 'requested_token_type', the
 	// AS must refuse with the spec-appropriate code if policy disallows it rather than silently downgrading.

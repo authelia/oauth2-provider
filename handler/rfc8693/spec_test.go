@@ -688,10 +688,11 @@ func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest
 
 	session, _ := req.GetSession().(Session)
 
-	var subjectToken map[string]any
+	var subjectToken, actorToken map[string]any
 
 	if session != nil {
 		subjectToken = session.GetSubjectToken()
+		actorToken = session.GetActorToken()
 	}
 
 	if err := h.HandleTokenEndpointRequest(context.Background(), req); err != nil {
@@ -700,6 +701,10 @@ func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest
 
 	if subjectToken != nil {
 		session.SetSubjectToken(subjectToken)
+	}
+
+	if actorToken != nil {
+		session.SetActorToken(actorToken)
 	}
 
 	return h.PopulateTokenEndpointResponse(context.Background(), req, oauth2.NewAccessResponse())
@@ -851,7 +856,7 @@ func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSess
 	ctx := context.Background()
 	resp := oauth2.NewAccessResponse()
 
-	subjectToken := session.GetSubjectToken()
+	subjectToken, actorToken := session.GetSubjectToken(), session.GetActorToken()
 
 	require.NoError(t, grant.HandleTokenEndpointRequest(ctx, req))
 
@@ -860,6 +865,7 @@ func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSess
 	}
 
 	session.SetSubjectToken(subjectToken)
+	session.SetActorToken(actorToken)
 
 	require.NoError(t, grant.PopulateTokenEndpointResponse(ctx, req, resp))
 	require.NoError(t, cjt.PopulateTokenEndpointResponse(ctx, req, resp))

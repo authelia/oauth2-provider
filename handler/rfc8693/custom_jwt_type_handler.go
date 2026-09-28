@@ -204,6 +204,10 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		return err
 	}
 
+	if err = requireActorToken(request); err != nil {
+		return err
+	}
+
 	jwtType, _ := tokenType.(*JWTType)
 	if jwtType == nil {
 		return errorsx.WithStack(

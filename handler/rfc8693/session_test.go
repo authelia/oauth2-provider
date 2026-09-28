@@ -52,6 +52,17 @@ func TestDefaultSessionSetClaimActor(t *testing.T) {
 	}
 }
 
+func TestDefaultSessionSetClaimActorNilRemovesTheClaim(t *testing.T) {
+	session := NewDefaultSession()
+	session.SetClaimActor(map[string]any{consts.ClaimSubject: "actor"})
+
+	session.SetClaimActor(nil)
+
+	assert.NotContains(t, session.Extra, consts.ClaimActor)
+	assert.NotContains(t, session.Claims.Extra, consts.ClaimActor)
+	assert.NotContains(t, session.AccessTokenClaimsMap(), consts.ClaimActor)
+}
+
 func TestDefaultSessionSetClaimActorAfterRoundTrip(t *testing.T) {
 	data, err := json.Marshal(NewDefaultSession())
 	require.NoError(t, err)

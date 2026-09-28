@@ -688,6 +688,17 @@ type IntrospectionEndpointClientAuthDisabledProvider interface {
 	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
 }
 
+// IntrospectionTokenTypeEnabledProvider returns the provider for including 'token_type' in introspection responses.
+type IntrospectionTokenTypeEnabledProvider interface {
+	// GetIntrospectionTokenTypeEnabled returns true if the introspection response for an active access token includes
+	// the OPTIONAL 'token_type' member, the type of the token as defined in RFC 6749 Section 5.1. A DPoP-bound access
+	// token is reported as 'DPoP' as RFC 9449 Section 6.2 requires. A refresh token has no such type, so the member
+	// is omitted for it. An IntrospectionTokenTypeClient calling the endpoint overrides this value.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+	GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool)
+}
+
 // RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
 // revocation endpoint.
 type RevocationEndpointClientAuthStrategyProvider interface {

@@ -626,6 +626,7 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 		name     string
 		session  *DefaultSession
 		use      TokenUse
+		disabled bool
 		expected string
 	}{
 		{
@@ -633,6 +634,13 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
 			use:      AccessToken,
 			expected: DPoPAccessToken,
+		},
+		{
+			name:     "ShouldReportBearerForABoundSubjectTokenWhenDPoPIsDisabled",
+			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
+			use:      AccessToken,
+			disabled: true,
+			expected: BearerAccessToken,
 		},
 		{
 			name:     "ShouldReportBearerForAnUnboundSubjectToken",
@@ -662,7 +670,7 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"), DPoPEnabled: !tc.disabled}
 
 			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 

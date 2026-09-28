@@ -294,13 +294,17 @@ func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.R
 	return nil
 }
 
+// RFC8628UserCodeSignature implements rfc8628.UserCodeStrategy. The code is upper-cased and stripped of every character
+// outside the user code character set before it is signed, as recommended by RFC 8628 Section 6.1.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-6.1
 func (s *HMACCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
-	return s.Enigma.GenerateHMACForString(ctx, tokenString)
+	return s.Enigma.GenerateHMACForString(ctx, normaliseRFC8628UserCode(tokenString))
 }
 
 // GenerateRFC8628UserCode implements rfc8628.UserCodeStrategy.
 func (s *HMACCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenString string, signature string, err error) {
-	seq, err := randx.RuneSequence(8, []rune("BCDFGHJKLMNPQRSTVWXZ"))
+	seq, err := randx.RuneSequence(8, []rune(rfc8628UserCodeCharset))
 	if err != nil {
 		return "", "", err
 	}
@@ -436,4 +440,16 @@ type HMACCoreStrategyConfigurator interface {
 	oauth2.HMACHashingProvider
 	oauth2.RFC8628DeviceAuthorizeConfigProvider
 	oauth2.RFC7591ClientRegistrationTokenSecretProvider
+}
+
+const rfc8628UserCodeCharset = "BCDFGHJKLMNPQRSTVWXZ"
+
+func normaliseRFC8628UserCode(code string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune(rfc8628UserCodeCharset, r) {
+			return r
+		}
+
+		return -1
+	}, strings.ToUpper(code))
 }

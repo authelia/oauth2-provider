@@ -36,7 +36,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// This requirement is already fulfilled because we require all token requests to be authenticated as described
 	// in https://tools.ietf.org/html/rfc6749#section-3.2.1
 	if client.IsPublic() {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'."))
 	}
 
 	if !client.GetGrantTypes().Has(consts.GrantTypeClientCredentials) {

@@ -63,7 +63,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if storedReq, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession()); errors.Is(err, oauth2.ErrNotFound) {
+	if storedReq, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession()); errors.Is(err, oauth2.ErrNotFound) || errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

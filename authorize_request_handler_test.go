@@ -55,6 +55,15 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		return par
 	}
 
+	parClientCurrent := &DefaultClient{
+		ID:            "1234",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo", "bar"},
+		GrantTypes:    []string{consts.GrantTypeAuthorizationCode},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		Audience:      []string{"https://cloud.authelia.com/api"},
+	}
+
 	parSessionValid := &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
 	parSessionExpired := &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(-time.Hour)}}
 
@@ -631,11 +640,30 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:   {"1234"},
 				consts.FormParameterState:      {"strong-enough-state"},
 			},
-			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not delete the Pushed Authorization Request session.",
-			mock: func(store *mock.MockStorage) {},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not delete the Pushed Authorization Request session.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
 			par: func(store *mock.MockPARStorage) {
 				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:delete-error").Return(newPARSession(parClient, parSessionValid), nil)
 				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:delete-error").Return(errors.New("Could not delete the Pushed Authorization Request session."))
+			},
+		},
+		{
+			name:   "ShouldFailPARSessionAlreadyRedeemed",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:redeemed"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The request_uri in the authorization request returns an error or contains invalid data. The 'request_uri' provided is invalid, expired, or otherwise incorrect. The Pushed Authorization Request session has already been redeemed.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:redeemed").Return(newPARSession(parClient, parSessionValid), nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:redeemed").Return(ErrNotFound)
 			},
 		},
 		{
@@ -646,8 +674,10 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:   {"1234"},
 				consts.FormParameterState:      {"strong-enough-state"},
 			},
-			err:  "The request_uri in the authorization request returns an error or contains invalid data. The 'request_uri' provided is invalid, expired, or otherwise incorrect. The Pushed Authorization Request session is expired.",
-			mock: func(store *mock.MockStorage) {},
+			err: "The request_uri in the authorization request returns an error or contains invalid data. The 'request_uri' provided is invalid, expired, or otherwise incorrect. The Pushed Authorization Request session is expired.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
 			par: func(store *mock.MockPARStorage) {
 				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:expired").Return(newPARSession(parClient, parSessionExpired), nil)
 				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:expired").Return(nil)
@@ -670,6 +700,155 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		{
 			name:   "ShouldPassPAR",
 			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+			},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClientCurrent, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				State:         "strong-enough-state",
+				Request: Request{
+					Client:            parClientCurrent,
+					RequestedScope:    []string{"foo", "bar"},
+					RequestedAudience: []string{"https://cloud.authelia.com/api"},
+				},
+			},
+		},
+		{
+			name:   "ShouldFailPARClientDeleted",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist. Could not find the requested resource(s).",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(nil, ErrNotFound)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientNil",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(nil, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientRedirectURIRemoved",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '1234' did not match 'redirect_uri' value 'https://foo.bar/cb/removed'.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				par := newPARSession(parClient, parSessionValid)
+				par.RedirectURI, _ = url.Parse("https://foo.bar/cb/removed")
+
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(par, nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientScopeRemoved",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'bar'.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo"}, ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow}, Audience: []string{"https://cloud.authelia.com/api"}}, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientAudienceRemoved",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://cloud.authelia.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow}}, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientResponseTypeRemoved",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code'.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeImplicitFlowToken}, Audience: []string{"https://cloud.authelia.com/api"}}, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(newPARSession(parClient, parSessionValid), nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+		},
+		{
+			name:   "ShouldFailPARClientResponseModeRemoved",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
+				consts.FormParameterClientID:   {"1234"},
+				consts.FormParameterState:      {"strong-enough-state"},
+			},
+			err: "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post.jwt', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode. The registered OAuth 2.0 Client with id '1234' does not the 'response_mode' type 'form_post.jwt', as it's not registered to support any.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
+			par: func(store *mock.MockPARStorage) {
+				par := newPARSession(parClient, parSessionValid)
+				par.ResponseMode = ResponseModeFormPostJWT
+				par.Form = url.Values{consts.FormParameterResponseMode: {consts.ResponseModeFormPostJWT}}
+
+				store.EXPECT().GetPARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(par, nil)
+				store.EXPECT().DeletePARSession(gomock.Any(), "urn:ietf:params:oauth:request_uri:valid").Return(nil)
+			},
+		},
+		{
+			name:   "ShouldPassPARClientRefetchDisabled",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy, DisablePushedAuthorizationRequestClientRefetch: true},
 			query: url.Values{
 				consts.FormParameterRequestURI: {"urn:ietf:params:oauth:request_uri:valid"},
 				consts.FormParameterClientID:   {"1234"},
@@ -700,7 +879,9 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterCodeChallenge: {"injected-challenge"},
 				consts.FormParameterNonce:         {"injected-nonce"},
 			},
-			mock: func(store *mock.MockStorage) {},
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(parClient, nil)
+			},
 			par: func(store *mock.MockPARStorage) {
 				par := newPARSession(parClient, parSessionValid)
 				par.Form = url.Values{

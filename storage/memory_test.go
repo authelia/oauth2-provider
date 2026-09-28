@@ -342,3 +342,31 @@ func TestMemoryStore_InvalidateDeviceCodeSessionKeepsTheRequester(t *testing.T) 
 	require.ErrorIs(t, store.InvalidateDeviceCodeSession(t.Context(), "device"), oauth2.ErrInvalidatedDeviceCode)
 	require.ErrorIs(t, store.CreateDeviceCodeSession(t.Context(), "other", request), oauth2.ErrDuplicateUserCode)
 }
+
+func TestMemoryStore_DeletePARSessionConsumesOnce(t *testing.T) {
+	testCases := []struct {
+		name  string
+		store oauth2.PARStorage
+	}{
+		{"ShouldConsumeOnceMemoryStore", NewMemoryStore()},
+		{"ShouldConsumeOnceHydratingMemoryStore", NewHydratingMemoryStore()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := oauth2.NewAuthorizeRequest()
+			request.SetSession(&oauth2.DefaultSession{})
+
+			require.NoError(t, tc.store.CreatePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc", request))
+
+			for range 2 {
+				found, err := tc.store.GetPARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc")
+				require.NoError(t, err)
+				require.NotNil(t, found)
+			}
+
+			require.NoError(t, tc.store.DeletePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc"))
+			require.ErrorIs(t, tc.store.DeletePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc"), oauth2.ErrNotFound)
+		})
+	}
+}

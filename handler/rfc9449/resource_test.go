@@ -53,6 +53,26 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			dpop:  true,
 		},
 		{
+			name: "DPoPSchemeMultipleSpaces",
+			request: func() *http.Request {
+				r := &http.Request{Header: http.Header{}}
+				r.Header.Set(consts.HeaderAuthorization, "DPoP   dpop-token")
+				return r
+			},
+			token: "dpop-token",
+			dpop:  true,
+		},
+		{
+			name: "DPoPSchemeEmptyToken",
+			request: func() *http.Request {
+				r := &http.Request{Header: http.Header{}}
+				r.Header.Set(consts.HeaderAuthorization, "DPoP   ")
+				return r
+			},
+			token: "",
+			dpop:  false,
+		},
+		{
 			name: "BearerScheme",
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}

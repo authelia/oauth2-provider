@@ -262,6 +262,9 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 // type handlers' PopulateTokenEndpointResponse implementations issue the token by serializing the session, so the
 // 'act' claim must be on the session before they run.
 //
+// An 'actor_token' with neither a 'sub' nor a 'client_id' claim does not identify the actor, and is rejected with
+// 'invalid_request' per RFC 8693 Section 2.2.2.
+//
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
 func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
@@ -284,7 +287,13 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
-	if act := buildActClaim(session); act != nil {
+	var act map[string]any
+
+	if act, err = buildActClaim(session); err != nil {
+		return err
+	}
+
+	if act != nil {
 		session.SetClaimActor(act)
 	}
 
@@ -295,17 +304,17 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 // token-type handlers. It returns nil when no actor_token was supplied (i.e. impersonation, where no 'act' claim is
 // required).
 //
-// The actor's identity is taken from the actor_token's identifying claims ('sub' and, when present, 'client_id'). If
-// the subject_token already carried an 'act' claim, that prior actor is nested under the new 'act' to express the
-// chain of delegation per §4.1: "the outermost act claim represents the current actor while nested act claims
-// represent prior actors".
+// The actor's identity is taken from the actor_token's identifying claims ('sub' and 'client_id'), and an actor_token
+// with neither is an error. If the subject_token already carried an 'act' claim, that prior actor is nested under the
+// new 'act' to express the chain of delegation per §4.1: "the outermost act claim represents the current actor while
+// nested act claims represent prior actors".
 //
 // The function does not mutate any of the input maps; the returned map is a fresh allocation safe for the caller to
 // store on the session.
-func buildActClaim(session Session) map[string]any {
+func buildActClaim(session Session) (map[string]any, error) {
 	actorToken := session.GetActorToken()
 	if actorToken == nil {
-		return nil
+		return nil, nil
 	}
 
 	act := map[string]any{}
@@ -318,6 +327,10 @@ func buildActClaim(session Session) map[string]any {
 		act[consts.ClaimClientIdentifier] = clientID
 	}
 
+	if len(act) == 0 {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify the actor as it has neither a '%s' nor a '%s' claim.", consts.FormParameterActorToken, consts.ClaimSubject, consts.ClaimClientIdentifier))
+	}
+
 	subjectToken := session.GetSubjectToken()
 	if subjectToken != nil {
 		if existing, ok := subjectToken[consts.ClaimActor].(map[string]any); ok && len(existing) > 0 {
@@ -325,11 +338,7 @@ func buildActClaim(session Session) map[string]any {
 		}
 	}
 
-	if len(act) == 0 {
-		return nil
-	}
-
-	return act
+	return act, nil
 }
 
 // resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved

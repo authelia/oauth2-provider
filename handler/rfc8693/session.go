@@ -35,7 +35,8 @@ type Session interface {
 	// GetSubjectToken returns the previously stored subject token claims, or nil if none were set.
 	GetSubjectToken() map[string]any
 
-	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow.
+	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow. A nil act removes
+	// the claim.
 	SetClaimActor(act map[string]any)
 
 	// AccessTokenClaimsMap returns the claims to include in the exchanged access token.
@@ -120,7 +121,19 @@ func (s *DefaultSession) GetSubjectToken() map[string]any {
 //     opaque access tokens stored verbatim.
 //   - s.DefaultSession.Claims.Extra flattened into the JWT body by jwt.IDTokenClaims.ToMap, so the 'act' claim
 //     is included in issued ID tokens and custom JWTs.
+//
+// A nil act removes the claim from both places.
 func (s *DefaultSession) SetClaimActor(act map[string]any) {
+	if act == nil {
+		delete(s.Extra, consts.ClaimActor)
+
+		if s.DefaultSession != nil && s.Claims != nil {
+			delete(s.Claims.Extra, consts.ClaimActor)
+		}
+
+		return
+	}
+
 	if s.Extra == nil {
 		s.Extra = map[string]any{}
 	}

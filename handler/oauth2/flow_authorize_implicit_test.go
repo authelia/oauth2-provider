@@ -39,6 +39,17 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectClientWithoutImplicitGrant",
+			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
+				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
+				areq.Client = &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+				}
+			},
+			err: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'.",
+		},
+		{
 			name: "ShouldFailAccessTokenGenerationFailed",
 			setup: func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder) {
 				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}

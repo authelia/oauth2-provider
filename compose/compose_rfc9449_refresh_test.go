@@ -160,6 +160,85 @@ func TestDPoPRefreshRebindsAConfidentialClientToThePresentedKey(t *testing.T) {
 	}
 }
 
+func TestDPoPRefreshWithoutRotationRebindsTheRefreshToken(t *testing.T) {
+	stores := []func() (store any, clients map[string]oauth2.Client){
+		func() (any, map[string]oauth2.Client) {
+			store := storage.NewMemoryStore()
+
+			return store, store.Clients
+		},
+		func() (any, map[string]oauth2.Client) {
+			store := storage.NewHydratingMemoryStore()
+
+			return store, store.Clients
+		},
+	}
+
+	for _, newStore := range stores {
+		store, clients := newStore()
+
+		t.Run(fmt.Sprintf("%T", store), func(t *testing.T) {
+			key, err := rsa.GenerateKey(rand.Reader, 2048)
+			require.NoError(t, err)
+
+			provider := ComposeAllEnabled(&oauth2.Config{DPoPEnabled: true, DisableRefreshTokenRotation: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}, store, key)
+
+			clients[rtClientID] = &oauth2.DefaultClient{
+				ID:            rtClientID,
+				ClientSecret:  oauth2.NewPlainTextClientSecret(rtSecret),
+				RedirectURIs:  []string{rtRedirectURI},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				GrantTypes:    []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+				Scopes:        []string{consts.ScopeOffline},
+			}
+
+			original := newPARProofKey(t)
+
+			response, err := tokenRequest(t, provider, url.Values{
+				consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+				consts.FormParameterAuthorizationCode: []string{authorizeForCode(t, provider, thumbprintOf(t, original))},
+				consts.FormParameterRedirectURI:       []string{rtRedirectURI},
+			}, signPARProof(t, original, "rebind-norotate-0", rtTokenEndpoint, nil))
+			require.NoError(t, err)
+
+			refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+			require.NotEmpty(t, refreshToken)
+
+			rotated := newPARProofKey(t)
+			jkt := thumbprintOf(t, rotated)
+
+			for i := range 2 {
+				response, err = tokenRequest(t, provider, url.Values{
+					consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+					consts.FormParameterRefreshToken: []string{refreshToken},
+				}, signPARProof(t, rotated, fmt.Sprintf("rebind-norotate-%d", i+1), rtTokenEndpoint, nil))
+				require.NoError(t, err, "refresh %d", i)
+
+				assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
+				assert.NotContains(t, response.ToMap(), consts.AccessResponseRefreshToken)
+
+				for tokenType, token := range map[oauth2.TokenType]string{oauth2.AccessToken: response.GetAccessToken(), oauth2.RefreshToken: refreshToken} {
+					_, requester, err := provider.IntrospectToken(context.Background(), token, tokenType, &oauth2.DefaultSession{})
+					require.NoError(t, err)
+
+					session, ok := requester.GetSession().(oauth2.DPoPBoundSession)
+					require.True(t, ok)
+
+					assert.Equal(t, jkt, session.GetDPoPJWKThumbprint(), "refresh %d %s", i, tokenType)
+				}
+			}
+
+			_, err = tokenRequest(t, provider, url.Values{
+				consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+				consts.FormParameterRefreshToken: []string{refreshToken},
+			}, "")
+
+			require.Error(t, err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
+		})
+	}
+}
+
 func TestDPoPStrictRefreshTokenBindingRejectsAConfidentialClientWithAnotherKey(t *testing.T) {
 	stores := []func() (store any, clients map[string]oauth2.Client){
 		func() (any, map[string]oauth2.Client) {

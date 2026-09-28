@@ -69,6 +69,14 @@ type RefreshTokenStorage interface {
 	// DeleteRefreshTokenSession removes the session stored against the given refresh token signature.
 	DeleteRefreshTokenSession(ctx context.Context, signature string) (err error)
 
+	// UpdateRefreshTokenSession replaces the request stored for the given refresh token signature while the refresh
+	// token itself stays valid. The refresh token keeps its active state and the access token signature it is paired
+	// with. It is called when a refresh token is redeemed without being rotated, so the stored session carries any
+	// proof-of-possession binding the redemption re-bound the grant to, as RFC 8705 Section 4 and RFC 9449 Section 5
+	// leave the binding of a refresh token to the authorization server. This method should return the
+	// oauth2.ErrNotFound error if no session exists for the given signature.
+	UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error)
+
 	// RotateRefreshToken deactivates the refresh token with the given signature and revokes the access tokens
 	// associated with the given request ID. Consecutive requests to GetRefreshTokenSession for that signature should
 	// return the oauth2.ErrInactiveToken error.

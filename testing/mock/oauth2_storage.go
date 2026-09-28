@@ -183,3 +183,17 @@ func (mr *MockCoreStorageMockRecorder) RotateRefreshToken(ctx, requestID, signat
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRefreshToken", reflect.TypeOf((*MockCoreStorage)(nil).RotateRefreshToken), ctx, requestID, signature)
 }
+
+// UpdateRefreshTokenSession mocks base method.
+func (m *MockCoreStorage) UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateRefreshTokenSession", ctx, signature, request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateRefreshTokenSession indicates an expected call of UpdateRefreshTokenSession.
+func (mr *MockCoreStorageMockRecorder) UpdateRefreshTokenSession(ctx, signature, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRefreshTokenSession", reflect.TypeOf((*MockCoreStorage)(nil).UpdateRefreshTokenSession), ctx, signature, request)
+}

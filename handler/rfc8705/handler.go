@@ -26,7 +26,6 @@ type Handler struct {
 	Config interface {
 		oauth2.MTLSConfigProvider
 		oauth2.MTLSStrictRefreshTokenBindingProvider
-		oauth2.DisableRefreshTokenRotationProvider
 	}
 }
 
@@ -37,8 +36,7 @@ type Handler struct {
 // grant is bound to, because RFC 8705 Section 4 binds the refresh tokens of public clients only, and Section 7.1 has
 // those of confidential clients sender-constrained by client authentication instead. A certificate is still required.
 // The grant of a client for which oauth2.MTLSStrictRefreshTokenBindingProvider or
-// oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding keeps its certificate, as does a grant whose refresh
-// token is not rotated, since the refresh token it keeps would otherwise remain bound to the previous certificate.
+// oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding keeps its certificate.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil
@@ -128,10 +126,6 @@ func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, reques
 
 func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester) bool {
 	if !request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken) || h.Config.GetMTLSStrictRefreshTokenBinding(ctx) {
-		return false
-	}
-
-	if oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, h.Config, request) {
 		return false
 	}
 

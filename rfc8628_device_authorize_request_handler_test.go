@@ -135,7 +135,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 					Scopes: []string{"foo", "bar"},
 				}, nil)
 			},
-			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The requested OAuth 2.0 Client does not have the 'urn:ietf:params:oauth:grant-type:device_code' grant.",
+			err: "The client is not authorized to request a token using this method. The requested OAuth 2.0 Client does not have the 'urn:ietf:params:oauth:grant-type:device_code' grant.",
 		},
 		{
 			name: "ShouldPassPublicClient",
@@ -224,6 +224,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 			ar, err := conf.NewRFC862DeviceAuthorizeRequest(context.Background(), r)
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
+				assert.NotNil(t, ar)
 			} else {
 				require.NoError(t, err)
 				assert.NotNil(t, ar.GetRequestedAt())

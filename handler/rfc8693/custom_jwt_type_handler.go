@@ -191,7 +191,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
 
-		if c.SetTokenExchangeCustomJWT(ctx, jti, time.Unix(expiry, 0)) != nil {
+		if c.SetTokenExchangeCustomJWT(ctx, iss, jti, time.Unix(expiry, 0)) != nil {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
 		}
 	}
@@ -201,6 +201,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
+		return err
+	}
+
+	if err = requireActorToken(request); err != nil {
 		return err
 	}
 
@@ -223,7 +227,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.expiry(ctx, jwtType)))
 	}
 
 	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
@@ -274,6 +278,20 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
 
 	return nil
+}
+
+func (c *CustomJWTTypeHandler) expiry(ctx context.Context, jwtType *JWTType) time.Duration {
+	if jwtType.Expiry > 0 {
+		return jwtType.Expiry
+	}
+
+	if provider, ok := c.Config.(oauth2.AccessTokenLifespanProvider); ok {
+		if lifespan := provider.GetAccessTokenLifespan(ctx); lifespan > 0 {
+			return lifespan
+		}
+	}
+
+	return time.Hour
 }
 
 func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {

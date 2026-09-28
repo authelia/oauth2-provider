@@ -215,6 +215,10 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 		return err
 	}
 
+	if err = requireActorToken(request); err != nil {
+		return err
+	}
+
 	var (
 		session openid.Session
 		ok      bool

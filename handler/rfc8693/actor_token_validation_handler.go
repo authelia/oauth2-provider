@@ -63,6 +63,14 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		return err
 	}
 
+	// RFC 8693 Section 2.2.2 requires 'invalid_request' for an 'actor_token' that is invalid for any reason, which
+	// includes one no token type handler validated.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+	if err = requireActorToken(request); err != nil {
+		return err
+	}
+
 	mayAct, present, err := authorizedActor(subjectTokenObject)
 	if err != nil {
 		return err

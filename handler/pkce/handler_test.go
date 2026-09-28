@@ -165,7 +165,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -182,7 +182,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -201,7 +201,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -228,7 +228,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: "S256", DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -256,7 +256,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -284,7 +284,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: false, EnforcePKCEChallengeMethod: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{"S252"},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -305,7 +305,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -325,7 +325,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				Request: oauth2.Request{
 					Client: &TestPKCEClient{EnforcePKCE: true, EnforcePKCEChallengeMethod: true, PKCEChallengeMethod: consts.PKCEChallengeMethodPlain, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
-						consts.FormParameterCodeChallenge: []string{"abc123456"},
+						consts.FormParameterCodeChallenge: []string{testChallengeS256},
 					},
 				},
 			},
@@ -353,7 +353,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
 					Form: url.Values{
 						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
-						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+						consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 					},
 				},
 			},
@@ -371,6 +371,153 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			oauth2.ErrServerError,
 			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting create PKCE request session: bad connection.",
+		},
+		{
+			"ShouldFailChallengeTooShort",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{"abc123456"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge must be at least 43 characters.",
+		},
+		{
+			"ShouldFailChallengeTooLong",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{strings.Repeat("a", 129)},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge must be no more than 128 characters.",
+		},
+		{
+			"ShouldFailChallengeInvalidCharacters",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{strings.Repeat("a", 42) + "+"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge must only contain [a-Z], [0-9], '-', '.', '_', '~'.",
+		},
+		{
+			"ShouldFailChallengeS256WrongLength",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+						consts.FormParameterCodeChallenge:       []string{strings.Repeat("a", 44)},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			testErrChallengeS256Syntax,
+		},
+		{
+			"ShouldFailChallengeS256NotBase64URL",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+						consts.FormParameterCodeChallenge:       []string{strings.Repeat("a", 42) + "."},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			testErrChallengeS256Syntax,
+		},
+		{
+			"ShouldFailChallengeS256NonCanonical",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+						consts.FormParameterCodeChallenge:       []string{"X_rhBVULlQ_7LU7Cv25I6ouGvJQLtum1M-Fjw0f24hJ"},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+			},
+			oauth2.ErrInvalidRequest,
+			testErrChallengeS256Syntax,
+		},
+		{
+			"ShouldPassChallengeMaximumLength",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: false}},
+					Form: url.Values{
+						consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodPlain},
+						consts.FormParameterCodeChallenge:       []string{strings.Repeat("a", 128)},
+					},
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.EnablePKCEPlainChallengeMethod = true
+				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
+
+				gomock.InOrder(
+					store.
+						EXPECT().
+						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
+						Return(nil),
+				)
+			},
+			nil,
+			"",
 		},
 	}
 
@@ -1170,7 +1317,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 						Return(&oauth2.Request{
 							Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
 							Form: url.Values{
-								consts.FormParameterCodeChallenge:       []string{"X_rhBVULlQ_7LU7Cv25I6ouGvJQLtum1M-Fjw0f24hI"},
+								consts.FormParameterCodeChallenge:       []string{testChallengeS256},
 								consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 							},
 						}, nil),
@@ -1433,3 +1580,8 @@ func (h *failOnceBindingHandler) BindAccessRequest(_ context.Context, _ oauth2.A
 func (h *failOnceBindingHandler) PopulateBoundTokenEndpointResponse(_ context.Context, _ oauth2.AccessRequester, _ oauth2.AccessResponder) error {
 	return nil
 }
+
+const (
+	testChallengeS256          = "X_rhBVULlQ_7LU7Cv25I6ouGvJQLtum1M-Fjw0f24hI"
+	testErrChallengeS256Syntax = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge for method 'S256' must be the base64url encoding of a SHA-256 hash without padding."
+)

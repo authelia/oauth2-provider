@@ -52,6 +52,17 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectPublicClient",
+			err:  "The client is not authorized to request a token using this method. The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'client_credentials'.",
+			mock: func(areq *mock.MockAccessRequester) {
+				areq.EXPECT().GetGrantTypes().Return(oauth2.Arguments{consts.GrantTypeClientCredentials})
+				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+					Public:     true,
+				})
+			},
+		},
+		{
 			name: "ShouldFailAudienceNotValid",
 			err:  "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
 			mock: func(areq *mock.MockAccessRequester) {

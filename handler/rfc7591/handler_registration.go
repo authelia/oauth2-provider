@@ -134,14 +134,29 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 		return err
 	}
 
-	// RFC 7591 Section 3.2.1 defines 'client_secret_expires_at' as the time the secret expires. It is recorded on the
-	// client before it is persisted, so the value the response states is the one CompareClientSecret enforces; a
-	// client type that cannot carry it is advertised no expiry at all rather than one nothing would apply.
-	var secretExpiresAt time.Time
+	// RFC 7591 Section 3.2.1 defines 'client_id_issued_at' as the time the client identifier was issued, so the
+	// response states the value recorded on the client, as the RFC 7592 read does. It defines
+	// 'client_secret_expires_at' as the time the secret expires. It is measured from that same issuance and recorded
+	// on the client before it is persisted, so the value the response states is the one CompareClientSecret
+	// enforces; a client type that cannot carry it is advertised no expiry at all rather than one nothing would apply.
+	var (
+		now             = time.Now().UTC()
+		issuedAt        = now
+		secretExpiresAt time.Time
+	)
+
+	if issued, ok := client.(oauth2.ClientIDIssuedAtClient); ok {
+		issuedAt = issued.GetClientIDIssuedAt()
+	}
 
 	if lifespan := h.Config.GetRFC7591ClientSecretLifespan(ctx); lifespan > 0 && len(plainSecret) != 0 {
 		if registered, ok := client.(*oauth2.DefaultRegisteredClient); ok {
-			secretExpiresAt = time.Now().UTC().Add(lifespan)
+			if issuedAt.IsZero() {
+				secretExpiresAt = now.Add(lifespan)
+			} else {
+				secretExpiresAt = issuedAt.Add(lifespan)
+			}
+
 			registered.ClientSecretExpiresAt = secretExpiresAt
 		}
 	}
@@ -191,7 +206,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	responder.SetMetadata(responseMetadata)
 	responder.SetClientID(id)
 	responder.SetClientSecret(plainSecret)
-	responder.SetClientIDIssuedAt(time.Now().UTC())
+	responder.SetClientIDIssuedAt(issuedAt)
 
 	// Only when a secret was actually issued and the expiry was recorded on the client: RFC 7591 Section 3.2.1 makes
 	// 'client_secret_expires_at' meaningful only alongside a 'client_secret', so a client registering with

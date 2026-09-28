@@ -604,6 +604,13 @@ type PushedAuthorizeRequestConfigProvider interface {
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 	GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) (require bool)
+
+	// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization
+	// Request is used as is when its 'request_uri' is redeemed at the 'authorize' endpoint, instead of fetching the
+	// current client registration and validating the pushed request against it as RFC 9126 Section 7.4 recommends.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+	GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) (disable bool)
 }
 
 // JWTSecuredAuthorizationRequestConfigProvider is the configuration provider for JWT-Secured Authorization
@@ -681,12 +688,34 @@ type IntrospectionEndpointClientAuthDisabledProvider interface {
 	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
 }
 
+// IntrospectionTokenTypeEnabledProvider returns the provider for including 'token_type' in introspection responses.
+type IntrospectionTokenTypeEnabledProvider interface {
+	// GetIntrospectionTokenTypeEnabled returns true if the introspection response for an active access token includes
+	// the OPTIONAL 'token_type' member, the type of the token as defined in RFC 6749 Section 5.1. A DPoP-bound access
+	// token is reported as 'DPoP' as RFC 9449 Section 6.2 requires. A refresh token has no such type, so the member
+	// is omitted for it. An IntrospectionTokenTypeClient calling the endpoint overrides this value.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+	GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool)
+}
+
 // RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
 // revocation endpoint.
 type RevocationEndpointClientAuthStrategyProvider interface {
 	// GetRevocationEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. This endpoint permits public clients to authenticate using the 'none' method.
 	GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
+}
+
+// DPoPStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 9449 refresh token binding of
+// confidential clients.
+type DPoPStrictRefreshTokenBindingProvider interface {
+	// GetDPoPStrictRefreshTokenBinding returns true if a confidential client's DPoP bound refresh token may only be
+	// redeemed with a proof for the key it is bound to. When false the grant is re-bound to the key of the presented
+	// proof, as RFC 9449 Section 5 does not bind the refresh tokens of confidential clients to the proof key.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-5
+	GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
 // DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
@@ -719,6 +748,18 @@ type DPoPConfigProvider interface {
 
 	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
+}
+
+// MTLSStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 8705 refresh token binding of
+// confidential clients.
+type MTLSStrictRefreshTokenBindingProvider interface {
+	// GetMTLSStrictRefreshTokenBinding returns true if a confidential client's certificate-bound refresh token may only
+	// be redeemed with the certificate it is bound to. When false the grant is re-bound to the presented certificate,
+	// as RFC 8705 Section 4 binds the refresh tokens of public clients only and Section 7.1 has those of confidential
+	// clients sender-constrained by client authentication instead.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
 // MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.

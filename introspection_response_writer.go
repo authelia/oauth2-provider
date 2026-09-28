@@ -277,7 +277,11 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())
 
-	if f.isIntrospectionTokenTypeEnabled(ctx, caller) {
+	switch {
+	case r.GetTokenUse() == RefreshToken:
+		// RFC 7662 Section 2.2 defines 'token_type' by the RFC 6749 Section 5.1 access token types.
+		delete(response, consts.AccessResponseTokenType)
+	case f.isIntrospectionTokenTypeEnabled(ctx, caller):
 		if tokenType := r.GetAccessTokenType(); tokenType != "" {
 			response[consts.AccessResponseTokenType] = tokenType
 		} else {

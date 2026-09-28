@@ -782,6 +782,13 @@ func TestWriteIntrospectionResponseTokenType(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name:     "ShouldOmitTokenTypeForRefreshTokenWhenDisabled",
+			config:   &Config{},
+			use:      RefreshToken,
+			extra:    map[string]any{consts.AccessResponseTokenType: BearerAccessToken},
+			expected: nil,
+		},
+		{
 			name:      "ShouldNotAllowExtraClaimsToForgeTokenTypeWhenEnabled",
 			config:    &Config{IntrospectionTokenTypeEnabled: true},
 			use:       AccessToken,

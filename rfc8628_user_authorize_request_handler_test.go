@@ -140,7 +140,7 @@ func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
 
 			tc.mock(handlers)
 
-			actual, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), tc.req)
+			actual, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), tc.req, new(DefaultSession))
 
 			if tc.expected != "" {
 				assert.Nil(t, actual)
@@ -152,6 +152,67 @@ func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
 			require.NoError(t, ErrorToDebugRFC6749Error(err))
 			require.NotNil(t, actual)
 			assert.Equal(t, tc.req.Form, actual.GetRequestForm())
+		})
+	}
+}
+
+func TestFosite_NewRFC8628UserAuthorizeRequest_Session(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  Session
+		mock     func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session)
+		expected string
+	}{
+		{
+			name:    "ShouldPassTheSessionToTheHandlers",
+			session: new(DefaultSession),
+			mock: func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session) {
+				handler.EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, request DeviceAuthorizeRequester) error {
+					assert.Same(t, session, request.GetSession())
+
+					return nil
+				})
+			},
+		},
+		{
+			name:     "ShouldRejectNilSession",
+			mock:     func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session) {},
+			expected: "must not be nil",
+		},
+		{
+			name:     "ShouldRejectTypedNilSession",
+			session:  (*DefaultSession)(nil),
+			mock:     func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session) {},
+			expected: "Session must not",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			handler := mock.NewMockRFC8628UserAuthorizeEndpointHandler(ctrl)
+
+			provider := &Fosite{Config: &Config{
+				RFC8628UserAuthorizeEndpointHandlers: RFC8628UserAuthorizeEndpointHandlers{handler},
+			}}
+
+			tc.mock(handler, tc.session)
+
+			req := &http.Request{Form: url.Values{consts.FormParameterUserCode: {"A1B2C3D4"}}}
+
+			actual, err := provider.NewRFC8628UserAuthorizeRequest(t.Context(), req, tc.session)
+
+			if tc.expected != "" {
+				assert.Nil(t, actual)
+				assert.ErrorContains(t, err, tc.expected)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Same(t, tc.session, actual.GetSession())
 		})
 	}
 }

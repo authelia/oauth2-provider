@@ -452,6 +452,157 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			},
 		},
 		{
+			name: "invalid request no session",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+					}),
+				status: oauth2.DeviceAuthorizeStatusNew,
+			},
+			setup: func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args) {
+				defaultSetupFunc(t, dar, f, a)
+				dar.SetSession(nil)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrServerError)
+				return errors.Is(err, oauth2.ErrServerError)
+			},
+		},
+		{
+			name: "invalid request stored session nil",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+					}),
+				status: oauth2.DeviceAuthorizeStatusNew,
+			},
+			setup: func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args) {
+				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
+				require.NoError(t, err)
+
+				stored := NewDeviceAuthorizeRequest([]string{string(oauth2.GrantTypeDeviceCode)})
+				stored.SetDeviceCodeSignature("device")
+				stored.SetUserCodeSignature(sig)
+				require.NoError(t, f.Storage.CreateDeviceCodeSession(a.ctx, "device", stored))
+
+				dar.SetSession(openid.NewDefaultSession())
+				dar.GetRequestForm().Set("user_code", code)
+				dar.SetStatus(a.status)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrServerError)
+				return errors.Is(err, oauth2.ErrServerError)
+			},
+		},
+		{
+			name: "invalid request typed nil session",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+					}),
+				status: oauth2.DeviceAuthorizeStatusNew,
+			},
+			setup: func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args) {
+				defaultSetupFunc(t, dar, f, a)
+				dar.SetSession((*openid.DefaultSession)(nil))
+			},
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrServerError)
+				return errors.Is(err, oauth2.ErrServerError)
+			},
+		},
+		{
+			name: "invalid request stored session typed nil",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+					}),
+				status: oauth2.DeviceAuthorizeStatusNew,
+			},
+			setup: func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args) {
+				code, sig, err := f.Strategy.GenerateRFC8628UserCode(a.ctx)
+				require.NoError(t, err)
+
+				stored := NewDeviceAuthorizeRequest([]string{string(oauth2.GrantTypeDeviceCode)})
+				stored.SetDeviceCodeSignature("device")
+				stored.SetUserCodeSignature(sig)
+				stored.SetSession((*openid.DefaultSession)(nil))
+				require.NoError(t, f.Storage.CreateDeviceCodeSession(a.ctx, "device", stored))
+
+				dar.SetSession(openid.NewDefaultSession())
+				dar.GetRequestForm().Set("user_code", code)
+				dar.SetStatus(a.status)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrServerError)
+				return errors.Is(err, oauth2.ErrServerError)
+			},
+		},
+		{
 			name: "invalid request user code expired",
 			fields: fields{
 				Storage:  storage.NewMemoryStore(),

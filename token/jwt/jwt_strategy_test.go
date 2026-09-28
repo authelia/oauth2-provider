@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
 )
 
 func TestDefaultStrategy(t *testing.T) {
@@ -832,6 +833,37 @@ func TestDefaultStrategy_Validate(t *testing.T) {
 
 		require.NoError(t, strategy.Validate(ctx, token))
 		assert.True(t, token.valid)
+	})
+
+	t.Run("ShouldPassClaimsToKeyFunc", func(t *testing.T) {
+		ctx := t.Context()
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeJWT}}
+
+		issuer := "https://issuer.example.com"
+
+		tokenString, _, err := strategy.Encode(ctx, MapClaims{ClaimIssuer: issuer}, WithHeaders(headers))
+		require.NoError(t, err)
+
+		var issuers []any
+
+		keyFunc := func(ctx context.Context, token *jwt.JSONWebToken, claims MapClaims) (*jose.JSONWebKey, error) {
+			issuers = append(issuers, claims[ClaimIssuer])
+
+			return &issuerJWKS.Keys[0], nil
+		}
+
+		token, err := strategy.Decode(ctx, tokenString, WithKeyFunc(keyFunc))
+		require.NoError(t, err)
+		require.True(t, token.valid)
+
+		token, err = strategy.Decode(ctx, tokenString, WithAllowUnverified())
+		require.NoError(t, err)
+		require.False(t, token.valid)
+
+		require.NoError(t, strategy.Validate(ctx, token, WithKeyFunc(keyFunc)))
+		assert.True(t, token.valid)
+
+		assert.Equal(t, []any{issuer, issuer}, issuers)
 	})
 }
 

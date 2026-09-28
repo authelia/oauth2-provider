@@ -27,6 +27,8 @@ type StrategyOpts struct {
 }
 
 type (
+	// KeyFuncJWS resolves the key used to verify a JWS. The claims are decoded from the payload before the signature
+	// is verified and MUST be treated as untrusted until the signature is verified with the returned key.
 	KeyFuncJWS  func(ctx context.Context, token *jwt.JSONWebToken, claims MapClaims) (jwk *jose.JSONWebKey, err error)
 	KeyFuncJWE  func(ctx context.Context, jwe *jose.JSONWebEncryption, kid, alg string) (jwk *jose.JSONWebKey, err error)
 	StrategyOpt func(opts *StrategyOpts) (err error)

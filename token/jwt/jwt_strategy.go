@@ -341,9 +341,13 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
-	claims := MapClaims{}
-
 	if o.jwsKeyFunc != nil {
+		claims := MapClaims{}
+
+		if err = t.UnsafeClaimsWithoutVerification(&claims); err != nil {
+			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err})
+		}
+
 		if key, err = o.jwsKeyFunc(ctx, t, claims); err != nil {
 			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}

@@ -133,6 +133,11 @@ type Config struct {
 	// identifier as the sole value of its 'aud' claim. See GetEnforceClientAssertionIssuerAudience.
 	EnforceClientAssertionIssuerAudience bool
 
+	// ClientAssertionClientSecretEncryptionDisabled rejects client assertions encrypted with a key derived from the
+	// client secret. Defaults to false, which accepts them when the request includes the 'client_id' parameter. See
+	// ClientAssertionClientSecretEncryptionDisabledProvider.
+	ClientAssertionClientSecretEncryptionDisabled bool
+
 	// AllowedJWTAssertionAudiences is a list of permitted client assertion audiences. If the authorization server is
 	// intended to be compatible with the client_secret_jwt or private_key_jwt client authentication methods
 	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
@@ -596,6 +601,12 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 // published.
 func (c *Config) GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool) {
 	return c.EnforceClientAssertionIssuerAudience
+}
+
+// GetClientAssertionClientSecretEncryptionDisabled returns whether client assertions encrypted with a key derived from
+// the client secret are rejected. See ClientAssertionClientSecretEncryptionDisabledProvider.
+func (c *Config) GetClientAssertionClientSecretEncryptionDisabled(ctx context.Context) (disabled bool) {
+	return c.ClientAssertionClientSecretEncryptionDisabled
 }
 
 func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {
@@ -1350,6 +1361,7 @@ var (
 	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)
 	_ FormPostResponseProvider                              = (*Config)(nil)
 	_ AllowedJWTAssertionAudiencesProvider                  = (*Config)(nil)
+	_ ClientAssertionClientSecretEncryptionDisabledProvider = (*Config)(nil)
 	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
 	_ HTTPClientProvider                                    = (*Config)(nil)

@@ -55,11 +55,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	switch {
 	case err == nil:
 		if err = c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); err != nil {
-			if errors.Is(err, oauth2.ErrTokenExpired) {
-				return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
-			}
-
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
 		if orequest == nil {
@@ -86,7 +82,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	if !(len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || orequest.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...)) {
 		scopeNames := strings.Join(c.Config.GetRefreshTokenScopes(ctx), " or ")
 		hint := fmt.Sprintf("The OAuth 2.0 Client was not granted scope %s and may thus not perform the 'refresh_token' authorization grant.", scopeNames)
-		return errorsx.WithStack(oauth2.ErrScopeNotGranted.WithHint(hint))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint))
 	}
 
 	if orequest.GetClient().GetID() != request.GetClient().GetID() {

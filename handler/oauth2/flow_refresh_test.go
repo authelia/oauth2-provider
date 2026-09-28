@@ -71,6 +71,27 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token has not been found: Could not find the requested resource(s).",
 		},
 		{
+			name: "ShouldRejectMalformedTokenWithInvalidGrant",
+			setup: func(requester *oauth2.AccessRequest, store *storage.MemoryStore, config *oauth2.Config) {
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+				_, sig, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				requester.Form.Add(consts.FormParameterRefreshToken, "authelia_rt_."+sig)
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+					Client:         requester.Client,
+					GrantedScope:   oauth2.Arguments{consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{consts.ScopeOffline},
+					Session:        session,
+					RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
+				})
+				require.NoError(t, err)
+			},
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The token provided is expired, revoked, malformed, or invalid for other reasons. Check that you provided a valid token in the right format.",
+		},
+		{
 			name: "ShouldFailClientMismatches",
 			setup: func(requester *oauth2.AccessRequest, store *storage.MemoryStore, config *oauth2.Config) {
 				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
@@ -330,7 +351,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			err: "The token was not granted the requested scope. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
 		},
 		{
 			name: "ShouldPassWithoutOfflineScopeWhenConfigured",

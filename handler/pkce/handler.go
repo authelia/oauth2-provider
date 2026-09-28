@@ -51,6 +51,10 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 		return nil
 	}
 
+	if err = validateChallengeSyntax(challenge, method); err != nil {
+		return err
+	}
+
 	code := response.GetCode()
 
 	if len(code) == 0 {
@@ -64,6 +68,25 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 		consts.FormParameterCodeChallengeMethod,
 	})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting create PKCE request session: %s.", err.Error()))
+	}
+
+	return nil
+}
+
+func validateChallengeSyntax(challenge, method string) (err error) {
+	switch n := len(challenge); {
+	case n < 43:
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The PKCE code challenge must be at least 43 characters."))
+	case n > 128:
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The PKCE code challenge must be no more than 128 characters."))
+	case verifierWrongFormat.MatchString(challenge):
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The PKCE code challenge must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
+	}
+
+	if method == consts.PKCEChallengeMethodSHA256 {
+		if digest, err := base64.RawURLEncoding.Strict().DecodeString(challenge); err != nil || len(digest) != sha256.Size {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The PKCE code challenge for method 'S256' must be the base64url encoding of a SHA-256 hash without padding."))
+		}
 	}
 
 	return nil

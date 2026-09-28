@@ -12,6 +12,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -59,6 +60,10 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user_code is missing."))
 	}
 
+	if reflection.IsNil(request.GetSession()) {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the session is nil."))
+	}
+
 	if signature, err = d.Strategy.RFC8628UserCodeSignature(ctx, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -78,6 +83,10 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 	}
 
 	session := request.GetSession()
+
+	if reflection.IsNil(session) {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the stored session is nil."))
+	}
 
 	if request.GetUserCodeSignature() != signature {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))

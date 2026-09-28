@@ -77,8 +77,12 @@ func TestAccessToken(t *testing.T) {
 
 				strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
 
+				before := time.Now().Truncate(time.Second)
+
 				token, signature, err := strategy.GenerateAccessToken(t.Context(), tc.r)
 				assert.NoError(t, err)
+
+				after := time.Now()
 
 				parts := strings.Split(token, ".")
 				require.Len(t, parts, 3, "%s - %v", token, parts)
@@ -120,8 +124,8 @@ func TestAccessToken(t *testing.T) {
 				// Scope field is always a string.
 				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimIssuedAt]), before, after)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimNotBefore]), before, after)
 
 				err = strategy.ValidateAccessToken(context.Background(), tc.r, token)
 				if tc.pass {

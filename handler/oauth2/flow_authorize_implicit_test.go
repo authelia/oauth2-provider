@@ -28,9 +28,10 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	h, store, chgen, aresp := makeAuthorizeImplicitGrantTypeHandler(ctrl)
 
 	testCases := []struct {
-		name  string
-		setup func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder)
-		err   string
+		name     string
+		setup    func(areq *oauth2.AuthorizeRequest, store *mock.MockAccessTokenStorage, chgen *mock.MockAccessTokenStrategy, aresp *mock.MockAuthorizeResponder)
+		err      string
+		errField string
 	}{
 		{
 			name: "ShouldPassNotResponsibleForResponseType",
@@ -47,7 +48,8 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
 			},
-			err: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'.",
+			err:      "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'.",
+			errField: oauth2.ErrUnauthorizedClient.ErrorField,
 		},
 		{
 			name: "ShouldFailAccessTokenGenerationFailed",
@@ -120,6 +122,10 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				if tc.errField != "" {
+					assert.Equal(t, tc.errField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+				}
 			} else {
 				require.NoError(t, err)
 			}

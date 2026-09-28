@@ -7,6 +7,7 @@ package oauth2_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -767,6 +768,109 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			if tc.form != nil {
 				assert.Equal(t, tc.form, actual.GetRequestForm())
 			}
+		})
+	}
+}
+
+func TestNewAuthorizeRequestEarlyErrorResponseMode(t *testing.T) {
+	testCases := []struct {
+		name         string
+		responseType string
+		registered   string
+		scope        string
+		fragment     bool
+	}{
+		{
+			name:         "ShouldWriteInvalidScopeInQueryForCode",
+			responseType: consts.ResponseTypeAuthorizationCodeFlow,
+			scope:        "bar",
+		},
+		{
+			name:         "ShouldWriteInvalidScopeInFragmentForToken",
+			responseType: consts.ResponseTypeImplicitFlowToken,
+			scope:        "bar",
+			fragment:     true,
+		},
+		{
+			name:         "ShouldWriteInvalidScopeInFragmentForIDToken",
+			responseType: consts.ResponseTypeImplicitFlowIDToken,
+			scope:        "openid bar",
+			fragment:     true,
+		},
+		{
+			name:         "ShouldWriteInvalidScopeInFragmentForHybrid",
+			responseType: consts.ResponseTypeHybridFlowIDToken,
+			scope:        "openid baz",
+			fragment:     true,
+		},
+		{
+			name:         "ShouldWriteUnsupportedResponseTypeInFragmentForToken",
+			responseType: "token unknown",
+			registered:   consts.ResponseTypeImplicitFlowToken,
+			scope:        "foo",
+			fragment:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			store := mock.NewMockStorage(ctrl)
+
+			registered := tc.registered
+			if registered == "" {
+				registered = tc.responseType
+			}
+
+			client := &DefaultClient{
+				ID:            "1234",
+				RedirectURIs:  []string{"https://foo.bar/cb"},
+				Scopes:        []string{consts.ScopeOpenID, "foo"},
+				ResponseTypes: []string{registered},
+			}
+
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+			query := url.Values{
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterResponseType: []string{tc.responseType},
+				consts.FormParameterScope:        []string{tc.scope},
+				consts.FormParameterState:        []string{"strong-enough-state"},
+				consts.FormParameterNonce:        []string{"strong-enough-nonce"},
+			}
+
+			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			requester, err := provider.NewAuthorizeRequest(context.Background(), r)
+			require.Error(t, err)
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteAuthorizeError(context.Background(), rw, requester, err)
+
+			require.Equal(t, http.StatusSeeOther, rw.Code)
+
+			location, err := url.Parse(rw.Header().Get(consts.HeaderLocation))
+			require.NoError(t, err)
+
+			var values url.Values
+
+			if tc.fragment {
+				assert.Empty(t, location.RawQuery)
+
+				values, err = url.ParseQuery(location.Fragment)
+				require.NoError(t, err)
+			} else {
+				assert.Empty(t, location.Fragment)
+
+				values = location.Query()
+			}
+
+			assert.NotEmpty(t, values.Get(consts.FormParameterError))
+			assert.Equal(t, "strong-enough-state", values.Get(consts.FormParameterState))
 		})
 	}
 }

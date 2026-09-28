@@ -49,6 +49,12 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	request := NewAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
+	defer func() {
+		if err != nil {
+			setAuthorizeErrorDefaultResponseMode(request)
+		}
+	}()
+
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
 
@@ -155,6 +161,18 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	}
 
 	return request, nil
+}
+
+func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {
+	if request.GetResponseMode() != ResponseModeDefault || request.Form == nil {
+		return
+	}
+
+	responseTypes := Arguments(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " ")))
+
+	if responseTypes.HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) {
+		request.SetDefaultResponseMode(ResponseModeFragment)
+	}
 }
 
 // TODO: Refactor time permitting.

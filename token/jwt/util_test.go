@@ -465,6 +465,41 @@ func TestGetJWTSignature(t *testing.T) {
 	}
 }
 
+func TestIsEncryptedJWT(t *testing.T) {
+	testCases := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{
+			name:     "ShouldMatchFiveSegments",
+			value:    "header.key.iv.ciphertext.tag",
+			expected: true,
+		},
+		{
+			name:     "ShouldMatchEmptyEncryptedKey",
+			value:    "header..iv.ciphertext.tag",
+			expected: true,
+		},
+		{
+			name:     "ShouldNotMatchEmptyCiphertext",
+			value:    "header.key.iv..tag",
+			expected: false,
+		},
+		{
+			name:     "ShouldNotMatchThreeSegments",
+			value:    "header.payload.signature",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsEncryptedJWT(tc.value))
+		})
+	}
+}
+
 func TestAssign(t *testing.T) {
 	a := map[string]any{"existing": 1}
 	b := map[string]any{"existing": 99, "new": 2}

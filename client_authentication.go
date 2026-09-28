@@ -284,9 +284,10 @@ func (c *EndpointClientAuthJWTClient) GetEncryptionKeyID() (kid string) {
 	return ""
 }
 
-// GetEncryptionAlg returns an empty algorithm as client assertions are verified, not encrypted, by this client.
+// GetEncryptionAlg returns the key management algorithm registered for client assertions at the endpoint, resolved via
+// the strategy. A password based algorithm is only accepted when it is the registered one.
 func (c *EndpointClientAuthJWTClient) GetEncryptionAlg() (alg string) {
-	return ""
+	return c.strategy.GetAuthEncryptionAlg(c.client)
 }
 
 // GetEncryptionEnc returns an empty content encryption algorithm as client assertions are verified, not encrypted, by

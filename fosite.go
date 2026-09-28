@@ -290,6 +290,7 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthDisabledProvider
 	IntrospectionTokenTypeEnabledProvider
+	ClientAssertionClientSecretEncryptionDisabledProvider
 	DPoPConfigProvider
 	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider

@@ -376,6 +376,19 @@ type AllowedJWTAssertionAudiencesProvider interface {
 	GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool)
 }
 
+// ClientAssertionClientSecretEncryptionDisabledProvider returns the provider for turning off client assertions that
+// are encrypted with a key derived from the client secret.
+type ClientAssertionClientSecretEncryptionDisabledProvider interface {
+	// GetClientAssertionClientSecretEncryptionDisabled returns true when a client assertion encrypted with a key derived
+	// from the client secret per OpenID Connect Core 1.0 Section 10.2 must be rejected.
+	//
+	// Such an assertion identifies its client with the 'iss' and 'sub' claims per RFC 7523 Section 3, which are only
+	// readable after decryption. When this returns false the client is resolved from the 'client_id' parameter, which
+	// RFC 7521 Section 4.2 permits alongside the assertion, and the claims must identify that same client. An assertion
+	// of this kind without the 'client_id' parameter is always rejected.
+	GetClientAssertionClientSecretEncryptionDisabled(ctx context.Context) (disabled bool)
+}
+
 // AllowedIntrospectionAudiencesProvider is a provider used in contexts where the permitted audiences for an Access
 // Token used to authenticate a request to the introspection endpoint is required to validate a request.
 type AllowedIntrospectionAudiencesProvider interface {

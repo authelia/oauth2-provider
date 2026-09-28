@@ -39,6 +39,8 @@ var TestLifespans = oauth2.ClientLifespanConfig{
 	RefreshTokenGrantIDTokenLifespan:           ptr(40 * time.Hour),
 	RefreshTokenGrantAccessTokenLifespan:       ptr(41 * time.Hour),
 	RefreshTokenGrantRefreshTokenLifespan:      ptr(42 * time.Hour),
+	TokenExchangeGrantAccessTokenLifespan:      ptr(43 * time.Hour),
+	TokenExchangeGrantRefreshTokenLifespan:     ptr(44 * time.Hour),
 }
 
 func RequireEqualDuration(t *testing.T, expected time.Duration, actual time.Duration, precision time.Duration) {

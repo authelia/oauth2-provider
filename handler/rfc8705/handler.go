@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -24,11 +25,20 @@ import (
 type Handler struct {
 	Config interface {
 		oauth2.MTLSConfigProvider
+		oauth2.MTLSStrictRefreshTokenBindingProvider
+		oauth2.DisableRefreshTokenRotationProvider
 	}
 }
 
 // BindAccessRequest records the thumbprint of the mutual-TLS client certificate presented with this request on the
 // session, and enforces any thumbprint the session already carries. It returns nil when there is nothing to bind.
+//
+// A refresh by a confidential client is re-bound to the presented certificate rather than held to the certificate the
+// grant is bound to, because RFC 8705 Section 4 binds the refresh tokens of public clients only, and Section 7.1 has
+// those of confidential clients sender-constrained by client authentication instead. A certificate is still required.
+// The grant of a client for which oauth2.MTLSStrictRefreshTokenBindingProvider or
+// oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding keeps its certificate, as does a grant whose refresh
+// token is not rotated, since the refresh token it keeps would otherwise remain bound to the previous certificate.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil
@@ -42,8 +52,9 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		bound = session.GetClientCertificateSHA256Thumbprint()
 	}
 
-	// An existing binding makes a certificate mandatory regardless of policy. This is what enforces Sections 4 and
-	// 7.1: a refresh token issued under a bound session may only be redeemed by the holder of that certificate.
+	// An existing binding makes a certificate mandatory regardless of policy. For a public client this is what
+	// enforces Section 4: a refresh token issued under a bound session may only be redeemed by the holder of that
+	// certificate.
 	required := h.required(ctx, request) || bound != ""
 
 	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
@@ -89,7 +100,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 
 	x5t := oauth2.X509CertificateSHA256Thumbprint(cert)
 
-	if bound != "" && subtle.ConstantTimeCompare([]byte(bound), []byte(x5t)) != 1 {
+	if bound != "" && subtle.ConstantTimeCompare([]byte(bound), []byte(x5t)) != 1 && !h.rebindable(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The mutual-TLS client certificate does not match the certificate the grant is bound to."))
 	}
 
@@ -113,6 +124,27 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 // than the scheme.
 func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	return nil
+}
+
+func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester) bool {
+	if !request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken) || h.Config.GetMTLSStrictRefreshTokenBinding(ctx) {
+		return false
+	}
+
+	if oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, h.Config, request) {
+		return false
+	}
+
+	client := request.GetClient()
+	if client == nil || client.IsPublic() {
+		return false
+	}
+
+	if c, ok := client.(oauth2.MTLSStrictRefreshTokenBindingClient); ok && c.GetMTLSStrictRefreshTokenBinding() {
+		return false
+	}
+
+	return true
 }
 
 func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {

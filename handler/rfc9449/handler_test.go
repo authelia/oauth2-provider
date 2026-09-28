@@ -500,6 +500,69 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 	})
 }
 
+func TestHandlerRefreshBinding(t *testing.T) {
+	const endpoint = "https://as.example.com/token"
+
+	testCases := []struct {
+		name         string
+		public       bool
+		keyBound     bool
+		strict       bool
+		clientStrict bool
+		grantType    string
+		proof        bool
+		err          error
+	}{
+		{name: "ShouldRebindConfidentialClientRefreshToThePresentedKey", grantType: consts.GrantTypeRefreshToken, proof: true},
+		{name: "ShouldRejectConfidentialClientRefreshWithoutAProof", grantType: consts.GrantTypeRefreshToken, err: oauth2.ErrInvalidDPoPProof},
+		{name: "ShouldRejectPublicClientRefreshWithAnotherKey", public: true, grantType: consts.GrantTypeRefreshToken, proof: true, err: oauth2.ErrInvalidDPoPProof},
+		{name: "ShouldRejectKeyBoundConfidentialClientRefreshWithAnotherKey", keyBound: true, grantType: consts.GrantTypeRefreshToken, proof: true, err: oauth2.ErrInvalidDPoPProof},
+		{name: "ShouldRejectConfidentialClientAuthorizationCodeWithAnotherKey", grantType: consts.GrantTypeAuthorizationCode, proof: true, err: oauth2.ErrInvalidDPoPProof},
+		{name: "ShouldRejectConfidentialClientRefreshWithAnotherKeyWhenStrict", strict: true, grantType: consts.GrantTypeRefreshToken, proof: true, err: oauth2.ErrInvalidDPoPProof},
+		{name: "ShouldRejectConfidentialClientRefreshWithAnotherKeyWhenTheClientIsStrict", clientStrict: true, grantType: consts.GrantTypeRefreshToken, proof: true, err: oauth2.ErrInvalidDPoPProof},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, config := newTestHandler(false)
+			config.strictRefreshTokenBinding = tc.strict
+
+			bound := thumbprint(t, newTestProofKey(t))
+
+			session := &oauth2.DefaultSession{}
+			session.SetDPoPJWKThumbprint(bound)
+			session.SetOIDCKeyBindingGranted(tc.keyBound)
+
+			request := oauth2.NewAccessRequest(session)
+			request.Client = &strictRefreshTokenBindingClient{DefaultClient: &oauth2.DefaultClient{Public: tc.public}, strict: tc.clientStrict}
+			request.GrantTypes = oauth2.Arguments{tc.grantType}
+
+			var raw, presented string
+
+			if tc.proof {
+				key := newTestProofKey(t)
+				presented = thumbprint(t, key)
+				raw = signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+					jwt.ClaimJWTID: "refresh-" + tc.name, jwt.ClaimHTTPMethod: http.MethodPost,
+					jwt.ClaimHTTPURI: endpoint, jwt.ClaimIssuedAt: time.Now().Unix(),
+				})
+			}
+
+			err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), request)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+				assert.Equal(t, bound, session.GetDPoPJWKThumbprint())
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, presented, session.GetDPoPJWKThumbprint())
+		})
+	}
+}
+
 func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
 	cfg := &testHandlerConfig{
@@ -532,7 +595,22 @@ func ctxWithDPoP(method, rawURL, proof string) context.Context {
 type testHandlerConfig struct {
 	testStrategyConfig
 	enabled, enforce, nonceRequired bool
+	strictRefreshTokenBinding       bool
 	strategy                        oauth2.DPoPStrategy
+}
+
+func (c *testHandlerConfig) GetDPoPStrictRefreshTokenBinding(context.Context) bool {
+	return c.strictRefreshTokenBinding
+}
+
+type strictRefreshTokenBindingClient struct {
+	*oauth2.DefaultClient
+
+	strict bool
+}
+
+func (c *strictRefreshTokenBindingClient) GetDPoPStrictRefreshTokenBinding() bool {
+	return c.strict
 }
 
 func (c *testHandlerConfig) GetDPoPEnabled(context.Context) bool { return c.enabled }

@@ -743,6 +743,154 @@ func TestWriteIntrospectionResponseHandlesTheErrorResponder(t *testing.T) {
 	assert.JSONEq(t, `{"active":false}`, rw.Body.String())
 }
 
+func TestWriteIntrospectionResponseTokenType(t *testing.T) {
+	testCases := []struct {
+		name      string
+		config    *Config
+		caller    Client
+		use       TokenUse
+		tokenType string
+		extra     map[string]any
+		expected  any
+	}{
+		{
+			name:      "ShouldOmitTokenTypeByDefault",
+			config:    &Config{},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+		},
+		{
+			name:      "ShouldEmitBearerWhenEnabled",
+			config:    &Config{IntrospectionTokenTypeEnabled: true},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+			expected:  BearerAccessToken,
+		},
+		{
+			// RFC 9449 Section 6.2: the token_type of a DPoP-bound access token MUST be DPoP.
+			name:      "ShouldEmitDPoPWhenEnabled",
+			config:    &Config{IntrospectionTokenTypeEnabled: true},
+			use:       AccessToken,
+			tokenType: DPoPAccessToken,
+			expected:  DPoPAccessToken,
+		},
+		{
+			name:     "ShouldOmitTokenTypeForRefreshTokenWhenEnabled",
+			config:   &Config{IntrospectionTokenTypeEnabled: true},
+			use:      RefreshToken,
+			extra:    map[string]any{consts.AccessResponseTokenType: "forged-type"},
+			expected: nil,
+		},
+		{
+			name:     "ShouldOmitTokenTypeForRefreshTokenWhenDisabled",
+			config:   &Config{},
+			use:      RefreshToken,
+			extra:    map[string]any{consts.AccessResponseTokenType: BearerAccessToken},
+			expected: nil,
+		},
+		{
+			name:      "ShouldNotAllowExtraClaimsToForgeTokenTypeWhenEnabled",
+			config:    &Config{IntrospectionTokenTypeEnabled: true},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+			extra:     map[string]any{consts.AccessResponseTokenType: DPoPAccessToken},
+			expected:  BearerAccessToken,
+		},
+		{
+			name:      "ShouldPassExtraClaimsTokenTypeThroughWhenDisabled",
+			config:    &Config{},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+			extra:     map[string]any{consts.AccessResponseTokenType: RFC8693NAToken},
+			expected:  RFC8693NAToken,
+		},
+		{
+			name:      "ShouldEmitWhenTheCallerEnablesIt",
+			config:    &Config{},
+			caller:    &introspectionTokenTypeTestClient{DefaultClient: &DefaultClient{ID: "resource-server"}, enabled: true},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+			expected:  BearerAccessToken,
+		},
+		{
+			name:      "ShouldOmitWhenTheCallerDisablesIt",
+			config:    &Config{IntrospectionTokenTypeEnabled: true},
+			caller:    &introspectionTokenTypeTestClient{DefaultClient: &DefaultClient{ID: "resource-server"}, enabled: false},
+			use:       AccessToken,
+			tokenType: BearerAccessToken,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := &DefaultSession{Subject: "user-123", Extra: tc.extra}
+
+			ar := NewAccessRequest(session)
+			ar.Client = &DefaultClient{ID: "client-id"}
+
+			provider := &Fosite{Config: tc.config}
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+				Client:          tc.caller,
+				Active:          true,
+				TokenUse:        tc.use,
+				AccessTokenType: tc.tokenType,
+				AccessRequester: ar,
+			})
+
+			assert.Equal(t, http.StatusOK, rw.Code)
+
+			params := map[string]any{}
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+
+			if tc.expected == nil {
+				assert.NotContains(t, params, consts.AccessResponseTokenType)
+			} else {
+				assert.Equal(t, tc.expected, params[consts.AccessResponseTokenType])
+			}
+		})
+	}
+}
+
+func TestWriteIntrospectionResponseTokenTypeInJWT(t *testing.T) {
+	strategy := &stubIntrospectionStrategy{token: "a.b.c"}
+	provider := &Fosite{Config: &Config{
+		IntrospectionIssuer:              "https://issuer.example.com",
+		IntrospectionJWTResponseStrategy: strategy,
+		IntrospectionTokenTypeEnabled:    true,
+	}}
+
+	ar := NewAccessRequest(&DefaultSession{Subject: "user-123"})
+	ar.Client = &DefaultClient{ID: "client-id"}
+
+	rw := httptest.NewRecorder()
+
+	provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+		Client:          &introspectionJWTTestClient{DefaultClient: &DefaultClient{ID: "resource-server"}, alg: "RS256"},
+		Active:          true,
+		TokenUse:        AccessToken,
+		AccessTokenType: DPoPAccessToken,
+		AccessRequester: ar,
+	})
+
+	assert.Equal(t, consts.ContentTypeApplicationTokenIntrospectionJWT, rw.Header().Get(consts.HeaderContentType))
+
+	intro, ok := strategy.claims[consts.ClaimTokenIntrospection].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, DPoPAccessToken, intro[consts.AccessResponseTokenType])
+}
+
+type introspectionTokenTypeTestClient struct {
+	*DefaultClient
+
+	enabled bool
+}
+
+func (c *introspectionTokenTypeTestClient) GetIntrospectionTokenTypeEnabled() bool {
+	return c.enabled
+}
+
 // introspectionJWTTestClient is a minimal IntrospectionJWTResponseClient used to exercise the signed
 // introspection response code paths.
 type introspectionJWTTestClient struct {

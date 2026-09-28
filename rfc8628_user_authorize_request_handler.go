@@ -10,13 +10,15 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // NewRFC8628UserAuthorizeRequest parses the user-facing device authorization request and dispatches it to each
 // configured RFC8628UserAuthorizeEndpointHandler. The returned DeviceAuthorizeRequester reflects the user's
-// authorization decision (approval, denial, or pending) as recorded by the handlers.
-func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error) {
+// authorization decision (approval, denial, or pending) as recorded by the handlers. The session must not be nil; it is
+// the session the stored device authorization request is hydrated into.
+func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request, session Session) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
@@ -25,6 +27,12 @@ func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Req
 	}
 
 	request.Form = r.Form
+
+	if reflection.IsNil(session) {
+		return nil, errors.New("Session must not be nil")
+	}
+
+	request.SetSession(session)
 
 	for _, h := range f.Config.GetRFC8628UserAuthorizeEndpointHandlers(ctx) {
 		if err = h.HandleRFC8628UserAuthorizeEndpointRequest(ctx, request); err != nil && !errors.Is(err, ErrUnknownRequest) {

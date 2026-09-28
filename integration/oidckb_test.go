@@ -277,7 +277,7 @@ func oidckbUserAuthorizeHandler(provider oauth2.Provider, session oauth2.Session
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := oauth2.NewContext()
 
-		ar, err := provider.NewRFC8628UserAuthorizeRequest(ctx, req)
+		ar, err := provider.NewRFC8628UserAuthorizeRequest(ctx, req, session)
 		if err != nil {
 			provider.WriteRFC8628UserAuthorizeError(ctx, rw, ar, err)
 			return

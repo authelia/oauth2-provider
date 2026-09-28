@@ -477,6 +477,38 @@ func TestClientRegistrationHandlerPersistsClientSecretExpiry(t *testing.T) {
 	assert.Equal(t, expiresAt, registered.ClientSecretExpiresAt.Unix())
 }
 
+func TestClientRegistrationHandlerReportsRecordedClientIDIssuedAt(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	issued := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Second)
+
+	config.RFC7591ClientSecretLifespan = time.Hour
+	config.RFC7591ClientRegistrationStrategy = &fixedIssuedAtStrategy{DefaultClientRegistrationStrategy: NewDefaultClientRegistrationStrategy(), issued: issued}
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:  []string{"https://example.com/cb"},
+		GrantTypes:    []string{"authorization_code"},
+		ResponseTypes: []string{"code"},
+	}
+
+	responder := oauth2.NewClientRegistrationResponse()
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
+
+	client, err := store.GetClient(ctx, responder.ClientID)
+	require.NoError(t, err)
+
+	registered, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok, "got %T", client)
+
+	assert.Equal(t, issued, registered.ClientIDIssuedAt)
+	assert.Equal(t, registered.ClientIDIssuedAt, responder.ClientIDIssuedAt)
+	assert.Equal(t, issued.Add(time.Hour), responder.ClientSecretExpiresAt)
+	assert.Equal(t, responder.ClientSecretExpiresAt, registered.ClientSecretExpiresAt)
+}
+
 func newRegistrationHandler(t *testing.T) (*ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {
 	t.Helper()
 
@@ -511,4 +543,20 @@ func (f *failingSessionStore) CreateClient(ctx context.Context, client oauth2.Cl
 
 func (f *failingSessionStore) CreateClientRegistrationTokenSession(ctx context.Context, signature string, requester oauth2.Requester) (err error) {
 	return errTestCreateSessionFailed
+}
+
+type fixedIssuedAtStrategy struct {
+	*DefaultClientRegistrationStrategy
+
+	issued time.Time
+}
+
+func (s *fixedIssuedAtStrategy) NewClient(ctx context.Context, id string, secret oauth2.ClientSecret, metadata *oauth2.ClientRegistrationMetadata) (client oauth2.Client, err error) {
+	if client, err = s.DefaultClientRegistrationStrategy.NewClient(ctx, id, secret, metadata); err != nil {
+		return nil, err
+	}
+
+	client.(*oauth2.DefaultRegisteredClient).ClientIDIssuedAt = s.issued
+
+	return client, nil
 }

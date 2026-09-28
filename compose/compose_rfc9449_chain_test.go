@@ -486,7 +486,6 @@ func TestTokenEndpointEnforcementRequiresBinding(t *testing.T) {
 
 func TestRefreshRequiresTheMTLSBindingTheGrantCarries(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{})
-	other := gen.MustCertificate(gen.CertificateOptions{SerialNumber: 2})
 
 	provider, store, config := newDPoPChainProviderWithConfig(t)
 
@@ -513,13 +512,6 @@ func TestRefreshRequiresTheMTLSBindingTheGrantCarries(t *testing.T) {
 
 		require.Error(t, err)
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
-	})
-
-	t.Run("ShouldRejectTheRefreshWithAnotherCertificate", func(t *testing.T) {
-		_, err := chainTokenRequestWithCert(t, provider, chainRefreshForm(refresh), "", other)
-
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
 	})
 
 	t.Run("ShouldAcceptTheBoundCertificateAndStayBound", func(t *testing.T) {
@@ -915,14 +907,6 @@ func TestDPoPRefreshStepEnforcement(t *testing.T) {
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
-	t.Run("ShouldRejectTheRefreshWithAnotherKey", func(t *testing.T) {
-		_, err := chainTokenRequest(t, provider, chainRefreshForm(refreshToken),
-			signPARProof(t, newPARProofKey(t), "chain-refresh-other", rtTokenEndpoint, nil))
-
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
-	})
-
 	t.Run("ShouldAcceptTheRefreshWithTheBoundKeyAndStayBound", func(t *testing.T) {
 		response, err := chainTokenRequest(t, provider, chainRefreshForm(refreshToken),
 			signPARProof(t, key, "chain-refresh-2", rtTokenEndpoint, nil))
@@ -937,12 +921,6 @@ func TestDPoPRefreshStepEnforcement(t *testing.T) {
 
 		require.Error(t, err)
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
-
-		_, err = chainTokenRequest(t, provider, chainRefreshForm(rotated),
-			signPARProof(t, newPARProofKey(t), "chain-refresh-rotated-other", rtTokenEndpoint, nil))
-
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
 
 		response, err = chainTokenRequest(t, provider, chainRefreshForm(rotated),
 			signPARProof(t, key, "chain-refresh-3", rtTokenEndpoint, nil))

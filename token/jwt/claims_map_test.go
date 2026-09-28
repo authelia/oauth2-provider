@@ -461,23 +461,30 @@ func TestMapClaims_VerifyExpiresAt(t *testing.T) {
 		{
 			name:     "ShouldPass",
 			have:     MapClaims{consts.ClaimExpirationTime: int64(123)},
-			cmp:      int64(123),
+			cmp:      int64(122),
 			required: true,
 			expected: true,
 		},
 		{
 			name:     "ShouldPassStandardInt",
 			have:     MapClaims{consts.ClaimExpirationTime: 123},
-			cmp:      int64(123),
+			cmp:      int64(122),
 			required: true,
 			expected: true,
 		},
 		{
 			name:     "ShouldPassStandardInt32",
 			have:     MapClaims{consts.ClaimExpirationTime: int32(123)},
-			cmp:      int64(123),
+			cmp:      int64(122),
 			required: true,
 			expected: true,
+		},
+		{
+			name:     "ShouldFailEqual",
+			have:     MapClaims{consts.ClaimExpirationTime: int64(123)},
+			cmp:      int64(123),
+			required: true,
+			expected: false,
 		},
 		{
 			name:     "ShouldFailNoClaim",
@@ -723,6 +730,25 @@ func TestMapClaims_Valid(t *testing.T) {
 			err:  "Token is expired",
 		},
 		{
+			name: "ShouldPassBeforeExpiry",
+			have: MapClaims{consts.ClaimExpirationTime: 1000},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(999, int64(999*time.Millisecond)) })},
+		},
+		{
+			name: "ShouldFailAtExpiry",
+			have: MapClaims{consts.ClaimExpirationTime: 1000},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, 0) })},
+			errs: []uint32{ValidationErrorExpired},
+			err:  "Token is expired",
+		},
+		{
+			name: "ShouldFailWithinSecondOfExpiry",
+			have: MapClaims{consts.ClaimExpirationTime: 1000},
+			opts: []ClaimValidationOption{ValidateTimeFunc(func() time.Time { return time.Unix(1000, int64(500*time.Millisecond)) })},
+			errs: []uint32{ValidationErrorExpired},
+			err:  "Token is expired",
+		},
+		{
 			name: "ShouldFailIssuedFuture",
 			have: MapClaims{consts.ClaimIssuedAt: 999999999999999},
 			errs: []uint32{ValidationErrorIssuedAt},
@@ -874,11 +900,11 @@ func TestMapClaims_Valid(t *testing.T) {
 				errs |= err
 
 				assert.True(t, e.Has(err))
-				assert.Equal(t, len(tc.errs) == 1, e.Is(err))
+				assert.Equal(t, len(tc.errs) == 1, e.IsExactly(err))
 			}
 
 			assert.Equal(t, errs, e.Errors)
-			assert.True(t, e.Is(errs))
+			assert.True(t, e.IsExactly(errs))
 		})
 	}
 }

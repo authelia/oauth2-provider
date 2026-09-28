@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
 )
 
 func TestDefaultStrategy(t *testing.T) {
@@ -929,6 +930,51 @@ func TestEncodeNestedCompactEncrypted(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
+}
+
+func TestEncodeHeaderKeyID(t *testing.T) {
+	claims := MapClaims{"sub": "john"}
+	stale := "stale"
+
+	t.Run("ShouldUseSigningKeyID", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+
+		out, _, err := EncodeCompactSigned(t.Context(), claims, headers, &testKeySigECDSA)
+		require.NoError(t, err)
+
+		token, err := jwt.ParseSigned(out, []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+		require.Len(t, token.Headers, 1)
+		assert.Equal(t, testKeySigECDSA.KeyID, token.Headers[0].KeyID)
+	})
+
+	t.Run("ShouldUseSigningAndEncryptionKeyIDs", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+		headersJWE := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: "stale-enc"}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, headers, headersJWE, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, testKeyPublicEncECDSA.KeyID, jwe.Header.KeyID)
+
+		raw, err := jwe.Decrypt(&testKeyEncECDSA)
+		require.NoError(t, err)
+
+		token, err := jwt.ParseSigned(string(raw), []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+		require.Len(t, token.Headers, 1)
+		assert.Equal(t, testKeySigECDSA.KeyID, token.Headers[0].KeyID)
+	})
+
+	t.Run("ShouldNotModifyCallerHeaders", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+
+		_, _, err := EncodeCompactSigned(t.Context(), claims, headers, &testKeySigECDSA)
+		require.NoError(t, err)
+		assert.Equal(t, stale, headers.Get(JSONWebTokenHeaderKeyIdentifier))
+	})
 }
 
 func TestDefaultStrategyDecodeAlgNone(t *testing.T) {

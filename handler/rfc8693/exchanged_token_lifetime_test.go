@@ -18,6 +18,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -143,6 +144,161 @@ func TestExchangedTokenLifetime(t *testing.T) {
 
 						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.AccessToken).After(expires))
 						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.RefreshToken).After(expires))
+					})
+				}
+			})
+
+			t.Run("ShouldHonorANegativeRefreshTokenLifespan", func(t *testing.T) {
+				testCases := []struct {
+					name      string
+					requested string
+					expires   time.Time
+				}{
+					{
+						name:      "ShouldNotExpireAccessTokenType",
+						requested: "",
+					},
+					{
+						name:      "ShouldNotExpireRefreshTokenType",
+						requested: consts.TokenTypeRFC8693RefreshToken,
+					},
+					{
+						name:      "ShouldCapAccessTokenTypeAtTheSubjectToken",
+						requested: "",
+						expires:   time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second),
+					},
+					{
+						name:      "ShouldCapRefreshTokenTypeAtTheSubjectToken",
+						requested: consts.TokenTypeRFC8693RefreshToken,
+						expires:   time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second),
+					},
+				}
+
+				for _, tc := range testCases {
+					t.Run(tc.name, func(t *testing.T) {
+						store := sc.newStore()
+						config, coreStrategy := newBindingExchangeConfig()
+						config.RefreshTokenScopes = []string{}
+						config.RefreshTokenLifespan = -1
+
+						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], tc.expires), tc.requested)
+
+						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
+						refreshHandler.RefreshTokenLifespan = -1
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(refreshHandler.HandleTokenEndpointRequest(t.Context(), request)))
+
+						var (
+							issuer oauth2.TokenEndpointHandler
+							token  func(response *oauth2.AccessResponse) string
+						)
+
+						if tc.requested == consts.TokenTypeRFC8693RefreshToken {
+							issuer = refreshHandler
+							token = func(response *oauth2.AccessResponse) string {
+								return response.GetAccessToken()
+							}
+						} else {
+							handler := newLifetimeAccessTokenHandler(config, coreStrategy, store)
+							handler.RefreshTokenLifespan = -1
+							issuer = handler
+							token = func(response *oauth2.AccessResponse) string {
+								value, _ := response.GetExtra(consts.FormParameterRefreshToken).(string)
+
+								return value
+							}
+						}
+
+						response := oauth2.NewAccessResponse()
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(issuer.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+						assert.Equal(t, tc.expires, request.GetSession().GetExpiresAt(oauth2.RefreshToken))
+
+						if tc.requested == consts.TokenTypeRFC8693RefreshToken && tc.expires.IsZero() {
+							assert.NotContains(t, response.ToMap(), consts.AccessResponseExpiresIn)
+						}
+
+						refresh := token(response)
+						require.NotEmpty(t, refresh)
+
+						redeemLifetimeRefreshToken(t, config, coreStrategy, store, refresh)
+					})
+				}
+			})
+
+			t.Run("ShouldResolveTheClientTokenExchangeLifespans", func(t *testing.T) {
+				testCases := []struct {
+					name      string
+					custom    bool
+					requested string
+					access    time.Duration
+					refresh   time.Duration
+				}{
+					{
+						name:      "ShouldApplyTheClientLifespansAccessTokenType",
+						custom:    true,
+						requested: "",
+						access:    *internal.TestLifespans.TokenExchangeGrantAccessTokenLifespan,
+						refresh:   *internal.TestLifespans.TokenExchangeGrantRefreshTokenLifespan,
+					},
+					{
+						name:      "ShouldApplyTheClientLifespansRefreshTokenType",
+						custom:    true,
+						requested: consts.TokenTypeRFC8693RefreshToken,
+						refresh:   *internal.TestLifespans.TokenExchangeGrantRefreshTokenLifespan,
+					},
+					{
+						name:      "ShouldApplyTheDefaultLifespansAccessTokenType",
+						requested: "",
+						access:    time.Hour,
+						refresh:   24 * time.Hour,
+					},
+					{
+						name:      "ShouldApplyTheDefaultLifespansRefreshTokenType",
+						requested: consts.TokenTypeRFC8693RefreshToken,
+						refresh:   24 * time.Hour,
+					},
+				}
+
+				for _, tc := range testCases {
+					t.Run(tc.name, func(t *testing.T) {
+						store := sc.newStore()
+						config, coreStrategy := newBindingExchangeConfig()
+						config.RefreshTokenScopes = []string{}
+
+						client, subject := store.GetClients()["my-client"], store.GetClients()["custom-lifespan-client"]
+						if tc.custom {
+							client, subject = subject, client
+						}
+
+						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, subject, time.Time{}), tc.requested)
+						request.Client = client
+
+						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(refreshHandler.HandleTokenEndpointRequest(t.Context(), request)))
+
+						var issuer oauth2.TokenEndpointHandler = newLifetimeAccessTokenHandler(config, coreStrategy, store)
+						if tc.requested == consts.TokenTypeRFC8693RefreshToken {
+							issuer = refreshHandler
+						}
+
+						response := oauth2.NewAccessResponse()
+
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(issuer.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+						now := time.Now().UTC()
+
+						if tc.access != 0 {
+							assert.WithinDuration(t, now.Add(tc.access), request.GetSession().GetExpiresAt(oauth2.AccessToken), 5*time.Second)
+							assert.InDelta(t, int64(tc.access.Seconds()), response.ToMap()[consts.AccessResponseExpiresIn], 5)
+							assert.NotEmpty(t, response.GetExtra(consts.FormParameterRefreshToken))
+						} else {
+							assert.InDelta(t, int64(tc.refresh.Seconds()), response.ToMap()[consts.AccessResponseExpiresIn], 5)
+						}
+
+						assert.WithinDuration(t, now.Add(tc.refresh), request.GetSession().GetExpiresAt(oauth2.RefreshToken), 5*time.Second)
 					})
 				}
 			})

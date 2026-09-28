@@ -1231,6 +1231,50 @@ func TestAuthenticateClientTwice(t *testing.T) {
 				assert.Nil(t, actual)
 			},
 		},
+		{
+			name: "ShouldPassAnotherClientReusingTheJTI",
+			check: func(t *testing.T) {
+				provider, registered, formValues := newFixture(t)
+
+				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				key := gen.MustRSAKey()
+
+				other := &DefaultJARClient{
+					DefaultClient: &DefaultClient{ID: "baz"},
+					JSONWebKeys: &jose.JSONWebKeySet{
+						Keys: []jose.JSONWebKey{
+							{
+								KeyID:     "kid-baz",
+								Use:       consts.JSONWebTokenUseSignature,
+								Algorithm: "RS256",
+								Key:       &key.PublicKey,
+							},
+						},
+					},
+					TokenEndpointAuthMethod: registered.TokenEndpointAuthMethod,
+				}
+
+				provider.Store.(*storage.MemoryStore).Clients[other.ID] = other
+
+				assertion := mustGenerateClientAssertion(t, jwt.MapClaims{
+					consts.ClaimSubject:        "baz",
+					consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+					consts.ClaimIssuer:         "baz",
+					consts.ClaimJWTID:          "12345",
+					consts.ClaimAudience:       "token-url",
+				}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-baz", key)
+
+				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), url.Values{
+					consts.FormParameterClientID:            {"baz"},
+					consts.FormParameterClientAssertion:     {assertion},
+					consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+				})
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, other, actual)
+			},
+		},
 	}
 
 	for _, tc := range testCases {

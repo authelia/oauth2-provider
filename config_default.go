@@ -133,6 +133,11 @@ type Config struct {
 	// identifier as the sole value of its 'aud' claim. See GetEnforceClientAssertionIssuerAudience.
 	EnforceClientAssertionIssuerAudience bool
 
+	// ClientAssertionClientSecretEncryptionDisabled rejects client assertions encrypted with a key derived from the
+	// client secret. Defaults to false, which accepts them when the request includes the 'client_id' parameter. See
+	// ClientAssertionClientSecretEncryptionDisabledProvider.
+	ClientAssertionClientSecretEncryptionDisabled bool
+
 	// AllowedJWTAssertionAudiences is a list of permitted client assertion audiences. If the authorization server is
 	// intended to be compatible with the client_secret_jwt or private_key_jwt client authentication methods
 	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
@@ -207,6 +212,10 @@ type Config struct {
 	// an Access Token presented as a bearer credential the only way to authorize a call to it. Defaults to false,
 	// which permits both. See IntrospectionEndpointClientAuthDisabledProvider for why a deployment would set it.
 	IntrospectionEndpointClientAuthDisabled bool
+
+	// IntrospectionTokenTypeEnabled includes the RFC 7662 Section 2.2 'token_type' member in the response for an
+	// active access token. Defaults to false, which omits it. See IntrospectionTokenTypeEnabledProvider.
+	IntrospectionTokenTypeEnabled bool
 
 	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
@@ -336,6 +345,12 @@ type Config struct {
 	// Requests. This is required by FAPI 2.0 Security Profile Section 5.3.2.2.
 	RequireRedirectURIPushedAuthorizationRequests bool
 
+	// DisablePushedAuthorizationRequestClientRefetch disables fetching the current client registration when a Pushed
+	// Authorization Request 'request_uri' is redeemed at the 'authorize' endpoint, so the client stored with the
+	// pushed request is used as is. RFC 9126 Section 7.4 recommends the pushed request is checked against the current
+	// client policy.
+	DisablePushedAuthorizationRequestClientRefetch bool
+
 	// RequireSignedRequestObject requires all authorization requests be protected as a signed Request Object provided
 	// by either the 'request' or 'request_uri' parameter. This is equivalent to the 'require_signed_request_object'
 	// authorization server metadata value.
@@ -403,6 +418,12 @@ type Config struct {
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
 
+	// DPoPStrictRefreshTokenBinding keeps a confidential client's DPoP bound refresh token bound to the key it was
+	// issued for, so a refresh with a proof for another key is rejected. Defaults to false, which re-binds the grant
+	// to the key of the presented proof, as RFC 9449 Section 5 does not bind the refresh tokens of confidential
+	// clients to the proof key. Public clients are always strictly bound.
+	DPoPStrictRefreshTokenBinding bool
+
 	// OIDCKeyBindingEnabled enables OpenID Connect Key Binding 1.0, which issues an ID Token carrying the 'cnf'
 	// claim of a DPoP proof-of-possession key. Requires DPoPEnabled. Defaults to false.
 	OIDCKeyBindingEnabled bool
@@ -428,6 +449,13 @@ type Config struct {
 	// that validated it, and RFC 8705 Section 6.5 places that channel out of scope. Per Section 7.4 the trust anchors
 	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
 	MTLSClientCertificateHeader string
+
+	// MTLSStrictRefreshTokenBinding keeps a confidential client's certificate-bound refresh token bound to the
+	// certificate it was issued for, so a refresh with another certificate is rejected. Defaults to false, which
+	// re-binds the grant to the presented certificate, as RFC 8705 Section 4 binds the refresh tokens of public
+	// clients only and Section 7.1 has those of confidential clients sender-constrained by client authentication.
+	// Public clients are always strictly bound.
+	MTLSStrictRefreshTokenBinding bool
 
 	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is
 	// deliberately separate from GlobalSecret: a client management token never expires and RFC 7592 provides no way
@@ -573,6 +601,12 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 // published.
 func (c *Config) GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool) {
 	return c.EnforceClientAssertionIssuerAudience
+}
+
+// GetClientAssertionClientSecretEncryptionDisabled returns whether client assertions encrypted with a key derived from
+// the client secret are rejected. See ClientAssertionClientSecretEncryptionDisabledProvider.
+func (c *Config) GetClientAssertionClientSecretEncryptionDisabled(ctx context.Context) (disabled bool) {
+	return c.ClientAssertionClientSecretEncryptionDisabled
 }
 
 func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {
@@ -1030,6 +1064,14 @@ func (c *Config) GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Co
 	return c.RequireRedirectURIPushedAuthorizationRequests
 }
 
+// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization Request
+// is used as is when its 'request_uri' is redeemed, instead of the current client registration.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+func (c *Config) GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) bool {
+	return c.DisablePushedAuthorizationRequestClientRefetch
+}
+
 // GetRequireSignedRequestObject indicates if JWT-Secured Authorization Requests are enforced. In this mode, a client
 // cannot pass authorization parameters via the OAuth 2.0 request syntax alone; the request must be protected as a
 // signed Request Object provided by either the 'request' or 'request_uri' parameter.
@@ -1118,6 +1160,11 @@ func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context)
 	return c.IntrospectionEndpointClientAuthDisabled
 }
 
+// GetIntrospectionTokenTypeEnabled returns whether the introspection response includes the 'token_type' member.
+func (c *Config) GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool) {
+	return c.IntrospectionTokenTypeEnabled
+}
+
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	c.revocationEndpointClientAuthStrategyOnce.Do(func() {
 		if c.RevocationEndpointClientAuthStrategy == nil {
@@ -1185,6 +1232,12 @@ func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 	return c.DPoPStrategy
 }
 
+// GetDPoPStrictRefreshTokenBinding returns whether a confidential client's DPoP bound refresh token stays bound to
+// the key it was issued for.
+func (c *Config) GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool) {
+	return c.DPoPStrictRefreshTokenBinding
+}
+
 func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
 	return c.MTLSEnabled || c.MTLSEnforce
 }
@@ -1195,6 +1248,12 @@ func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
 
 func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
 	return c.MTLSClientCertificateHeader
+}
+
+// GetMTLSStrictRefreshTokenBinding returns whether a confidential client's certificate-bound refresh token stays
+// bound to the certificate it was issued for.
+func (c *Config) GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool) {
+	return c.MTLSStrictRefreshTokenBinding
 }
 
 func (c *Config) GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error) {
@@ -1302,6 +1361,7 @@ var (
 	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)
 	_ FormPostResponseProvider                              = (*Config)(nil)
 	_ AllowedJWTAssertionAudiencesProvider                  = (*Config)(nil)
+	_ ClientAssertionClientSecretEncryptionDisabledProvider = (*Config)(nil)
 	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
 	_ HTTPClientProvider                                    = (*Config)(nil)
@@ -1325,10 +1385,13 @@ var (
 	_ TokenEndpointClientAuthStrategyProvider               = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
+	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)
+	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
+	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
 	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)

@@ -159,7 +159,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	if or, err = c.GetRefreshTokenSession(ctx, signature, newTokenSession(request.GetSession())); err != nil {
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	} else if err = c.ValidateRefreshToken(ctx, or, token); err != nil {
-		return nil, nil, err
+		return nil, nil, errExchangeTokenValidation(err)
 	}
 
 	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), or, role); err != nil {

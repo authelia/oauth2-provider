@@ -9,6 +9,7 @@ package rfc8693_test
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -194,6 +195,123 @@ func TestSpec_2_4_Errors_SubjectTokenMissingRequestedScopeReturnsInvalidScope(t 
 	err := newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidScope)
+}
+
+// §2.2.2: an expired subject or actor token is 'invalid_request'.
+func TestSpec_2_2_2_Errors_ExpiredTokenReturnsInvalidRequest(t *testing.T) {
+	testCases := []struct {
+		name      string
+		tokenType string
+		key       oauth2.TokenType
+		param     string
+	}{
+		{"ShouldRejectExpiredAccessTokenSubject", consts.TokenTypeRFC8693AccessToken, oauth2.AccessToken, consts.FormParameterSubjectToken},
+		{"ShouldRejectExpiredRefreshTokenSubject", consts.TokenTypeRFC8693RefreshToken, oauth2.RefreshToken, consts.FormParameterSubjectToken},
+		{"ShouldRejectExpiredAccessTokenActor", consts.TokenTypeRFC8693AccessToken, oauth2.AccessToken, consts.FormParameterActorToken},
+		{"ShouldRejectExpiredRefreshTokenActor", consts.TokenTypeRFC8693RefreshToken, oauth2.RefreshToken, consts.FormParameterActorToken},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, store, strategy := newExchangeFixture(t)
+
+			client := store.Clients["my-client"]
+			subjectClient := store.Clients["custom-lifespan-client"]
+
+			issued := newIssuedRequest(subjectClient, "alice", nil, tc.key)
+			issued.GetSession().SetExpiresAt(tc.key, time.Now().UTC().Add(-time.Minute))
+
+			var (
+				token, signature string
+				err              error
+			)
+
+			ctx := context.Background()
+
+			if tc.key == oauth2.AccessToken {
+				token, signature, err = strategy.GenerateAccessToken(ctx, issued)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, issued.Sanitize(nil)))
+			} else {
+				token, signature, err = strategy.GenerateRefreshToken(ctx, issued)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateRefreshTokenSession(ctx, signature, "", issued.Sanitize(nil)))
+			}
+
+			form := url.Values{
+				consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
+				consts.FormParameterSubjectToken:     {createExchangeAccessToken(t, strategy, store, subjectClient, "alice")},
+			}
+
+			if tc.param == consts.FormParameterSubjectToken {
+				form.Set(consts.FormParameterSubjectTokenType, tc.tokenType)
+				form.Set(consts.FormParameterSubjectToken, token)
+			} else {
+				form.Set(consts.FormParameterActorTokenType, tc.tokenType)
+				form.Set(consts.FormParameterActorToken, token)
+			}
+
+			req := newExchangeRequest(t, client, newSpecSession("alice"), form)
+
+			if tc.key == oauth2.AccessToken {
+				err = newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(ctx, req)
+			} else {
+				err = newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(ctx, req)
+			}
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.NotErrorIs(t, err, oauth2.ErrTokenExpired)
+		})
+	}
+}
+
+func TestExchange_ValidatorOperationalErrorIsNotInvalidRequest(t *testing.T) {
+	testCases := []struct {
+		name      string
+		tokenType string
+		key       oauth2.TokenType
+	}{
+		{"ShouldNotMaskAccessTokenValidatorError", consts.TokenTypeRFC8693AccessToken, oauth2.AccessToken},
+		{"ShouldNotMaskRefreshTokenValidatorError", consts.TokenTypeRFC8693RefreshToken, oauth2.RefreshToken},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, store, strategy := newExchangeFixture(t)
+
+			client := store.Clients["my-client"]
+			subjectClient := store.Clients["custom-lifespan-client"]
+
+			var token string
+
+			if tc.key == oauth2.AccessToken {
+				token = createExchangeAccessToken(t, strategy, store, subjectClient, "alice")
+			} else {
+				token = createExchangeRefreshToken(t, strategy, store, subjectClient, "alice")
+			}
+
+			cfg.GlobalSecret = []byte("short")
+			cfg.RotatedGlobalSecrets = nil
+
+			req := newExchangeRequest(t, client, newSpecSession("alice"), url.Values{
+				consts.FormParameterSubjectTokenType: {tc.tokenType},
+				consts.FormParameterSubjectToken:     {token},
+			})
+
+			var err error
+
+			if tc.key == oauth2.AccessToken {
+				err = newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
+			} else {
+				err = newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
+			}
+
+			require.Error(t, err)
+			assert.NotErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.Equal(t, http.StatusInternalServerError, oauth2.ErrorToRFC6749Error(err).CodeField)
+		})
+	}
 }
 
 // newExchangeFixture returns a spec config, an example store and the HMAC core strategy wired to that config.

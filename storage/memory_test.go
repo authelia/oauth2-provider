@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 )
 
 func TestMemoryStore_Authenticate(t *testing.T) {
@@ -241,6 +242,15 @@ func TestMemoryStoreClientRegistrationManager(t *testing.T) {
 	t.Run("ShouldRejectDeletingAnUnknownIdentifier", func(t *testing.T) {
 		assert.ErrorIs(t, store.DeleteClient(ctx, "new-client"), oauth2.ErrNotFound)
 	})
+}
+
+func TestExampleStoreCustomLifespanClient(t *testing.T) {
+	client, err := NewExampleStore().GetClient(context.Background(), "custom-lifespan-client")
+	require.NoError(t, err)
+
+	c, ok := client.(*oauth2.DefaultClientWithCustomTokenLifespans)
+	require.True(t, ok)
+	assert.Equal(t, &internal.TestLifespans, c.TokenLifespans)
 }
 
 func TestExampleStoreSupportsDPoP(t *testing.T) {

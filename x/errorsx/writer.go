@@ -27,6 +27,8 @@ func WriteJSONError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // WriteJSONErrorCode is a helper function for writing errors in various scenarios. Taken from github.com/ory/herodot.
+// The body is the first error in the chain of err that implements json.Marshaler or RFCError, so a wrapped RFC 6749
+// error still carries the 'error' member required by RFC 6749 Section 5.2.
 func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err error) {
 	if code == 0 {
 		code = http.StatusInternalServerError
@@ -39,7 +41,18 @@ func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err er
 	w.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	w.WriteHeader(code)
 
-	_ = json.NewEncoder(w).Encode(err)
+	_ = json.NewEncoder(w).Encode(jsonErrorValue(err))
+}
+
+func jsonErrorValue(err error) error {
+	for e := err; e != nil; e = stderr.Unwrap(e) {
+		switch e.(type) {
+		case json.Marshaler, RFCError:
+			return e
+		}
+	}
+
+	return err
 }
 
 type Fields map[string]string

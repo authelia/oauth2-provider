@@ -356,6 +356,14 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 	return config.GetRFC8693TokenTypes(ctx)[id]
 }
 
+func errExchangeTokenValidation(err error) error {
+	if rfc := new(oauth2.RFC6749Error); !errors.As(err, &rfc) {
+		return errors.WithStack(err)
+	}
+
+	return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
+}
+
 // validateExchangeTokenPolicy applies the client and scope policy for a 'subject_token' or 'actor_token' resolved
 // back to the request it was issued for.
 //

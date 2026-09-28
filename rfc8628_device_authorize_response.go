@@ -23,10 +23,12 @@ type DeviceAuthorizeResponse struct {
 	Extra                   map[string]any `json:"-"`
 }
 
-// NewDeviceAuthorizeResponse returns an empty RFC 8628 device authorization response with its extras map initialized.
+// NewDeviceAuthorizeResponse returns an empty RFC 8628 device authorization response with its header and extras map
+// initialized.
 func NewDeviceAuthorizeResponse() *DeviceAuthorizeResponse {
 	return &DeviceAuthorizeResponse{
-		Extra: map[string]any{},
+		Header: http.Header{},
+		Extra:  map[string]any{},
 	}
 }
 

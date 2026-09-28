@@ -134,17 +134,60 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 	assert.NotContains(t, priorAct, "injected", "mutating the issued nested 'act' must not leak into the subject_token's act map")
 }
 
-// An actor_token containing no recognised identifying claims must NOT produce a stub/empty act claim.
-func TestSpec_4_1_ActClaim_EmptyActorTokenProducesNoActClaim(t *testing.T) {
-	cfg := newSpecConfig(t)
-	session := newSpecSession("alice")
+// §4.1 and §2.2.2: an actor_token that does not identify the actor is unacceptable, as the issued token could not
+// express the delegation.
+func TestSpec_4_1_ActClaim_ActorTokenWithoutIdentity(t *testing.T) {
+	testCases := []struct {
+		name    string
+		actor   map[string]any
+		subject map[string]any
+	}{
+		{
+			name:  "ShouldRejectAnActorTokenWithUnknownClaims",
+			actor: map[string]any{"unknown_claim": "value"},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWithOnlyAnIssuer",
+			actor: map[string]any{consts.ClaimIssuer: "https://actor.example.com"},
+		},
+		{
+			name:  "ShouldRejectAnEmptyActorToken",
+			actor: map[string]any{},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWithEmptyIdentifiers",
+			actor: map[string]any{consts.ClaimSubject: "", consts.ClaimClientIdentifier: ""},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWhenTheSubjectTokenHasAPriorActor",
+			actor: map[string]any{consts.ClaimIssuer: "https://service77.example.com"},
+			subject: map[string]any{
+				consts.ClaimSubject: "alice",
+				consts.ClaimActor:   map[string]any{consts.ClaimSubject: "carol"},
+			},
+		},
+	}
 
-	session.SetActorToken(map[string]any{"unknown_claim": "value"})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newSpecConfig(t)
+			session := newSpecSession("alice")
 
-	require.NoError(t, runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil)))
+			if tc.subject != nil {
+				session.SetSubjectToken(tc.subject)
+			}
 
-	_, present := session.Extra[consts.ClaimActor]
-	assert.False(t, present, "an actor_token with no identifying claims must not produce an empty 'act' claim")
+			session.SetActorToken(tc.actor)
+
+			err := runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil))
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'actor_token' does not identify the actor as it has neither a 'sub' nor a 'client_id' claim.")
+
+			_, present := session.Extra[consts.ClaimActor]
+			assert.False(t, present)
+		})
+	}
 }
 
 // §2.1: the issued JWT's 'aud' MUST reflect this exchange's audience/resource parameters, not any audience the

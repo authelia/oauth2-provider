@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -609,6 +610,14 @@ func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.T
 	}
 
 	return expires
+}
+
+func refreshTokenExpiry(request oauth2.Requester, lifespan time.Duration) time.Time {
+	if lifespan > -1 {
+		return capToSubjectTokenExpiry(request, time.Now().UTC().Add(lifespan)).Truncate(jwt.TimePrecision)
+	}
+
+	return subjectTokenExpiry(request)
 }
 
 func recordSubjectTokenDeadline(request oauth2.Requester) {

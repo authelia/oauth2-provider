@@ -15,7 +15,6 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -23,6 +22,9 @@ import (
 //
 // A refresh token is only issued when the 'subject_token' is itself a refresh token, the case RFC 8693 Section 2.2.1
 // describes of a client that needs access once the original credential is no longer valid, and never outlives it.
+//
+// RefreshTokenLifespan applies unless the client sets its own lifespan for the token exchange grant. A value of -1
+// removes the configured limit, but the refresh token still expires with the 'subject_token'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 type RefreshTokenTypeHandler struct {
@@ -200,7 +202,9 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	}
 
 	recordSubjectTokenDeadline(request)
-	request.GetSession().SetExpiresAt(oauth2.RefreshToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(c.RefreshTokenLifespan)).Truncate(jwt.TimePrecision))
+
+	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)
+	request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, rtLifespan))
 
 	var token, signature string
 
@@ -221,7 +225,11 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
-	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.RefreshToken, c.RefreshTokenLifespan, time.Now().UTC()))
+
+	if !request.GetSession().GetExpiresAt(oauth2.RefreshToken).IsZero() {
+		response.SetExpiresIn(c.GetExpiresIn(request, oauth2.RefreshToken, rtLifespan, time.Now().UTC()))
+	}
+
 	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693RefreshToken)
 

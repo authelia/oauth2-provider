@@ -113,12 +113,13 @@ func TestAccessToken(t *testing.T) {
 				assert.Equal(t, "bar", claims["foo"])
 				// Returned, but will be ignored by the introspect handler.
 				assert.Equal(t, "peter", claims[consts.ClaimSubject])
-				assert.Equal(t, []string{"group0"}, claims[consts.ClaimAudience])
-				// Scope field is always a string.
-				assert.Equal(t, "email offline", claims[consts.ClaimScope])
+				assert.NotContains(t, claims, consts.ClaimAudience)
+				assert.NotContains(t, claims, consts.ClaimScope)
 
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
+				sessionClaims := tc.r.GetSession().(*JWTSession).JWTClaims
+
+				assert.Equal(t, sessionClaims.IssuedAt.Unix(), claims[consts.ClaimIssuedAt])
+				assert.Equal(t, sessionClaims.NotBefore.Unix(), claims[consts.ClaimNotBefore])
 
 				err = strategy.ValidateAccessToken(context.Background(), tc.r, token)
 				if tc.pass {
@@ -313,8 +314,50 @@ func TestGenerateJWTIncludesClientID(t *testing.T) {
 	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
 }
 
-func anyInt64ToTime(in any) time.Time {
-	return time.Unix(in.(int64), 0)
+func TestGenerateJWTDoesNotMutateSessionClaims(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	config.AccessTokenIssuer = "https://old.example.com"
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = &oauth2.DefaultClient{ID: "client-abc"}
+
+	claims := r.Session.(*JWTSession).JWTClaims
+	claims.Issuer = ""
+
+	expected := claims.Clone()
+
+	_, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, claims)
+
+	config.AccessTokenIssuer = "https://new.example.com"
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, err)
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var payload map[string]any
+
+	require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+	assert.Equal(t, "https://new.example.com", payload[consts.ClaimIssuer])
 }
 
 var rsaKey = gen.MustRSAKey()

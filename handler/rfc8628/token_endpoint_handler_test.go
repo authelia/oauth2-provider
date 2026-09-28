@@ -955,6 +955,8 @@ func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t
 	require.Error(t, err)
 
 	assert.Equal(t, oauth2.ErrSlowDown.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+}
+
 func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 	testCases := []struct {
 		name     string

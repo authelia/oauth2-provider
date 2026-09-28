@@ -128,6 +128,29 @@ type ExtraClaimsSession interface {
 	GetExtraClaims() map[string]any
 }
 
+// ExpiryDeadlineSession is implemented by a Session whose tokens must not expire after a fixed time, such as the
+// session of a token exchange bounded by the expiry of its subject token.
+type ExpiryDeadlineSession interface {
+	// GetExpiryDeadline returns the latest time a token issued for the session may expire, or the zero time when the
+	// session has no deadline.
+	GetExpiryDeadline() time.Time
+}
+
+// CapToExpiryDeadline returns expires, or the deadline of the session when it is an ExpiryDeadlineSession with an
+// earlier deadline.
+func CapToExpiryDeadline(session Session, expires time.Time) time.Time {
+	bounded, ok := session.(ExpiryDeadlineSession)
+	if !ok {
+		return expires
+	}
+
+	if deadline := bounded.GetExpiryDeadline(); !deadline.IsZero() && deadline.Before(expires) {
+		return deadline
+	}
+
+	return expires
+}
+
 // GetExtraClaims implements ExtraClaimsSession for DefaultSession.
 // The returned value can be modified in-place.
 func (s *DefaultSession) GetExtraClaims() map[string]any {

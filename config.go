@@ -72,6 +72,13 @@ type ClientCredentialsImplicitProvider interface {
 	GetClientCredentialsFlowImplicitGrantRequested(ctx context.Context) (implicit bool)
 }
 
+// PublicClientIdentityCheckerProvider returns the provider for configuring the public client identity validator.
+type PublicClientIdentityCheckerProvider interface {
+	// GetPublicClientIdentityChecker returns the validator which reports whether an authorization request assures the
+	// identity of a public client, as required to process it without user interaction.
+	GetPublicClientIdentityChecker(ctx context.Context) func(context.Context, AuthorizeRequester) bool
+}
+
 // RedirectSecureCheckerProvider returns the provider for configuring the redirect URL security validator.
 type RedirectSecureCheckerProvider interface {
 	// GetRedirectSecureChecker returns the redirect URL security validator.
@@ -597,6 +604,13 @@ type PushedAuthorizeRequestConfigProvider interface {
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 	GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) (require bool)
+
+	// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization
+	// Request is used as is when its 'request_uri' is redeemed at the 'authorize' endpoint, instead of fetching the
+	// current client registration and validating the pushed request against it as RFC 9126 Section 7.4 recommends.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+	GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) (disable bool)
 }
 
 // JWTSecuredAuthorizationRequestConfigProvider is the configuration provider for JWT-Secured Authorization

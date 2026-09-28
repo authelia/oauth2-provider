@@ -96,6 +96,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		}
 	}
 
+	if err = c.validateClientScopes(ctx, request); err != nil {
+		return err
+	}
+
 	if claims.ID != "" {
 		if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -346,6 +350,23 @@ func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extende
 var (
 	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
 )
+
+func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	client := request.GetClient()
+	if !isAuthenticatedClient(client) {
+		return nil
+	}
+
+	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+		}
+	}
+
+	return nil
+}
 
 func isAuthenticatedClient(client oauth2.Client) bool {
 	return client != nil && len(client.GetID()) != 0

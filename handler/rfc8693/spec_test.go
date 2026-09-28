@@ -27,6 +27,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
@@ -133,17 +134,60 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 	assert.NotContains(t, priorAct, "injected", "mutating the issued nested 'act' must not leak into the subject_token's act map")
 }
 
-// An actor_token containing no recognised identifying claims must NOT produce a stub/empty act claim.
-func TestSpec_4_1_ActClaim_EmptyActorTokenProducesNoActClaim(t *testing.T) {
-	cfg := newSpecConfig(t)
-	session := newSpecSession("alice")
+// §4.1 and §2.2.2: an actor_token that does not identify the actor is unacceptable, as the issued token could not
+// express the delegation.
+func TestSpec_4_1_ActClaim_ActorTokenWithoutIdentity(t *testing.T) {
+	testCases := []struct {
+		name    string
+		actor   map[string]any
+		subject map[string]any
+	}{
+		{
+			name:  "ShouldRejectAnActorTokenWithUnknownClaims",
+			actor: map[string]any{"unknown_claim": "value"},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWithOnlyAnIssuer",
+			actor: map[string]any{consts.ClaimIssuer: "https://actor.example.com"},
+		},
+		{
+			name:  "ShouldRejectAnEmptyActorToken",
+			actor: map[string]any{},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWithEmptyIdentifiers",
+			actor: map[string]any{consts.ClaimSubject: "", consts.ClaimClientIdentifier: ""},
+		},
+		{
+			name:  "ShouldRejectAnActorTokenWhenTheSubjectTokenHasAPriorActor",
+			actor: map[string]any{consts.ClaimIssuer: "https://service77.example.com"},
+			subject: map[string]any{
+				consts.ClaimSubject: "alice",
+				consts.ClaimActor:   map[string]any{consts.ClaimSubject: "carol"},
+			},
+		},
+	}
 
-	session.SetActorToken(map[string]any{"unknown_claim": "value"})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newSpecConfig(t)
+			session := newSpecSession("alice")
 
-	require.NoError(t, runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil)))
+			if tc.subject != nil {
+				session.SetSubjectToken(tc.subject)
+			}
 
-	_, present := session.Extra[consts.ClaimActor]
-	assert.False(t, present, "an actor_token with no identifying claims must not produce an empty 'act' claim")
+			session.SetActorToken(tc.actor)
+
+			err := runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil))
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'actor_token' does not identify the actor as it has neither a 'sub' nor a 'client_id' claim.")
+
+			_, present := session.Extra[consts.ClaimActor]
+			assert.False(t, present)
+		})
+	}
 }
 
 // §2.1: the issued JWT's 'aud' MUST reflect this exchange's audience/resource parameters, not any audience the
@@ -244,6 +288,34 @@ func TestSpec_2_2_ResponseShape_AccessToken(t *testing.T) {
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope (and AS sets unconditionally)")
 	assert.Equal(t, consts.TokenTypeRFC8693AccessToken, resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
+}
+
+// §2.2.1: a DPoP bound exchange keeps token_type 'N_A' for an issued token that is not an access token.
+func TestSpec_2_2_1_TokenType_DPoPBoundExchange(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requested string
+		expected  string
+	}{
+		{name: "ShouldRelabelAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken, expected: oauth2.DPoPAccessToken},
+		{name: "ShouldKeepNotApplicableForARefreshToken", requested: consts.TokenTypeRFC8693RefreshToken, expected: oauth2.RFC8693NAToken},
+		{name: "ShouldKeepNotApplicableForAnIDToken", requested: consts.TokenTypeRFC8693IDToken, expected: oauth2.RFC8693NAToken},
+		{name: "ShouldKeepNotApplicableForACustomJWT", requested: "urn:spec:jwt", expected: oauth2.RFC8693NAToken},
+	}
+
+	binder := &rfc9449.Handler{Config: &oauth2.Config{DPoPEnabled: true}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := runTokenExchange(t, tc.requested)
+
+			session := newSpecSession("peter")
+			session.SetDPoPJWKThumbprint("some-thumbprint")
+
+			require.NoError(t, binder.PopulateBoundTokenEndpointResponse(t.Context(), oauth2.NewAccessRequest(session), resp))
+			assert.Equal(t, tc.expected, resp.GetTokenType())
+		})
+	}
 }
 
 // §2.2: refresh-token response carries access_token (carrying the refresh token), token_type=N_A, expires_in, scope, issued_token_type.
@@ -355,7 +427,7 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
 			Session: newValidatedSpecSession("alice"),
@@ -392,7 +464,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
 			},
 			Session: newValidatedSpecSession("alice"),
@@ -683,6 +755,13 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 
 	handlers := []oauth2.TokenEndpointHandler{grant, access, refresh, idt, cjt}
 
+	subjectTokenType, subjectToken := consts.TokenTypeRFC8693AccessToken, createAccessToken(context.Background(), coreStrategy, store, store.Clients["custom-lifespan-client"])
+
+	// RFC 8693 Section 2.2.1: a refresh token is only issued in exchange for a refresh token.
+	if requestedType == consts.TokenTypeRFC8693RefreshToken {
+		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], time.Now().UTC().Add(10*time.Minute))
+	}
+
 	req := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
@@ -690,8 +769,8 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 			Client: store.Clients["my-client"],
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
-				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
-				consts.FormParameterSubjectToken:       {createAccessToken(context.Background(), coreStrategy, store, store.Clients["custom-lifespan-client"])},
+				consts.FormParameterSubjectTokenType:   {subjectTokenType},
+				consts.FormParameterSubjectToken:       {subjectToken},
 				consts.FormParameterRequestedTokenType: {requestedType},
 			},
 			Session: newSpecSession("peter"),

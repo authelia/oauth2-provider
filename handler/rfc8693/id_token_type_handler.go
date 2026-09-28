@@ -6,6 +6,7 @@ package rfc8693
 
 import (
 	"context"
+	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -231,6 +232,14 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 
 	session.IDTokenClaims().Subject = subject
 
+	claims := session.IDTokenClaims()
+
+	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.Config.GetIDTokenLifespan(ctx)))
+	}
+
+	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
+
 	var token string
 
 	if token, err = c.IssueStrategy.GenerateIDToken(ctx, c.Config.GetIDTokenLifespan(ctx), request); err != nil {
@@ -239,7 +248,7 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
-	response.SetExpiresIn(c.Config.GetIDTokenLifespan(ctx))
+	response.SetExpiresIn(time.Until(claims.ExpirationTime.Time))
 	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693IDToken)
 

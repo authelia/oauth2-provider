@@ -297,7 +297,8 @@ type RefreshFlowScopeClient interface {
 }
 
 // RefreshTokenRotationClient is a client which keeps its refresh token during its own refresh token grants. Rotation
-// is disabled when either this or the provider-wide option is set.
+// is disabled when either this or the provider-wide option is set, except for a public client whose refresh token is
+// not sender-constrained by an enabled DPoP or mTLS binding; see IsRefreshTokenRotationDisabledForRequest.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 type RefreshTokenRotationClient interface {
@@ -351,7 +352,7 @@ type JARMClient interface {
 	// also be provided.
 	GetAuthorizationEncryptedResponseEnc() (alg string)
 
-	Client
+	JSONWebKeysClient
 }
 
 // PushedAuthorizationRequestClient is a client with custom requirements for Pushed Authorization requests.
@@ -451,7 +452,7 @@ type JWTProfileClient interface {
 	// GetEnableJWTProfileOAuthAccessTokens indicates this client should or should not issue JWT Profile Access Tokens.
 	GetEnableJWTProfileOAuthAccessTokens() (enforce bool)
 
-	Client
+	JSONWebKeysClient
 }
 
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
@@ -553,7 +554,7 @@ type IntrospectionJWTResponseClient interface {
 	// be specified without setting introspection_encrypted_response_alg.
 	GetIntrospectionEncryptedResponseEnc() (enc string)
 
-	Client
+	JSONWebKeysClient
 }
 
 // ClientAssertionJWTValidationOptionsClient allows extending the client assertion validation and strengthening the

@@ -223,8 +223,10 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.expiry(ctx, jwtType)))
 	}
+
+	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
 
 	if claims.Issuer == "" {
 		claims.Issuer = jwtType.Issuer
@@ -272,6 +274,20 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
 
 	return nil
+}
+
+func (c *CustomJWTTypeHandler) expiry(ctx context.Context, jwtType *JWTType) time.Duration {
+	if jwtType.Expiry > 0 {
+		return jwtType.Expiry
+	}
+
+	if provider, ok := c.Config.(oauth2.AccessTokenLifespanProvider); ok {
+		if lifespan := provider.GetAccessTokenLifespan(ctx); lifespan > 0 {
+			return lifespan
+		}
+	}
+
+	return time.Hour
 }
 
 func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {

@@ -70,6 +70,8 @@ func TestEncodeParameters(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
+	const errNoIssuer = "the JARM response modes require the JWTSecuredAuthorizeResponseModeIssuerProvider to return an issuer but it didn't"
+
 	testCases := []struct {
 		name       string
 		config     *stubConfigurator
@@ -80,22 +82,24 @@ func TestGenerate(t *testing.T) {
 		checkToken func(t *testing.T, token, signature string, strategy *stubStrategy)
 	}{
 		{
-			name: "ShouldFailWhenSessionIsNilAndNoConfiguredIssuer",
+			name: "ShouldFailWithoutAConfiguredIssuer",
 			config: &stubConfigurator{
 				strategy: &stubStrategy{token: "stub.token"},
 			},
 			client:  &stubClient{id: "client-id"},
 			session: nil,
-			err:     "The JARM response modes require the Authorize Requester session to be set but it wasn't.",
+			err:     errNoIssuer,
 		},
 		{
-			name: "ShouldFailWhenSessionImplementsNeitherInterface",
+			name: "ShouldFailWithoutAConfiguredIssuerWhenTheSessionHasOne",
 			config: &stubConfigurator{
 				strategy: &stubStrategy{token: "stub.token"},
 			},
-			client:  &stubClient{id: "client-id"},
-			session: struct{}{},
-			err:     "The JARM response modes require the Authorize Requester session to implement either the openid.Session or oauth2.JWTSessionContainer interfaces but it doesn't.",
+			client: &stubClient{id: "client-id"},
+			session: &openIDSession{
+				claims: &jwt.IDTokenClaims{Issuer: "https://session.example.com"},
+			},
+			err: errNoIssuer,
 		},
 		{
 			name: "ShouldFailWhenStrategyIsNil",
@@ -107,7 +111,7 @@ func TestGenerate(t *testing.T) {
 			err:     "The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.",
 		},
 		{
-			name: "ShouldUseConfiguredIssuerOverSessionIssuer",
+			name: "ShouldUseTheConfiguredIssuerWithoutASession",
 			config: &stubConfigurator{
 				issuer:   "https://config.example.com",
 				strategy: &stubStrategy{token: "tok"},
@@ -122,22 +126,9 @@ func TestGenerate(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldExtractIssuerFromOpenIDSession",
+			name: "ShouldUseTheConfiguredIssuerOverTheSessionIssuer",
 			config: &stubConfigurator{
-				strategy: &stubStrategy{token: "tok"},
-				lifespan: time.Hour,
-			},
-			client: &stubClient{id: "client-id"},
-			session: &openIDSession{
-				claims: &jwt.IDTokenClaims{Issuer: "https://session.example.com"},
-			},
-			checkToken: func(t *testing.T, token, signature string, strategy *stubStrategy) {
-				assert.Equal(t, "https://session.example.com", strategy.lastClaims[jwt.ClaimIssuer])
-			},
-		},
-		{
-			name: "ShouldExtractIssuerFromJWTSessionContainer",
-			config: &stubConfigurator{
+				issuer:   "https://config.example.com",
 				strategy: &stubStrategy{token: "tok"},
 				lifespan: time.Hour,
 			},
@@ -146,22 +137,7 @@ func TestGenerate(t *testing.T) {
 				claims: &jwt.JWTClaims{Issuer: "https://jwt-session.example.com"},
 			},
 			checkToken: func(t *testing.T, token, signature string, strategy *stubStrategy) {
-				assert.Equal(t, "https://jwt-session.example.com", strategy.lastClaims[jwt.ClaimIssuer])
-			},
-		},
-		{
-			name: "ShouldOmitIssuerWhenSessionHasNone",
-			config: &stubConfigurator{
-				strategy: &stubStrategy{token: "tok"},
-				lifespan: time.Hour,
-			},
-			client: &stubClient{id: "client-id"},
-			session: &openIDSession{
-				claims: &jwt.IDTokenClaims{},
-			},
-			checkToken: func(t *testing.T, token, signature string, strategy *stubStrategy) {
-				_, ok := strategy.lastClaims[jwt.ClaimIssuer]
-				assert.False(t, ok, "issuer should not be set when both config and session lack one")
+				assert.Equal(t, "https://config.example.com", strategy.lastClaims[jwt.ClaimIssuer])
 			},
 		},
 		{

@@ -26,7 +26,6 @@ var defaultPrompts = []string{
 }
 
 type openIDConnectRequestValidatorConfigProvider interface {
-	oauth2.RedirectSecureCheckerProvider
 	oauth2.AllowedPromptsProvider
 }
 
@@ -40,6 +39,16 @@ func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnec
 		Strategy: strategy,
 		Config:   config,
 	}
+}
+
+func (v *OpenIDConnectRequestValidator) getPublicClientIdentityChecker(ctx context.Context) (checker func(context.Context, oauth2.AuthorizeRequester) bool) {
+	if provider, ok := v.Config.(oauth2.PublicClientIdentityCheckerProvider); ok {
+		if checker = provider.GetPublicClientIdentityChecker(ctx); checker != nil {
+			return checker
+		}
+	}
+
+	return oauth2.IsPublicClientIdentityAssured
 }
 
 func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
@@ -66,6 +75,20 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
+	availablePrompts := v.Config.GetAllowedPrompts(ctx)
+	if len(availablePrompts) == 0 {
+		availablePrompts = defaultPrompts
+	}
+
+	if !isWhitelisted(requiredPrompt, availablePrompts) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The requested prompt value '%s' either contains unknown, unsupported, or prohibited prompt values.", strings.Join(requiredPrompt, " ")).WithDebugf("The permitted prompt values are '%s'.", strings.Join(availablePrompts, "', '")))
+	}
+
+	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
+		// If this parameter contains none with any other value, an error is returned.
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
+	}
+
 	if request.GetClient().IsPublic() {
 		// Threat: Malicious Client Obtains Existing Authorization by Fraud
 		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
@@ -85,26 +108,9 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		//  unless the identity of the client can be proven, the request SHOULD
 		//  be processed as if no previous request had been approved.
 
-		checker := v.Config.GetRedirectSecureChecker(ctx)
-		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
-			if !checker(ctx, request.GetRedirectURI()) {
-				return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and redirect uri is not considered secure (https missing), but 'prompt' type 'none' was requested."))
-			}
+		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
+			return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
 		}
-	}
-
-	availablePrompts := v.Config.GetAllowedPrompts(ctx)
-	if len(availablePrompts) == 0 {
-		availablePrompts = defaultPrompts
-	}
-
-	if !isWhitelisted(requiredPrompt, availablePrompts) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The requested prompt value '%s' either contains unknown, unsupported, or prohibited prompt values.", strings.Join(requiredPrompt, " ")).WithDebugf("The permitted prompt values are '%s'.", strings.Join(availablePrompts, "', '")))
-	}
-
-	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
-		// If this parameter contains none with any other value, an error is returned.
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
 
 	maxAge, hasMaxAge, err := requestedMaxAge(request.GetRequestForm())

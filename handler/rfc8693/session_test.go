@@ -126,9 +126,10 @@ func TestDefaultSessionClone(t *testing.T) {
 				KeyBindingGranted:           true,
 				RequestedAt:                 now,
 			},
-			ActorToken:   map[string]any{consts.ClaimSubject: "actor"},
-			SubjectToken: map[string]any{consts.ClaimSubject: "peter"},
-			Extra:        map[string]any{consts.ClaimActor: map[string]any{consts.ClaimSubject: "actor"}},
+			ActorToken:     map[string]any{consts.ClaimSubject: "actor"},
+			SubjectToken:   map[string]any{consts.ClaimSubject: "peter"},
+			Extra:          map[string]any{consts.ClaimActor: map[string]any{consts.ClaimSubject: "actor"}},
+			ExpiryDeadline: now.Add(time.Hour),
 		}
 
 		cloned, ok := s.Clone().(*DefaultSession)

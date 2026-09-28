@@ -67,6 +67,71 @@ func TestIsLocalhost(t *testing.T) {
 			"https://test.localhost:1234",
 			true,
 		},
+		{
+			"ShouldMatchUpperCaseLocalHost",
+			"https://LOCALHOST",
+			true,
+		},
+		{
+			"ShouldMatchMixedCaseLocalHostSubDomain",
+			"https://test.LocalHost",
+			true,
+		},
+		{
+			"ShouldMatchFullyQualifiedLocalHost",
+			"https://localhost.",
+			true,
+		},
+		{
+			"ShouldMatchShorthandIPv4Loopback",
+			"https://127.1",
+			true,
+		},
+		{
+			"ShouldMatchThreePartIPv4Loopback",
+			"https://127.0.1:1234",
+			true,
+		},
+		{
+			"ShouldMatchHexadecimalIPv4Loopback",
+			"https://0x7f.0.0.1",
+			true,
+		},
+		{
+			"ShouldMatchOctalIPv4Loopback",
+			"https://0177.0.0.1",
+			true,
+		},
+		{
+			"ShouldMatchIntegerIPv4Loopback",
+			"https://2130706433",
+			true,
+		},
+		{
+			"ShouldMatchFullyQualifiedIPv4Loopback",
+			"https://127.0.0.1.",
+			true,
+		},
+		{
+			"ShouldNotMatchShorthandNonLoopback",
+			"https://128.1",
+			false,
+		},
+		{
+			"ShouldNotMatchOutOfRangeIPv4",
+			"https://127.256.0.0.1",
+			false,
+		},
+		{
+			"ShouldNotMatchNumericLabelDomain",
+			"https://127.example.com",
+			false,
+		},
+		{
+			"ShouldNotMatchLocalHostPrefix",
+			"https://localhost.example.com",
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -576,6 +641,47 @@ func TestIsRedirectURISecureStrict(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected, oauth2.IsRedirectURISecureStrict(uri))
+		})
+	}
+}
+
+func TestIsPublicClientIdentityAssured(t *testing.T) {
+	testCases := []struct {
+		name     string
+		url      string
+		expected bool
+	}{
+		{"ShouldPassHTTPS", "https://app.example.com/callback", true},
+		{"ShouldFailHTTP", "http://app.example.com/callback", false},
+		{"ShouldFailLocalHost", "http://localhost:8080/callback", false},
+		{"ShouldFailIPv4Loopback", "http://127.0.0.1:8080/callback", false},
+		{"ShouldFailIPv6Loopback", "http://[::1]:8080/callback", false},
+		{"ShouldFailHTTPSLocalHost", "https://localhost:8443/callback", false},
+		{"ShouldFailHTTPSLocalHostSubDomain", "https://app.localhost/callback", false},
+		{"ShouldFailHTTPSIPv4Loopback", "https://127.0.0.1:8443/callback", false},
+		{"ShouldFailHTTPSIPv6Loopback", "https://[::1]:8443/callback", false},
+		{"ShouldFailHTTPSUpperCaseLocalHost", "https://LOCALHOST:8443/callback", false},
+		{"ShouldFailHTTPSShorthandIPv4Loopback", "https://127.1:8443/callback", false},
+		{"ShouldFailPrivateUseScheme", "com.example.app:/callback", false},
+		{"ShouldFailNoRedirectURI", "", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := oauth2.NewAuthorizeRequest()
+
+			if tc.url != "" {
+				uri, err := url.Parse(tc.url)
+				require.NoError(t, err)
+
+				request.RedirectURI = uri
+			}
+
+			assert.Equal(t, tc.expected, oauth2.IsPublicClientIdentityAssured(t.Context(), request))
+
+			config := &oauth2.Config{}
+
+			assert.Equal(t, tc.expected, config.GetPublicClientIdentityChecker(t.Context())(t.Context(), request))
 		})
 	}
 }

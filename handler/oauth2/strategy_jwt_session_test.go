@@ -108,6 +108,56 @@ func TestJWTSessionClone(t *testing.T) {
 	}
 }
 
+func TestJWTSessionGetJWTHeader(t *testing.T) {
+	const customType = "custom+jwt"
+
+	testCases := []struct {
+		name     string
+		session  func(t *testing.T) *JWTSession
+		expected any
+	}{
+		{
+			name:     "ShouldDefaultTheTypeWithoutAHeader",
+			session:  func(t *testing.T) *JWTSession { return &JWTSession{} },
+			expected: jwt.JSONWebTokenTypeAccessToken,
+		},
+		{
+			name:     "ShouldDefaultTheTypeForAHeaderWithoutExtra",
+			session:  func(t *testing.T) *JWTSession { return &JWTSession{JWTHeader: &jwt.Headers{}} },
+			expected: jwt.JSONWebTokenTypeAccessToken,
+		},
+		{
+			name: "ShouldDefaultTheTypeForAHeaderRestoredWithNullExtra",
+			session: func(t *testing.T) *JWTSession {
+				session := &JWTSession{}
+
+				require.NoError(t, json.Unmarshal([]byte(`{"JWTHeader":{"extra":null}}`), session))
+				require.NotNil(t, session.JWTHeader)
+				require.Nil(t, session.JWTHeader.Extra)
+
+				return session
+			},
+			expected: jwt.JSONWebTokenTypeAccessToken,
+		},
+		{
+			name: "ShouldKeepAnExistingType",
+			session: func(t *testing.T) *JWTSession {
+				return &JWTSession{JWTHeader: &jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: customType}}}
+			},
+			expected: customType,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := tc.session(t)
+
+			require.NotPanics(t, func() { session.GetJWTHeader() })
+			assert.Equal(t, tc.expected, session.GetJWTHeader().Get(jwt.JSONWebTokenHeaderType))
+		})
+	}
+}
+
 func TestJWTSessionOmitsEmptyBindingFields(t *testing.T) {
 	bindings := []string{"JWKThumbprint", "ClientCertificateThumbprint", "RequestedJWKThumbprint", "PublicKeyJWK", "KeyBindingGranted"}
 

@@ -64,6 +64,7 @@ type MemoryStore struct {
 	RefreshTokens            map[string]StoreRefreshToken
 	DeviceCodes              map[string]oauth2.Requester
 	UserCodes                map[string]oauth2.Requester
+	InvalidatedDeviceCodes   map[string]bool
 	PKCES                    map[string]oauth2.Requester
 	Users                    map[string]MemoryUserRelation
 	BlacklistedJTIs          map[string]time.Time
@@ -102,6 +103,7 @@ func NewMemoryStore() *MemoryStore {
 		RefreshTokens:            make(map[string]StoreRefreshToken),
 		DeviceCodes:              make(map[string]oauth2.Requester),
 		UserCodes:                make(map[string]oauth2.Requester),
+		InvalidatedDeviceCodes:   make(map[string]bool),
 		PKCES:                    make(map[string]oauth2.Requester),
 		Users:                    make(map[string]MemoryUserRelation),
 		AccessTokenRequestIDs:    make(map[string]string),
@@ -524,6 +526,10 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
+	return s.deactivateRefreshToken(requestID)
+}
+
+func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
 	if signature, exists := s.RefreshTokenRequestIDs[requestID]; exists {
 		rel, ok := s.RefreshTokens[signature]
 		if !ok {
@@ -535,16 +541,31 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	return nil
 }
 
-// RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request. The
-// refresh token signature is unused here because the request ID is enough to locate both; it exists for stores that
-// track individual tokens. A grace period is not implemented by the memory store; implementations that need one should
-// mark the refresh token as expiring after the grace period instead of deactivating it here.
+// RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request, which
+// the request ID locates. It returns oauth2.ErrInactiveToken when the refresh token with the given signature is
+// already inactive, as it is when a concurrent request rotated it first. A grace period is not implemented by the
+// memory store; implementations that need one should mark the refresh token as expiring after the grace period instead
+// of deactivating it here.
 func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, signature string) error {
-	if err := s.RevokeRefreshToken(ctx, requestID); err != nil {
+	if err := s.rotateRefreshToken(requestID, signature); err != nil {
 		return err
 	}
 
 	return s.RevokeAccessToken(ctx, requestID)
+}
+
+func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
+	s.refreshTokenRequestIDsMutex.Lock()
+	defer s.refreshTokenRequestIDsMutex.Unlock()
+
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
+	if rel, exists := s.RefreshTokens[signature]; exists && !rel.active {
+		return oauth2.ErrInactiveToken
+	}
+
+	return s.deactivateRefreshToken(requestID)
 }
 
 func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) error {
@@ -655,10 +676,17 @@ func (s *MemoryStore) GetPARSession(ctx context.Context, requestURI string) (oau
 	return r, nil
 }
 
-// DeletePARSession deletes the context.
+// DeletePARSession deletes the context. It returns oauth2.ErrNotFound if the context does not exist, so a request_uri
+// is only consumed once per RFC 9126 Section 4.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-4
 func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (err error) {
 	s.parSessionsMutex.Lock()
 	defer s.parSessionsMutex.Unlock()
+
+	if _, ok := s.PARSessions[requestURI]; !ok {
+		return oauth2.ErrNotFound
+	}
 
 	delete(s.PARSessions, requestURI)
 
@@ -718,6 +746,10 @@ func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string
 		return nil, oauth2.ErrNotFound
 	}
 
+	if s.InvalidatedDeviceCodes[signature] {
+		return rel, oauth2.ErrInvalidatedDeviceCode
+	}
+
 	return rel, nil
 }
 
@@ -730,6 +762,10 @@ func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signat
 		return nil, oauth2.ErrNotFound
 	}
 
+	if s.InvalidatedDeviceCodes[rel.GetDeviceCodeSignature()] {
+		return rel, oauth2.ErrInvalidatedDeviceCode
+	}
+
 	return rel, nil
 }
 
@@ -737,13 +773,19 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
 
-	rel, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
-	if !ok {
+	if _, ok := s.DeviceCodes[signature]; !ok {
 		return oauth2.ErrNotFound
 	}
 
-	delete(s.DeviceCodes, rel.GetDeviceCodeSignature())
-	delete(s.UserCodes, rel.GetUserCodeSignature())
+	if s.InvalidatedDeviceCodes[signature] {
+		return oauth2.ErrInvalidatedDeviceCode
+	}
+
+	if s.InvalidatedDeviceCodes == nil {
+		s.InvalidatedDeviceCodes = make(map[string]bool)
+	}
+
+	s.InvalidatedDeviceCodes[signature] = true
 
 	return nil
 }

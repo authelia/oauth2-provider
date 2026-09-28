@@ -344,6 +344,72 @@ func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTo
 	return ok && rc.GetDisableRefreshTokenRotation()
 }
 
+// IsRefreshTokenRotationDisabledForRequest determines if the refresh token grant keeps the refresh token presented with
+// the request. Rotation is disabled as IsRefreshTokenRotationDisabled determines, except for a public client whose
+// refresh token is not sender-constrained by an enabled DPoP or mTLS binding: RFC 9700 Section 4.14.2 requires the
+// refresh tokens of public clients to be sender-constrained or rotated so that a replay can be detected.
+//
+// The binding is that of the presented refresh token, not one a token endpoint binding handler records on the session
+// for this request, so an *AccessRequest keeps the result of the first call and returns it on every later call. The
+// refresh token grant makes that call from HandleTokenEndpointRequest, before any binding handler runs.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
+	recorder, ok := request.(refreshTokenRotationRecorder)
+	if ok {
+		if disable, ok = recorder.getRefreshTokenRotationDisabled(); ok {
+			return disable
+		}
+	}
+
+	disable = isRefreshTokenRotationDisabledForRequest(ctx, config, request)
+
+	if recorder != nil {
+		recorder.setRefreshTokenRotationDisabled(disable)
+	}
+
+	return disable
+}
+
+type refreshTokenRotationRecorder interface {
+	getRefreshTokenRotationDisabled() (disable, ok bool)
+	setRefreshTokenRotationDisabled(disable bool)
+}
+
+func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
+	client := request.GetClient()
+
+	if !IsRefreshTokenRotationDisabled(ctx, config, client) {
+		return false
+	}
+
+	if client == nil || !client.IsPublic() {
+		return true
+	}
+
+	return isSenderConstrained(ctx, config, request.GetSession())
+}
+
+func isSenderConstrained(ctx context.Context, config any, session Session) bool {
+	if s, ok := session.(DPoPBoundSession); ok && s.GetDPoPJWKThumbprint() != "" {
+		if c, ok := config.(interface {
+			GetDPoPEnabled(ctx context.Context) bool
+		}); ok && c.GetDPoPEnabled(ctx) {
+			return true
+		}
+	}
+
+	if s, ok := session.(MTLSBoundSession); ok && s.GetClientCertificateSHA256Thumbprint() != "" {
+		if c, ok := config.(interface {
+			GetMTLSEnabled(ctx context.Context) bool
+		}); ok && c.GetMTLSEnabled(ctx) {
+			return true
+		}
+	}
+
+	return false
+}
+
 var (
 	_ Provider = (*Fosite)(nil)
 )

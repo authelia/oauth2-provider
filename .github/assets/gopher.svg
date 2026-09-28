@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="title desc">
+  <title id="title">OAuth 2.0 Gopher</title>
+  <desc id="desc">A Go gopher in front of a shield, holding up a golden token key and presenting an ID token badge.</desc>
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a7bea"/>
+      <stop offset="1" stop-color="#173d8f"/>
+    </linearGradient>
+    <clipPath id="clip"><use href="#shieldPath"/></clipPath>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f26a4b"/>
+      <stop offset="1" stop-color="#c9362a"/>
+    </linearGradient>
+    <path id="ribbonText" d="M92 451Q256 481 420 451"/>
+    <radialGradient id="glow" cx="0.5" cy="0.38" r="0.5">
+      <stop offset="0" stop-color="#8fc0ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8fc0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9be3f2"/>
+      <stop offset="1" stop-color="#5ec4dc"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe07a"/>
+      <stop offset="1" stop-color="#e79a12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- shield -->
+  <path id="shieldPath" d="M256 24C330 58 400 64 456 64V250C456 370 370 440 256 488C142 440 56 370 56 250V64C112 64 182 58 256 24Z" fill="url(#shield)" stroke="#0e2a5c" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M256 24C330 58 400 64 456 64V250C456 370 370 440 256 488C142 440 56 370 56 250V64C112 64 182 58 256 24Z" fill="none" stroke="#9ec5ff" stroke-width="5" stroke-linejoin="round"/>
+  <ellipse cx="256" cy="210" rx="190" ry="170" fill="url(#glow)"/>
+
+
+  <g stroke="#16323a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- ears -->
+    <circle cx="172" cy="140" r="22" fill="url(#fur)"/>
+    <circle cx="340" cy="140" r="22" fill="url(#fur)"/>
+    <circle cx="172" cy="140" r="10" fill="#4aa9c1" stroke="none"/>
+    <circle cx="340" cy="140" r="10" fill="#4aa9c1" stroke="none"/>
+
+    <!-- feet -->
+    <ellipse cx="210" cy="452" rx="32" ry="14" fill="#f6d2a2"/>
+    <ellipse cx="302" cy="452" rx="32" ry="14" fill="#f6d2a2"/>
+
+    <!-- body -->
+    <path d="M256 116C336 116 360 170 362 250L366 380C368 430 320 450 256 450C192 450 144 430 146 380L150 250C152 170 176 116 256 116Z" fill="url(#fur)"/>
+
+    <path d="M206 138C188 146 177 158 171 174" fill="none" stroke="#e6f9fd" stroke-width="8" opacity="0.8"/>
+
+    <!-- eyes -->
+    <circle cx="206" cy="198" r="40" fill="#fff"/>
+    <circle cx="306" cy="198" r="40" fill="#fff"/>
+    <circle cx="220" cy="190" r="15" fill="#16323a" stroke="none"/>
+    <circle cx="320" cy="190" r="15" fill="#16323a" stroke="none"/>
+    <circle cx="225" cy="185" r="5" fill="#fff" stroke="none"/>
+    <circle cx="325" cy="185" r="5" fill="#fff" stroke="none"/>
+
+    <!-- cheeks -->
+    <ellipse cx="178" cy="256" rx="16" ry="9" fill="#ff8fa3" opacity="0.45" stroke="none"/>
+    <ellipse cx="334" cy="256" rx="16" ry="9" fill="#ff8fa3" opacity="0.45" stroke="none"/>
+
+    <!-- snout, teeth, nose -->
+    <path d="M246 266h20v18a4 4 0 0 1-4 4h-12a4 4 0 0 1-4-4Z" fill="#fff"/>
+    <path d="M256 268v18" stroke-width="3"/>
+    <ellipse cx="256" cy="256" rx="36" ry="22" fill="#f6d2a2"/>
+    <ellipse cx="256" cy="244" rx="15" ry="10" fill="#3b2a20"/>
+
+    <!-- lanyard -->
+    <path d="M200 282C214 312 232 330 248 340M312 282C298 312 280 330 264 340" fill="none" stroke="#e8543c" stroke-width="9"/>
+
+    <!-- ID token badge -->
+    <rect x="212" y="334" width="88" height="68" rx="9" fill="#fff"/>
+    <path d="M212 343a9 9 0 0 1 9-9h70a9 9 0 0 1 9 9v9h-88Z" fill="#2f6fdb" stroke="none"/>
+    <rect x="212" y="334" width="88" height="68" rx="9" fill="none"/>
+    <circle cx="238" cy="370" r="8" fill="#9aa9bd" stroke="none"/>
+    <path d="M226 392a12 11 0 0 1 24 0Z" fill="#9aa9bd" stroke="none"/>
+    <path d="M258 368h30M258 379h22M258 390h26" stroke-width="6"/>
+    <path d="M258 368h30" stroke="#fb015b" stroke-width="6"/>
+    <path d="M258 379h22" stroke="#d63aff" stroke-width="6"/>
+    <path d="M258 390h26" stroke="#00b9f1" stroke-width="6"/>
+    <rect x="249" y="329" width="14" height="9" rx="2" fill="#c7d0dc" stroke-width="3"/>
+
+    <!-- left arm holding the badge -->
+    <path d="M166 300C154 334 166 366 200 376" fill="none" stroke="#16323a" stroke-width="32"/>
+    <path d="M166 300C154 334 166 366 200 376" fill="none" stroke="#6fcbe0" stroke-width="22"/>
+    <circle cx="206" cy="376" r="14" fill="#f6d2a2"/>
+
+    <!-- key -->
+    <g transform="rotate(-24 400 200)">
+      <path d="M392 148h16v74h20v12h-20v10h14v12h-14v10h-16Z" fill="url(#gold)"/>
+      <path d="M397 160v96" stroke="#fff6c9" stroke-width="3" opacity="0.8"/>
+      <circle cx="400" cy="120" r="34" fill="url(#gold)"/>
+      <circle cx="400" cy="120" r="21" fill="none" stroke="#b86d00" stroke-width="3" opacity="0.6"/>
+      <circle cx="400" cy="113" r="7" fill="#16323a" stroke="none"/>
+      <path d="M396 116h8l3 16h-14Z" fill="#16323a" stroke="none"/>
+    </g>
+
+    <!-- right arm holding the key -->
+    <path d="M344 296C368 272 384 238 392 212" fill="none" stroke="#16323a" stroke-width="32"/>
+    <path d="M344 296C368 272 384 238 392 212" fill="none" stroke="#6fcbe0" stroke-width="22"/>
+    <circle cx="396" cy="204" r="16" fill="#f6d2a2"/>
+  </g>
+
+  <!-- ribbon -->
+  <g stroke="#6e1a14" stroke-width="5" stroke-linejoin="round">
+    <path d="M100 430L52 438L74 462L56 488L116 478Z" fill="#a82a21"/>
+    <path d="M412 430L460 438L438 462L456 488L396 478Z" fill="#a82a21"/>
+    <path d="M96 424Q256 454 416 424V470Q256 500 96 470Z" fill="url(#ribbon)"/>
+  </g>
+  <path d="M104 432Q256 461 408 432" fill="none" stroke="#ffb199" stroke-width="2" opacity="0.7"/>
+  <text font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="17.5" font-weight="800" letter-spacing="0.6" fill="#fff" text-anchor="middle">
+    <textPath href="#ribbonText" startOffset="50%">OAuth 2.0 · OpenID Connect 1.0</textPath>
+  </text>
+
+  <!-- sparkles -->
+  <g fill="#fff3b0">
+    <path d="M462 92l5 14 14 5-14 5-5 14-5-14-14-5 14-5Z"/>
+    <path d="M330 60l3 9 9 3-9 3-3 9-3-9-9-3 9-3Z"/>
+    <path d="M96 150l4 11 11 4-11 4-4 11-4-11-11-4 11-4Z" fill="#cfe3ff"/>
+    <path d="M118 330l3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" fill="#cfe3ff"/>
+  </g>
+</svg>

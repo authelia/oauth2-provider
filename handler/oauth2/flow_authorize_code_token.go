@@ -66,6 +66,10 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 				WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'.")
 		}
 
+		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !isIntactToken(verr) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
+		}
+
 		return revokeCodeGrant(ctx, c.TokenRevocationStorage, authorizeRequest.GetID())
 	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugf("The authorization code session for the given authorization code was not found."))
@@ -225,6 +229,10 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		}
 	}
 
+	var replayed bool
+
+	parent := ctx
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -233,11 +241,15 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
+			} else if replayed {
+				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
 			}
 		}
 	}()
 
 	if err = c.CoreStorage.InvalidateAuthorizeCodeSession(ctx, signature); errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+		replayed = true
+
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The authorization code has already been exchanged.").WithWrap(err))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

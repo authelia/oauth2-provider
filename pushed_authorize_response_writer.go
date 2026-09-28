@@ -37,6 +37,11 @@ func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, request Authori
 		}
 	}
 
+	// RFC 9126 Section 2.2: a successful response carries the 'request_uri' the stored request is referenced by.
+	if response.GetRequestURI() == "" {
+		return nil, errorsx.WithStack(ErrServerError.WithDebug(DebugPARRequestURIMissing))
+	}
+
 	return response, nil
 }
 

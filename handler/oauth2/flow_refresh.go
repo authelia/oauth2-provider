@@ -62,6 +62,16 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
+		if orequest == nil {
+			return errorsx.WithStack(oauth2.ErrServerError.
+				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+				WithDebug("GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'."))
+		}
+
+		if verr := c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); !isIntactToken(verr) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
+		}
+
 		if e := c.handleRefreshTokenReuse(ctx, signature, orequest); e != nil {
 			return errorsx.WithStack(e)
 		}
@@ -163,12 +173,15 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision)))
 
-	// An unrotated refresh token keeps the expiry it was issued with.
+	// Decided here, before the token endpoint binding handlers can bind the restored session, so the decision reflects
+	// the presented refresh token. An unrotated refresh token keeps the expiry it was issued with.
+	rotate := !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request)
+
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 && !oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, client) {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+	if rtLifespan > -1 && rotate {
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision)))
 	}
 
 	return nil
@@ -189,7 +202,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if oauth2.IsRefreshTokenRotationDisabled(ctx, c.Config, request.GetClient()) {
+	if oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request) {
 		return c.populateTokenEndpointResponseWithoutRotation(ctx, request, response, accessToken, accessSignature)
 	}
 
@@ -199,12 +212,26 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
+	var replayed error
+
+	parent := ctx
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+
+		// RFC 9700 Section 4.14.2: a refresh token that another request already rotated is a replay, so the grant is
+		// revoked once this request's transaction has been rolled back.
+		if replayed != nil && !errors.Is(err, oauth2.ErrServerError) {
+			if e := c.handleRefreshTokenReuse(parent, signature, request); e != nil {
+				err = errorsx.WithStack(e)
+			} else {
+				err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(replayed).WithDebugError(replayed))
+			}
+		}
 	}()
 
 	srequester, srtrequester := request.Sanitize(nil), request.Sanitize(nil)
@@ -215,7 +242,11 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
 		var orequest oauth2.Requester
 
-		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
+		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) {
+			replayed = err
+
+			return err
+		} else if err != nil {
 			return err
 		}
 
@@ -223,7 +254,11 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		srtrequester.SetSession(request.GetSession().Clone())
 	}
 
-	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); err != nil {
+	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); errors.Is(err, oauth2.ErrInactiveToken) {
+		replayed = err
+
+		return err
+	} else if err != nil {
 		return err
 	}
 
@@ -251,13 +286,29 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder, accessToken, accessSignature string) (err error) {
+	var revoked error
+
 	if ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	defer func() {
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+
+		if revoked != nil && !errors.Is(err, oauth2.ErrServerError) {
+			err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The refresh token has been revoked.").WithWrap(revoked).WithDebugError(revoked))
+		}
 	}()
+
+	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
+
+	if _, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) || errors.Is(err, oauth2.ErrNotFound) {
+		revoked = err
+
+		return err
+	} else if err != nil {
+		return err
+	}
 
 	if err = c.TokenRevocationStorage.RevokeAccessToken(ctx, request.GetID()); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err

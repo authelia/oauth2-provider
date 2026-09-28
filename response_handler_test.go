@@ -148,6 +148,37 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQueryResponseParameter(t *testi
 	}
 }
 
+func TestDefaultResponseModeHandlerJWTErrorWithoutSession(t *testing.T) {
+	config := &Config{JWTSecuredAuthorizeResponseModeIssuer: "https://jarm.example.com"}
+	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	handler := &DefaultResponseModeHandler{Config: config}
+
+	redirectURI, err := url.Parse("https://client.example.com/callback")
+	require.NoError(t, err)
+
+	request := NewAuthorizeRequest()
+	request.RedirectURI = redirectURI
+	request.ResponseMode = ResponseModeJWT
+	request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+	request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client", RedirectURIs: []string{redirectURI.String()}}, AuthorizationSignedResponseAlg: "RS256"}
+	request.Session = nil
+
+	rw := httptest.NewRecorder()
+
+	handler.WriteAuthorizeError(context.Background(), rw, request, ErrInvalidScope)
+
+	require.Equal(t, http.StatusSeeOther, rw.Code)
+
+	location, err := url.Parse(rw.Header().Get(consts.HeaderLocation))
+	require.NoError(t, err)
+
+	claims := testDecodeJWTPayload(t, location.Query().Get(consts.FormParameterResponse))
+
+	assert.Equal(t, ErrInvalidScope.ErrorField, claims[consts.FormParameterError])
+	assert.Equal(t, "https://jarm.example.com", claims[jwt.ClaimIssuer])
+}
+
 func testNewJARMResponseModeHandler() *DefaultResponseModeHandler {
 	config := &Config{IDTokenIssuer: "https://auth.example.com"}
 	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}

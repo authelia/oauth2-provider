@@ -75,7 +75,7 @@ func TestTokenExchangeKeepsSubjectAndActorClaimsApart(t *testing.T) {
 
 			validator := &ActorTokenValidationHandler{}
 
-			require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(validator.HandleTokenEndpointRequest(t.Context(), request)), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The subject token does not authorize delegation: no 'may_act' claim is present. The OAuth 2.0 client supplied an 'actor_token' but the subject token does not contain a 'may_act' claim authorizing the actor to act on behalf of the subject. Either set the 'may_act' claim on the subject token, or configure the client to use an out-of-band authorization policy by implementing the ActorTokenPolicyClient interface.")
+			require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(validator.HandleTokenEndpointRequest(t.Context(), request)), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The subject token does not authorize delegation: no 'may_act' claim is present. The OAuth 2.0 client supplied an 'actor_token' but the subject token does not contain a 'may_act' claim authorizing the actor to act on behalf of the subject. Either set the 'may_act' claim on the subject token, or configure the client to use an out-of-band authorization policy by implementing the ActorTokenPolicyClient interface.")
 		})
 	}
 }

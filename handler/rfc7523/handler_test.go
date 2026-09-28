@@ -30,6 +30,11 @@ import (
 )
 
 func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
+	const (
+		testClientID   = "my-client"
+		testWiderScope = "wider_scope"
+	)
+
 	testCases := []struct {
 		name     string
 		setup    func(f *jwtBearerFixture)
@@ -468,6 +473,37 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.requester.RequestedScope = []string{"valid_scope"}
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
+				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
+			},
+		},
+		{
+			name: "ShouldRejectAScopeTheAuthenticatedClientIsNotRegisteredFor",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				f.requester.Client = &oauth2.DefaultClient{ID: testClientID, GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Scopes: []string{"valid_scope"}}
+				pubKey := f.createJWK(f.privateKey.Public(), keyID)
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.requester.RequestedScope = []string{"valid_scope", testWiderScope}
+				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", testWiderScope}, nil)
+				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+			},
+			err:      oauth2.ErrInvalidScope,
+			expected: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'wider_scope'.",
+		},
+		{
+			name: "ShouldAcceptAScopeTheAuthenticatedClientIsRegisteredFor",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				f.requester.Client = &oauth2.DefaultClient{ID: testClientID, GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Scopes: []string{"valid_scope"}}
+				pubKey := f.createJWK(f.privateKey.Public(), keyID)
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.requester.RequestedScope = []string{"valid_scope"}
+				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", testWiderScope}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},

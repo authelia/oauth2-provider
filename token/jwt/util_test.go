@@ -7,6 +7,8 @@ package jwt
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/sha512"
 	"errors"
 	"fmt"
 	"testing"
@@ -381,6 +383,40 @@ func TestNewClientSecretJWK(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "is not configured with a client secret")
 	})
+}
+
+func TestNewClientSecretJWKKnownAnswers(t *testing.T) {
+	secret := []byte("super-secret-value-of-some-length-long-enough-for-hs512-mac-keys")
+
+	sum256, sum384, sum512 := sha256.Sum256(secret), sha512.Sum384(secret), sha512.Sum512(secret)
+
+	// OpenID Connect Core 1.0 Section 10.2: SHA-256 for keys of 256 or fewer bits, SHA-384 for 257-384 bits and SHA-512
+	// for 385-512 bits, truncated to the left-most bits the algorithm requires.
+	testCases := []struct {
+		name     string
+		alg      string
+		enc      string
+		expected []byte
+	}{
+		{"ShouldDeriveA128KW", string(jose.A128KW), "", sum256[:16]},
+		{"ShouldDeriveA192KW", string(jose.A192KW), "", sum256[:24]},
+		{"ShouldDeriveA256KW", string(jose.A256KW), "", sum256[:32]},
+		{"ShouldDeriveDirectA128CBCHS256", string(jose.DIRECT), string(jose.A128CBC_HS256), sum256[:32]},
+		{"ShouldDeriveDirectA192CBCHS384", string(jose.DIRECT), string(jose.A192CBC_HS384), sum384[:48]},
+		{"ShouldDeriveDirectA256CBCHS512", string(jose.DIRECT), string(jose.A256CBC_HS512), sum512[:64]},
+		{"ShouldDeriveDirectA128GCM", string(jose.DIRECT), string(jose.A128GCM), sum256[:16]},
+		{"ShouldDeriveDirectA192GCM", string(jose.DIRECT), string(jose.A192GCM), sum256[:24]},
+		{"ShouldDeriveDirectA256GCM", string(jose.DIRECT), string(jose.A256GCM), sum256[:32]},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := NewClientSecretJWK(t.Context(), secret, "kid", tc.alg, tc.enc, JSONWebTokenUseEncryption)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, key.Key)
+		})
+	}
 }
 
 func TestGetJWTSignature(t *testing.T) {

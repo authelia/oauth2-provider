@@ -137,6 +137,17 @@ func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
 	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "live", Method: "POST", URL: "https://as.example.com/token"})
 }
 
+func TestMemoryStoreRotateRefreshTokenReportsAnInactiveToken(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := &oauth2.Request{ID: "rotated-request", Client: &oauth2.DefaultClient{ID: "client"}, Session: &oauth2.DefaultSession{}}
+
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "", request))
+	require.NoError(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"))
+
+	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"), oauth2.ErrInactiveToken)
+}
+
 func TestMemoryStore_RotateRefreshToken(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
@@ -304,4 +315,58 @@ func TestMemoryStore_CreateDeviceCodeSessionRejectsDuplicateUserCode(t *testing.
 
 	_, err = store.GetDeviceCodeSession(t.Context(), "second", &oauth2.DefaultSession{})
 	require.ErrorIs(t, err, oauth2.ErrNotFound)
+}
+
+func TestMemoryStore_InvalidateDeviceCodeSessionKeepsTheRequester(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := oauth2.NewDeviceAuthorizeRequest()
+	request.SetID("request")
+	request.SetSession(&oauth2.DefaultSession{})
+	request.SetDeviceCodeSignature("device")
+	request.SetUserCodeSignature("user")
+
+	require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "device", request))
+	require.NoError(t, store.InvalidateDeviceCodeSession(t.Context(), "device"))
+
+	found, err := store.GetDeviceCodeSession(t.Context(), "device", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrInvalidatedDeviceCode)
+	require.NotNil(t, found)
+	assert.Equal(t, "request", found.GetID())
+
+	found, err = store.GetDeviceCodeSessionByUserCode(t.Context(), "user", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrInvalidatedDeviceCode)
+	require.NotNil(t, found)
+	assert.Equal(t, "request", found.GetID())
+
+	require.ErrorIs(t, store.InvalidateDeviceCodeSession(t.Context(), "device"), oauth2.ErrInvalidatedDeviceCode)
+	require.ErrorIs(t, store.CreateDeviceCodeSession(t.Context(), "other", request), oauth2.ErrDuplicateUserCode)
+}
+
+func TestMemoryStore_DeletePARSessionConsumesOnce(t *testing.T) {
+	testCases := []struct {
+		name  string
+		store oauth2.PARStorage
+	}{
+		{"ShouldConsumeOnceMemoryStore", NewMemoryStore()},
+		{"ShouldConsumeOnceHydratingMemoryStore", NewHydratingMemoryStore()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := oauth2.NewAuthorizeRequest()
+			request.SetSession(&oauth2.DefaultSession{})
+
+			require.NoError(t, tc.store.CreatePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc", request))
+
+			for range 2 {
+				found, err := tc.store.GetPARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc")
+				require.NoError(t, err)
+				require.NotNil(t, found)
+			}
+
+			require.NoError(t, tc.store.DeletePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc"))
+			require.ErrorIs(t, tc.store.DeletePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc"), oauth2.ErrNotFound)
+		})
+	}
 }

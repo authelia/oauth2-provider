@@ -5,6 +5,7 @@
 package openid
 
 import (
+	"net/url"
 	"testing"
 	"time"
 
@@ -168,6 +169,61 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
 				require.NotEmpty(t, idTokenExp)
 				internal.RequireEqualTime(t, time.Now().Add(*internal.TestLifespans.RefreshTokenGrantIDTokenLifespan).UTC(), *idTokenExp, time.Minute)
+			},
+		},
+		{
+			name: "ShouldPassIgnoringTheTokenRequestNonce",
+			areq: &oauth2.AccessRequest{
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
+				Request: oauth2.Request{
+					Form:         url.Values{consts.FormParameterNonce: {"attacker-chosen-nonce"}},
+					GrantedScope: []string{consts.ScopeOpenID},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
+					},
+					Session: &DefaultSession{
+						Subject: "foo",
+						Claims: &jwt.IDTokenClaims{
+							Subject: "foo",
+						},
+					},
+				},
+			},
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				idToken, _ := aresp.GetExtra(consts.AccessResponseIDToken).(string)
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
+					return key.PublicKey, nil
+				})
+				require.NoError(t, err)
+				assert.NotContains(t, decodedIdToken.Claims.ToMapClaims(), consts.ClaimNonce)
+			},
+		},
+		{
+			// OpenID Connect Core 1.0 Section 12.2.
+			name: "ShouldPassOmittingTheOriginalNonce",
+			areq: &oauth2.AccessRequest{
+				GrantTypes: []string{consts.GrantTypeRefreshToken},
+				Request: oauth2.Request{
+					GrantedScope: []string{consts.ScopeOpenID},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: []string{consts.GrantTypeRefreshToken},
+					},
+					Session: &DefaultSession{
+						Subject: "foo",
+						Claims: &jwt.IDTokenClaims{
+							Subject: "foo",
+							Nonce:   "original-authentication-nonce",
+						},
+					},
+				},
+			},
+			check: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				idToken, _ := aresp.GetExtra(consts.AccessResponseIDToken).(string)
+				decodedIdToken, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
+					return key.PublicKey, nil
+				})
+				require.NoError(t, err)
+				assert.NotContains(t, decodedIdToken.Claims.ToMapClaims(), consts.ClaimNonce)
 			},
 		},
 		{

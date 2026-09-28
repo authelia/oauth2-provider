@@ -90,6 +90,8 @@ type Config struct {
 	// DisableRefreshTokenRotation keeps the presented refresh token during the refresh token grant rather than issuing
 	// a new one. The refresh token keeps the expiry it was issued with, and access tokens previously issued for the
 	// grant are revoked. FAPI 2.0 Security Profile Section 5.3.2.1 permits rotation only in extraordinary circumstances.
+	// It does not apply to a public client whose refresh token is not sender-constrained by an enabled DPoP or mTLS
+	// binding, as RFC 9700 Section 4.14.2 requires such a refresh token to be rotated.
 	DisableRefreshTokenRotation bool
 
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive
@@ -160,6 +162,10 @@ type Config struct {
 
 	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants
 	RFC8628TokenPollingInterval time.Duration
+
+	// PublicClientIdentityChecker is a function that returns true if the authorization request assures the identity of
+	// a public client, which is required to process a 'prompt' of 'none' for a public client.
+	PublicClientIdentityChecker func(context.Context, AuthorizeRequester) bool
 
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
@@ -238,7 +244,8 @@ type Config struct {
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
 	JWTScopeClaimKey jwt.JWTScopeFieldEnum
 
-	// JWTSecuredAuthorizeResponseModeIssuer sets the default issuer for the JWT Secured Authorization Response Mode.
+	// JWTSecuredAuthorizeResponseModeIssuer sets the issuer for the JWT Secured Authorization Response Mode. Defaults to
+	// IDTokenIssuer. JARM Section 2.1 requires every response, including an error response, to carry the issuer.
 	JWTSecuredAuthorizeResponseModeIssuer string
 
 	// JWTSecuredAuthorizeResponseModeLifespan sets the default lifetime for the tokens issued in the
@@ -328,6 +335,12 @@ type Config struct {
 	// RequireRedirectURIPushedAuthorizationRequests requires the 'redirect_uri' parameter in Pushed Authorization
 	// Requests. This is required by FAPI 2.0 Security Profile Section 5.3.2.2.
 	RequireRedirectURIPushedAuthorizationRequests bool
+
+	// DisablePushedAuthorizationRequestClientRefetch disables fetching the current client registration when a Pushed
+	// Authorization Request 'request_uri' is redeemed at the 'authorize' endpoint, so the client stored with the
+	// pushed request is used as is. RFC 9126 Section 7.4 recommends the pushed request is checked against the current
+	// client policy.
+	DisablePushedAuthorizationRequestClientRefetch bool
 
 	// RequireSignedRequestObject requires all authorization requests be protected as a signed Request Object provided
 	// by either the 'request' or 'request_uri' parameter. This is equivalent to the 'require_signed_request_object'
@@ -720,7 +733,13 @@ func (c *Config) GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum {
 	return c.JWTScopeClaimKey
 }
 
+// GetJWTSecuredAuthorizeResponseModeIssuer returns JWTSecuredAuthorizeResponseModeIssuer if set. Defaults to
+// IDTokenIssuer.
 func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string {
+	if c.JWTSecuredAuthorizeResponseModeIssuer != "" {
+		return c.JWTSecuredAuthorizeResponseModeIssuer
+	}
+
 	return c.IDTokenIssuer
 }
 
@@ -772,7 +791,7 @@ func (c *Config) GetAudienceStrategy(_ context.Context) AudienceStrategy {
 }
 
 // GetResourceStrategy returns the RFC 8707 resource indicator matching strategy. Defaults to
-// DefaultAudienceStrategy (URL-based matching against the client's allowed audience list).
+// DefaultAudienceStrategy, which requires an exact match against the client's allowed audience list.
 func (c *Config) GetResourceStrategy(_ context.Context) ResourceStrategy {
 	c.resourceStrategyOnce.Do(func() {
 		if c.ResourceStrategy == nil {
@@ -898,6 +917,16 @@ func (c *Config) GetTokenEntropy(_ context.Context) int {
 	return c.TokenEntropy
 }
 
+// GetPublicClientIdentityChecker returns the checker to check if an authorization request assures the identity of a
+// public client. Defaults to oauth2.IsPublicClientIdentityAssured.
+func (c *Config) GetPublicClientIdentityChecker(_ context.Context) func(context.Context, AuthorizeRequester) bool {
+	if c.PublicClientIdentityChecker == nil {
+		return IsPublicClientIdentityAssured
+	}
+
+	return c.PublicClientIdentityChecker
+}
+
 // GetRedirectSecureChecker returns the checker to check if redirect URI is secure. Defaults to oauth2.IsRedirectURISecure.
 func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Context, *url.URL) bool {
 	if c.RedirectSecureChecker == nil {
@@ -1005,6 +1034,14 @@ func (c *Config) GetRequirePushedAuthorizationRequests(ctx context.Context) bool
 // Authorization Requests.
 func (c *Config) GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) bool {
 	return c.RequireRedirectURIPushedAuthorizationRequests
+}
+
+// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization Request
+// is used as is when its 'request_uri' is redeemed, instead of the current client registration.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+func (c *Config) GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) bool {
+	return c.DisablePushedAuthorizationRequestClientRefetch
 }
 
 // GetRequireSignedRequestObject indicates if JWT-Secured Authorization Requests are enforced. In this mode, a client
@@ -1242,6 +1279,7 @@ var (
 	_ ScopeStrategyProvider                                 = (*Config)(nil)
 	_ AudienceStrategyProvider                              = (*Config)(nil)
 	_ RedirectSecureCheckerProvider                         = (*Config)(nil)
+	_ PublicClientIdentityCheckerProvider                   = (*Config)(nil)
 	_ RefreshTokenScopesProvider                            = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
 	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)

@@ -279,3 +279,35 @@ func TestDefaultSessionClone(t *testing.T) {
 		t.Run(tc.name, tc.check)
 	}
 }
+
+func TestCapToExpiryDeadline(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+
+	testCases := []struct {
+		name     string
+		session  Session
+		expected time.Time
+	}{
+		{"ShouldKeepTheExpiryWithoutADeadlineSession", &DefaultSession{}, now.Add(time.Hour)},
+		{"ShouldKeepTheExpiryWithoutASession", nil, now.Add(time.Hour)},
+		{"ShouldKeepTheExpiryWithAZeroDeadline", &testDeadlineSession{DefaultSession: &DefaultSession{}}, now.Add(time.Hour)},
+		{"ShouldKeepAnEarlierExpiry", &testDeadlineSession{DefaultSession: &DefaultSession{}, deadline: now.Add(2 * time.Hour)}, now.Add(time.Hour)},
+		{"ShouldCapALaterExpiry", &testDeadlineSession{DefaultSession: &DefaultSession{}, deadline: now.Add(time.Minute)}, now.Add(time.Minute)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, CapToExpiryDeadline(tc.session, now.Add(time.Hour)))
+		})
+	}
+}
+
+type testDeadlineSession struct {
+	*DefaultSession
+
+	deadline time.Time
+}
+
+func (s *testDeadlineSession) GetExpiryDeadline() time.Time {
+	return s.deadline
+}

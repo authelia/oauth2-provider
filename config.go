@@ -739,6 +739,18 @@ type DPoPConfigProvider interface {
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
 }
 
+// MTLSStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 8705 refresh token binding of
+// confidential clients.
+type MTLSStrictRefreshTokenBindingProvider interface {
+	// GetMTLSStrictRefreshTokenBinding returns true if a confidential client's certificate-bound refresh token may only
+	// be redeemed with the certificate it is bound to. When false the grant is re-bound to the presented certificate,
+	// as RFC 8705 Section 4 binds the refresh tokens of public clients only and Section 7.1 has those of confidential
+	// clients sender-constrained by client authentication instead.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
+}
+
 // MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.
 type MTLSConfigProvider interface {
 	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.

@@ -292,6 +292,7 @@ type Configurator interface {
 	DPoPConfigProvider
 	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider
+	MTLSStrictRefreshTokenBindingProvider
 	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider
 	RFC7591ClientRegistrationEndpointHandlersProvider

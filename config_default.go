@@ -441,6 +441,13 @@ type Config struct {
 	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
 	MTLSClientCertificateHeader string
 
+	// MTLSStrictRefreshTokenBinding keeps a confidential client's certificate-bound refresh token bound to the
+	// certificate it was issued for, so a refresh with another certificate is rejected. Defaults to false, which
+	// re-binds the grant to the presented certificate, as RFC 8705 Section 4 binds the refresh tokens of public
+	// clients only and Section 7.1 has those of confidential clients sender-constrained by client authentication.
+	// Public clients are always strictly bound.
+	MTLSStrictRefreshTokenBinding bool
+
 	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is
 	// deliberately separate from GlobalSecret: a client management token never expires and RFC 7592 provides no way
 	// to re-issue one, so signing it with the global secret would mean routine rotation of that secret permanently
@@ -1223,6 +1230,12 @@ func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header str
 	return c.MTLSClientCertificateHeader
 }
 
+// GetMTLSStrictRefreshTokenBinding returns whether a confidential client's certificate-bound refresh token stays
+// bound to the certificate it was issued for.
+func (c *Config) GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool) {
+	return c.MTLSStrictRefreshTokenBinding
+}
+
 func (c *Config) GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error) {
 	return c.RFC7591ClientRegistrationGlobalSecret, nil
 }
@@ -1356,6 +1369,7 @@ var (
 	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
+	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
 	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)

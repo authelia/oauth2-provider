@@ -114,6 +114,13 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, err
 	}
 
+	// RFC 7662 Section 2.1 makes 'token' REQUIRED, and RFC 6749 Section 3.1 treats an empty value as omitted. A request
+	// without it is not "a properly formed and authorized query" (RFC 7662 Section 2.3), so it is answered with the
+	// RFC 6749 Section 5.2 'invalid_request' error rather than an inactive introspection response.
+	if token == "" {
+		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'token' parameter is required."))
+	}
+
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err))

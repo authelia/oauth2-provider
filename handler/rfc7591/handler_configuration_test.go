@@ -507,6 +507,29 @@ func TestClientConfigurationHandlerRejectsUnknownClient(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, oauth2.ErrorToRFC6749Error(err).CodeField)
 }
 
+func TestClientConfigurationHandlerReportsClientLookupFailureAsServerError(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, _, store := newConfigurationHandler(t)
+
+	created := registerClient(t, ctx, registrar)
+
+	handler.Store = &failingGetClientStore{Storage: store}
+
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			requester := oauth2.NewClientConfigurationRequest()
+			requester.Method = method
+			requester.ClientID = created["client_id"].(string)
+
+			err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrServerError)
+			assert.NotErrorIs(t, err, oauth2.ErrNotFound)
+			assert.ErrorIs(t, err, errTestGetClientFailed)
+		})
+	}
+}
+
 func TestClientConfigurationHandlerWithholdsDisabledFeatureMetadataOnRead(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, config, _ := newConfigurationHandler(t)
@@ -679,6 +702,14 @@ type failingUpdateClientStore struct {
 
 func (f *failingUpdateClientStore) UpdateClient(ctx context.Context, id string, client oauth2.Client) (err error) {
 	return errTestUpdateClientFailed
+}
+
+type failingGetClientStore struct {
+	Storage
+}
+
+func (f *failingGetClientStore) GetClient(ctx context.Context, id string) (client oauth2.Client, err error) {
+	return nil, errTestGetClientFailed
 }
 
 type scopeStrategyClient struct {

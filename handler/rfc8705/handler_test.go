@@ -247,7 +247,7 @@ func TestHandlerRefreshBinding(t *testing.T) {
 		{name: "ShouldRejectConfidentialClientTokenExchangeWithAnotherCertificate", grantType: consts.GrantTypeOAuthTokenExchange, certificate: true, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectConfidentialClientRefreshWithAnotherCertificateWhenStrict", strict: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectConfidentialClientRefreshWithAnotherCertificateWhenTheClientIsStrict", clientStrict: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
-		{name: "ShouldRejectConfidentialClientRefreshWithAnotherCertificateWithoutRotation", noRotation: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRebindConfidentialClientRefreshToThePresentedCertificateWithoutRotation", noRotation: true, grantType: consts.GrantTypeRefreshToken, certificate: true},
 	}
 
 	for _, tc := range testCases {

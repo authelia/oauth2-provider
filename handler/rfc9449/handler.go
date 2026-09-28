@@ -35,7 +35,8 @@ type Handler struct {
 // grant is bound to, because RFC 9449 Section 5 does not bind the refresh tokens of confidential clients to the proof
 // key. A proof is still required. A grant whose ID Tokens are key bound keeps its key, as OpenID Connect Key Binding
 // 1.0 Section 5 requires, and so does the grant of a client for which oauth2.DPoPStrictRefreshTokenBindingProvider or
-// oauth2.DPoPStrictRefreshTokenBindingClient requires strict binding.
+// oauth2.DPoPStrictRefreshTokenBindingClient requires strict binding. When refresh token rotation is disabled the grant
+// is still re-bound, but the stored refresh token keeps the binding it was issued with.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetDPoPEnabled(ctx) {
 		return nil

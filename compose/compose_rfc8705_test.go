@@ -145,6 +145,87 @@ func TestMTLSRefreshRebindsAConfidentialClientToThePresentedCertificate(t *testi
 	}
 }
 
+func TestMTLSRefreshRebindsAConfidentialClientWithoutRotation(t *testing.T) {
+	stores := []func() (store any, clients map[string]oauth2.Client){
+		func() (any, map[string]oauth2.Client) {
+			store := storage.NewMemoryStore()
+
+			return store, store.Clients
+		},
+		func() (any, map[string]oauth2.Client) {
+			store := storage.NewHydratingMemoryStore()
+
+			return store, store.Clients
+		},
+	}
+
+	for _, newStore := range stores {
+		store, clients := newStore()
+
+		t.Run(fmt.Sprintf("%T", store), func(t *testing.T) {
+			provider := ComposeAllEnabled(&oauth2.Config{MTLSEnabled: true, DisableRefreshTokenRotation: true, GlobalSecret: []byte("some-cool-secret-that-is-32bytes"), RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}, store, gen.MustRSAKey())
+
+			clients[mtClientID] = &oauth2.DefaultClient{
+				ID:                                    mtClientID,
+				ClientSecret:                          oauth2.NewPlainTextClientSecret(mtSecret),
+				RedirectURIs:                          []string{mtRedirectURI},
+				ResponseTypes:                         []string{consts.ResponseTypeAuthorizationCodeFlow},
+				GrantTypes:                            []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+				Scopes:                                []string{consts.ScopeOffline},
+				TLSClientCertificateBoundAccessTokens: true,
+			}
+
+			original := gen.MustCertificate(gen.CertificateOptions{})
+
+			response, err := mtlsTokenRequest(t, provider, url.Values{
+				consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+				consts.FormParameterAuthorizationCode: []string{mtlsAuthorizeForCode(t, provider)},
+				consts.FormParameterRedirectURI:       []string{mtRedirectURI},
+			}, original)
+			require.NoError(t, err)
+
+			refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+			require.NotEmpty(t, refreshToken)
+
+			renewed := gen.MustCertificate(gen.CertificateOptions{SerialNumber: 2})
+
+			for i := 0; i < 2; i++ {
+				response, err = mtlsTokenRequest(t, provider, url.Values{
+					consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+					consts.FormParameterRefreshToken: []string{refreshToken},
+				}, renewed)
+				require.NoError(t, err)
+
+				assert.NotContains(t, response.ToMap(), consts.AccessResponseRefreshToken)
+
+				_, requester, err := provider.IntrospectToken(context.Background(), response.GetAccessToken(), oauth2.AccessToken, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				session, ok := requester.GetSession().(oauth2.MTLSBoundSession)
+				require.True(t, ok)
+
+				assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(renewed), session.GetClientCertificateSHA256Thumbprint())
+
+				_, requester, err = provider.IntrospectToken(context.Background(), refreshToken, oauth2.RefreshToken, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				session, ok = requester.GetSession().(oauth2.MTLSBoundSession)
+				require.True(t, ok)
+
+				assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(original), session.GetClientCertificateSHA256Thumbprint())
+			}
+
+			_, err = mtlsTokenRequest(t, provider, url.Values{
+				consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+				consts.FormParameterRefreshToken: []string{refreshToken},
+			}, nil)
+
+			require.Error(t, err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request requires a mutual-TLS client certificate but none was presented.")
+		})
+	}
+}
+
 func TestMTLSStrictRefreshTokenBindingRejectsAConfidentialClientWithAnotherCertificate(t *testing.T) {
 	stores := []func() (store any, clients map[string]oauth2.Client){
 		func() (any, map[string]oauth2.Client) {

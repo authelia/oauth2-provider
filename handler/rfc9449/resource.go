@@ -20,8 +20,14 @@ import (
 // AccessTokenFromRequest extracts the access token from an HTTP request and reports whether it was presented under the
 // RFC 9449 DPoP authentication scheme (Authorization: DPoP <token>). When the DPoP scheme is not used it falls back to
 // oauth2.AccessTokenFromRequest (RFC 6750 Bearer header, access_token form/query parameter), returning dpop=false.
+// One or more spaces may separate the scheme from the token (RFC 9110 Section 11.4); a DPoP scheme without a token
+// returns an empty token and dpop=false.
 func AccessTokenFromRequest(r *http.Request) (token string, dpop bool) {
 	if scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); found && strings.EqualFold(scheme, oauth2.DPoPAccessToken) {
+		if value = strings.TrimLeft(value, " "); value == "" {
+			return "", false
+		}
+
 		return value, true
 	}
 

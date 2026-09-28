@@ -183,16 +183,6 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	header = session.GetJWTHeader()
 
-	if client != nil {
-		if kid := client.GetAccessTokenSignedResponseKeyID(); len(kid) != 0 {
-			header.SetDefaultString(consts.JSONWebTokenHeaderKeyIdentifier, kid)
-		}
-
-		if alg := client.GetAccessTokenSignedResponseAlg(); len(alg) != 0 {
-			header.SetDefaultString(consts.JSONWebTokenHeaderAlgorithm, alg)
-		}
-	}
-
 	claims = claims.
 		Sanitize().
 		With(

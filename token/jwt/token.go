@@ -193,9 +193,12 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 	return header
 }
 
-// SetJWS sets the JWS output values.
+// SetJWS sets the JWS output values. A 'kid' in the header is ignored, as the 'kid' header parameter identifies the
+// key that secures the JWS and is taken from that key. See RFC 7515 section 4.1.4.
 func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.SignatureAlgorithm) {
 	assign(t.Header, header.ToMap())
+
+	delete(t.Header, JSONWebTokenHeaderKeyIdentifier)
 
 	t.KeyID = kid
 	t.SignatureAlgorithm = alg
@@ -203,9 +206,12 @@ func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.Signat
 	t.Claims = claims
 }
 
-// SetJWE sets the JWE output values.
+// SetJWE sets the JWE output values. A 'kid' in the header is ignored, as the 'kid' header parameter identifies the
+// key the CEK is encrypted to and is taken from that key. See RFC 7516 section 4.1.6.
 func (t *Token) SetJWE(header Mapper, kid string, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
 	assign(t.HeaderJWE, header.ToMap())
+
+	delete(t.HeaderJWE, JSONWebTokenHeaderKeyIdentifier)
 
 	t.EncryptionKeyID = kid
 	t.KeyAlgorithm = alg

@@ -191,7 +191,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
 
-		if c.SetTokenExchangeCustomJWT(ctx, jti, time.Unix(expiry, 0)) != nil {
+		if c.SetTokenExchangeCustomJWT(ctx, iss, jti, time.Unix(expiry, 0)) != nil {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
 		}
 	}

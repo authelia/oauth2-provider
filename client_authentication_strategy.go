@@ -333,11 +333,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 			return "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The client assertion was not able to be parsed."))
 		}
 
-		if err = s.Store.ClientAssertionJWTValid(ctx, claims.JTI); err != nil {
+		if err = s.Store.ClientAssertionJWTValid(ctx, client.GetID(), claims.JTI); err != nil {
 			return "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("Claim 'jti' from 'client_assertion' MUST only be used once.").WithWrap(err))
 		}
 
-		if err = s.Store.SetClientAssertionJWT(ctx, claims.JTI, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
+		if err = s.Store.SetClientAssertionJWT(ctx, client.GetID(), claims.JTI, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
 			return "", err
 		}
 

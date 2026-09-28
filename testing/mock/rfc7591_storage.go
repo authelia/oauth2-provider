@@ -43,17 +43,17 @@ func (m *MockRFC7591Storage) EXPECT() *MockRFC7591StorageMockRecorder {
 }
 
 // ClientAssertionJWTValid mocks base method.
-func (m *MockRFC7591Storage) ClientAssertionJWTValid(ctx context.Context, jti string) error {
+func (m *MockRFC7591Storage) ClientAssertionJWTValid(ctx context.Context, clientID, jti string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClientAssertionJWTValid", ctx, jti)
+	ret := m.ctrl.Call(m, "ClientAssertionJWTValid", ctx, clientID, jti)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ClientAssertionJWTValid indicates an expected call of ClientAssertionJWTValid.
-func (mr *MockRFC7591StorageMockRecorder) ClientAssertionJWTValid(ctx, jti any) *gomock.Call {
+func (mr *MockRFC7591StorageMockRecorder) ClientAssertionJWTValid(ctx, clientID, jti any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientAssertionJWTValid", reflect.TypeOf((*MockRFC7591Storage)(nil).ClientAssertionJWTValid), ctx, jti)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientAssertionJWTValid", reflect.TypeOf((*MockRFC7591Storage)(nil).ClientAssertionJWTValid), ctx, clientID, jti)
 }
 
 // CreateAccessTokenSession mocks base method.
@@ -186,17 +186,17 @@ func (mr *MockRFC7591StorageMockRecorder) GetClientRegistrationTokenSession(ctx,
 }
 
 // SetClientAssertionJWT mocks base method.
-func (m *MockRFC7591Storage) SetClientAssertionJWT(ctx context.Context, jti string, exp time.Time) error {
+func (m *MockRFC7591Storage) SetClientAssertionJWT(ctx context.Context, clientID, jti string, exp time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetClientAssertionJWT", ctx, jti, exp)
+	ret := m.ctrl.Call(m, "SetClientAssertionJWT", ctx, clientID, jti, exp)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetClientAssertionJWT indicates an expected call of SetClientAssertionJWT.
-func (mr *MockRFC7591StorageMockRecorder) SetClientAssertionJWT(ctx, jti, exp any) *gomock.Call {
+func (mr *MockRFC7591StorageMockRecorder) SetClientAssertionJWT(ctx, clientID, jti, exp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClientAssertionJWT", reflect.TypeOf((*MockRFC7591Storage)(nil).SetClientAssertionJWT), ctx, jti, exp)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClientAssertionJWT", reflect.TypeOf((*MockRFC7591Storage)(nil).SetClientAssertionJWT), ctx, clientID, jti, exp)
 }
 
 // UpdateClient mocks base method.

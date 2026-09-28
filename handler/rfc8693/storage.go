@@ -15,9 +15,10 @@ import (
 type Storage interface {
 	hoauth2.CoreStorage
 
-	// SetTokenExchangeCustomJWT marks a JTI as known for the given expiry time. It should atomically check if the JTI
-	// already exists and fail the request if found.
-	SetTokenExchangeCustomJWT(ctx context.Context, jti string, exp time.Time) (err error)
+	// SetTokenExchangeCustomJWT marks a JTI as known for the issuer until the given expiry time. It should atomically
+	// check if the JTI already exists for the issuer and fail the request if found. A JTI is only unique among the
+	// JWTs produced by one issuer per RFC 7519 Section 4.1.7, so the JTI must be scoped to the issuer.
+	SetTokenExchangeCustomJWT(ctx context.Context, issuer, jti string, exp time.Time) (err error)
 
 	// GetSubjectForTokenExchange computes the session subject and is used for token types where there is no way
 	// to know the subject value. For some token types, such as access and refresh tokens, the subject is well-defined

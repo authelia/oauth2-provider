@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	. "authelia.com/provider/oauth2/token/jwt"
@@ -108,10 +109,15 @@ func TestJWTClaims_With(t *testing.T) {
 	c := &JWTClaims{}
 	result := c.With(exp, scope, audience)
 
-	assert.Same(t, c, result)
-	assert.Equal(t, exp, c.ExpiresAt)
-	assert.Equal(t, scope, c.Scope)
-	assert.Equal(t, audience, c.Audience)
+	require.IsType(t, &JWTClaims{}, result)
+	assert.NotSame(t, c, result)
+	assert.Equal(t, &JWTClaims{}, c)
+
+	actual := result.(*JWTClaims)
+
+	assert.Equal(t, exp, actual.ExpiresAt)
+	assert.Equal(t, scope, actual.Scope)
+	assert.Equal(t, audience, actual.Audience)
 }
 
 func TestJWTClaims_Sanitize(t *testing.T) {
@@ -121,12 +127,19 @@ func TestJWTClaims_Sanitize(t *testing.T) {
 		NotBefore: time.Now().UTC(),
 	}
 
+	expected := c.Clone()
+
 	result := c.Sanitize()
 
-	assert.Same(t, c, result)
-	assert.True(t, c.IssuedAt.IsZero())
-	assert.True(t, c.NotBefore.IsZero())
-	assert.Equal(t, "peter", c.Subject, "Sanitize must not affect unrelated fields")
+	require.IsType(t, &JWTClaims{}, result)
+	assert.NotSame(t, c, result)
+	assert.Equal(t, expected, c)
+
+	actual := result.(*JWTClaims)
+
+	assert.True(t, actual.IssuedAt.IsZero())
+	assert.True(t, actual.NotBefore.IsZero())
+	assert.Equal(t, "peter", actual.Subject, "Sanitize must not affect unrelated fields")
 }
 
 func TestJWTClaims_WithDefaults(t *testing.T) {
@@ -171,11 +184,19 @@ func TestJWTClaims_WithDefaults(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			expected := tc.existing.Clone()
+
 			result := tc.existing.WithDefaults(tc.iat, tc.nbf, tc.issuer)
-			assert.Same(t, tc.existing, result)
-			assert.Equal(t, tc.expectedIAT, tc.existing.IssuedAt)
-			assert.Equal(t, tc.expectedNBF, tc.existing.NotBefore)
-			assert.Equal(t, tc.expectedIss, tc.existing.Issuer)
+
+			require.IsType(t, &JWTClaims{}, result)
+			assert.NotSame(t, tc.existing, result)
+			assert.Equal(t, expected, tc.existing)
+
+			actual := result.(*JWTClaims)
+
+			assert.Equal(t, tc.expectedIAT, actual.IssuedAt)
+			assert.Equal(t, tc.expectedNBF, actual.NotBefore)
+			assert.Equal(t, tc.expectedIss, actual.Issuer)
 		})
 	}
 }

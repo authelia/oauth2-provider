@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strconv"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -23,7 +24,8 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 }
 
 // Generate generates the token and signature for a JARM response. The issuer is always the configured JARM issuer, and
-// the session argument is not used.
+// the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
+// and all other parameters as JSON strings.
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
@@ -48,6 +50,14 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 		case 0:
 			continue
 		case 1:
+			if param == consts.AccessResponseExpiresIn {
+				if n, err := strconv.ParseInt(values[0], 10, 64); err == nil {
+					claims.Extra[param] = n
+
+					continue
+				}
+			}
+
 			claims.Extra[param] = values[0]
 		default:
 			claims.Extra[param] = values

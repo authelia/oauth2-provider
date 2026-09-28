@@ -173,6 +173,38 @@ func TestGenerate(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldEncodeExpiresInAsNumber",
+			config: &stubConfigurator{
+				issuer:   "https://issuer.example.com",
+				strategy: &stubStrategy{token: "tok"},
+				lifespan: time.Hour,
+			},
+			client: &stubClient{id: "client-id"},
+			parameters: url.Values{
+				"access_token":                 {"at"},
+				consts.AccessResponseExpiresIn: {"3599"},
+			},
+			checkToken: func(t *testing.T, token, signature string, strategy *stubStrategy) {
+				assert.Equal(t, int64(3599), strategy.lastClaims[consts.AccessResponseExpiresIn])
+				assert.Equal(t, "at", strategy.lastClaims["access_token"])
+			},
+		},
+		{
+			name: "ShouldEncodeNonNumericExpiresInAsString",
+			config: &stubConfigurator{
+				issuer:   "https://issuer.example.com",
+				strategy: &stubStrategy{token: "tok"},
+				lifespan: time.Hour,
+			},
+			client: &stubClient{id: "client-id"},
+			parameters: url.Values{
+				consts.AccessResponseExpiresIn: {"abc"},
+			},
+			checkToken: func(t *testing.T, token, signature string, strategy *stubStrategy) {
+				assert.Equal(t, "abc", strategy.lastClaims[consts.AccessResponseExpiresIn])
+			},
+		},
+		{
 			name: "ShouldSkipEmptyValueSlices",
 			config: &stubConfigurator{
 				issuer:   "https://issuer.example.com",

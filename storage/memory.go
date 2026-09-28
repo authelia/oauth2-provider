@@ -15,7 +15,6 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -182,7 +181,7 @@ func NewExampleStore() *MemoryStore {
 					GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
 					Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 				},
-				TokenLifespans: &internal.TestLifespans,
+				TokenLifespans: exampleLifespans(),
 			},
 			"encoded:client": &oauth2.DefaultClient{
 				ID:                   "encoded:client",
@@ -207,6 +206,27 @@ func NewExampleStore() *MemoryStore {
 	store.Clients, store.Users = example.Clients, example.Users
 
 	return store
+}
+
+func exampleLifespans() *oauth2.ClientLifespanConfig {
+	ptr := func(d time.Duration) *time.Duration {
+		return &d
+	}
+
+	return &oauth2.ClientLifespanConfig{
+		AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
+		AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
+		AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),
+		ClientCredentialsGrantAccessTokenLifespan:  ptr(34 * time.Hour),
+		ImplicitGrantAccessTokenLifespan:           ptr(35 * time.Hour),
+		ImplicitGrantIDTokenLifespan:               ptr(36 * time.Hour),
+		JwtBearerGrantAccessTokenLifespan:          ptr(37 * time.Hour),
+		PasswordGrantAccessTokenLifespan:           ptr(38 * time.Hour),
+		PasswordGrantRefreshTokenLifespan:          ptr(39 * time.Hour),
+		RefreshTokenGrantIDTokenLifespan:           ptr(40 * time.Hour),
+		RefreshTokenGrantAccessTokenLifespan:       ptr(41 * time.Hour),
+		RefreshTokenGrantRefreshTokenLifespan:      ptr(42 * time.Hour),
+	}
 }
 
 func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCode string, request oauth2.Requester) error {

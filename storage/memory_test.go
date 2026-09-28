@@ -118,25 +118,6 @@ func TestMemoryStoreDPoP(t *testing.T) {
 	assert.True(t, valid)
 }
 
-func TestMemoryStoreDPoPPrunesExpiredRecords(t *testing.T) {
-	ctx := context.Background()
-	s := NewMemoryStore()
-
-	require.NoError(t, s.CreateDPoPNonce(ctx, "expired", time.Now().Add(-time.Minute)))
-	require.NoError(t, s.CreateDPoPNonce(ctx, "live", time.Now().Add(time.Minute)))
-
-	assert.NotContains(t, s.DPoPNonces, "expired")
-	assert.Contains(t, s.DPoPNonces, "live")
-
-	_, err := s.CheckAndSetDPoPProofUsed(ctx, "expired", "jkt-1", "n-1", "POST", "https://as.example.com/token", time.Now().Add(-time.Minute))
-	require.NoError(t, err)
-	_, err = s.CheckAndSetDPoPProofUsed(ctx, "live", "jkt-1", "n-1", "POST", "https://as.example.com/token", time.Now().Add(time.Minute))
-	require.NoError(t, err)
-
-	assert.NotContains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "expired", Method: "POST", URL: "https://as.example.com/token"})
-	assert.Contains(t, s.DPoPProofJTIs, DPoPProofMarker{JTI: "live", Method: "POST", URL: "https://as.example.com/token"})
-}
-
 func TestMemoryStoreRotateRefreshTokenReportsAnInactiveToken(t *testing.T) {
 	store := NewMemoryStore()
 
@@ -369,4 +350,238 @@ func TestMemoryStore_DeletePARSessionConsumesOnce(t *testing.T) {
 			require.ErrorIs(t, tc.store.DeletePARSession(t.Context(), "urn:ietf:params:oauth:request_uri:abc"), oauth2.ErrNotFound)
 		})
 	}
+}
+
+func TestMemoryStoreScopesJTIs(t *testing.T) {
+	exp := time.Now().Add(time.Minute)
+
+	testCases := []struct {
+		name  string
+		check func(t *testing.T, s *MemoryStore)
+	}{
+		{
+			name: "ShouldScopeClientAssertionJTIsToTheClient",
+			check: func(t *testing.T, s *MemoryStore) {
+				require.NoError(t, s.ClientAssertionJWTValid(t.Context(), "client-a", "jti"))
+				require.NoError(t, s.SetClientAssertionJWT(t.Context(), "client-a", "jti", exp))
+
+				assert.NoError(t, s.ClientAssertionJWTValid(t.Context(), "client-b", "jti"))
+				assert.NoError(t, s.SetClientAssertionJWT(t.Context(), "client-b", "jti", exp))
+
+				assert.ErrorIs(t, s.ClientAssertionJWTValid(t.Context(), "client-a", "jti"), oauth2.ErrJTIKnown)
+				assert.ErrorIs(t, s.SetClientAssertionJWT(t.Context(), "client-a", "jti", exp), oauth2.ErrJTIKnown)
+			},
+		},
+		{
+			name: "ShouldScopeRFC7523JTIsToTheIssuer",
+			check: func(t *testing.T, s *MemoryStore) {
+				require.NoError(t, s.MarkRFC7523JWTUsedForTime(t.Context(), "a", "b\x00c", exp))
+
+				used, err := s.IsRFC7523JWTUsed(t.Context(), "a\x00b", "c")
+				require.NoError(t, err)
+				assert.False(t, used)
+
+				used, err = s.IsRFC7523JWTUsed(t.Context(), "a", "b\x00c")
+				require.NoError(t, err)
+				assert.True(t, used)
+
+				assert.ErrorIs(t, s.MarkRFC7523JWTUsedForTime(t.Context(), "a", "b\x00c", exp), oauth2.ErrJTIKnown)
+			},
+		},
+		{
+			name: "ShouldScopeTokenExchangeJTIsToTheIssuer",
+			check: func(t *testing.T, s *MemoryStore) {
+				require.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp))
+
+				assert.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://b.example.com", "jti", exp))
+				assert.ErrorIs(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp), oauth2.ErrJTIKnown)
+			},
+		},
+		{
+			name: "ShouldSeparateEachPurpose",
+			check: func(t *testing.T, s *MemoryStore) {
+				require.NoError(t, s.SetClientAssertionJWT(t.Context(), "https://a.example.com", "jti", exp))
+
+				used, err := s.IsRFC7523JWTUsed(t.Context(), "https://a.example.com", "jti")
+				require.NoError(t, err)
+				assert.False(t, used)
+
+				assert.NoError(t, s.MarkRFC7523JWTUsedForTime(t.Context(), "https://a.example.com", "jti", exp))
+				assert.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp))
+			},
+		},
+		{
+			name: "ShouldForgetExpiredJTIs",
+			check: func(t *testing.T, s *MemoryStore) {
+				require.NoError(t, s.SetClientAssertionJWT(t.Context(), "client", "jti", time.Now().Add(-time.Minute)))
+
+				assert.NoError(t, s.ClientAssertionJWTValid(t.Context(), "client", "jti"))
+				assert.NoError(t, s.SetClientAssertionJWT(t.Context(), "client", "jti", exp))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.check(t, NewMemoryStore())
+		})
+	}
+}
+
+func TestMemoryStoreRevokeAccessTokenRevokesEveryTokenForTheRequest(t *testing.T) {
+	testCases := []struct {
+		name  string
+		store accessTokenStore
+	}{
+		{"ShouldRevokeEveryTokenMemoryStore", NewMemoryStore()},
+		{"ShouldRevokeEveryTokenHydratingMemoryStore", NewHydratingMemoryStore()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &oauth2.Request{ID: "hybrid", Session: &oauth2.DefaultSession{Subject: "abc"}}
+			other := &oauth2.Request{ID: "other", Session: &oauth2.DefaultSession{Subject: "abc"}}
+
+			require.NoError(t, tc.store.CreateAccessTokenSession(t.Context(), "implicit", request))
+			require.NoError(t, tc.store.CreateAccessTokenSession(t.Context(), "code", request))
+			require.NoError(t, tc.store.CreateAccessTokenSession(t.Context(), "unrelated", other))
+
+			require.NoError(t, tc.store.RevokeAccessToken(t.Context(), "hybrid"))
+
+			for _, signature := range []string{"implicit", "code"} {
+				_, err := tc.store.GetAccessTokenSession(t.Context(), signature, &oauth2.DefaultSession{})
+				assert.ErrorIs(t, err, oauth2.ErrNotFound, signature)
+			}
+
+			_, err := tc.store.GetAccessTokenSession(t.Context(), "unrelated", &oauth2.DefaultSession{})
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestMemoryStoreDeleteAccessTokenSessionUnindexesTheSignature(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := &oauth2.Request{ID: "req", Session: &oauth2.DefaultSession{}}
+
+	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "a", request))
+	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "b", request))
+	require.NoError(t, store.DeleteAccessTokenSession(t.Context(), "a"))
+
+	assert.Equal(t, map[string]struct{}{"b": {}}, store.AccessTokenRequestIDs[request.ID])
+
+	require.NoError(t, store.DeleteAccessTokenSession(t.Context(), "b"))
+
+	assert.NotContains(t, store.AccessTokenRequestIDs, request.ID)
+}
+
+func TestMemoryStorePrunesExpiredEntriesAtAnInterval(t *testing.T) {
+	past, future := time.Now().Add(-time.Minute), time.Now().Add(time.Minute)
+
+	const htu, iss = "https://as.example.com/token", "https://issuer.example.com"
+
+	testCases := []struct {
+		name    string
+		insert  func(t *testing.T, s *MemoryStore, key string, exp time.Time)
+		contain func(s *MemoryStore, key string) bool
+		rewind  func(s *MemoryStore)
+	}{
+		{
+			name: "ShouldPruneClientAssertionJTIs",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.SetClientAssertionJWT(t.Context(), "client", key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.ClientAssertionJTIs[JTIMarker{Issuer: "client", JTI: key}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.clientAssertionJTIsPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPruneRFC7523JTIs",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.MarkRFC7523JWTUsedForTime(t.Context(), iss, key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.RFC7523JTIs[JTIMarker{Issuer: iss, JTI: key}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.rfc7523JTIsPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPruneTokenExchangeJTIs",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), iss, key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.TokenExchangeJTIs[JTIMarker{Issuer: iss, JTI: key}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.tokenExchangeJTIsPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPruneDPoPProofJTIs",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				_, err := s.CheckAndSetDPoPProofUsed(t.Context(), key, "jkt", "", "POST", htu, exp)
+				require.NoError(t, err)
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.DPoPProofJTIs[DPoPProofMarker{JTI: key, Method: "POST", URL: htu}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.dpopProofJTIsPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPruneDPoPNonces",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.CreateDPoPNonce(t.Context(), key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.DPoPNonces[key]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.dpopNoncesPruneAt = time.Time{} },
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewMemoryStore()
+
+			tc.insert(t, s, "expired", past)
+			tc.insert(t, s, "first", future)
+
+			assert.True(t, tc.contain(s, "expired"))
+
+			tc.rewind(s)
+			tc.insert(t, s, "second", future)
+
+			assert.False(t, tc.contain(s, "expired"))
+			assert.True(t, tc.contain(s, "first"))
+			assert.True(t, tc.contain(s, "second"))
+		})
+	}
+}
+
+func TestExampleStoreInitialisesEveryMap(t *testing.T) {
+	s := NewExampleStore()
+
+	require.NoError(t, s.CreateClientRegistrationTokenSession(t.Context(), "cr-sig", &oauth2.Request{ID: "cr-req", Session: &oauth2.DefaultSession{}}))
+
+	request := oauth2.NewDeviceAuthorizeRequest()
+	request.SetSession(&oauth2.DefaultSession{})
+	request.SetDeviceCodeSignature("device")
+	request.SetUserCodeSignature("user")
+
+	require.NoError(t, s.CreateDeviceCodeSession(t.Context(), "device", request))
+	require.NoError(t, s.InvalidateDeviceCodeSession(t.Context(), "device"))
+
+	assert.Contains(t, s.Clients, "my-client")
+	assert.Contains(t, s.Users, "peter")
+}
+
+type accessTokenStore interface {
+	CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) error
+	GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
+	RevokeAccessToken(ctx context.Context, requestID string) error
 }

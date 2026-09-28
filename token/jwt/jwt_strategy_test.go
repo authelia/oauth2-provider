@@ -930,6 +930,28 @@ func TestEncodeNestedCompactEncrypted(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
+
+	t.Run("ShouldSetContentTypeJWT", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, headers, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, JSONWebTokenTypeJWT, jwe.Header.ExtraHeaders[JSONWebTokenHeaderContentType])
+	})
+
+	t.Run("ShouldUseCallerContentType", func(t *testing.T) {
+		headersJWE := &Headers{Extra: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeAccessToken}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, &Headers{}, headersJWE, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, JSONWebTokenTypeAccessToken, jwe.Header.ExtraHeaders[JSONWebTokenHeaderContentType])
+	})
 }
 
 func TestEncodeHeaderKeyID(t *testing.T) {

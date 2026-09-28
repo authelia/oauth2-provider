@@ -418,6 +418,40 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			},
 		},
 		{
+			name: "invalid request user code invalidated",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+					}),
+				status: oauth2.DeviceAuthorizeStatusNew,
+			},
+			setup: func(t *testing.T, dar oauth2.DeviceAuthorizeRequester, f *fields, a *args) {
+				dar.SetDeviceCodeSignature("device")
+				defaultSetupFunc(t, dar, f, a)
+				require.NoError(t, f.Storage.InvalidateDeviceCodeSession(a.ctx, "device"))
+			},
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+				return errors.Is(err, oauth2.ErrInvalidGrant)
+			},
+		},
+		{
 			name: "invalid request user code expired",
 			fields: fields{
 				Storage:  storage.NewMemoryStore(),

@@ -179,6 +179,51 @@ func TestDefaultResponseModeHandlerJWTErrorWithoutSession(t *testing.T) {
 	assert.Equal(t, "https://jarm.example.com", claims[jwt.ClaimIssuer])
 }
 
+func TestDefaultResponseModeHandlerShouldNotMutateRedirectURI(t *testing.T) {
+	testCases := []struct {
+		name string
+		mode ResponseModeType
+	}{
+		{
+			name: "ShouldNotMutateQuery",
+			mode: ResponseModeQuery,
+		},
+		{
+			name: "ShouldNotMutateFragment",
+			mode: ResponseModeFragment,
+		},
+		{
+			name: "ShouldNotMutateQueryJWT",
+			mode: ResponseModeQueryJWT,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := testNewJARMResponseModeHandler()
+
+			redirectURI, err := url.Parse("https://client.example.com/callback?foo=bar")
+			require.NoError(t, err)
+
+			request := NewAuthorizeRequest()
+			request.RedirectURI = redirectURI
+			request.ResponseMode = tc.mode
+			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, AuthorizationSignedResponseAlg: "RS256"}
+
+			response := NewAuthorizeResponse()
+			response.AddParameter(consts.FormParameterAuthorizationCode, "code-value")
+
+			rw := httptest.NewRecorder()
+
+			handler.WriteAuthorizeResponse(context.Background(), rw, request, response)
+
+			require.Equal(t, http.StatusSeeOther, rw.Code)
+			assert.Equal(t, "https://client.example.com/callback?foo=bar", request.GetRedirectURI().String())
+		})
+	}
+}
+
 func testNewJARMResponseModeHandler() *DefaultResponseModeHandler {
 	config := &Config{IDTokenIssuer: "https://auth.example.com"}
 	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}

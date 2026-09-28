@@ -73,7 +73,8 @@ func (h *DefaultResponseModeHandler) WriteAuthorizeError(ctx context.Context, rw
 }
 
 func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, parameters url.Values) {
-	redirectURI := request.GetRedirectURI()
+	uri := *request.GetRedirectURI()
+	redirectURI := &uri
 	redirectURI.Fragment = ""
 
 	var (

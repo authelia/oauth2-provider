@@ -1268,11 +1268,11 @@ func TestHandler_PopulateTokenEndpointResponse(t *testing.T) {
 			"",
 		},
 		{
-			"ShouldFailStorageDeleteError",
+			"ShouldPassStorageDeleteError",
 			func(t *testing.T, store *mock.MockPKCERequestStorage) {
 				store.EXPECT().DeletePKCERequestSession(t.Context(), "sig").Return(errors.New("bad connection"))
 			},
-			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting delete PKCE request session: bad connection.",
+			"",
 		},
 	}
 

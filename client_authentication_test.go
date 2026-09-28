@@ -9,16 +9,19 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/jose"
 
@@ -26,6 +29,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -1279,6 +1283,137 @@ func TestAuthenticateClientTwice(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.check)
+	}
+}
+
+func TestClientAuthenticationChallenge(t *testing.T) {
+	const (
+		clientID  = "challenged"
+		incorrect = "incorrect"
+		challenge = `Basic realm="oauth2"`
+	)
+
+	authorization := basicAuth(clientID, incorrect)
+
+	endpoints := []struct {
+		name  string
+		form  url.Values
+		write func(t *testing.T, provider *Fosite, r *http.Request, rw http.ResponseWriter)
+	}{
+		{
+			name: "TokenEndpoint",
+			form: url.Values{consts.FormParameterGrantType: {consts.GrantTypeClientCredentials}},
+			write: func(t *testing.T, provider *Fosite, r *http.Request, rw http.ResponseWriter) {
+				requester, err := provider.NewAccessRequest(t.Context(), r, &DefaultSession{})
+				require.ErrorIs(t, err, ErrInvalidClient)
+
+				provider.WriteAccessError(t.Context(), rw, requester, err)
+			},
+		},
+		{
+			name: "RevocationEndpoint",
+			form: url.Values{consts.FormParameterToken: {"revoked"}},
+			write: func(t *testing.T, provider *Fosite, r *http.Request, rw http.ResponseWriter) {
+				err := provider.NewRevocationRequest(t.Context(), r)
+				require.ErrorIs(t, err, ErrInvalidClient)
+
+				provider.WriteRevocationResponse(t.Context(), rw, err)
+			},
+		},
+		{
+			name: "PushedAuthorizationEndpoint",
+			form: url.Values{consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow}},
+			write: func(t *testing.T, provider *Fosite, r *http.Request, rw http.ResponseWriter) {
+				requester, err := provider.NewPushedAuthorizeRequest(t.Context(), r)
+				require.ErrorIs(t, err, ErrInvalidClient)
+
+				provider.WritePushedAuthorizeError(t.Context(), rw, requester, err)
+			},
+		},
+	}
+
+	testCases := []struct {
+		name          string
+		realm         string
+		authorization string
+		form          url.Values
+		expected      string
+	}{
+		{
+			name:          "ShouldChallengeFailedBasicAuthenticationWithDefaultRealm",
+			authorization: authorization,
+			expected:      challenge,
+		},
+		{
+			name:          "ShouldChallengeFailedBasicAuthenticationWithConfiguredRealm",
+			realm:         "example.com",
+			authorization: authorization,
+			expected:      `Basic realm="example.com"`,
+		},
+		{
+			name:          "ShouldEscapeRealmQuotedStringSpecials",
+			realm:         `a "b" \c`,
+			authorization: authorization,
+			expected:      `Basic realm="a \"b\" \\c"`,
+		},
+		{
+			name:          "ShouldRemoveRealmControlCharacters",
+			realm:         "a\r\nb\x00c\td",
+			authorization: authorization,
+			expected:      "Basic realm=\"abc\td\"",
+		},
+		{
+			name:          "ShouldChallengeUnknownAuthorizationScheme",
+			authorization: "Digest abc",
+			expected:      challenge,
+		},
+		{
+			name: "ShouldNotChallengeFailedPostAuthentication",
+			form: url.Values{
+				consts.FormParameterClientID:     {clientID},
+				consts.FormParameterClientSecret: {incorrect},
+			},
+		},
+	}
+
+	for _, endpoint := range endpoints {
+		t.Run(endpoint.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					defer ctrl.Finish()
+
+					handler := mock.NewMockTokenEndpointHandler(ctrl)
+					handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+					handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+
+					store := storage.NewMemoryStore()
+					store.Clients[clientID] = &DefaultClient{ID: clientID, ClientSecret: NewPlainTextClientSecret("secret")}
+
+					provider := &Fosite{Store: store, Config: &Config{
+						ClientAuthenticationRealm: tc.realm,
+						TokenEndpointHandlers:     TokenEndpointHandlers{handler},
+					}}
+
+					form := url.Values{}
+					maps.Copy(form, endpoint.form)
+					maps.Copy(form, tc.form)
+
+					r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+					r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
+					if len(tc.authorization) != 0 {
+						r.Header.Set(consts.HeaderAuthorization, tc.authorization)
+					}
+
+					rw := httptest.NewRecorder()
+					endpoint.write(t, provider, r, rw)
+
+					assert.Equal(t, http.StatusUnauthorized, rw.Code)
+					assert.Equal(t, tc.expected, rw.Header().Get(consts.HeaderWWWAuthenticate))
+				})
+			}
+		})
 	}
 }
 

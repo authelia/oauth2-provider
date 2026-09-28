@@ -42,6 +42,10 @@ func (f *Fosite) AuthenticateClient(ctx context.Context, r *http.Request, form u
 // AuthenticateClientWithAuthHandler authenticates a client at the endpoint represented by handler using the configured
 // ClientAuthenticationStrategy, falling back to DefaultClientAuthenticationStrategy if none is configured. Use this in
 // preference to AuthenticateClient when the request is not destined for the token endpoint.
+//
+// An invalid_client error for a request carrying an 'Authorization' header records the 'Basic' challenge, with the
+// realm from GetClientAuthenticationRealm, that the error writers send in the 'WWW-Authenticate' header, per RFC 6749
+// Section 5.2.
 func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.Request, form url.Values, strategyECA EndpointClientAuthStrategy) (client Client, method string, err error) {
 	var strategy ClientAuthenticationStrategy
 
@@ -49,8 +53,55 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 		strategy = &DefaultClientAuthenticationStrategy{Store: f.Store, Config: f.Config}
 	}
 
-	return strategy.AuthenticateClient(ctx, r, form, strategyECA)
+	if client, method, err = strategy.AuthenticateClient(ctx, r, form, strategyECA); err != nil {
+		return client, method, withClientAuthenticationChallenge(r, err, f.Config.GetClientAuthenticationRealm(ctx))
+	}
+
+	return client, method, nil
 }
+
+func withClientAuthenticationChallenge(r *http.Request, err error, realm string) error {
+	if r == nil || len(r.Header.Get(consts.HeaderAuthorization)) == 0 {
+		return err
+	}
+
+	var rfc *RFC6749Error
+
+	if !errors.As(err, &rfc) || rfc.ErrorField != errInvalidClientName || rfc.CodeField != http.StatusUnauthorized {
+		return err
+	}
+
+	challenged := *rfc
+	challenged.challenge = clientAuthenticationBasicChallenge(realm)
+
+	return errorsx.WithStack(&challenged)
+}
+
+func setClientAuthenticationChallenge(rw http.ResponseWriter, rfc *RFC6749Error) {
+	if rfc == nil || len(rfc.challenge) == 0 || rfc.CodeField != http.StatusUnauthorized {
+		return
+	}
+
+	rw.Header().Set(consts.HeaderWWWAuthenticate, rfc.challenge)
+}
+
+func clientAuthenticationBasicChallenge(realm string) string {
+	if len(realm) == 0 {
+		realm = defaultClientAuthenticationRealm
+	}
+
+	realm = strings.Map(func(c rune) rune {
+		if (c < 0x20 && c != '\t') || c == 0x7f {
+			return -1
+		}
+
+		return c
+	}, realm)
+
+	return `Basic realm="` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(realm) + `"`
+}
+
+const defaultClientAuthenticationRealm = "oauth2"
 
 // CompareClientSecret compares a raw secret input from a client to the registered client secret. If the secret is valid
 // it returns nil, otherwise it returns an error. The ErrClientSecretNotRegistered error indicates the ClientSecret

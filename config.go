@@ -320,6 +320,13 @@ type SendDebugMessagesToClientsProvider interface {
 	GetSendDebugMessagesToClients(ctx context.Context) (send bool)
 }
 
+// ClientAuthenticationRealmProvider returns the provider for configuring the realm of the 'Basic' challenge sent with a
+// 401 invalid_client response, per RFC 6749 Section 5.2 and RFC 7617 Section 2.
+type ClientAuthenticationRealmProvider interface {
+	// GetClientAuthenticationRealm returns the realm of the 'Basic' client authentication challenge.
+	GetClientAuthenticationRealm(ctx context.Context) (realm string)
+}
+
 // RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
 type RevokeRefreshTokensExplicitlyProvider interface {
 	// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.

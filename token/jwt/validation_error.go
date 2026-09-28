@@ -56,10 +56,12 @@ func (e *ValidationError) valid() bool {
 	return e.Errors == 0
 }
 
+// Has reports whether any of the bits in verr are set in Errors.
 func (e *ValidationError) Has(verr uint32) bool {
 	return (e.Errors & verr) != 0
 }
 
-func (e *ValidationError) Is(verr uint32) bool {
+// IsExactly reports whether Errors is equal to verr, meaning no other validation error bits are set.
+func (e *ValidationError) IsExactly(verr uint32) bool {
 	return e.Errors == verr
 }

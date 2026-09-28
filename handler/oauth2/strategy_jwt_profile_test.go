@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+	josejwt "authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -74,8 +77,12 @@ func TestAccessToken(t *testing.T) {
 
 				strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
 
+				before := time.Now().Truncate(time.Second)
+
 				token, signature, err := strategy.GenerateAccessToken(t.Context(), tc.r)
 				assert.NoError(t, err)
+
+				after := time.Now()
 
 				parts := strings.Split(token, ".")
 				require.Len(t, parts, 3, "%s - %v", token, parts)
@@ -117,8 +124,8 @@ func TestAccessToken(t *testing.T) {
 				// Scope field is always a string.
 				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimIssuedAt]), before, after)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimNotBefore]), before, after)
 
 				err = strategy.ValidateAccessToken(context.Background(), tc.r, token)
 				if tc.pass {
@@ -311,6 +318,48 @@ func TestGenerateJWTIncludesClientID(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawPayload, &payload))
 
 	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
+}
+
+func TestGenerateJWTUsesTheClientSigningKeyID(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{Key: rsaKey, KeyID: "a", Use: consts.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+			{Key: gen.MustRSAKey(), KeyID: "b", Use: consts.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+		},
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks),
+	})
+
+	client := &oauth2.DefaultRegisteredClient{
+		DefaultClient:                  &oauth2.DefaultClient{ID: "client-abc"},
+		AccessTokenSignedResponseKeyID: "a",
+		AccessTokenSignedResponseAlg:   string(jose.RS256),
+	}
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = client
+
+	for _, kid := range []string{"a", "b"} {
+		client.AccessTokenSignedResponseKeyID = kid
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parsed, err := josejwt.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
+		require.NoError(t, err)
+		require.Len(t, parsed.Headers, 1)
+		assert.Equal(t, kid, parsed.Headers[0].KeyID)
+	}
+
+	assert.NotContains(t, r.GetSession().(*JWTSession).JWTHeader.Extra, consts.JSONWebTokenHeaderKeyIdentifier)
 }
 
 func anyInt64ToTime(in any) time.Time {

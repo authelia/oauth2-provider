@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -55,8 +56,11 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	// Only a subject token validated by a token type handler for this request may be issued against.
+	// Only a subject or actor token validated by a token type handler for this request may be issued against, and only
+	// an 'act' claim derived from them may be issued.
 	session.SetSubjectToken(nil)
+	session.SetActorToken(nil)
+	session.SetClaimActor(nil)
 
 	form := request.GetRequestForm()
 	configTypesSupported := c.Config.GetRFC8693TokenTypes(ctx)
@@ -262,6 +266,9 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 // type handlers' PopulateTokenEndpointResponse implementations issue the token by serializing the session, so the
 // 'act' claim must be on the session before they run.
 //
+// An 'actor_token' with neither a 'sub' nor a 'client_id' claim does not identify the actor, and is rejected with
+// 'invalid_request' per RFC 8693 Section 2.2.2.
+//
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
 func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
@@ -284,7 +291,13 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
-	if act := buildActClaim(session); act != nil {
+	var act map[string]any
+
+	if act, err = buildActClaim(session); err != nil {
+		return err
+	}
+
+	if act != nil {
 		session.SetClaimActor(act)
 	}
 
@@ -295,17 +308,17 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 // token-type handlers. It returns nil when no actor_token was supplied (i.e. impersonation, where no 'act' claim is
 // required).
 //
-// The actor's identity is taken from the actor_token's identifying claims ('sub' and, when present, 'client_id'). If
-// the subject_token already carried an 'act' claim, that prior actor is nested under the new 'act' to express the
-// chain of delegation per §4.1: "the outermost act claim represents the current actor while nested act claims
-// represent prior actors".
+// The actor's identity is taken from the actor_token's identifying claims ('sub' and 'client_id'), and an actor_token
+// with neither is an error. If the subject_token already carried an 'act' claim, that prior actor is nested under the
+// new 'act' to express the chain of delegation per §4.1: "the outermost act claim represents the current actor while
+// nested act claims represent prior actors".
 //
 // The function does not mutate any of the input maps; the returned map is a fresh allocation safe for the caller to
 // store on the session.
-func buildActClaim(session Session) map[string]any {
+func buildActClaim(session Session) (map[string]any, error) {
 	actorToken := session.GetActorToken()
 	if actorToken == nil {
-		return nil
+		return nil, nil
 	}
 
 	act := map[string]any{}
@@ -318,6 +331,10 @@ func buildActClaim(session Session) map[string]any {
 		act[consts.ClaimClientIdentifier] = clientID
 	}
 
+	if len(act) == 0 {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify the actor as it has neither a '%s' nor a '%s' claim.", consts.FormParameterActorToken, consts.ClaimSubject, consts.ClaimClientIdentifier))
+	}
+
 	subjectToken := session.GetSubjectToken()
 	if subjectToken != nil {
 		if existing, ok := subjectToken[consts.ClaimActor].(map[string]any); ok && len(existing) > 0 {
@@ -325,11 +342,7 @@ func buildActClaim(session Session) map[string]any {
 		}
 	}
 
-	if len(act) == 0 {
-		return nil
-	}
-
-	return act
+	return act, nil
 }
 
 // resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved
@@ -345,6 +358,14 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 	}
 
 	return config.GetRFC8693TokenTypes(ctx)[id]
+}
+
+func errExchangeTokenValidation(err error) error {
+	if rfc := new(oauth2.RFC6749Error); !errors.As(err, &rfc) {
+		return errors.WithStack(err)
+	}
+
+	return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 }
 
 // validateExchangeTokenPolicy applies the client and scope policy for a 'subject_token' or 'actor_token' resolved
@@ -577,6 +598,24 @@ func requireSubjectToken(request oauth2.AccessRequester) (err error) {
 		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
 }
 
+func requireActorToken(request oauth2.AccessRequester) (err error) {
+	form := request.GetRequestForm()
+
+	if form.Get(consts.FormParameterActorToken) == "" {
+		return nil
+	}
+
+	if session, ok := request.GetSession().(Session); ok && session != nil && session.GetActorToken() != nil {
+		return nil
+	}
+
+	actorTokenType := form.Get(consts.FormParameterActorTokenType)
+
+	return errorsx.WithStack(oauth2.ErrInvalidRequest.
+		WithHintf("The '%s' token type is not supported as a '%s'.", actorTokenType, consts.FormParameterActorTokenType).
+		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated an actor token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterActorTokenType, actorTokenType, consts.FormParameterActorToken))
+}
+
 func isRefreshTokenSubject(request oauth2.Requester) bool {
 	return request.GetRequestForm().Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken
 }
@@ -600,6 +639,14 @@ func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.T
 	}
 
 	return expires
+}
+
+func refreshTokenExpiry(request oauth2.Requester, lifespan time.Duration) time.Time {
+	if lifespan > -1 {
+		return capToSubjectTokenExpiry(request, time.Now().UTC().Add(lifespan)).Truncate(jwt.TimePrecision)
+	}
+
+	return subjectTokenExpiry(request)
 }
 
 func recordSubjectTokenDeadline(request oauth2.Requester) {

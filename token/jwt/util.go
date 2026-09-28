@@ -25,7 +25,7 @@ import (
 
 var (
 	reSignedJWT    = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.([-_A-Za-z0-9]+)?$`)
-	reEncryptedJWT = regexp.MustCompile(`^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
+	reEncryptedJWT = regexp.MustCompile(`^[-_A-Za-z0-9]+\.([-_A-Za-z0-9]+)?\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$`)
 )
 
 // IsSignedJWT returns true if a given token string meets the basic criteria of a compact serialized signed JWT.
@@ -34,6 +34,7 @@ func IsSignedJWT(tokenString string) (signed bool) {
 }
 
 // IsEncryptedJWT returns true if a given token string meets the basic criteria of a compact serialized encrypted JWT.
+// The JWE Encrypted Key may be empty, as it is for direct encryption and direct key agreement. See RFC 7516 Section 7.1.
 func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }

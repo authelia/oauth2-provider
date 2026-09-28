@@ -47,6 +47,8 @@ type ClientLifespanConfig struct {
 	RefreshTokenGrantIDTokenLifespan           *time.Duration `json:"refresh_token_grant_id_token_lifespan"`
 	RefreshTokenGrantAccessTokenLifespan       *time.Duration `json:"refresh_token_grant_access_token_lifespan"`
 	RefreshTokenGrantRefreshTokenLifespan      *time.Duration `json:"refresh_token_grant_refresh_token_lifespan"`
+	TokenExchangeGrantAccessTokenLifespan      *time.Duration `json:"token_exchange_grant_access_token_lifespan"`
+	TokenExchangeGrantRefreshTokenLifespan     *time.Duration `json:"token_exchange_grant_refresh_token_lifespan"`
 	// Hybrid grant tokens are not independently configurable, see the comment above.
 }
 
@@ -123,6 +125,13 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 			cl = c.TokenLifespans.RefreshTokenGrantRefreshTokenLifespan
 		case IDToken:
 			cl = c.TokenLifespans.RefreshTokenGrantIDTokenLifespan
+		}
+	case GrantTypeTokenExchange:
+		switch tt {
+		case AccessToken:
+			cl = c.TokenLifespans.TokenExchangeGrantAccessTokenLifespan
+		case RefreshToken:
+			cl = c.TokenLifespans.TokenExchangeGrantRefreshTokenLifespan
 		}
 	}
 

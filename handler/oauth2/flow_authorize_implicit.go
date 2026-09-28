@@ -45,7 +45,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	// }
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
 	client := request.GetClient()

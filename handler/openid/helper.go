@@ -118,7 +118,7 @@ func hashFor(alg string) (h hash.Hash) {
 		return sha512.New384()
 	case jose.RS512, jose.PS512, jose.ES512, jose.HS512:
 		return sha512.New()
-	case jose.EdDSA:
+	case jose.EdDSA, jose.Ed25519:
 		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally.
 		return sha512.New()
 	default:

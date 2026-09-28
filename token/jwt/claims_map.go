@@ -161,7 +161,7 @@ func (m MapClaims) GetExpirationTime() (exp *NumericDate, err error) {
 	return m.toNumericDate(ClaimExpirationTime)
 }
 
-// VerifyExpirationTime compares the exp claim against cmp.
+// VerifyExpirationTime compares the exp claim against cmp, which RFC 7519 Section 4.1.4 requires be before exp.
 // If required is false, this method will return true if the value matches or is unset
 func (m MapClaims) VerifyExpirationTime(cmp int64, required bool) (ok bool) {
 	var (

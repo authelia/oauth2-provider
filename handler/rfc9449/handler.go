@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -22,12 +23,19 @@ import (
 type Handler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider
+		oauth2.DPoPStrictRefreshTokenBindingProvider
 	}
 	Strategy oauth2.DPoPStrategy
 }
 
 // BindAccessRequest validates the DPoP proof presented with this request, records its key thumbprint on the session,
 // and enforces any thumbprint the session already carries. It returns nil when there is nothing to bind.
+//
+// A refresh by a confidential client is re-bound to the key of the presented proof rather than held to the key the
+// grant is bound to, because RFC 9449 Section 5 does not bind the refresh tokens of confidential clients to the proof
+// key. A proof is still required. A grant whose ID Tokens are key bound keeps its key, as OpenID Connect Key Binding
+// 1.0 Section 5 requires, and so does the grant of a client for which oauth2.DPoPStrictRefreshTokenBindingProvider or
+// oauth2.DPoPStrictRefreshTokenBindingClient requires strict binding.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetDPoPEnabled(ctx) {
 		return nil
@@ -43,8 +51,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		}
 	}
 
-	// An existing binding makes a proof mandatory regardless of policy: a refresh token issued under a bound
-	// session may only be redeemed by the holder of that key.
+	// An existing binding makes a proof mandatory regardless of policy.
 	required := h.required(ctx, request) || bound != ""
 
 	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
@@ -80,7 +87,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return err
 	}
 
-	if bound != "" && bound != proof.Thumbprint {
+	if bound != "" && bound != proof.Thumbprint && !h.rebindable(ctx, request, session) {
 		return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof key does not match the key the grant is bound to."))
 	}
 
@@ -114,6 +121,23 @@ func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, reques
 	response.SetTokenType(oauth2.DPoPAccessToken)
 
 	return nil
+}
+
+func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester, session oauth2.DPoPBoundSession) bool {
+	if !request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken) || session.GetOIDCKeyBindingGranted() || h.Config.GetDPoPStrictRefreshTokenBinding(ctx) {
+		return false
+	}
+
+	client := request.GetClient()
+	if client == nil || client.IsPublic() {
+		return false
+	}
+
+	if c, ok := client.(oauth2.DPoPStrictRefreshTokenBindingClient); ok && c.GetDPoPStrictRefreshTokenBinding() {
+		return false
+	}
+
+	return true
 }
 
 func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {

@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/handler/rfc8628"
+	"authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 )
 
@@ -40,11 +41,17 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     DPoP proof rfc9449.Handler publishes.
 //   - Every oidckb.UserAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628 user authorize
 //     endpoint handlers, as it records the granted key binding onto the session rfc8628.UserAuthorizeHandler persists.
+//   - When any RFC 8693 handler is registered in the token endpoint handlers, an rfc8693.TokenExchangeGrantHandler
+//     must precede every RFC 8693 token type handler and an rfc8693.ActorTokenValidationHandler must follow every
+//     one, the order RFC8693TokenExchangeFactories declares. The grant handler validates the request and writes the
+//     RFC 8693 Section 4.1 'act' claim the token type handlers issue, and the validation handler enforces the RFC
+//     8693 Section 4.4 'may_act' claim on the tokens they validate.
 //
-// A rule only applies when both handlers are registered.
+// Except for the RFC 8693 rule, a rule only applies when both handlers are registered.
 func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 	return errors.Join(
 		validateTokenEndpointHandlerOrder(config),
+		validateRFC8693HandlerOrder(config),
 		validateTokenEndpointBindingHandlerOrder(config),
 		validateRFC8628UserAuthorizeHandlerOrder(config),
 	)
@@ -84,6 +91,49 @@ func tokenEndpointHandlerPrecedes[Dependent, Dependency oauth2.TokenEndpointHand
 	}
 
 	return unordered && dependency
+}
+
+func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
+	var grant, typed, validator, grantUnordered, validatorUnordered bool
+
+	for _, handler := range config.TokenEndpointHandlers {
+		switch handler.(type) {
+		case *rfc8693.TokenExchangeGrantHandler:
+			grant = true
+
+			if typed {
+				grantUnordered = true
+			}
+		case *rfc8693.AccessTokenTypeHandler, *rfc8693.RefreshTokenTypeHandler, *rfc8693.IDTokenTypeHandler, *rfc8693.CustomJWTTypeHandler:
+			typed = true
+
+			if validator {
+				validatorUnordered = true
+			}
+		case *rfc8693.ActorTokenValidationHandler:
+			validator = true
+		}
+	}
+
+	if !grant && !typed && !validator {
+		return nil
+	}
+
+	switch {
+	case !grant:
+		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.TokenExchangeGrantHandler (RFC8693TokenExchangeGrantFactory) must be registered with the other RFC 8693 handlers, as it validates the token exchange request and writes the 'act' claim", ErrHandlerOrder))
+	case grantUnordered:
+		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.TokenExchangeGrantHandler (RFC8693TokenExchangeGrantFactory) must be registered before every RFC 8693 token type handler, as it writes the 'act' claim onto the session they issue the token from", ErrHandlerOrder))
+	}
+
+	switch {
+	case !validator:
+		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered with the other RFC 8693 handlers, as it requires a validated subject token and enforces the 'may_act' claim", ErrHandlerOrder))
+	case validatorUnordered:
+		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered after every RFC 8693 token type handler, as it enforces the 'may_act' claim on the tokens they validate", ErrHandlerOrder))
+	}
+
+	return err
 }
 
 // validateTokenEndpointBindingHandlerOrder returns an error when both key binding token endpoint binding handlers are

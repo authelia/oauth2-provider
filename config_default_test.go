@@ -137,6 +137,18 @@ func TestConfigIntrospectionEndpointClientAuthDisabled(t *testing.T) {
 	})
 }
 
+func TestConfigIntrospectionTokenTypeEnabled(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("DefaultsToDisabled", func(t *testing.T) {
+		assert.False(t, (&Config{}).GetIntrospectionTokenTypeEnabled(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		assert.True(t, (&Config{IntrospectionTokenTypeEnabled: true}).GetIntrospectionTokenTypeEnabled(ctx))
+	})
+}
+
 func TestConfigRFC7591ClientRegistrationMetadataStrategy(t *testing.T) {
 	config := &Config{}
 

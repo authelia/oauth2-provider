@@ -352,13 +352,18 @@ func (s *MemoryStore) DeleteClient(_ context.Context, id string) (err error) {
 	return nil
 }
 
+// SetTokenLifespans replaces the stored client with a copy that has the given lifespans. A client already returned by
+// GetClient is not modified.
 func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.ClientLifespanConfig) error {
-	s.clientsMutex.RLock()
-	defer s.clientsMutex.RUnlock()
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
 
 	if client, ok := s.Clients[clientID]; ok {
 		if clc, ok := client.(*oauth2.DefaultClientWithCustomTokenLifespans); ok {
-			clc.SetTokenLifespans(lifespans)
+			updated := *clc
+			updated.SetTokenLifespans(lifespans)
+
+			s.Clients[clientID] = &updated
 
 			return nil
 		}

@@ -399,6 +399,72 @@ func TestMemoryStore_InvalidateDeviceCodeSessionKeepsTheRequester(t *testing.T) 
 	require.ErrorIs(t, store.CreateDeviceCodeSession(t.Context(), "other", request), oauth2.ErrDuplicateUserCode)
 }
 
+func TestMemoryStore_SetTokenLifespans(t *testing.T) {
+	lifespan := time.Hour
+	lifespans := &oauth2.ClientLifespanConfig{ClientCredentialsGrantAccessTokenLifespan: &lifespan}
+
+	t.Run("ShouldReplaceTheStoredClient", func(t *testing.T) {
+		store := NewExampleStore()
+
+		before, err := store.GetClient(t.Context(), "custom-lifespan-client")
+		require.NoError(t, err)
+
+		previous := before.(*oauth2.DefaultClientWithCustomTokenLifespans).GetTokenLifespans()
+
+		require.NoError(t, store.SetTokenLifespans("custom-lifespan-client", lifespans))
+
+		after, err := store.GetClient(t.Context(), "custom-lifespan-client")
+		require.NoError(t, err)
+
+		assert.Equal(t, lifespans, after.(*oauth2.DefaultClientWithCustomTokenLifespans).GetTokenLifespans())
+		assert.Same(t, previous, before.(*oauth2.DefaultClientWithCustomTokenLifespans).GetTokenLifespans())
+		assert.Equal(t, before.GetID(), after.GetID())
+	})
+
+	t.Run("ShouldRejectUnknownClient", func(t *testing.T) {
+		store := NewExampleStore()
+
+		require.ErrorIs(t, store.SetTokenLifespans("unknown", lifespans), oauth2.ErrNotFound)
+	})
+
+	t.Run("ShouldRejectClientWithoutCustomLifespans", func(t *testing.T) {
+		store := NewExampleStore()
+
+		require.Error(t, store.SetTokenLifespans("my-client", lifespans))
+	})
+
+	t.Run("ShouldNotRaceWithReaders", func(t *testing.T) {
+		store := NewExampleStore()
+
+		var wg sync.WaitGroup
+
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+
+			for range 100 {
+				client, err := store.GetClient(context.Background(), "custom-lifespan-client")
+				if err != nil {
+					continue
+				}
+
+				oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, time.Minute)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			for range 100 {
+				_ = store.SetTokenLifespans("custom-lifespan-client", lifespans)
+			}
+		}()
+
+		wg.Wait()
+	})
+}
+
 func TestMemoryStore_DeletePARSessionConsumesOnce(t *testing.T) {
 	testCases := []struct {
 		name  string

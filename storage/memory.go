@@ -676,10 +676,17 @@ func (s *MemoryStore) GetPARSession(ctx context.Context, requestURI string) (oau
 	return r, nil
 }
 
-// DeletePARSession deletes the context.
+// DeletePARSession deletes the context. It returns oauth2.ErrNotFound if the context does not exist, so a request_uri
+// is only consumed once per RFC 9126 Section 4.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-4
 func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (err error) {
 	s.parSessionsMutex.Lock()
 	defer s.parSessionsMutex.Unlock()
+
+	if _, ok := s.PARSessions[requestURI]; !ok {
+		return oauth2.ErrNotFound
+	}
 
 	delete(s.PARSessions, requestURI)
 

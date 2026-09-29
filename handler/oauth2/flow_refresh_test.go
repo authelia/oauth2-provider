@@ -21,6 +21,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -449,6 +450,76 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 			if tc.expect != nil {
 				tc.expect(t, requester)
 			}
+		})
+	}
+}
+
+func TestRefreshFlow_HandleTokenEndpointRequestValidationErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		secret   []byte
+		token    func(token string) string
+		inactive bool
+		expected error
+	}{
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecret",
+			secret:   []byte("short"),
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecretWithInactiveToken",
+			secret:   []byte("short"),
+			inactive: true,
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnInvalidGrantForCorruptToken",
+			secret:   []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+			token:    func(token string) string { return "authelia_rt_!" + token[len("authelia_rt_"):] },
+			expected: oauth2.ErrInvalidGrant,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			client := &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+			token, sig, err := hmacshaStrategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			if tc.token != nil {
+				token = tc.token(token)
+			}
+
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+				ID:           "request-id",
+				Client:       client,
+				GrantedScope: oauth2.Arguments{consts.ScopeOffline},
+				Session:      &oauth2.DefaultSession{},
+			}))
+
+			if tc.inactive {
+				require.NoError(t, store.RotateRefreshToken(t.Context(), "request-id", sig))
+			}
+
+			strategy := hmacshaStrategy
+			strategy.Enigma = &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: tc.secret}}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   &strategy,
+				Config:                 &oauth2.Config{},
+			}
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+			requester.Client = client
+			requester.Form = url.Values{consts.FormParameterRefreshToken: {token}}
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+			assert.ErrorIs(t, err, tc.expected)
 		})
 	}
 }

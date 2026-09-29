@@ -55,6 +55,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	switch {
 	case err == nil:
 		if err = c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); err != nil {
+			if !isTokenRejection(err) {
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+			}
+
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
@@ -65,6 +69,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		}
 
 		if verr := c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); !isIntactToken(verr) {
+			if !isTokenRejection(verr) {
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(verr).WithDebugError(verr))
+			}
+
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 

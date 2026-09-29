@@ -29,6 +29,10 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //
 // The rules are:
 //
+//   - Every openid.OpenIDConnectExplicitHandler must follow the hoauth2.AuthorizeExplicitGrantHandler, and every
+//     pkce.Handler must follow the hoauth2.AuthorizeExplicitGrantHandler and the openid.OpenIDConnectHybridHandler, in
+//     the authorize endpoint handlers. Each records a session keyed by the authorization code the handler it follows
+//     issues, so registered first it finds no code and fails the request.
 //   - Every pkce.Handler must follow the hoauth2.AuthorizeExplicitGrantHandler in the token endpoint handlers. The
 //     PKCE request session is removed once the token request succeeds, so the authorization code must already be
 //     invalidated; otherwise a request failing in between leaves the code redeemable without its PKCE binding.
@@ -50,6 +54,7 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 // Except for the RFC 8693 rule, a rule only applies when both handlers are registered.
 func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 	return errors.Join(
+		validateAuthorizeEndpointHandlerOrder(config),
 		validateTokenEndpointHandlerOrder(config),
 		validateRFC8693HandlerOrder(config),
 		validateTokenEndpointBindingHandlerOrder(config),
@@ -57,35 +62,53 @@ func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 	)
 }
 
+func validateAuthorizeEndpointHandlerOrder(config *oauth2.Config) (err error) {
+	handlers := config.AuthorizeEndpointHandlers
+
+	if handlerPrecedes[*openid.OpenIDConnectExplicitHandler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectExplicitHandler (OpenIDConnectExplicitFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory) in the authorize endpoint handlers, as it records the OpenID Connect session under the authorization code the hoauth2.AuthorizeExplicitGrantHandler issues", ErrHandlerOrder))
+	}
+
+	if handlerPrecedes[*pkce.Handler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory) in the authorize endpoint handlers, as it records the PKCE request session under the authorization code the hoauth2.AuthorizeExplicitGrantHandler issues", ErrHandlerOrder))
+	}
+
+	if handlerPrecedes[*pkce.Handler, *openid.OpenIDConnectHybridHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must be registered after the openid.OpenIDConnectHybridHandler (OpenIDConnectHybridFactory) in the authorize endpoint handlers, as it records the PKCE request session under the authorization code the openid.OpenIDConnectHybridHandler issues", ErrHandlerOrder))
+	}
+
+	return err
+}
+
 func validateTokenEndpointHandlerOrder(config *oauth2.Config) (err error) {
 	handlers := config.TokenEndpointHandlers
 
-	if tokenEndpointHandlerPrecedes[*pkce.Handler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+	if handlerPrecedes[*pkce.Handler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it removes the PKCE request session which must outlive the authorization code", ErrHandlerOrder))
 	}
 
-	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectExplicitHandler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
+	if handlerPrecedes[*openid.OpenIDConnectExplicitHandler, *hoauth2.AuthorizeExplicitGrantHandler](handlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectExplicitHandler (OpenIDConnectExplicitFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it computes the ID Token 'at_hash' claim from the access token the hoauth2.AuthorizeExplicitGrantHandler issues", ErrHandlerOrder))
 	}
 
-	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectRefreshHandler, *hoauth2.RefreshTokenGrantHandler](handlers) {
+	if handlerPrecedes[*openid.OpenIDConnectRefreshHandler, *hoauth2.RefreshTokenGrantHandler](handlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectRefreshHandler (OpenIDConnectRefreshFactory) must be registered after the hoauth2.RefreshTokenGrantHandler (OAuth2RefreshTokenGrantFactory), as it computes the ID Token 'at_hash' claim from the access token the hoauth2.RefreshTokenGrantHandler issues", ErrHandlerOrder))
 	}
 
-	if tokenEndpointHandlerPrecedes[*openid.OpenIDConnectDeviceAuthorizeHandler, *rfc8628.DeviceAuthorizeTokenEndpointHandler](handlers) {
+	if handlerPrecedes[*openid.OpenIDConnectDeviceAuthorizeHandler, *rfc8628.DeviceAuthorizeTokenEndpointHandler](handlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectDeviceAuthorizeHandler (OpenIDConnectDeviceAuthorizeFactory) must be registered after the rfc8628.DeviceAuthorizeTokenEndpointHandler (RFC8628DeviceAuthorizeTokenFactory), as it computes the ID Token 'at_hash' claim from the access token the rfc8628.DeviceAuthorizeTokenEndpointHandler issues", ErrHandlerOrder))
 	}
 
 	return err
 }
 
-func tokenEndpointHandlerPrecedes[Dependent, Dependency oauth2.TokenEndpointHandler](handlers oauth2.TokenEndpointHandlers) bool {
+func handlerPrecedes[Dependent, Dependency, Handler any](handlers []Handler) bool {
 	var dependency, unordered bool
 
 	for _, handler := range handlers {
-		if _, ok := handler.(Dependency); ok {
+		if _, ok := any(handler).(Dependency); ok {
 			dependency = true
-		} else if _, ok = handler.(Dependent); ok && !dependency {
+		} else if _, ok = any(handler).(Dependent); ok && !dependency {
 			unordered = true
 		}
 	}

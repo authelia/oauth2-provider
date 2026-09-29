@@ -89,6 +89,41 @@ func TestValidateHandlerOrderOpenIDConnect(t *testing.T) {
 	}
 }
 
+func TestValidateHandlerOrderAuthorizeEndpoint(t *testing.T) {
+	explicit, hybrid := &hoauth2.AuthorizeExplicitGrantHandler{}, &openid.OpenIDConnectHybridHandler{}
+	oidc, proof := &openid.OpenIDConnectExplicitHandler{}, &pkce.Handler{}
+
+	testCases := []struct {
+		name     string
+		handlers oauth2.AuthorizeEndpointHandlers
+		contains []string
+	}{
+		{name: "ShouldPassInTheDocumentedOrder", handlers: oauth2.AuthorizeEndpointHandlers{explicit, oidc, hybrid, proof}},
+		{name: "ShouldPassWithTheDependentHandlersAlone", handlers: oauth2.AuthorizeEndpointHandlers{oidc, proof}},
+		{name: "ShouldFailWhenTheOpenIDConnectExplicitHandlerIsRegisteredFirst", handlers: oauth2.AuthorizeEndpointHandlers{oidc, explicit}, contains: []string{"openid.OpenIDConnectExplicitHandler"}},
+		{name: "ShouldFailWhenThePKCEHandlerPrecedesTheExplicitHandler", handlers: oauth2.AuthorizeEndpointHandlers{proof, explicit}, contains: []string{"pkce.Handler", "hoauth2.AuthorizeExplicitGrantHandler"}},
+		{name: "ShouldFailWhenThePKCEHandlerPrecedesTheHybridHandler", handlers: oauth2.AuthorizeEndpointHandlers{explicit, proof, hybrid}, contains: []string{"pkce.Handler", "openid.OpenIDConnectHybridHandler"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateHandlerOrder(&oauth2.Config{AuthorizeEndpointHandlers: tc.handlers})
+
+			if len(tc.contains) == 0 {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrHandlerOrder)
+
+			for _, contains := range tc.contains {
+				assert.Contains(t, err.Error(), contains)
+			}
+		})
+	}
+}
+
 func TestValidateHandlerOrderRFC8693(t *testing.T) {
 	grant, access, refresh, validator := &rfc8693.TokenExchangeGrantHandler{}, &rfc8693.AccessTokenTypeHandler{}, &rfc8693.RefreshTokenTypeHandler{}, &rfc8693.ActorTokenValidationHandler{}
 	id, custom := &rfc8693.IDTokenTypeHandler{}, &rfc8693.CustomJWTTypeHandler{}
@@ -155,7 +190,7 @@ func TestComposeAllEnabledPassesValidateHandlerOrder(t *testing.T) {
 func TestComposePanicsWhenThePKCEFactoryPrecedesTheExplicitFactory(t *testing.T) {
 	config := &oauth2.Config{GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
 
-	assert.PanicsWithError(t, "oauth2: handlers are registered in an order which does not work: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it removes the PKCE request session which must outlive the authorization code", func() {
+	assert.PanicsWithError(t, "oauth2: handlers are registered in an order which does not work: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory) in the authorize endpoint handlers, as it records the PKCE request session under the authorization code the hoauth2.AuthorizeExplicitGrantHandler issues\noauth2: handlers are registered in an order which does not work: the pkce.Handler (OAuth2PKCEFactory) must be registered after the hoauth2.AuthorizeExplicitGrantHandler (OAuth2AuthorizeExplicitFactory), as it removes the PKCE request session which must outlive the authorization code", func() {
 		_ = Compose(config, storage.NewMemoryStore(), NewOAuth2HMACStrategy(config), OAuth2PKCEFactory, OAuth2AuthorizeExplicitFactory)
 	})
 }

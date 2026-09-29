@@ -21,6 +21,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -69,6 +70,27 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
 			},
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token has not been found: Could not find the requested resource(s).",
+		},
+		{
+			name: "ShouldRejectMalformedTokenWithInvalidGrant",
+			setup: func(requester *oauth2.AccessRequest, store *storage.MemoryStore, config *oauth2.Config) {
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+				_, sig, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				requester.Form.Add(consts.FormParameterRefreshToken, "authelia_rt_."+sig)
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+					Client:         requester.Client,
+					GrantedScope:   oauth2.Arguments{consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{consts.ScopeOffline},
+					Session:        session,
+					RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
+				})
+				require.NoError(t, err)
+			},
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The token provided is expired, revoked, malformed, or invalid for other reasons. Check that you provided a valid token in the right format.",
 		},
 		{
 			name: "ShouldFailClientMismatches",
@@ -330,7 +352,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			err: "The token was not granted the requested scope. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
 		},
 		{
 			name: "ShouldPassWithoutOfflineScopeWhenConfigured",
@@ -428,6 +450,76 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 			if tc.expect != nil {
 				tc.expect(t, requester)
 			}
+		})
+	}
+}
+
+func TestRefreshFlow_HandleTokenEndpointRequestValidationErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		secret   []byte
+		token    func(token string) string
+		inactive bool
+		expected error
+	}{
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecret",
+			secret:   []byte("short"),
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecretWithInactiveToken",
+			secret:   []byte("short"),
+			inactive: true,
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnInvalidGrantForCorruptToken",
+			secret:   []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+			token:    func(token string) string { return "authelia_rt_!" + token[len("authelia_rt_"):] },
+			expected: oauth2.ErrInvalidGrant,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			client := &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+			token, sig, err := hmacshaStrategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			if tc.token != nil {
+				token = tc.token(token)
+			}
+
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+				ID:           "request-id",
+				Client:       client,
+				GrantedScope: oauth2.Arguments{consts.ScopeOffline},
+				Session:      &oauth2.DefaultSession{},
+			}))
+
+			if tc.inactive {
+				require.NoError(t, store.RotateRefreshToken(t.Context(), "request-id", sig))
+			}
+
+			strategy := hmacshaStrategy
+			strategy.Enigma = &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: tc.secret}}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   &strategy,
+				Config:                 &oauth2.Config{},
+			}
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+			requester.Client = client
+			requester.Form = url.Values{consts.FormParameterRefreshToken: {token}}
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+			assert.ErrorIs(t, err, tc.expected)
 		})
 	}
 }

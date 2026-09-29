@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -54,4 +55,20 @@ func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time
 
 func isIntactToken(err error) bool {
 	return err == nil || errors.Is(err, oauth2.ErrTokenExpired) || errors.Is(err, oauth2.ErrDeviceExpiredToken)
+}
+
+func isTokenRejection(err error) bool {
+	var (
+		rfc     *oauth2.RFC6749Error
+		corrupt base64.CorruptInputError
+	)
+
+	switch {
+	case errors.As(err, &corrupt):
+		return true
+	case errors.As(err, &rfc):
+		return !errors.Is(err, oauth2.ErrServerError)
+	default:
+		return false
+	}
 }

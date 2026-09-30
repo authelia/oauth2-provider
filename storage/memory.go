@@ -788,6 +788,7 @@ func (s *MemoryStore) GetIDJAGRelationship(_ context.Context, request oauth2.Acc
 
 	relationship.Scopes = slices.Clone(relationship.Scopes)
 	relationship.Resources = slices.Clone(relationship.Resources)
+	relationship.AuthorizationDetailsTypes = slices.Clone(relationship.AuthorizationDetailsTypes)
 
 	return &relationship, nil
 }

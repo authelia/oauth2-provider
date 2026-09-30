@@ -33,6 +33,10 @@ import (
 // session (Section 3.1). For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler supplies them from the
 // ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
+// It accepts the RFC 9396 'authorization_details' parameter and grants the requested details whose type the
+// relationship permits. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler also rejects any
+// requested detail not contained in the details granted to the refresh token.
+//
 // The 'cnf' claim carries the thumbprint bound to the session, which equals the validated DPoP proof key only when
 // rfc9449.Handler is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token.
 //
@@ -65,10 +69,6 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 		return nil
 	}
 
-	if request.GetRequestForm().Has(formParameterAuthorizationDetails) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is not supported.", formParameterAuthorizationDetails))
-	}
-
 	relationship, err := h.relationship(ctx, request)
 	if err != nil {
 		return err
@@ -89,6 +89,8 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 			request.GrantScope(scope)
 		}
 	}
+
+	grantAuthorizationDetails(request, relationship)
 
 	request.GrantAudience(relationship.Issuer)
 
@@ -148,6 +150,15 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693IDJAG)
 
+	if len(request.GetRequestedAuthorizationDetails()) != 0 {
+		granted := request.GetGrantedAuthorizationDetails()
+		if granted == nil {
+			granted = oauth2.AuthorizationDetails{}
+		}
+
+		response.SetExtra(consts.AccessResponseAuthorizationDetails, granted)
+	}
+
 	return nil
 }
 
@@ -161,6 +172,14 @@ func (h *IssueHandler) CanHandleTokenEndpointRequest(_ context.Context, request 
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
+// CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. It accepts the RFC 9396
+// 'authorization_details' parameter of a token exchange requesting an ID-JAG.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.1
+func (h *IssueHandler) CanHandleAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester) bool {
+	return rfc8693.IsIDJAGRequest(ctx, request, h.Config)
+}
+
 func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, subject string, now, expires time.Time) (claims jwt.MapClaims) {
 	claims = jwt.MapClaims{}
 
@@ -170,7 +189,7 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 
 	delete(claims, consts.ClaimConfirmation)
 	delete(claims, consts.ClaimActor)
-	delete(claims, claimAuthorizationDetails)
+	delete(claims, consts.ClaimAuthorizationDetails)
 	delete(claims, consts.ClaimResource)
 	delete(claims, consts.ClaimScope)
 
@@ -208,6 +227,10 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 		claims[consts.ClaimResource] = []string(resources)
 	}
 
+	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+		claims[consts.ClaimAuthorizationDetails] = details
+	}
+
 	if h.Config.GetDPoPEnabled(ctx) {
 		if session, ok := request.GetSession().(oauth2.DPoPBoundSession); ok && session.GetDPoPJWKThumbprint() != "" {
 			claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationJWKThumbprint: session.GetDPoPJWKThumbprint()}
@@ -234,6 +257,23 @@ func authenticationSources(session oauth2.Session) (sources []*jwt.IDTokenClaims
 	}
 
 	return sources
+}
+
+func grantAuthorizationDetails(request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) {
+	requested := request.GetRequestedAuthorizationDetails()
+	if len(requested) == 0 {
+		return
+	}
+
+	granted := oauth2.AuthorizationDetails{}
+
+	for _, detail := range requested {
+		if relationship.AuthorizationDetailsTypes == nil || slices.Contains(relationship.AuthorizationDetailsTypes, detail.Type) {
+			granted = append(granted, detail)
+		}
+	}
+
+	request.SetGrantedAuthorizationDetails(granted)
 }
 
 func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRequester) (relationship *oauth2.IDJAGRelationship, err error) {
@@ -263,5 +303,6 @@ func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRe
 }
 
 var (
-	_ oauth2.TokenEndpointHandler = (*IssueHandler)(nil)
+	_ oauth2.TokenEndpointHandler                     = (*IssueHandler)(nil)
+	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*IssueHandler)(nil)
 )

@@ -29,6 +29,7 @@ import (
 	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
@@ -54,6 +55,12 @@ const (
 	redeemJKT      = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
 	redeemJWKSURI  = "https://idp.example/jwks"
 	redeemEndpoint = "https://chat.example/token"
+
+	redeemActionInitiate = "initiate"
+	redeemActionRead     = "read"
+	redeemMemberType     = "type"
+	redeemMemberActions  = "actions"
+	redeemMalformed      = "not-an-array"
 )
 
 func TestRedeemHandlerValidation(t *testing.T) {
@@ -106,7 +113,7 @@ func TestRedeemHandlerValidation(t *testing.T) {
 		{name: "ShouldRejectMissingSub", mutate: func(c map[string]any) { delete(c, "sub") }, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectExpired", mutate: func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() }, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectFutureIAT", mutate: func(c map[string]any) { c["iat"] = time.Now().Add(time.Hour).Unix() }, err: oauth2.ErrInvalidGrant},
-		{name: "ShouldRejectAuthorizationDetailsClaim", mutate: func(c map[string]any) { c["authorization_details"] = []any{} }, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAuthorizationDetailsClaim", mutate: func(c map[string]any) { c[consts.ClaimAuthorizationDetails] = []any{} }, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectUnlistedAlgorithm", alg: jose.PS256, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectSymmetricAlgorithm", alg: jose.HS256, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldAcceptKeyWithoutUseOrAlg", setup: func(store *storage.MemoryStore) {
@@ -650,6 +657,89 @@ func TestRedeemHandlerPopulateBoundTokenEndpointResponse(t *testing.T) {
 
 	require.NoError(t, fixture.handler.PopulateBoundTokenEndpointResponse(t.Context(), newRedeemRequest(fixture.store.Clients[redeemClient], "", nil), response))
 	assert.Equal(t, oauth2.BearerAccessToken, response.GetTokenType())
+}
+
+func TestRedeemHandlerAuthorizationDetails(t *testing.T) {
+	payment := map[string]any{redeemMemberType: internal.AuthorizationDetailsTypePaymentInitiation, redeemMemberActions: []any{redeemActionInitiate}}
+	invalid := map[string]any{redeemMemberType: internal.AuthorizationDetailsTypePaymentInitiation, redeemMemberActions: []any{"unknown"}}
+	unsupported := map[string]any{redeemMemberType: "unsupported", redeemMemberActions: []any{redeemActionRead}}
+
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}}
+
+	testCases := []struct {
+		name     string
+		enabled  bool
+		claim    any
+		null     bool
+		maximum  int
+		client   oauth2.Client
+		expected oauth2.AuthorizationDetails
+		err      error
+	}{
+		{name: "ShouldGrantValidDetails", enabled: true, claim: []any{payment}, expected: granted},
+		// Section 4.4.1: the Resource AS MAY filter authorization details based on policy.
+		{name: "ShouldDropInvalidDetails", enabled: true, claim: []any{payment, invalid}, expected: granted},
+		{name: "ShouldDropUnsupportedTypes", enabled: true, claim: []any{payment, unsupported}, expected: granted},
+		{name: "ShouldDropTypesTheClientMayNotRequest", enabled: true, claim: []any{payment}, client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{ID: redeemClient, GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer}, Scopes: oauth2.Arguments{redeemRead, redeemHistory, redeemOffline}, Audience: oauth2.Arguments{redeemResource}}, AuthorizationDetailsTypes: []string{"other"}}},
+		{name: "ShouldGrantNothingWhenEveryDetailIsDropped", enabled: true, claim: []any{invalid}},
+		{name: "ShouldGrantNothingWithoutClaim", enabled: true},
+		{name: "ShouldRejectNullClaim", enabled: true, null: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectMalformedClaim", enabled: true, claim: redeemMalformed, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldGrantDetailsAtTheObjectLimit", enabled: true, claim: []any{payment}, maximum: 1, expected: granted},
+		{name: "ShouldRejectDetailsOverTheObjectLimit", enabled: true, claim: []any{payment, invalid}, maximum: 1, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectEmptyClaim", enabled: true, claim: []any{}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectClaimWhenDisabled", claim: []any{payment}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectMalformedClaimWhenDisabled", claim: redeemMalformed, err: oauth2.ErrInvalidGrant},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newRedeemFixture(t, false)
+
+			if tc.enabled {
+				fixture.config.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+			}
+
+			fixture.config.AuthorizationDetailsMaxObjects = tc.maximum
+
+			claims := fixture.claims()
+			if tc.claim != nil {
+				claims[consts.ClaimAuthorizationDetails] = tc.claim
+			}
+
+			if tc.null {
+				claims[consts.ClaimAuthorizationDetails] = nil
+			}
+
+			client := tc.client
+			if client == nil {
+				client = fixture.store.Clients[redeemClient]
+			}
+
+			request := newRedeemRequest(client, fixture.sign(t, claims, "", "", ""), nil)
+
+			err := fixture.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expected, request.GetGrantedAuthorizationDetails())
+
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, fixture.handler.PopulateTokenEndpointResponse(t.Context(), request, response))
+
+			if tc.expected == nil {
+				assert.Nil(t, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+			} else {
+				assert.Equal(t, tc.expected, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+			}
+		})
+	}
 }
 
 type redeemSession struct {

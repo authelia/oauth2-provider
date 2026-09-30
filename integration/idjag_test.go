@@ -28,6 +28,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -460,6 +461,85 @@ func TestIDJAG(t *testing.T) {
 				assert.Empty(t, redeemed.AccessToken)
 			})
 
+			t.Run("ShouldCarryAuthorizationDetails", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new, idjagOptions{rar: true})
+
+				requested := idjagDetailsInitiate
+
+				form := env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL)
+				form.Set(consts.FormParameterAuthorizationDetails, requested)
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+				assert.JSONEq(t, requested, string(token.AuthorizationDetails))
+
+				_, claims := env.decodeIDJAG(t, token.AccessToken)
+				assert.Equal(t, []any{map[string]any{"type": internal.AuthorizationDetailsTypePaymentInitiation, "actions": []any{idjagInitiate}}}, claims[consts.ClaimAuthorizationDetails])
+
+				// Section 4.4.1: the granted details are included in the access token response.
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), "")
+				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
+				assert.JSONEq(t, requested, string(redeemed.AuthorizationDetails))
+
+				// Section 4.4.1: the granted details are bound to the issued access token.
+				_, ar, err := env.rsProvider.IntrospectToken(t.Context(), redeemed.AccessToken, oauth2.AccessToken, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+				assert.Equal(t, oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate}}}, ar.GetGrantedAuthorizationDetails())
+			})
+
+			t.Run("ShouldBoundARefreshTokenSubjectAuthorizationDetailsByItsGrant", func(t *testing.T) {
+				initiate := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate}}
+				both := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate, idjagStatus}}
+
+				testCases := []struct {
+					name      string
+					granted   oauth2.AuthorizationDetails
+					requested string
+					err       string
+				}{
+					// Section 4.3.3: the requested details remain within the authorization context of the refresh token.
+					{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: idjagDetailsStatus},
+					{name: "ShouldRejectDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: idjagDetailsStatus, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
+					{name: "ShouldRejectDetailsWhenNoneWereGranted", requested: idjagDetailsInitiate, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
+				}
+
+				for _, tc := range testCases {
+					t.Run(tc.name, func(t *testing.T) {
+						env := newIDJAGEnvironment(t, s.new, idjagOptions{rar: true})
+
+						form := env.exchangeForm(env.refreshToken(t, []string{idjagScope}, []string{env.rs.URL}, []string{env.rs.URL + idjagResourcePath}, tc.granted...), consts.TokenTypeRFC8693RefreshToken, env.rs.URL)
+						form.Set(consts.FormParameterAuthorizationDetails, tc.requested)
+
+						status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+
+						if tc.err != "" {
+							assert.Equal(t, http.StatusBadRequest, status)
+							assert.Equal(t, tc.err, errBody.Error)
+							assert.Empty(t, token.AccessToken)
+
+							return
+						}
+
+						require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+						assert.JSONEq(t, tc.requested, string(token.AuthorizationDetails))
+					})
+				}
+			})
+
+			t.Run("ShouldIgnoreAuthorizationDetailsWhenDisabled", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				form := env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL)
+				form.Set(consts.FormParameterAuthorizationDetails, "not json")
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+				assert.Empty(t, token.AuthorizationDetails)
+
+				_, claims := env.decodeIDJAG(t, token.AccessToken)
+				assert.NotContains(t, claims, consts.ClaimAuthorizationDetails)
+			})
+
 			// Section 9.1: the grant is for confidential clients.
 			t.Run("ShouldRejectPublicClient", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)
@@ -516,6 +596,10 @@ const (
 	idjagProofMatch        = "matching"
 	idjagProofOther        = "other"
 	idjagEnvironmentTarget = "environment"
+	idjagInitiate          = "initiate"
+	idjagStatus            = "status"
+	idjagDetailsInitiate   = `[{"type":"payment_initiation","actions":["initiate"]}]`
+	idjagDetailsStatus     = `[{"type":"payment_initiation","actions":["status"]}]`
 )
 
 type idjagTokenResponse struct {
@@ -526,16 +610,21 @@ type idjagTokenResponse struct {
 	Scope           string `json:"scope"`
 	ExpiresIn       int64  `json:"expires_in"`
 	Resource        any    `json:"resource"`
+
+	AuthorizationDetails json.RawMessage `json:"authorization_details"`
 }
 
 type idjagOptions struct {
 	enforce        bool
 	singleUse      bool
 	skipClientAuth bool
+	rar            bool
 }
 
 type idjagEnvironment struct {
 	idp, rs *httptest.Server
+
+	rsProvider oauth2.Provider
 
 	idpKey      *rsa.PrivateKey
 	rsMemory    *storage.MemoryStore
@@ -622,6 +711,11 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		rsConfig.DPoPEnforce = opts[0].enforce
 		rsConfig.IDJAGSingleUse = opts[0].singleUse
 		rsConfig.GrantTypeJWTBearerCanSkipClientAuth = opts[0].skipClientAuth
+
+		if opts[0].rar {
+			idpConfig.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+			rsConfig.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+		}
 	}
 
 	rsStore, rsMemory := newStore()
@@ -663,6 +757,8 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		compose.OAuth2TokenIntrospectionFactory,
 	)
 
+	env.rsProvider = rsProvider
+
 	rsMux.HandleFunc(tokenRelativePath, idjagTokenHandler(rsProvider, func() oauth2.Session { return &oauth2.DefaultSession{} }))
 
 	return env
@@ -688,7 +784,7 @@ func (env *idjagEnvironment) idToken(t *testing.T) string {
 	return token
 }
 
-func (env *idjagEnvironment) refreshToken(t *testing.T, scopes, audience, resources []string) string {
+func (env *idjagEnvironment) refreshToken(t *testing.T, scopes, audience, resources []string, details ...oauth2.AuthorizationDetail) string {
 	t.Helper()
 
 	return env.refreshTokenWithSession(t, &oauth2.DefaultSession{
@@ -697,10 +793,10 @@ func (env *idjagEnvironment) refreshToken(t *testing.T, scopes, audience, resour
 		ExpiresAt: map[oauth2.TokenType]time.Time{
 			oauth2.RefreshToken: time.Now().UTC().Add(10 * time.Minute),
 		},
-	}, scopes, audience, resources)
+	}, scopes, audience, resources, details...)
 }
 
-func (env *idjagEnvironment) refreshTokenWithSession(t *testing.T, session oauth2.Session, scopes, audience, resources []string) string {
+func (env *idjagEnvironment) refreshTokenWithSession(t *testing.T, session oauth2.Session, scopes, audience, resources []string, details ...oauth2.AuthorizationDetail) string {
 	t.Helper()
 
 	ctx := context.Background()
@@ -716,6 +812,10 @@ func (env *idjagEnvironment) refreshTokenWithSession(t *testing.T, session oauth
 			GrantedResource: resources,
 			Session:         session,
 		},
+	}
+
+	if len(details) != 0 {
+		request.SetGrantedAuthorizationDetails(details)
 	}
 
 	token, signature, err := env.idpStrategy.GenerateRefreshToken(ctx, request)

@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/idjag"
 	"authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -39,6 +40,10 @@ const (
 	issueACRBronze   = "urn:acr:bronze"
 	issueAMRMFA      = "mfa"
 	issueAMRPassword = "pwd"
+
+	issueAudienceTyped = "urn:example:typed"
+	issueAudienceNone  = "urn:example:none"
+	issueOtherType     = "other_type"
 )
 
 func TestIssueHandlerHandle(t *testing.T) {
@@ -58,7 +63,6 @@ func TestIssueHandlerHandle(t *testing.T) {
 		{name: "ShouldRejectMultipleAudiences", audience: oauth2.Arguments{redeemAudience, issueAudienceURN}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectUnknownAudience", audience: oauth2.Arguments{redeemOther}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectResourceOutsideRelationship", audience: oauth2.Arguments{redeemAudience}, resource: oauth2.Arguments{redeemEvil}, err: oauth2.ErrInvalidTarget},
-		{name: "ShouldRejectAuthorizationDetails", audience: oauth2.Arguments{redeemAudience}, form: url.Values{"authorization_details": {"[]"}}, err: oauth2.ErrInvalidRequest},
 	}
 
 	for _, tc := range testCases {
@@ -328,6 +332,80 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 	}
 }
 
+func TestIssueHandlerAuthorizationDetails(t *testing.T) {
+	payment := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}
+	other := oauth2.AuthorizationDetail{Type: issueOtherType, Actions: []string{redeemActionRead}}
+
+	testCases := []struct {
+		name      string
+		audience  string
+		requested oauth2.AuthorizationDetails
+		expected  oauth2.AuthorizationDetails
+		claim     bool
+		response  bool
+	}{
+		{name: "ShouldGrantEveryTypeWhenUnrestricted", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment, other}, expected: oauth2.AuthorizationDetails{payment, other}, claim: true, response: true},
+		// Section 4.3.3: the IdP MAY filter authorization details based on policy.
+		{name: "ShouldDropTypesTheRelationshipDoesNotPermit", audience: issueAudienceTyped, requested: oauth2.AuthorizationDetails{payment, other}, expected: oauth2.AuthorizationDetails{payment}, claim: true, response: true},
+		// Section 4.3.4: the response carries the granted details whenever they differ from those requested.
+		{name: "ShouldReturnEmptyWhenNonePermitted", audience: issueAudienceNone, requested: oauth2.AuthorizationDetails{payment}, expected: oauth2.AuthorizationDetails{}, response: true},
+		{name: "ShouldOmitWhenNoneRequested", audience: redeemAudience},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, key := newIssueFixture(t, false)
+
+			request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+			request.RequestedAudience = oauth2.Arguments{tc.audience}
+			request.SetRequestedAuthorizationDetails(tc.requested)
+
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+			_, claims := parseIssued(t, response.GetAccessToken(), key)
+
+			if tc.claim {
+				raw, err := json.Marshal(claims[consts.ClaimAuthorizationDetails])
+				require.NoError(t, err)
+
+				details, err := oauth2.ParseAuthorizationDetails(string(raw))
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, details)
+			} else {
+				assert.NotContains(t, claims, consts.ClaimAuthorizationDetails)
+			}
+
+			if tc.response {
+				assert.Equal(t, tc.expected, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+			} else {
+				assert.Nil(t, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+			}
+		})
+	}
+}
+
+func TestIssueHandlerCanHandleAuthorizationDetails(t *testing.T) {
+	handler, _, _ := newIssueFixture(t, false)
+
+	testCases := []struct {
+		name     string
+		form     url.Values
+		expected bool
+	}{
+		{name: "ShouldAcceptIDJAGRequest", expected: true},
+		{name: "ShouldDeclineOtherRequestedTypes", form: url.Values{consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693AccessToken}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, handler.CanHandleAuthorizationDetails(t.Context(), newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), tc.form)))
+		})
+	}
+}
+
 type issueSession struct {
 	*rfc8693.DefaultSession
 
@@ -382,6 +460,15 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: redeemAudience}] = relationship
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceURN}] = relationship
+
+	typed := relationship
+	typed.AuthorizationDetailsTypes = []string{internal.AuthorizationDetailsTypePaymentInitiation}
+
+	none := relationship
+	none.AuthorizationDetailsTypes = []string{}
+
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceTyped}] = typed
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceNone}] = none
 
 	return &idjag.IssueHandler{
 		Config:   cfg,

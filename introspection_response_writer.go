@@ -245,7 +245,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation:
+			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails:
 				continue
 			default:
 				response[name] = value
@@ -273,6 +273,11 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 	if r.GetAccessRequester().GetSession().GetUsername() != "" {
 		response[jwt.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
+	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
+	if details := r.GetAccessRequester().GetGrantedAuthorizationDetails(); len(details) != 0 {
+		response[jwt.ClaimAuthorizationDetails] = details
 	}
 
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())

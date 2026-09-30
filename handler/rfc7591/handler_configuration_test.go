@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -361,6 +362,31 @@ func TestClientConfigurationHandlerEnforcesAudienceCeiling(t *testing.T) {
 		Audience:      []string{"https://ceiling.example.com", "https://outside.example.com"},
 	}
 	requester.Authenticated = grantableFixtureWithAudience(id, nil, oauth2.Arguments{"https://ceiling.example.com"})
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func TestClientConfigurationHandlerRejectsUnsupportedAuthorizationDetailsType(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, config, _ := newConfigurationHandler(t)
+	config.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:              []string{"https://example.com/cb"},
+		GrantTypes:                []string{"authorization_code"},
+		ResponseTypes:             []string{"code"},
+		AuthorizationDetailsTypes: []string{testAuthorizationDetailsTypeUnknown},
+	}
+	requester.Authenticated = grantableFixtureWithAudience(id, nil, nil)
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 

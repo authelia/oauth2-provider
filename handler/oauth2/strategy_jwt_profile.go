@@ -210,6 +210,13 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		mapClaims[consts.ClaimClientIdentifier] = requestClient.GetID()
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.1
+	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+		mapClaims[consts.ClaimAuthorizationDetails] = details
+	} else {
+		delete(mapClaims, consts.ClaimAuthorizationDetails)
+	}
+
 	// The claims above include the session's extra claims, which may carry a 'cnf' of their own. This rebuilds the
 	// claim from the session so the token asserts only the bindings the server actually established, and only for
 	// binding methods that are currently enabled.

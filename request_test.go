@@ -5,11 +5,13 @@
 package oauth2_test
 
 import (
+	"encoding/json"
 	"net/url"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/text/language"
 
 	. "authelia.com/provider/oauth2"
@@ -540,4 +542,61 @@ func TestRequestSanitize(t *testing.T) {
 			tc.check(t, build())
 		})
 	}
+}
+
+func TestRequestAuthorizationDetailsSettersCopy(t *testing.T) {
+	details := AuthorizationDetails{{Type: "a", Actions: []string{"read"}}}
+
+	r := NewRequest()
+	r.SetRequestedAuthorizationDetails(details)
+	r.SetGrantedAuthorizationDetails(details)
+
+	details[0].Actions[0] = "write"
+
+	assert.Equal(t, "read", r.GetRequestedAuthorizationDetails()[0].Actions[0])
+	assert.Equal(t, "read", r.GetGrantedAuthorizationDetails()[0].Actions[0])
+}
+
+func TestRequestMergeAuthorizationDetails(t *testing.T) {
+	source := NewRequest()
+	source.SetRequestedAuthorizationDetails(AuthorizationDetails{{Type: "a", Actions: []string{"read"}}})
+	source.SetGrantedAuthorizationDetails(AuthorizationDetails{{Type: "a", Actions: []string{"read"}, Identifier: new("enriched")}})
+
+	target := NewRequest()
+	target.Merge(source)
+
+	assert.Equal(t, source.GetRequestedAuthorizationDetails(), target.GetRequestedAuthorizationDetails())
+	assert.Equal(t, source.GetGrantedAuthorizationDetails(), target.GetGrantedAuthorizationDetails())
+
+	target.GetGrantedAuthorizationDetails()[0].Actions[0] = "write"
+	assert.Equal(t, "read", source.GetGrantedAuthorizationDetails()[0].Actions[0])
+
+	empty := NewRequest()
+	target.Merge(empty)
+	assert.Len(t, target.GetGrantedAuthorizationDetails(), 1)
+}
+
+func TestRequestAuthorizationDetailsJSONPersistence(t *testing.T) {
+	r := NewRequest()
+	r.SetRequestedAuthorizationDetails(AuthorizationDetails{{Type: "a", Extra: map[string]any{"k": "v"}}})
+	r.SetGrantedAuthorizationDetails(AuthorizationDetails{{Type: "a", Identifier: new("x"), Extra: map[string]any{"k": "v"}}})
+
+	data, err := json.Marshal(r)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(data), `"authorizationDetails":[{`)
+	assert.Contains(t, string(data), `"grantedAuthorizationDetails":[{`)
+
+	decoded := &Request{}
+	require.NoError(t, json.Unmarshal(data, decoded))
+
+	assert.Equal(t, r.GetRequestedAuthorizationDetails(), decoded.GetRequestedAuthorizationDetails())
+	assert.Equal(t, r.GetGrantedAuthorizationDetails(), decoded.GetGrantedAuthorizationDetails())
+}
+
+func TestRequestSanitizeKeepsAuthorizationDetails(t *testing.T) {
+	r := NewRequest()
+	r.SetGrantedAuthorizationDetails(AuthorizationDetails{{Type: "a"}})
+
+	assert.Equal(t, r.GetGrantedAuthorizationDetails(), r.Sanitize(nil).GetGrantedAuthorizationDetails())
 }

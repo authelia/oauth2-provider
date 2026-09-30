@@ -437,6 +437,18 @@ type Requester interface {
 	// GrantResource marks a request's resource indicator as granted.
 	GrantResource(resource string)
 
+	// GetRequestedAuthorizationDetails returns the requested RFC 9396 authorization details.
+	GetRequestedAuthorizationDetails() (details AuthorizationDetails)
+
+	// SetRequestedAuthorizationDetails sets the requested RFC 9396 authorization details.
+	SetRequestedAuthorizationDetails(details AuthorizationDetails)
+
+	// GetGrantedAuthorizationDetails returns the granted RFC 9396 authorization details.
+	GetGrantedAuthorizationDetails() (details AuthorizationDetails)
+
+	// SetGrantedAuthorizationDetails sets the granted RFC 9396 authorization details.
+	SetGrantedAuthorizationDetails(details AuthorizationDetails)
+
 	// GetSession returns a pointer to the request's session or nil if none is set.
 	GetSession() (session Session)
 

@@ -9,6 +9,9 @@ import "errors"
 const (
 	testEndpoint = "https://auth.example.com/register"
 	testClientID = "abc"
+
+	testAuthorizationDetailsTypeUnknown = "unknown"
+	testAuthorizationDetailsTypeOther   = "other"
 )
 
 var (

@@ -81,6 +81,13 @@ type DefaultRegisteredClient struct {
 
 	RequireSignedRequestObject bool `json:"require_signed_request_object"`
 
+	// RFC 9396 Section 10 (Rich Authorization Requests) client metadata. A nil value permits every type and a non-nil
+	// empty value permits none.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-10
+
+	AuthorizationDetailsTypes []string `json:"authorization_details_types"`
+
 	// OpenID Connect RP-Initiated Logout 1.0 and OpenID Connect Back-Channel Logout 1.0 client metadata.
 	//
 	// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ClientMetadata
@@ -438,7 +445,13 @@ var (
 	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
 	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
+	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)
 )
+
+// GetAuthorizationDetailsTypes returns the RFC 9396 authorization details types this client may request.
+func (c *DefaultRegisteredClient) GetAuthorizationDetailsTypes() (types []string) {
+	return c.AuthorizationDetailsTypes
+}
 
 // GetClientIDIssuedAt returns the time the client identifier was issued, or the zero time when it is not recorded.
 func (c *DefaultRegisteredClient) GetClientIDIssuedAt() (issued time.Time) {

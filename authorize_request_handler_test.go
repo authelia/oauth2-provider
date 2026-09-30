@@ -6,6 +6,8 @@ package oauth2_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,9 +19,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"authelia.com/provider/jose"
+
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 //   - https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
@@ -949,6 +955,265 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			if tc.form != nil {
 				assert.Equal(t, tc.form, actual.GetRequestForm())
 			}
+		})
+	}
+}
+
+func TestNewAuthorizeRequestAuthorizationDetails(t *testing.T) {
+	client := &DefaultClient{
+		ID:            "1234",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	restrictedClient := &internal.AuthorizationDetailsClient{
+		DefaultClient:             client,
+		AuthorizationDetailsTypes: []string{},
+	}
+
+	handlers := []AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+	testCases := []struct {
+		name     string
+		handlers []AuthorizationDetailsTypeHandler
+		max      int
+		client   Client
+		raw      string
+		err      error
+		expect   AuthorizationDetails
+	}{
+		{
+			name:     "ShouldAcceptDefaultMaximumObjects",
+			handlers: handlers,
+			client:   client,
+			raw:      newRARDetailsJSON(32),
+			expect:   newRARDetails(32),
+		},
+		{
+			name:     "ShouldRejectMoreObjectsThanDefaultMaximum",
+			handlers: handlers,
+			client:   client,
+			raw:      newRARDetailsJSON(33),
+			err:      ErrInvalidAuthorizationDetails,
+		},
+		{
+			name:     "ShouldRejectMoreObjectsThanConfiguredMaximum",
+			handlers: handlers,
+			max:      1,
+			client:   client,
+			raw:      newRARDetailsJSON(2),
+			err:      ErrInvalidAuthorizationDetails,
+		},
+		{
+			name:   "ShouldIgnoreWhenDisabled",
+			client: client,
+			raw:    testRARMalformedJSON,
+		},
+		{
+			name:     "ShouldParse",
+			handlers: handlers,
+			client:   client,
+			raw:      testRARDetailsJSON,
+			expect:   AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:     "ShouldRejectUnknownType",
+			handlers: handlers,
+			client:   client,
+			raw:      `[{"type":"x"}]`,
+			err:      ErrInvalidAuthorizationDetails,
+		},
+		{
+			name:     "ShouldRejectDisallowedForClient",
+			handlers: handlers,
+			client:   restrictedClient,
+			raw:      testRARDetailsJSON,
+			err:      ErrInvalidAuthorizationDetails,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(tc.client, nil)
+
+			config := &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy, AuthorizationDetailsTypeHandlers: tc.handlers, AuthorizationDetailsMaxObjects: tc.max}
+			provider := &Fosite{Store: store, Config: config}
+
+			r := &http.Request{
+				Method: http.MethodGet,
+				Header: http.Header{},
+				Form: url.Values{
+					consts.FormParameterClientID:             {"1234"},
+					consts.FormParameterRedirectURI:          {"https://foo.bar/cb"},
+					consts.FormParameterResponseType:         {consts.ResponseTypeAuthorizationCodeFlow},
+					consts.FormParameterState:                {"strong-state"},
+					consts.FormParameterScope:                {"foo"},
+					consts.FormParameterAuthorizationDetails: {tc.raw},
+				},
+			}
+
+			ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expect, ar.GetRequestedAuthorizationDetails())
+		})
+	}
+}
+
+func TestNewAuthorizeRequestAuthorizationDetailsFromRequestObject(t *testing.T) {
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwkPrivateSigRSA := jose.JSONWebKey{Key: keyRSA, KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+	jwkPublicSigRSA := jose.JSONWebKey{Key: keyRSA.Public(), KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+
+	client := &DefaultJARClient{
+		JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPublicSigRSA}},
+		RequestObjectSigningAlg: string(jose.RS256),
+		DefaultClient: &DefaultClient{
+			ID:            "foo",
+			RedirectURIs:  []string{"https://foo.bar/cb"},
+			Scopes:        []string{consts.ScopeOpenID},
+			ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mock.NewMockStorage(ctrl)
+	store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	config := &Config{
+		ScopeStrategy:                    ExactScopeStrategy,
+		AudienceStrategy:                 DefaultAudienceStrategy,
+		IDTokenIssuer:                    testRARIssuer,
+		JWKSFetcherStrategy:              NewDefaultJWKSFetcherStrategy(),
+		AuthorizationDetailsTypeHandlers: []AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
+	}
+
+	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPrivateSigRSA}})}
+	config.JWTStrategy = strategy
+
+	assertion, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
+		consts.ClaimIssuer:                       "foo",
+		consts.ClaimAudience:                     []string{testRARIssuer},
+		consts.FormParameterClientID:             "foo",
+		consts.FormParameterResponseType:         consts.ResponseTypeAuthorizationCodeFlow,
+		consts.FormParameterScope:                consts.ScopeOpenID,
+		consts.FormParameterState:                "strong-enough-state",
+		consts.FormParameterRedirectURI:          "https://foo.bar/cb",
+		consts.FormParameterAuthorizationDetails: []any{map[string]any{testRARMemberType: internal.AuthorizationDetailsTypePaymentInitiation, testRARMemberActions: []any{testRARActionInitiate}}},
+	})
+	require.NoError(t, err)
+
+	provider := &Fosite{Store: store, Config: config}
+
+	query := url.Values{
+		consts.FormParameterClientID:             {"foo"},
+		consts.FormParameterResponseType:         {consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterScope:                {consts.ScopeOpenID},
+		consts.FormParameterRequest:              {assertion},
+		consts.FormParameterAuthorizationDetails: {`[{"type":"payment_initiation","actions":["status"]}]`},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	details := ar.GetRequestedAuthorizationDetails()
+	require.Len(t, details, 1)
+	assert.Equal(t, internal.AuthorizationDetailsTypePaymentInitiation, details[0].Type)
+	assert.Equal(t, []string{testRARActionInitiate}, details[0].Actions)
+}
+
+func TestAuthorizeRequestFromPARRevalidatesAuthorizationDetails(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:rar"
+
+	redir, _ := url.Parse("https://foo.bar/cb")
+
+	newPARSessionWithDetails := func(client Client) *AuthorizeRequest {
+		par := NewAuthorizeRequest()
+		par.Client = client
+		par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+		par.State = "strong-enough-state"
+		par.RedirectURI = redir
+		par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+		par.RequestedScope = []string{"foo"}
+		par.SetRequestedAuthorizationDetails(AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}})
+
+		return par
+	}
+
+	testCases := []struct {
+		name  string
+		types []string
+		err   bool
+	}{
+		{name: "ShouldRejectWhenNoLongerAllowed", types: []string{}, err: true},
+		{name: "ShouldPassWhenAllowed", types: []string{internal.AuthorizationDetailsTypePaymentInitiation}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &internal.AuthorizationDetailsClient{
+				DefaultClient: &DefaultClient{
+					ID:            testRARClientID,
+					RedirectURIs:  []string{"https://foo.bar/cb"},
+					Scopes:        []string{"foo"},
+					ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				},
+				AuthorizationDetailsTypes: tc.types,
+			}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockStorage := mock.NewMockStorage(ctrl)
+			mockStorage.EXPECT().GetClient(gomock.Any(), testRARClientID).Return(client, nil)
+
+			mockPAR := mock.NewMockPARStorage(ctrl)
+			mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(newPARSessionWithDetails(client), nil)
+			mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil)
+
+			config := &Config{
+				ScopeStrategy:                    ExactScopeStrategy,
+				AudienceStrategy:                 DefaultAudienceStrategy,
+				AuthorizationDetailsTypeHandlers: []AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
+			}
+			provider := &Fosite{Store: &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR}, Config: config}
+
+			query := url.Values{
+				consts.FormParameterRequestURI: {requestURI},
+				consts.FormParameterClientID:   {testRARClientID},
+			}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+
+			if tc.err {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidAuthorizationDetails)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}}, ar.GetRequestedAuthorizationDetails())
 		})
 	}
 }

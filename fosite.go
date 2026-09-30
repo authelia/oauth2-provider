@@ -285,6 +285,7 @@ type Configurator interface {
 	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
 	ResourceStrategyProvider
+	AuthorizationDetailsTypeHandlersProvider
 	TokenEndpointClientAuthStrategyProvider
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider

@@ -143,6 +143,7 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		RequestURIs:                  registered.RequestURIs,
 
 		RequireSignedRequestObject: registered.RequireSignedRequestObject,
+		AuthorizationDetailsTypes:  registered.AuthorizationDetailsTypes,
 
 		PostLogoutRedirectURIs:           registered.PostLogoutRedirectURIs,
 		BackChannelLogoutURI:             registered.BackChannelLogoutURI,
@@ -239,6 +240,7 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.TokenExchangePermittedClientIDs = metadata.TokenExchangePermittedClientIDs
 
 	registered.RequireSignedRequestObject = metadata.RequireSignedRequestObject
+	registered.AuthorizationDetailsTypes = metadata.AuthorizationDetailsTypes
 
 	registered.PostLogoutRedirectURIs = metadata.PostLogoutRedirectURIs
 	registered.BackChannelLogoutURI = metadata.BackChannelLogoutURI

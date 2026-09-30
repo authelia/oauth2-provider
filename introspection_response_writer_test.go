@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/jose"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -529,6 +530,60 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
 
 			tc.check(t, params)
+		})
+	}
+}
+
+func TestWriteIntrospectionResponseAuthorizationDetails(t *testing.T) {
+	testCases := []struct {
+		name    string
+		granted AuthorizationDetails
+		extra   any
+	}{
+		{
+			name:    "ShouldIncludeGranted",
+			granted: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:  "ShouldIgnoreSessionExtraWhenNothingGranted",
+			extra: "spoofed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := &DefaultSession{Subject: "user-123"}
+			if tc.extra != nil {
+				session.GetExtraClaims()[consts.ClaimAuthorizationDetails] = tc.extra
+			}
+
+			ar := NewAccessRequest(session)
+			ar.Client = &DefaultClient{ID: "client-id"}
+			ar.GrantedAuthorizationDetails = tc.granted
+
+			provider := &Fosite{Config: &Config{}}
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+				Active:          true,
+				TokenUse:        AccessToken,
+				AccessRequester: ar,
+			})
+
+			assert.Equal(t, http.StatusOK, rw.Code)
+
+			params := map[string]any{}
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+
+			if tc.granted == nil {
+				assert.NotContains(t, params, consts.ClaimAuthorizationDetails)
+
+				return
+			}
+
+			raw, err := json.Marshal(params[consts.ClaimAuthorizationDetails])
+			require.NoError(t, err)
+			assert.JSONEq(t, testRARDetailsJSON, string(raw))
 		})
 	}
 }

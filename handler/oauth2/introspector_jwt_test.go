@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -308,6 +310,69 @@ func TestIntrospectJWTRecoversClientID(t *testing.T) {
 
 	require.NotNil(t, areq.GetClient())
 	assert.Equal(t, "client-abc", areq.GetClient().GetID())
+}
+
+func TestIntrospectJWTAuthorizationDetails(t *testing.T) {
+	details := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}}
+
+	testCases := []struct {
+		name     string
+		handlers []oauth2.AuthorizationDetailsTypeHandler
+		expected oauth2.AuthorizationDetails
+	}{
+		{name: "ShouldRecoverWhenEnabled", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, expected: details},
+		{name: "ShouldNotRecoverWhenDisabled"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens: true,
+				GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+			}
+
+			strategy := &JWTProfileCoreStrategy{
+				HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+				Strategy: &jwt.DefaultStrategy{
+					Config: config,
+					Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey()),
+				},
+				Config: config,
+			}
+
+			validator := &StatelessJWTValidator{
+				StatelessJWTStrategy: strategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:                    oauth2.HierarchicScopeStrategy,
+					AuthorizationDetailsTypeHandlers: tc.handlers,
+				},
+			}
+
+			r := jwtValidCase(oauth2.AccessToken)
+			r.SetGrantedAuthorizationDetails(details)
+
+			tokenString, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			require.NoError(t, err)
+
+			areq := oauth2.NewAccessRequest(nil)
+
+			_, err = validator.IntrospectToken(t.Context(), tokenString, oauth2.AccessToken, areq, []string{})
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, areq.GetGrantedAuthorizationDetails())
+			assert.Equal(t, tc.expected, areq.GetRequestedAuthorizationDetails())
+		})
+	}
+}
+
+func TestAccessTokenJWTToRequestIgnoresAuthorizationDetails(t *testing.T) {
+	token := &jwt.Token{
+		Claims: jwt.MapClaims{
+			consts.ClaimAuthorizationDetails: []any{map[string]any{"type": internal.AuthorizationDetailsTypePaymentInitiation, "actions": []any{testRARActionInitiate}}},
+		},
+	}
+
+	assert.Nil(t, AccessTokenJWTToRequest(token).GetGrantedAuthorizationDetails())
 }
 
 func BenchmarkIntrospectJWT(b *testing.B) {

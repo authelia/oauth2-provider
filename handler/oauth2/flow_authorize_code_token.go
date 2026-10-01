@@ -66,7 +66,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 				WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'.")
 		}
 
-		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !isIntactToken(verr) {
+		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !IsIntactToken(verr) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 

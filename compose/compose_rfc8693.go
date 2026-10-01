@@ -74,17 +74,19 @@ func RFC8693AccessTokenTypeFactory(config oauth2.Configurator, storage any, stra
 // RFC8693RefreshTokenTypeFactory creates the handler that exchanges to a refresh token. Refuses to issue when the
 // client is not registered for the refresh_token grant type or when the granted scopes do not include any of the
 // configured RefreshTokenScopes (see RFC8693RefreshTokenTypeFactory's gating logic in
-// handler/rfc8693/refresh_token_type_handler.go).
+// handler/rfc8693/refresh_token_type_handler.go). The storage must implement hoauth2.TokenRevocationStorage, which
+// revokes the grant of a replayed refresh token as the refresh_token grant does.
 func RFC8693RefreshTokenTypeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	ctx := context.Background()
 
 	return &rfc8693.RefreshTokenTypeHandler{
-		Config:               config.(oauth2.RFC8693ConfigProvider),
-		RefreshTokenLifespan: config.GetRefreshTokenLifespan(ctx),
-		RefreshTokenScopes:   config.GetRefreshTokenScopes(ctx),
-		ScopeStrategy:        config.GetScopeStrategy(ctx),
-		CoreStrategy:         strategy.(hoauth2.CoreStrategy),
-		Storage:              storage.(rfc8693.Storage),
+		Config:                 config.(oauth2.RFC8693ConfigProvider),
+		RefreshTokenLifespan:   config.GetRefreshTokenLifespan(ctx),
+		RefreshTokenScopes:     config.GetRefreshTokenScopes(ctx),
+		ScopeStrategy:          config.GetScopeStrategy(ctx),
+		CoreStrategy:           strategy.(hoauth2.CoreStrategy),
+		Storage:                storage.(rfc8693.Storage),
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 	}
 }
 

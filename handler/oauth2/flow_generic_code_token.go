@@ -66,7 +66,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
 		}
 
-		if verr := c.ValidateCodeAndSession(ctx, request, deviceRequester, code); !isIntactToken(verr) {
+		if verr := c.ValidateCodeAndSession(ctx, request, deviceRequester, code); !IsIntactToken(verr) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 

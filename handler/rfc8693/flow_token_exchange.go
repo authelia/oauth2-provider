@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -361,7 +362,7 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 }
 
 func errExchangeTokenValidation(err error) error {
-	if rfc := new(oauth2.RFC6749Error); !errors.As(err, &rfc) {
+	if !hoauth2.IsTokenRejection(err) {
 		return errors.WithStack(err)
 	}
 

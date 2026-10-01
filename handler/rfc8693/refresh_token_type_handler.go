@@ -39,6 +39,12 @@ type RefreshTokenTypeHandler struct {
 	hoauth2.CoreStrategy
 
 	Storage
+
+	// TokenRevocationStorage revokes the grant of a rotated refresh token presented as a 'subject_token' or
+	// 'actor_token'. A replayed refresh token is refused with a server error when it is nil.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	TokenRevocationStorage hoauth2.TokenRevocationStorage
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -156,10 +162,21 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 
 	var or oauth2.Requester
 
-	if or, err = c.GetRefreshTokenSession(ctx, signature, newTokenSession(request.GetSession())); err != nil {
+	or, err = c.GetRefreshTokenSession(ctx, signature, newTokenSession(request.GetSession()))
+
+	switch {
+	case err == nil:
+		if err = c.ValidateRefreshToken(ctx, or, token); err != nil {
+			return nil, nil, errExchangeTokenValidation(err)
+		}
+	case errors.Is(err, oauth2.ErrInactiveToken):
+		return nil, nil, c.handleRefreshTokenReuse(ctx, or, token, signature, err)
+	default:
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
-	} else if err = c.ValidateRefreshToken(ctx, or, token); err != nil {
-		return nil, nil, errExchangeTokenValidation(err)
+	}
+
+	if scopes := c.RefreshTokenScopes; len(scopes) != 0 && !or.GetGrantedScopes().HasOneOf(scopes...) {
+		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(scopes, " or ")))
 	}
 
 	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), or, role); err != nil {
@@ -179,6 +196,28 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
 	return or.GetSession(), claims, nil
+}
+
+func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, or oauth2.Requester, token, signature string, inactive error) (err error) {
+	if or == nil {
+		return errors.WithStack(oauth2.ErrServerError.
+			WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+			WithDebug("GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'."))
+	}
+
+	if err = c.ValidateRefreshToken(ctx, or, token); !hoauth2.IsIntactToken(err) {
+		return errExchangeTokenValidation(err)
+	}
+
+	if c.TokenRevocationStorage == nil {
+		return errors.WithStack(oauth2.ErrServerError.WithDebug("The refresh token was reused but the handler has no TokenRevocationStorage to revoke its grant."))
+	}
+
+	if err = hoauth2.RevokeRefreshTokenFamily(ctx, c.TokenRevocationStorage, signature, or); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithWrap(inactive).WithDebugError(inactive))
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

@@ -55,7 +55,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	switch {
 	case err == nil:
 		if err = c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); err != nil {
-			if !isTokenRejection(err) {
+			if !IsTokenRejection(err) {
 				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 			}
 
@@ -68,8 +68,8 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 				WithDebug("GetRefreshTokenSession must return a value for 'oauth2.Requester' when returning 'ErrInactiveToken'."))
 		}
 
-		if verr := c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); !isIntactToken(verr) {
-			if !isTokenRejection(verr) {
+		if verr := c.RefreshTokenStrategy.ValidateRefreshToken(ctx, orequest, refresh); !IsIntactToken(verr) {
+			if !IsTokenRejection(verr) {
 				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(verr).WithDebugError(verr))
 			}
 
@@ -338,50 +338,55 @@ func (c *RefreshTokenGrantHandler) setAccessTokenResponse(ctx context.Context, r
 	response.SetScopes(request.GetGrantedScopes())
 }
 
-// Reference: https://datatracker.ietf.org/doc/html/rfc6819#section-5.2.2.3
-//
-//	The basic idea is to change the refresh token
-//	value with every refresh request in order to detect attempts to
-//	obtain access tokens using old refresh tokens.  Since the
-//	authorization server cannot determine whether the attacker or the
-//	legitimate client is trying to access, in case of such an access
-//	attempt the valid refresh token and the access authorization
-//	associated with it are both revoked.
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {
-	ctx, err = storage.MaybeBeginTx(ctx, c.TokenRevocationStorage)
+	return RevokeRefreshTokenFamily(ctx, c.TokenRevocationStorage, signature, request)
+}
+
+func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx context.Context, storageErr error) (err error) {
+	return handleRefreshTokenStorageError(ctx, c.TokenRevocationStorage, storageErr)
+}
+
+// RevokeRefreshTokenFamily responds to the reuse of a rotated refresh token by deleting the refresh token session with
+// the given signature and revoking the refresh and access tokens of the grant the request belongs to. The revocation
+// runs in a transaction when the store supports transactions.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6819#section-5.2.2.3
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func RevokeRefreshTokenFamily(ctx context.Context, store TokenRevocationStorage, signature string, request oauth2.Requester) (err error) {
+	ctx, err = storage.MaybeBeginTx(ctx, store)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 	defer func() {
-		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+		err = handleRefreshTokenStorageError(ctx, store, err)
 	}()
 
-	if err = c.TokenRevocationStorage.DeleteRefreshTokenSession(ctx, signature); err != nil {
+	if err = store.DeleteRefreshTokenSession(ctx, signature); err != nil {
 		return err
-	} else if err = c.TokenRevocationStorage.RevokeRefreshToken(
+	} else if err = store.RevokeRefreshToken(
 		ctx, request.GetID(),
 	); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err
-	} else if err = c.TokenRevocationStorage.RevokeAccessToken(
+	} else if err = store.RevokeAccessToken(
 		ctx, request.GetID(),
 	); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err
 	}
 
-	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
+	if err = storage.MaybeCommitTx(ctx, store); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx context.Context, storageErr error) (err error) {
+func handleRefreshTokenStorageError(ctx context.Context, store TokenRevocationStorage, storageErr error) (err error) {
 	if storageErr == nil {
 		return nil
 	}
 
 	defer func() {
-		if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.TokenRevocationStorage); rollBackTxnErr != nil {
+		if rollBackTxnErr := storage.MaybeRollbackTx(ctx, store); rollBackTxnErr != nil {
 			err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
 		}
 	}()

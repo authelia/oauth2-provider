@@ -53,11 +53,17 @@ func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
 }
 
-func isIntactToken(err error) bool {
+// IsIntactToken reports whether a token validation error leaves the token intact: it validated, or it failed only
+// because it expired. A replayed token must be intact before the grant it belongs to is revoked.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func IsIntactToken(err error) bool {
 	return err == nil || errors.Is(err, oauth2.ErrTokenExpired) || errors.Is(err, oauth2.ErrDeviceExpiredToken)
 }
 
-func isTokenRejection(err error) bool {
+// IsTokenRejection reports whether a token validation error rejects the token presented by the client, as opposed to
+// a server error that must be answered as one.
+func IsTokenRejection(err error) bool {
 	var (
 		rfc     *oauth2.RFC6749Error
 		corrupt base64.CorruptInputError

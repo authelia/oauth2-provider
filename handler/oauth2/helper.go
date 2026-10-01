@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 type HandleHelperConfigProvider interface {
@@ -41,6 +42,7 @@ func (h *HandleHelper) IssueAccessToken(ctx context.Context, defaultLifespan tim
 	response.SetTokenType(oauth2.BearerAccessToken)
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, defaultLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	setAuthorizationDetailsResponse(response, request)
 
 	return signature, nil
 }
@@ -51,6 +53,12 @@ func getExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time
 		return defaultLifespan
 	}
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
+}
+
+func setAuthorizationDetailsResponse(response oauth2.AccessResponder, request oauth2.Requester) {
+	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+		response.SetExtra(consts.AccessResponseAuthorizationDetails, details)
+	}
 }
 
 // IsIntactToken reports whether a token validation error leaves the token intact: it validated, or it failed only

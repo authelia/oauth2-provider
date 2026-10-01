@@ -14,6 +14,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -30,7 +32,6 @@ func TestGetExpiresIn(t *testing.T) {
 func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	areq := &oauth2.AccessRequest{}
-	aresp := &oauth2.AccessResponse{Extra: map[string]any{}}
 	accessStrat := mock.NewMockAccessTokenStrategy(ctrl)
 	accessStore := mock.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()
@@ -45,9 +46,10 @@ func TestIssueAccessToken(t *testing.T) {
 
 	areq.Session = &oauth2.DefaultSession{}
 	testCases := []struct {
-		name string
-		mock func()
-		err  error
+		name    string
+		details oauth2.AuthorizationDetails
+		mock    func()
+		err     error
 	}{
 		{
 			name: "ShouldFailWhenTheStrategyCannotGenerateTheToken",
@@ -71,10 +73,22 @@ func TestIssueAccessToken(t *testing.T) {
 				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
 			},
 		},
+		{
+			name:    "ShouldIssueTheTokenWithAuthorizationDetails",
+			details: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+			mock: func() {
+				accessStrat.EXPECT().GenerateAccessToken(t.Context(), areq).Return("token", "signature", nil)
+				accessStore.EXPECT().CreateAccessTokenSession(t.Context(), "signature", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			aresp := &oauth2.AccessResponse{Extra: map[string]any{}}
+
+			areq.SetGrantedAuthorizationDetails(tc.details)
+
 			tc.mock()
 
 			signature, err := helper.IssueAccessToken(t.Context(), helper.Config.GetAccessTokenLifespan(t.Context()), areq, aresp)
@@ -88,6 +102,12 @@ func TestIssueAccessToken(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, "signature", signature)
+
+			if tc.details == nil {
+				assert.NotContains(t, aresp.Extra, consts.AccessResponseAuthorizationDetails)
+			} else {
+				assert.Equal(t, tc.details, aresp.Extra[consts.AccessResponseAuthorizationDetails])
+			}
 		})
 	}
 }

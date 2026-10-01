@@ -127,6 +127,10 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
+	if err = f.validateAuthorizationDetails(ctx, request); err != nil {
+		return request, err
+	}
+
 	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
 		return request, errorsx.WithStack(ErrRegistrationNotSupported)
 	}
@@ -612,6 +616,18 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request
 	return nil
 }
 
+func (f *Fosite) validateAuthorizationDetails(ctx context.Context, request *AuthorizeRequest) (err error) {
+	var details AuthorizationDetails
+
+	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, request.GetClient(), request.Form); err != nil {
+		return err
+	}
+
+	request.SetRequestedAuthorizationDetails(details)
+
+	return nil
+}
+
 func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Requester) error {
 	requested := RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterScope), " "))
 
@@ -800,6 +816,10 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 	}
 
 	if err = GetResourceStrategy(ctx, f.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+		return err
+	}
+
+	if err = ValidateAuthorizationDetails(ctx, f.Config, client, request.GetRequestedAuthorizationDetails()); err != nil {
 		return err
 	}
 

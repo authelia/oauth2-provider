@@ -39,6 +39,7 @@ const (
 	ClaimActor                               = "act"
 	ClaimEvents                              = "events"
 	ClaimConfirmation                        = "cnf"
+	ClaimAuthorizationDetails                = valueAuthorizationDetails
 	ClaimConfirmationJWKThumbprint           = "jkt"
 	ClaimConfirmationX509SHA256Thumbprint    = "x5t#S256"
 	ClaimHTTPMethod                          = "htm"

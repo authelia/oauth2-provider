@@ -42,6 +42,18 @@ type TokenEndpointHandler interface {
 	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) (handle bool)
 }
 
+// AuthorizationDetailsTokenEndpointHandler is implemented by a TokenEndpointHandler which processes the RFC 9396
+// 'authorization_details' token request parameter for a grant type other than 'authorization_code' and
+// 'refresh_token'. For such a grant type the parameter is rejected unless a handler which can handle the request
+// implements this interface and accepts it. The accepting handler is responsible for granting the details.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+type AuthorizationDetailsTokenEndpointHandler interface {
+	// CanHandleAuthorizationDetails returns true when the handler processes the 'authorization_details' parameter of
+	// the request. It is called before client authentication.
+	CanHandleAuthorizationDetails(ctx context.Context, request AccessRequester) (handle bool)
+}
+
 // AuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of an authorize request
 // before any handler persists that session.
 //

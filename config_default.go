@@ -20,15 +20,16 @@ import (
 )
 
 const (
-	defaultPARPrefix                    = consts.PrefixRequestURI
-	defaultPARContextLifetime           = 5 * time.Minute
-	defaultBackChannelLogoutLifespan    = 5 * time.Minute
-	defaultBackChannelLogoutConcurrency = 10
-	defaultDPoPClockSkew                = 10 * time.Second
-	defaultDPoPProofLifespan            = 10 * time.Second
-	defaultJWTClockSkew                 = 10 * time.Second
-	maxJWTClockSkew                     = 60 * time.Second
-	defaultRequestObjectMaximumLifetime = 60 * time.Minute
+	defaultPARPrefix                      = consts.PrefixRequestURI
+	defaultPARContextLifetime             = 5 * time.Minute
+	defaultBackChannelLogoutLifespan      = 5 * time.Minute
+	defaultBackChannelLogoutConcurrency   = 10
+	defaultDPoPClockSkew                  = 10 * time.Second
+	defaultDPoPProofLifespan              = 10 * time.Second
+	defaultJWTClockSkew                   = 10 * time.Second
+	maxJWTClockSkew                       = 60 * time.Second
+	defaultRequestObjectMaximumLifetime   = 60 * time.Minute
+	defaultAuthorizationDetailsMaxObjects = 32
 )
 
 type Config struct {
@@ -114,6 +115,14 @@ type Config struct {
 
 	// ResourceStrategy sets the RFC 8707 resource indicator matching strategy, defaults to oauth2.DefaultAudienceStrategy.
 	ResourceStrategy ResourceStrategy
+
+	// AuthorizationDetailsTypeHandlers enables RFC 9396 Rich Authorization Requests for the types these handlers
+	// implement. The 'authorization_details' parameter is ignored when empty.
+	AuthorizationDetailsTypeHandlers []AuthorizationDetailsTypeHandler
+
+	// AuthorizationDetailsMaxObjects sets the maximum number of RFC 9396 authorization details objects accepted in a
+	// single 'authorization_details' parameter. Defaults to 32.
+	AuthorizationDetailsMaxObjects int
 
 	ClientCredentialsFlowImplicitGrantRequested bool
 
@@ -828,6 +837,30 @@ func (c *Config) GetResourceStrategy(_ context.Context) ResourceStrategy {
 	})
 
 	return c.ResourceStrategy
+}
+
+// GetAuthorizationDetailsTypeHandlers returns the configured RFC 9396 authorization details type handlers keyed by
+// the type each implements. When two handlers share a Type, the last one wins.
+func (c *Config) GetAuthorizationDetailsTypeHandlers(_ context.Context) map[string]AuthorizationDetailsTypeHandler {
+	handlers := make(map[string]AuthorizationDetailsTypeHandler, len(c.AuthorizationDetailsTypeHandlers))
+
+	for _, handler := range c.AuthorizationDetailsTypeHandlers {
+		if handler != nil {
+			handlers[handler.Type()] = handler
+		}
+	}
+
+	return handlers
+}
+
+// GetAuthorizationDetailsMaxObjects returns the maximum number of RFC 9396 authorization details objects accepted in
+// a single 'authorization_details' parameter. Defaults to 32.
+func (c *Config) GetAuthorizationDetailsMaxObjects(_ context.Context) int {
+	if c.AuthorizationDetailsMaxObjects <= 0 {
+		return defaultAuthorizationDetailsMaxObjects
+	}
+
+	return c.AuthorizationDetailsMaxObjects
 }
 
 func (c *Config) GetClientCredentialsFlowImplicitGrantRequested(_ context.Context) bool {

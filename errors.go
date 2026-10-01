@@ -262,6 +262,12 @@ var (
 		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInvalidAuthorizationDetails = &RFC6749Error{
+		ErrorField:       errInvalidAuthorizationDetailsName,
+		DescriptionField: "The requested authorization details are invalid, unknown, or malformed.",
+		HintField:        "Ensure every authorization details object has a type supported by the authorization server, conforms to that type's definition, and is permitted for this client.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrInvalidClientMetadata = &RFC6749Error{
 		ErrorField:       errInvalidClientMetadataName,
 		DescriptionField: "The value of one of the client metadata fields is invalid and the server has rejected this request.",
@@ -323,6 +329,7 @@ const (
 	errDeviceExpiredTokenName          = "expired_token"
 	errSlowDownName                    = "slow_down"
 	errInvalidTargetName               = "invalid_target"
+	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
 	errInvalidDPoPProofName            = "invalid_dpop_proof"
 	errUseDPoPNonceName                = "use_dpop_nonce"
 	errInvalidClientMetadataName       = "invalid_client_metadata"

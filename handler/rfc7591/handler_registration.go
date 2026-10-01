@@ -97,6 +97,10 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 		return err
 	}
 
+	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
+		return err
+	}
+
 	// Unconditional, and after the ceiling check rather than before it: an authenticated request asking for the
 	// registration scope was already rejected above, while an unauthenticated (open) endpoint has no ceiling to
 	// reject it with and would otherwise register a client holding it. See ExcludeRegistrationScopeFromMetadata.

@@ -19,6 +19,7 @@ import (
 	josejwt "authelia.com/provider/jose/jwt"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -266,6 +267,76 @@ func TestGenerateJWTIncludesCnf(t *testing.T) {
 		assert.Equal(t, "test-jkt", cnf[jwt.ClaimConfirmationJWKThumbprint])
 		assert.NotContains(t, cnf, jwt.ClaimConfirmationX509SHA256Thumbprint)
 	})
+}
+
+func TestJWTProfileAuthorizationDetailsClaim(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	testCases := []struct {
+		name    string
+		granted oauth2.AuthorizationDetails
+		extra   any
+	}{
+		{
+			name:    "ShouldIncludeGranted",
+			granted: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:    "ShouldOverrideSessionExtra",
+			granted: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+			extra:   testRARExtraSpoofed,
+		},
+		{
+			name:  "ShouldDropSessionExtraWhenNothingGranted",
+			extra: testRARExtraSpoofed,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := jwtValidCase(oauth2.AccessToken)
+
+			if tc.extra != nil {
+				r.GetSession().(*JWTSession).JWTClaims.Extra[consts.ClaimAuthorizationDetails] = tc.extra
+			}
+
+			if tc.granted != nil {
+				r.GrantedAuthorizationDetails = tc.granted
+			}
+
+			token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			require.NoError(t, err)
+
+			parts := strings.Split(token, ".")
+			require.Len(t, parts, 3, "%s - %v", token, parts)
+
+			rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+			require.NoError(t, err)
+
+			var payload map[string]any
+			require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+			if tc.granted == nil {
+				assert.NotContains(t, payload, consts.ClaimAuthorizationDetails)
+
+				return
+			}
+
+			raw, err := json.Marshal(payload[consts.ClaimAuthorizationDetails])
+			require.NoError(t, err)
+			assert.JSONEq(t, `[{"type":"payment_initiation","actions":["initiate"]}]`, string(raw))
+		})
+	}
 }
 
 func TestSplitN(t *testing.T) {

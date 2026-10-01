@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -165,6 +167,89 @@ func TestDefaultResponseMode_AuthorizeImplicit_EndpointHandler(t *testing.T) {
 	assert.Equal(t, oauth2.ResponseModeFragment, areq.GetResponseMode())
 
 	internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ImplicitGrantAccessTokenLifespan), areq.Session.GetExpiresAt(oauth2.AccessToken), time.Minute)
+}
+
+func TestAuthorizeImplicit_AuthorizationDetails(t *testing.T) {
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}}
+
+	testCases := []struct {
+		name     string
+		handlers []oauth2.AuthorizationDetailsTypeHandler
+		allowed  []string
+		hint     string
+	}{
+		{name: "ShouldIssueGrantedDetails", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}},
+		{name: "ShouldIssueGrantedDetailsAllowedForClient", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, allowed: []string{internal.AuthorizationDetailsTypePaymentInitiation}},
+		{name: "ShouldRejectGrantedTypeNotAllowedForClient", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, allowed: []string{}, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectGrantedTypeWithoutHandler", hint: testRARHintTypeNotSupported},
+	}
+
+	entrypoints := []struct {
+		name string
+		call func(ctx context.Context, h *AuthorizeImplicitGrantTypeHandler, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error
+	}{
+		{"HandleAuthorizeEndpointRequest", func(ctx context.Context, h *AuthorizeImplicitGrantTypeHandler, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
+			return h.HandleAuthorizeEndpointRequest(ctx, request, response)
+		}},
+		{"IssueImplicitAccessToken", func(ctx context.Context, h *AuthorizeImplicitGrantTypeHandler, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
+			return h.IssueImplicitAccessToken(ctx, request, response)
+		}},
+	}
+
+	for _, entrypoint := range entrypoints {
+		for _, tc := range testCases {
+			t.Run(entrypoint.name+"/"+tc.name, func(t *testing.T) {
+				store := storage.NewMemoryStore()
+
+				h := &AuthorizeImplicitGrantTypeHandler{
+					AccessTokenStorage:  store,
+					AccessTokenStrategy: &hmacshaStrategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:              time.Hour,
+						ScopeStrategy:                    oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:                 oauth2.DefaultAudienceStrategy,
+						AuthorizationDetailsTypeHandlers: tc.handlers,
+					},
+				}
+
+				areq := oauth2.NewAuthorizeRequest()
+				areq.Session = new(oauth2.DefaultSession)
+				areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
+				areq.Client = &internal.AuthorizationDetailsClient{
+					DefaultClient: &oauth2.DefaultClient{
+						GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+					},
+					AuthorizationDetailsTypes: tc.allowed,
+				}
+				areq.SetGrantedAuthorizationDetails(granted)
+
+				aresp := oauth2.NewAuthorizeResponse()
+
+				err := entrypoint.call(t.Context(), h, areq, aresp)
+
+				if tc.hint == "" {
+					require.NoError(t, err)
+
+					token := aresp.GetParameters().Get(consts.AccessResponseAccessToken)
+					require.NotEmpty(t, token)
+
+					stored, err := store.GetAccessTokenSession(t.Context(), hmacshaStrategy.AccessTokenSignature(t.Context(), token), new(oauth2.DefaultSession))
+					require.NoError(t, err)
+
+					assert.Equal(t, granted, stored.GetGrantedAuthorizationDetails())
+
+					return
+				}
+
+				require.Error(t, err)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+				assert.Empty(t, aresp.GetParameters().Get(consts.AccessResponseAccessToken))
+				assert.Empty(t, store.AccessTokens)
+			})
+		}
+	}
 }
 
 func makeAuthorizeImplicitGrantTypeHandler(ctrl *gomock.Controller) (AuthorizeImplicitGrantTypeHandler,

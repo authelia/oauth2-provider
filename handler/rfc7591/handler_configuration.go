@@ -159,6 +159,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
+		return err
+	}
+
 	var patched oauth2.Client
 
 	if patched, err = strategy.PatchClient(ctx, client, nil, metadata); err != nil {

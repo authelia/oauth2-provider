@@ -27,6 +27,7 @@ const (
 	FormParameterRegistration                              = "registration"
 	FormParameterAudience                                  = "audience"
 	FormParameterResource                                  = "resource"
+	FormParameterAuthorizationDetails                      = valueAuthorizationDetails
 	FormParameterRefreshToken                              = valueRefreshToken
 	FormParameterIssuer                                    = valueIss
 	FormParameterToken                                     = "token"

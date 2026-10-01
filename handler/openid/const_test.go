@@ -9,4 +9,6 @@ const (
 	testNonce        = "some-foobar-nonce-win"
 	testSubjectPeter = "peter"
 	testScopeProfile = "profile"
+
+	testRARHintTypeNotAllowed = "The OAuth 2.0 Client is not allowed to request authorization details type 'payment_initiation'."
 )

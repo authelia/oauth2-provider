@@ -176,6 +176,19 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		request.GrantResource(resource)
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if len(request.GetRequestedAuthorizationDetails()) == 0 {
+		request.SetRequestedAuthorizationDetails(orequest.GetGrantedAuthorizationDetails())
+	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, orequest.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
+
 	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision)))
 
@@ -336,6 +349,7 @@ func (c *RefreshTokenGrantHandler) setAccessTokenResponse(ctx context.Context, r
 	response.SetTokenType(oauth2.BearerAccessToken)
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	setAuthorizationDetailsResponse(response, request)
 }
 
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {

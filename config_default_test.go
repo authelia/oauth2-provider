@@ -328,6 +328,16 @@ func TestConfigJWEPBES2Count(t *testing.T) {
 	}
 }
 
+func TestConfigGetAuthorizationDetailsTypeHandlers(t *testing.T) {
+	config := &Config{}
+	assert.Empty(t, config.GetAuthorizationDetailsTypeHandlers(context.Background()))
+
+	handler := &testAuthorizationDetailsTypeHandler{typ: "a"}
+	config.AuthorizationDetailsTypeHandlers = []AuthorizationDetailsTypeHandler{handler, nil}
+
+	assert.Equal(t, map[string]AuthorizationDetailsTypeHandler{"a": handler}, config.GetAuthorizationDetailsTypeHandlers(context.Background()))
+}
+
 type testClientRegistrationMetadataStrategy struct{}
 
 func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
@@ -338,4 +348,16 @@ type testTokenValidationStrategy struct{}
 
 func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
 	return nil, nil
+}
+
+type testAuthorizationDetailsTypeHandler struct{ typ string }
+
+func (h *testAuthorizationDetailsTypeHandler) Type() string { return h.typ }
+
+func (h *testAuthorizationDetailsTypeHandler) Validate(context.Context, Client, AuthorizationDetail) error {
+	return nil
+}
+
+func (h *testAuthorizationDetailsTypeHandler) Contains(context.Context, AuthorizationDetail, AuthorizationDetail) bool {
+	return true
 }

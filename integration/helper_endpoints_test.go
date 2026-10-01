@@ -93,6 +93,8 @@ func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.
 			ar.GrantAudience(a)
 		}
 
+		ar.SetGrantedAuthorizationDetails(ar.GetRequestedAuthorizationDetails())
+
 		response, err := provider.NewAuthorizeResponse(ctx, ar, session)
 		if err != nil {
 			t.Logf("Access request failed because: %+v", err)

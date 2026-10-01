@@ -133,6 +133,7 @@ type ClientRegistrationMetadata struct {
 	DPoPBoundAccessTokens               bool     `json:"dpop_bound_access_tokens,omitempty"`
 	ResponseModes                       []string `json:"response_modes,omitempty"`
 	Audience                            []string `json:"audience,omitempty"`
+	AuthorizationDetailsTypes           []string `json:"authorization_details_types,omitempty"`
 
 	// Extra holds every unregistered client metadata parameter so it survives a registration round trip.
 	Extra map[string]any `json:"-"`

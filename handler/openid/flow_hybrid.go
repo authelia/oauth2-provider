@@ -91,6 +91,13 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		}
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
+	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
+		if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, client, request.GetGrantedAuthorizationDetails()); err != nil {
+			return err
+		}
+	}
+
 	claims := session.IDTokenClaims()
 
 	var hash string

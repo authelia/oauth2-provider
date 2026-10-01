@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -51,6 +52,17 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	r := AccessTokenJWTToRequest(token)
 
+	// The claim is recovered as both requested and granted, and only while RFC 9396 is enabled. Numeric Extra values
+	// are recovered with JSON number precision and may not round-trip exactly.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.1
+	if oauth2.IsAuthorizationDetailsEnabled(ctx, v.Config) {
+		details := authorizationDetailsFromClaim(token.Claims.ToMapClaims()[consts.ClaimAuthorizationDetails])
+
+		r.SetRequestedAuthorizationDetails(details)
+		r.SetGrantedAuthorizationDetails(details)
+	}
+
 	if err = matchScopes(oauth2.GetScopeStrategy(ctx, v.Config, r.GetClient()), r.GetGrantedScopes(), scopes); err != nil {
 		return oauth2.AccessToken, err
 	}
@@ -60,7 +72,8 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	return oauth2.AccessToken, nil
 }
 
-// AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT.
+// AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT. It does not recover the
+// 'authorization_details' claim, which StatelessJWTValidator recovers only while RFC 9396 is enabled.
 func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	mapClaims := token.Claims.ToMapClaims()
 	claims := jwt.JWTClaims{}
@@ -115,6 +128,24 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		RequestedAudience: claims.Audience,
 		GrantedAudience:   claims.Audience,
 	}
+}
+
+func authorizationDetailsFromClaim(value any) oauth2.AuthorizationDetails {
+	if value == nil {
+		return nil
+	}
+
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+
+	details, err := oauth2.ParseAuthorizationDetails(string(raw))
+	if err != nil {
+		return nil
+	}
+
+	return details
 }
 
 // SetSkipStatelessIntrospection sets the ContextKeySkipStatelessIntrospection to true.

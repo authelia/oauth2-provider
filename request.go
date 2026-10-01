@@ -30,6 +30,9 @@ type Request struct {
 	RequestedResource Arguments    `json:"requestedResource"`
 	GrantedResource   Arguments    `json:"grantedResource"`
 	Lang              language.Tag `json:"-"`
+
+	RequestedAuthorizationDetails AuthorizationDetails `json:"authorizationDetails"`
+	GrantedAuthorizationDetails   AuthorizationDetails `json:"grantedAuthorizationDetails"`
 }
 
 // NewRequest returns a Request with its slice and map fields initialized, a default empty client, and RequestedAt set
@@ -175,6 +178,29 @@ func (a *Request) GetGrantedResource() Arguments {
 	return a.GrantedResource
 }
 
+// GetRequestedAuthorizationDetails returns the RFC 9396 authorization details requested by the client.
+func (a *Request) GetRequestedAuthorizationDetails() AuthorizationDetails {
+	return a.RequestedAuthorizationDetails
+}
+
+// SetRequestedAuthorizationDetails stores a copy of the requested RFC 9396 authorization details. The copy normalises
+// Extra through JSON: numbers become json.Number and structs become maps.
+func (a *Request) SetRequestedAuthorizationDetails(details AuthorizationDetails) {
+	a.RequestedAuthorizationDetails = details.Clone()
+}
+
+// GetGrantedAuthorizationDetails returns the RFC 9396 authorization details granted to the client.
+func (a *Request) GetGrantedAuthorizationDetails() AuthorizationDetails {
+	return a.GrantedAuthorizationDetails
+}
+
+// SetGrantedAuthorizationDetails stores a copy of the granted RFC 9396 authorization details. The granted set
+// replaces any previous value and may differ from the requested set, e.g. when enriched during consent. The copy
+// normalises Extra through JSON: numbers become json.Number and structs become maps.
+func (a *Request) SetGrantedAuthorizationDetails(details AuthorizationDetails) {
+	a.GrantedAuthorizationDetails = details.Clone()
+}
+
 // GetGrantedScopes returns the scopes that have been granted to the client.
 func (a *Request) GetGrantedScopes() Arguments {
 	return a.GrantedScope
@@ -203,8 +229,8 @@ func (a *Request) GetSession() Session {
 	return a.Session
 }
 
-// Merge copies the requested and granted scopes, audiences and resource indicators from the given Requester into this
-// request alongside its ID, RequestedAt timestamp, client, session, and form values.
+// Merge copies the requested and granted scopes, audiences, resource indicators and authorization details from the
+// given Requester into this request alongside its ID, RequestedAt timestamp, client, session, and form values.
 func (a *Request) Merge(request Requester) {
 	for _, scope := range request.GetRequestedScopes() {
 		a.AppendRequestedScope(scope)
@@ -228,6 +254,14 @@ func (a *Request) Merge(request Requester) {
 
 	for _, resource := range request.GetGrantedResource() {
 		a.GrantResource(resource)
+	}
+
+	if details := request.GetRequestedAuthorizationDetails(); len(details) != 0 {
+		a.SetRequestedAuthorizationDetails(details)
+	}
+
+	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+		a.SetGrantedAuthorizationDetails(details)
 	}
 
 	a.ID = request.GetID()

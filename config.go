@@ -65,6 +65,22 @@ type ResourceStrategyProvider interface {
 	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
+// AuthorizationDetailsTypeHandlersProvider returns the provider for configuring the RFC 9396 authorization details
+// type handlers.
+type AuthorizationDetailsTypeHandlersProvider interface {
+	// GetAuthorizationDetailsTypeHandlers returns the handlers keyed by authorization details type. RFC 9396 Rich
+	// Authorization Requests are disabled when it is empty. The map must not contain nil handlers.
+	GetAuthorizationDetailsTypeHandlers(ctx context.Context) (handlers map[string]AuthorizationDetailsTypeHandler)
+}
+
+// AuthorizationDetailsMaxObjectsProvider returns the provider for configuring the maximum number of RFC 9396
+// authorization details objects accepted in a single 'authorization_details' parameter.
+type AuthorizationDetailsMaxObjectsProvider interface {
+	// GetAuthorizationDetailsMaxObjects returns the maximum number of authorization details objects accepted in a
+	// single 'authorization_details' parameter.
+	GetAuthorizationDetailsMaxObjects(ctx context.Context) (maximum int)
+}
+
 // ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
 type ClientCredentialsImplicitProvider interface {
 	// GetClientCredentialsFlowImplicitGrantRequested returns true if the PopulateTokenEndpointResponse portion of the

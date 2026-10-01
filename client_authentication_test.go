@@ -1336,6 +1336,7 @@ func TestClientAuthenticationChallenge(t *testing.T) {
 		name          string
 		realm         string
 		authorization string
+		empty         bool
 		form          url.Values
 		expected      string
 	}{
@@ -1366,6 +1367,11 @@ func TestClientAuthenticationChallenge(t *testing.T) {
 			name:          "ShouldChallengeUnknownAuthorizationScheme",
 			authorization: "Digest abc",
 			expected:      challenge,
+		},
+		{
+			name:     "ShouldChallengeEmptyAuthorizationHeader",
+			empty:    true,
+			expected: challenge,
 		},
 		{
 			name: "ShouldNotChallengeFailedPostAuthentication",
@@ -1402,7 +1408,7 @@ func TestClientAuthenticationChallenge(t *testing.T) {
 					r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
 					r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 
-					if len(tc.authorization) != 0 {
+					if len(tc.authorization) != 0 || tc.empty {
 						r.Header.Set(consts.HeaderAuthorization, tc.authorization)
 					}
 

@@ -9,7 +9,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -857,6 +859,34 @@ func TestNewPushedAuthorizeRequestClientCredentials(t *testing.T) {
 
 		assert.NotContains(t, ar.GetRequestForm(), consts.FormParameterClientSecret)
 		assert.Equal(t, "1234", ar.GetRequestForm().Get(consts.FormParameterClientID))
+	})
+
+	t.Run("ShouldChallengeClientIDMismatchWithBasicAuthentication", func(t *testing.T) {
+		store := mock.NewMockStorage(gomock.NewController(t))
+		store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).AnyTimes()
+
+		provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+		form := url.Values{}
+
+		for k, v := range parameters {
+			if k != consts.FormParameterClientID {
+				form[k] = v
+			}
+		}
+
+		r := httptest.NewRequest(http.MethodPost, "/?"+url.Values{consts.FormParameterClientID: {"other"}}.Encode(), strings.NewReader(form.Encode()))
+		r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+		r.Header.Set(consts.HeaderAuthorization, basicAuth("1234", "1234"))
+
+		ar, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+		require.ErrorIs(t, err, ErrInvalidClient)
+
+		rw := httptest.NewRecorder()
+		provider.WritePushedAuthorizeError(NewContext(), rw, ar, err)
+
+		assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
 	})
 }
 

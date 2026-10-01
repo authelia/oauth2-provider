@@ -61,7 +61,7 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 }
 
 func withClientAuthenticationChallenge(r *http.Request, err error, realm string) error {
-	if r == nil || len(r.Header.Get(consts.HeaderAuthorization)) == 0 {
+	if r == nil || len(r.Header.Values(consts.HeaderAuthorization)) == 0 {
 		return err
 	}
 

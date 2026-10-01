@@ -53,9 +53,9 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	// RFC 9126 Section 2.1: the request is processed for the authenticated client, so a 'client_id' naming any other
 	// client is rejected rather than resolved.
 	if id := r.Form.Get(consts.FormParameterClientID); len(id) != 0 && id != client.GetID() {
-		return request, errorsx.WithStack(ErrInvalidClient.
+		return request, withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.
 			WithHint("The 'client_id' parameter does not identify the authenticated client.").
-			WithDebugf("The 'client_id' parameter has the value '%s' but the client authenticated as '%s'.", id, client.GetID()))
+			WithDebugf("The 'client_id' parameter has the value '%s' but the client authenticated as '%s'.", id, client.GetID())), f.Config.GetClientAuthenticationRealm(ctx))
 	}
 
 	request.Client = client

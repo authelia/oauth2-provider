@@ -158,8 +158,12 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 
 	expectedIssuer := ""
 
-	if config, ok := c.Config.(oauth2.AccessTokenIssuerProvider); ok {
-		expectedIssuer = config.GetAccessTokenIssuer(ctx)
+	// OpenID Connect Core 1.0 Section 3.1.3.7 requires the 'iss' claim to exactly match the Issuer Identifier of the
+	// OpenID Provider, which is the issuer every ID Token from this server is generated with.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+	if config, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		expectedIssuer = config.GetIDTokenIssuer(ctx)
 	}
 
 	iss, _ := claims[consts.ClaimIssuer].(string)

@@ -888,6 +888,23 @@ func TestNewPushedAuthorizeRequestClientCredentials(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rw.Code)
 		assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
 	})
+
+	t.Run("ShouldChallengeConvertedAuthenticationErrorWithBasicAuthentication", func(t *testing.T) {
+		provider := &Fosite{Config: &Config{ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{err: ErrInvalidRequest}}}
+
+		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(parameters.Encode()))
+		r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+		r.Header.Set(consts.HeaderAuthorization, basicAuth("1234", "1234"))
+
+		ar, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+		require.ErrorIs(t, err, ErrInvalidClient)
+
+		rw := httptest.NewRecorder()
+		provider.WritePushedAuthorizeError(NewContext(), rw, ar, err)
+
+		assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
+	})
 }
 
 type testRedirectURIPushedAuthorizationRequestClient struct {
@@ -902,8 +919,9 @@ func (c *testRedirectURIPushedAuthorizationRequestClient) GetRequireRedirectURIP
 
 type staticClientAuthenticationStrategy struct {
 	client Client
+	err    error
 }
 
 func (s *staticClientAuthenticationStrategy) AuthenticateClient(_ context.Context, _ *http.Request, _ url.Values, _ EndpointClientAuthStrategy) (Client, string, error) {
-	return s.client, consts.ClientAuthMethodPrivateKeyJWT, nil
+	return s.client, consts.ClientAuthMethodPrivateKeyJWT, s.err
 }

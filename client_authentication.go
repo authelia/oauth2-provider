@@ -73,6 +73,7 @@ func withClientAuthenticationChallenge(r *http.Request, err error, realm string)
 
 	challenged := *rfc
 	challenged.challenge = clientAuthenticationBasicChallenge(realm)
+	challenged.cause = err
 
 	return errorsx.WithStack(&challenged)
 }

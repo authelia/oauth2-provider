@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -1421,6 +1422,25 @@ func TestClientAuthenticationChallenge(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClientAuthenticationChallengePreservesErrorChain(t *testing.T) {
+	errPolicy := errors.New("policy")
+
+	provider := &Fosite{Config: &Config{ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{err: errors.Join(ErrInvalidClient, errPolicy)}}}
+
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.Header.Set(consts.HeaderAuthorization, basicAuth("challenged", "incorrect"))
+
+	_, _, err := provider.AuthenticateClient(t.Context(), r, url.Values{})
+	assert.ErrorIs(t, err, ErrInvalidClient)
+	assert.ErrorIs(t, err, errPolicy)
+
+	rw := httptest.NewRecorder()
+	provider.WriteAccessError(t.Context(), rw, nil, err)
+
+	assert.Equal(t, http.StatusUnauthorized, rw.Code)
+	assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
 }
 
 func mustGenerateClientAssertion(t *testing.T, claims jwt.MapClaims, alg jose.SignatureAlgorithm, typ, kid string, key any) string {

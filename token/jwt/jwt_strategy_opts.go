@@ -23,7 +23,8 @@ type StrategyOpts struct {
 	jwsKeyFunc KeyFuncJWS
 	jweKeyFunc KeyFuncJWE
 
-	allowUnverified bool
+	allowUnverified  bool
+	issuerSigningAlg string
 }
 
 type (
@@ -171,6 +172,16 @@ func WithKeyFunc(f KeyFuncJWS) StrategyOpt {
 func WithKeyFuncJWE(f KeyFuncJWE) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.jweKeyFunc = f
+
+		return nil
+	}
+}
+
+// WithIssuerSigningAlg selects the issuer key by JWS algorithm when no client is supplied. RS256 is used when alg is
+// empty.
+func WithIssuerSigningAlg(alg string) StrategyOpt {
+	return func(opts *StrategyOpts) (err error) {
+		opts.issuerSigningAlg = alg
 
 		return nil
 	}

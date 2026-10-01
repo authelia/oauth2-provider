@@ -7,6 +7,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,13 +64,36 @@ type JTIMarker struct {
 	JTI    string
 }
 
+// IDJAGRelationshipKey identifies an ID-JAG relationship by requesting client and requested audience.
+type IDJAGRelationshipKey struct {
+	ClientID string
+	Audience string
+}
+
+// IDJAGSubjectKey identifies an ID-JAG subject within the namespace of its issuer, and of its tenant when the issuer
+// is multi-tenant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+type IDJAGSubjectKey struct {
+	// Issuer is the 'iss' claim of the grant.
+	Issuer string
+
+	// Tenant is the 'tenant' claim of the grant, empty when the grant has none. A grant whose 'tenant' claim is
+	// present but empty or not a string is not resolved.
+	Tenant string
+
+	// Subject is the 'sub' claim of the grant.
+	Subject string
+}
+
 // MemoryStore is a reference storage implementation which keeps every record in memory. It is intended for tests and
 // examples rather than production use.
 //
 // The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
-// RFC7523JTIs for RFC 7523 authorization grants, and TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
-// tokens. Expired 'jti' values, DPoP proof markers and DPoP nonces are no longer recognised once they expire, and are
-// removed by the next insert into the same map once the prune interval has elapsed.
+// RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
+// tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
+// longer recognised once they expire, and are removed by the next insert into the same map once the prune interval
+// has elapsed.
 //
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
 // live access tokens (e.g. the OpenID Connect hybrid flow).
@@ -94,6 +118,10 @@ type MemoryStore struct {
 	PARSessions              map[string]oauth2.AuthorizeRequester
 	DPoPProofJTIs            map[DPoPProofMarker]time.Time
 	DPoPNonces               map[string]time.Time
+	IDJAGRelationships       map[IDJAGRelationshipKey]oauth2.IDJAGRelationship
+	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
+	IDJAGSubjects            map[IDJAGSubjectKey]string
+	IDJAGJTIs                map[JTIMarker]time.Time
 
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
@@ -111,12 +139,14 @@ type MemoryStore struct {
 	parSessionsMutex              sync.RWMutex
 	dpopProofJTIsMutex            sync.RWMutex
 	dpopNoncesMutex               sync.RWMutex
+	idjagMutex                    sync.RWMutex
 
 	clientAssertionJTIsPruneAt time.Time
 	rfc7523JTIsPruneAt         time.Time
 	tokenExchangeJTIsPruneAt   time.Time
 	dpopProofJTIsPruneAt       time.Time
 	dpopNoncesPruneAt          time.Time
+	idjagJTIsPruneAt           time.Time
 }
 
 const memoryStorePruneInterval = time.Minute
@@ -143,6 +173,10 @@ func NewMemoryStore() *MemoryStore {
 		PARSessions:              make(map[string]oauth2.AuthorizeRequester),
 		DPoPProofJTIs:            make(map[DPoPProofMarker]time.Time),
 		DPoPNonces:               make(map[string]time.Time),
+		IDJAGRelationships:       make(map[IDJAGRelationshipKey]oauth2.IDJAGRelationship),
+		IDJAGTrustedIssuers:      make(map[string]oauth2.IDJAGTrustedIssuer),
+		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
+		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 	}
 }
 
@@ -740,6 +774,80 @@ func (s *MemoryStore) IsRFC7523JWTUsed(_ context.Context, issuer, jti string) (b
 // already marked. The 'jti' is scoped to the issuer per RFC 7519 Section 4.1.7, see JTIMarker.
 func (s *MemoryStore) MarkRFC7523JWTUsedForTime(_ context.Context, issuer, jti string, exp time.Time) error {
 	return s.setJTI(s.RFC7523JTIs, &s.rfc7523JTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
+}
+
+// GetIDJAGRelationship returns a copy of the relationship registered for the client and audience.
+func (s *MemoryStore) GetIDJAGRelationship(_ context.Context, request oauth2.AccessRequester, audience string) (*oauth2.IDJAGRelationship, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	relationship, ok := s.IDJAGRelationships[IDJAGRelationshipKey{ClientID: request.GetClient().GetID(), Audience: audience}]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	relationship.Scopes = slices.Clone(relationship.Scopes)
+	relationship.Resources = slices.Clone(relationship.Resources)
+
+	return &relationship, nil
+}
+
+// GetIDJAGTrustedIssuer returns a copy of the trust configuration registered for the issuer.
+func (s *MemoryStore) GetIDJAGTrustedIssuer(_ context.Context, issuer string) (*oauth2.IDJAGTrustedIssuer, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	trusted, ok := s.IDJAGTrustedIssuers[issuer]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	trusted.SigningAlgs = slices.Clone(trusted.SigningAlgs)
+	trusted.Clients = slices.Clone(trusted.Clients)
+
+	if trusted.JSONWebKeys != nil {
+		trusted.JSONWebKeys = &jose.JSONWebKeySet{Keys: slices.Clone(trusted.JSONWebKeys.Keys)}
+	}
+
+	return &trusted, nil
+}
+
+// ResolveIDJAGSubject returns the subject registered for the grant's issuer, tenant and subject, or oauth2.ErrNotFound
+// when none is registered.
+func (s *MemoryStore) ResolveIDJAGSubject(_ context.Context, _ oauth2.Client, claims map[string]any) (string, error) {
+	issuer, _ := claims[consts.ClaimIssuer].(string)
+	subject, _ := claims[consts.ClaimSubject].(string)
+
+	if subject == "" {
+		return "", oauth2.ErrNotFound
+	}
+
+	var tenant string
+
+	if value, ok := claims[consts.ClaimTenant]; ok {
+		if tenant, ok = value.(string); !ok || tenant == "" {
+			return "", oauth2.ErrNotFound
+		}
+	}
+
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	if resolved, ok := s.IDJAGSubjects[IDJAGSubjectKey{Issuer: issuer, Tenant: tenant, Subject: subject}]; ok {
+		return resolved, nil
+	}
+
+	return "", oauth2.ErrNotFound
+}
+
+// IsIDJAGUsed reports whether the issuer's 'jti' was already redeemed and is unexpired.
+func (s *MemoryStore) IsIDJAGUsed(_ context.Context, issuer, jti string) (bool, error) {
+	return s.isJTIKnown(s.IDJAGJTIs, JTIMarker{Issuer: issuer, JTI: jti}) != nil, nil
+}
+
+// MarkIDJAGUsed marks the issuer's 'jti' as redeemed until exp, returning oauth2.ErrJTIKnown when it is already marked.
+func (s *MemoryStore) MarkIDJAGUsed(_ context.Context, issuer, jti string, exp time.Time) error {
+	return s.setJTI(s.IDJAGJTIs, &s.idjagJTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
 }
 
 // CreatePARSession stores the pushed authorization request context. The requestURI is used to derive the key.

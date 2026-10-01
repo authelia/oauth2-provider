@@ -386,6 +386,13 @@ type Config struct {
 
 	DefaultRequestedTokenType string
 
+	// IDJAGLifespan is the lifespan of an issued Identity Assertion JWT Authorization Grant. Defaults to 5 minutes when
+	// zero.
+	IDJAGLifespan time.Duration
+
+	// IDJAGSingleUse rejects a second redemption of the same Identity Assertion JWT Authorization Grant.
+	IDJAGSingleUse bool
+
 	// JWTClockSkew is how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client: a client
 	// assertion, a request object, or an RFC 7523 authorization grant. Defaults to 10 seconds when zero, is disabled
 	// when negative, and is capped at 60 seconds.
@@ -1147,6 +1154,20 @@ func (c *Config) GetDefaultRFC8693RequestedTokenType(ctx context.Context) string
 	return c.DefaultRequestedTokenType
 }
 
+// GetIDJAGLifespan returns the lifespan of an issued Identity Assertion JWT Authorization Grant.
+func (c *Config) GetIDJAGLifespan(ctx context.Context) (lifespan time.Duration) {
+	if c.IDJAGLifespan <= 0 {
+		return 5 * time.Minute
+	}
+
+	return c.IDJAGLifespan
+}
+
+// GetIDJAGSingleUse returns true when an Identity Assertion JWT Authorization Grant may only be redeemed once.
+func (c *Config) GetIDJAGSingleUse(ctx context.Context) (single bool) {
+	return c.IDJAGSingleUse
+}
+
 func (c *Config) GetRFC8628UserVerificationURL(_ context.Context) string {
 	return c.RFC8628UserVerificationURL
 }
@@ -1409,6 +1430,7 @@ var (
 	_ PushedAuthorizeRequestHandlersProvider                = (*Config)(nil)
 	_ PushedAuthorizeRequestConfigProvider                  = (*Config)(nil)
 	_ RFC8693ConfigProvider                                 = (*Config)(nil)
+	_ IDJAGConfigProvider                                   = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeConfigProvider                  = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider        = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider          = (*Config)(nil)

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -157,6 +158,37 @@ func TestValidateHandlerOrderRFC8693(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrHandlerOrder)
 			assert.Contains(t, err.Error(), tc.err)
+		})
+	}
+}
+
+func TestValidateHandlerOrderIDJAG(t *testing.T) {
+	redeem := &idjag.RedeemHandler{}
+
+	testCases := []struct {
+		name     string
+		token    oauth2.TokenEndpointHandlers
+		binding  oauth2.TokenEndpointBindingHandlers
+		contains string
+	}{
+		{name: "ShouldAcceptRedeemAfterDPoP", token: oauth2.TokenEndpointHandlers{redeem}, binding: oauth2.TokenEndpointBindingHandlers{&rfc9449.Handler{}, redeem}},
+		{name: "ShouldAcceptRedeemWithoutDPoP", token: oauth2.TokenEndpointHandlers{redeem}, binding: oauth2.TokenEndpointBindingHandlers{redeem}},
+		{name: "ShouldRejectRedeemBeforeDPoP", token: oauth2.TokenEndpointHandlers{redeem}, binding: oauth2.TokenEndpointBindingHandlers{redeem, &rfc9449.Handler{}}, contains: "must be registered before the idjag.RedeemHandler"},
+		{name: "ShouldRejectRedeemMissingFromBinding", token: oauth2.TokenEndpointHandlers{redeem}, binding: oauth2.TokenEndpointBindingHandlers{&rfc9449.Handler{}}, contains: "must also be registered in the token endpoint binding handlers"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: tc.token, TokenEndpointBindingHandlers: tc.binding})
+
+			if tc.contains == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrHandlerOrder)
+			assert.Contains(t, err.Error(), tc.contains)
 		})
 	}
 }

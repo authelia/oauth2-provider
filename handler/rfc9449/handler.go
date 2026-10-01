@@ -19,7 +19,8 @@ import (
 // DPoP augments a grant another handler owns rather than owning one itself, so it is dispatched in the token binding
 // phase: oauth2.(*Fosite).NewAccessRequest runs it only once a grant handler has accepted the request and restored
 // the session, and oauth2.(*Fosite).NewAccessResponse runs its populate after every grant handler has set a token
-// type. Registration order does not affect either.
+// type. A binding handler that consumes the published proof, such as oidckb.Handler or idjag.RedeemHandler, must be
+// registered after it.
 type Handler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider

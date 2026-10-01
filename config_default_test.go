@@ -338,6 +338,19 @@ func TestConfigGetAuthorizationDetailsTypeHandlers(t *testing.T) {
 	assert.Equal(t, map[string]AuthorizationDetailsTypeHandler{"a": handler}, config.GetAuthorizationDetailsTypeHandlers(context.Background()))
 }
 
+func TestConfig_IDJAG(t *testing.T) {
+	config := &Config{}
+
+	assert.Equal(t, 5*time.Minute, config.GetIDJAGLifespan(context.Background()))
+	assert.False(t, config.GetIDJAGSingleUse(context.Background()))
+
+	config.IDJAGLifespan = time.Minute
+	config.IDJAGSingleUse = true
+
+	assert.Equal(t, time.Minute, config.GetIDJAGLifespan(context.Background()))
+	assert.True(t, config.GetIDJAGSingleUse(context.Background()))
+}
+
 type testClientRegistrationMetadataStrategy struct{}
 
 func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {

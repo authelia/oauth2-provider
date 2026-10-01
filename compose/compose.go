@@ -124,6 +124,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		RFC8693RefreshTokenTypeFactory,
 		RFC8693IDTokenTypeFactory,
 		RFC8693CustomJWTTypeFactory,
+		IDJAGIssueFactory,
 		RFC8693ActorTokenValidationFactory,
 
 		OpenIDConnectExplicitFactory,
@@ -143,6 +144,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 
 		DPoPAuthorizeFactory,
 		DPoPTokenFactory,
+		IDJAGRedeemFactory,
 		RFC8705Factory,
 	)
 }

@@ -6,6 +6,7 @@ package rfc8693
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"time"
 
@@ -183,6 +184,12 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, err
 	}
 
+	if role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config) {
+		if err = c.validateIDJAGGrant(ctx, request, or); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Convert to flat session with only access token claims.
 	claims = tokenClaimsMap(or.GetSession())
 
@@ -194,6 +201,11 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	}
 
 	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
+
+	// An ID-JAG carries the authentication context of the login the refresh token was issued for (Section 4.3.3).
+	if role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config) {
+		maps.Copy(claims, authenticationContextClaims(or.GetSession()))
+	}
 
 	return or.GetSession(), claims, nil
 }
@@ -218,6 +230,43 @@ func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, o
 	}
 
 	return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithWrap(inactive).WithDebugError(inactive))
+}
+
+func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, request oauth2.AccessRequester, original oauth2.Requester) (err error) {
+	client := request.GetClient()
+	strategy := c.GetScopeStrategy(ctx, client)
+
+	if err = validateSubjectTokenScope(request, original.GetGrantedScopes()); err != nil {
+		return err
+	}
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
+			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+		}
+	}
+
+	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
+
+	if err = audience(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err = audience(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return errors.WithStack(err)
+	}
+
+	resource := oauth2.GetResourceStrategy(ctx, c.Config, client)
+
+	if err = resource(client.GetAudience(), request.GetRequestedResource()); err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err = resource(original.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

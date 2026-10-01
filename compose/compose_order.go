@@ -7,8 +7,10 @@ package compose
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -41,8 +43,10 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     openid.OpenIDConnectDeviceAuthorizeHandler must follow the rfc8628.DeviceAuthorizeTokenEndpointHandler in the
 //     token endpoint handlers. Each computes the ID Token 'at_hash' claim from the access token the OAuth 2.0 grant
 //     handler adds to the response, so registered first it hashes an empty access token.
-//   - Every oidckb.Handler must follow the rfc9449.Handler in the token endpoint binding handlers, as it consumes the
-//     DPoP proof rfc9449.Handler publishes.
+//   - Every oidckb.Handler and every idjag.RedeemHandler must follow the rfc9449.Handler in the token endpoint binding
+//     handlers, as each consumes the DPoP proof rfc9449.Handler publishes.
+//   - Every idjag.RedeemHandler registered in the token endpoint handlers must also be registered in the token
+//     endpoint binding handlers, as it enforces the grant's 'cnf' claim there.
 //   - Every oidckb.UserAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628 user authorize
 //     endpoint handlers, as it records the granted key binding onto the session rfc8628.UserAuthorizeHandler persists.
 //   - When any RFC 8693 handler is registered in the token endpoint handlers, an rfc8693.TokenExchangeGrantHandler
@@ -58,6 +62,7 @@ func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 		validateTokenEndpointHandlerOrder(config),
 		validateRFC8693HandlerOrder(config),
 		validateTokenEndpointBindingHandlerOrder(config),
+		validateIDJAGRedeemHandlerBinding(config),
 		validateRFC8628UserAuthorizeHandlerOrder(config),
 	)
 }
@@ -127,7 +132,7 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 			if typed {
 				grantUnordered = true
 			}
-		case *rfc8693.AccessTokenTypeHandler, *rfc8693.RefreshTokenTypeHandler, *rfc8693.IDTokenTypeHandler, *rfc8693.CustomJWTTypeHandler:
+		case *rfc8693.AccessTokenTypeHandler, *rfc8693.RefreshTokenTypeHandler, *rfc8693.IDTokenTypeHandler, *rfc8693.CustomJWTTypeHandler, *idjag.IssueHandler:
 			typed = true
 
 			if validator {
@@ -159,8 +164,8 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 	return err
 }
 
-// validateTokenEndpointBindingHandlerOrder returns an error when both key binding token endpoint binding handlers are
-// registered and oidckb.Handler precedes rfc9449.Handler.
+// validateTokenEndpointBindingHandlerOrder returns an error when an oidckb.Handler or idjag.RedeemHandler precedes the
+// rfc9449.Handler in the token endpoint binding handlers.
 //
 // oidckb.Handler performs no proof validation of its own; it consumes the proof rfc9449.Handler publishes once every
 // RFC 9449 Section 5 check has passed. Registered first it would find nothing published, so a grant that asked to be
@@ -169,8 +174,11 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 // rfc9449.Handler alone is a legitimate configuration. oidckb.Handler alone is legitimate only when some other
 // handler publishes a validated proof via oauth2.PublishDPoPProof; with no publisher registered at all, every grant
 // whose authentication request carried 'dpop_jkt' fails with a server error at the token endpoint.
+//
+// An idjag.RedeemHandler registered first would find nothing published and reject every grant carrying a 'cnf'
+// claim, so it is held to the same order.
 func validateTokenEndpointBindingHandlerOrder(config *oauth2.Config) (err error) {
-	var dpop, unordered bool
+	var dpop, keyBindingUnordered, idjagUnordered bool
 
 	// Every oidckb.Handler must be preceded by an rfc9449.Handler, so the list is walked in order rather than
 	// reduced to one index per type: a list carrying more than one of either would report only the last of each,
@@ -182,18 +190,46 @@ func validateTokenEndpointBindingHandlerOrder(config *oauth2.Config) (err error)
 			dpop = true
 		case *oidckb.Handler:
 			if !dpop {
-				unordered = true
+				keyBindingUnordered = true
+			}
+		case *idjag.RedeemHandler:
+			if !dpop {
+				idjagUnordered = true
 			}
 		}
 	}
 
-	// An oidckb.Handler with no rfc9449.Handler registered at all is the custom publisher configuration described
-	// above, not an ordering fault.
-	if !unordered || !dpop {
+	// A consumer with no rfc9449.Handler registered at all is the custom publisher configuration described above, not
+	// an ordering fault.
+	if !dpop {
 		return nil
 	}
 
-	return fmt.Errorf("%w: the rfc9449.Handler (DPoPTokenFactory) must be registered before the oidckb.Handler (OpenIDConnectKeyBindingFactory), as it consumes the DPoP proof the rfc9449.Handler publishes", ErrHandlerOrder)
+	if keyBindingUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the rfc9449.Handler (DPoPTokenFactory) must be registered before the oidckb.Handler (OpenIDConnectKeyBindingFactory), as it consumes the DPoP proof the rfc9449.Handler publishes", ErrHandlerOrder))
+	}
+
+	if idjagUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the rfc9449.Handler (DPoPTokenFactory) must be registered before the idjag.RedeemHandler (IDJAGRedeemFactory), as it enforces the ID-JAG 'cnf' claim against the DPoP proof the rfc9449.Handler publishes", ErrHandlerOrder))
+	}
+
+	return err
+}
+
+func validateIDJAGRedeemHandlerBinding(config *oauth2.Config) (err error) {
+	isRedeem := func(handler oauth2.TokenEndpointBindingHandler) bool {
+		_, ok := handler.(*idjag.RedeemHandler)
+
+		return ok
+	}
+
+	for _, handler := range config.TokenEndpointHandlers {
+		if _, ok := handler.(*idjag.RedeemHandler); ok && !slices.ContainsFunc(config.TokenEndpointBindingHandlers, isRedeem) {
+			return fmt.Errorf("%w: the idjag.RedeemHandler (IDJAGRedeemFactory) must also be registered in the token endpoint binding handlers, as it enforces the ID-JAG 'cnf' claim there", ErrHandlerOrder)
+		}
+	}
+
+	return nil
 }
 
 // validateRFC8628UserAuthorizeHandlerOrder returns an error when oidckb.UserAuthorizeHandler is registered after

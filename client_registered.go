@@ -75,6 +75,9 @@ type DefaultRegisteredClient struct {
 	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types"`
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
+	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
+	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
+
 	// RFC 9101 Section 10.5 (JWT-Secured Authorization Request) client metadata.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc9101#section-10.5
@@ -491,6 +494,11 @@ func (c *DefaultRegisteredClient) GetSupportedSubjectTokenIssuers() (issuers []s
 // setting as the interface documents. There is no registered metadata for it.
 func (c *DefaultRegisteredClient) GetSupportedActorTokenIssuers() (issuers []string) {
 	return nil
+}
+
+// GetAuthorizationGrantProfilesSupported returns the authorization grant profiles the client implements.
+func (c *DefaultRegisteredClient) GetAuthorizationGrantProfilesSupported() (profiles []string) {
+	return c.AuthorizationGrantProfilesSupported
 }
 
 // GetTokenExchangePermitted reports whether client may exchange a token issued to this one, per RFC 8693 Section 5's

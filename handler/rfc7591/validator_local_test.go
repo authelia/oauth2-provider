@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestLocalValidator(t *testing.T) {
@@ -596,6 +597,39 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 
 			require.Error(t, err)
 			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
+}
+
+func TestLocalValidatorAuthorizationGrantProfiles(t *testing.T) {
+	const hint = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'urn:ietf:params:oauth:grant-profile:id-jag' authorization grant profile requires the 'urn:ietf:params:oauth:grant-type:token-exchange' and 'urn:ietf:params:oauth:grant-type:jwt-bearer' grant types to be present in 'grant_types'."
+
+	testCases := []struct {
+		name       string
+		grantTypes []string
+		profiles   []string
+		err        string
+	}{
+		{name: "ShouldAcceptWithoutProfiles", grantTypes: []string{consts.GrantTypeClientCredentials}},
+		// Section 8: the id-jag profile requires both grant types.
+		{name: "ShouldAcceptIDJAGWithBothGrantTypes", grantTypes: []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeOAuthJWTBearer}, profiles: []string{consts.GrantProfileIDJAG}},
+		{name: "ShouldRejectIDJAGWithoutJWTBearer", grantTypes: []string{consts.GrantTypeOAuthTokenExchange}, profiles: []string{consts.GrantProfileIDJAG}, err: hint},
+		{name: "ShouldRejectIDJAGWithoutTokenExchange", grantTypes: []string{consts.GrantTypeOAuthJWTBearer}, profiles: []string{consts.GrantProfileIDJAG}, err: hint},
+		{name: "ShouldAcceptUnknownProfile", grantTypes: []string{consts.GrantTypeClientCredentials}, profiles: []string{"urn:example:profile"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAuthorizationGrantProfiles(&oauth2.ClientRegistrationMetadata{GrantTypes: tc.grantTypes, AuthorizationGrantProfilesSupported: tc.profiles})
+
+			if tc.err == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 		})
 	}
 }

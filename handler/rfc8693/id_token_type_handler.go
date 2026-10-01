@@ -84,8 +84,10 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		if err = validateSubjectTokenScope(request, nil); err != nil {
-			return err
+		if !IsIDJAGRequest(ctx, request, c.Config) {
+			if err = validateSubjectTokenScope(request, nil); err != nil {
+				return err
+			}
 		}
 
 		if err = c.inherit(request, unpacked, tokenRoleSubject, prior); err != nil {

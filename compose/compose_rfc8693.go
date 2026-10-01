@@ -38,6 +38,7 @@ import (
 //	3. RFC8693RefreshTokenTypeFactory          they're mutually exclusive at issuance because each handler's
 //	4. RFC8693IDTokenTypeFactory               CanHandleTokenEndpointRequest filters by requested_token_type)
 //	5. RFC8693CustomJWTTypeFactory
+//	   IDJAGIssueFactory                      (optional; ID-JAG token type handler)
 //	6. RFC8693ActorTokenValidationFactory     (may_act validator; LAST)
 //
 // Skipping any of the type-handler factories is supported (e.g. an AS that does not accept JWT subject tokens may

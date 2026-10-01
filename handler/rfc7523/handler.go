@@ -19,6 +19,27 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+var assertionAlgorithms = []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512}
+
+// IsIDJAGAssertion returns true when the JOSE 'typ' header of assertion identifies an Identity Assertion JWT
+// Authorization Grant, which this handler leaves to the handler for that profile.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.1
+func IsIDJAGAssertion(assertion string) bool {
+	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
+	if err != nil {
+		return false
+	}
+
+	for _, header := range token.Headers {
+		if typ, _ := header.ExtraHeaders[jose.HeaderType].(string); oauth2.IsIDJAGTokenType(typ) {
+			return true
+		}
+	}
+
+	return false
+}
+
 type Handler struct {
 	Storage Storage
 
@@ -44,16 +65,21 @@ type Handler struct {
 //
 //nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	assertion := request.GetRequestForm().Get(consts.FormParameterAssertion)
+
+	if assertion != "" && IsIDJAGAssertion(assertion) {
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
+	}
+
 	if err = c.CheckRequest(ctx, request); err != nil {
 		return err
 	}
 
-	assertion := request.GetRequestForm().Get(consts.FormParameterAssertion)
 	if assertion == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
-	token, err := jwt.ParseSigned(assertion, []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
+	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
 	}
@@ -130,6 +156,10 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = c.CheckRequest(ctx, request); err != nil {
 		return err
+	}
+
+	if IsIDJAGAssertion(request.GetRequestForm().Get(consts.FormParameterAssertion)) {
+		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeJWTBearer, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))

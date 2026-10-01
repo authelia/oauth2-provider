@@ -7,6 +7,7 @@ package rfc8693
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,9 +23,12 @@ import (
 //
 // A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
 // either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
-// when the token has no such claim.
+// when the token has no such claim. When the 'requested_token_type' is an Identity Assertion JWT Authorization Grant,
+// the 'subject_token' must instead be an assertion whose 'aud' claim includes the requesting client and whose 'typ' is
+// not an access token type, and its 'scope' claim does not limit the requested scopes.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
 type CustomJWTTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -103,6 +107,10 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
+	if IsIDJAGRequest(ctx, request, c.Config) {
+		return nil
+	}
+
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 
@@ -146,6 +154,19 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
 	}
 
+	typ, _ := ftoken.Header[jwt.JSONWebTokenHeaderType].(string)
+
+	if oauth2.IsIDJAGTokenType(typ) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693IDJAG))
+	}
+
+	idjag := role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config)
+
+	// Draft ID-JAG Section 4.3: the subject token is an Identity Assertion or a Refresh Token.
+	if idjag && (strings.EqualFold(typ, consts.JSONWebTokenTypeAccessToken) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeAccessToken)) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An access token is not supported as a '%s' when the '%s' is '%s'.", consts.FormParameterSubjectToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+	}
+
 	window := jwtType.JWTLifetimeToleranceWindow
 	if window == 0 {
 		window = 1 * time.Hour
@@ -179,7 +200,13 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
-	if err = validateCustomJWTScope(request, role, claims); err != nil {
+	if idjag {
+		// Draft ID-JAG Section 4.3.3: the audience of the assertion MUST match the authenticated client, and the
+		// requested scopes are governed by the relationship rather than the assertion.
+		if clientID := request.GetClient().GetID(); !claims.VerifyAudience(clientID, true) {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s'.", clientID))
+		}
+	} else if err = validateCustomJWTScope(request, role, claims); err != nil {
 		return nil, err
 	}
 

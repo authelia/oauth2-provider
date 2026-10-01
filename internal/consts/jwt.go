@@ -57,6 +57,11 @@ const (
 	//
 	// See: https://openid.net/specs/openid-connect-key-binding-1_0.html#section-4
 	JSONWebTokenTypeDPoPIDToken = "dpop+id_token"
+
+	// JSONWebTokenTypeIDJAG represents the JWT type value for an Identity Assertion JWT Authorization Grant.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt" //nolint:gosec // This is a credential type, not a credential.
 )
 
 const (

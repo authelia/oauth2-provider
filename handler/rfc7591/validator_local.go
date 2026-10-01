@@ -85,6 +85,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateAuthorizationGrantProfiles(metadata); err != nil {
+		return err
+	}
+
 	if err = validateAlgorithms(metadata); err != nil {
 		return err
 	}
@@ -592,3 +596,15 @@ func isValidScopeToken(s string) bool {
 var (
 	_ oauth2.ClientRegistrationValidator = (*LocalValidator)(nil)
 )
+
+func validateAuthorizationGrantProfiles(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if !slices.Contains(metadata.AuthorizationGrantProfilesSupported, consts.GrantProfileIDJAG) {
+		return nil
+	}
+
+	if slices.Contains(metadata.GrantTypes, consts.GrantTypeOAuthTokenExchange) && slices.Contains(metadata.GrantTypes, consts.GrantTypeOAuthJWTBearer) {
+		return nil
+	}
+
+	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' authorization grant profile requires the '%s' and '%s' grant types to be present in '%s'.", consts.GrantProfileIDJAG, consts.GrantTypeOAuthTokenExchange, consts.GrantTypeOAuthJWTBearer, consts.ClientMetadataGrantTypes))
+}

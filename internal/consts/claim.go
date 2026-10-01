@@ -47,6 +47,11 @@ const (
 	ClaimDPoPAccessTokenHash                 = "ath"
 	ClaimConfirmationJWK                     = "jwk"
 	ClaimDPoPCodeHash                        = "c_s256"
+	ClaimResource                            = "resource"
+	ClaimTenant                              = "tenant"
+	ClaimAudienceTenant                      = "aud_tenant"
+	ClaimAudienceSubject                     = "aud_sub"
+	ClaimSubjectIdentifier                   = "sub_id"
 )
 
 const (

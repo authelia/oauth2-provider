@@ -22,6 +22,8 @@ import (
 
 	"authelia.com/provider/jose"
 	"authelia.com/provider/jose/jwt"
+
+	"authelia.com/provider/oauth2/internal/gen"
 )
 
 func TestDefaultStrategy(t *testing.T) {
@@ -613,6 +615,39 @@ func TestDefaultStrategy_DecodeEncryptedTokens(t *testing.T) {
 
 			assert.NoError(t, token.Valid())
 			assert.NoError(t, token.Claims.Valid(ValidateIssuer("example.com"), ValidateRequireIssuedAt(), ValidateRequireExpiresAt(), ValidateSubject("john")))
+		})
+	}
+}
+
+func TestDefaultStrategy_EncodeWithIssuerSigningAlg(t *testing.T) {
+	rsaKey := gen.MustRSAKey()
+	ecKey := gen.MustES256Key()
+
+	rsaJWK := jose.JSONWebKey{Key: rsaKey, KeyID: "rs", Algorithm: string(jose.RS256), Use: JSONWebTokenUseSignature}
+	ecJWK := jose.JSONWebKey{Key: ecKey, KeyID: "es", Algorithm: string(jose.ES256), Use: JSONWebTokenUseSignature}
+
+	issuer, err := NewDefaultIssuer(rsaJWK, ecJWK)
+	require.NoError(t, err)
+
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: issuer}
+
+	testCases := []struct {
+		name string
+		alg  string
+		kid  string
+	}{
+		{"ShouldDefaultToRS256", "", rsaJWK.KeyID},
+		{"ShouldSelectES256", string(jose.ES256), ecJWK.KeyID},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, _, err := strategy.Encode(context.Background(), MapClaims{"sub": "a"}, WithIssuerSigningAlg(tc.alg))
+			require.NoError(t, err)
+
+			parsed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			require.NoError(t, err)
+			assert.Equal(t, tc.kid, parsed.Signatures[0].Header.KeyID)
 		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -154,6 +155,15 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 
 	if len(supportedRequestTypes) > 0 && !supportedRequestTypes.Has(requestedTokenType) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not allowed to use '%s' as '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
+	}
+
+	if requestedTokenType == consts.TokenTypeRFC8693IDJAG {
+		switch subjectTokenType {
+		case consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693IDJAG:
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+		}
+
+		return nil
 	}
 
 	// Check the requested scope.
@@ -361,6 +371,34 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 	return config.GetRFC8693TokenTypes(ctx)[id]
 }
 
+// IsIDJAGRequest returns true when the resolved 'requested_token_type' of the request is an Identity Assertion JWT
+// Authorization Grant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
+func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
+	requested := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
+	if requested == "" {
+		requested = config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	return requested == consts.TokenTypeRFC8693IDJAG
+}
+
+// RequireSubjectToken returns an error unless a token type handler validated the 'subject_token' of the request.
+func RequireSubjectToken(request oauth2.AccessRequester) (err error) {
+	return requireSubjectToken(request)
+}
+
+// RequireActorToken returns an error when the request carries an 'actor_token' no token type handler validated.
+func RequireActorToken(request oauth2.AccessRequester) (err error) {
+	return requireActorToken(request)
+}
+
+// CapToSubjectTokenExpiry returns the earlier of expires and the expiry of the validated 'subject_token'.
+func CapToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
+	return capToSubjectTokenExpiry(request, expires)
+}
+
 func errExchangeTokenValidation(err error) error {
 	if !hoauth2.IsTokenRejection(err) {
 		return errors.WithStack(err)
@@ -382,6 +420,14 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()
 	self := client.GetID() == originalClientID
+
+	if role == tokenRoleSubject && IsIDJAGRequest(ctx, request, config) {
+		if !self {
+			return errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The subject token was not issued to the OAuth 2.0 client requesting a '%s'.", consts.TokenTypeRFC8693IDJAG))
+		}
+
+		return nil
+	}
 
 	if self && role == tokenRoleSubject {
 		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
@@ -516,6 +562,34 @@ func tokenClaimsMap(session oauth2.Session) map[string]any {
 
 	claims[consts.ClaimSubject] = session.GetSubject()
 	claims[consts.ClaimUsername] = session.GetUsername()
+
+	return claims
+}
+
+func authenticationContextClaims(session oauth2.Session) (claims map[string]any) {
+	claims = map[string]any{}
+
+	s, ok := session.(interface{ IDTokenClaims() *jwt.IDTokenClaims })
+	if !ok {
+		return claims
+	}
+
+	login := s.IDTokenClaims()
+	if login == nil {
+		return claims
+	}
+
+	if login.AuthTime != nil {
+		claims[consts.ClaimAuthenticationTime] = login.AuthTime.Unix()
+	}
+
+	if login.AuthenticationContextClassReference != "" {
+		claims[consts.ClaimAuthenticationContextClassReference] = login.AuthenticationContextClassReference
+	}
+
+	if len(login.AuthenticationMethodsReferences) != 0 {
+		claims[consts.ClaimAuthenticationMethodsReference] = slices.Clone(login.AuthenticationMethodsReferences)
+	}
 
 	return claims
 }

@@ -256,6 +256,7 @@ type Configurator interface {
 	ClientAuthenticationStrategyProvider
 	ResponseModeHandlerProvider
 	SendDebugMessagesToClientsProvider
+	ClientAuthenticationRealmProvider
 	RevokeRefreshTokensExplicitlyProvider
 	JWKSFetcherStrategyProvider
 	ClientAuthenticationStrategyProvider

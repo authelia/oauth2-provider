@@ -373,6 +373,7 @@ type (
 		cause           error
 		useLegacyFormat bool
 		exposeDebug     bool
+		challenge       string
 
 		// Fields for globalization
 		hintIDField string

@@ -100,6 +100,12 @@ type Config struct {
 	// codes or other information. Proceed with caution!
 	SendDebugMessagesToClients bool
 
+	// ClientAuthenticationRealm is the realm of the 'Basic' challenge sent in the 'WWW-Authenticate' header of a 401
+	// invalid_client response to a client that authenticated with the 'Authorization' header, per RFC 6749 Section 5.2
+	// and RFC 7617 Section 2. The value is sent as a quoted-string per RFC 9110 Section 5.6.4: '"' and '\' are
+	// backslash-escaped and control characters other than horizontal tab are removed. Defaults to 'oauth2'.
+	ClientAuthenticationRealm string
+
 	// RevokeRefreshTokensExplicit determines if Refresh Tokens should only be revoked explicitly.
 	RevokeRefreshTokensExplicit bool
 
@@ -671,6 +677,15 @@ func (c *Config) GetResponseModeParameterHandlers(ctx context.Context) ResponseM
 
 func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
 	return c.SendDebugMessagesToClients
+}
+
+// GetClientAuthenticationRealm returns the ClientAuthenticationRealm, or 'oauth2' when it is unset.
+func (c *Config) GetClientAuthenticationRealm(ctx context.Context) (realm string) {
+	if len(c.ClientAuthenticationRealm) == 0 {
+		return defaultClientAuthenticationRealm
+	}
+
+	return c.ClientAuthenticationRealm
 }
 
 func (c *Config) GetRevokeRefreshTokensExplicit(ctx context.Context) bool {
@@ -1410,6 +1425,7 @@ var (
 	_ JWKSFetcherStrategyProvider                           = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider                  = (*Config)(nil)
 	_ SendDebugMessagesToClientsProvider                    = (*Config)(nil)
+	_ ClientAuthenticationRealmProvider                     = (*Config)(nil)
 	_ ResponseModeHandlerProvider                           = (*Config)(nil)
 	_ MessageCatalogProvider                                = (*Config)(nil)
 	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)

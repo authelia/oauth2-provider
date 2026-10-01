@@ -7,6 +7,7 @@ package idjag
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -31,6 +32,10 @@ import (
 // malformed, expired or replayed proof answers invalid_dpop_proof per RFC 9449, keeping use_dpop_nonce usable, rather
 // than the invalid_grant of draft-parecki-oauth-jwt-dpop-grant-01 Section 4. A requested resource or scope within the
 // grant that the client is not permitted is dropped rather than refused.
+// With RFC 9396 enabled it grants the grant's authorization details that the client may use and the type handlers
+// accept. With RFC 9396 disabled it rejects a grant carrying them. A client whose authorization details types are
+// unrestricted accepts every configured type any trusted issuer grants, so restrict the types of clients that redeem
+// grants carrying authorization details.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.2.1
@@ -400,8 +405,8 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 		return err
 	}
 
-	if _, ok := raw[claimAuthorizationDetails]; ok {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is not supported.", claimAuthorizationDetails))
+	if _, ok := raw[consts.ClaimAuthorizationDetails]; ok && !oauth2.IsAuthorizationDetailsEnabled(ctx, h.Config) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is not supported.", consts.ClaimAuthorizationDetails))
 	}
 
 	now := time.Now()
@@ -559,6 +564,40 @@ func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.Acces
 			request.GrantResource(resource)
 		}
 	}
+
+	return h.grantAuthorizationDetails(ctx, request, client, raw)
+}
+
+func (h *RedeemHandler) grantAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester, client oauth2.Client, raw map[string]any) (err error) {
+	value, ok := raw[consts.ClaimAuthorizationDetails]
+	if !ok {
+		return nil
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is malformed.", consts.ClaimAuthorizationDetails).WithWrap(err).WithDebugError(err))
+	}
+
+	details, err := oauth2.ParseAuthorizationDetails(string(encoded))
+	if err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is malformed.", consts.ClaimAuthorizationDetails).WithWrap(err).WithDebugError(err))
+	}
+
+	if err = oauth2.CheckAuthorizationDetailsMaxObjects(ctx, h.Config, details); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim contains too many authorization details objects.", consts.ClaimAuthorizationDetails).WithWrap(err).WithDebugError(err))
+	}
+
+	var granted oauth2.AuthorizationDetails
+
+	for _, detail := range details {
+		if oauth2.ValidateAuthorizationDetails(ctx, h.Config, client, oauth2.AuthorizationDetails{detail}) == nil {
+			granted = append(granted, detail)
+		}
+	}
+
+	request.SetRequestedAuthorizationDetails(granted)
+	request.SetGrantedAuthorizationDetails(granted)
 
 	return nil
 }

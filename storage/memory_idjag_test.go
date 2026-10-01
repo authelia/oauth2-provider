@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
@@ -46,6 +47,23 @@ func TestMemoryStoreIDJAG(t *testing.T) {
 	again, err := store.GetIDJAGRelationship(ctx, request, "urn:example:chat")
 	require.NoError(t, err)
 	assert.Equal(t, "chat.read", again.Scopes[0])
+
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: idjagTestClient, Audience: "urn:example:pay"}] = oauth2.IDJAGRelationship{Issuer: "https://pay.example/", ClientID: "a1", AuthorizationDetailsTypes: []string{internal.AuthorizationDetailsTypePaymentInitiation}}
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: idjagTestClient, Audience: "urn:example:none"}] = oauth2.IDJAGRelationship{Issuer: "https://none.example/", ClientID: "a2", AuthorizationDetailsTypes: []string{}}
+
+	relationship, err = store.GetIDJAGRelationship(ctx, request, "urn:example:pay")
+	require.NoError(t, err)
+
+	relationship.AuthorizationDetailsTypes[0] = idjagTestMutated
+
+	again, err = store.GetIDJAGRelationship(ctx, request, "urn:example:pay")
+	require.NoError(t, err)
+	assert.Equal(t, []string{internal.AuthorizationDetailsTypePaymentInitiation}, again.AuthorizationDetailsTypes)
+
+	relationship, err = store.GetIDJAGRelationship(ctx, request, "urn:example:none")
+	require.NoError(t, err)
+	assert.NotNil(t, relationship.AuthorizationDetailsTypes)
+	assert.Empty(t, relationship.AuthorizationDetailsTypes)
 
 	_, err = store.GetIDJAGRelationship(ctx, request, "https://unknown.example/")
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)

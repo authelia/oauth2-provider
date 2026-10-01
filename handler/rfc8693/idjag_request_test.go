@@ -16,27 +16,30 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const (
-	idjagSubject       = "peter"
-	idjagClientID      = "my-client"
-	idjagIssuer        = "https://as.example.com"
-	idjagSubjectToken  = "subject"
-	idjagSubjectType   = "urn:spec:jwt"
-	idjagScope         = "chat.read"
-	idjagAudience      = "https://rs.example.com/"
-	idjagOtherClient   = "some-other-client"
-	idjagOtherOwner    = "custom-lifespan-client"
-	idjagOtherScope    = "chat.history"
-	idjagOtherAudience = "https://other.example.com/"
-	idjagResource      = "https://rs.example.com/api"
-	idjagOtherResource = "https://other.example.com/api"
-	idjagACR           = "urn:example:acr:mfa"
-	idjagAMR           = "otp"
+	idjagSubject        = "peter"
+	idjagClientID       = "my-client"
+	idjagIssuer         = "https://as.example.com"
+	idjagSubjectToken   = "subject"
+	idjagSubjectType    = "urn:spec:jwt"
+	idjagScope          = "chat.read"
+	idjagAudience       = "https://rs.example.com/"
+	idjagOtherClient    = "some-other-client"
+	idjagOtherOwner     = "custom-lifespan-client"
+	idjagOtherScope     = "chat.history"
+	idjagOtherAudience  = "https://other.example.com/"
+	idjagResource       = "https://rs.example.com/api"
+	idjagOtherResource  = "https://other.example.com/api"
+	idjagACR            = "urn:example:acr:mfa"
+	idjagAMR            = "otp"
+	idjagActionInitiate = "initiate"
+	idjagActionStatus   = "status"
 )
 
 func TestIDJAGRequestGrantHandler(t *testing.T) {
@@ -195,6 +198,66 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 			assert.Equal(t, idjagSubject, request.GetSession().GetSubject())
+		})
+	}
+}
+
+func TestIDJAGRequestRefreshTokenSubjectAuthorizationDetails(t *testing.T) {
+	initiate := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagActionInitiate}}
+	status := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagActionStatus}}
+	both := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagActionInitiate, idjagActionStatus}}
+
+	testCases := []struct {
+		name      string
+		granted   oauth2.AuthorizationDetails
+		requested oauth2.AuthorizationDetails
+		err       error
+	}{
+		// Section 4.3.3: the requested details remain within the authorization context of the refresh token.
+		{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{status}},
+		{name: "ShouldAcceptNoDetails", granted: oauth2.AuthorizationDetails{both}},
+		{name: "ShouldAcceptNoDetailsWhenNoneWereGranted"},
+		{name: "ShouldRejectDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: oauth2.AuthorizationDetails{status}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldRejectDetailsWhenNoneWereGranted", requested: oauth2.AuthorizationDetails{initiate}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldRejectTwoDetailsContainedByOneGrantedDetail", granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{initiate, status}, err: oauth2.ErrInvalidAuthorizationDetails},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, store, strategy := newExchangeFixture(t)
+			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
+			cfg.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
+
+			client := newIDJAGRegisteredClient()
+
+			original := newIssuedRequest(client, idjagSubject, []string{idjagScope}, oauth2.RefreshToken)
+			original.GrantedAudience = []string{idjagAudience}
+			original.SetGrantedAuthorizationDetails(tc.granted)
+
+			refreshToken, signature, err := strategy.GenerateRefreshToken(t.Context(), original)
+			require.NoError(t, err)
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original.Sanitize(nil)))
+
+			request := newExchangeRequest(t, client, newSpecSession(idjagSubject), url.Values{
+				consts.FormParameterSubjectToken:       {refreshToken},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
+				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693IDJAG},
+			})
+			request.RequestedScope = []string{idjagScope}
+			request.RequestedAudience = oauth2.Arguments{idjagAudience}
+			request.SetRequestedAuthorizationDetails(tc.requested)
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 		})
 	}
 }

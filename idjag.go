@@ -29,12 +29,17 @@ type IDJAGRelationship struct {
 	// Resources is the set of resource indicators that may be requested.
 	Resources []string
 
+	// AuthorizationDetailsTypes is the set of RFC 9396 authorization details types that may be granted. Every type
+	// when nil, and none when empty.
+	AuthorizationDetailsTypes []string
+
 	// SigningAlg is the JWS algorithm used to sign the grant. RS256 when empty.
 	SigningAlg string
 }
 
 // IDJAGTrustedIssuer is the Resource Authorization Server's trust configuration for an issuer of Identity Assertion JWT
-// Authorization Grants.
+// Authorization Grants. Authorization details in its grants are limited only by the redeeming client's authorization
+// details types and the configured type handlers.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.1
 type IDJAGTrustedIssuer struct {

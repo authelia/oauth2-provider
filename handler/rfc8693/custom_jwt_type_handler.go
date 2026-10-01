@@ -154,17 +154,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
 	}
 
-	typ, _ := ftoken.Header[jwt.JSONWebTokenHeaderType].(string)
-
-	if oauth2.IsIDJAGTokenType(typ) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693IDJAG))
-	}
-
 	idjag := role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config)
 
-	// Draft ID-JAG Section 4.3: the subject token is an Identity Assertion or a Refresh Token.
-	if idjag && (strings.EqualFold(typ, consts.JSONWebTokenTypeAccessToken) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeAccessToken)) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An access token is not supported as a '%s' when the '%s' is '%s'.", consts.FormParameterSubjectToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+	if err = validateCustomJWTType(ctx, jwtType, ftoken, idjag); err != nil {
+		return nil, err
 	}
 
 	window := jwtType.JWTLifetimeToleranceWindow
@@ -190,6 +183,11 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
+
+	if err = c.validateIssuerIsNotIDTokenIssuer(ctx, iss); err != nil {
+		return nil, err
+	}
+
 	allowed := clientAllowedIssuers(request.GetClient(), role)
 
 	if _, ok = ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
@@ -224,6 +222,43 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	return claims, nil
+}
+
+func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Token, idjag bool) error {
+	typ, _ := token.Header[jwt.JSONWebTokenHeaderType].(string)
+
+	if oauth2.IsIDJAGTokenType(typ) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693IDJAG))
+	}
+
+	// RFC 8725 Section 3.11 explicit typing keeps another kind of JWT signed by a trusted key, such as an RFC 9068
+	// access token or a Logout Token, from being accepted as this type.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
+	if err := token.Valid(jwt.ValidateTypes(jwtType.GetTypes()...), jwt.ValidateAllowEmptyType(true)); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The 'typ' header '%s' is not permitted for the token type '%s'.", typ, jwtType.GetName(ctx)).WithWrap(err).WithDebugError(err))
+	}
+
+	// Draft ID-JAG Section 4.3: the subject token is an Identity Assertion or a Refresh Token.
+	if idjag && (strings.EqualFold(typ, consts.JSONWebTokenTypeAccessToken) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeAccessToken)) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An access token is not supported as a '%s' when the '%s' is '%s'.", consts.FormParameterSubjectToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+	}
+
+	return nil
+}
+
+func (c *CustomJWTTypeHandler) validateIssuerIsNotIDTokenIssuer(ctx context.Context, iss string) error {
+	// An ID Token is validated by the ID Token type, which binds it to the client it was issued to. RFC 8725 Section
+	// 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && iss == issuer {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token is the ID Token issuer, so the token must be exchanged as '%s'.", consts.TokenTypeRFC8693IDToken))
+		}
+	}
+
+	return nil
 }
 
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) (err error) {

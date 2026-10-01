@@ -762,8 +762,9 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 
 	subjectTokenType, subjectToken := consts.TokenTypeRFC8693AccessToken, createAccessToken(context.Background(), coreStrategy, store, store.Clients["custom-lifespan-client"])
 
-	// RFC 8693 Section 2.2.1: a refresh token is only issued in exchange for a refresh token.
-	if requestedType == consts.TokenTypeRFC8693RefreshToken {
+	// RFC 8693 Section 2.2.1: a refresh token is only issued in exchange for a refresh token. An ID Token is only issued
+	// in exchange for an ID Token or a refresh token.
+	if requestedType == consts.TokenTypeRFC8693RefreshToken || requestedType == consts.TokenTypeRFC8693IDToken {
 		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], time.Now().UTC().Add(10*time.Minute))
 	}
 

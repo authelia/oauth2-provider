@@ -14,6 +14,7 @@ import (
 
 type Storage interface {
 	hoauth2.CoreStorage
+	oauth2.ClientManager
 
 	// SetTokenExchangeCustomJWT marks a JTI as known for the issuer until the given expiry time. It should atomically
 	// check if the JTI already exists for the issuer and fail the request if found. A JTI is only unique among the

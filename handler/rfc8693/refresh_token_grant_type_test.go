@@ -17,11 +17,14 @@ import (
 )
 
 func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
+	const hintNoGrant = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not allowed to use authorization grant 'refresh_token'."
+
 	testCases := []struct {
-		name       string
-		actor      bool
-		grantTypes []string
-		expected   string
+		name         string
+		actor        bool
+		grantTypes   []string
+		unregistered bool
+		expected     string
 	}{
 		{
 			name:       "ShouldAcceptASubjectTokenOfAClientWithTheGrant",
@@ -30,7 +33,7 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 		{
 			name:       "ShouldRejectASubjectTokenOfAClientWithoutTheGrant",
 			grantTypes: []string{consts.GrantTypeAuthorizationCode},
-			expected:   "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not allowed to use authorization grant 'refresh_token'.",
+			expected:   hintNoGrant,
 		},
 		{
 			name:       "ShouldAcceptAnActorTokenOfAClientWithTheGrant",
@@ -41,7 +44,12 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			name:       "ShouldRejectAnActorTokenOfAClientWithoutTheGrant",
 			actor:      true,
 			grantTypes: []string{consts.GrantTypeAuthorizationCode},
-			expected:   "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not allowed to use authorization grant 'refresh_token'.",
+			expected:   hintNoGrant,
+		},
+		{
+			name:         "ShouldRejectATokenOfAClientNoLongerRegistered",
+			unregistered: true,
+			expected:     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not registered.",
 		},
 	}
 
@@ -50,13 +58,20 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			cfg, store, strategy := newExchangeFixture(t)
 			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
 
-			owner := &oauth2.DefaultClient{ID: "refresh-token-owner", GrantTypes: tc.grantTypes, Scopes: []string{consts.ScopeOpenID}}
+			owner := &oauth2.DefaultClient{ID: "refresh-token-owner", GrantTypes: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOpenID}}
+			store.Clients[owner.ID] = owner
 
 			original := newIssuedRequest(owner, "peter", []string{consts.ScopeOpenID}, oauth2.RefreshToken)
 
 			token, signature, err := strategy.GenerateRefreshToken(t.Context(), original)
 			require.NoError(t, err)
 			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original.Sanitize(nil)))
+
+			if tc.unregistered {
+				delete(store.Clients, owner.ID)
+			} else {
+				store.Clients[owner.ID] = &oauth2.DefaultClient{ID: owner.ID, GrantTypes: tc.grantTypes, Scopes: owner.Scopes}
+			}
 
 			form := url.Values{
 				consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},

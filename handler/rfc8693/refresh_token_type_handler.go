@@ -176,7 +176,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	}
 
-	if err = c.validateRefreshTokenUse(client, or); err != nil {
+	if err = c.validateRefreshTokenUse(ctx, client, or); err != nil {
 		return nil, nil, err
 	}
 
@@ -210,19 +210,27 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	return or.GetSession(), claims, nil
 }
 
-func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(client oauth2.Client, or oauth2.Requester) error {
+func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(ctx context.Context, client oauth2.Client, or oauth2.Requester) (err error) {
 	if scopes := c.RefreshTokenScopes; len(scopes) != 0 && !or.GetGrantedScopes().HasOneOf(scopes...) {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(scopes, " or ")))
 	}
 
 	// A refresh token is only usable while the client it was issued to may use the refresh_token grant, as ID-JAG
-	// draft 04 Section 4.3.3 validates a refresh token subject as the refresh_token grant would. The registration of
-	// the requesting client is current, so it is preferred when it is that client.
+	// draft 04 Section 4.3.3 validates a refresh token subject as the refresh_token grant would. That is the current
+	// registration of the client, which is the requesting client or is loaded by its identifier.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
-	owner := or.GetClient()
-	if owner.GetID() == client.GetID() {
-		owner = client
+	owner := client
+
+	if id := or.GetClient().GetID(); id != client.GetID() {
+		owner, err = c.GetClient(ctx, id)
+
+		switch {
+		case errors.Is(err, oauth2.ErrNotFound):
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The OAuth 2.0 Client the refresh token was issued to is not registered."))
+		case err != nil:
+			return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 	}
 
 	if !owner.GetGrantTypes().Has(consts.GrantTypeRefreshToken) {

@@ -11,10 +11,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -511,6 +513,41 @@ func TestRedeemHandlerKeyResolution(t *testing.T) {
 			assert.Equal(t, tc.forced, fetcher.forced)
 		})
 	}
+}
+
+func TestRedeemHandlerLimitsForcedKeyRefetches(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+
+	var fetches atomic.Int64
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fetches.Add(1)
+
+		require.NoError(t, json.NewEncoder(w).Encode(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{fixture.public}}))
+	}))
+	t.Cleanup(ts.Close)
+
+	fetcher := oauth2.NewDefaultJWKSFetcherStrategy().(*oauth2.DefaultJWKSFetcherStrategy)
+	fixture.config.JWKSFetcherStrategy = fetcher
+
+	trusted := fixture.store.IDJAGTrustedIssuers[redeemIssuer]
+	trusted.JSONWebKeys = nil
+	trusted.JSONWebKeysURI = ts.URL
+	fixture.store.IDJAGTrustedIssuers[redeemIssuer] = trusted
+
+	client := fixture.store.Clients[redeemClient]
+
+	for i := range 10 {
+		request := newRedeemRequest(client, fixture.sign(t, fixture.claims(), "", "", fmt.Sprintf("unknown-%d", i)), nil)
+
+		require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrInvalidGrant)
+		fetcher.WaitForCache()
+	}
+
+	request := newRedeemRequest(client, fixture.sign(t, fixture.claims(), "", "", ""), nil)
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(fixture.handler.HandleTokenEndpointRequest(t.Context(), request)))
+	assert.Equal(t, int64(2), fetches.Load())
 }
 
 func TestRedeemHandlerBindAccessRequest(t *testing.T) {

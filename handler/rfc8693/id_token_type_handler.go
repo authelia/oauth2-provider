@@ -19,7 +19,8 @@ import (
 // as defined in RFC8693.
 //
 // An ID Token represents an authentication rather than an authorization and grants no scope, so a token exchange
-// with an ID Token as the 'subject_token' cannot request a scope.
+// with an ID Token as the 'subject_token' cannot request a scope. For the same reason an ID Token is only issued for
+// an ID Token or refresh token 'subject_token'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
@@ -50,6 +51,10 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 	}
 
 	form := request.GetRequestForm()
+
+	if err = c.validateIssuable(ctx, request); err != nil {
+		return err
+	}
 
 	if form.Get(consts.FormParameterSubjectTokenType) != consts.TokenTypeRFC8693IDToken && form.Get(consts.FormParameterActorTokenType) != consts.TokenTypeRFC8693IDToken {
 		return nil
@@ -210,6 +215,30 @@ func (c *IDTokenTypeHandler) inherit(request oauth2.AccessRequester, claims map[
 	}
 
 	return inheritTokenBinding(request, incoming, role, prior)
+}
+
+func (c *IDTokenTypeHandler) validateIssuable(ctx context.Context, request oauth2.AccessRequester) error {
+	form := request.GetRequestForm()
+
+	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
+	if requestedTokenType == "" {
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	// OpenID Connect Core 1.0 Section 2 makes an ID Token a statement about the authentication of the End-User, so one
+	// is only issued from a 'subject_token' that carries such an authentication. Any other subject would assert a
+	// login the client never received.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+	if requestedTokenType == consts.TokenTypeRFC8693IDToken {
+		switch form.Get(consts.FormParameterSubjectTokenType) {
+		case consts.TokenTypeRFC8693IDToken, consts.TokenTypeRFC8693RefreshToken:
+		default:
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An ID Token can only be issued by a token exchange whose '%s' is an ID Token or a refresh token.", consts.FormParameterSubjectTokenType))
+		}
+	}
+
+	return nil
 }
 
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

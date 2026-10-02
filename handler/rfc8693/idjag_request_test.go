@@ -496,6 +496,7 @@ func TestIDJAGRequestCustomJWTSubject(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := storage.NewExampleStore()
 			cfg := newIDJAGSpecConfig(t)
+			cfg.RFC8693TokenTypes[idjagSubjectType].(*JWTType).Types = []string{consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeAccessToken}
 
 			jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 			handler := &CustomJWTTypeHandler{Config: cfg, Strategy: jwtStrategy, Storage: store}

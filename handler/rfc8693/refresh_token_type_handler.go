@@ -176,8 +176,8 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	}
 
-	if scopes := c.RefreshTokenScopes; len(scopes) != 0 && !or.GetGrantedScopes().HasOneOf(scopes...) {
-		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(scopes, " or ")))
+	if err = c.validateRefreshTokenUse(client, or); err != nil {
+		return nil, nil, err
 	}
 
 	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), or, role); err != nil {
@@ -208,6 +208,28 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	}
 
 	return or.GetSession(), claims, nil
+}
+
+func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(client oauth2.Client, or oauth2.Requester) error {
+	if scopes := c.RefreshTokenScopes; len(scopes) != 0 && !or.GetGrantedScopes().HasOneOf(scopes...) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(scopes, " or ")))
+	}
+
+	// A refresh token is only usable while the client it was issued to may use the refresh_token grant, as ID-JAG
+	// draft 04 Section 4.3.3 validates a refresh token subject as the refresh_token grant would. The registration of
+	// the requesting client is current, so it is preferred when it is that client.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
+	owner := or.GetClient()
+	if owner.GetID() == client.GetID() {
+		owner = client
+	}
+
+	if !owner.GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 Client the refresh token was issued to is not allowed to use authorization grant '%s'.", consts.GrantTypeRefreshToken))
+	}
+
+	return nil
 }
 
 func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, or oauth2.Requester, token, signature string, inactive error) (err error) {

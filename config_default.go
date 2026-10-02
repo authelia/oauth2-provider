@@ -464,7 +464,9 @@ type Config struct {
 	// reaches this server without transiting the proxy can set it to any value, authenticating the sender as any
 	// client registered with an mTLS authentication method and binding tokens to a certificate it does not hold. A
 	// deployment that sets this MUST ensure the proxy unconditionally overwrites the header on every inbound request,
-	// and that the server is unreachable except through that proxy.
+	// and that the server is unreachable except through that proxy. A proxy mode that appends to a header the client
+	// sent is not safe: a header on more than one field line is rejected, but a value appended to the same line
+	// cannot be told apart from a comma separated certificate chain, whose first element is taken as the leaf.
 	//
 	// The certificate chain is not validated here. For a certificate from the TLS connection Go has already done so
 	// against the listener's ClientCAs; for a forwarded one the proxy that performed the handshake is the component

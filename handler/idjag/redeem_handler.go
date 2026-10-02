@@ -31,7 +31,7 @@ import (
 // binding handler, which enforces the grant's 'cnf' claim and MUST follow rfc9449.Handler. Under 'jwt-dpop' a
 // malformed, expired or replayed proof answers invalid_dpop_proof per RFC 9449, keeping use_dpop_nonce usable, rather
 // than the invalid_grant of draft-parecki-oauth-jwt-dpop-grant-01 Section 4. A requested resource or scope within the
-// grant that the client is not permitted is dropped rather than refused.
+// grant that the client is not permitted is dropped rather than refused, unless no resource of the grant remains.
 // With RFC 9396 enabled it grants the grant's authorization details that the client may use and the type handlers
 // accept. With RFC 9396 disabled it rejects a grant carrying them. A client whose authorization details types are
 // unrestricted accepts every configured type any trusted issuer grants, so restrict the types of clients that redeem
@@ -563,6 +563,14 @@ func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.Acces
 		if resourceStrategy(client.GetAudience(), []string{resource}) == nil {
 			request.GrantResource(resource)
 		}
+	}
+
+	// RFC 8707 Section 2 has the access token audience restricted to the indicated resources, so a grant whose
+	// resources are all dropped would issue an access token without the restriction the grant carries.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8707#section-2
+	if len(resources) != 0 && len(request.GetGrantedResource()) == 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("No resource of the Identity Assertion JWT Authorization Grant is permitted for the OAuth 2.0 Client."))
 	}
 
 	return h.grantAuthorizationDetails(ctx, request, client, raw)

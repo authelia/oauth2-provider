@@ -366,7 +366,9 @@ func TestRedeemHandlerResource(t *testing.T) {
 		{name: "ShouldRespondWithASingleResource", claim: redeemResource, granted: []string{redeemResource}, response: redeemResource},
 		{name: "ShouldRespondWithSeveralResources", claim: []string{redeemResource, redeemOther}, audience: []string{redeemResource, redeemOther}, granted: []string{redeemResource, redeemOther}, response: []string{redeemResource, redeemOther}},
 		{name: "ShouldRespondWithOnlyTheGrantedResource", claim: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},
-		{name: "ShouldOmitResourceWhenNoneIsPermitted", claim: redeemOther},
+		// RFC 8707 Section 2: the access token stays audience restricted to the resources of the grant.
+		{name: "ShouldRejectAGrantWhoseResourcesAreNotPermitted", claim: redeemOther, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectARequestedResourceTheClientIsNotPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, err: oauth2.ErrInvalidTarget},
 		// RFC 8707 Section 2.2: a requested resource narrows the grant.
 		{name: "ShouldNarrowToTheRequestedResource", claim: []string{redeemResource, redeemOther}, audience: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, granted: []string{redeemOther}, response: redeemOther},
 		{name: "ShouldNarrowToTheRequestedResourceTheClientIsPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},

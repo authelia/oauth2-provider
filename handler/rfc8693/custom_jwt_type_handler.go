@@ -298,6 +298,17 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		claims.Issuer = jwtType.Issuer
 	}
 
+	// The token is signed with the ID Token key and typed 'JWT', so an ID Token issuer would make it valid as an ID
+	// Token. RFC 8725 Section 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && claims.Issuer == issuer {
+			return errorsx.WithStack(oauth2.ErrServerError.
+				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the ID Token issuer, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), claims.Issuer))
+		}
+	}
+
 	// The issued JWT's audience MUST reflect THIS exchange's audience/resource parameters per RFC 8693 §2.1, not
 	// any audience that happened to be on the session from a prior OIDC flow. Replace rather than append.
 	switch {

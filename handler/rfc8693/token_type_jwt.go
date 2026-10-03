@@ -13,8 +13,12 @@ import (
 )
 
 type JWTType struct {
-	Name                string `json:"name"`
-	Issuer              string `json:"iss"`
+	Name string `json:"name"`
+
+	// Issuer is the 'iss' claim of an issued JWT and the expected issuer of a validated one. A JWT is not issued when
+	// it equals the ID Token issuer, as it would then be accepted as an ID Token.
+	Issuer string `json:"iss"`
+
 	JWTValidationConfig `json:"validate"`
 	JWTIssueConfig      `json:"issue"`
 }

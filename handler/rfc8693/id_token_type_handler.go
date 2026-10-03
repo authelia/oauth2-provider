@@ -67,7 +67,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		prior := bindingOf(request.GetSession())
 
-		if unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+		if unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
 		}
 
@@ -85,7 +85,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		prior := bindingOf(request.GetSession())
 
-		if unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+		if unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
 		}
 
@@ -156,27 +156,26 @@ func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, 
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (claims map[string]any, err error) {
+func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (claims map[string]any, err error) {
 	if claims, err = c.ValidationStrategy.ValidateIDToken(ctx, request, token); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the id_token").WithWrap(err).WithDebugError(err))
 	}
 
 	expectedIssuer := ""
 
-	if config, ok := c.Config.(oauth2.AccessTokenIssuerProvider); ok {
-		expectedIssuer = config.GetAccessTokenIssuer(ctx)
+	// OpenID Connect Core 1.0 Section 3.1.3.7 requires the 'iss' claim to exactly match the Issuer Identifier of the
+	// OpenID Provider, which is the issuer every ID Token from this server is generated with.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+	if config, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		expectedIssuer = config.GetIDTokenIssuer(ctx)
 	}
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
-	allowed := clientAllowedIssuers(request.GetClient(), role)
 
 	var ok bool
 
-	if _, ok = ValidateIssuer(iss, expectedIssuer, allowed); !ok {
-		if len(allowed) > 0 {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
-		}
-
+	if _, ok = ValidateIssuer(iss, expectedIssuer, nil); !ok {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", expectedIssuer))
 	}
 

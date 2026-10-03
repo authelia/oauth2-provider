@@ -25,6 +25,7 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 	testCases := []struct {
 		name     string
 		issuer   string
+		allowed  []string
 		expected string
 	}{
 		{
@@ -36,6 +37,17 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 			issuer:   "https://at.example.com",
 			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token must match the 'https://id.example.com'.",
 		},
+		{
+			name:     "ShouldRejectAnIssuerOnlyTheClientPermits",
+			issuer:   "https://jwt.example.com",
+			allowed:  []string{"https://jwt.example.com"},
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token must match the 'https://id.example.com'.",
+		},
+		{
+			name:    "ShouldAcceptTheIDTokenIssuerTheClientDoesNotPermit",
+			issuer:  "https://id.example.com",
+			allowed: []string{"https://jwt.example.com"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -45,7 +57,7 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 			config.AccessTokenIssuer = "https://at.example.com"
 
 			store := storage.NewExampleStore()
-			client := store.Clients["my-client"]
+			client := &rfc8693Client{DefaultClient: store.Clients["my-client"].(*oauth2.DefaultClient), subjectTokenIssuers: tc.allowed}
 			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 			token := createJWT(t.Context(), client, strategy, jwt.MapClaims{

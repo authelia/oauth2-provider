@@ -150,11 +150,25 @@ func (s *HydratingMemoryStore) CreateRefreshTokenSession(ctx context.Context, si
 }
 
 func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	var data []byte
+
+	if session := request.GetSession(); session != nil {
+		if data, err = json.Marshal(session); err != nil {
+			return err
+		}
+	}
+
 	if err = s.MemoryStore.UpdateRefreshTokenSession(ctx, signature, request); err != nil {
 		return err
 	}
 
-	return s.marshal("rt:"+signature, request)
+	if data != nil {
+		s.sessionsMutex.Lock()
+		s.sessions["rt:"+signature] = data
+		s.sessionsMutex.Unlock()
+	}
+
+	return nil
 }
 
 func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {

@@ -475,8 +475,9 @@ type Config struct {
 	// MTLSStrictRefreshTokenBinding keeps a confidential client's certificate-bound refresh token bound to the
 	// certificate it was issued for, so a refresh with another certificate is rejected. Defaults to false, which
 	// re-binds the grant to the presented certificate, as RFC 8705 Section 4 binds the refresh tokens of public
-	// clients only and Section 7.1 has those of confidential clients sender-constrained by client authentication.
-	// Public clients are always strictly bound.
+	// clients only, and those of confidential clients are sender-constrained by the client authentication RFC 6749
+	// Section 6 requires, which RFC 8705 Section 7.1 notes for the mutual-TLS client authentication methods. Public
+	// clients are always strictly bound.
 	MTLSStrictRefreshTokenBinding bool
 
 	// RFC7591ClientRegistrationGlobalSecret is the secret used to sign client registration tokens. It is

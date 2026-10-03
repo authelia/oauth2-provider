@@ -191,6 +191,30 @@ func TestMemoryStoreDecideDeviceCodeSession(t *testing.T) {
 	})
 }
 
+func TestMemoryStoreUpdateRefreshTokenSession(t *testing.T) {
+	const issued, rebound = "issued-subject", "rebound-subject"
+
+	ctx := context.Background()
+	s := NewMemoryStore()
+
+	assert.ErrorIs(t, s.UpdateRefreshTokenSession(ctx, "rt-sig", &oauth2.Request{ID: "req-id"}), oauth2.ErrNotFound)
+
+	require.NoError(t, s.CreateRefreshTokenSession(ctx, "rt-sig", "at-sig", &oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{Subject: issued}}))
+	require.NoError(t, s.UpdateRefreshTokenSession(ctx, "rt-sig", &oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{Subject: rebound}}))
+
+	got, err := s.GetRefreshTokenSession(ctx, "rt-sig", nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, rebound, got.GetSession().(*oauth2.DefaultSession).Subject)
+	assert.Equal(t, "at-sig", s.RefreshTokens["rt-sig"].accessTokenSignature)
+
+	require.NoError(t, s.RevokeRefreshToken(ctx, "req-id"))
+	require.NoError(t, s.UpdateRefreshTokenSession(ctx, "rt-sig", &oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{}}))
+
+	_, err = s.GetRefreshTokenSession(ctx, "rt-sig", nil)
+	assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+}
+
 func TestMemoryStoreClientRegistrationManager(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

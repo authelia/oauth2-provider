@@ -45,8 +45,9 @@ func (a *AccessRequest) SetGrantedScopes(scopes Arguments) {
 }
 
 // SanitizeRestoreRefreshTokenOriginalRequester returns a sanitized Requester carrying the original refresh token
-// session's requested and granted scopes and authorization details alongside the supplied requester's ID. It is used
-// by refresh token handlers to preserve the lineage between an issued refresh token and its preceding access request.
+// session's requested and granted scopes, audiences, resources, and authorization details alongside the supplied
+// requester's ID. It is used by refresh token handlers to preserve the lineage between an issued refresh token and its
+// preceding access request.
 func (a *AccessRequest) SanitizeRestoreRefreshTokenOriginalRequester(requester Requester) Requester {
 	r := a.Sanitize(nil).(*Request)
 
@@ -58,6 +59,20 @@ func (a *AccessRequest) SanitizeRestoreRefreshTokenOriginalRequester(requester R
 
 	ar.SetRequestedScopes(requester.GetRequestedScopes())
 	ar.SetGrantedScopes(requester.GetGrantedScopes())
+
+	ar.SetRequestedAudience(requester.GetRequestedAudience())
+	ar.GrantedAudience = nil
+
+	for _, audience := range requester.GetGrantedAudience() {
+		ar.GrantAudience(audience)
+	}
+
+	ar.SetRequestedResource(requester.GetRequestedResource())
+	ar.GrantedResource = nil
+
+	for _, resource := range requester.GetGrantedResource() {
+		ar.GrantResource(resource)
+	}
 
 	ar.SetRequestedAuthorizationDetails(requester.GetRequestedAuthorizationDetails())
 	ar.SetGrantedAuthorizationDetails(requester.GetGrantedAuthorizationDetails())

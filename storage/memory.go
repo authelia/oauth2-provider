@@ -619,6 +619,24 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 	return rel, nil
 }
 
+// UpdateRefreshTokenSession replaces the request stored against the refresh token signature, keeping its active state
+// and the signature of the access token issued alongside it. It returns oauth2.ErrNotFound when no session exists for
+// the signature.
+func (s *MemoryStore) UpdateRefreshTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
+	rel, ok := s.RefreshTokens[signature]
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	rel.Requester = req
+	s.RefreshTokens[signature] = rel
+
+	return nil
+}
+
 // DeleteRefreshTokenSession removes the session stored against the refresh token signature. Deleting a signature that
 // has no session is not an error.
 func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature string) error {

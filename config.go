@@ -803,10 +803,13 @@ type DPoPConfigProvider interface {
 type MTLSStrictRefreshTokenBindingProvider interface {
 	// GetMTLSStrictRefreshTokenBinding returns true if a confidential client's certificate-bound refresh token may only
 	// be redeemed with the certificate it is bound to. When false the grant is re-bound to the presented certificate,
-	// as RFC 8705 Section 4 binds the refresh tokens of public clients only and Section 7.1 has those of confidential
-	// clients sender-constrained by client authentication instead.
+	// as RFC 8705 Section 4 binds the refresh tokens of public clients only, and those of confidential clients are
+	// sender-constrained by the client authentication RFC 6749 Section 6 requires, which RFC 8705 Section 7.1 notes
+	// for the mutual-TLS client authentication methods.
 	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-6
 	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 

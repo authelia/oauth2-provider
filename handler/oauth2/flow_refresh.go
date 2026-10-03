@@ -319,7 +319,9 @@ func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
-	if _, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) || errors.Is(err, oauth2.ErrNotFound) {
+	var orequest oauth2.Requester
+
+	if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) || errors.Is(err, oauth2.ErrNotFound) {
 		revoked = err
 
 		return err
@@ -332,6 +334,19 @@ func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(
 	}
 
 	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize(nil)); err != nil {
+		return err
+	}
+
+	srtrequester := request.Sanitize(nil)
+
+	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
+		srtrequester = rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
+	}
+
+	srtrequester.SetSession(request.GetSession().Clone())
+	srtrequester.SetRequestedAt(orequest.GetRequestedAt())
+
+	if err = c.TokenRevocationStorage.UpdateRefreshTokenSession(ctx, signature, srtrequester); err != nil {
 		return err
 	}
 

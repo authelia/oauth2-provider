@@ -14,7 +14,10 @@ import (
 
 type Storage interface {
 	hoauth2.CoreStorage
-	oauth2.ClientManager
+
+	// GetClient loads the current registration of the client a refresh token was issued to, returning
+	// oauth2.ErrNotFound when the client does not exist.
+	GetClient(ctx context.Context, id string) (client oauth2.Client, err error)
 
 	// SetTokenExchangeCustomJWT marks a JTI as known for the issuer until the given expiry time. It should atomically
 	// check if the JTI already exists for the issuer and fail the request if found. A JTI is only unique among the

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -805,6 +806,108 @@ func TestRefreshFlow_WithoutRotation(t *testing.T) {
 				assert.NoError(t, err)
 			})
 		}
+	}
+}
+
+func TestRefreshFlow_WithoutRotationKeepsTheOriginalGrant(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	stores := []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	const (
+		audienceA, audienceB = "https://a.example.com", "https://b.example.com"
+		resourceA, resourceB = audienceA, audienceB
+	)
+
+	for _, s := range stores {
+		t.Run(s.name, func(t *testing.T) {
+			store := s.new()
+
+			client := &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
+				Scopes:     []string{"foo", "bar", consts.ScopeOffline},
+				Audience:   []string{audienceA, audienceB},
+			}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   strategy,
+				AccessTokenStrategy:    strategy,
+				Config: &oauth2.Config{
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{consts.ScopeOffline},
+					DisableRefreshTokenRotation: true,
+				},
+			}
+
+			original := &oauth2.Request{
+				ID:                "req-id",
+				Client:            client,
+				RequestedAt:       time.Now().UTC(),
+				RequestedScope:    oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
+				GrantedScope:      oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
+				RequestedAudience: oauth2.Arguments{audienceA, audienceB},
+				GrantedAudience:   oauth2.Arguments{audienceA, audienceB},
+				RequestedResource: oauth2.Arguments{resourceA, resourceB},
+				GrantedResource:   oauth2.Arguments{resourceA, resourceB},
+				Session:           &oauth2.DefaultSession{Subject: "peter"},
+				Form:              url.Values{},
+			}
+
+			refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, "", original))
+
+			refresh := func(form url.Values) *oauth2.AccessRequest {
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = client
+				requester.Form = form
+				requester.Form.Set(consts.FormParameterRefreshToken, refreshToken)
+				requester.SetRequestedScopes(oauth2.RemoveEmpty(strings.Split(form.Get(consts.FormParameterScope), " ")))
+				requester.SetRequestedAudience(form[consts.FormParameterAudience])
+				requester.SetRequestedResource(form[consts.FormParameterResource])
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), requester)))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())))
+
+				return requester
+			}
+
+			narrowed := refresh(url.Values{
+				consts.FormParameterScope:    {"foo " + consts.ScopeOffline},
+				consts.FormParameterAudience: {audienceA},
+				consts.FormParameterResource: {resourceA},
+			})
+
+			assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, narrowed.GetGrantedScopes())
+			assert.Equal(t, oauth2.Arguments{audienceA}, narrowed.GetGrantedAudience())
+			assert.Equal(t, oauth2.Arguments{resourceA}, narrowed.GetGrantedResource())
+
+			stored, err := store.GetRefreshTokenSession(t.Context(), refreshSignature, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, original.GrantedScope, stored.GetGrantedScopes())
+			assert.Equal(t, original.GrantedAudience, stored.GetGrantedAudience())
+			assert.Equal(t, original.GrantedResource, stored.GetGrantedResource())
+
+			full := refresh(url.Values{})
+
+			assert.Equal(t, original.GrantedScope, full.GetGrantedScopes())
+			assert.Equal(t, original.GrantedAudience, full.GetGrantedAudience())
+			assert.Equal(t, original.GrantedResource, full.GetGrantedResource())
+		})
 	}
 }
 

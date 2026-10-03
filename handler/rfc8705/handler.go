@@ -33,10 +33,11 @@ type Handler struct {
 // session, and enforces any thumbprint the session already carries. It returns nil when there is nothing to bind.
 //
 // A refresh by a confidential client is re-bound to the presented certificate rather than held to the certificate the
-// grant is bound to, because RFC 8705 Section 4 binds the refresh tokens of public clients only, and Section 7.1 has
-// those of confidential clients sender-constrained by client authentication instead. A certificate is still required.
-// The grant of a client for which oauth2.MTLSStrictRefreshTokenBindingProvider or
-// oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding keeps its certificate.
+// grant is bound to, because RFC 8705 Section 4 binds the refresh tokens of public clients only, and those of
+// confidential clients are sender-constrained by the client authentication RFC 6749 Section 6 requires, which RFC 8705
+// Section 7.1 notes for the mutual-TLS client authentication methods. A certificate is still required. The grant of a
+// client for which oauth2.MTLSStrictRefreshTokenBindingProvider or oauth2.MTLSStrictRefreshTokenBindingClient requires
+// strict binding keeps its certificate.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil

@@ -40,6 +40,9 @@ import (
 // The 'cnf' claim carries the thumbprint bound to the session, which equals the validated DPoP proof key only when
 // rfc9449.Handler is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token.
 //
+// The 'iss' claim is the RFC 8414 issuer identifier of the authorization server, which MUST be configured (Section
+// 3.1).
+//
 // The 'sub' claim is the session subject, so a deployment with pairwise subjects sets the subject the Resource
 // Authorization Server knows on the session before the response is issued (Section 5). The 'tenant', 'aud_tenant'
 // and 'aud_sub' claims are supplied through Session.IDJAGClaims (Section 6).
@@ -122,6 +125,11 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return err
 	}
 
+	issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx)
+	if issuer == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The authorization server issuer identifier is not configured."))
+	}
+
 	subject := request.GetSession().GetSubject()
 	if subject == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The session has no subject to issue the grant for."))
@@ -134,7 +142,7 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token expires too soon to issue an Identity Assertion JWT Authorization Grant."))
 	}
 
-	claims := h.claims(ctx, request, relationship, subject, now, expires)
+	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 
 	token, _, err := h.Strategy.Encode(ctx, claims,
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: consts.JSONWebTokenTypeIDJAG}}),
@@ -180,7 +188,7 @@ func (h *IssueHandler) CanHandleAuthorizationDetails(ctx context.Context, reques
 	return rfc8693.IsIDJAGRequest(ctx, request, h.Config)
 }
 
-func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, subject string, now, expires time.Time) (claims jwt.MapClaims) {
+func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, issuer, subject string, now, expires time.Time) (claims jwt.MapClaims) {
 	claims = jwt.MapClaims{}
 
 	if session, ok := request.GetSession().(Session); ok {
@@ -207,7 +215,7 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 		}
 	}
 
-	claims[consts.ClaimIssuer] = h.Config.GetAccessTokenIssuer(ctx)
+	claims[consts.ClaimIssuer] = issuer
 	claims[consts.ClaimSubject] = subject
 	claims[consts.ClaimAudience] = relationship.Issuer
 	claims[consts.ClaimClientIdentifier] = relationship.ClientID

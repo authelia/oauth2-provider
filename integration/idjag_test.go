@@ -625,10 +625,10 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 	t.Cleanup(env.rs.Close)
 
 	idpConfig := &oauth2.Config{
-		GlobalSecret:              []byte("idjag-integration-idp-secret-32-bytes"),
-		AccessTokenIssuer:         env.idp.URL,
-		DPoPEnabled:               true,
-		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
+		GlobalSecret:                            []byte("idjag-integration-idp-secret-32-bytes"),
+		AuthorizationServerIdentificationIssuer: env.idp.URL,
+		DPoPEnabled:                             true,
+		DefaultRequestedTokenType:               consts.TokenTypeRFC8693AccessToken,
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693IDToken:      &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
 			consts.TokenTypeRFC8693RefreshToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},

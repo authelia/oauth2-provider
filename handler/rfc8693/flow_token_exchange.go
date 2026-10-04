@@ -28,6 +28,10 @@ type TokenExchangeGrantHandler struct {
 	ScopeStrategy    oauth2.ScopeStrategy
 	AudienceStrategy oauth2.AudienceStrategy
 	ResourceStrategy oauth2.ResourceStrategy
+
+	// Storage marks a custom JWT presented as a subject or actor token as used. It is required when a *JWTType
+	// sets ValidateJTI.
+	Storage CustomJWTStorage
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -302,6 +306,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
+	if err = c.consume(ctx, request, session); err != nil {
+		return err
+	}
+
 	var act map[string]any
 
 	if act, err = buildActClaim(session); err != nil {
@@ -310,6 +318,42 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 
 	if act != nil {
 		session.SetClaimActor(act)
+	}
+
+	return nil
+}
+
+func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.AccessRequester, session Session) (err error) {
+	form := request.GetRequestForm()
+	types := c.Config.GetRFC8693TokenTypes(ctx)
+
+	presented := []struct {
+		kind   string
+		claims map[string]any
+	}{
+		{form.Get(consts.FormParameterActorTokenType), session.GetActorToken()},
+		{form.Get(consts.FormParameterSubjectTokenType), session.GetSubjectToken()},
+	}
+
+	for _, token := range presented {
+		if jwtType, ok := types[token.kind].(*JWTType); !ok || jwtType == nil || !jwtType.ValidateJTI {
+			continue
+		}
+
+		if c.Storage == nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the storage required to validate the 'jti' claim of a JSON Web Token is not configured."))
+		}
+
+		iss, _ := token.claims[consts.ClaimIssuer].(string)
+		jti, _ := token.claims[consts.ClaimJWTID].(string)
+
+		if jti == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
+		}
+
+		if c.Storage.SetTokenExchangeCustomJWT(ctx, iss, jti, time.Unix(toInt64(token.claims[consts.ClaimExpirationTime]), 0)) != nil {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
+		}
 	}
 
 	return nil

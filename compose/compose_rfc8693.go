@@ -46,13 +46,17 @@ import (
 
 // RFC8693TokenExchangeGrantFactory creates the request-validation + act-claim writer for the OAuth 2.0 Token
 // Exchange grant. It MUST be registered FIRST in the RFC 8693 chain so the act claim is set before any token-type
-// handler issues a token.
-func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, _ any, _ any) any {
+// handler issues a token. For the same reason it is the handler that marks a custom JWT as used, so storage should
+// implement rfc8693.CustomJWTStorage when a rfc8693.JWTType sets ValidateJTI.
+func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, storage any, _ any) any {
+	store, _ := storage.(rfc8693.CustomJWTStorage)
+
 	return &rfc8693.TokenExchangeGrantHandler{
 		Config:           config.(oauth2.RFC8693ConfigProvider),
 		ScopeStrategy:    config.GetScopeStrategy(context.Background()),
 		AudienceStrategy: config.GetAudienceStrategy(context.Background()),
 		ResourceStrategy: config.GetResourceStrategy(context.Background()),
+		Storage:          store,
 	}
 }
 

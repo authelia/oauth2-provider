@@ -16,13 +16,8 @@ import (
 // Handler implements the OpenID Connect Key Binding 1.0 token endpoint rules: the Section 2.3 and Section 3.3
 // 'c_s256' confirmation, and recording the proof's public key so the ID Token can carry it in 'cnf'.
 //
-// It performs no proof validation and no parsing at all. It consumes the proof rfc9449.Handler has already fully
-// validated and published via oauth2.PublishDPoPProof, including the replay check that consumes the proof's 'jti';
-// parsing the header itself would present that same 'jti' to the replay store a second time and reject the request.
-//
-// This handler MUST therefore be registered AFTER rfc9449.Handler in the token endpoint binding handler list. A proof
-// obtained from oauth2.GetDPoPProof has passed every RFC 9449 Section 5 check and has matched any binding the grant
-// already carried: oauth2.PublishDPoPProof has exactly one call site, after all of them.
+// It performs no proof validation or parsing: it consumes the proof rfc9449.Handler has validated and published via
+// oauth2.PublishDPoPProof, so it MUST be registered after rfc9449.Handler in the token endpoint binding handler list.
 type Handler struct {
 	Config interface {
 		oauth2.OIDCKeyBindingConfigProvider
@@ -32,23 +27,16 @@ type Handler struct {
 
 // BindAccessRequest confirms the 'c_s256' claim and records the proof's public key on the session.
 //
-// The granted scopes are not consulted for the authorization code and device code grants: both grant their scopes in
-// the populate phase, after every binding handler has run, so 'bound_key' is not yet visible here. The presence of the
-// 'c_s256' claim is the signal instead, which Section 2.3 makes mandatory for a key-bound token request and which a
-// plain RFC 9449 client never sends. The 'bound_key' gate is applied at issuance by oauth2.ApplyIDTokenConfirmation.
+// The authorization code and device code grants grant their scopes after the binding handlers run, so the Section 2.3
+// 'c_s256' claim is the signal rather than the granted scopes. The 'bound_key' gate is applied at issuance by
+// oauth2.ApplyIDTokenConfirmation.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetOIDCKeyBindingEnabled(ctx) || !h.Config.GetDPoPEnabled(ctx) {
 		return nil
 	}
 
-	// A refresh records nothing. The key is already on the session from the original token request, and
-	// oauth2.ApplyIDTokenConfirmation decides from the key binding marker rather than the current request's granted
-	// scopes, so a refresh narrowing 'bound_key' away keeps its confirmation. That is what Section 5 asks for: the
-	// refreshed ID Token's 'cnf' must equal the original's.
-	//
-	// The presence of a recorded key cannot stand in for "this grant is key bound": the bind phase records one
-	// without consulting scopes, so a grant that requested 'bound_key' and was granted only 'openid' carries a key
-	// while never having issued a bound ID Token. That is why the marker exists.
+	// A refresh records nothing: the key and the key binding marker are already on the session, and Section 5
+	// requires the refreshed ID Token's 'cnf' to equal the original's.
 	if request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken) {
 		return nil
 	}
@@ -74,11 +62,8 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	requested := session.GetRequestedDPoPJWKThumbprint()
 
 	if requested == "" {
-		// A grant granted 'bound_key' always carried 'dpop_jkt': Section 2.1 and Section 3.1 make it mandatory
-		// alongside the scope, and AuthorizeHandler and DeviceAuthorizeHandler both reject the scope without it.
-		// The marker set with no thumbprint recorded is therefore a handler that never ran rather than anything
-		// the client did or omitted, and saying so here keeps the fault from surfacing at issuance as a missing
-		// 'c_s256' the client did in fact send.
+		// A grant granted 'bound_key' always carried 'dpop_jkt' (Section 2.1 and Section 3.1), so the marker with no
+		// thumbprint recorded means a handler did not run.
 		if granted {
 			return errorsx.WithStack(oauth2.ErrServerError.WithHint("No 'dpop_jkt' was recorded for a grant that was granted the 'bound_key' scope; DPoPAuthorizeFactory, or DPoPDeviceAuthorizeFactory for the device flow, must be registered."))
 		}

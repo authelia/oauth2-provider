@@ -10,11 +10,8 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-// ClientRegistrationTokenStrategy mints, signs and validates RFC 7591 / RFC 7592 client registration tokens.
-//
-// It is declared here rather than consumed as a handler/oauth2 interface for the same reason LocalValidatorConfig is:
-// the consumer defines the narrow interface it needs. Both hoauth2.HMACCoreStrategy and hoauth2.JWTProfileCoreStrategy
-// satisfy it, the latter by delegating to the former, because client registration tokens are always opaque.
+// ClientRegistrationTokenStrategy mints, signs and validates RFC 7591 / RFC 7592 client registration tokens. Both
+// hoauth2.HMACCoreStrategy and hoauth2.JWTProfileCoreStrategy satisfy it; client registration tokens are always opaque.
 type ClientRegistrationTokenStrategy interface {
 	// ClientRegistrationTokenSignature returns the signature of the given client registration token, or an empty
 	// string when the token is not one.

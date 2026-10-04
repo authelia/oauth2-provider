@@ -16,22 +16,13 @@ import (
 
 // HydratingMemoryStore is a MemoryStore which honours the documented session hydration contract: it marshals a
 // request's session on write and unmarshals it into the caller-supplied session on read, returning a requester
-// carrying that caller-supplied value.
+// carrying that caller-supplied value. MemoryStore does neither, so use this store for any test whose subject is the
+// session a Get*Session call returns.
 //
-// MemoryStore does neither - it ignores the session argument and hands back the object it was given - which makes it
-// unable to detect a whole class of defect. Code that type asserts on the session returned by a Get*Session call
-// passes against MemoryStore and fails against every JSON or SQL backed store, because only the latter actually
-// hydrates. A guard written that way shipped green once already; use this store for any test whose subject is what
-// the returned session is.
-//
-// Hydration works by cloning the stored request and swapping in the caller-supplied session, and it can only clone
-// a *oauth2.Request or a *oauth2.AccessRequest. A Get*Session call for a request stored as any other oauth2.Requester
-// implementation returns an error rather than silently handing back an unhydrated result - this store never trades a
-// wrong answer for a convenient one.
-//
-// The clone is shallow: fields such as Form and Client are shared with the stored request, so a caller mutating them
-// after a Get still reaches the stored copy. Only Session is decoupled, which is the property this fixture exists to
-// test.
+// Hydration clones the stored request and swaps in the caller-supplied session. Only a *oauth2.Request or a
+// *oauth2.AccessRequest can be cloned; a Get*Session call for any other oauth2.Requester implementation returns an
+// error. The clone is shallow: fields such as Form and Client are shared with the stored request, and only Session
+// is decoupled.
 type HydratingMemoryStore struct {
 	*MemoryStore
 

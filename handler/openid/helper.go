@@ -73,17 +73,10 @@ func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan
 	return nil
 }
 
-// ComputeHash computes the 'at_hash', 'c_hash', or 's_hash' value for token.
+// ComputeHash computes the 'at_hash', 'c_hash', or 's_hash' value for token. The hash algorithm is resolved from the
+// client's registered 'id_token_signed_response_alg', as the session's ID Token headers never carry 'alg'.
 //
-// OpenID Connect Core 1.0 Section 3.3.2.11 defines the value as "the base64url encoding of the left-most half of the
-// hash of the octets of the ASCII representation" of the token, "where the hash algorithm used is the hash algorithm
-// used in the 'alg' Header Parameter of the ID Token's JOSE Header. For instance, if the alg is HS512, hash the code
-// value with SHA-512".
-//
-// The algorithm is resolved from the client's registered 'id_token_signed_response_alg', which is what the encoder
-// actually signs the ID Token with, rather than from the session's ID Token headers. The session cannot carry it:
-// jwt.Headers.ToMap deliberately filters 'alg' out, so reading it there always missed and every hash was computed
-// with SHA-256 no matter which algorithm the ID Token declared, which a conforming Relying Party must reject.
+// See: https://openid.net/specs/openid-connect-core-1_0.html#HybridIDToken
 func (i *IDTokenHandleHelper) ComputeHash(_ context.Context, client oauth2.Client, token string) (sum string, err error) {
 	h := hashFor(idTokenSigningAlg(client))
 
@@ -111,9 +104,6 @@ func idTokenSigningAlg(client oauth2.Client) (alg string) {
 }
 
 // hashFor returns the hash paired with a JWS signing algorithm by OpenID Connect Core 1.0 Section 3.3.2.11.
-//
-// The pairing is expressed as an explicit table rather than derived from the digits in the algorithm name: that
-// derivation silently mis-handles every algorithm not ending in its digest size, of which EdDSA is one.
 func hashFor(alg string) (h hash.Hash) {
 	switch jose.SignatureAlgorithm(alg) {
 	case jose.RS256, jose.PS256, jose.ES256, jose.HS256:
@@ -126,25 +116,18 @@ func hashFor(alg string) (h hash.Hash) {
 		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally.
 		return sha512.New()
 	default:
-		// SHA-256 is the correct fallback for an unrecognised algorithm: RS256 is both the
-		// 'id_token_signed_response_alg' default and the algorithm Section 15.1 requires be supported, and
-		// ES256K pairs with SHA-256 as well. Reporting an error here is not an option, because GetAccessTokenHash
-		// panics on one and cannot return it without a breaking signature change.
+		// SHA-256 is the fallback as it pairs with RS256, the 'id_token_signed_response_alg' default. An error cannot
+		// be reported here as GetAccessTokenHash panics on one.
 		return sha256.New()
 	}
 }
 
-// requestedMaxAge returns the 'max_age' authorization request parameter and whether it was present.
+// requestedMaxAge returns the 'max_age' authorization request parameter and whether it was present. A 'max_age' of 0
+// is distinct from an absent one as it is equivalent to 'prompt=login', and an empty or repeated parameter is rejected
+// rather than read as absent.
 //
-// A 'max_age' of 0 is not the same as an absent 'max_age': OpenID Connect Core 1.0 Section 3.1.2.1 states that
-// "max_age=0 is equivalent to prompt=login", so it demands re-authentication rather than imposing no constraint at
-// all. Parsing it with the error discarded and then gating enforcement on 'max_age > 0' collapsed the two, so the
-// client that asked most explicitly for a fresh authentication silently received the existing session.
-//
-// Presence is decided by the key itself rather than by url.Values.Get, which returns an empty string for an absent
-// key, for an explicitly empty 'max_age=', and for a repeated parameter alike. The latter two are malformed rather
-// than absent: RFC6749 Section 3.1 requires that request parameters are not included more than once, and an empty
-// value is not a non-negative integer, so both are rejected instead of being silently read as no constraint.
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
 func requestedMaxAge(form url.Values) (maxAge int64, ok bool, err error) {
 	values, present := form[consts.FormParameterMaximumAge]
 

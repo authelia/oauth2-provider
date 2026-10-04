@@ -45,13 +45,9 @@ func OpenIDConnectKeyBindingFactory(config oauth2.Configurator, storage any, str
 // OpenIDConnectKeyBindingUserAuthorizeFactory creates the OpenID Connect Key Binding 1.0 user authorization endpoint
 // handler, which records that the 'bound_key' scope was granted for a device flow.
 //
-// It must be registered for device flow key binding to work. The Device Authorization Flow grants its scopes at this
-// endpoint rather than at the device authorization endpoint, because the end user approves the request here, so
-// OpenIDConnectKeyBindingDeviceAuthorizeFactory's handler cannot record the grant itself.
-//
-// It MUST be registered before RFC8628UserAuthorizeFactory, whose handler persists the device code session: registered
-// after it, this handler would record the grant onto a session already written, and every store that serializes on
-// write would drop it. Compose panics on the wrong order.
+// It is required for device flow key binding, as the Device Authorization Flow grants its scopes at this endpoint. It
+// MUST be registered before RFC8628UserAuthorizeFactory, whose handler persists the device code session; Compose
+// panics on the wrong order.
 func OpenIDConnectKeyBindingUserAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &oidckb.UserAuthorizeHandler{
 		Config: config,

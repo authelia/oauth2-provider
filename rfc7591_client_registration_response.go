@@ -59,11 +59,9 @@ type ClientRegistrationResponder interface {
 	AddHeader(key, value string)
 
 	// ToMap marshals the metadata and overlays the registration values, keyed by their wire names. Timestamps are
-	// emitted as int64 Unix seconds. 'client_id_issued_at' is omitted entirely when unset, since RFC 7591 defines no
-	// zero sentinel for that OPTIONAL field. The 'client_secret' and 'client_secret_expires_at' values are omitted
-	// entirely when there is no client secret. Every key ToMap is responsible for is deterministically controlled by
-	// the server: it is either always set or explicitly deleted, so an unregistered 'Extra' metadata parameter of the
-	// same name submitted by the client can never survive into the response in its place.
+	// emitted as int64 Unix seconds. 'client_id_issued_at' is omitted when unset, and 'client_secret' and
+	// 'client_secret_expires_at' are omitted when there is no client secret. Every registration key is either set or
+	// deleted, so a client submitted 'Extra' metadata parameter of the same name never reaches the response.
 	ToMap() (values map[string]any)
 }
 
@@ -154,19 +152,9 @@ func (r *ClientRegistrationResponse) AddHeader(key, value string) {
 	r.Header.Add(key, value)
 }
 
-// ToMap marshals the metadata through json.Marshal into a map[string]any and overlays the registration values on
-// top, keyed by the consts.ClientRegistrationResponse* constants. 'client_secret_expires_at' is emitted as an int64
-// Unix seconds value, and a zero ClientSecretExpiresAt emits 0, which per RFC 7591 Section 3.2.1 means the secret
-// does not expire. 'client_id_issued_at' is also emitted as an int64 Unix seconds value when set, but is omitted
-// entirely when zero since RFC 7591 defines no zero sentinel for that OPTIONAL field. Both 'client_secret' and
-// 'client_secret_expires_at' are omitted entirely when there is no client secret.
-//
-// Every key overlaid here is deterministically controlled by the server: it is either always set unconditionally
-// (which is enough to override anything of the same name decoded from Metadata's Extra) or, when it may be omitted,
-// explicitly deleted first. This matters because none of these keys are registered ClientRegistrationMetadata
-// fields, so a client that submits e.g. 'client_secret' or 'client_id_issued_at' as an unrecognized metadata
-// parameter has it land in Extra, which MarshalJSON merges into the map above. Without the delete, an omitted
-// server-controlled value would silently let that client-submitted value survive into the response.
+// ToMap marshals the metadata into a map and overlays the registration values on top. A zero ClientSecretExpiresAt
+// emits 0, which per RFC 7591 Section 3.2.1 means the secret does not expire. Every overlaid key is either set or
+// deleted first, so a value of the same name in the metadata's Extra never reaches the response.
 func (r *ClientRegistrationResponse) ToMap() (values map[string]any) {
 	values = map[string]any{}
 

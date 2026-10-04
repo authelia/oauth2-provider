@@ -23,16 +23,12 @@ import (
 // EqualDistinguishedNames reports whether two RFC 4514 string representations of a distinguished name denote the same
 // name.
 //
-// RFC 8705 Section 2.1 notes that a predictable treatment of DN values, such as the distinguishedNameMatch rule from
-// RFC 4517, is needed when comparing a certificate's subject DN to a client's registered one. Full RFC 4517 matching
-// is not implemented; this normalises the two spellings that differ in practice without changing what a DN denotes.
-// Insignificant whitespace around each relative distinguished name is ignored, attribute types are compared without
-// regard to case, and the sequence is compared in both directions because Go's pkix.Name.String and OpenSSL emit
-// relative distinguished names in opposite orders.
+// Full RFC 4517 distinguishedNameMatch is not implemented. Insignificant whitespace around each relative distinguished
+// name is ignored, attribute types are compared without regard to case, and the sequence is compared in both
+// directions because Go's pkix.Name.String and OpenSSL emit relative distinguished names in opposite orders.
+// Attribute values are compared with case significance, which is stricter than RFC 4517 requires.
 //
-// Attribute values are compared with case significance. Most attribute types in a subject DN use caseIgnoreMatch, so
-// this is stricter than RFC 4517 requires; the registered value is ordinarily copied from the certificate, and for a
-// value serving as an authentication credential a visible mismatch is preferable to a silent widening.
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
 func EqualDistinguishedNames(a, b string) (equal bool) {
 	x, y := normalizeDistinguishedName(a), normalizeDistinguishedName(b)
 
@@ -70,21 +66,11 @@ func normalizeDistinguishedName(dn string) (rdns []string) {
 }
 
 // trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is deliberately narrower
-// than strings.TrimSpace, which strips the full unicode.IsSpace set (tab, newline, U+00A0, ...).
+// than strings.TrimSpace, which strips the full unicode.IsSpace set (tab, newline, U+00A0, ...): every other
+// whitespace character is part of the value. A trailing space escaped with a backslash is also part of the value and
+// is not trimmed.
 //
-// Go's pkix.RDNSequence.String, which produces one side of every comparison EqualDistinguishedNames performs, escapes
-// only a leading or trailing space, the characters `,+"\<>;`, and a leading '#'; every other whitespace character,
-// including a tab or newline in any position, is emitted into the value literally. Trimming the full Unicode space set
-// would therefore delete characters that are part of the value, letting a certificate whose subject differs only by a
-// trailing tab, newline, or non-breaking space collide with an unrelated registered value. Only the plain space
-// adjacent to an RDN or attribute/value boundary is insignificant formatting; every other whitespace character is left
-// untouched.
-//
-// A trailing space escaped with a backslash per RFC 4514 is part of the value and is not trimmed: the number of
-// consecutive backslashes immediately preceding it is counted, and trimming stops as soon as that count is odd. A
-// leading space can never be escaped from this position: RFC 4514 escapes a leading space as "\ ", so an escaped
-// leading space is preceded by its backslash and is not the first character; a space that is the first character is
-// therefore always insignificant and is trimmed unconditionally.
+// See: https://www.rfc-editor.org/rfc/rfc4514#section-2.4
 func trimUnescapedSpace(s string) (trimmed string) {
 	for len(s) > 0 && s[len(s)-1] == ' ' {
 		i := len(s) - 1
@@ -159,10 +145,8 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 
 	if dn := client.GetTLSClientAuthSubjectDN(); dn != "" {
 		count, parameter = count+1, "tls_client_auth_subject_dn"
-		// A registered value made only of separators and space, such as "  ", " , " or ",", is non-empty as a string
-		// but names no relative distinguished name at all. It would otherwise satisfy the exactly-one check below and
-		// then normalise to a zero length sequence, which compares equal to the empty subject of any SAN-only
-		// certificate and would authenticate its holder as this client.
+		// A registered value made only of separators and space names no relative distinguished name, and must not be
+		// left to match the empty subject of a SAN-only certificate.
 		subjectDNEmpty = len(normalizeDistinguishedName(dn)) == 0
 		match = func() bool { return EqualDistinguishedNames(dn, cert.Subject.String()) }
 	}
@@ -282,9 +266,7 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 
 	for _, key := range jwks.Keys {
 		for _, registered := range key.Certificates {
-			// X509CertificateSHA256Thumbprint returns "" for a nil certificate. Skipping an empty thumbprint here,
-			// on top of the cert == nil guard above, keeps a malformed or absent registered entry from ever being
-			// treated as a match rather than relying on presented always being non-empty.
+			// An empty thumbprint is skipped so a malformed or absent registered entry is never treated as a match.
 			thumbprint := X509CertificateSHA256Thumbprint(registered)
 			if thumbprint == "" {
 				continue

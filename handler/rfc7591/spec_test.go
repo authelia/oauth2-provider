@@ -2,17 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package rfc7591 (spec_test.go) is a spec compliance test suite for the RFC 7591 client registration endpoint, the
-// RFC 7592 client configuration endpoint, and the OpenID Connect Dynamic Client Registration 1.0 metadata they both
-// carry.
-//
-// These tests are written to map directly to numbered sections of those specs so that the behavior the
-// implementation guarantees can be read out against the spec text. Each test name carries the relevant section
-// reference and a description; failures should be interpreted as a divergence from that spec section.
-//
-// A number of cases in the task brief this file was written against turned out to already be covered verbatim by
-// existing tests elsewhere in this package (or, for the two HTTP-transport-shaped cases, in the root package's
-// request/response handler tests) - those are noted, not duplicated, in the task report rather than reproduced here.
+// Package rfc7591 (spec_test.go) is a spec compliance test suite for the RFC 7591 client registration endpoint, the RFC
+// 7592 client configuration endpoint, and the OpenID Connect Dynamic Client Registration 1.0 metadata they both carry.
+// Each test name carries the relevant section reference and a description.
 //
 // https://datatracker.ietf.org/doc/html/rfc7591
 // https://datatracker.ietf.org/doc/html/rfc7592

@@ -26,17 +26,9 @@ type Configurator interface {
 	ClientRegistrationMetadataStrategyConfig
 }
 
-// ClientRegistrationHandler implements oauth2.RFC7591ClientRegistrationEndpointHandler, RFC 7591 Section 3.1's
-// client registration endpoint. It generates the client_id (and, unless the submitted metadata requests the "none"
-// token_endpoint_auth_method, a client secret), delegates construction of the concrete client to the configured
-// oauth2.ClientRegistrationStrategy, persists the client, and mints the RFC 7592 registration access token used to
-// manage it afterwards.
-//
-// The client secret this handler generates is plaintext entropy wrapped with oauth2.NewPlainTextClientSecret. That
-// is the default, not a recommendation: a deployment that wants secrets hashed at rest supplies its own
-// oauth2.ClientRegistrationStrategy (via Configurator's GetRFC7591ClientRegistrationStrategy) that generates and
-// stores the secret however it sees fit; this handler only ever receives the ClientSecret that strategy is given
-// to embed on the client it constructs.
+// ClientRegistrationHandler implements oauth2.RFC7591ClientRegistrationEndpointHandler, RFC 7591 Section 3.1's client
+// registration endpoint. The client secret it generates is plaintext; a deployment that wants secrets hashed at rest
+// supplies its own oauth2.ClientRegistrationStrategy.
 type ClientRegistrationHandler struct {
 	// Store persists the registered client and the registration access token's session.
 	Store Storage
@@ -49,17 +41,9 @@ type ClientRegistrationHandler struct {
 	Config Configurator
 }
 
-// HandleRFC7591ClientRegistrationEndpointRequest implements oauth2.RFC7591ClientRegistrationEndpointHandler.
-//
-// It performs, in order: (1) confirms a client registration strategy is configured, (2) runs every configured
-// validator against the submitted metadata with a nil client, (3) enforces the requesting creation token's scope
-// and audience ceilings, if any, against the requested scopes and audiences, and then strips the client registration
-// scope from the requested scopes unconditionally, (4) generates the client_id, (5) generates a plaintext client
-// secret unless the metadata's token_endpoint_auth_method is "none", (6) constructs the concrete client via the
-// strategy, (7) persists it, (8) mints and persists the registration access token - compensating with a client
-// delete if that fails, since a client nobody holds a token for is permanently unmanageable - and (9) populates
-// the responder, re-rendering the metadata from the persisted client so server-applied values are reflected
-// rather than echoing the request.
+// HandleRFC7591ClientRegistrationEndpointRequest implements oauth2.RFC7591ClientRegistrationEndpointHandler. If minting
+// the registration access token fails the persisted client is deleted. The response metadata is rendered from the
+// persisted client rather than echoing the request.
 func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointRequest(ctx context.Context, requester oauth2.ClientRegistrationRequester, responder oauth2.ClientRegistrationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {
@@ -68,10 +52,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 
 	metadata := requester.GetMetadata()
 
-	// A registration with no metadata at all is rejected here rather than dereferenced below. The shipped
-	// NewRFC7591ClientRegistrationRequest never produces one - it either decodes a body into a non-nil value or
-	// fails - but ClientRegistrationRequester is an extension point, so nil is a value this exported handler can be
-	// handed and must answer rather than panic on.
+	// ClientRegistrationRequester is an extension point, so nil metadata is rejected rather than dereferenced.
 	if metadata == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
 	}
@@ -143,11 +124,9 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 		return err
 	}
 
-	// RFC 7591 Section 3.2.1 defines 'client_id_issued_at' as the time the client identifier was issued, so the
-	// response states the value recorded on the client, as the RFC 7592 read does. It defines
-	// 'client_secret_expires_at' as the time the secret expires. It is measured from that same issuance and recorded
-	// on the client before it is persisted, so the value the response states is the one CompareClientSecret
-	// enforces; a client type that cannot carry it is advertised no expiry at all rather than one nothing would apply.
+	// RFC 7591 Section 3.2.1: 'client_id_issued_at' and 'client_secret_expires_at' are the values recorded on the
+	// client before it is persisted, so the expiry stated is the one CompareClientSecret enforces. A client type that
+	// cannot carry an expiry is advertised none.
 	var (
 		now             = time.Now().UTC()
 		issuedAt        = now
@@ -193,10 +172,8 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	var token string
 
 	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, client, grantable, grantableAudience, grantableResource); err != nil {
-		// The client was persisted but nobody holds a token to manage it: it would be permanently unmanageable and
-		// its client_id burned. Compensate by deleting it before returning the original error. If the compensating
-		// delete itself fails, prefer the original error and note the cleanup failure in the debug field rather
-		// than masking the root cause.
+		// A persisted client with no management token is unmanageable: delete it and return the original error, noting
+		// a failed delete in the debug field.
 		if delErr := h.Store.DeleteClient(ctx, id); delErr != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Failed to mint the client registration token: %s. Compensating deletion of client '%s' also failed: %s.", err, id, delErr))
 		}
@@ -219,11 +196,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	responder.SetClientSecret(plainSecret)
 	responder.SetClientIDIssuedAt(issuedAt)
 
-	// Only when a secret was actually issued and the expiry was recorded on the client: RFC 7591 Section 3.2.1 makes
-	// 'client_secret_expires_at' meaningful only alongside a 'client_secret', so a client registering with
-	// 'token_endpoint_auth_method' of 'none' must not be handed an expiry for a secret it does not have.
-	// ClientRegistrationResponse.ToMap already omits both together, but ClientRegistrationResponder is a public
-	// interface and a deployment's own implementation should never be told an expiry that describes nothing.
+	// RFC 7591 Section 3.2.1: 'client_secret_expires_at' is only reported alongside a 'client_secret'.
 	if !secretExpiresAt.IsZero() {
 		responder.SetClientSecretExpiresAt(secretExpiresAt)
 	}

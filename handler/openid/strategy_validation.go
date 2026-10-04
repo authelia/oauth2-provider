@@ -13,26 +13,14 @@ import (
 )
 
 // DefaultIDTokenValidationStrategy is the default TokenValidationStrategy. It decodes an inbound id_token via the
-// embedded jwt.Strategy, using the request's registered client as the source of JSON Web Keys for signature
-// verification when available.
+// embedded jwt.Strategy, verifying the signature with the request's registered client's JSON Web Keys when available,
+// and validates the time-based claims ('exp', 'nbf', 'iat'), which jwt.Strategy.Decode does not. The 'exp' and 'iat'
+// claims must be present unless oauth2.WithAllowExpired is used.
 //
-// Validation responsibility split:
+// The 'typ' header must be absent, 'JWT', or 'dpop+id_token'; the check is skipped when unverified tokens are allowed.
+// The 'iss' and 'aud' claims are not validated and are left to the caller.
 //
-//   - This strategy enforces JWS/JWE structural validation, signature verification and signature algorithm
-//     enforcement via jwt.Strategy.Decode, then validates the time-based claims ('exp', 'nbf', 'iat') itself via
-//     jwt.MapClaims.Valid. Note that jwt.Strategy.Decode does NOT validate time-based claims. The 'exp' and 'iat'
-//     claims OpenID Connect Core 1.0 Section 2 requires must be present unless oauth2.WithAllowExpired is used.
-//   - The 'typ' header must be absent, 'JWT', or 'dpop+id_token', so that another kind of JWT signed by the same
-//     issuer, such as an RFC9068 access token or a Logout Token, is not accepted as an ID Token. The check is
-//     skipped when unverified tokens are allowed.
-//     See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
-//   - Application-specific claim checks, most notably 'iss' (issuer) and 'aud' (audience), are intentionally
-//     LEFT TO THE CALLER. RFC 8693 ID tokens may originate from federated identity providers, so the AS-specific
-//     issuer/audience policy lives one layer up (e.g. rfc8693.IDTokenTypeHandler.validate enforces 'iss' against
-//     the configured issuer and the client's per-role issuer allow-list).
-//
-// The strategy is safe to use concurrently provided the embedded jwt.Strategy is itself concurrent-safe (the
-// reference DefaultStrategy is).
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
 type DefaultIDTokenValidationStrategy struct {
 	jwt.Strategy
 }

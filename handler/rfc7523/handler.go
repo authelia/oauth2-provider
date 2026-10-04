@@ -221,12 +221,8 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	// Client Authentication is optional:
-	//
-	// Authentication of the client is optional, as described in
-	//   Section 3.2.1 of OAuth 2.0 [RFC6749] and consequently, the
-	//   "client_id" is only needed when a form of client authentication that
-	//   relies on the parameter is used.
+	// Client authentication is optional.
+	// See: https://www.rfc-editor.org/rfc/rfc7523#section-2.1
 
 	// if client is authenticated, check grant types
 	if (!c.CanSkipClientAuth(ctx, request) || isAuthenticatedClient(request.GetClient())) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {

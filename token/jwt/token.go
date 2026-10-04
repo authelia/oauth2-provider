@@ -63,13 +63,8 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorMalformed, Inner: err}
 	}
 
-	// fill unverified claims
-	// This conversion is required because go-jose supports
-	// only marshalling structs or maps but not alias types from maps
-	//
-	// The KeyFunc(*Token) function requires the claims to be set into the
-	// Token, that is an unverified token, therefore an UnsafeClaimsWithoutVerification is done first
-	// then with the returned key, the claims gets verified.
+	// The Keyfunc requires the unverified claims to be set on the Token; they are verified with the returned key
+	// below. go-jose supports only structs or maps, not alias types from maps.
 	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
 		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
@@ -99,10 +94,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	if key == nil {
 		return token, &ValidationError{Errors: ValidationErrorSignatureInvalid, text: "keyfunc returned a nil verification key"}
 	}
-	// To verify signature go-jose requires a pointer to
-	// public key instead of the public key value.
-	// The pointer values provides that pointer.
-	// E.g. transform rsa.PublicKey -> *rsa.PublicKey
+	// go-jose requires a pointer to the public key to verify the signature.
 	key = pointer(key)
 
 	// verify signature with returned key.
@@ -155,15 +147,6 @@ type Token struct {
 func (t *Token) IsSignatureValid() bool {
 	return t.valid
 }
-
-// Claims is a port from https://github.com/dgrijalva/jwt-go/blob/master/claims.go
-// including its validation methods, which are not available in go-jose library
-//
-// > For a type to be a Claims object, it must just have a Valid method that determines
-// if the token is invalid for any supported reason
-// type Claims interface {
-//	Valid() error
-//}
 
 func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
 	header = map[jose.HeaderKey]any{
@@ -327,12 +310,7 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 		return "", fmt.Errorf("error signing jwt using alg '%s' and kid '%s': %w", t.SignatureAlgorithm, t.KeyID, errorsx.WithStack(err))
 	}
 
-	// A explicit conversion from type alias MapClaims
-	// to map[string]any is required because the
-	// go-jose CompactSerialize() only support explicit maps
-	// as claims or structs but not type aliases from maps.
-	// claims := t.Claims.ToMapClaims()
-
+	// go-jose serializes only explicit maps or structs as claims, not type aliases from maps.
 	if tokenString, err = jwt.Signed(signer).Claims(t.Claims.ToMapClaims().ToMap()).Serialize(); err != nil {
 		return "", &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}

@@ -59,63 +59,30 @@ const (
 type Provider interface {
 	// NewAuthorizeRequest returns an AuthorizeRequest.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
-	//	 Extension response types MAY contain a space-delimited (%x20) list of
-	//	 values, where the order of values does not matter (e.g., response
-	//	 type "a b" is the same as "b a").  The meaning of such composite
-	//	 response types is defined by their respective specifications.
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
-	//   The redirection endpoint URI MUST be an absolute URI as defined by
-	//   [RFC3986] Section 4.3.  The endpoint URI MAY include an
-	//   "application/x-www-form-urlencoded" formatted (per Appendix B) query
-	//   component ([RFC3986] Section 3.4), which MUST be retained when adding
-	//   additional query parameters.  The endpoint URI MUST NOT include a
-	//   fragment component.
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2
 	NewAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error)
 
 	// NewAuthorizeResponse iterates through all response type handlers and returns their result or
 	// ErrUnsupportedResponseType if none of the handlers were able to handle it.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
-	//	 Extension response types MAY contain a space-delimited (%x20) list of
-	//	 values, where the order of values does not matter (e.g., response
-	//	 type "a b" is the same as "b a").  The meaning of such composite
-	//	 response types is defined by their respective specifications.
-	//	 If an authorization request is missing the "response_type" parameter,
-	//	 or if the response type is not understood, the authorization server
-	//	 MUST return an error response as described in Section 4.1.2.1.
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	NewAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder AuthorizeResponder, err error)
 
 	// WriteAuthorizeError returns the error codes to the redirection endpoint or shows the error to the user, if no valid
-	// redirect uri was given. Implements rfc6749#section-4.1.2.1
+	// redirect uri was given.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
-	//   The redirection endpoint URI MUST be an absolute URI as defined by
-	//   [RFC3986] Section 4.3.  The endpoint URI MAY include an
-	//   "application/x-www-form-urlencoded" formatted (per Appendix B) query
-	//   component ([RFC3986] Section 3.4), which MUST be retained when adding
-	//   additional query parameters.  The endpoint URI MUST NOT include a
-	//   fragment component.
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1 (everything)
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
 	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
 
 	// WriteAuthorizeResponse persists the AuthorizeSession in the store and redirects the user agent to the provided
 	// redirect url or returns an error if storage failed.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc6749#rfc6749#section-4.1.2.1
-	//   After completing its interaction with the resource owner, the
-	//   authorization server directs the resource owner's user-agent back to
-	//   the client.  The authorization server redirects the user-agent to the
-	//   client's redirection endpoint previously established with the
-	//   authorization server during the client registration process or when
-	//   making the authorization request.
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2 (everything MUST be implemented)
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2
 	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder)
 
 	// NewAccessRequest creates a new access request object and validates
@@ -162,16 +129,19 @@ type Provider interface {
 	// such as the authorization code, can not be introspected.
 	IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scope ...string) (actualTokenUse TokenUse, requester AccessRequester, err error)
 
-	// NewIntrospectionRequest initiates token introspection as defined in
-	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+	// NewIntrospectionRequest initiates token introspection.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
 	NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (responder IntrospectionResponder, err error)
 
-	// WriteIntrospectionError responds with an error if token introspection failed as defined in
-	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
+	// WriteIntrospectionError responds with an error if token introspection failed.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 	WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error)
 
-	// WriteIntrospectionResponse responds with token metadata discovered by token introspection as defined in
-	//https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+	// WriteIntrospectionResponse responds with token metadata discovered by token introspection.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, response IntrospectionResponder)
 
 	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
@@ -188,67 +158,41 @@ type Provider interface {
 
 	// NewRFC862DeviceAuthorizeRequest validate the OAuth 2.0 Device Authorization Flow Request
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.1 (everything MUST be implemented)
-	// Parameters sent without a value MUST be treated as if they were
-	// omitted from the request.  The authorization server MUST ignore
-	// unrecognized request parameters.  Request and response parameters
-	// MUST NOT be included more than once.
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.1
 	NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error)
 
 	// NewRFC862DeviceAuthorizeResponse persists the DeviceCodeSession and UserCodeSession in the store
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.2 (everything MUST be implemented)
-	// In response, the authorization server generates a unique device
-	// verification code and an end-user code that are valid for a limited
-	// time
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
 	NewRFC862DeviceAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceAuthorizeResponder, err error)
 
-	// WriteRFC862DeviceAuthorizeResponse return to the user both codes and
-	// some configuration information in a JSON formatted manner
+	// WriteRFC862DeviceAuthorizeResponse return to the user both codes and some configuration information in a JSON
+	// formatted manner
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.2 (everything MUST be implemented)
-	// Response is a HTTP response body using the
-	// "application/json" format [RFC8259] with a 200 (OK) status code.
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
 	WriteRFC862DeviceAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder)
 
 	// WriteRFC8628UserAuthorizeResponse returns the device grant user verification result in a JSON formatted manner.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
-	// Response is a HTTP response body using the
-	// "application/json" format [RFC8259] with a 200 (OK) status code.
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.3
 	WriteRFC8628UserAuthorizeResponse(cxt context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, response DeviceUserAuthorizeResponder)
 
 	// WriteRFC8628UserAuthorizeError returns the device grant user verification error in a JSON formatted manner.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
-	// Response is a HTTP response body using the
-	// "application/json" format [RFC8259] with a 200 (OK) status code.
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.3
 	WriteRFC8628UserAuthorizeError(_ context.Context, rw http.ResponseWriter, request DeviceAuthorizeRequester, err error)
 
 	// NewRFC8628UserAuthorizeRequest validate the OAuth 2.0 Device Authorization Flow - User interaction Request
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.3 (everything MUST be implemented)
-	// Parameters sent without a value MUST be treated as if they were
-	// omitted from the request. The authorization server MUST ignore
-	// unrecognized request parameters. Request and response parameters
-	// MUST NOT be included more than once.
-	//
 	// The session is the session the stored device authorization request is hydrated into and must not be nil.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.3
 	NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request, session Session) (requester DeviceAuthorizeRequester, err error)
 
-	// NewRFC8628UserAuthorizeResponse persists the DeviceCodeSession and UserCodeSession in the store
+	// NewRFC8628UserAuthorizeResponse replaces the session of the device authorization request with the given session
+	// and returns the response of the user authorization handlers.
 	//
-	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8628#section-3.2 (everything MUST be implemented)
-	// In response, the authorization server generates a unique device
-	// verification code and an end-user code that are valid for a limited
-	// time
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.3
 	NewRFC8628UserAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
 
 	// NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester.

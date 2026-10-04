@@ -49,11 +49,8 @@ func DPoPTokenFactory(config oauth2.Configurator, storage any, strategy any) any
 // It is dispatched in the device authorization binding phase, which runs ahead of every device authorization endpoint
 // handler, so its position in the factory list does not matter.
 //
-// It is deliberately absent from ComposeAllEnabled, unlike DPoPAuthorizeFactory and DPoPTokenFactory. There was no
-// device authorization binding phase before this handler existed, so registering it there would newly reject a
-// malformed 'dpop_jkt' at that endpoint for every existing deployment composed that way; leaving it out preserves
-// exactly the behaviour those deployments have today. Register it explicitly to accept 'dpop_jkt' in a device
-// authorization request.
+// It is not part of ComposeAllEnabled, unlike DPoPAuthorizeFactory and DPoPTokenFactory. Register it explicitly to
+// accept 'dpop_jkt' in a device authorization request.
 func DPoPDeviceAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc9449.DeviceAuthorizeHandler{
 		Config: config,

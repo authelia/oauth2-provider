@@ -51,12 +51,8 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 	subjectTokenObject := session.GetSubjectToken()
 	actorTokenObject := session.GetActorToken()
 
-	// Every token type handler records the subject token's claims when it is the one that validated it, and this
-	// handler runs after all of them, so an absent record means no handler claimed the 'subject_token_type'. That is
-	// reachable whenever a type is registered in the token types configuration but is neither one of the three
-	// built-in types nor a *JWTType: each handler compares the requested type against its own and returns without
-	// error when it does not match, leaving the 'subject_token' unread. RFC 8693 Section 2.1 makes the subject token
-	// the identity the issued token represents, so there is nothing to issue against.
+	// This handler runs after every token type handler, so an absent subject token record means none of them
+	// validated the 'subject_token'.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 	if err = requireSubjectToken(request); err != nil {

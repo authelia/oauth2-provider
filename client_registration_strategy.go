@@ -50,23 +50,15 @@ type ClientRegistrationMetadataStrategy interface {
 // ClientRegistrationEndpointAuthStrategy authenticates requests made to the client registration and client
 // configuration endpoints.
 type ClientRegistrationEndpointAuthStrategy interface {
-	// AuthenticateClientRegistrationRequest authenticates the request and returns the Requester it authenticates as.
-	// id is empty for client registration requests (RFC 7591), and carries the target client id for client
-	// configuration requests (RFC 7592), letting the strategy verify the credential is authorized for that specific
-	// client.
+	// AuthenticateClientRegistrationRequest authenticates the request and returns the Requester it authenticates as. id
+	// is empty for client registration requests (RFC 7591), and carries the target client id for client configuration
+	// requests (RFC 7592).
 	//
-	// An implementation may return a nil requester together with a nil error, which reports that the endpoint is open
-	// and the request carries no authenticated identity - RFC 7591 Section 3.1 makes the initial access token optional,
-	// "if authorization is required". Consumers must therefore treat a nil error as permission to proceed, not as a
-	// promise of a requester, and check the requester before dereferencing it; the scope and audience ceilings derived
-	// from it simply do not apply when there is none. Returning a non-nil error is what refuses a request.
+	// A nil requester with a nil error reports an open endpoint with no authenticated identity, so consumers must check
+	// the requester before dereferencing it. That return is valid only when id is empty: an implementation must return
+	// an error for an unauthenticated request when id is non-empty.
 	//
-	// That open-endpoint return is valid ONLY for the client registration endpoint, i.e. when id is empty. RFC 7592
-	// Section 2 requires that "The client MUST use its registration access token in all calls to this endpoint as an
-	// OAuth 2.0 Bearer Token", so an implementation must never report the client configuration endpoint as open: the
-	// client acted upon there is named by the request path, and its identifier is not a secret, so an unauthenticated
-	// request would be able to read, replace, or delete any registered client. An implementation that wants open
-	// registration must therefore branch on id and return an error when it is non-empty. NewRFC7592ClientConfiguration
-	// Request rejects a nil requester regardless, so a strategy which does not branch fails closed rather than open.
+	// See: https://www.rfc-editor.org/rfc/rfc7591#section-3.1
+	// See: https://www.rfc-editor.org/rfc/rfc7592#section-2
 	AuthenticateClientRegistrationRequest(ctx context.Context, r *http.Request, id string) (requester Requester, err error)
 }

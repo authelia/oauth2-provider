@@ -2,14 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package rfc8693_test is a spec compliance test suite.
+// Package rfc8693_test is a spec compliance test suite. Each test name carries the RFC 8693 § reference it covers.
 //
-// These tests are written to map directly to numbered sections of RFC 8693 (OAuth 2.0 Token Exchange) so that the
-// behavior the implementation guarantees can be read out against the spec. Each test name carries the relevant §
-// reference and a description; failures should be interpreted as a divergence from that spec section.
-//
-// https://datatracker.ietf.org/doc/html/rfc8693
-
+// See: https://datatracker.ietf.org/doc/html/rfc8693
 package rfc8693_test
 
 import (

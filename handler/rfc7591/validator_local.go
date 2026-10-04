@@ -36,15 +36,10 @@ func NewLocalValidator(config LocalValidatorConfig) (validator *LocalValidator) 
 }
 
 // validators returns the configured oauth2.ClientRegistrationValidator values, falling back to a single
-// LocalValidator when none are configured. The fallback is what makes registration safe out of the box, in the same
-// way and for the same reason metadataStrategy defaults the metadata filter: without it an integrator who has never
-// heard of this seam gets an endpoint that validates nothing at all, accepting a 'javascript:' redirect URI, a
-// 'jwks' and 'jwks_uri' together, an 'id_token_signed_response_alg' of 'none', and grant and response types that
-// contradict each other. Configuring validators explicitly replaces the default, including with an empty-but-non-nil
-// slice for a deployment that genuinely wants no local validation.
+// LocalValidator when none are configured. An empty but non-nil slice is honoured and disables local validation.
 //
-// Network-dereferencing validators such as SectorIdentifierValidator are deliberately not included: they perform
-// egress on a client supplied URI, which is a deployment decision rather than a safe default.
+// Network-dereferencing validators such as SectorIdentifierValidator are not included by default, as they perform
+// egress on a client supplied URI.
 func validators(ctx context.Context, config Configurator) (validators []oauth2.ClientRegistrationValidator) {
 	if validators = config.GetRFC7591ClientRegistrationValidators(ctx); validators != nil {
 		return validators
@@ -179,13 +174,8 @@ func validateTLSClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err err
 // fragment. It additionally enforces the OAuth 2.0 Security Best Current Practice scheme rules for the declared
 // 'application_type': a 'web' client (the default when 'application_type' is absent) must use 'https' and must not
 // target the loopback interface, while a 'native' client may use a non-'https' scheme only for a loopback redirect
-// (127.0.0.1 or [::1]) or a private-use URI scheme of the reverse-DNS shape RFC 8252 Section 7.1 requires.
-//
-// OpenID Connect Dynamic Client Registration 1.0 Section 2 states that web clients "MUST NOT use localhost as the
-// hostname", and in the same sentence defines the loopback URLs reserved for native clients as those using
-// "localhost or the IP loopback literals 127.0.0.1 or [::1] as the hostname". The prohibition is therefore on the
-// loopback interface, not on one spelling of it: a redirect to the resource owner's own machine is a host the web
-// client does not control however it is written, so oauth2.IsLocalhost rejects the name and the literals alike.
+// (127.0.0.1 or [::1]) or a private-use URI scheme of the reverse-DNS shape RFC 8252 Section 7.1 requires. For a
+// 'web' client the loopback interface covers 'localhost' and the IP loopback literals alike.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
@@ -237,13 +227,8 @@ func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err erro
 }
 
 // validateGrantTypesPermitted checks the registered 'grant_types' against the grant types the deployment permits a
-// client to register for. RFC 7591 Section 2 permits the authorization server to reject requested metadata values
-// with an error response, and every token endpoint authorization check in this library is a GetGrantTypes().Has
-// call, so without this a registrant asserts its own authority.
-//
-// An empty policy permits any grant, which is the default; see GetRFC7591ClientRegistrationGrantTypes. An absent
-// 'grant_types' is not checked either way: Section 2 makes that the authorization code grant, which
-// validateGrantResponseTypeCoherence already applies.
+// client to register for. An empty policy permits any grant, which is the default; see
+// GetRFC7591ClientRegistrationGrantTypes. An absent 'grant_types' is not checked.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
 func validateGrantTypesPermitted(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
@@ -339,19 +324,10 @@ func validateURI(name, value string, secure bool) (err error) {
 	return nil
 }
 
-// isPrivateUseURIScheme reports whether scheme is a private-use URI scheme of the form RFC 8252 Section 7.1 requires
-// of a native application: "apps MUST use a URI scheme based on a domain name under their control, expressed in
-// reverse order", as recommended by RFC 7595 Section 3.8. It is therefore satisfied only by a domain-shaped, dotted
-// scheme such as 'com.example.app'.
-//
-// The requirement is what makes a private-use scheme meaningfully the registrant's: a single-label scheme like
-// 'myapp' is claimable by any other application on the device, and the shape check is also what keeps the browser
-// pseudo-schemes ('javascript', 'data', 'file', ...) out of a client's registered redirect URIs, which the previous
-// unconditional acceptance of every non-HTTP scheme did not.
-//
-// url.Parse has already lowercased the scheme and enforced RFC 3986's 'scheme' production, so only the domain shape
-// is checked here: at least one dot, and every label non-empty, composed of unreserved DNS characters, and neither
-// starting nor ending with a hyphen.
+// isPrivateUseURIScheme reports whether scheme is a private-use URI scheme of the reverse-DNS form RFC 8252 Section
+// 7.1 requires of a native application, such as 'com.example.app'. The scheme must already be parsed by url.Parse;
+// only the domain shape is checked: at least one dot, and every label non-empty, composed of unreserved DNS
+// characters, and neither starting nor ending with a hyphen.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.1
 // See: https://datatracker.ietf.org/doc/html/rfc7595#section-3.8
@@ -431,17 +407,9 @@ func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error
 // requires the 'implicit' grant, and the 'authorization_code' and 'implicit' grants each require at least one
 // registered redirect URI.
 //
-// RFC 7591 Section 2 defaults an absent 'grant_types' to 'authorization_code' and an absent 'response_types' to
-// 'code', which is exactly what oauth2.DefaultClient's GetGrantTypes and GetResponseTypes return at request time.
-// The same defaults are applied here, otherwise omitting 'grant_types' is enough to register a client the rest of
-// the provider then treats as an authorization code client while skipping the redirect URI requirement below. The
-// defaults are evaluated only and never written back: the registered client and the registration response continue
-// to carry exactly what was submitted.
-//
-// The 'response_types' default is applied only when 'grant_types' is absent as well, i.e. only as the other half of
-// the same default pair. A client that declares 'grant_types' without 'response_types' - a 'client_credentials'
-// client being the common case - has declared it will not use a redirection flow, and synthesizing a 'code'
-// response type for it would reject the registration over a response type it never asked for.
+// The RFC 7591 Section 2 defaults ('authorization_code' for an absent 'grant_types', 'code' for an absent
+// 'response_types') are evaluated but never written back. The 'response_types' default is applied only when
+// 'grant_types' is absent as well.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
 func validateGrantResponseTypeCoherence(metadata *oauth2.ClientRegistrationMetadata) (err error) {
@@ -545,11 +513,8 @@ func isToken(s string) bool {
 	})
 }
 
-// validateScopes implements a syntactic check of the 'scope' metadata: RFC 6749 Section 3.3 defines a scope token
-// as one or more characters drawn from %x21 / %x23-5B / %x5D-7E, i.e. printable US-ASCII excluding space,
-// double-quote ('"'), and backslash ('\'). This deliberately does not validate the declared scopes against
-// config.GetScopeStrategy(ctx): at registration time there is nothing to match a self-contained needle against
-// other than itself, which is always true and would not catch anything.
+// validateScopes implements a syntactic check of the 'scope' metadata against the RFC 6749 Section 3.3 scope token
+// production. The declared scopes are not matched against config.GetScopeStrategy(ctx).
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.3
 func validateScopes(metadata *oauth2.ClientRegistrationMetadata) (err error) {

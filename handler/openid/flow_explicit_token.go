@@ -61,13 +61,6 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 
 	claims.AccessTokenHash = c.GetAccessTokenHash(ctx, request, response)
 
-	// The response type `id_token` is only required when performing the implicit or hybrid flow, see:
-	// https://openid.net/specs/openid-connect-registration-1_0.html
-	//
-	// if !requester.GetClient().GetResponseTypes().Has("id_token") {
-	// 	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type id_token"))
-	// }
-
 	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
 
 	return c.IssueExplicitIDToken(ctx, lifespan, authorize, response)

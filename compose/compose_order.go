@@ -165,25 +165,15 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 }
 
 // validateTokenEndpointBindingHandlerOrder returns an error when an oidckb.Handler or idjag.RedeemHandler precedes the
-// rfc9449.Handler in the token endpoint binding handlers.
+// rfc9449.Handler in the token endpoint binding handlers, as each consumes the validated proof it publishes.
 //
-// oidckb.Handler performs no proof validation of its own; it consumes the proof rfc9449.Handler publishes once every
-// RFC 9449 Section 5 check has passed. Registered first it would find nothing published, so a grant that asked to be
-// key bound would fail with a server error on every token request.
-//
-// rfc9449.Handler alone is a legitimate configuration. oidckb.Handler alone is legitimate only when some other
-// handler publishes a validated proof via oauth2.PublishDPoPProof; with no publisher registered at all, every grant
-// whose authentication request carried 'dpop_jkt' fails with a server error at the token endpoint.
-//
-// An idjag.RedeemHandler registered first would find nothing published and reject every grant carrying a 'cnf'
-// claim, so it is held to the same order.
+// Either consumer without any rfc9449.Handler is not an error: another handler may publish the proof via
+// oauth2.PublishDPoPProof.
 func validateTokenEndpointBindingHandlerOrder(config *oauth2.Config) (err error) {
 	var dpop, keyBindingUnordered, idjagUnordered bool
 
-	// Every oidckb.Handler must be preceded by an rfc9449.Handler, so the list is walked in order rather than
-	// reduced to one index per type: a list carrying more than one of either would report only the last of each,
-	// and a misordered earlier pair would go unseen. Config.TokenEndpointBindingHandlers is exported and can be
-	// assigned directly, so the Append deduplication cannot be relied on here.
+	// Walked in order as Config.TokenEndpointBindingHandlers is exported and may hold more than one handler of each
+	// type.
 	for _, handler := range config.TokenEndpointBindingHandlers {
 		switch handler.(type) {
 		case *rfc9449.Handler:
@@ -233,13 +223,7 @@ func validateIDJAGRedeemHandlerBinding(config *oauth2.Config) (err error) {
 }
 
 // validateRFC8628UserAuthorizeHandlerOrder returns an error when oidckb.UserAuthorizeHandler is registered after
-// rfc8628.UserAuthorizeHandler.
-//
-// Both populate the user authorization response in registration order. rfc8628.UserAuthorizeHandler persists the
-// device code session, and oidckb.UserAuthorizeHandler records onto that session that the 'bound_key' scope was
-// granted; consent decides that here, so it cannot be recorded any earlier. Registered second it would mutate a
-// session already written, and every store that serializes on write would drop the marker, leaving the device flow to
-// issue an ID Token with no 'cnf' claim and no error anywhere to say why.
+// rfc8628.UserAuthorizeHandler, which persists the device code session the 'bound_key' grant must be recorded onto.
 func validateRFC8628UserAuthorizeHandlerOrder(config *oauth2.Config) (err error) {
 	var device, unordered bool
 

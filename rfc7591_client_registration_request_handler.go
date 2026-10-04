@@ -19,26 +19,18 @@ import (
 
 const (
 	// DebugRFC7591ConfigMissing is the debug message returned when no RFC 7591 client registration endpoint auth
-	// strategy is configured, mirroring DebugPARConfigMissing's pattern for the pushed authorization request
-	// endpoint (see pushed_authorize_request_handler.go).
+	// strategy is configured.
 	DebugRFC7591ConfigMissing = "'RFC7591ClientRegistrationConfigProvider' not implemented"
 )
 
 // maxClientRegistrationRequestBodyBytes bounds the size of the JSON request body read at the client registration
-// (RFC 7591) and client configuration (RFC 7592) endpoints. The registration endpoint is always reachable by an
-// unauthenticated client, and the configuration endpoint becomes reachable by one whenever the presented credential
-// turns out to be invalid, so the body must be bounded before it is read to avoid an unbounded read becoming a
-// denial of service vector.
+// (RFC 7591) and client configuration (RFC 7592) endpoints, both of which read it before the caller is authenticated.
 const maxClientRegistrationRequestBodyBytes = 1 << 20 // 1 MiB
 
 // NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester that can be
 // passed to NewRFC7591ClientRegistrationResponse.
 //
-// The following specs must be considered in any implementation of this method:
-// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.1
-//
-//	This request MUST be authenticated using a valid Initial Access Token, if authorization is required. The
-//	request body is a JSON document consisting of a JSON object.
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-3.1
 func (f *Fosite) NewRFC7591ClientRegistrationRequest(ctx context.Context, r *http.Request) (requester ClientRegistrationRequester, err error) {
 	request := NewClientRegistrationRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)

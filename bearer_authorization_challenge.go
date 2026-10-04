@@ -18,17 +18,14 @@ import (
 // for an endpoint acting as an OAuth 2.0 protected resource, and returns the error with its status corrected for that
 // context. The caller writes the response body.
 //
-// r may be nil. The response writers that call this - WriteIntrospectionError and writeClientRegistrationError - are
-// public API taking only a context, and the request is not reliably on it: the handlers store it under
-// RequestContextKey on their own derived context, which a caller writing the error from the context it started with
-// will not have. A nil request means the scheme used cannot be established, which RFC 9449 Section 7.2 covers
-// explicitly - "otherwise, both Bearer and DPoP challenges MAY be used to deliver error information" (Figure 19). The
-// challenge stays conformant either way; supplying the request only buys the more precise placement of Figures 16
-// and 18.
+// r may be nil, in which case the scheme used cannot be established and both the Bearer and DPoP challenges carry the
+// error information.
 //
-// Status correction: ErrInvalidDPoPProof and ErrUseDPoPNonce are HTTP 400, which is correct at the token endpoint per
-// RFC 9449 Section 5, but Section 7.1 Figure 16 and Section 9 Figure 24 both require 401 at a protected resource.
-// They are promoted here rather than by forking the error variables, which would change public API.
+// ErrInvalidDPoPProof and ErrUseDPoPNonce are HTTP 400 at the token endpoint but are returned as 401 here, as required
+// at a protected resource.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-3, https://www.rfc-editor.org/rfc/rfc9449#section-7.1, and
+// https://www.rfc-editor.org/rfc/rfc9449#section-7.2
 func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error) {
 	rfc = ErrorToRFC6749Error(err)
 
@@ -132,17 +129,12 @@ func challengeScheme(scheme string, params ...string) (value string) {
 }
 
 // IsBearerCredentialError reports whether err is a rejection of a bearer credential presented to authorize a call,
-// and so warrants a RFC 6750 Section 3 'WWW-Authenticate' challenge naming the Bearer and DPoP schemes. It is the
-// predicate both protected-resource error writers use to decide whether to emit one.
+// and so warrants a RFC 6750 Section 3 'WWW-Authenticate' challenge naming the Bearer and DPoP schemes.
 //
-// ErrRequestUnauthorized is deliberately excluded even though it is also an authorization failure. It is what a
-// client authentication branch returns, and a caller that authenticated with client credentials was not using either
-// of those schemes - RFC 6749 Section 5.2 calls for a challenge matching the scheme actually attempted, so answering
-// a failed Basic authentication with 'WWW-Authenticate: Bearer' would advertise the wrong one.
+// ErrRequestUnauthorized is deliberately excluded as it is a client authentication failure, where neither scheme was
+// attempted. ErrInvalidRequest is excluded as it says nothing about how the caller authenticated.
 //
-// ErrInvalidRequest is excluded for a related reason: it is mostly a malformed method or body, which says nothing
-// about how the caller authenticated. That includes the RFC 9449 Section 7.2 multiple-Authorization-header case,
-// where a challenge would add nothing the 400 does not already convey.
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-3 and https://www.rfc-editor.org/rfc/rfc6749#section-5.2
 func IsBearerCredentialError(err error) (is bool) {
 	return errors.Is(err, ErrInvalidToken) ||
 		errors.Is(err, ErrInsufficientScope) ||

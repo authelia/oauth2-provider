@@ -48,10 +48,7 @@ func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oau
 	types := request.GetResponseTypes()
 
 	// Section 1.4: key binding is defined for the Authorization Code Flow and the Device Authorization Flow only, and
-	// the device flow binds at its own endpoint. The Implicit and Hybrid Flows MUST NOT be used to obtain a key-bound
-	// ID Token, and support for any other flow is out of scope, so exactly 'code' is required here: every other
-	// response type either returns an ID Token from this endpoint that no proof was presented for, or returns none
-	// that a Token Request could bind.
+	// the device flow binds at its own endpoint, so exactly 'code' is required here.
 	if !types.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The scope 'bound_key' must not be requested with the response type '%s' because only the Authorization Code Flow can produce a key-bound ID Token.", strings.Join(types, " ")))
 	}

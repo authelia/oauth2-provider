@@ -111,15 +111,9 @@ func (f *Fosite) RequireRedirectURIPushedAuthorizationRequest(ctx context.Contex
 	return ok && parc.GetRequireRedirectURIPushedAuthorizationRequests()
 }
 
-// handlePushedAuthorizeRequestDPoP implements RFC 9449 Section 10.1 at the pushed authorization request endpoint. A
-// client may commit to a DPoP proof-of-possession key either by sending the 'dpop_jkt' parameter or by presenting a
-// DPoP proof, and when a proof is presented the authorization server MUST check it and MUST then behave as if its
-// public key thumbprint had been supplied via 'dpop_jkt'. It does so by writing the thumbprint into the pushed request
-// form, which Request.Merge copies onto the authorization request when the 'request_uri' is later redeemed, so the
-// binding reaches rfc9449.AuthorizeHandler by the same route as a directly supplied 'dpop_jkt'.
-//
-// This lives here rather than in a pushed authorize endpoint handler because the proof arrives in an HTTP header and
-// NewPushedAuthorizeResponse, where those handlers run, is not given the request.
+// handlePushedAuthorizeRequestDPoP implements RFC 9449 Section 10.1 at the pushed authorization request endpoint: a
+// presented DPoP proof is validated and its public key thumbprint written to the pushed request form as 'dpop_jkt'.
+// It runs here because NewPushedAuthorizeResponse, where the endpoint handlers run, is not given the HTTP request.
 func (f *Fosite) handlePushedAuthorizeRequestDPoP(ctx context.Context, r *http.Request, request AuthorizeRequester) (err error) {
 	if !f.Config.GetDPoPEnabled(ctx) {
 		return nil

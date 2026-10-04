@@ -16,33 +16,20 @@ import (
 
 // RFC 8693 (OAuth 2.0 Token Exchange) factory functions.
 //
-// The factories MUST be registered in the order declared by RFC8693TokenExchangeFactories. The order is required
-// because of two cross-handler dependencies that are not encoded in the type system:
-//
-//  1. TokenExchangeGrantHandler.PopulateTokenEndpointResponse writes the RFC 8693 §4.1 'act' claim onto the session
-//     via session.SetClaimActor. The token-type handlers' PopulateTokenEndpointResponse implementations issue the
-//     token by serializing the session into a JWT or persisting the session for opaque introspection. The grant
-//     handler MUST therefore run BEFORE any token-type handler in the PopulateTokenEndpointResponse phase, or the
-//     'act' claim is computed too late to reach the issued token.
-//
-//  2. ActorTokenValidationHandler.HandleTokenEndpointRequest enforces the RFC 8693 §4.4 'may_act' authorization
-//     constraint. It reads session.GetActorToken(), which is populated by the token-type handlers' own
-//     HandleTokenEndpointRequest implementations when actor_token / actor_token_type match their token type. The
-//     validation handler MUST therefore run AFTER the token-type handlers in the HandleTokenEndpointRequest phase
-//     or the may_act check fires before there is anything to validate.
-//
-// Putting the two together produces the canonical order:
+// The factories MUST be registered in the order declared by RFC8693TokenExchangeFactories. The grant handler writes
+// the RFC 8693 Section 4.1 'act' claim onto the session before a token type handler issues the token, and the actor
+// token validation handler enforces the Section 4.4 'may_act' claim on the actor token the token type handlers
+// populate:
 //
 //	1. RFC8693TokenExchangeGrantFactory       (grant + act-claim writer; FIRST)
-//	2. RFC8693AccessTokenTypeFactory          (token-type handlers; any order among themselves;
-//	3. RFC8693RefreshTokenTypeFactory          they're mutually exclusive at issuance because each handler's
-//	4. RFC8693IDTokenTypeFactory               CanHandleTokenEndpointRequest filters by requested_token_type)
+//	2. RFC8693AccessTokenTypeFactory          (token-type handlers; any order among themselves)
+//	3. RFC8693RefreshTokenTypeFactory
+//	4. RFC8693IDTokenTypeFactory
 //	5. RFC8693CustomJWTTypeFactory
 //	   IDJAGIssueFactory                      (optional; ID-JAG token type handler)
 //	6. RFC8693ActorTokenValidationFactory     (may_act validator; LAST)
 //
-// Skipping any of the type-handler factories is supported (e.g. an AS that does not accept JWT subject tokens may
-// omit RFC8693CustomJWTTypeFactory) as long as the relative order of the remaining factories is preserved.
+// Any of the token type factories may be omitted as long as the relative order of the rest is preserved.
 
 // RFC8693TokenExchangeGrantFactory creates the request-validation + act-claim writer for the OAuth 2.0 Token
 // Exchange grant. It MUST be registered FIRST in the RFC 8693 chain so the act claim is set before any token-type

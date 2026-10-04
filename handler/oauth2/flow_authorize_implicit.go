@@ -42,11 +42,6 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 
 	request.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
-	// Disabled because this is already handled at the authorize_request_handler
-	// if !requester.GetClient().GetResponseTypes().Has("token") {
-	// 	 return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The client is not allowed to use response type token"))
-	// }
-
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}

@@ -41,15 +41,10 @@ type PublicKeyScopes struct {
 	Audience []string
 }
 
-// DPoPProofMarker identifies a used DPoP proof for replay detection. It follows the RFC 9449 Section 11.1
-// recommendation to store the 'jti' "in the context of the target URI", taking that context to be the endpoint the
-// proof is bound to: the method as well as the normalized target URI, since RFC 9449 Section 4.3 binds a proof to both
-// and the two together are what identifies an endpoint.
-//
-// rfc9449.DPoPReplayStorage passes the proof key thumbprint and nonce as well, and documents why an implementation may
-// prefer to include them: keying without the thumbprint leaves the 'jti' namespace shared by every client, so one
-// client emitting weak 'jti' values denies service to every other client that happens to pick the same value. A
-// deployment for which that matters should key on those fields too rather than use this store.
+// DPoPProofMarker identifies a used DPoP proof for replay detection by its 'jti', method and normalized target URI,
+// following the RFC 9449 Section 11.1 recommendation to store the 'jti' in the context of the target URI. It is not
+// keyed on the proof key thumbprint or nonce, so the 'jti' namespace is shared by every client; see
+// rfc9449.DPoPReplayStorage.
 type DPoPProofMarker struct {
 	JTI    string
 	Method string
@@ -337,9 +332,7 @@ func (s *MemoryStore) UpdateClient(_ context.Context, id string, client oauth2.C
 		return errorsx.WithStack(oauth2.ErrNotFound.WithHintf("No client with id '%s' was found.", id))
 	}
 
-	// The id argument and the client's own id must agree, otherwise the client stored under this key would answer
-	// GetClient with a client that reports a different id - and every later lookup keyed off that reported id would
-	// miss it, or worse, find a different client.
+	// The id argument and the client's own id must agree.
 	if client.GetID() != id {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The client with id '%s' can not be updated with a client with id '%s'.", id, client.GetID()))
 	}

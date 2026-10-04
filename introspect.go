@@ -23,9 +23,7 @@ type TokenIntrospector interface {
 // the Authorization header (Bearer scheme) or as the 'access_token' form parameter. Returns the empty string if no
 // token can be located.
 func AccessTokenFromRequest(r *http.Request) string {
-	// According to https://datatracker.ietf.org/doc/html/rfc6750 you can pass tokens through:
-	// - Form-Encoded Body Parameter. Recommended, more likely to appear. e.g.: Authorization: Bearer mytoken123
-	// - URI Query Parameter e.g. access_token=mytoken123
+	// RFC 6750: the Authorization header is tried first, then the 'access_token' parameter.
 
 	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)

@@ -154,12 +154,9 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 	}
 
-	// rfc6819 4.4.1.8.  Threat: CSRF Attack against redirect-uri
-	// The "state" parameter should be used to link the authorization
-	// request with the redirect URI used to deliver the access token (Section 5.3.5).
+	// The 'state' parameter must not be guessable.
 	//
-	// https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.8
-	// The "state" parameter should not	be guessable
+	// See: https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
 	if len(request.State) < f.GetMinParameterEntropy(ctx) {
 		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
 	}
@@ -223,14 +220,16 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	}
 
 	if request.Form.Get(consts.FormParameterClientID) == "" {
-		// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
-		// parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
+		// The 'client_id' parameter must be included using the OAuth 2.0 request syntax.
+		//
+		// See: https://www.rfc-editor.org/rfc/rfc9101#section-5
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterClientID).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'client_id' parameter.", request.GetClient().GetID(), parameter))
 	}
 
 	if openid && !isPARRequest && request.Form.Get(consts.FormParameterResponseType) == "" {
-		// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
-		// parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
+		// OpenID Connect requires the 'response_type' parameter be included using the OAuth 2.0 request syntax.
+		//
+		// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
 	}
 
@@ -275,15 +274,9 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
 		}
 
-		// RFC9101 Section 10.4.1 requires that a 'request_uri' fetch not become a denial of service or a probe: the
-		// location is checked against the registered set above, the request carries the caller's context so a slow
-		// origin cannot outlive it, redirects are refused so a registered location cannot hand the fetch to an
-		// unregistered one, and the body is bounded.
-		//
-		// The same section also suggests checking that the response media type is 'application/oauth-authz-req+jwt'.
-		// That is not done: the origin chooses the header, so it stops no attack the other three controls do not,
-		// while 'text/plain' is what a request object is commonly served as and rejecting it would break those
-		// deployments. The content is a JWS verified against the client's registered key regardless.
+		// The 'request_uri' fetch is bounded: the location must be registered, the request carries the caller's
+		// context, redirects are refused, and the body is limited. The response media type is deliberately not
+		// checked as request objects are commonly served as 'text/plain'.
 		//
 		// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
 		hc := HTTPClientWithoutRedirects(f.Config.GetHTTPClient(ctx))
@@ -383,9 +376,9 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			// The subject is not relevant, and the issuer and audience are validated below.
 			continue
 		case consts.FormParameterClientID:
-			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
-			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
-			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
+			// The request syntax 'client_id' must match the Request Object value.
+			//
+			// See: https://www.rfc-editor.org/rfc/rfc9101#section-5
 			rsyntax := request.Form.Get(consts.FormParameterClientID)
 
 			if value, ok = v.(string); !ok {
@@ -396,9 +389,9 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterClientID, value, rsyntax))
 			}
 		case consts.FormParameterResponseType:
-			// So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and
-			// client_id parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by
-			// OAuth 2.0. The values for these parameters MUST match those in the Request Object, if present.
+			// The request syntax 'response_type', if present, must match the Request Object value.
+			//
+			// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
 			rsyntax := request.Form.Get(consts.FormParameterResponseType)
 
 			if value, ok = v.(string); !ok {
@@ -448,21 +441,11 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	// RFC9101 Section 6.3 requires the authorization server "MUST only use the parameters in the Request Object,
-	// even if the same parameter is provided in the query parameter", so the Request Object's scope is authoritative
-	// and the outer query values are discarded rather than merged into it. Unioning them would let any party able to
-	// rewrite the authorization URL - a malicious application, an open redirect, a hostile browser extension - add
-	// scopes to a signed request, bounded only by the client's registered scope set, defeating the integrity
-	// guarantee a signed request object exists to provide.
+	// The Request Object scope is authoritative and the request syntax scope is never merged into it. The sole
+	// exception is 'openid', which is carried over when the request syntax marked the request as OpenID Connect.
 	//
-	// The 'openid' value is the sole exception. OpenID Connect Core 1.0 Section 6.1 requires that "Even if a scope
-	// parameter is present in the Request Object value, a scope parameter MUST always be passed using the OAuth 2.0
-	// request syntax containing the openid scope value to indicate to the underlying OAuth 2.0 logic that this is an
-	// OpenID Connect request", making it a marker for the OAuth 2.0 layer rather than a scope the outer syntax gets
-	// to request. It is therefore carried over when the outer syntax marked the request as OpenID Connect, and
-	// nothing else is.
-	//
-	// See: https://www.rfc-editor.org/rfc/rfc9101#section-6.3
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-6.3 and
+	// https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	if openid && !stringslice.Has(claimScope, consts.ScopeOpenID) {
@@ -488,14 +471,10 @@ func requestObjectSyntaxForm(form url.Values) (syntax url.Values) {
 }
 
 // requestObjectFormValue renders a Request Object claim value as the string the equivalent OAuth 2.0 request syntax
-// parameter would have carried.
+// parameter would have carried. A claim is not necessarily a string: numerical values are JSON numbers, and 'claims'
+// and 'authorization_details' are JSON objects.
 //
-// A claim is not necessarily a string: RFC9101 Section 4 requires that "Numerical values MUST be included as JSON
-// numbers", and OpenID Connect Core 1.0 Section 5.5 defines 'claims' as a JSON object, as RFC9396 Section 2 does
-// 'authorization_details'. Rendering every value with the %s verb turns the numeric 'max_age' of the specification's
-// own example into the literal string '%!s(float64=86400)' and an object into Go map syntax, neither of which any
-// consumer can parse - and because the 'max_age' call sites treat a parse failure as absent, that silently disables
-// the re-authentication the parameter was sent to demand.
+// See: https://www.rfc-editor.org/rfc/rfc9101#section-4
 func requestObjectFormValue(v any) (value string, err error) {
 	switch t := v.(type) {
 	case string:
@@ -505,9 +484,7 @@ func requestObjectFormValue(v any) (value string, err error) {
 	case json.Number:
 		return t.String(), nil
 	case float64:
-		// JSON numbers decode to float64, so this is the path a conformant numeric claim takes. The 'f' format with
-		// precision -1 renders an integral value without a fractional part or an exponent, so 86400 formats as
-		// "86400" rather than "86400.000000" or "8.64e+04".
+		// JSON numbers decode to float64. An integral value must render without a fractional part or an exponent.
 		return strconv.FormatFloat(t, 'f', -1, 64), nil
 	case float32:
 		return strconv.FormatFloat(float64(t), 'f', -1, 32), nil
@@ -647,11 +624,9 @@ func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Req
 }
 
 func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
-	// https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
-	// Extension response types MAY contain a space-delimited (%x20) list of
-	// values, where the order of values does not matter (e.g., response
-	// type "a b" is the same as "b a").  The meaning of such composite
-	// response types is defined by their respective specifications.
+	// The order of the space-delimited response type values is not significant.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-3.1.1
 	responseTypes := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " "))
 	if len(responseTypes) == 0 {
 		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The request is missing the 'response_type' parameter."))

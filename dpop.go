@@ -20,14 +20,10 @@ import (
 // SHA-256 digest occupies when base64url encoded without padding.
 const DPoPJWKThumbprintLength = 43
 
-// IsValidDPoPJWKThumbprint reports whether jkt is a well-formed RFC 9449 Section 10.1 'dpop_jkt' value, which that
-// section defines as the RFC 7638 JWK Thumbprint of the proof-of-possession public key computed with SHA-256, the same
-// value used for 'jkt' in the 'cnf' claim. Only the encoding can be checked, as the thumbprint of a key the client has
-// not yet presented cannot be recomputed.
+// IsValidDPoPJWKThumbprint reports whether jkt is a well-formed 'dpop_jkt' value. Only the encoding can be checked, as
+// the thumbprint of a key the client has not yet presented cannot be recomputed.
 //
-// The client supplies this value directly, so it is validated before being recorded against a grant. An unchecked
-// value is stored verbatim for the lifetime of the authorization code and can be of any length, and while a malformed
-// one only ever fails to match a proof, there is no reason to carry it that far.
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-10.1
 func IsValidDPoPJWKThumbprint(jkt string) bool {
 	if len(jkt) != DPoPJWKThumbprintLength {
 		return false
@@ -59,10 +55,7 @@ func RequestURL(r *http.Request) string {
 		}
 	}
 
-	// A request served by net/http always carries a URL, but this is reached from authorization decisions - the DPoP
-	// 'htu' comparison and the bearer credential audience fallback - where a panic would be a far worse failure mode
-	// than a mismatch. A hand-constructed request with no URL therefore reconstructs to just the scheme and host,
-	// which no legitimately issued audience or proof will match.
+	// A request with no URL reconstructs to just the scheme and host rather than panicking.
 	if r.URL == nil {
 		return scheme + "://" + r.Host
 	}
@@ -156,9 +149,8 @@ type DPoPStrategy interface {
 }
 
 // DPoPResourceStrategy is the resource-server half of the RFC 9449 strategy, which an endpoint accepting an access
-// token as a credential needs and DPoPStrategy - the type GetDPoPStrategy returns - does not declare.
-// *rfc9449.DefaultStrategy implements it; the assertion is made at the point of use rather than by widening
-// DPoPStrategy so a deployment supplying its own strategy is not broken by a method it has no bound tokens to serve.
+// token as a credential needs. It is not part of DPoPStrategy; *rfc9449.DefaultStrategy implements it, and it is
+// asserted at the point of use.
 type DPoPResourceStrategy interface {
 	// ValidateResourceAccess performs the RFC 9449 7.1/7.2 resource-server checks for a DPoP-bound access token. It
 	// verifies the token was presented under the DPoP scheme, that the proof covers this request and this token via
@@ -196,16 +188,9 @@ type DPoPBoundSession interface {
 	// GetDPoPPublicKeyJWK returns the bound public key, or nil when the session is not key bound.
 	GetDPoPPublicKeyJWK() (jwk []byte)
 
-	// SetOIDCKeyBindingGranted records that the 'bound_key' scope was granted, so that the ID Tokens of this grant
-	// are key bound.
-	//
-	// It is recorded where consent has already decided it; the authorization endpoint, and for the device flow the
-	// user authorization endpoint; because the token endpoint's binding phase runs before the authorization code
-	// and device code grants copy their granted scopes onto the request.
-	//
-	// Neither thumbprint answers this. They record that DPoP is in play and that the authentication request asked
-	// to be bound; a grant that requested 'bound_key' and was granted only 'openid' carries both and is not key
-	// bound.
+	// SetOIDCKeyBindingGranted records that the 'bound_key' scope was granted, so that the ID Tokens of this grant are
+	// key bound. It is recorded at the authorization endpoint, and for the device flow the user authorization endpoint,
+	// because the token endpoint's binding phase runs before the granted scopes are copied onto the request.
 	SetOIDCKeyBindingGranted(granted bool)
 
 	// GetOIDCKeyBindingGranted returns whether the 'bound_key' scope was granted for this grant.

@@ -13,10 +13,6 @@ import (
 
 // ClientRegistrationMetadataStrategyConfig is the configuration DefaultClientRegistrationMetadataStrategy consults
 // to decide whether a feature's client metadata may be registered and returned.
-//
-// It restates the two 'enabled' getters rather than embedding oauth2.DPoPConfigProvider and oauth2.MTLSConfigProvider,
-// which together carry ten methods where two are needed. Go interfaces are structural, so any configuration already
-// satisfying those providers satisfies this one without change.
 type ClientRegistrationMetadataStrategyConfig interface {
 	// GetDPoPEnabled returns true if DPoP handling is enabled.
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
@@ -26,15 +22,12 @@ type ClientRegistrationMetadataStrategyConfig interface {
 }
 
 // DefaultClientRegistrationMetadataStrategy is the default oauth2.ClientRegistrationMetadataStrategy. It removes the
-// client metadata belonging to a feature the server has disabled, so such a value is never validated against, never
-// persisted, and never returned to the client describing a capability it does not have.
+// client metadata belonging to a feature the server has disabled.
 //
-// It only ever clears values on the *oauth2.ClientRegistrationMetadata passed to it; nothing here writes to the
-// store. That makes a read non-destructive: a client persisted while a feature was enabled keeps its stored values
-// and advertises them again once the feature is read back after being re-enabled. It does not make a write
-// non-destructive: the registration and configuration-update call sites persist a client built from the filtered
-// metadata, so a client that registers or updates itself while a feature is disabled has that feature's values
-// cleared in storage too, not only in the response, and re-enabling the feature will not restore them.
+// It only clears values on the *oauth2.ClientRegistrationMetadata passed to it and never writes to the store, so a
+// read is non-destructive. The registration and configuration-update call sites persist a client built from the
+// filtered metadata, so a client registered or updated while a feature is disabled loses that feature's values in
+// storage too.
 type DefaultClientRegistrationMetadataStrategy struct {
 	config ClientRegistrationMetadataStrategyConfig
 }
@@ -59,13 +52,9 @@ func (s *DefaultClientRegistrationMetadataStrategy) FilterClientRegistrationMeta
 		metadata.TLSClientAuthSANEmail = ""
 		metadata.TLSClientCertificateBoundAccessTokens = false
 
-		// The authentication method is cleared alongside the subject values it selects between, keeping the result
-		// internally coherent: LocalValidator rejects a subject value registered without 'tls_client_auth', so
-		// clearing only half would fail validation over metadata that was about to be discarded anyway. Clearing
-		// narrows rather than widens at all three endpoints: an emptied TokenEndpointAuthMethod falls back to the
-		// 'client_secret_basic' default per OpenID Connect Dynamic Client Registration 1.0 Section 2, so the client
-		// is issued a secret, and an emptied IntrospectionEndpointAuthMethod or RevocationEndpointAuthMethod
-		// inherits that token endpoint method (see DefaultRegisteredClient.GetIntrospectionEndpointAuthMethod).
+		// The authentication method is cleared alongside the subject values it selects between, as LocalValidator
+		// rejects a subject value registered without 'tls_client_auth'. An emptied TokenEndpointAuthMethod falls back
+		// to 'client_secret_basic', and the introspection and revocation methods inherit the token endpoint method.
 		metadata.TokenEndpointAuthMethod = clearMutualTLSAuthMethod(metadata.TokenEndpointAuthMethod)
 		metadata.IntrospectionEndpointAuthMethod = clearMutualTLSAuthMethod(metadata.IntrospectionEndpointAuthMethod)
 		metadata.RevocationEndpointAuthMethod = clearMutualTLSAuthMethod(metadata.RevocationEndpointAuthMethod)
@@ -88,9 +77,7 @@ func clearMutualTLSAuthMethod(method string) string {
 }
 
 // metadataStrategy returns the configured oauth2.ClientRegistrationMetadataStrategy, falling back to
-// DefaultClientRegistrationMetadataStrategy when none is configured. The fallback is what makes the gating correct
-// out of the box: an integrator who has never heard of this seam still gets metadata for disabled features removed,
-// which is the safe default. Configuring a strategy explicitly replaces it, including with one that filters nothing.
+// DefaultClientRegistrationMetadataStrategy when none is configured.
 func metadataStrategy(ctx context.Context, config Configurator) (strategy oauth2.ClientRegistrationMetadataStrategy) {
 	if strategy = config.GetRFC7591ClientRegistrationMetadataStrategy(ctx); strategy != nil {
 		return strategy

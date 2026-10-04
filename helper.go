@@ -81,16 +81,9 @@ func DeviceAuthorizeStatusToString(status DeviceAuthorizeStatus) string {
 // See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
 const MaxFetchedBodyBytes = 1 << 20
 
-// HTTPClientWithoutRedirects returns a *retryablehttp.Client that behaves identically to client except that it
-// refuses to follow HTTP redirects, returning the first redirect response as-is instead of dereferencing it. A fetch
-// of a client-supplied URI uses it so that a location which passed validation cannot hand the fetch on to one that
-// would not have.
-//
-// This is a fresh value built from client's exported configuration fields rather than a mutation of client itself,
-// which is typically the shared instance HTTPClientProvider.GetHTTPClient returns and whose other consumers must keep
-// following redirects. client's unexported sync.Once guards are deliberately not copied, since copying a sync.Once
-// that may have fired is unsafe; the returned client starts with its own unfired guards, which is safe because every
-// field they guard is set explicitly here.
+// HTTPClientWithoutRedirects returns a copy of client that refuses to follow HTTP redirects, returning the first
+// redirect response as-is. client itself, typically the shared instance, is not mutated: the copy is built from its
+// exported fields, and its unexported sync.Once guards are not copied.
 func HTTPClientWithoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {
 	refuseRedirect := func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse

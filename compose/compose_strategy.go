@@ -16,15 +16,10 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// CommonStrategy does not itself implement rfc7591.ClientRegistrationTokenStrategy, by design. CoreStrategy is
-// declared as the hoauth2.CoreStrategy interface, so embedding it here promotes only the methods that interface
-// declares; the client registration token methods live only on the concrete *hoauth2.HMACCoreStrategy or
-// *hoauth2.JWTProfileCoreStrategy CommonStrategy is ordinarily constructed with (see NewOAuth2HMACStrategy,
-// NewOAuth2JWTStrategy), and are invisible through CommonStrategy regardless of whether it is held by value or by
-// pointer. RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory know this and resolve the
-// underlying CoreStrategy directly - see mustClientRegistrationTokenStrategy - rather than requiring CommonStrategy
-// itself to satisfy the interface. A CoreStrategy that does not implement it fails there, at compose time, with a
-// message naming this field and the methods it lacks.
+// CommonStrategy does not itself implement rfc7591.ClientRegistrationTokenStrategy, as the embedded
+// hoauth2.CoreStrategy interface does not declare its methods. RFC7591ClientRegistrationFactory and
+// RFC7592ClientConfigurationFactory resolve the CoreStrategy via mustClientRegistrationTokenStrategy, which panics at
+// compose time when it does not implement the interface.
 type CommonStrategy struct {
 	hoauth2.CoreStrategy
 	openid.OpenIDConnectTokenStrategy
@@ -75,18 +70,9 @@ func (s CommonStrategy) clientRegistrationTokenStrategy() (strategy rfc7591.Clie
 	)
 }
 
-// mustClientRegistrationTokenStrategy resolves strategy to an rfc7591.ClientRegistrationTokenStrategy, or panics
-// with a message naming what is wrong.
-//
-// It special-cases CommonStrategy, by value and by pointer, because CommonStrategy never satisfies the interface
-// through method promotion alone (see its doc comment) - it resolves CoreStrategy directly instead. Any other
-// strategy type is asserted against the interface directly, exactly as every other compose factory asserts its
-// strategy parameter.
-//
-// RFC7591ClientRegistrationFactory and RFC7592ClientConfigurationFactory call this from inside the Factory Compose
-// invokes synchronously while assembling the Provider, so a misconfigured CoreStrategy fails here - at compose time
-// - rather than as an interface-conversion panic on the first request that reaches the client registration or
-// configuration endpoint.
+// mustClientRegistrationTokenStrategy resolves strategy to an rfc7591.ClientRegistrationTokenStrategy, or panics at
+// compose time. A CommonStrategy, by value or by pointer, is resolved through its CoreStrategy; any other type is
+// asserted against the interface directly.
 func mustClientRegistrationTokenStrategy(strategy any) (resolved rfc7591.ClientRegistrationTokenStrategy) {
 	var (
 		cs  CommonStrategy
@@ -121,11 +107,8 @@ type HMACSHAStrategyConfigurator interface {
 	oauth2.RFC7591ClientRegistrationTokenSecretProvider
 }
 
-// NewOAuth2HMACStrategy builds the CoreStrategy through hoauth2.NewHMACCoreStrategy, not a struct literal, so its
-// client registration token methods sign and verify with their own secret instead of being left unconfigured -
-// which would otherwise make every client registration token mint or validation fail the first time
-// compose.ComposeAllEnabled's RFC 7591 handlers use one, since ComposeAllEnabled builds its strategy through this
-// constructor.
+// NewOAuth2HMACStrategy returns a hoauth2.HMACCoreStrategy built through hoauth2.NewHMACCoreStrategy, so its client
+// registration token methods sign and verify with their own secret.
 func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCoreStrategy {
 	return hoauth2.NewHMACCoreStrategy(config, "")
 }

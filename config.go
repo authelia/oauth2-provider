@@ -495,11 +495,7 @@ type RFC8628DeviceAuthorizeConfigProvider interface {
 }
 
 // RFC7591ClientRegistrationTokenSecretProvider returns the provider for configuring the secret client registration
-// tokens are signed and verified with. It is declared once here, rather than inline wherever a configurator needs
-// it, because it is embedded by more than one interface across packages (RFC7591ClientRegistrationConfigProvider
-// here; HMACCoreStrategyConfigurator in handler/oauth2 and HMACSHAStrategyConfigurator in compose both need it to
-// build a hmac.HMACStrategy for client registration tokens) and three independently-maintained copies of the same
-// two methods and doc comments would drift.
+// tokens are signed and verified with.
 type RFC7591ClientRegistrationTokenSecretProvider interface {
 	// GetRFC7591ClientRegistrationGlobalSecret returns the secret used to sign client registration tokens. It is
 	// deliberately separate from the global secret: a client management token never expires and RFC 7592 provides no
@@ -723,16 +719,10 @@ type IntrospectionEndpointClientAuthStrategyProvider interface {
 // introspection endpoint.
 type IntrospectionEndpointClientAuthDisabledProvider interface {
 	// GetIntrospectionEndpointClientAuthDisabled returns true when the introspection endpoint must not accept client
-	// authentication, leaving an Access Token presented as a bearer credential the only way to authorize a call.
+	// authentication, leaving an Access Token presented as a bearer credential the only way to authorize a call. It is
+	// off by default.
 	//
-	// RFC 7662 Section 2.1 requires the endpoint to "require some form of authorization", naming client
-	// authentication and a bearer token as the two examples, and leaves the choice open. This narrows it to the
-	// second. It is off by default, because turning it on rejects every caller using the first.
-	//
-	// A deployment turns this on to make one property hold: that authorizing a call to this endpoint always means
-	// presenting a credential carrying a grant, which can be scoped, audienced, bound to a key or a certificate, and
-	// revoked on its own. Client credentials carry none of those - a client registered for introspection can call it
-	// for as long as it holds its secret - so while both methods are available the weaker one sets the bar.
+	// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.1
 	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
 }
 
@@ -829,10 +819,6 @@ type MTLSConfigProvider interface {
 
 // ConfirmationConfigProvider is the configuration ApplyConfirmation consults to decide whether a given RFC 7800
 // confirmation method may be asserted in a token or an introspection response.
-//
-// It deliberately restates the two 'enabled' getters rather than embedding DPoPConfigProvider and MTLSConfigProvider,
-// which together carry ten methods where two are needed. Go interfaces are structural, so any configuration already
-// satisfying those providers satisfies this one without change.
 type ConfirmationConfigProvider interface {
 	// GetDPoPEnabled returns true if DPoP handling is enabled.
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
@@ -841,16 +827,9 @@ type ConfirmationConfigProvider interface {
 	GetMTLSEnabled(ctx context.Context) (enabled bool)
 }
 
-// IDTokenConfirmationConfigProvider is the configuration ApplyIDTokenConfirmation consults to decide whether the
-// OpenID Connect Key Binding 1.0 confirmation may be asserted in an ID Token.
-//
-// Both getters are required, for the reason documented on confirmationMethod.enabled: the 'cnf' claim tells a Relying
-// Party that a proof of possession was checked, and the handlers that check one run only while DPoP is enabled. A
-// session outlives a configuration change, so a key recorded while DPoP was enabled survives on it afterwards; without
-// the DPoP getter this claim would still be asserted for a refresh no proof was demanded on.
-//
-// It restates the getters rather than embedding the two providers, as ConfirmationConfigProvider does and for the same
-// reason: Go interfaces are structural, so any configuration already satisfying those providers satisfies this one.
+// IDTokenConfirmationConfigProvider is the configuration ApplyIDTokenConfirmation consults to decide whether the OpenID
+// Connect Key Binding 1.0 confirmation may be asserted in an ID Token. Both getters are required, see
+// confirmationMethod.enabled.
 type IDTokenConfirmationConfigProvider interface {
 	// GetOIDCKeyBindingEnabled returns true if OpenID Connect Key Binding 1.0 handling is enabled.
 	GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool)

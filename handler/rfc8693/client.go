@@ -28,14 +28,10 @@ type Client interface {
 	GetSupportedActorTokenIssuers() (issuers []string)
 
 	// GetTokenExchangePermitted reports whether the subject token's original client authorizes the given requesting
-	// client to perform a token exchange targeting the supplied requestedTokenType. Both inputs are passed so the
-	// policy can encode rules like "client X may mint id_tokens from my tokens but not refresh_tokens".
+	// client to perform a token exchange targeting the supplied requestedTokenType, which is the resolved
+	// 'requested_token_type' (or the configured default when omitted) and is non-nil at the call site.
 	//
-	// requestedTokenType is the resolved oauth2.RFC8693TokenType corresponding to the request's
-	// 'requested_token_type' parameter (or the configured default when omitted). It is non-nil at the call site.
-	//
-	// See RFC 8693 §5: "Authorization servers SHOULD restrict the use of token exchange to only those clients
-	// explicitly authorized to perform the exchange operation."
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
 	GetTokenExchangePermitted(client oauth2.Client, requestedTokenType oauth2.RFC8693TokenType) (allowed bool)
 
 	// GetAllowActorTokenWithoutMayAct reports whether the client may perform delegation with an actor_token on

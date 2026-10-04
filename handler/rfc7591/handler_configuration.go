@@ -15,9 +15,8 @@ import (
 )
 
 // ClientConfigurationHandler implements oauth2.RFC7592ClientConfigurationEndpointHandler, RFC 7592's client
-// configuration endpoint. One handler serves the whole endpoint, dispatching on the requester's HTTP method between
-// reading (GET), replacing (PUT), and deleting (DELETE) a client - the same shape ClientRegistrationHandler's
-// sibling handler uses for the client registration endpoint.
+// configuration endpoint. It dispatches on the requester's HTTP method between reading (GET), replacing (PUT), and
+// deleting (DELETE) a client.
 type ClientConfigurationHandler struct {
 	// Store persists the registered client and the registration access token's session.
 	Store Storage
@@ -30,11 +29,9 @@ type ClientConfigurationHandler struct {
 	Config Configurator
 }
 
-// HandleRFC7592ClientConfigurationEndpointRequest implements oauth2.RFC7592ClientConfigurationEndpointHandler.
-//
-// It loads the client named by requester.GetClientID(), returning oauth2.ErrNotFound when no such client exists and
-// oauth2.ErrServerError when the lookup fails for any other reason, then dispatches on requester.GetMethod() to read, update, or delete. A method other than GET, PUT, or DELETE
-// yields oauth2.ErrInvalidRequest naming the method, which the RFC 7592 response writer (Task 15) maps to 405.
+// HandleRFC7592ClientConfigurationEndpointRequest implements oauth2.RFC7592ClientConfigurationEndpointHandler. It
+// returns oauth2.ErrNotFound when the client does not exist and oauth2.ErrInvalidRequest for a method other than GET,
+// PUT, or DELETE.
 func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointRequest(ctx context.Context, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	id := requester.GetClientID()
 
@@ -113,12 +110,9 @@ func setRegistrationTimes(client oauth2.Client, responder oauth2.ClientConfigura
 	}
 }
 
-// update implements the PUT case, RFC 7592 Section 2.2's full replacement semantics: 'client_id' and 'client_secret'
-// arrive as unregistered metadata parameters (see PatchClient's doc comment), are validated and stripped from Extra
-// so they are never persisted as unregistered client metadata, the remaining metadata is validated and applied as a
-// complete replacement, and finally a replacement registration access token is minted before the old one's session
-// is deleted - in that order, so a failure minting the replacement leaves the client still holding a working token
-// rather than locked out of its own registration.
+// update implements the PUT case, RFC 7592 Section 2.2's full replacement semantics. The replacement registration
+// access token is minted before the old one's session is deleted, so a failed mint leaves the client holding a working
+// token.
 func (h *ClientConfigurationHandler) update(ctx context.Context, id string, client oauth2.Client, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {
@@ -127,10 +121,8 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	metadata := requester.GetMetadata()
 
-	// ClientConfigurationRequester documents GetMetadata as nil for GET and DELETE, so a PUT arriving with none is a
-	// shape the interface itself makes reachable: reject it before the metadata is filtered, checked, and validated
-	// rather than dereferencing it. RFC 7592 Section 2.2 replacement semantics also make an empty PUT the wrong
-	// thing to treat as "nothing to change" - it would replace the client's entire metadata with nothing.
+	// A PUT must carry metadata; GetMetadata is nil for GET and DELETE.
+	// See: https://www.rfc-editor.org/rfc/rfc7592#section-2.2
 	if metadata == nil {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
 	}
@@ -183,11 +175,8 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	grantableAudience := oauth2.Arguments(nil)
 	grantableResource := oauth2.Arguments(nil)
 
-	// The authenticated requester came from the configured oauth2.ClientRegistrationEndpointAuthStrategy, whose sole
-	// contract is authenticating client registration tokens - this package's own DefaultEndpointAuthStrategy resolves
-	// it from the client registration token store, a storage namespace separate from ordinary access tokens, so a
-	// requester reaching this point through it always carries a genuine client registration token's own grant. A
-	// deployment supplying its own implementation of that interface is expected to honour the same contract.
+	// The authenticated requester carries the client registration token's own grant; a custom
+	// oauth2.ClientRegistrationEndpointAuthStrategy must honour the same contract.
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
 		grantable = authenticated.GetGrantedScopes()
 		grantableAudience = authenticated.GetGrantedAudience()
@@ -206,11 +195,8 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	// The replacement token above is minted before the old session is deleted here: if minting had failed, the
-	// client would still hold a working token (returned above). Deleting first and having the mint then fail would
-	// instead leave the client permanently locked out of its own registration. If this delete itself fails, the
-	// client already holds the new, working token from the mint above, so that is preferred over failing the whole
-	// request; the stale old session is otherwise harmless since it authenticates a client that continues to exist.
+	// The old session is deleted only after the replacement token is minted. A failed delete does not fail the request,
+	// as the client already holds the new token.
 	if oldSignature := requester.GetSignature(); oldSignature != "" {
 		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, oldSignature)
 	}
@@ -242,11 +228,9 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	return nil
 }
 
-// checkClientIDAndSecret validates the 'client_id' and 'client_secret' pseudo-metadata parameters RFC 7592
-// Section 2.2 permits in a PUT body. Neither is a registered ClientRegistrationMetadata field, so both arrive in
-// metadata.Extra. A present 'client_id' must match the target id; a present 'client_secret' must match the client's
-// current secret. Both keys are deleted from Extra once checked - whether or not they were present - so neither is
-// ever persisted as unregistered client metadata.
+// checkClientIDAndSecret validates the 'client_id' and 'client_secret' parameters RFC 7592 Section 2.2 permits in a PUT
+// body, which arrive in metadata.Extra. A present 'client_id' must match the target id and a present 'client_secret'
+// must match the client's current secret. Both keys are deleted from Extra so neither is persisted.
 func (h *ClientConfigurationHandler) checkClientIDAndSecret(ctx context.Context, id string, client oauth2.Client, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if metadata == nil || len(metadata.Extra) == 0 {
 		return nil
@@ -285,11 +269,8 @@ func (h *ClientConfigurationHandler) checkClientIDAndSecret(ctx context.Context,
 	return nil
 }
 
-// delete implements the DELETE case: it removes the client and its registration session and responds 204 with an
-// empty body. Deleting the session is best-effort: if it fails after the client itself was successfully deleted,
-// the client is already gone, so any subsequent request bearing the stale token fails at the client lookup anyway,
-// and leaving the request otherwise successful is preferable to reporting failure for cleanup of a resource whose
-// primary deletion already succeeded.
+// delete implements the DELETE case: it removes the client and its registration session and responds 204 with an empty
+// body. Deleting the session is best-effort, as the client is already gone.
 func (h *ClientConfigurationHandler) delete(ctx context.Context, id string, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	if err = h.Store.DeleteClient(ctx, id); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

@@ -14,7 +14,7 @@ import (
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
 type IssueConfig interface {
 	oauth2.RFC8693ConfigProvider
-	oauth2.AccessTokenIssuerProvider
+	oauth2.AuthorizationServerIssuerIdentificationProvider
 	oauth2.IDJAGConfigProvider
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
 }

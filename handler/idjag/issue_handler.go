@@ -6,6 +6,7 @@ package idjag
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"slices"
@@ -40,6 +41,10 @@ import (
 // The 'cnf' claim carries the thumbprint bound to the session, which equals the validated DPoP proof key only when
 // rfc9449.Handler is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token.
 //
+// The relationship may require an Authentication Context Class Reference and a maximum authentication age. A grant
+// whose 'acr' and 'auth_time' claims do not satisfy them is refused with insufficient_user_authentication, and the
+// error response carries the requirements as 'acr_values' and 'max_age' as RFC 9470 defines them (Section 9.2).
+//
 // The 'iss' claim is the RFC 8414 issuer identifier of the authorization server, which MUST be configured (Section
 // 3.1).
 //
@@ -51,7 +56,9 @@ import (
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-5
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-6
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.1
+// See: https://datatracker.ietf.org/doc/html/rfc9470#section-3
 type IssueHandler struct {
 	Config   IssueConfig
 	Strategy jwt.Strategy
@@ -142,6 +149,10 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	}
 
 	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
+
+	if err = requireAuthentication(relationship, claims, now); err != nil {
+		return err
+	}
 
 	token, _, err := h.Strategy.Encode(ctx, claims,
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: consts.JSONWebTokenTypeIDJAG}}),
@@ -245,6 +256,51 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 	}
 
 	return claims
+}
+
+func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.MapClaims, now time.Time) (err error) {
+	acr, _ := claims[consts.ClaimAuthenticationContextClassReference].(string)
+
+	satisfied := len(relationship.ACRValues) == 0 || slices.Contains(relationship.ACRValues, acr)
+
+	if relationship.MaxAge > 0 {
+		authTime, ok := authenticationTime(claims[consts.ClaimAuthenticationTime])
+
+		satisfied = satisfied && ok && now.Sub(authTime) <= relationship.MaxAge
+	}
+
+	if satisfied {
+		return nil
+	}
+
+	rfc := oauth2.ErrInsufficientUserAuthentication.WithHintf("The authentication of the subject does not meet the requirements for the audience '%s'.", relationship.Issuer)
+
+	if len(relationship.ACRValues) != 0 {
+		rfc = rfc.WithExtra(consts.FormParameterAuthenticationContextClassReferenceValues, strings.Join(relationship.ACRValues, " "))
+	}
+
+	if relationship.MaxAge > 0 {
+		rfc = rfc.WithExtra(consts.FormParameterMaximumAge, int64(relationship.MaxAge/time.Second))
+	}
+
+	return errorsx.WithStack(rfc)
+}
+
+func authenticationTime(value any) (authTime time.Time, ok bool) {
+	switch v := value.(type) {
+	case int64:
+		return time.Unix(v, 0), true
+	case int:
+		return time.Unix(int64(v), 0), true
+	case float64:
+		return time.Unix(int64(v), 0), true
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return time.Unix(i, 0), true
+		}
+	}
+
+	return authTime, false
 }
 
 func authenticationSources(request oauth2.AccessRequester) (sources []*jwt.IDTokenClaims) {

@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"strings"
+	"time"
 
 	"authelia.com/provider/jose"
 
@@ -35,6 +36,14 @@ type IDJAGRelationship struct {
 
 	// SigningAlg is the JWS algorithm used to sign the grant. RS256 when empty.
 	SigningAlg string
+
+	// ACRValues is the set of Authentication Context Class References of which the 'acr' claim of the grant must be
+	// one. Not required when empty.
+	ACRValues []string
+
+	// MaxAge is the longest time since the End-User authenticated, measured from the 'auth_time' claim of the grant.
+	// Not required when zero.
+	MaxAge time.Duration
 }
 
 // IDJAGTrustedIssuer is the Resource Authorization Server's trust configuration for an issuer of Identity Assertion JWT

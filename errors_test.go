@@ -123,6 +123,40 @@ func TestRFC6749ErrorWithLegacyFormat(t *testing.T) {
 	}
 }
 
+func TestRFC6749ErrorWithExtra(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      *RFC6749Error
+		expected string
+	}{
+		{
+			name:     "ShouldEncodeExtraMembers",
+			err:      ErrInsufficientUserAuthentication.WithExtra("max_age", int64(5)).WithExtra("acr_values", "gold silver"),
+			expected: `{"error":"insufficient_user_authentication","error_description":"The authentication of the End-User does not meet the requirements of the request.","max_age":5,"acr_values":"gold silver"}`,
+		},
+		{
+			name:     "ShouldEncodeExtraMembersInTheLegacyFormat",
+			err:      ErrInsufficientUserAuthentication.WithExtra("max_age", int64(5)).WithLegacyFormat(true),
+			expected: `{"error":"insufficient_user_authentication","error_description":"The authentication of the End-User does not meet the requirements of the request.","status_code":400,"max_age":5}`,
+		},
+		{
+			name:     "ShouldNotReplaceADefinedMember",
+			err:      ErrInsufficientUserAuthentication.WithExtra("error", "invalid_request"),
+			expected: `{"error":"insufficient_user_authentication","error_description":"The authentication of the End-User does not meet the requirements of the request."}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := json.Marshal(tc.err)
+
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.expected, string(actual))
+			assert.Nil(t, ErrInsufficientUserAuthentication.extra)
+		})
+	}
+}
+
 func TestRFC6749ErrorWithTrace(t *testing.T) {
 	testCases := []struct {
 		name      string

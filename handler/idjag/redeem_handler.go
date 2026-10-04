@@ -336,7 +336,9 @@ func (h *RedeemHandler) verify(ctx context.Context, token *josejwt.JSONWebToken,
 				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 			}
 
-			if err = verifyWithKeys(token, jwks, header, claims, raw); !errors.Is(err, errNoCandidateKey) {
+			// A grant without a 'kid' header matches every cached key, so only a failure of a key the grant names is
+			// final.
+			if err = verifyWithKeys(token, jwks, header, claims, raw); err == nil || (header.KeyID != "" && !errors.Is(err, errNoCandidateKey)) {
 				break
 			}
 		}

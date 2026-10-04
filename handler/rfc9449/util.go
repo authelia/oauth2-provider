@@ -50,7 +50,7 @@ func normalizeHTU(raw string) (string, error) {
 	host := strings.ToLower(u.Host)
 
 	// RFC 3986 6.2.3: an empty port and the scheme's default port are equivalent to no port at all.
-	if (u.Scheme == consts.SchemeHTTPS && strings.HasSuffix(host, ":443")) || (u.Scheme == consts.SchemeHTTP && strings.HasSuffix(host, ":80")) {
+	if strings.HasSuffix(host, ":") || (u.Scheme == consts.SchemeHTTPS && strings.HasSuffix(host, ":443")) || (u.Scheme == consts.SchemeHTTP && strings.HasSuffix(host, ":80")) {
 		host = host[:strings.LastIndex(host, ":")]
 	}
 

@@ -219,6 +219,10 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	header = session.GetJWTHeader()
 
+	original := claims
+
+	now := time.Now().UTC()
+
 	claims = claims.
 		Sanitize().
 		With(
@@ -227,13 +231,20 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 			oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource()),
 		).
 		WithDefaults(
-			time.Now().UTC(),
-			time.Now().UTC(),
+			now,
+			now,
 			s.Config.GetAccessTokenIssuer(ctx),
 		).
 		WithScopeField(
 			s.Config.GetJWTScopeField(ctx),
 		)
+
+	// The introspection response reports the 'nbf' of the session, so it is kept equal to the one in the token.
+	if generated, ok := claims.(jwt.NotBeforeJWTClaimsContainer); ok {
+		if stored, ok := original.(jwt.NotBeforeJWTClaimsContainer); ok {
+			stored.SetNotBefore(generated.GetNotBefore())
+		}
+	}
 
 	mapClaims := claims.ToMapClaims()
 

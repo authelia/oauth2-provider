@@ -126,7 +126,7 @@ func TestAccessToken(t *testing.T) {
 				sessionClaims := tc.r.GetSession().(*JWTSession).JWTClaims
 
 				assert.Equal(t, sessionClaims.IssuedAt.Unix(), claims[consts.ClaimIssuedAt])
-				assert.Equal(t, sessionClaims.NotBefore.Unix(), claims[consts.ClaimNotBefore])
+				assert.EqualValues(t, payload[consts.ClaimNotBefore], claims[consts.ClaimNotBefore])
 
 				assert.WithinRange(t, anyFloat64ToTime(payload[consts.ClaimIssuedAt]), before, after)
 				assert.WithinRange(t, anyFloat64ToTime(payload[consts.ClaimNotBefore]), before, after)
@@ -391,7 +391,7 @@ func TestGenerateJWTIncludesClientID(t *testing.T) {
 	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
 }
 
-func TestGenerateJWTDoesNotMutateSessionClaims(t *testing.T) {
+func TestGenerateJWTWritesOnlyNotBeforeToSessionClaims(t *testing.T) {
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
 		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
@@ -411,11 +411,18 @@ func TestGenerateJWTDoesNotMutateSessionClaims(t *testing.T) {
 
 	claims := r.Session.(*JWTSession).JWTClaims
 	claims.Issuer = ""
+	claims.NotBefore = time.Now().UTC().Add(-time.Hour)
 
 	expected := claims.Clone()
 
+	before := time.Now().Truncate(time.Second)
+
 	_, _, err := strategy.GenerateAccessToken(t.Context(), r)
 	require.NoError(t, err)
+
+	assert.WithinRange(t, claims.NotBefore, before, time.Now())
+
+	expected.NotBefore = claims.NotBefore
 
 	assert.Equal(t, expected, claims)
 
@@ -435,6 +442,7 @@ func TestGenerateJWTDoesNotMutateSessionClaims(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawPayload, &payload))
 
 	assert.Equal(t, "https://new.example.com", payload[consts.ClaimIssuer])
+	assert.EqualValues(t, payload[consts.ClaimNotBefore], r.Session.(*JWTSession).GetExtraClaims()[consts.ClaimNotBefore])
 }
 
 func TestGenerateJWTUsesTheClientSigningKeyID(t *testing.T) {

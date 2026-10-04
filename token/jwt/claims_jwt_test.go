@@ -201,6 +201,18 @@ func TestJWTClaims_WithDefaults(t *testing.T) {
 	}
 }
 
+func TestJWTClaims_NotBefore(t *testing.T) {
+	var claims NotBeforeJWTClaimsContainer = &JWTClaims{}
+
+	assert.True(t, claims.GetNotBefore().IsZero())
+
+	nbf := time.Now().UTC()
+
+	claims.SetNotBefore(nbf)
+
+	assert.Equal(t, nbf, claims.GetNotBefore())
+}
+
 func TestJWTClaims_Add(t *testing.T) {
 	t.Run("ShouldInitializeExtraWhenNil", func(t *testing.T) {
 		c := &JWTClaims{}

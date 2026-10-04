@@ -51,6 +51,17 @@ type JWTClaimsContainer interface {
 	ToMapClaims() MapClaims
 }
 
+// NotBeforeJWTClaimsContainer is a JWTClaimsContainer which exposes its NotBefore value.
+type NotBeforeJWTClaimsContainer interface {
+	// GetNotBefore returns the NotBefore value.
+	GetNotBefore() time.Time
+
+	// SetNotBefore sets the NotBefore value.
+	SetNotBefore(nbf time.Time)
+
+	JWTClaimsContainer
+}
+
 // JWTClaims represent a token's claims.
 type JWTClaims struct {
 	Subject    string
@@ -120,6 +131,16 @@ func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsCon
 	}
 
 	return cloned
+}
+
+// GetNotBefore returns the NotBefore value.
+func (c *JWTClaims) GetNotBefore() time.Time {
+	return c.NotBefore
+}
+
+// SetNotBefore sets the NotBefore value.
+func (c *JWTClaims) SetNotBefore(nbf time.Time) {
+	c.NotBefore = nbf
 }
 
 // WithScopeField sets how the scope is represented in the JWT and returns the claims.

@@ -397,3 +397,203 @@ type nilResourceStrategyProvider struct{}
 func (nilResourceStrategyProvider) GetResourceStrategy(_ context.Context) ResourceStrategy {
 	return nil
 }
+
+func TestWildcardResourceStrategy(t *testing.T) {
+	const debugPrefix = "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. "
+
+	testCases := []struct {
+		name     string
+		haystack []string
+		needle   []string
+		expected string
+	}{
+		{
+			name:     "ShouldPassEmptyNeedle",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{},
+		},
+		{
+			name:     "ShouldFailEmptyHaystack",
+			haystack: []string{},
+			needle:   []string{"https://auth.example.com/api"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldPassExactMatch",
+			haystack: []string{"https://auth.example.com/api"},
+			needle:   []string{"https://auth.example.com/api"},
+		},
+		{
+			name:     "ShouldFailSubPathOfExactEntry",
+			haystack: []string{"https://auth.example.com/api"},
+			needle:   []string{"https://auth.example.com/api/v1"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/v1' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldPassRootWildcard",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{"https://auth.example.com/api", "https://auth.example.com/", "https://auth.example.com/a/b?c=d"},
+		},
+		{
+			name:     "ShouldPassNestedWildcard",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/v1"},
+		},
+		{
+			name:     "ShouldFailNestedWildcardOtherPath",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/other"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/other' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailNestedWildcardWithoutTrailingSlash",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWhenOneNeedleUnmatched",
+			haystack: []string{"https://auth.example.com/api/*", "https://other.example.com/"},
+			needle:   []string{"https://auth.example.com/api/v1", "https://other.example.com/x"},
+			expected: debugPrefix + "Requested resource 'https://other.example.com/x' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardInHost",
+			haystack: []string{"https://auth.*"},
+			needle:   []string{"https://auth.evil.com/"},
+			expected: debugPrefix + "Requested resource 'https://auth.evil.com/' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardDirectlyAfterHost",
+			haystack: []string{"https://auth.example.com*"},
+			needle:   []string{"https://auth.example.com.evil.com/"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com.evil.com/' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardNotFollowingSlash",
+			haystack: []string{"https://auth.example.com/api*"},
+			needle:   []string{"https://auth.example.com/api2"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api2' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardWithoutHost",
+			haystack: []string{"https:///*", "/*", "*", "urn:example:/*"},
+			needle:   []string{"https:///api"},
+			expected: debugPrefix + "Requested resource 'https:///api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardInQuery",
+			haystack: []string{"https://auth.example.com/api?x=/*"},
+			needle:   []string{"https://auth.example.com/api?x=/y"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api?x=/y' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailMultipleWildcards",
+			haystack: []string{"https://auth.example.com/*/api/*"},
+			needle:   []string{"https://auth.example.com/*/api/v1"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/*/api/v1' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldPassInvalidWildcardAsLiteral",
+			haystack: []string{"https://auth.example.com/api*"},
+			needle:   []string{"https://auth.example.com/api*"},
+		},
+		{
+			name:     "ShouldFailWildcardNeedleWithDotSegment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/../admin"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/../admin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardNeedleWithEncodedDotSegment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/%2e%2e/admin"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/%2e%2e/admin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardNeedleWithEncodedSlash",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/..%2fadmin"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/..%2fadmin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardNeedleWithFragment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/v1#frag"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/v1#frag' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardNeedleUnparseable",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/\x7f"},
+			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/\x7f' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWildcardDifferentScheme",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{"http://auth.example.com/api"},
+			expected: debugPrefix + "Requested resource 'http://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := WildcardResourceStrategy(tc.haystack, tc.needle)
+
+			if tc.expected != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(actual))
+		})
+	}
+}
+
+func TestDefaultClientGetResource(t *testing.T) {
+	client := &DefaultClient{Audience: []string{"api"}, Resource: []string{"https://auth.example.com/*"}}
+
+	var c Client = client
+
+	assert.Equal(t, Arguments{"https://auth.example.com/*"}, c.GetResource())
+}
+
+func TestValidateAudienceMatchesResourceAgainstClientResource(t *testing.T) {
+	testCases := []struct {
+		name     string
+		client   *DefaultClient
+		expected string
+	}{
+		{
+			name:   "ShouldPassResourceRegisteredAsResource",
+			client: &DefaultClient{Resource: []string{"https://auth.example.com/api"}},
+		},
+		{
+			name:     "ShouldFailResourceRegisteredOnlyAsAudience",
+			client:   &DefaultClient{Audience: []string{"https://auth.example.com/api"}},
+			expected: "invalid_target",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: &Config{}}
+
+			request := NewRequest()
+			request.Client = tc.client
+			request.Form = url.Values{consts.FormParameterResource: {"https://auth.example.com/api"}}
+
+			err := provider.validateAudience(t.Context(), nil, request)
+
+			if tc.expected != "" {
+				assert.EqualError(t, err, tc.expected)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, Arguments{"https://auth.example.com/api"}, request.GetRequestedResource())
+		})
+	}
+}

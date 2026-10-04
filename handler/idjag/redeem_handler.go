@@ -560,7 +560,7 @@ func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.Acces
 
 	// A resource the client is not permitted is dropped, as a scope is.
 	for _, resource := range resources {
-		if resourceStrategy(client.GetAudience(), []string{resource}) == nil {
+		if resourceStrategy(client.GetResource(), []string{resource}) == nil {
 			request.GrantResource(resource)
 		}
 	}

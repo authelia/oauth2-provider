@@ -99,7 +99,7 @@ func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request 
 			return err
 		}
 
-		if err := GetResourceStrategy(ctx, f.Config, request.GetClient())(request.GetClient().GetAudience(), resource); err != nil {
+		if err := GetResourceStrategy(ctx, f.Config, request.GetClient())(request.GetClient().GetResource(), resource); err != nil {
 			return err
 		}
 	}

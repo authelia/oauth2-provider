@@ -159,6 +159,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	if err = CheckGrantableResource(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+		return err
+	}
+
 	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
 		return err
 	}
@@ -177,6 +181,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	grantable := oauth2.Arguments(nil)
 	grantableAudience := oauth2.Arguments(nil)
+	grantableResource := oauth2.Arguments(nil)
 
 	// The authenticated requester came from the configured oauth2.ClientRegistrationEndpointAuthStrategy, whose sole
 	// contract is authenticating client registration tokens - this package's own DefaultEndpointAuthStrategy resolves
@@ -186,6 +191,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
 		grantable = authenticated.GetGrantedScopes()
 		grantableAudience = authenticated.GetGrantedAudience()
+		grantableResource = authenticated.GetGrantedResource()
 	}
 
 	// The registration scope is never carried forward onto the rotated management token, even if the token
@@ -194,7 +200,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	var token string
 
-	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable, grantableAudience); err != nil {
+	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable, grantableAudience, grantableResource); err != nil {
 		// The replacement client metadata is already persisted, but no replacement token was minted. The client's
 		// existing management token (not yet deleted, see below) still works, so nothing is lost.
 		return err

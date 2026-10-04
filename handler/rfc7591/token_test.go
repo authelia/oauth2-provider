@@ -27,7 +27,7 @@ func TestNewClientManagementToken(t *testing.T) {
 
 	managed := &oauth2.DefaultClient{ID: "managed-one"}
 
-	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, managed, oauth2.Arguments{"openid"}, oauth2.Arguments{"https://api.example.com"})
+	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, managed, oauth2.Arguments{"openid"}, oauth2.Arguments{"https://api.example.com"}, nil)
 	require.NoError(t, err)
 
 	requester, err := store.GetClientRegistrationTokenSession(ctx, tokens.ClientRegistrationTokenSignature(ctx, tokenString), &oauth2.DefaultSession{})
@@ -52,7 +52,7 @@ func TestNewClientManagementTokenNeverExpires(t *testing.T) {
 	config.AccessTokenLifespan = time.Nanosecond
 	auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
 
-	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "forever"}, oauth2.Arguments{"openid"}, nil)
+	tokenString, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "forever"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	time.Sleep(time.Millisecond)
@@ -111,7 +111,7 @@ func TestNewClientManagementTokenNeverExpiresUnderJWTProfile(t *testing.T) {
 
 	auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
-	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "forever-jwt"}, oauth2.Arguments{"openid"}, nil)
+	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "forever-jwt"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
@@ -151,7 +151,7 @@ func TestNewClientManagementTokenUnderJWTProfile(t *testing.T) {
 
 	managed := &oauth2.DefaultClient{ID: "managed-jwt"}
 
-	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, managed, oauth2.Arguments{"openid"}, nil)
+	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, managed, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
@@ -170,7 +170,7 @@ func TestRegistrationTokenIsNotIntrospectedAsAnAccessToken(t *testing.T) {
 
 	validator := &hoauth2.CoreValidator{CoreStrategy: tokens, CoreStorage: store, Config: config}
 
-	registration, err := NewClientManagementToken(ctx, tokens, store, config, client, oauth2.Arguments{"openid"}, nil)
+	registration, err := NewClientManagementToken(ctx, tokens, store, config, client, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	_, err = validator.IntrospectToken(ctx, registration, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
@@ -202,7 +202,7 @@ func TestManagementTokenIgnoresClientLifespanOverride(t *testing.T) {
 
 	client := &shortLifespanClient{DefaultClient: &oauth2.DefaultClient{ID: "client-a"}}
 
-	token, err := NewClientManagementToken(ctx, strategy, store, config, client, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(ctx, strategy, store, config, client, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	requester, err := store.GetClientRegistrationTokenSession(ctx, strategy.ClientRegistrationTokenSignature(ctx, token), &oauth2.DefaultSession{})

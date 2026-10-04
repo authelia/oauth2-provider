@@ -126,6 +126,20 @@ func (mr *MockClientMockRecorder) GetRedirectURIs() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRedirectURIs", reflect.TypeOf((*MockClient)(nil).GetRedirectURIs))
 }
 
+// GetResource mocks base method.
+func (m *MockClient) GetResource() oauth2.Arguments {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResource")
+	ret0, _ := ret[0].(oauth2.Arguments)
+	return ret0
+}
+
+// GetResource indicates an expected call of GetResource.
+func (mr *MockClientMockRecorder) GetResource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResource", reflect.TypeOf((*MockClient)(nil).GetResource))
+}
+
 // GetResponseTypes mocks base method.
 func (m *MockClient) GetResponseTypes() oauth2.Arguments {
 	m.ctrl.T.Helper()

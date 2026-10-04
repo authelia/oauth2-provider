@@ -3,6 +3,7 @@ package oauth2
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -10,7 +11,7 @@ import (
 )
 
 // ResourceStrategy matches requested RFC 8707 resource indicators against the client's
-// allowed audience list. Defaults to DefaultAudienceStrategy, which requires an exact match.
+// allowed resource list. Defaults to DefaultAudienceStrategy, which requires an exact match.
 type ResourceStrategy func(haystack, needle []string) (err error)
 
 // GetResourceStrategy resolves the ResourceStrategy to use for a request. If the client implements
@@ -35,7 +36,7 @@ func GetResourceStrategy(ctx context.Context, config ResourceStrategyProvider, c
 	return strategy
 }
 
-// DefaultResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed audience list,
+// DefaultResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list,
 // accepting a requested resource at or below a registered one as IsMatchingResourceIndicator describes. It is not the
 // default; it applies only when configured as the ResourceStrategy.
 func DefaultResourceStrategy(haystack, needle []string) (err error) {
@@ -69,6 +70,66 @@ func DefaultResourceStrategy(haystack, needle []string) (err error) {
 	}
 
 	return nil
+}
+
+// WildcardResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list.
+// A requested resource must equal an allowed value exactly, or begin with the prefix of an allowed value which ends
+// with '/*'. The prefix must be an absolute URI with a host and no query, so the wildcard only ever spans a path, and
+// a requested resource carrying a fragment, a dot segment or an encoded slash never matches a wildcard. An allowed
+// value with a wildcard anywhere else is compared exactly. It applies only when configured as the ResourceStrategy.
+func WildcardResourceStrategy(haystack, needle []string) (err error) {
+	for _, n := range needle {
+		if !isMatchingWildcardResource(haystack, n) {
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested resource '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
+		}
+	}
+
+	return nil
+}
+
+func isMatchingWildcardResource(haystack []string, needle string) bool {
+	if slices.Contains(haystack, needle) {
+		return true
+	}
+
+	for _, h := range haystack {
+		prefix, ok := getWildcardResourcePrefix(h)
+		if !ok || !strings.HasPrefix(needle, prefix) {
+			continue
+		}
+
+		uri, err := url.Parse(needle)
+		if err != nil || strings.Contains(needle, "#") || hasDotOrEncodedSlashSegment(uri.EscapedPath()) {
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// getWildcardResourcePrefix returns the prefix an allowed resource ending with '/*' matches, and false if the value
+// is not a usable wildcard.
+func getWildcardResourcePrefix(resource string) (prefix string, ok bool) {
+	if prefix, ok = strings.CutSuffix(resource, "*"); !ok || !strings.HasSuffix(prefix, "/") {
+		return "", false
+	}
+
+	if strings.ContainsAny(prefix, "*?#") {
+		return "", false
+	}
+
+	uri, err := url.Parse(prefix)
+	if err != nil || uri.Scheme == "" || uri.Host == "" || uri.Opaque != "" || uri.User != nil {
+		return "", false
+	}
+
+	if !strings.HasPrefix(uri.Path, "/") || hasDotOrEncodedSlashSegment(uri.EscapedPath()) {
+		return "", false
+	}
+
+	return prefix, true
 }
 
 // IsMatchingResourceIndicator returns true if needleURL is haystackURL or a path below it. The scheme, host, opaque part

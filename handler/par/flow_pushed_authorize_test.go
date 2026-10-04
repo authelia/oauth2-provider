@@ -205,6 +205,26 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
+func TestPushedAuthorizeHandlerRejectsResourceRegisteredOnlyAsAudience(t *testing.T) {
+	const resource = "https://auth.example.com/api"
+
+	request := oauth2.NewAuthorizeRequest()
+	request.Client = &oauth2.DefaultClient{
+		ResponseTypes: oauth2.Arguments{"code"},
+		RedirectURIs:  []string{"https://app.example.com/cb"},
+		Audience:      []string{resource},
+	}
+	request.ResponseTypes = oauth2.Arguments{"code"}
+	request.RedirectURI = parseURL("https://app.example.com/cb")
+	request.RequestedResource = oauth2.Arguments{resource}
+
+	handler := PushedAuthorizeHandler{Storage: storage.NewMemoryStore(), Config: &oauth2.Config{}}
+
+	err := handler.HandlePushedAuthorizeEndpointRequest(context.Background(), request, &oauth2.PushedAuthorizeResponse{})
+
+	assert.ErrorIs(t, err, oauth2.ErrInvalidTarget)
+}
+
 func parseURL(uu string) *url.URL {
 	u, _ := url.Parse(uu)
 	return u

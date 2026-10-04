@@ -184,7 +184,7 @@ func TestIDJAG(t *testing.T) {
 					{name: "ShouldRejectAnAudienceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) {
 						client.Audience = []string{env.rs.URL + idjagResourcePath}
 					}, err: oauth2.ErrInvalidTarget.ErrorField},
-					{name: "ShouldRejectAResourceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) { client.Audience = []string{env.rs.URL} }, err: oauth2.ErrInvalidTarget.ErrorField},
+					{name: "ShouldRejectAResourceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) { client.Resource = nil }, err: oauth2.ErrInvalidTarget.ErrorField},
 					// Section 4.3.3: the relationship policy still narrows the granted scopes.
 					{name: "ShouldNarrowByTheRelationship", grantedScopes: []string{idjagScope, idjagOtherScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope + " " + idjagOtherScope, expected: idjagScope},
 				}
@@ -552,7 +552,7 @@ func TestIDJAG(t *testing.T) {
 					Public:     true,
 					GrantTypes: []string{consts.GrantTypeOAuthJWTBearer},
 					Scopes:     []string{idjagScope},
-					Audience:   []string{env.rs.URL + idjagResourcePath},
+					Resource:   []string{env.rs.URL + idjagResourcePath},
 				}
 
 				form := idjagRedeemForm(token.AccessToken)
@@ -643,7 +643,8 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		ClientSecret: oauth2.NewBCryptClientSecret(idjagSecretHash),
 		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
 		Scopes:       []string{idjagScope, idjagOtherScope},
-		Audience:     []string{env.rs.URL, env.rs.URL + idjagResourcePath},
+		Audience:     []string{env.rs.URL},
+		Resource:     []string{env.rs.URL + idjagResourcePath},
 	}
 
 	idpMemory.Clients[idjagIdPClientID] = env.idpClient
@@ -703,7 +704,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		ClientSecret: oauth2.NewBCryptClientSecret(idjagSecretHash),
 		GrantTypes:   []string{consts.GrantTypeOAuthJWTBearer},
 		Scopes:       []string{idjagScope},
-		Audience:     []string{env.rs.URL + idjagResourcePath},
+		Resource:     []string{env.rs.URL + idjagResourcePath},
 	}
 
 	rsMemory.IDJAGTrustedIssuers[env.idp.URL] = oauth2.IDJAGTrustedIssuer{

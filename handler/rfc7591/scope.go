@@ -153,6 +153,25 @@ func CheckGrantableAudience(ctx context.Context, config oauth2.AudienceStrategyP
 	return nil
 }
 
+// CheckGrantableResource enforces that the RFC 8707 resource indicators requested in metadata are within those the
+// authenticated client registration token was itself granted. It mirrors CheckGrantableAudience, and passes no
+// client to oauth2.GetResourceStrategy for the same reason.
+func CheckGrantableResource(ctx context.Context, config oauth2.ResourceStrategyProvider, authenticated oauth2.Requester, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if authenticated == nil || metadata == nil {
+		return nil
+	}
+
+	if len(metadata.Resource) == 0 {
+		return nil
+	}
+
+	if err = oauth2.GetResourceStrategy(ctx, config, nil)(authenticated.GetGrantedResource(), metadata.Resource); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request requested a resource which the presented Client Registration Token is not permitted to grant.").WithWrap(err).WithDebugError(err))
+	}
+
+	return nil
+}
+
 func isRegistrationScope(ctx context.Context, config any, registration []string, scope string) bool {
 	if slices.Contains(registration, scope) {
 		return true

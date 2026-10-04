@@ -74,7 +74,7 @@ func TestAuthRejectsManagementTokenForAnotherClient(t *testing.T) {
 	ctx := context.Background()
 	auth, config, store, tokens := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil, nil)
 	require.NoError(t, err)
 
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/client-b", token), "client-b")
@@ -85,7 +85,7 @@ func TestAuthAcceptsManagementTokenForItsOwnClient(t *testing.T) {
 	ctx := context.Background()
 	auth, config, store, tokens := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/client-a", token), "client-a")
@@ -194,7 +194,7 @@ func TestAuthRejectsAManagementTokenAtTheRegistrationEndpoint(t *testing.T) {
 
 	handler, config, store, strategy := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	_, err = handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
@@ -391,7 +391,7 @@ func TestAuthAcceptsAManagementTokenBehindAProxy(t *testing.T) {
 	ctx := context.Background()
 	auth, config, store, tokens := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil, nil)
 	require.NoError(t, err)
 
 	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://backend.internal:8080/oauth2/register/client-a", token), "client-a")
@@ -459,7 +459,7 @@ func TestAuthAcceptsExtraSpacesAfterTheScheme(t *testing.T) {
 	ctx := context.Background()
 	auth, config, store, tokens := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil)
+	token, err := NewClientManagementToken(ctx, tokens, store, config, &oauth2.DefaultClient{ID: "client-a"}, nil, nil, nil)
 	require.NoError(t, err)
 
 	r := httptest.NewRequest(http.MethodGet, ClientConfigurationURL(testEndpoint, "client-a"), nil)

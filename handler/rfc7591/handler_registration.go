@@ -21,6 +21,7 @@ type Configurator interface {
 	oauth2.TokenEntropyProvider
 	oauth2.ScopeStrategyProvider
 	oauth2.AudienceStrategyProvider
+	oauth2.ResourceStrategyProvider
 
 	ClientRegistrationMetadataStrategyConfig
 }
@@ -94,6 +95,10 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	}
 
 	if err = CheckGrantableAudience(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+		return err
+	}
+
+	if err = CheckGrantableResource(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
 		return err
 	}
 
@@ -173,10 +178,12 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 
 	grantable := metadata.GetScopes()
 	grantableAudience := oauth2.Arguments(metadata.Audience)
+	grantableResource := oauth2.Arguments(metadata.Resource)
 
 	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
 		grantable = authenticated.GetGrantedScopes()
 		grantableAudience = authenticated.GetGrantedAudience()
+		grantableResource = authenticated.GetGrantedResource()
 	}
 
 	// The registration scope is never carried forward onto the minted management token, even though every
@@ -185,7 +192,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 
 	var token string
 
-	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, client, grantable, grantableAudience); err != nil {
+	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, client, grantable, grantableAudience, grantableResource); err != nil {
 		// The client was persisted but nobody holds a token to manage it: it would be permanently unmanageable and
 		// its client_id burned. Compensate by deleting it before returning the original error. If the compensating
 		// delete itself fails, prefer the original error and note the cleanup failure in the debug field rather

@@ -475,6 +475,7 @@ func newConfidentialClient() *oauth2.DefaultClient {
 		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange},
 		Scopes:       []string{"openid", "offline_access"},
 		Audience:     []string{"https://api.example.com", "my-service"},
+		Resource:     []string{"https://api.example.com"},
 	}
 }
 

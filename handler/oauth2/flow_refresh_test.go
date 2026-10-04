@@ -832,6 +832,7 @@ func TestRefreshFlow_WithoutRotationKeepsTheOriginalGrant(t *testing.T) {
 				GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 				Scopes:     []string{"foo", "bar", consts.ScopeOffline},
 				Audience:   []string{audienceA, audienceB},
+				Resource:   []string{resourceA, resourceB},
 			}
 
 			handler := &RefreshTokenGrantHandler{

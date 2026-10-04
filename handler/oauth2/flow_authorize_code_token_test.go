@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
@@ -1347,6 +1348,176 @@ func TestAuthorizeCodeFlow_PopulateTokenEndpointResponseKeepsBinding(t *testing.
 			assert.Equal(t, x5t, stored.GetSession().(oauth2.MTLSBoundSession).GetClientCertificateSHA256Thumbprint())
 		})
 	}
+}
+
+func TestAuthorizeCode_AuthorizationDetails(t *testing.T) {
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate, testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
+	narrow := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}}}
+	wide := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionCancel}}}
+
+	newHandlerAndAuthCode := func(t *testing.T, grantedDetails oauth2.AuthorizationDetails) (AuthorizeExplicitGrantHandler, string, *storage.MemoryStore) {
+		t.Helper()
+
+		store := storage.NewMemoryStore()
+		strategy := &hmacshaStrategy
+		config := &oauth2.Config{
+			ScopeStrategy:                    oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:                 oauth2.DefaultAudienceStrategy,
+			AccessTokenLifespan:              time.Minute,
+			AuthorizeCodeLifespan:            time.Minute,
+			AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
+		}
+
+		handler := AuthorizeExplicitGrantHandler{
+			CoreStorage:           store,
+			AuthorizeCodeStrategy: strategy,
+			AccessTokenStrategy:   strategy,
+			RefreshTokenStrategy:  strategy,
+			Config:                config,
+		}
+
+		code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+		require.NoError(t, err)
+
+		authreq := &oauth2.AuthorizeRequest{
+			Request: oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+				},
+				Form: url.Values{
+					consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"},
+				},
+				RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+				GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+				Session:        &oauth2.DefaultSession{},
+				RequestedAt:    time.Now().UTC(),
+			},
+		}
+		authreq.SetGrantedAuthorizationDetails(grantedDetails)
+
+		require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, authreq))
+
+		return handler, code, store
+	}
+
+	newAccessRequest := func(code string, requestedDetails oauth2.AuthorizationDetails) *oauth2.AccessRequest {
+		ar := &oauth2.AccessRequest{
+			GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			Request: oauth2.Request{
+				Client: &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				},
+				Form: url.Values{
+					consts.FormParameterAuthorizationCode: []string{code},
+					consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+				},
+				Session:     &oauth2.DefaultSession{},
+				RequestedAt: time.Now().UTC(),
+			},
+		}
+		ar.SetRequestedAuthorizationDetails(requestedDetails)
+
+		return ar
+	}
+
+	t.Run("ShouldCarryGrantWhenAbsent", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, nil)
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+
+		assert.Equal(t, granted, accessRequest.GetGrantedAuthorizationDetails())
+		assert.Equal(t, granted, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+	})
+
+	t.Run("ShouldNarrow", func(t *testing.T) {
+		handler, code, store := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, narrow)
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+
+		assert.Equal(t, narrow, accessRequest.GetGrantedAuthorizationDetails())
+		assert.Equal(t, narrow, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+
+		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+		refreshToken, ok := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+		require.True(t, ok, "a refresh token must be issued")
+
+		refreshSignature := hmacshaStrategy.RefreshTokenSignature(t.Context(), refreshToken)
+		stored, err := store.GetRefreshTokenSession(t.Context(), refreshSignature, &oauth2.DefaultSession{})
+		require.NoError(t, err)
+
+		assert.Equal(t, granted, stored.GetGrantedAuthorizationDetails(),
+			"the refresh token session must keep the full authorize-time grant, not the narrowed access token grant")
+	})
+
+	t.Run("ShouldRejectNotContained", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, wide)
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+	})
+
+	t.Run("ShouldRejectOneGrantedForTwoRequested", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, oauth2.AuthorizationDetails{granted[0], granted[0]})
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+	})
+
+	t.Run("ShouldRejectCarriedWhenHandlerRemoved", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		handler.Config.(*oauth2.Config).AuthorizationDetailsTypeHandlers = nil
+		accessRequest := newAccessRequest(code, nil)
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+		assert.Equal(t, testRARHintTypeNotSupported, oauth2.ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldRejectCarriedWhenAllowListChanged", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, nil)
+		accessRequest.Client = &internal.AuthorizationDetailsClient{DefaultClient: accessRequest.Client.(*oauth2.DefaultClient), AuthorizationDetailsTypes: []string{}}
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+		assert.Equal(t, testRARHintTypeNotAllowed, oauth2.ErrorToRFC6749Error(err).HintField)
+	})
+
+	t.Run("ShouldRejectClientMismatchBeforeDetails", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, granted)
+		accessRequest := newAccessRequest(code, wide)
+		accessRequest.Client.(*oauth2.DefaultClient).ID = "bar"
+
+		err := handler.HandleTokenEndpointRequest(t.Context(), accessRequest)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+		assert.NotErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+	})
+
+	t.Run("ShouldOmitWhenNothingGranted", func(t *testing.T) {
+		handler, code, _ := newHandlerAndAuthCode(t, nil)
+		accessRequest := newAccessRequest(code, nil)
+
+		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+
+		response := oauth2.NewAccessResponse()
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
+
+		assert.Nil(t, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+	})
 }
 
 type hydratingAuthorizeCodeStore struct {

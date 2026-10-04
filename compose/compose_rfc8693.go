@@ -38,6 +38,7 @@ import (
 //	3. RFC8693RefreshTokenTypeFactory          they're mutually exclusive at issuance because each handler's
 //	4. RFC8693IDTokenTypeFactory               CanHandleTokenEndpointRequest filters by requested_token_type)
 //	5. RFC8693CustomJWTTypeFactory
+//	   IDJAGIssueFactory                      (optional; ID-JAG token type handler)
 //	6. RFC8693ActorTokenValidationFactory     (may_act validator; LAST)
 //
 // Skipping any of the type-handler factories is supported (e.g. an AS that does not accept JWT subject tokens may
@@ -45,13 +46,17 @@ import (
 
 // RFC8693TokenExchangeGrantFactory creates the request-validation + act-claim writer for the OAuth 2.0 Token
 // Exchange grant. It MUST be registered FIRST in the RFC 8693 chain so the act claim is set before any token-type
-// handler issues a token.
-func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, _ any, _ any) any {
+// handler issues a token. For the same reason it is the handler that marks a custom JWT as used, so storage should
+// implement rfc8693.CustomJWTStorage when a rfc8693.JWTType sets ValidateJTI.
+func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, storage any, _ any) any {
+	store, _ := storage.(rfc8693.CustomJWTStorage)
+
 	return &rfc8693.TokenExchangeGrantHandler{
 		Config:           config.(oauth2.RFC8693ConfigProvider),
 		ScopeStrategy:    config.GetScopeStrategy(context.Background()),
 		AudienceStrategy: config.GetAudienceStrategy(context.Background()),
 		ResourceStrategy: config.GetResourceStrategy(context.Background()),
+		Storage:          store,
 	}
 }
 
@@ -74,17 +79,19 @@ func RFC8693AccessTokenTypeFactory(config oauth2.Configurator, storage any, stra
 // RFC8693RefreshTokenTypeFactory creates the handler that exchanges to a refresh token. Refuses to issue when the
 // client is not registered for the refresh_token grant type or when the granted scopes do not include any of the
 // configured RefreshTokenScopes (see RFC8693RefreshTokenTypeFactory's gating logic in
-// handler/rfc8693/refresh_token_type_handler.go).
+// handler/rfc8693/refresh_token_type_handler.go). The storage must implement hoauth2.TokenRevocationStorage, which
+// revokes the grant of a replayed refresh token as the refresh_token grant does.
 func RFC8693RefreshTokenTypeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	ctx := context.Background()
 
 	return &rfc8693.RefreshTokenTypeHandler{
-		Config:               config.(oauth2.RFC8693ConfigProvider),
-		RefreshTokenLifespan: config.GetRefreshTokenLifespan(ctx),
-		RefreshTokenScopes:   config.GetRefreshTokenScopes(ctx),
-		ScopeStrategy:        config.GetScopeStrategy(ctx),
-		CoreStrategy:         strategy.(hoauth2.CoreStrategy),
-		Storage:              storage.(rfc8693.Storage),
+		Config:                 config.(oauth2.RFC8693ConfigProvider),
+		RefreshTokenLifespan:   config.GetRefreshTokenLifespan(ctx),
+		RefreshTokenScopes:     config.GetRefreshTokenScopes(ctx),
+		ScopeStrategy:          config.GetScopeStrategy(ctx),
+		CoreStrategy:           strategy.(hoauth2.CoreStrategy),
+		Storage:                storage.(rfc8693.Storage),
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 	}
 }
 

@@ -90,6 +90,7 @@ func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWr
 	case errors.Is(err, ErrInvalidRequest):
 		f.writeRevocationResponseError(ctx, rw, ErrInvalidRequest)
 	case errors.Is(err, ErrInvalidClient):
+		setClientAuthenticationChallenge(rw, ErrorToRFC6749Error(err))
 		f.writeRevocationResponseError(ctx, rw, ErrInvalidClient)
 	case errors.Is(err, ErrInvalidGrant):
 		f.writeRevocationResponseError(ctx, rw, ErrInvalidGrant)

@@ -40,3 +40,14 @@ type Storage interface {
 	// oauth2.ErrInvalidatedDeviceCode error.
 	InvalidateDeviceCodeSession(ctx context.Context, signature string) (err error)
 }
+
+// DecisionStorage is an optional Storage extension which records the user's decision on a device code session
+// atomically. The UserAuthorizeHandler uses it when the Storage implements it, so of two decisions submitted
+// concurrently for one user code only the first is recorded.
+type DecisionStorage interface {
+	// DecideDeviceCodeSession stores the device code session for the given device code only while the stored session
+	// has the oauth2.DeviceAuthorizeStatusNew status, checking and writing it in one atomic operation. It returns the
+	// oauth2.ErrDeviceAuthorizeDecided error when the stored session was already decided, and the oauth2.ErrNotFound
+	// error when no session is stored for the device code.
+	DecideDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
+}

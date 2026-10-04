@@ -181,7 +181,7 @@ func validInt64Future(value, now int64, required bool) bool {
 		return !required
 	}
 
-	return now <= value
+	return now < value
 }
 
 // validInt64Past ensures the given value is in the past or the current value.

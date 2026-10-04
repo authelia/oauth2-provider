@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 )
 
@@ -229,6 +230,60 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 }
 
+func TestHandlerRefreshBinding(t *testing.T) {
+	testCases := []struct {
+		name         string
+		public       bool
+		strict       bool
+		clientStrict bool
+		noRotation   bool
+		grantType    string
+		certificate  bool
+		err          error
+	}{
+		{name: "ShouldRebindConfidentialClientRefreshToThePresentedCertificate", grantType: consts.GrantTypeRefreshToken, certificate: true},
+		{name: "ShouldRejectConfidentialClientRefreshWithoutACertificate", grantType: consts.GrantTypeRefreshToken, err: oauth2.ErrInvalidRequest},
+		{name: "ShouldRejectPublicClientRefreshWithAnotherCertificate", public: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectConfidentialClientTokenExchangeWithAnotherCertificate", grantType: consts.GrantTypeOAuthTokenExchange, certificate: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectConfidentialClientRefreshWithAnotherCertificateWhenStrict", strict: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectConfidentialClientRefreshWithAnotherCertificateWhenTheClientIsStrict", clientStrict: true, grantType: consts.GrantTypeRefreshToken, certificate: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRebindConfidentialClientRefreshToThePresentedCertificateWithoutRotation", noRotation: true, grantType: consts.GrantTypeRefreshToken, certificate: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bound := oauth2.X509CertificateSHA256Thumbprint(gen.MustCertificate(gen.CertificateOptions{}))
+
+			session := &oauth2.DefaultSession{}
+			session.SetClientCertificateSHA256Thumbprint(bound)
+
+			request := oauth2.NewAccessRequest(session)
+			request.Client = &strictRefreshTokenBindingClient{DefaultClient: &oauth2.DefaultClient{Public: tc.public}, strict: tc.clientStrict}
+			request.GrantTypes = oauth2.Arguments{tc.grantType}
+
+			var presented *x509.Certificate
+
+			if tc.certificate {
+				presented = gen.MustCertificate(gen.CertificateOptions{SerialNumber: 2})
+			}
+
+			h := &Handler{Config: &oauth2.Config{MTLSEnabled: true, MTLSStrictRefreshTokenBinding: tc.strict, DisableRefreshTokenRotation: tc.noRotation}}
+
+			err := h.BindAccessRequest(ctxWithCertificate(presented), request)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+				assert.Equal(t, bound, session.GetClientCertificateSHA256Thumbprint())
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, oauth2.X509CertificateSHA256Thumbprint(presented), session.GetClientCertificateSHA256Thumbprint())
+		})
+	}
+}
+
 func newTestHandler(enabled, enforce bool) *Handler {
 	return &Handler{Config: &oauth2.Config{MTLSEnabled: enabled, MTLSEnforce: enforce}}
 }
@@ -241,6 +296,16 @@ func ctxWithCertificate(cert *x509.Certificate) context.Context {
 	}
 
 	return context.WithValue(context.Background(), oauth2.RequestContextKey, r)
+}
+
+type strictRefreshTokenBindingClient struct {
+	*oauth2.DefaultClient
+
+	strict bool
+}
+
+func (c *strictRefreshTokenBindingClient) GetMTLSStrictRefreshTokenBinding() bool {
+	return c.strict
 }
 
 type unboundSession struct {

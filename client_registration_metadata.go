@@ -90,6 +90,12 @@ type ClientRegistrationMetadata struct {
 	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types,omitempty"`
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids,omitempty"`
 
+	// Identity Assertion JWT Authorization Grant client metadata.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-8
+
+	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported,omitempty"`
+
 	// RFC 8705 (OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens) client metadata.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8705#section-2.1.2
@@ -133,6 +139,7 @@ type ClientRegistrationMetadata struct {
 	DPoPBoundAccessTokens               bool     `json:"dpop_bound_access_tokens,omitempty"`
 	ResponseModes                       []string `json:"response_modes,omitempty"`
 	Audience                            []string `json:"audience,omitempty"`
+	AuthorizationDetailsTypes           []string `json:"authorization_details_types,omitempty"`
 
 	// Extra holds every unregistered client metadata parameter so it survives a registration round trip.
 	Extra map[string]any `json:"-"`

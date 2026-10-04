@@ -62,6 +62,8 @@ func (f *Fosite) writeErrorJSONRFC(ctx context.Context, rw http.ResponseWriter, 
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
+	setClientAuthenticationChallenge(rw, rfc)
+
 	rfc = rfc.WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
 
 	data, err := json.Marshal(rfc)

@@ -7,6 +7,7 @@ package rfc8693
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,9 +23,12 @@ import (
 //
 // A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
 // either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
-// when the token has no such claim.
+// when the token has no such claim. When the 'requested_token_type' is an Identity Assertion JWT Authorization Grant,
+// the 'subject_token' must instead be an assertion whose 'aud' claim includes the requesting client and whose 'typ' is
+// not an access token type, and its 'scope' claim does not limit the requested scopes.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
 type CustomJWTTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -103,6 +107,10 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
+	if IsIDJAGRequest(ctx, request, c.Config) {
+		return nil
+	}
+
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 
@@ -146,6 +154,12 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
 	}
 
+	idjag := role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config)
+
+	if err = validateCustomJWTType(ctx, jwtType, ftoken, idjag); err != nil {
+		return nil, err
+	}
+
 	window := jwtType.JWTLifetimeToleranceWindow
 	if window == 0 {
 		window = 1 * time.Hour
@@ -169,6 +183,11 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
+
+	if err = c.validateIssuerIsNotIDTokenIssuer(ctx, iss); err != nil {
+		return nil, err
+	}
+
 	allowed := clientAllowedIssuers(request.GetClient(), role)
 
 	if _, ok = ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
@@ -179,28 +198,69 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
-	if err = validateCustomJWTScope(request, role, claims); err != nil {
+	if idjag {
+		// Draft ID-JAG Section 4.3.3: the audience of the assertion MUST match the authenticated client, and the
+		// requested scopes are governed by the relationship rather than the assertion.
+		if clientID := request.GetClient().GetID(); !claims.VerifyAudience(clientID, true) {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s'.", clientID))
+		}
+	} else if err = validateCustomJWTScope(request, role, claims); err != nil {
 		return nil, err
 	}
 
-	// Validate the JTI is unique if required.
+	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
 	if jwtType.ValidateJTI {
-		jti, _ := claims[consts.ClaimJWTID].(string)
-
-		if jti == "" {
+		if jti, _ := claims[consts.ClaimJWTID].(string); jti == "" {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
-		}
-
-		if c.SetTokenExchangeCustomJWT(ctx, jti, time.Unix(expiry, 0)) != nil {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
 		}
 	}
 
 	return claims, nil
 }
 
+func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Token, idjag bool) error {
+	typ, _ := token.Header[jwt.JSONWebTokenHeaderType].(string)
+
+	if oauth2.IsIDJAGTokenType(typ) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693IDJAG))
+	}
+
+	// RFC 8725 Section 3.11 explicit typing keeps another kind of JWT signed by a trusted key, such as an RFC 9068
+	// access token or a Logout Token, from being accepted as this type.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
+	if err := token.Valid(jwt.ValidateTypes(jwtType.GetTypes()...), jwt.ValidateAllowEmptyType(true)); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The 'typ' header '%s' is not permitted for the token type '%s'.", typ, jwtType.GetName(ctx)).WithWrap(err).WithDebugError(err))
+	}
+
+	// Draft ID-JAG Section 4.3: the subject token is an Identity Assertion or a Refresh Token.
+	if idjag && (strings.EqualFold(typ, consts.JSONWebTokenTypeAccessToken) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeAccessToken)) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An access token is not supported as a '%s' when the '%s' is '%s'.", consts.FormParameterSubjectToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+	}
+
+	return nil
+}
+
+func (c *CustomJWTTypeHandler) validateIssuerIsNotIDTokenIssuer(ctx context.Context, iss string) error {
+	// An ID Token is validated by the ID Token type, which binds it to the client it was issued to. RFC 8725 Section
+	// 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && iss == issuer {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token is the ID Token issuer, so the token must be exchanged as '%s'.", consts.TokenTypeRFC8693IDToken))
+		}
+	}
+
+	return nil
+}
+
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
+		return err
+	}
+
+	if err = requireActorToken(request); err != nil {
 		return err
 	}
 
@@ -223,13 +283,24 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(jwtType.Expiry))
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.expiry(ctx, jwtType)))
 	}
 
 	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
 
 	if claims.Issuer == "" {
 		claims.Issuer = jwtType.Issuer
+	}
+
+	// The token is signed with the ID Token key and typed 'JWT', so an ID Token issuer would make it valid as an ID
+	// Token. RFC 8725 Section 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && claims.Issuer == issuer {
+			return errorsx.WithStack(oauth2.ErrServerError.
+				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the ID Token issuer, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), claims.Issuer))
+		}
 	}
 
 	// The issued JWT's audience MUST reflect THIS exchange's audience/resource parameters per RFC 8693 §2.1, not
@@ -274,6 +345,20 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
 
 	return nil
+}
+
+func (c *CustomJWTTypeHandler) expiry(ctx context.Context, jwtType *JWTType) time.Duration {
+	if jwtType.Expiry > 0 {
+		return jwtType.Expiry
+	}
+
+	if provider, ok := c.Config.(oauth2.AccessTokenLifespanProvider); ok {
+		if lifespan := provider.GetAccessTokenLifespan(ctx); lifespan > 0 {
+			return lifespan
+		}
+	}
+
+	return time.Hour
 }
 
 func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {

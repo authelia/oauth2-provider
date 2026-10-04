@@ -245,7 +245,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation:
+			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails:
 				continue
 			default:
 				response[name] = value
@@ -275,7 +275,24 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		response[jwt.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
+	if details := r.GetAccessRequester().GetGrantedAuthorizationDetails(); len(details) != 0 {
+		response[jwt.ClaimAuthorizationDetails] = details
+	}
+
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())
+
+	switch {
+	case r.GetTokenUse() == RefreshToken:
+		// RFC 7662 Section 2.2 defines 'token_type' by the RFC 6749 Section 5.1 access token types.
+		delete(response, consts.AccessResponseTokenType)
+	case f.isIntrospectionTokenTypeEnabled(ctx, caller):
+		if tokenType := r.GetAccessTokenType(); tokenType != "" {
+			response[consts.AccessResponseTokenType] = tokenType
+		} else {
+			delete(response, consts.AccessResponseTokenType)
+		}
+	}
 
 	f.writeIntrospectionResponse(ctx, rw, r, caller, response, alg, kid)
 }
@@ -348,4 +365,12 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 
 		_ = json.NewEncoder(rw).Encode(response)
 	}
+}
+
+func (f *Fosite) isIntrospectionTokenTypeEnabled(ctx context.Context, caller Client) (enabled bool) {
+	if client, ok := caller.(IntrospectionTokenTypeClient); ok {
+		return client.GetIntrospectionTokenTypeEnabled()
+	}
+
+	return f.Config != nil && f.Config.GetIntrospectionTokenTypeEnabled(ctx)
 }

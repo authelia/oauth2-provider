@@ -455,6 +455,32 @@ type JWTProfileClient interface {
 	JSONWebKeysClient
 }
 
+// DPoPStrictRefreshTokenBindingClient is a client whose DPoP bound refresh tokens may only be redeemed with a proof
+// for the key they are bound to, even though it is confidential. Strict binding applies when either this or the
+// provider-wide option is set; see DPoPStrictRefreshTokenBindingProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-5
+type DPoPStrictRefreshTokenBindingClient interface {
+	// GetDPoPStrictRefreshTokenBinding returns true if this client's refresh tokens stay bound to the DPoP key they
+	// were issued for.
+	GetDPoPStrictRefreshTokenBinding() (strict bool)
+
+	Client
+}
+
+// IntrospectionTokenTypeClient is a client which, when it calls the introspection endpoint, decides whether the
+// response includes the RFC 7662 Section 2.2 'token_type' member. When implemented it overrides
+// IntrospectionTokenTypeEnabledProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+type IntrospectionTokenTypeClient interface {
+	// GetIntrospectionTokenTypeEnabled returns true if introspection responses sent to this client include the
+	// 'token_type' member.
+	GetIntrospectionTokenTypeEnabled() (enabled bool)
+
+	Client
+}
+
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
 type DPoPClient interface {
 	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is
@@ -487,6 +513,19 @@ type TLSClientAuthClient interface {
 	// GetTLSClientAuthSANEmail returns the 'tls_client_auth_san_email' client metadata value, being the expected
 	// rfc822Name subject alternative name entry.
 	GetTLSClientAuthSANEmail() (email string)
+
+	Client
+}
+
+// MTLSStrictRefreshTokenBindingClient is a client whose certificate-bound refresh tokens may only be redeemed with
+// the certificate they are bound to, even though it is confidential. Strict binding applies when either this or the
+// provider-wide option is set; see MTLSStrictRefreshTokenBindingProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+type MTLSStrictRefreshTokenBindingClient interface {
+	// GetMTLSStrictRefreshTokenBinding returns true if this client's refresh tokens stay bound to the certificate they
+	// were issued for.
+	GetMTLSStrictRefreshTokenBinding() (strict bool)
 
 	Client
 }

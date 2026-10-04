@@ -238,7 +238,9 @@ type Provider interface {
 	// omitted from the request. The authorization server MUST ignore
 	// unrecognized request parameters. Request and response parameters
 	// MUST NOT be included more than once.
-	NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error)
+	//
+	// The session is the session the stored device authorization request is hydrated into and must not be nil.
+	NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request, session Session) (requester DeviceAuthorizeRequester, err error)
 
 	// NewRFC8628UserAuthorizeResponse persists the DeviceCodeSession and UserCodeSession in the store
 	//
@@ -434,6 +436,18 @@ type Requester interface {
 
 	// GrantResource marks a request's resource indicator as granted.
 	GrantResource(resource string)
+
+	// GetRequestedAuthorizationDetails returns the requested RFC 9396 authorization details.
+	GetRequestedAuthorizationDetails() (details AuthorizationDetails)
+
+	// SetRequestedAuthorizationDetails sets the requested RFC 9396 authorization details.
+	SetRequestedAuthorizationDetails(details AuthorizationDetails)
+
+	// GetGrantedAuthorizationDetails returns the granted RFC 9396 authorization details.
+	GetGrantedAuthorizationDetails() (details AuthorizationDetails)
+
+	// SetGrantedAuthorizationDetails sets the granted RFC 9396 authorization details.
+	SetGrantedAuthorizationDetails(details AuthorizationDetails)
 
 	// GetSession returns a pointer to the request's session or nil if none is set.
 	GetSession() (session Session)

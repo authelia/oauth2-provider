@@ -15,7 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+	josejwt "authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -74,8 +78,12 @@ func TestAccessToken(t *testing.T) {
 
 				strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
 
+				before := time.Now().Truncate(time.Second)
+
 				token, signature, err := strategy.GenerateAccessToken(t.Context(), tc.r)
 				assert.NoError(t, err)
+
+				after := time.Now()
 
 				parts := strings.Split(token, ".")
 				require.Len(t, parts, 3, "%s - %v", token, parts)
@@ -117,8 +125,8 @@ func TestAccessToken(t *testing.T) {
 				// Scope field is always a string.
 				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimIssuedAt]), time.Second)
-				assert.WithinDuration(t, time.Now(), anyInt64ToTime(claims[consts.ClaimNotBefore]), time.Second)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimIssuedAt]), before, after)
+				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimNotBefore]), before, after)
 
 				err = strategy.ValidateAccessToken(context.Background(), tc.r, token)
 				if tc.pass {
@@ -261,6 +269,76 @@ func TestGenerateJWTIncludesCnf(t *testing.T) {
 	})
 }
 
+func TestJWTProfileAuthorizationDetailsClaim(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	testCases := []struct {
+		name    string
+		granted oauth2.AuthorizationDetails
+		extra   any
+	}{
+		{
+			name:    "ShouldIncludeGranted",
+			granted: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:    "ShouldOverrideSessionExtra",
+			granted: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+			extra:   testRARExtraSpoofed,
+		},
+		{
+			name:  "ShouldDropSessionExtraWhenNothingGranted",
+			extra: testRARExtraSpoofed,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := jwtValidCase(oauth2.AccessToken)
+
+			if tc.extra != nil {
+				r.GetSession().(*JWTSession).JWTClaims.Extra[consts.ClaimAuthorizationDetails] = tc.extra
+			}
+
+			if tc.granted != nil {
+				r.GrantedAuthorizationDetails = tc.granted
+			}
+
+			token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			require.NoError(t, err)
+
+			parts := strings.Split(token, ".")
+			require.Len(t, parts, 3, "%s - %v", token, parts)
+
+			rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+			require.NoError(t, err)
+
+			var payload map[string]any
+			require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+			if tc.granted == nil {
+				assert.NotContains(t, payload, consts.ClaimAuthorizationDetails)
+
+				return
+			}
+
+			raw, err := json.Marshal(payload[consts.ClaimAuthorizationDetails])
+			require.NoError(t, err)
+			assert.JSONEq(t, `[{"type":"payment_initiation","actions":["initiate"]}]`, string(raw))
+		})
+	}
+}
+
 func TestSplitN(t *testing.T) {
 	value1 := "a.b.c"
 
@@ -311,6 +389,81 @@ func TestGenerateJWTIncludesClientID(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawPayload, &payload))
 
 	assert.Equal(t, "client-abc", payload[consts.ClaimClientIdentifier])
+}
+
+func TestGenerateJWTUsesTheClientSigningKeyID(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{Key: rsaKey, KeyID: "a", Use: consts.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+			{Key: gen.MustRSAKey(), KeyID: "b", Use: consts.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+		},
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks),
+	})
+
+	client := &oauth2.DefaultRegisteredClient{
+		DefaultClient:                  &oauth2.DefaultClient{ID: "client-abc"},
+		AccessTokenSignedResponseKeyID: "a",
+		AccessTokenSignedResponseAlg:   string(jose.RS256),
+	}
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = client
+
+	for _, kid := range []string{"a", "b"} {
+		client.AccessTokenSignedResponseKeyID = kid
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+		require.NoError(t, err)
+
+		parsed, err := josejwt.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
+		require.NoError(t, err)
+		require.Len(t, parsed.Headers, 1)
+		assert.Equal(t, kid, parsed.Headers[0].KeyID)
+	}
+
+	assert.NotContains(t, r.GetSession().(*JWTSession).JWTHeader.Extra, consts.JSONWebTokenHeaderKeyIdentifier)
+}
+
+func TestGenerateJWTDefaultsTheSigningAlgorithm(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	jwtStrategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", jwtStrategy)
+
+	r := jwtValidCase(oauth2.AccessToken)
+	r.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client-abc"}}
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3, "%s - %v", token, parts)
+
+	rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	var header map[string]any
+
+	require.NoError(t, json.Unmarshal(rawHeader, &header))
+
+	assert.Equal(t, "RS256", header["alg"])
+	assert.NoError(t, strategy.ValidateAccessToken(t.Context(), r, token))
 }
 
 func anyInt64ToTime(in any) time.Time {

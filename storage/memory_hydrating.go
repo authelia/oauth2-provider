@@ -7,6 +7,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -24,9 +25,9 @@ import (
 // the returned session is.
 //
 // Hydration works by cloning the stored request and swapping in the caller-supplied session, and it can only clone
-// a *oauth2.Request. A Get*Session call for a request stored as any other oauth2.Requester implementation returns an
-// error rather than silently handing back an unhydrated result - this store never trades a wrong answer for a
-// convenient one.
+// a *oauth2.Request or a *oauth2.AccessRequest. A Get*Session call for a request stored as any other oauth2.Requester
+// implementation returns an error rather than silently handing back an unhydrated result - this store never trades a
+// wrong answer for a convenient one.
 //
 // The clone is shallow: fields such as Form and Client are shared with the stored request, so a caller mutating them
 // after a Get still reaches the stored copy. Only Session is decoupled, which is the property this fixture exists to
@@ -68,16 +69,18 @@ func (s *HydratingMemoryStore) marshal(key string, request oauth2.Requester) (er
 // hydrate unmarshals the stored session blob into session and returns a shallow copy of request carrying it. When no
 // blob was stored, or the caller supplied no session, request is returned untouched.
 //
-// request must be a *oauth2.Request - that is the only type this method knows how to clone. It is checked before any
-// unmarshalling happens, so a caller-supplied session is never mutated on a path that then fails to return it.
+// request must be a *oauth2.Request or a *oauth2.AccessRequest - the only types this method knows how to clone. It is
+// checked before any unmarshalling happens, so a caller-supplied session is never mutated on a path that then fails to
+// return it.
 func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, session oauth2.Session) (out oauth2.Requester, err error) {
 	if session == nil {
 		return request, nil
 	}
 
-	req, ok := request.(*oauth2.Request)
-	if !ok {
-		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.Request", request)
+	switch request.(type) {
+	case *oauth2.Request, *oauth2.AccessRequest:
+	default:
+		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.Request or *oauth2.AccessRequest", request)
 	}
 
 	s.sessionsMutex.RLock()
@@ -92,10 +95,18 @@ func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, ses
 		return nil, err
 	}
 
-	clone := *req
-	clone.Session = session
+	switch req := request.(type) {
+	case *oauth2.AccessRequest:
+		clone := *req
+		clone.Session = session
 
-	return &clone, nil
+		return &clone, nil
+	default:
+		clone := *req.(*oauth2.Request)
+		clone.Session = session
+
+		return &clone, nil
+	}
 }
 
 func (s *HydratingMemoryStore) CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
@@ -128,4 +139,51 @@ func (s *HydratingMemoryStore) GetClientRegistrationTokenSession(ctx context.Con
 	}
 
 	return s.hydrate("cr:"+signature, request, session)
+}
+
+func (s *HydratingMemoryStore) CreateRefreshTokenSession(ctx context.Context, signature, accessSignature string, request oauth2.Requester) (err error) {
+	if err = s.marshal("rt:"+signature, request); err != nil {
+		return err
+	}
+
+	return s.MemoryStore.CreateRefreshTokenSession(ctx, signature, accessSignature, request)
+}
+
+func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	var data []byte
+
+	if session := request.GetSession(); session != nil {
+		if data, err = json.Marshal(session); err != nil {
+			return err
+		}
+	}
+
+	if err = s.MemoryStore.UpdateRefreshTokenSession(ctx, signature, request); err != nil {
+		return err
+	}
+
+	if data != nil {
+		s.sessionsMutex.Lock()
+		s.sessions["rt:"+signature] = data
+		s.sessionsMutex.Unlock()
+	}
+
+	return nil
+}
+
+func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
+	if request, err = s.MemoryStore.GetRefreshTokenSession(ctx, signature, session); err != nil && !errors.Is(err, oauth2.ErrInactiveToken) {
+		return nil, err
+	}
+
+	if stored, ok := request.(StoreRefreshToken); ok {
+		request = stored.Requester
+	}
+
+	hydrated, herr := s.hydrate("rt:"+signature, request, session)
+	if herr != nil {
+		return nil, herr
+	}
+
+	return hydrated, err
 }

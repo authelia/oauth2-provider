@@ -66,7 +66,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 				WithDebug("GetAuthorizeCodeSession must return a value for 'oauth2.Requester' when returning 'ErrInvalidatedAuthorizeCode'.")
 		}
 
-		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !isIntactToken(verr) {
+		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !IsIntactToken(verr) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 
@@ -107,6 +107,17 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// code was issued to "client_id" in the request,
 	if authorizeRequest.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
+	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if len(request.GetRequestedAuthorizationDetails()) == 0 {
+		request.SetRequestedAuthorizationDetails(authorizeRequest.GetGrantedAuthorizationDetails())
+	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, authorizeRequest.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
 	}
 
 	// ensure that the "redirect_uri" parameter is present if the
@@ -215,6 +226,8 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		request.GrantResource(resource)
 	}
 
+	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
+
 	var access, accessSignature string
 
 	if access, accessSignature, err = c.AccessTokenStrategy.GenerateAccessToken(ctx, request); err != nil {
@@ -256,7 +269,16 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	} else if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, request.Sanitize([]string{})); err != nil {
+		rtrequester := request.Sanitize([]string{})
+
+		// The refresh token keeps the authorization details granted at the authorize endpoint, not the narrowed
+		// access token grant: narrowing the access token does not shrink the resource owner's authorization.
+		//
+		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+		rtrequester.SetRequestedAuthorizationDetails(ar.GetRequestedAuthorizationDetails())
+		rtrequester.SetGrantedAuthorizationDetails(ar.GetGrantedAuthorizationDetails())
+
+		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, rtrequester); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
@@ -267,6 +289,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	response.SetTokenType(oauth2.BearerAccessToken)
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	setAuthorizationDetailsResponse(response, request)
 
 	if refresh != "" {
 		response.SetExtra(consts.AccessResponseRefreshToken, refresh)

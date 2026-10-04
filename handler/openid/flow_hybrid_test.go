@@ -557,6 +557,72 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
+func TestHybrid_AuthorizationDetails(t *testing.T) {
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{"initiate"}}}
+
+	testCases := []struct {
+		name          string
+		responseTypes oauth2.Arguments
+		allowed       []string
+		hint          string
+	}{
+		{name: "ShouldIssueCodeAndTokenWhenAllowed", responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}},
+		{name: "ShouldRejectCodeTokenBeforeStoringCode", responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}, allowed: []string{}, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectCodeIDTokenTokenBeforeStoringCode", responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}, allowed: []string{}, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldDeferCodeIDTokenToCodeExchange", responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}, allowed: []string{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			handlers := []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+			h.Config.(*oauth2.Config).AuthorizationDetailsTypeHandlers = handlers
+			h.AuthorizeImplicitGrantTypeHandler.Config.(*oauth2.Config).AuthorizationDetailsTypeHandlers = handlers
+
+			request := oauth2.NewAuthorizeRequest()
+			request.Form.Set(consts.FormParameterNonce, testNonce)
+			request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+			request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+			request.ResponseTypes = tc.responseTypes
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.Session = &DefaultSession{Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter}, Headers: &jwt.Headers{}, Subject: testSubjectPeter}
+			request.Client = &internal.AuthorizationDetailsClient{
+				DefaultClient: &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth, consts.ResponseTypeHybridFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				},
+				AuthorizationDetailsTypes: tc.allowed,
+			}
+			request.SetGrantedAuthorizationDetails(granted)
+
+			response := oauth2.NewAuthorizeResponse()
+
+			err := h.HandleAuthorizeEndpointRequest(t.Context(), request, response)
+
+			codes := h.AuthorizeExplicitGrantHandler.CoreStorage.(*storage.MemoryStore).AuthorizeCodes
+			sessions := h.OpenIDConnectRequestStorage.(*storage.MemoryStore).IDSessions
+			tokens := h.AuthorizeImplicitGrantTypeHandler.AccessTokenStorage.(*storage.MemoryStore).AccessTokens
+
+			if tc.hint == "" {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.NotEmpty(t, response.GetCode())
+				assert.Len(t, codes, 1)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+			assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			assert.Empty(t, response.GetCode())
+			assert.Empty(t, codes)
+			assert.Empty(t, sessions)
+			assert.Empty(t, tokens)
+		})
+	}
+}
+
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
 	config := &oauth2.Config{
 		ScopeStrategy:         oauth2.HierarchicScopeStrategy,

@@ -94,6 +94,7 @@ func TestIntrospectionResponse(t *testing.T) {
 
 func TestNewIntrospectionRequest(t *testing.T) {
 	newErr := errors.New("asdf")
+	errMissingToken := "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'token' parameter is required."
 
 	testCases := []struct {
 		name     string
@@ -111,6 +112,45 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				}
 			},
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
+		},
+		{
+			name: "ShouldFailMissingTokenWithBearerCredential",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
+				r.PostForm = url.Values{consts.FormParameterTokenTypeHint: []string{string(AccessToken)}}
+
+				return r
+			},
+			err: errMissingToken,
+		},
+		{
+			// RFC 6749 Section 3.1: a parameter sent without a value is treated as omitted.
+			name: "ShouldFailEmptyTokenWithBasicAuth",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.SetBasicAuth("my-client", "foobar")
+				r.PostForm = url.Values{consts.FormParameterToken: []string{""}}
+
+				return r
+			},
+			err: errMissingToken,
+		},
+		{
+			// RFC 7662 Section 2.3: invalid caller credentials are answered with HTTP 401.
+			name: "ShouldFailMissingTokenWithInvalidClientAuthAsUnauthorized",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.SetBasicAuth("my-client", "wrong")
+				r.PostForm = url.Values{consts.FormParameterTokenTypeHint: []string{string(AccessToken)}}
+
+				return r
+			},
+			err: "The request could not be authorized. The request either did not include a known client authentication method, or contained invalid authentication details. Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
 			name: "ShouldFailIntrospectionError",
@@ -586,6 +626,7 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 		name     string
 		session  *DefaultSession
 		use      TokenUse
+		disabled bool
 		expected string
 	}{
 		{
@@ -593,6 +634,13 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
 			use:      AccessToken,
 			expected: DPoPAccessToken,
+		},
+		{
+			name:     "ShouldReportBearerForABoundSubjectTokenWhenDPoPIsDisabled",
+			session:  &DefaultSession{JWKThumbprint: "some-thumbprint"},
+			use:      AccessToken,
+			disabled: true,
+			expected: BearerAccessToken,
 		},
 		{
 			name:     "ShouldReportBearerForAnUnboundSubjectToken",
@@ -622,7 +670,7 @@ func TestIntrospectionResponseTokenTypeReflectsTheSubjectBinding(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
+			config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"), DPoPEnabled: !tc.disabled}
 
 			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 

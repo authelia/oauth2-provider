@@ -6,6 +6,7 @@ package rfc7591
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"authelia.com/provider/oauth2"
@@ -31,8 +32,8 @@ type ClientConfigurationHandler struct {
 
 // HandleRFC7592ClientConfigurationEndpointRequest implements oauth2.RFC7592ClientConfigurationEndpointHandler.
 //
-// It loads the client named by requester.GetClientID(), returning oauth2.ErrNotFound when no such client exists,
-// then dispatches on requester.GetMethod() to read, update, or delete. A method other than GET, PUT, or DELETE
+// It loads the client named by requester.GetClientID(), returning oauth2.ErrNotFound when no such client exists and
+// oauth2.ErrServerError when the lookup fails for any other reason, then dispatches on requester.GetMethod() to read, update, or delete. A method other than GET, PUT, or DELETE
 // yields oauth2.ErrInvalidRequest naming the method, which the RFC 7592 response writer (Task 15) maps to 405.
 func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointRequest(ctx context.Context, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	id := requester.GetClientID()
@@ -40,7 +41,11 @@ func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointReq
 	var client oauth2.Client
 
 	if client, err = h.Store.GetClient(ctx, id); err != nil {
-		return errorsx.WithStack(oauth2.ErrNotFound.WithWrap(err).WithDebugError(err))
+		if errors.Is(err, oauth2.ErrNotFound) {
+			return errorsx.WithStack(oauth2.ErrNotFound.WithWrap(err).WithDebugError(err))
+		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	switch requester.GetMethod() {
@@ -151,6 +156,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	}
 
 	if err = CheckGrantableAudience(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+		return err
+	}
+
+	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
 		return err
 	}
 

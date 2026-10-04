@@ -66,7 +66,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
 		}
 
-		if verr := c.ValidateCodeAndSession(ctx, request, deviceRequester, code); !isIntactToken(verr) {
+		if verr := c.ValidateCodeAndSession(ctx, request, deviceRequester, code); !IsIntactToken(verr) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 
@@ -172,6 +172,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 			}
 
 			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+		case errors.Is(err, oauth2.ErrAuthorizationPending), errors.Is(err, oauth2.ErrAccessDenied),
+			errors.Is(err, oauth2.ErrDeviceExpiredToken), errors.Is(err, oauth2.ErrSlowDown),
+			errors.Is(err, oauth2.ErrInvalidGrant):
+			return errorsx.WithStack(err)
 		case errors.Is(err, oauth2.ErrNotFound):
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 		default:

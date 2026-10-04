@@ -179,11 +179,8 @@ func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
 
 func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 	header = map[jose.HeaderKey]any{
-		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
-	}
-
-	if cty, ok := t.Header[JSONWebTokenHeaderType]; ok {
-		header[JSONWebTokenHeaderContentType] = cty
+		JSONWebTokenHeaderType:        JSONWebTokenTypeJWT,
+		JSONWebTokenHeaderContentType: JSONWebTokenTypeJWT,
 	}
 
 	for k, v := range t.HeaderJWE {
@@ -193,9 +190,12 @@ func (t *Token) toEncryptedJoseHeader() (header map[jose.HeaderKey]any) {
 	return header
 }
 
-// SetJWS sets the JWS output values.
+// SetJWS sets the JWS output values. A 'kid' in the header is ignored, as the 'kid' header parameter identifies the
+// key that secures the JWS and is taken from that key. See RFC 7515 section 4.1.4.
 func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.SignatureAlgorithm) {
 	assign(t.Header, header.ToMap())
+
+	delete(t.Header, JSONWebTokenHeaderKeyIdentifier)
 
 	t.KeyID = kid
 	t.SignatureAlgorithm = alg
@@ -203,9 +203,12 @@ func (t *Token) SetJWS(header Mapper, claims Claims, kid string, alg jose.Signat
 	t.Claims = claims
 }
 
-// SetJWE sets the JWE output values.
+// SetJWE sets the JWE output values. A 'kid' in the header is ignored, as the 'kid' header parameter identifies the
+// key the CEK is encrypted to and is taken from that key. See RFC 7516 section 4.1.6.
 func (t *Token) SetJWE(header Mapper, kid string, alg jose.KeyAlgorithm, enc jose.ContentEncryption, zip jose.CompressionAlgorithm) {
 	assign(t.HeaderJWE, header.ToMap())
+
+	delete(t.HeaderJWE, JSONWebTokenHeaderKeyIdentifier)
 
 	t.EncryptionKeyID = kid
 	t.KeyAlgorithm = alg
@@ -249,7 +252,8 @@ func (t *Token) AssignJWE(jwe *jose.JSONWebEncryption) {
 }
 
 // CompactEncrypted serializes this token as a Compact Encrypted string, and returns the token string, signature, and
-// an error if one occurred.
+// an error if one occurred. The JWE 'cty' header is 'JWT' unless HeaderJWE sets it, as a Nested JWT requires. See
+// RFC 7519 section 5.2.
 func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature string, err error) {
 	var (
 		signed string
@@ -267,16 +271,6 @@ func (t *Token) CompactEncrypted(keySig, keyEnc any) (tokenString, signature str
 	opts := &jose.EncrypterOptions{
 		Compression:  t.CompressionAlgorithm,
 		ExtraHeaders: t.toEncryptedJoseHeader(),
-	}
-
-	if _, ok := opts.ExtraHeaders[JSONWebTokenHeaderContentType]; !ok {
-		var typ any
-
-		if typ, ok = t.Header[JSONWebTokenHeaderType]; ok {
-			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = typ
-		} else {
-			opts.ExtraHeaders[JSONWebTokenHeaderContentType] = JSONWebTokenTypeJWT
-		}
 	}
 
 	var encrypter jose.Encrypter
@@ -346,7 +340,8 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	return tokenString, nil
 }
 
-// Valid validates the token headers given various input options. This does not validate any claims.
+// Valid validates the token headers given various input options. This does not validate any claims. The JWE 'cty'
+// header of a Nested JWT must be 'JWT' as required by RFC 7519 section 5.2.
 //
 //nolint:gocyclo
 func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
@@ -371,19 +366,9 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
 		}
 
-		ttyp := t.Header[JSONWebTokenHeaderType]
-		cty := t.HeaderJWE[JSONWebTokenHeaderContentType]
-
-		if cty != ttyp {
-			vErr.Inner = errors.New("token was encrypted with a cty value that doesn't match the typ value")
-			vErr.Errors |= ValidationErrorHeaderContentTypeInvalidMismatch
-		}
-
-		if len(vopts.types) != 0 {
-			if !validateTokenTypeValue(cty, vopts.types...) {
-				vErr.Inner = errors.New("token was encrypted with an invalid cty")
-				vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
-			}
+		if !validateTokenTypeValue(t.HeaderJWE[JSONWebTokenHeaderContentType], consts.JSONWebTokenTypeJWT) {
+			vErr.Inner = errors.New("token was encrypted with an invalid cty")
+			vErr.Errors |= ValidationErrorHeaderContentTypeInvalid
 		}
 	}
 
@@ -440,12 +425,8 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	var raw any
 
-	if len(t.HeaderJWE) > 0 {
-		if raw, ok = t.HeaderJWE[JSONWebTokenHeaderContentType]; ok {
-			if !validateTokenTypeValue(raw, JSONWebTokenTypeAccessToken) {
-				return false
-			}
-		}
+	if len(t.HeaderJWE) > 0 && !validateTokenTypeValue(t.HeaderJWE[JSONWebTokenHeaderContentType], JSONWebTokenTypeJWT) {
+		return false
 	}
 
 	if raw, ok = t.Header[JSONWebTokenHeaderType]; !ok {

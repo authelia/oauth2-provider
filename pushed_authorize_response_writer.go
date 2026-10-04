@@ -93,6 +93,8 @@ func (f *Fosite) WritePushedAuthorizeError(ctx context.Context, rw http.Response
 	rfcerr := ErrorToRFC6749Error(err).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).
 		WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx)).WithLocalizer(f.Config.GetMessageCatalog(ctx), getLangFromRequester(request))
 
+	setClientAuthenticationChallenge(rw, rfcerr)
+
 	var data []byte
 
 	if data, err = json.Marshal(rfcerr); err != nil {

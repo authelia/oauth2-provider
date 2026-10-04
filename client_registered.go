@@ -75,11 +75,21 @@ type DefaultRegisteredClient struct {
 	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types"`
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
+	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
+	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
+
 	// RFC 9101 Section 10.5 (JWT-Secured Authorization Request) client metadata.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc9101#section-10.5
 
 	RequireSignedRequestObject bool `json:"require_signed_request_object"`
+
+	// RFC 9396 Section 10 (Rich Authorization Requests) client metadata. A nil value permits every type and a non-nil
+	// empty value permits none.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-10
+
+	AuthorizationDetailsTypes []string `json:"authorization_details_types"`
 
 	// OpenID Connect RP-Initiated Logout 1.0 and OpenID Connect Back-Channel Logout 1.0 client metadata.
 	//
@@ -438,7 +448,13 @@ var (
 	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
 	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
+	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)
 )
+
+// GetAuthorizationDetailsTypes returns the RFC 9396 authorization details types this client may request.
+func (c *DefaultRegisteredClient) GetAuthorizationDetailsTypes() (types []string) {
+	return c.AuthorizationDetailsTypes
+}
 
 // GetClientIDIssuedAt returns the time the client identifier was issued, or the zero time when it is not recorded.
 func (c *DefaultRegisteredClient) GetClientIDIssuedAt() (issued time.Time) {
@@ -478,6 +494,11 @@ func (c *DefaultRegisteredClient) GetSupportedSubjectTokenIssuers() (issuers []s
 // setting as the interface documents. There is no registered metadata for it.
 func (c *DefaultRegisteredClient) GetSupportedActorTokenIssuers() (issuers []string) {
 	return nil
+}
+
+// GetAuthorizationGrantProfilesSupported returns the authorization grant profiles the client implements.
+func (c *DefaultRegisteredClient) GetAuthorizationGrantProfilesSupported() (profiles []string) {
+	return c.AuthorizationGrantProfilesSupported
 }
 
 // GetTokenExchangePermitted reports whether client may exchange a token issued to this one, per RFC 8693 Section 5's

@@ -585,11 +585,11 @@ func (s *mtlsClientStore) GetClient(_ context.Context, id string) (Client, error
 	return client, nil
 }
 
-func (s *mtlsClientStore) ClientAssertionJWTValid(_ context.Context, _ string) error {
+func (s *mtlsClientStore) ClientAssertionJWTValid(_ context.Context, _, _ string) error {
 	return nil
 }
 
-func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
+func (s *mtlsClientStore) SetClientAssertionJWT(_ context.Context, _, _ string, _ time.Time) error {
 	return nil
 }
 

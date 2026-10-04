@@ -78,6 +78,7 @@ const (
 	ClaimEvents                              = consts.ClaimEvents
 	ClaimEventBackChannelLogout              = consts.ClaimEventBackChannelLogout
 	ClaimConfirmation                        = consts.ClaimConfirmation
+	ClaimAuthorizationDetails                = consts.ClaimAuthorizationDetails
 	ClaimConfirmationJWKThumbprint           = consts.ClaimConfirmationJWKThumbprint
 	ClaimConfirmationX509SHA256Thumbprint    = consts.ClaimConfirmationX509SHA256Thumbprint
 	ClaimHTTPMethod                          = consts.ClaimHTTPMethod

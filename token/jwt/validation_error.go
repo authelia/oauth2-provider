@@ -7,29 +7,28 @@ package jwt
 // Validation provides a backwards compatible error definition
 // from `jwt-go` to `go-jose`.
 const (
-	ValidationErrorMalformed                        uint32 = 1 << iota // Token is malformed
-	ValidationErrorMalformedNotCompactSerialized                       // Token is malformed specifically it does not have the compact serialized format.
-	ValidationErrorUnverifiable                                        // Token could not be verified because of signing problems
-	ValidationErrorSignatureInvalid                                    // Signature validation failed.
-	ValidationErrorHeaderKeyIDInvalid                                  // Header KID invalid error.
-	ValidationErrorHeaderAlgorithmInvalid                              // Header ALG invalid error.
-	ValidationErrorHeaderTypeInvalid                                   // Header TYP invalid error.
-	ValidationErrorHeaderEncryptionTypeInvalid                         // Header TYP invalid error (JWE).
-	ValidationErrorHeaderContentTypeInvalid                            // Header TYP invalid error (JWE).
-	ValidationErrorHeaderContentTypeInvalidMismatch                    // Header TYP invalid error (JWE).
-	ValidationErrorHeaderEncryptionKeyIDInvalid                        // Header KID invalid error (JWE).
-	ValidationErrorHeaderKeyAlgorithmInvalid                           // Header ALG invalid error (JWE).
-	ValidationErrorHeaderContentEncryptionInvalid                      // Header ENC invalid error (JWE).
-	ValidationErrorId                                                  // Claim JTI validation failed.
-	ValidationErrorAudience                                            // Claim AUD validation failed.
-	ValidationErrorExpired                                             // Claim EXP validation failed.
-	ValidationErrorIssuedAt                                            // Claim IAT validation failed.
-	ValidationErrorNotValidYet                                         // Claim NBF validation failed.
-	ValidationErrorIssuer                                              // Claim ISS validation failed.
-	ValidationErrorSubject                                             // Claim SUB validation failed.
-	ValidationErrorAuthorizedParty                                     // Claim SUB validation failed.
-	ValidationErrorClaimsInvalid                                       // Generic claims validation error.
-	ValidationErrorLifetime                                            // Claim NBF or EXP exceeds the maximum lifetime.
+	ValidationErrorMalformed                      uint32 = 1 << iota // Token is malformed
+	ValidationErrorMalformedNotCompactSerialized                     // Token is malformed specifically it does not have the compact serialized format.
+	ValidationErrorUnverifiable                                      // Token could not be verified because of signing problems
+	ValidationErrorSignatureInvalid                                  // Signature validation failed.
+	ValidationErrorHeaderKeyIDInvalid                                // Header KID invalid error.
+	ValidationErrorHeaderAlgorithmInvalid                            // Header ALG invalid error.
+	ValidationErrorHeaderTypeInvalid                                 // Header TYP invalid error.
+	ValidationErrorHeaderEncryptionTypeInvalid                       // Header TYP invalid error (JWE).
+	ValidationErrorHeaderContentTypeInvalid                          // Header CTY invalid error (JWE).
+	ValidationErrorHeaderEncryptionKeyIDInvalid                      // Header KID invalid error (JWE).
+	ValidationErrorHeaderKeyAlgorithmInvalid                         // Header ALG invalid error (JWE).
+	ValidationErrorHeaderContentEncryptionInvalid                    // Header ENC invalid error (JWE).
+	ValidationErrorId                                                // Claim JTI validation failed.
+	ValidationErrorAudience                                          // Claim AUD validation failed.
+	ValidationErrorExpired                                           // Claim EXP validation failed.
+	ValidationErrorIssuedAt                                          // Claim IAT validation failed.
+	ValidationErrorNotValidYet                                       // Claim NBF validation failed.
+	ValidationErrorIssuer                                            // Claim ISS validation failed.
+	ValidationErrorSubject                                           // Claim SUB validation failed.
+	ValidationErrorAuthorizedParty                                   // Claim SUB validation failed.
+	ValidationErrorClaimsInvalid                                     // Generic claims validation error.
+	ValidationErrorLifetime                                          // Claim NBF or EXP exceeds the maximum lifetime.
 )
 
 // The ValidationError is an error implementation from Parse if token is not valid.
@@ -56,10 +55,12 @@ func (e *ValidationError) valid() bool {
 	return e.Errors == 0
 }
 
+// Has reports whether any of the bits in verr are set in Errors.
 func (e *ValidationError) Has(verr uint32) bool {
 	return (e.Errors & verr) != 0
 }
 
-func (e *ValidationError) Is(verr uint32) bool {
+// IsExactly reports whether Errors is equal to verr, meaning no other validation error bits are set.
+func (e *ValidationError) IsExactly(verr uint32) bool {
 	return e.Errors == verr
 }

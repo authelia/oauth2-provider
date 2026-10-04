@@ -431,7 +431,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", RequestObjectSigningKeyID: "rs256-sig", DefaultClient: &DefaultClient{ID: "test", ClientSecret: clientSecretHS256}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
-			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value 'at+jwt' and signed with the 'typ' header value 'JWT'.",
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted with the 'cty' header value 'JWT' but the request object was encrypted with the 'cty' header value 'at+jwt'.",
 		},
 		{
 			name:      "ShouldFailJWEBadType",

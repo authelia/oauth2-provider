@@ -35,15 +35,15 @@ type ClientManager interface {
 	// if the client does not exist or another error occurred.
 	GetClient(ctx context.Context, id string) (client Client, err error)
 
-	// ClientAssertionJWTValid returns an error if the JTI is
-	// known or the DB check failed and nil if the JTI is not known.
-	ClientAssertionJWTValid(ctx context.Context, jti string) (err error)
+	// ClientAssertionJWTValid returns an error if the JTI is known for the client or the DB check failed and nil if
+	// the JTI is not known. A JTI is only unique among the JWTs produced by one issuer per RFC 7519 Section 4.1.7, and
+	// the issuer of a client assertion is the client per RFC 7521 Section 5.2, so the JTI must be scoped to the client.
+	ClientAssertionJWTValid(ctx context.Context, clientID, jti string) (err error)
 
-	// SetClientAssertionJWT marks a JTI as known for the given
-	// expiry time. Before inserting the new JTI, it will clean
-	// up any existing JTIs that have expired as those tokens can
-	// not be replayed due to the expiry.
-	SetClientAssertionJWT(ctx context.Context, jti string, exp time.Time) (err error)
+	// SetClientAssertionJWT marks a JTI as known for the client until the given expiry time, scoped to the client as
+	// described for ClientAssertionJWTValid. An expired JTI can not be replayed due to the expiry, so an
+	// implementation may remove expired JTIs at any time.
+	SetClientAssertionJWT(ctx context.Context, clientID, jti string, exp time.Time) (err error)
 
 	ClientRegistrationManager
 }

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
+	"strings"
 	"time"
 
 	"authelia.com/provider/jose"
@@ -39,7 +40,8 @@ func IsValidDPoPJWKThumbprint(jkt string) bool {
 // RequestURL reconstructs the RFC 9449 target URI ('htu') from the request, discarding query and fragment. When the
 // request did not arrive over TLS directly it falls back to the X-Forwarded-Proto header to determine the scheme;
 // deployments MUST therefore ensure that header is set (and any client-supplied value stripped) by a trusted edge
-// proxy, otherwise a client could influence the reconstructed htu scheme.
+// proxy, otherwise a client could influence the reconstructed htu scheme. Only the first element of a comma separated
+// value is used, which is the scheme of the hop closest to the client.
 //
 // The path is taken in its escaped form. The decoded (*url.URL).Path would silently turn a percent-encoded delimiter
 // in the request target into a real one, so a request to '/token%3Fx=1' would reconstruct as '/token?x=1' and compare
@@ -48,7 +50,9 @@ func RequestURL(r *http.Request) string {
 	scheme := consts.SchemeHTTPS
 
 	if r.TLS == nil {
-		if proto := r.Header.Get(consts.HeaderXForwardedProto); proto != "" {
+		proto, _, _ := strings.Cut(r.Header.Get(consts.HeaderXForwardedProto), ",")
+
+		if proto = strings.TrimSpace(proto); proto != "" {
 			scheme = proto
 		} else {
 			scheme = consts.SchemeHTTP

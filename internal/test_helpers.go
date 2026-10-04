@@ -117,7 +117,11 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post url is wrong")
 	}
 
-	for _, node := range findElements(form, "input") {
+	for _, node := range findElements(doc, "input") {
+		if !isFormOwner(form, node) {
+			continue
+		}
+
 		var k, v string
 
 		for _, attr := range node.Attr {
@@ -172,6 +176,22 @@ func getAttr(node *html.Node, key string) (string, bool) {
 	return "", false
 }
 
+func isFormOwner(form, node *html.Node) bool {
+	if owner, ok := getAttr(node, "form"); ok {
+		id, _ := getAttr(form, "id")
+
+		return id != "" && id == owner
+	}
+
+	for parent := node.Parent; parent != nil; parent = parent.Parent {
+		if parent == form {
+			return true
+		}
+	}
+
+	return false
+}
+
 func findElement(node *html.Node, tag string) *html.Node {
 	if elements := findElements(node, tag); len(elements) != 0 {
 		return elements[0]
@@ -182,6 +202,10 @@ func findElement(node *html.Node, tag string) *html.Node {
 
 func findElements(node *html.Node, tag string) (elements []*html.Node) {
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.ElementNode && child.Data == "template" {
+			continue
+		}
+
 		if child.Type == html.ElementNode && child.Data == tag {
 			elements = append(elements, child)
 		}

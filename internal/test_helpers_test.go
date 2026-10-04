@@ -62,6 +62,35 @@ func TestParseFormPostResponse(t *testing.T) {
 			state: "",
 		},
 		{
+			name:  "ShouldParseInputsAssociatedByFormAttribute",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><input type="hidden" form="f" name="code" value="abc"/><form id="f" method="post" action="https://localhost:8080/cb"></form><input type="hidden" form="f" name="state" value="xyz"/></body></html>`,
+			code:  code,
+			state: state,
+		},
+		{
+			name:  "ShouldIgnoreInputsOwnedByAnotherForm",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form id="f" method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="hidden" form="g" name="state" value="xyz"/></form><form id="g"></form><input type="hidden" name="state" value="other"/></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldIgnoreInputsAssociatedWithAFormWithoutAnID",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/></form><input type="hidden" form="" name="state" value="xyz"/></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldIgnoreTemplateContent",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><template><form method="post" action="https://example.com/cb"><input type="hidden" name="code" value="other"/></form></template><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><template><input type="hidden" name="state" value="xyz"/></template></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name: "ShouldErrorWhenFormIsOnlyInATemplate",
+			html: `<html><body onload="javascript:document.forms[0].submit()"><template><form method="post" action="https://localhost:8080/cb"></form></template></body></html>`,
+			err:  "html form is missing",
+		},
+		{
 			name: "ShouldErrorWhenBodyHasNoAttributes",
 			html: `<html><body></body></html>`,
 			err:  "onload event is missing",

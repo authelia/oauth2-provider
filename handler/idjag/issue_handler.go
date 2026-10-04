@@ -29,8 +29,8 @@ import (
 // rfc8693.RefreshTokenTypeHandler also rejects any requested scope, 'audience' or 'resource' outside the grant of the
 // refresh token or the current registration of the client (Section 4.3.3).
 //
-// The 'auth_time', 'acr' and 'amr' claims come from the validated 'subject_token', then the ID token claims of the
-// session (Section 3.1). For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler supplies them from the
+// The 'auth_time', 'acr' and 'amr' claims come from the validated 'subject_token' when it is an ID token or a refresh
+// token, then the ID token claims of the session (Section 3.1). Those of any other 'subject_token' are not issued. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler supplies them from the
 // ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
 // It accepts the RFC 9396 'authorization_details' parameter and grants the requested details whose type the
@@ -193,7 +193,7 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 	delete(claims, consts.ClaimResource)
 	delete(claims, consts.ClaimScope)
 
-	for _, source := range slices.Backward(authenticationSources(request.GetSession())) {
+	for _, source := range slices.Backward(authenticationSources(request)) {
 		if source.AuthTime != nil {
 			claims[consts.ClaimAuthenticationTime] = source.AuthTime.Unix()
 		}
@@ -240,13 +240,18 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 	return claims
 }
 
-func authenticationSources(session oauth2.Session) (sources []*jwt.IDTokenClaims) {
-	if s, ok := session.(interface{ GetSubjectToken() map[string]any }); ok {
-		if token := s.GetSubjectToken(); token != nil {
-			source := &jwt.IDTokenClaims{}
-			source.FromMap(token)
+func authenticationSources(request oauth2.AccessRequester) (sources []*jwt.IDTokenClaims) {
+	session := request.GetSession()
 
-			sources = append(sources, source)
+	switch request.GetRequestForm().Get(consts.FormParameterSubjectTokenType) {
+	case consts.TokenTypeRFC8693IDToken, consts.TokenTypeRFC8693RefreshToken:
+		if s, ok := session.(interface{ GetSubjectToken() map[string]any }); ok {
+			if token := s.GetSubjectToken(); token != nil {
+				source := &jwt.IDTokenClaims{}
+				source.FromMap(token)
+
+				sources = append(sources, source)
+			}
 		}
 	}
 

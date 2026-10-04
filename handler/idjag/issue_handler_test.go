@@ -240,6 +240,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 
 	testCases := []struct {
 		name     string
+		typ      string
 		subject  map[string]any
 		idToken  *jwt.IDTokenClaims
 		extra    map[string]any
@@ -249,6 +250,25 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			name:     "ShouldCopyFromTheSubjectToken",
 			subject:  map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
 			expected: map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
+		},
+		{
+			name:     "ShouldCopyFromARefreshTokenSubjectToken",
+			typ:      consts.TokenTypeRFC8693RefreshToken,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
+			expected: map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
+		},
+		{
+			name:     "ShouldNotCopyFromACustomJWTSubjectToken",
+			typ:      consts.TokenTypeRFC8693JWT,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
+			expected: map[string]any{},
+		},
+		{
+			name:     "ShouldUseTheIDTokenClaimsForACustomJWTSubjectToken",
+			typ:      consts.TokenTypeRFC8693JWT,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
+			idToken:  &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(time.Unix(idTokenAuthTime, 0)), AuthenticationContextClassReference: issueACRSilver, AuthenticationMethodsReferences: []string{issueAMRPassword}},
+			expected: map[string]any{consts.ClaimAuthenticationTime: float64(idTokenAuthTime), consts.ClaimAuthenticationContextClassReference: issueACRSilver, consts.ClaimAuthenticationMethodsReference: []any{issueAMRPassword}},
 		},
 		{
 			name:     "ShouldPreferTheSubjectToken",
@@ -292,7 +312,13 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 				session.Claims = tc.idToken
 			}
 
-			request := newIssueRequest(t, session, nil)
+			var extra url.Values
+
+			if tc.typ != "" {
+				extra = url.Values{consts.FormParameterSubjectTokenType: {tc.typ}}
+			}
+
+			request := newIssueRequest(t, session, extra)
 			request.RequestedAudience = oauth2.Arguments{redeemAudience}
 
 			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))

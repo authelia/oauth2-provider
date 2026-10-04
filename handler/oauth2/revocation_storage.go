@@ -14,13 +14,10 @@ type TokenRevocationStorage interface {
 	RefreshTokenStorage
 	AccessTokenStorage
 
-	// RevokeRefreshToken revokes a refresh token as specified in:
-	// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
-	// If the particular
-	// token is a refresh token and the authorization server supports the
-	// revocation of access tokens, then the authorization server SHOULD
-	// also invalidate all access tokens based on the same authorization
-	// grant (see Implementation Note).
+	// RevokeRefreshToken revokes a refresh token, and SHOULD also revoke all access tokens based on the same
+	// authorization grant.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 	RevokeRefreshToken(ctx context.Context, requestID string) error
 
 	// RevokeAccessToken revokes an access token as specified in:

@@ -65,19 +65,9 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'htu' claim '%s' does not match the request URI '%s'.", expected, actual))
 	}
 
-	// RFC 9449 4.3 step 7: the 'iat' claim must be within an acceptable timeframe. That timeframe is built from two
-	// separate quantities, because they answer different questions and a deployment tunes them for different reasons:
-	//
-	//   - The lifespan is how long a proof is good for after it was minted. It is a policy about how stale a proof
-	//     may be, and it is what bounds the interval in which a captured proof could be replayed were the replay
-	//     record below lost.
-	//   - The skew is how far apart this server's clock and the client's are allowed to be. It is not a policy about
-	//     proofs at all, and it applies at both ends: a client running fast mints a proof whose 'iat' is ahead of
-	//     this server's clock, and one running slow mints one that already looks old.
-	//
-	// So the proof is good from iat-skew until iat+lifespan+skew. Collapsing the two into a single symmetric leeway -
-	// which this previously did - forces a deployment to buy tolerance for a badly synchronised clock by leaving
-	// every proof valid for that same span, and the two have no reason to be equal.
+	// RFC 9449 4.3 step 7: the 'iat' claim must be within an acceptable timeframe. The proof is good from iat-skew
+	// until iat+lifespan+skew: the lifespan is how long a proof is good for after it was minted, and the skew is how
+	// far apart this server's clock and the client's are allowed to be.
 	var (
 		skew     = s.Config.GetDPoPClockSkew(ctx)
 		lifespan = s.Config.GetDPoPProofLifespan(ctx)
@@ -111,14 +101,9 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	}
 
 	// Check-and-mark the proof as used in a single atomic step so concurrent requests presenting the same proof cannot
-	// both pass the replay check. The marker is kept until 'expires' - the exact instant the acceptance window above
-	// closes - rather than any interval measured from now: a proof presented early (client clock ahead, within skew)
-	// stays acceptable until iat+lifespan+skew, so a marker expiring before that would reopen a replay window for the
-	// remainder. Deriving both from the same value is what keeps them in step if either setting is retuned. It is
-	// recorded against the proof key together with the method, normalized target URI and nonce the proof commits to
-	// rather than the 'jti' alone, as that is the context a 'jti' is required to be unique in, see DPoPReplayStorage.
-	// The normalized 'htu' is passed rather than the raw claim so two spellings of the same target URI cannot be made
-	// to occupy separate replay slots.
+	// both pass the replay check. The marker is kept until 'expires', the instant the acceptance window above closes.
+	// The normalized 'htu' is passed rather than the raw claim so two spellings of the same target URI share one
+	// replay slot; see DPoPReplayStorage.
 	var used bool
 
 	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.Thumbprint, parsed.Nonce, parsed.Method, expected, expires); err != nil {

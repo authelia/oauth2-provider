@@ -121,11 +121,10 @@ type IDTokenClient interface {
 	GetIDTokenSignedResponseKeyID() (kid string)
 
 	// GetIDTokenSignedResponseAlg is equivalent to the 'id_token_signed_response_alg' client metadata value which
-	// determines the JWS alg algorithm [JWA] REQUIRED for signing the ID Token issued to this Client. The value none
-	// MUST NOT be used as the ID Token alg value unless the Client uses only Response Types that return no ID Token
-	// from the Authorization Endpoint (such as when only using the Authorization Code Flow). The default, if omitted,
-	// is RS256. The public key for validating the signature is provided by retrieving the JWK Set referenced by the
-	// jwks_uri element from OpenID Connect Discovery 1.0 [OpenID.Discovery].
+	// determines the JWS alg algorithm required for signing the ID Token issued to this client. The default, if
+	// omitted, is RS256.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetIDTokenSignedResponseAlg() (alg string)
 
 	// GetIDTokenEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the ID
@@ -134,15 +133,17 @@ type IDTokenClient interface {
 	GetIDTokenEncryptedResponseKeyID() (kid string)
 
 	// GetIDTokenEncryptedResponseAlg is equivalent to the 'id_token_encrypted_response_alg' client metadata value which
-	// determines the JWE alg algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If this is
-	// requested, the response will be signed then encrypted, with the result being a Nested JWT, as defined in [JWT].
-	// The default, if omitted, is that no encryption is performed.
+	// determines the JWE alg algorithm required for encrypting the ID Token issued to this client. The default, if
+	// omitted, is that no encryption is performed.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetIDTokenEncryptedResponseAlg() (alg string)
 
 	// GetIDTokenEncryptedResponseEnc is equivalent to the 'id_token_encrypted_response_enc' client metadata value which
-	// determines the JWE enc algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If
-	// id_token_encrypted_response_alg is specified, the default id_token_encrypted_response_enc value is A128CBC-HS256.
-	// When id_token_encrypted_response_enc is included, id_token_encrypted_response_alg MUST also be provided.
+	// determines the JWE enc algorithm required for encrypting the ID Token issued to this client. The default is
+	// A128CBC-HS256 when the alg is specified, and it must not be specified without the alg.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetIDTokenEncryptedResponseEnc() (enc string)
 
 	JSONWebKeysClient
@@ -156,9 +157,10 @@ type UserInfoClient interface {
 	GetUserinfoSignedResponseKeyID() (kid string)
 
 	// GetUserinfoSignedResponseAlg is equivalent to the 'userinfo_signed_response_alg' client metadata value which
-	// determines the JWS alg algorithm [JWA] REQUIRED for signing UserInfo Responses. If this is specified, the
-	// response will be JWT [JWT] serialized, and signed using JWS. The default, if omitted, is for the UserInfo
-	// Response to return the Claims as a UTF-8 [RFC3629] encoded JSON object using the application/json content-type.
+	// determines the JWS alg algorithm required for signing UserInfo Responses. The default, if omitted, is an
+	// unsigned JSON response.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetUserinfoSignedResponseAlg() (alg string)
 
 	// GetUserinfoEncryptedResponseKeyID returns the specific key identifier used to satisfy JWE requirements of the
@@ -167,21 +169,23 @@ type UserInfoClient interface {
 	GetUserinfoEncryptedResponseKeyID() (kid string)
 
 	// GetUserinfoEncryptedResponseAlg is equivalent to the 'userinfo_encrypted_response_alg' client metadata value
-	// which determines the JWE alg algorithm [JWA] REQUIRED for encrypting the ID Token issued to this Client. If
-	// this is requested, the response will be signed then encrypted, with the result being a Nested JWT, as defined in
-	// [JWT]. The default, if omitted, is that no encryption is performed.
+	// which determines the JWE alg algorithm required for encrypting UserInfo Responses. The default, if omitted, is
+	// that no encryption is performed.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetUserinfoEncryptedResponseAlg() (alg string)
 
 	// GetUserinfoEncryptedResponseEnc is equivalent to the 'userinfo_encrypted_response_enc' client metadata value
-	// which determines the JWE enc algorithm [JWA] REQUIRED for encrypting UserInfo Responses. If
-	// userinfo_encrypted_response_alg is specified, the default userinfo_encrypted_response_enc value is A128CBC-HS256.
-	// When userinfo_encrypted_response_enc is included, userinfo_encrypted_response_alg MUST also be provided.
+	// which determines the JWE enc algorithm required for encrypting UserInfo Responses. The default is A128CBC-HS256
+	// when the alg is specified, and it must not be specified without the alg.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetUserinfoEncryptedResponseEnc() (enc string)
 
 	JSONWebKeysClient
 }
 
-// JARClient represents a client capable of performing OpenID Connect requests.
+// JARClient represents a client capable of performing JWT-Secured Authorization Requests.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9101
 type JARClient interface {
@@ -199,13 +203,11 @@ type JARClient interface {
 	// key.
 	GetRequestObjectSigningKeyID() (kid string)
 
-	// GetRequestObjectSigningAlg is equivalent to the 'request_object_signing_alg' client metadata
-	// value which determines the JWS alg algorithm [JWA] that MUST be used for signing Request Objects sent to the OP.
-	// All Request Objects from this Client MUST be rejected, if not signed with this algorithm. Request Objects are
-	// described in Section 6.1 of OpenID Connect Core 1.0 [OpenID.Core]. This algorithm MUST be used both when the
-	// Request Object is passed by value (using the request parameter) and when it is passed by reference (using the
-	// request_uri parameter). Servers SHOULD support RS256. The value none MAY be used. The default, if omitted, is
-	// that any algorithm supported by the OP and the RP MAY be used.
+	// GetRequestObjectSigningAlg is equivalent to the 'request_object_signing_alg' client metadata value which
+	// determines the JWS alg algorithm that must be used for signing Request Objects, whether passed by value or by
+	// reference. The value none may be used. The default, if omitted, is that any supported algorithm may be used.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetRequestObjectSigningAlg() (alg string)
 
 	// GetRequestObjectEncryptionKeyID returns the specific key identifier used to satisfy JWE requirements of the
@@ -214,26 +216,22 @@ type JARClient interface {
 	GetRequestObjectEncryptionKeyID() (kid string)
 
 	// GetRequestObjectEncryptionAlg is equivalent to the 'request_object_encryption_alg' client metadata value which
-	// determines the JWE alg algorithm [JWA] the RP is declaring that it may use for encrypting Request Objects sent to
-	// the OP. This parameter SHOULD be included when symmetric encryption will be used, since this signals to the OP
-	// that a client_secret value needs to be returned from which the symmetric key will be derived, that might not
-	// otherwise be returned. The RP MAY still use other supported encryption algorithms or send unencrypted Request
-	// Objects, even when this parameter is present. If both signing and encryption are requested, the Request Object
-	// will be signed then encrypted, with the result being a Nested JWT, as defined in [JWT]. The default, if omitted,
-	// is that the RP is not declaring whether it might encrypt any Request Objects.
+	// determines the JWE alg algorithm the client declares it may use for encrypting Request Objects.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetRequestObjectEncryptionAlg() (alg string)
 
 	// GetRequestObjectEncryptionEnc is equivalent to the 'request_object_encryption_enc' client metadata value which
-	// determines the JWE enc algorithm [JWA] the RP is declaring that it may use for encrypting Request Objects sent to
-	// the OP. If request_object_encryption_alg is specified, the default request_object_encryption_enc value is
-	// A128CBC-HS256. When request_object_encryption_enc is included, request_object_encryption_alg MUST also be
-	// provided.
+	// determines the JWE enc algorithm the client declares it may use for encrypting Request Objects. The default is
+	// A128CBC-HS256 when the alg is specified, and it must not be specified without the alg.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetRequestObjectEncryptionEnc() (enc string)
 
-	// GetRequestURIs is an array of request_uri values that are pre-registered by the RP for use at the OP. Servers MAY
-	// cache the contents of the files referenced by these URIs and not retrieve them at the time they are used in a request.
-	// OPs can require that request_uri values used be pre-registered with the require_request_uri_registration
-	// discovery parameter.
+	// GetRequestURIs is equivalent to the 'request_uris' client metadata value which is the 'request_uri' values
+	// pre-registered by the client.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	GetRequestURIs() (requestURIs []string)
 
 	JSONWebKeysClient
@@ -342,17 +340,13 @@ type JARMClient interface {
 	GetAuthorizationEncryptedResponseKeyID() (kid string)
 
 	// GetAuthorizationEncryptedResponseAlg is equivalent to the 'authorization_encrypted_response_alg' client metadata
-	// value which determines the JWE [RFC7516] alg algorithm JWA [RFC7518] REQUIRED for encrypting authorization
-	// responses. If both signing and encryption are requested, the response will be signed then encrypted, with the
-	// result being a Nested JWT, as defined in JWT [RFC7519]. The default, if omitted, is that no encryption is
-	// performed.
+	// value which determines the JWE alg algorithm required for encrypting authorization responses. The default, if
+	// omitted, is that no encryption is performed.
 	GetAuthorizationEncryptedResponseAlg() (alg string)
 
 	// GetAuthorizationEncryptedResponseEnc is equivalent to the 'authorization_encrypted_response_enc' client
-	// metadata value which determines the JWE [RFC7516] enc algorithm JWA [RFC7518] REQUIRED for encrypting
-	// authorization responses. If authorization_encrypted_response_alg is specified, the default for this value is
-	// A128CBC-HS256. When authorization_encrypted_response_enc is included, authorization_encrypted_response_alg MUST
-	// also be provided.
+	// metadata value which determines the JWE enc algorithm required for encrypting authorization responses. The
+	// default is A128CBC-HS256 when the alg is specified, and it must not be specified without the alg.
 	GetAuthorizationEncryptedResponseEnc() (alg string)
 
 	JSONWebKeysClient
@@ -440,11 +434,8 @@ type JWTProfileClient interface {
 	// utilized to select an appropriate key.
 	GetAccessTokenEncryptedResponseKeyID() (kid string)
 
-	// GetAccessTokenEncryptedResponseAlg determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518]
-	// for content key encryption. If this is specified, the response will be encrypted using JWE and the configured
-	// content encryption algorithm (access_token_encrypted_response_enc). The default, if omitted, is that no
-	// encryption is performed. If both signing and encryption are requested, the response will be signed then
-	// encrypted, with the result being a Nested JWT, as defined in JWT [RFC7519].
+	// GetAccessTokenEncryptedResponseAlg determines the JWE alg algorithm for content key encryption of access token
+	// responses. The default, if omitted, is that no encryption is performed.
 	GetAccessTokenEncryptedResponseAlg() (alg string)
 
 	// GetAccessTokenEncryptedResponseEnc determines the JWE [RFC7516] algorithm (enc value) as defined in JWA [RFC7518]
@@ -583,11 +574,8 @@ type IntrospectionJWTResponseClient interface {
 	GetIntrospectionEncryptedResponseKeyID() (kid string)
 
 	// GetIntrospectionEncryptedResponseAlg is equivalent to the 'introspection_encrypted_response_alg' client metadata
-	// value which determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518] for content key
-	// encryption. If this is specified, the response will be encrypted using JWE and the configured content encryption
-	// algorithm (introspection_encrypted_response_enc). The default, if omitted, is that no encryption is performed.
-	// If both signing and encryption are requested, the response will be signed then encrypted, with the result being
-	// a Nested JWT, as defined in JWT [RFC7519].
+	// value which determines the JWE alg algorithm for content key encryption of introspection responses. The default,
+	// if omitted, is that no encryption is performed.
 	GetIntrospectionEncryptedResponseAlg() (alg string)
 
 	// GetIntrospectionEncryptedResponseEnc is equivalent to the 'introspection_encrypted_response_enc' client metadata
@@ -678,13 +666,11 @@ type DefaultBackChannelLogoutClient struct {
 // DefaultMTLSClient registers the RFC 8705 Section 2.1.2 certificate subject metadata required by the
 // 'tls_client_auth' method.
 //
-// It embeds *DefaultJARClient rather than *DefaultClient because both RFC 8705 authentication methods are unreachable
-// without what that type supplies. A certificate is only counted as an authentication method when the client's
-// registered '*_endpoint_auth_method' names one of them, which is read through AuthenticationMethodClient, and
-// *DefaultClient does not implement it; so a DefaultMTLSClient embedding *DefaultClient could never present
-// 'tls_client_auth' at all. The same embed supplies the 'jwks'/'jwks_uri' metadata that
-// 'self_signed_tls_client_auth' reads the accepted certificates from per Section 2.2.2. *DefaultJARClient embeds
-// *DefaultClient in turn, so every DefaultClient value and accessor remains available.
+// It must embed *DefaultJARClient rather than *DefaultClient: that type implements AuthenticationMethodClient, which
+// both RFC 8705 authentication methods are read through, and supplies the 'jwks'/'jwks_uri' metadata
+// 'self_signed_tls_client_auth' reads the accepted certificates from.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1.2 and https://www.rfc-editor.org/rfc/rfc8705#section-2.2.2
 type DefaultMTLSClient struct {
 	TLSClientAuthSubjectDN string `json:"tls_client_auth_subject_dn"`
 	TLSClientAuthSANDNS    string `json:"tls_client_auth_san_dns"`
@@ -766,11 +752,7 @@ func (c *DefaultClient) GetScopes() Arguments {
 
 // GetGrantTypes returns the client's allowed grant types, defaulting to 'authorization_code' when none are set.
 func (c *DefaultClient) GetGrantTypes() Arguments {
-	// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
-	//
-	// JSON array containing a list of the OAuth 2.0 Grant Types that the Client is declaring
-	// that it will restrict itself to using.
-	// If omitted, the default is that the Client will use only the authorization_code Grant Type.
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	if len(c.GrantTypes) == 0 {
 		return Arguments{consts.GrantTypeAuthorizationCode}
 	}
@@ -780,11 +762,7 @@ func (c *DefaultClient) GetGrantTypes() Arguments {
 
 // GetResponseTypes returns the client's allowed response types, defaulting to 'code' when none are set.
 func (c *DefaultClient) GetResponseTypes() Arguments {
-	// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
-	//
-	// JSON array containing a list of the OAuth 2.0 response_type values that the Client is declaring
-	// that it will restrict itself to using. If omitted, the default is that the Client will use
-	// only the code Response Type.
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	if len(c.ResponseTypes) == 0 {
 		return Arguments{"code"}
 	}

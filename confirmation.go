@@ -16,23 +16,15 @@ import (
 )
 
 // confirmationMethod is one member of the RFC 7800 'cnf' claim paired with the accessors that move it between a session
-// and a set of token claims.
-//
-// Both directions live in a single entry deliberately. An issuing side without a matching recovery side silently drops
-// the binding whenever a stateless token is introspected, because such a token's own claims are the only record of what
-// it is bound to; that asymmetry is exactly how 'jkt' came to be lost. Pairing them means a confirmation method cannot
-// be half-implemented.
+// and a set of token claims. Both directions are required, as a stateless token's own claims are the only record of
+// what it is bound to.
 type confirmationMethod struct {
 	// name is the member name within the 'cnf' claim, for example 'jkt'.
 	name string
 
 	// enabled reports whether the binding method this confirmation describes is turned on. A disabled method is never
-	// asserted, because a session outlives a configuration change: a binding recorded while the method was enabled
-	// survives on the session after it is turned off, and the handler that would verify it no longer runs. Emitting
-	// the confirmation anyway would tell the resource server a proof-of-possession check was performed when none was.
-	//
-	// Only ApplyConfirmation consults this. RestoreConfirmation deliberately does not: it recovers what a signed token
-	// already asserts, which is a statement about how the token was issued rather than about current configuration.
+	// asserted, as a binding recorded while it was enabled survives on the session and the handler that would verify it
+	// no longer runs. Only ApplyConfirmation consults this; RestoreConfirmation does not.
 	enabled func(ctx context.Context, config ConfirmationConfigProvider) bool
 
 	// get returns the binding recorded on session, or an empty string when session records none or does not support a
@@ -89,16 +81,9 @@ var confirmationMethods = []confirmationMethod{
 // ApplyConfirmation rebuilds the RFC 7800 'cnf' claim in claims from the bindings recorded on session whose binding
 // method is currently enabled, and is the only supported way to write that claim.
 //
-// The claim is rebuilt rather than merged into, so it asserts exactly the bindings the server established and nothing
-// else. That matters because the claims a token is minted from include the session's extra claims, which are free-form:
-// were the existing value merged into, a 'cnf' placed there would travel into the token, and a resource server reads
-// 'cnf' as evidence that a proof-of-possession check was performed. A 'cnf' that would be left empty is removed
-// entirely, since an empty confirmation asserts nothing while still suggesting the token is bound.
-//
-// A binding whose method is disabled is skipped for the same reason, and is skipped rather than erased: a session
-// restored from storage still carries a binding recorded while the method was enabled, but the handler that would
-// verify it no longer runs, so asserting it would claim a check that did not happen. Leaving the value on the session
-// keeps the binding dormant rather than lost, so re-enabling the method resumes both enforcement and this claim.
+// The claim is rebuilt rather than merged into, so a 'cnf' in the session's extra claims never reaches the token, and a
+// 'cnf' that would be left empty is removed. A binding whose method is disabled is skipped rather than erased, so it
+// stays on the session.
 func ApplyConfirmation(ctx context.Context, config ConfirmationConfigProvider, claims map[string]any, session Session) {
 	if claims == nil {
 		return
@@ -107,9 +92,7 @@ func ApplyConfirmation(ctx context.Context, config ConfirmationConfigProvider, c
 	cnf := map[string]any{}
 
 	for _, method := range confirmationMethods {
-		// A nil config asserts nothing, so no method is enabled. Failing closed is deliberate: the alternative
-		// direction would emit a confirmation on a misconfigured server, which is the one outcome this claim must
-		// never produce. Any existing 'cnf' is still stripped below.
+		// A nil config enables no method. Any existing 'cnf' is still stripped below.
 		if config == nil || !method.enabled(ctx, config) {
 			continue
 		}
@@ -165,14 +148,8 @@ func GetMTLSConfirmationX509SHA256Thumbprint(claims map[string]any) (x5t string)
 
 // GetOIDCKeyBindingConfirmationJWKThumbprint returns the RFC 7638 SHA-256 JWK Thumbprint of the public key carried by
 // the 'jwk' confirmation method of the RFC 7800 'cnf' claim in claims, or an empty string when the claim is absent, is
-// not a JSON object, or carries no key.
-//
-// OpenID Connect Key Binding 1.0 Section 4 puts the key itself into 'cnf' rather than its thumbprint, so a caller
-// comparing that confirmation against a DPoP proof must first reduce it to the thumbprint the proof is identified by.
-// GetDPoPConfirmationJWKThumbprint serves the 'jkt' method RFC 9449 Section 6.1 defines, which needs no reduction.
-//
-// It errors only when a key is present and cannot be read, which is a token asserting a confirmation that nothing can
-// be checked against; that is distinct from, and must not be conflated with, a token asserting no confirmation at all.
+// not a JSON object, or carries no key. It errors only when a key is present and cannot be read. See OpenID Connect Key
+// Binding 1.0 Section 4.
 func GetOIDCKeyBindingConfirmationJWKThumbprint(claims map[string]any) (jkt string, err error) {
 	value, ok := confirmationClaim(claims)[consts.ClaimConfirmationJWK]
 	if !ok {
@@ -217,18 +194,15 @@ var idTokenConfirmationGrants = []string{
 }
 
 // ApplyIDTokenConfirmation writes the OpenID Connect Key Binding 1.0 Section 4 confirmation into an ID Token's claims
-// and protected header: the proof-of-possession public key as 'cnf.jwk', and a 'typ' of 'dpop+id_token'. It is the
-// only supported way to write that claim, and rebuilds rather than merges for the reason ApplyConfirmation does.
+// and protected header: the proof-of-possession public key as 'cnf.jwk', and a 'typ' of 'dpop+id_token'. It is the only
+// supported way to write that claim, and rebuilds rather than merges.
 //
-// The binding is resolved from the access request in ctx rather than from the requester the ID Token is generated
-// from. The Authorization Code and Device Authorization flows generate theirs from the request persisted at the
-// authorization endpoint, whose session necessarily predates the DPoP proof presented at the token endpoint, so that
-// session can never carry the key. It also supplies the grant type and granted scopes, neither of which is on a
-// session at all.
+// The binding, grant type and granted scopes are resolved from the access request in ctx, not from the requester the ID
+// Token is generated from, whose session may predate the DPoP proof.
 //
-// It fails closed: an ID Token generated outside a token endpoint request carries no confirmation, which is what
-// keeps the Implicit and Hybrid flows unbound as Section 1.4 requires. Whenever it emits no confirmation it also
-// removes the 'typ' header, see clearIDTokenConfirmationHeader.
+// It fails closed: an ID Token generated outside a token endpoint request carries no confirmation, which keeps the
+// Implicit and Hybrid flows unbound as Section 1.4 requires. Whenever it emits no confirmation it also removes the
+// 'typ' header.
 func ApplyIDTokenConfirmation(ctx context.Context, config IDTokenConfirmationConfigProvider, claims *jwt.IDTokenClaims, headers *jwt.Headers) (err error) {
 	if claims == nil {
 		return nil

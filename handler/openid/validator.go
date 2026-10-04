@@ -102,16 +102,9 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		//  authorizations to public clients unless the client is validated
 		//  using a pre-registered redirect URI
 
-		// Client Impersonation
-		// https://datatracker.ietf.org/doc/html/rfc8252#section-8.6#
-		//
-		//  As stated in Section 10.2 of OAuth 2.0 [RFC6749], the authorization
-		//  server SHOULD NOT process authorization requests automatically
-		//  without user consent or interaction, except when the identity of the
-		//  client can be assured.  This includes the case where the user has
-		//  previously approved an authorization request for a given client id --
-		//  unless the identity of the client can be proven, the request SHOULD
-		//  be processed as if no previous request had been approved.
+		// Client Impersonation: a request is not processed without user interaction unless the client's identity is
+		// assured.
+		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
 
 		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
 			return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))

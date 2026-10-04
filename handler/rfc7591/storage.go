@@ -13,20 +13,9 @@ import (
 
 // ClientRegistrationTokenStorage handles storage requests related to RFC 7592 client management tokens.
 //
-// Client management tokens have their own storage namespace rather than sharing the access token namespace, in the
-// same way access tokens and refresh tokens each have their own. That separation is a security control, not
-// bookkeeping: while these tokens lived in access token storage every consumer of an access token could load one, and
-// two of them - the introspection endpoint's bearer authentication and the RFC 8693 subject_token path - accepted one
-// as a general purpose credential. It is also what the client configuration endpoint's authentication now rests on:
-// DefaultEndpointAuthStrategy resolves a management token from here and never from access token storage, and resolves
-// the client creation token the registration endpoint takes from access token storage and never from here, so neither
-// credential can be presented at the other's endpoint.
-//
 // An implementation MUST NOT satisfy these methods from the same namespace it uses for access tokens. A management
-// token never expires and authorises full control of the client it names, and a session hydrating here is evaluated
-// as one: the only checks left are that the token validates, that its granted audience names the requested client's
-// registration_client_uri, and that it was issued to that client. A namespace violation therefore fails open toward
-// the more privileged credential rather than failing closed.
+// token never expires and authorises full control of the client it names, and DefaultEndpointAuthStrategy relies on the
+// separation to keep a management token and a client creation token from being presented at the other's endpoint.
 type ClientRegistrationTokenStorage interface {
 	// CreateClientRegistrationTokenSession stores the request for a given client registration token signature.
 	CreateClientRegistrationTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error)

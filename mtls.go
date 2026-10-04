@@ -40,21 +40,13 @@ func X509CertificateSHA256Thumbprint(cert *x509.Certificate) (x5t string) {
 // ClientCertificateFromRequest returns the X.509 certificate the client authenticated with, or nil when it presented
 // none. It is the single point at which RFC 8705 obtains a certificate.
 //
-// The two sources are mutually exclusive, selected by whether header names one. Configuring a header name declares
-// that clients reach this server through a TLS terminating reverse proxy which forwards their certificate in that
-// header (see RFC 8705 Section 6.5); the peer certificate on such a connection belongs to the proxy, not to the
-// client, so r.TLS is not consulted at all. Preferring r.TLS there would bind a token to the proxy's certificate,
-// which every client behind that proxy would then satisfy. A request arriving without the header carries no client
-// certificate, even when the connection has a peer certificate of its own.
+// When header is not empty the certificate comes only from that header, as forwarded by a TLS terminating reverse
+// proxy (see RFC 8705 Section 6.5), and r.TLS is ignored because its peer certificate belongs to the proxy. Otherwise
+// it comes only from r.TLS.
 //
-// With no header configured, which is the default, the certificate comes from r.TLS alone, where Go has already
-// validated it against the listener's ClientCAs before the handler ran.
-//
-// The header is fully spoofable by anyone able to reach the server without transiting that proxy, and a forged value
-// authenticates the sender as any client registered with an mTLS authentication method. The caller must therefore opt
-// in by configuring a name, and a deployment that does MUST ensure the proxy overwrites the header on every inbound
-// request and that the server is unreachable except through it. A header present on more than one field line is an
-// error, as it is what a proxy that appends rather than overwrites produces.
+// The header is spoofable by anyone able to reach the server without transiting the proxy: a deployment that
+// configures one MUST ensure the proxy overwrites it on every inbound request and that the server is unreachable
+// except through it. A header present on more than one field line is an error.
 func ClientCertificateFromRequest(r *http.Request, header string) (cert *x509.Certificate, err error) {
 	if r == nil {
 		return nil, nil
@@ -195,20 +187,12 @@ func decodeCertificateBase64(value string) (der []byte, err error) {
 }
 
 // ValidateClientCertificateBinding performs the RFC 8705 Section 3 resource server check for a certificate-bound
-// access token, returning the certificate the connection was authenticated with.
+// access token, returning the certificate the connection was authenticated with. It is the single entry point for
+// that check.
 //
-// boundX5T is the confirmed 'cnf' member 'x5t#S256' the caller obtained by introspecting the access token, for which
-// GetMTLSConfirmationX509SHA256Thumbprint is provided; header names the trusted proxy header to fall back to when the
-// connection carries no peer certificate, and is empty when there is none.
-//
-// Every failure returns an error wrapping ErrInvalidToken, which Section 3 requires be reported with an HTTP 401
-// status and the 'invalid_token' error code. The function is intended only for tokens already known to be certificate
-// bound; an empty boundX5T is treated as caller misuse rather than as a token bound to nothing.
-//
-// This lives in the root package rather than in handler/rfc8705 because the root package needs it itself, to enforce
-// the binding of an access token presented as a credential at the introspection endpoint, and a proof-of-possession
-// check with two implementations is a check with one of them eventually wrong. It is the single entry point for the
-// Section 3 check, for callers inside this module and resource servers outside it alike.
+// boundX5T is the 'cnf' member 'x5t#S256' obtained by introspecting the access token (see
+// GetMTLSConfirmationX509SHA256Thumbprint) and must not be empty; header is the trusted proxy header name passed to
+// ClientCertificateFromRequest. Every failure returns an error wrapping ErrInvalidToken.
 func ValidateClientCertificateBinding(r *http.Request, header, boundX5T string) (cert *x509.Certificate, err error) {
 	if boundX5T == "" {
 		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The access token is not bound to a client certificate."))

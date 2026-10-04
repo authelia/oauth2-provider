@@ -461,21 +461,18 @@ type Config struct {
 	MTLSEnforce bool
 
 	// MTLSClientCertificateHeader is the name of the header a trusted TLS terminating proxy forwards the client
-	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header
-	// entirely so that only a certificate from the TLS connection itself is used.
+	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header so
+	// that only a certificate from the TLS connection itself is used.
 	//
-	// Setting this is a decision to trust the named header absolutely. It is not authenticated, and a request that
-	// reaches this server without transiting the proxy can set it to any value, authenticating the sender as any
-	// client registered with an mTLS authentication method and binding tokens to a certificate it does not hold. A
-	// deployment that sets this MUST ensure the proxy unconditionally overwrites the header on every inbound request,
-	// and that the server is unreachable except through that proxy. A proxy mode that appends to a header the client
-	// sent is not safe: a header on more than one field line is rejected, but a value appended to the same line
-	// cannot be told apart from a comma separated certificate chain, whose first element is taken as the leaf.
+	// The header is not authenticated. A deployment that sets this MUST ensure the proxy unconditionally overwrites the
+	// header on every inbound request, rather than appending to it, and that the server is unreachable except through
+	// that proxy.
 	//
-	// The certificate chain is not validated here. For a certificate from the TLS connection Go has already done so
-	// against the listener's ClientCAs; for a forwarded one the proxy that performed the handshake is the component
-	// that validated it, and RFC 8705 Section 6.5 places that channel out of scope. Per Section 7.4 the trust anchors
-	// accepted there SHOULD be limited to CAs whose issuance policy meets this server's requirements.
+	// The certificate chain is not validated here: a forwarded certificate is validated by the proxy that performed the
+	// handshake.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-6.5
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.4
 	MTLSClientCertificateHeader string
 
 	// MTLSStrictRefreshTokenBinding keeps a confidential client's certificate-bound refresh token bound to the
@@ -640,18 +637,11 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 }
 
 // GetEnforceClientAssertionIssuerAudience returns whether a JWT client authentication assertion must carry this
-// server's issuer identifier as the sole value of its 'aud' claim.
+// server's issuer identifier as the sole value of its 'aud' claim. It is off by default, as RFC 7523 permits the token
+// endpoint URL.
 //
-// draft-ietf-oauth-rfc7523bis Section 4 replaces RFC 7523 Section 3 item 3 and differentiates two cases: the
-// authorization grant MAY identify the server by "either its issuer identifier or its token endpoint URL", while for
-// client authentication the value "MUST use the issuer identifier of the authorization server as its sole value",
-// adding that "the token endpoint URL ... MUST NOT be used as an audience value". Accepting either at both endpoints
-// is the ambiguity Audience.Injection exploits: an assertion minted for one endpoint is replayed at another.
-//
-// It is off by default because the tightening lives in a draft, while published RFC 7523 permits the token endpoint
-// URL, so enabling it rejects assertions from clients that conform to the published specification. A deployment
-// whose clients have adopted the draft should turn it on; the default should be revisited when the draft is
-// published.
+// See: https://www.ietf.org/archive/id/draft-ietf-oauth-rfc7523bis-02.html#section-4
+// See: https://www.rfc-editor.org/rfc/rfc7523#section-3
 func (c *Config) GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool) {
 	return c.EnforceClientAssertionIssuerAudience
 }
@@ -836,10 +826,9 @@ func (c *Config) GetOmitRedirectScopeParam(ctx context.Context) bool {
 	return c.OmitRedirectScopeParam
 }
 
-// GetAccessTokenIssuer returns the issuer for JWT profile access tokens, falling back to the ID Token issuer. RFC 9068
-// Section 2.2 makes 'iss' a required claim, and RFC 8414 gives an authorization server one issuer identifier, so the
-// value that identifies it as an ID Token issuer identifies it here too. Without the fallback a deployment that
-// enabled JWT profile access tokens without setting this minted tokens carrying no 'iss' at all.
+// GetAccessTokenIssuer returns the issuer for JWT profile access tokens, falling back to the ID Token issuer.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
 func (c *Config) GetAccessTokenIssuer(ctx context.Context) string {
 	if c.AccessTokenIssuer == "" {
 		return c.IDTokenIssuer
@@ -1474,19 +1463,10 @@ func (c *Config) GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Conte
 	return c.RFC7591ClientRegistrationEndpointAudiences
 }
 
-// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for, or nil to permit any.
+// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for, or nil to permit any. It is
+// empty by default.
 //
-// RFC 7591 Section 2 permits the authorization server to "reject any requested client metadata values ... by
-// returning an error response". The registrant chooses 'grant_types' and every token endpoint authorization check in
-// this library is a GetGrantTypes().Has call, so a client that can register unrestricted grants its own authority:
-// asserting 'client_credentials' produces a client that acts with no resource owner, and 'password' one that
-// RFC 9700 Section 2.4 says MUST NOT be used at all.
-//
-// It is empty by default, permitting any grant, because registering a non-redirecting grant is legitimate and
-// specified: an mTLS client registered under RFC 8705 is a client credentials client, and Section 2 requires only
-// that 'grant_types' and 'response_types' be internally coherent. A deployment whose registration endpoint is open,
-// or is reachable by parties it does not intend to grant every flow to, should set this to the grants it means to
-// hand out.
+// See: https://www.rfc-editor.org/rfc/rfc7591#section-2
 func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string) {
 	return c.RFC7591ClientRegistrationGrantTypes
 }

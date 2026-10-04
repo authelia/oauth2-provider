@@ -54,12 +54,8 @@ func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Re
 		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The access token is not bound to a DPoP key."))
 	}
 
-	// RFC 9449 7.2: a DPoP-bound access token MUST be presented under the DPoP authentication scheme; reject a bearer
-	// (or any non-DPoP) presentation to prevent downgraded use of the token.
-	//
-	// This reports ErrInvalidToken, not ErrInvalidDPoPProof. Section 7.1 defines invalid_dpop_proof as indicating the
-	// proof "was deemed invalid based on the criteria of Section 4.3", and presenting a token under the wrong scheme
-	// is none of those criteria - the request may carry no proof at all, so there is nothing to have deemed.
+	// RFC 9449 7.2: a DPoP-bound access token MUST be presented under the DPoP authentication scheme. This reports
+	// ErrInvalidToken, not ErrInvalidDPoPProof, as the wrong scheme is not one of the Section 4.3 criteria.
 	token, dpop := AccessTokenFromRequest(r)
 	if !dpop || token != accessToken {
 		// The client-facing hint stays generic so it does not reveal which sub-condition failed; the debug field (only

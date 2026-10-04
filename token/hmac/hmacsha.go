@@ -66,13 +66,10 @@ func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
 		entropy = minimumEntropy
 	}
 
-	// When creating secrets not intended for usage by human users (e.g.,
-	// client secrets or token handles), the authorization server should
-	// include a reasonable level of entropy in order to mitigate the risk
-	// of guessing attacks.  The token value should be >=128 bits long and
-	// constructed from a cryptographically strong random or pseudo-random
-	// number sequence (see [RFC4086] for best current practice) generated
-	// by the authorization server.
+	// The token value should be at least 128 bits long and constructed from a cryptographically strong random
+	// sequence.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-10.10
 	tokenKey, err := RandomBytes(entropy)
 	if err != nil {
 		return "", "", errorsx.WithStack(err)

@@ -49,7 +49,6 @@ const (
 	AuthSchemeBearer = "Bearer"
 
 	// AuthSchemeDPoP is the HTTP authentication scheme name used in the 'WWW-Authenticate' response header, per
-	// RFC 9449 Section 7.1. Unlike the Bearer scheme it is spelled identically to the DPoP 'token_type' value, so
-	// there is no case distinction to preserve between the two uses.
+	// RFC 9449 Section 7.1.
 	AuthSchemeDPoP = "DPoP"
 )

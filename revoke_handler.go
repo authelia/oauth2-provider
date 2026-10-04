@@ -15,23 +15,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// NewRevocationRequest handles incoming token revocation requests and
-// validates various parameters as specified in:
-// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+// NewRevocationRequest handles incoming token revocation requests and validates various parameters.
 //
-// The authorization server first validates the client credentials (in
-// case of a confidential client) and then verifies whether the token
-// was issued to the client making the revocation request.  If this
-// validation fails, the request is refused and the client is informed
-// of the error by the authorization server as described below.
-//
-// In the next step, the authorization server invalidates the token.
-// The invalidation takes place immediately, and the token cannot be
-// used again after the revocation.
-//
-// * https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
-// An invalid token type hint value is ignored by the authorization
-// server and does not influence the revocation response.
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) error {
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
@@ -69,17 +56,9 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 	return nil
 }
 
-// WriteRevocationResponse writes a token revocation response as specified in:
-// https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+// WriteRevocationResponse writes a token revocation response.
 //
-// The authorization server responds with HTTP status code 200 if the
-// token has been revoked successfully or if the client submitted an
-// invalid token.
-//
-// Note: invalid tokens do not cause an error response since the client
-// cannot handle such an error in a reasonable way.  Moreover, the
-// purpose of the revocation request, invalidating the particular token,
-// is already achieved.
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWriter, err error) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)

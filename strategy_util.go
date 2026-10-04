@@ -86,10 +86,7 @@ func isPathOrSubpath(haystackPath, needlePath string) bool {
 		return true
 	}
 
-	// 3. Needle is strictly longer than the allowed haystack path AND the byte right
-	//    after the haystack prefix is a '/'. We check that boundary by taking
-	//    needle[:len(allowed)+1] and trimming a trailing '/' off; the result has to
-	//    equal `allowed`. (Equivalently: needle starts with allowed + "/".)
+	// 3. Needle is strictly longer than the allowed path and starts with allowed + "/".
 	if len(needlePath) <= len(allowed) {
 		return false
 	}

@@ -16,14 +16,11 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// IsValidRedirectURI validates a redirect_uri as specified in:
+// IsValidRedirectURI reports whether the redirect_uri is an absolute URI with no fragment component.
 //
-// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
-//   - The redirection endpoint URI MUST be an absolute URI as defined by [RFC3986] Section 4.3.
-//   - The endpoint URI MUST NOT include a fragment component.
-//   - https://datatracker.ietf.org/doc/html/rfc3986#section-4.3
-//     absolute-URI  = scheme ":" hier-part [ "?" query ]
-//   - https://datatracker.ietf.org/doc/html/rfc6819#section-5.1.1
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
+// See: https://datatracker.ietf.org/doc/html/rfc3986#section-4.3
+// See: https://datatracker.ietf.org/doc/html/rfc6819#section-5.1.1
 func IsValidRedirectURI(uri *url.URL) bool {
 	// We need to explicitly check for a scheme
 	if !urls.IsRequestURL(uri.String()) {
@@ -89,34 +86,8 @@ func IsLocalhost(uri *url.URL) bool {
 // MatchRedirectURIWithClientRedirectURIs if the given uri is a registered redirect uri. Does not perform
 // uri validation.
 //
-// Considered specifications
-//
-//   - https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
-//     If multiple redirection URIs have been registered, if only part of
-//     the redirection URI has been registered, or if no redirection URI has
-//     been registered, the client MUST include a redirection URI with the
-//     authorization request using the "redirect_uri" request parameter.
-//
-//     When a redirection URI is included in an authorization request, the
-//     authorization server MUST compare and match the value received
-//     against at least one of the registered redirection URIs (or URI
-//     components) as defined in [RFC3986] Section 6, if any redirection
-//     URIs were registered.  If the client registration included the full
-//     redirection URI, the authorization server MUST compare the two URIs
-//     using simple string comparison as defined in [RFC3986] Section 6.2.1.
-//
-// * https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.7
-//   - The authorization server may also enforce the usage and validation
-//     of pre-registered redirect URIs (see Section 5.2.3.5).  This will
-//     allow for early recognition of authorization "code" disclosure to
-//     counterfeit clients.
-//   - The attacker will need to use another redirect URI for its
-//     authorization process rather than the target web site because it
-//     needs to intercept the flow.  So, if the authorization server
-//     associates the authorization "code" with the redirect URI of a
-//     particular end-user authorization and validates this redirect URI
-//     with the redirect URI passed to the token's endpoint, such an
-//     attack is detected (see Section 5.2.4.5).
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
+// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.7
 func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL, error) {
 	strategy := GetClientRedirectURIComparisonStrategy(client)
 
@@ -131,7 +102,6 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
-			// If no redirect_uri was given and the client has exactly one valid redirect_uri registered, use that instead
 			return parsed, nil
 		}
 	}
@@ -139,21 +109,10 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s'.", client.GetID(), raw))
 }
 
-// IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs.
+// IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs. A request for a
+// registered loopback IP literal URI, http://127.0.0.1 or http://[::1], may use any port.
 //
-// Test a given redirect URI against a pool of URIs provided by a registered client.
-// If the OAuth 2.0 Client has loopback URIs registered either an IPv4 URI http://127.0.0.1 or
-// an IPv6 URI http://[::1] a client is allowed to request a dynamic port and the server MUST accept
-// it as a valid redirection uri.
-//
-// https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
-// Native apps that are able to open a port on the loopback network
-// interface without needing special permissions (typically, those on
-// desktop operating systems) can use the loopback interface to receive
-// the OAuth redirect.
-//
-// Loopback redirect URIs use the "http" scheme and are constructed with
-// the loopback IP literal and whatever port the client is listening on.
+// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 func IsMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy) (uri string, ok bool) {
 	var (
 		requested, registered *url.URL
@@ -275,15 +234,9 @@ func isMatchingRawLoopbackURI(requested *url.URL, registeredURI string) bool {
 }
 
 func isMatchingLoopbackURI(requested, registered *url.URL) bool {
-	// Native apps that are able to open a port on the loopback network
-	// interface without needing special permissions (typically, those on
-	// desktop operating systems) can use the loopback interface to receive
-	// the OAuth redirect.
+	// Loopback redirect URIs use the 'http' scheme, the loopback IP literal, and any port.
 	//
-	// Loopback redirect URIs use the "http" scheme and are constructed with
-	// the loopback IP literal and whatever port the client is listening on.
-	//
-	// Source: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
+	// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 	if requested.Scheme != consts.SchemeHTTP || registered.Scheme != consts.SchemeHTTP {
 		return false
 	}

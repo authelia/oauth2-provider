@@ -106,19 +106,15 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 		}
 	}
 
-	// RFC 8705 Section 2 makes mutual TLS an authentication method only for a client registered to use one. A
-	// certificate can be presented incidentally, by a proxy configured to forward one unconditionally or by an
-	// optional-mTLS listener, and treating that as an attempt to authenticate would reject every conventional client
-	// behind such a deployment. For any other client the certificate is ignored here and serves only to bind tokens.
+	// A certificate is an authentication method only for a client registered to use mutual TLS. For any other client
+	// it is ignored here and serves only to bind tokens.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-2
 	isMTLS := isMTLSAuthMethod(client, strategy)
 	hasMTLS := cert != nil && isMTLS
 
-	// A client registered to use mutual TLS is gated off the 'none' method regardless of whether it presented a
-	// certificate. Gating this on hasMTLS instead (i.e. only once a certificate is known to be present) would leave
-	// the no-certificate case reading as 'none', which doAuthenticateNone would then reject with a method-mismatch
-	// error masking the real problem: no known authentication method was used. Section 2 also requires that a client
-	// authenticating with mutual TLS still sends 'client_id', which on its own would otherwise be read as the 'none'
-	// method and produce a spurious two-method conflict once the certificate is counted as well.
+	// A client registered to use mutual TLS never uses the 'none' method, whether or not it presented a certificate,
+	// as it still sends the 'client_id' which would otherwise be read as 'none'.
 	hasNone = hasNone && !isMTLS
 
 	var methods []string
@@ -419,12 +415,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client AuthenticationMethodClient, assertion *ClientAssertion, strategy EndpointClientAuthStrategy) (method, kid, alg string, token *jwt.Token, err error) {
 	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
 
-	// draft-ietf-oauth-rfc7523bis Section 4 replaces RFC 7523 Section 3 item 3 with two differentiated cases. The
-	// authorization grant, handled in handler/rfc7523, may still identify this server by its issuer identifier or
-	// its token endpoint URL. Client authentication may not: the 'aud' value "MUST use the issuer identifier of the
-	// authorization server as its sole value", and "the token endpoint URL of the authorization server MUST NOT be
-	// used as an audience value". Sharing one configured list across both is what makes an assertion minted for one
-	// endpoint replayable at another, which is the Audience.Injection attack the draft exists to close.
+	// When enforced, the client assertion 'aud' must be solely the issuer identifier and never the token endpoint
+	// URL. This differs from the authorization grant handled in handler/rfc7523, which may use either.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc7523bis-11#section-4
 	enforceIssuerAudience := s.Config.GetEnforceClientAssertionIssuerAudience(ctx)
@@ -447,12 +439,9 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods as it could not determine any safe value for it's audience but it's required to validate the RFC7523 client assertions."))
 	}
 
-	// RFC7523 Section 3 requires the JWT be digitally signed or have a MAC applied, and the authorization server
-	// reject any JWT with an invalid signature or MAC. An 'alg' of 'none' is neither, and unlike an OpenID Connect
-	// 1.0 Request Object, which Section 6.1 permits to be unsigned, no registration value makes an unsigned client
-	// assertion acceptable. It is therefore rejected irrespective of the client's registered
-	// '<endpoint>_endpoint_auth_signing_alg' value. The algorithm list supplied to Decode below excludes 'none' so
-	// an unsigned assertion cannot be parsed at all; this check runs first only to return a diagnosable error.
+	// An unsigned client assertion is never acceptable, irrespective of the client's registered
+	// '<endpoint>_endpoint_auth_signing_alg' value. Decode below excludes 'none' as well; this check runs first only
+	// to return a diagnosable error.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
 	if assertion.Algorithm == consts.JSONWebTokenAlgNone {

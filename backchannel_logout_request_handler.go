@@ -67,10 +67,7 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 
 	results = make([]BackChannelLogoutResult, len(clients))
 
-	// Constructed once, outside the delivery loop, so every delivery shares a single underlying transport and
-	// connection pool. Constructing it per delivery (as GetHTTPClient's default of a nil Config.HTTPClient
-	// would otherwise force) would hand each Relying Party a brand-new retryablehttp client with no connection
-	// reuse at all.
+	// Constructed once, outside the delivery loop, so every delivery shares a single transport and connection pool.
 	client := backChannelLogoutHTTPClient(f.Config.GetHTTPClient(ctx))
 
 	var wg sync.WaitGroup
@@ -159,22 +156,10 @@ func postBackChannelLogout(ctx context.Context, client *retryablehttp.Client, ur
 }
 
 // backChannelLogoutHTTPClient returns a client configured like base, except that it always returns the final
-// response and error rather than discarding the response once retries are exhausted, and never follows
-// redirects.
+// response and error once retries are exhausted, so the Relying Party's actual status code can be reported, and
+// never follows redirects, so the Logout Token is only ever sent to the registered URI.
 //
-// The default ErrorHandler closes the body and synthesizes a generic "giving up" error once retries run out,
-// even when a response was received (for example a Relying Party's default retry policy treats a 500 response
-// as retryable, but discards the 500 response itself when no more retries remain). Back-Channel Logout results
-// report the Relying Party's actual status code, so the response must be preserved. A fresh value is
-// constructed rather than mutating base's ErrorHandler, because base is shared across concurrent deliveries and
-// across calls to SendBackChannelLogout.
-//
-// The wrapped *http.Client is likewise a copy of base.HTTPClient, never base.HTTPClient itself, with
-// CheckRedirect overridden so that a 3xx response is returned as-is instead of being followed: a registered
-// Relying Party could otherwise use a 307 or 308 (which Go's client replays with the same method and body) to
-// forward the signed Logout Token to a host that never registered to receive it. Copying rather than mutating
-// base.HTTPClient in place means the integrator's own *http.Client, which may be shared and used elsewhere, is
-// never touched.
+// Both base and base.HTTPClient are shared, so they are copied and never mutated.
 func backChannelLogoutHTTPClient(base *retryablehttp.Client) (client *retryablehttp.Client) {
 	httpClient := &http.Client{}
 

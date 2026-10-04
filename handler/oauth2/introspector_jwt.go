@@ -113,10 +113,8 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 		Subject: claims.Subject,
 	}
 
-	// A stateless token's claims are the only record of what it is bound to. Without recovering those bindings the
-	// reconstructed session reports the token as unbound, and since this request replaces the caller's session on
-	// oauth2.(*Request).Merge, introspection would then omit 'cnf' entirely and a resource server would accept a bound
-	// token as a bearer token. The token's signature was verified by the caller before this point.
+	// Recover the confirmation bindings from the claims, the only record of them for a stateless token, so
+	// introspection reports 'cnf'.
 	oauth2.RestoreConfirmation(mapClaims, session)
 
 	return &oauth2.Request{

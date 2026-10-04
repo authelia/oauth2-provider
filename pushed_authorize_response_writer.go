@@ -79,9 +79,7 @@ func (f *Fosite) WritePushedAuthorizeError(ctx context.Context, rw http.Response
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
-	// RFC 9449 Section 8: a nonce is demanded with the 'use_dpop_nonce' error, and the nonce to retry with is supplied
-	// in the DPoP-Nonce header. Without it a client that presented a proof to this endpoint while nonces are required
-	// has no way to learn the value it must include, so the request could never succeed.
+	// RFC 9449 Section 8: the 'use_dpop_nonce' error carries the nonce to retry with in the DPoP-Nonce header.
 	if f.isErrUseDPoPNonce(ctx, err) {
 		if strategy := f.Config.GetDPoPStrategy(ctx); strategy != nil {
 			if nonce, nonceErr := strategy.NewDPoPNonce(ctx); nonceErr == nil {

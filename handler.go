@@ -9,17 +9,10 @@ import (
 )
 
 type AuthorizeEndpointHandler interface {
-	// HandleAuthorizeEndpointRequest handles an authorize endpoint request. To extend the handler's capabilities, the http request
-	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
-	// the authorize request, he must return nil and NOT modify session nor responder neither requester.
+	// HandleAuthorizeEndpointRequest handles an authorize endpoint request. A handler that is not responsible for the
+	// request must return nil and must not modify the session, responder or requester.
 	//
-	// The following spec is a good example of what HandleAuthorizeRequest should do.
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
-	//   response_type REQUIRED.
-	//   The value MUST be one of "code" for requesting an
-	//   authorization code as described by Section 4.1.1, "token" for
-	//   requesting an access token (implicit grant) as described by
-	//   Section 4.2.1, or a registered extension value as described by Section 8.4.
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	HandleAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response AuthorizeResponder) (err error)
 }
 
@@ -99,19 +92,10 @@ type RFC8628DeviceAuthorizeEndpointBindingHandler interface {
 	BindRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error)
 }
 
-// RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider.
-// https://datatracker.ietf.org/doc/html/rfc7009
+// RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider. RevokeToken is invoked
+// after a new token revocation request is parsed.
 //
-// RevokeToken is invoked after a new token revocation request is parsed.
-//
-// https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
-// If the particular
-// token is a refresh token and the authorization server supports the
-// revocation of access tokens, then the authorization server SHOULD
-// also invalidate all access tokens based on the same authorization
-// grant (see Implementation Note). If the token passed to the request
-// is an access token, the server MAY revoke the respective refresh
-// token as well.
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 type RevocationHandler interface {
 	// RevokeToken handles access and refresh token revocation.
 	RevokeToken(ctx context.Context, token string, tokenType TokenType, client Client) (err error)

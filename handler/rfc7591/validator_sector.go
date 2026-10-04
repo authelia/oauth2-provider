@@ -48,12 +48,8 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' could not be parsed as a URI.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI).WithWrap(err).WithDebugError(err))
 	}
 
-	// OpenID Connect Dynamic Client Registration 1.0 Section 5 requires 'https', with no exception, and there is no
-	// loopback carve-out here for the same reason the fetch below refuses to follow redirects: the value is chosen by
-	// the registrant, so exempting plain 'http' on a loopback host would hand any registrant a direct fetch against
-	// the authorization server's own loopback interface, with the redirect URI containment check below as the read
-	// oracle. A local deployment that needs this validator in development must serve the document over TLS, as tests
-	// in this package do with httptest.NewTLSServer.
+	// OpenID Connect Dynamic Client Registration 1.0 Section 5 requires 'https'. There is no loopback exception, as
+	// the registrant chooses the URI.
 	if parsed.Scheme != consts.SchemeHTTPS {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must use the 'https' scheme.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI))
 	}
@@ -71,11 +67,8 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 
 	var response *http.Response
 
-	// withoutRedirects prevents the fetch from following any redirect the sector_identifier_uri server returns.
-	// Without this, a registrant-controlled server behind a validly-scoped 'https' URI could 302 the fetch to an
-	// internal, link-local, or loopback address, using this validator's redirect-URI containment check as a read
-	// oracle against that address (SSRF). A redirect response is instead surfaced as-is and rejected below by the
-	// non-200 status check, exactly like any other unexpected status code.
+	// Redirects are not followed, so a registrant-controlled server cannot steer the fetch to an internal address
+	// (SSRF). A redirect response is rejected below by the non-200 status check.
 	if response, err = oauth2.HTTPClientWithoutRedirects(httpClient).Do(req); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' could not be fetched.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI).WithWrap(err).WithDebugError(err))
 	}

@@ -18,12 +18,8 @@ import (
 )
 
 // revokeCodeGrant revokes the access and refresh tokens issued for the request a replayed code belongs to, and returns
-// the error the token endpoint answers the replay with. RFC 6749 Section 4.1.2 requires that the authorization server
-// deny a code presented more than once and revoke the tokens previously issued from it.
-//
-// Both the request validation phase and the response population phase re-read the code session, and either can be the
-// one to observe the replay depending on how two concurrent redemptions interleave, so both must reach this. Keeping
-// it in one place is what stops the two phases from disagreeing about what a replay means.
+// the error the token endpoint answers the replay with. Both the request validation phase and the response population
+// phase can observe a replay, so both must call it.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestID string) error {
@@ -102,9 +98,9 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return err
 	}
 
-	// The authorization server MUST ensure that the authorization code was issued to the authenticated
-	// confidential client, or if the client is public, ensure that the
-	// code was issued to "client_id" in the request,
+	// The code must have been issued to this client.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	if authorizeRequest.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
@@ -120,10 +116,9 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return err
 	}
 
-	// ensure that the "redirect_uri" parameter is present if the
-	// "redirect_uri" parameter was included in the initial authorization
-	// request as described in Section 4.1.1, and if included ensure that
-	// their values are identical.
+	// The 'redirect_uri' must be identical to the one included in the authorization request.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	redirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
 
 	switch redirectURI {
@@ -137,11 +132,9 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request.").WithDebugf("The 'redirect_uri' parameter value '%s' utilized in the Access Request does not match the original 'redirect_uri' parameter value '%s' requested in the Authorize Request which is not permitted.", request.GetRequestForm().Get(consts.FormParameterRedirectURI), redirectURI))
 	}
 
-	// Checking of POST client_id skipped, because:
-	// If the client type is confidential or the client was issued client
-	// credentials (or assigned other authentication requirements), the
-	// client MUST authenticate with the authorization server as described
-	// in Section 3.2.1.
+	// The POST client_id is not checked as the client is already authenticated.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
 	request.SetSession(authorizeRequest.GetSession())
 	request.SetID(authorizeRequest.GetID())
 
@@ -187,11 +180,10 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	var ar oauth2.Requester
 
-	// This re-read can observe a replay that HandleTokenEndpointRequest could not: two requests bearing the same code
-	// both clear that phase while the code is still active, and only one of them goes on to invalidate it. The loser
-	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
-	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
-	// mandates. That is precisely the window an attacker racing the legitimate client with a stolen code exploits.
+	// A concurrent redemption of the same code can surface the replay here rather than in HandleTokenEndpointRequest,
+	// so it is handled the same way.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 	if ar, err = c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession().Clone()); err != nil {
 		switch {
 		case errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):

@@ -135,13 +135,6 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 
-		// This is not required because the auth code flow is being handled by oauth2/flow_authorize_code_token which in turn
-		// sets the proper access/refresh token lifetimes.
-		//
-		// if c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan > -1 {
-		// 	 requester.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.RefreshTokenLifespan).Truncate(jwt.TimePrecision))
-		// }
-
 		// This is required because we must limit the authorize code lifespan.
 		request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Truncate(jwt.TimePrecision))
 

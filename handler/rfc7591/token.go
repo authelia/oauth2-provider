@@ -27,11 +27,8 @@ func ClientConfigurationURL(endpoint, id string) (uri string) {
 func NewClientManagementToken(ctx context.Context, strategy ClientRegistrationTokenStrategy, store Storage, config oauth2.RFC7591ClientRegistrationConfigProvider, client oauth2.Client, scopes, audience, resource oauth2.Arguments) (tokenString string, err error) {
 	id := client.GetID()
 
-	// A management token never expires, and neither configuration nor the client may change that. RFC 7592 provides
-	// no way to re-issue a registration_access_token, so a client whose management token expired would permanently
-	// lose the ability to read, update or delete its own registration and its client_id would be burned. The lifespan
-	// is therefore not routed through oauth2.GetEffectiveLifespan, which would let a CustomTokenLifespansClient - the
-	// controlled party - shorten the very credential that controls it.
+	// A management token never expires, as RFC 7592 provides no way to re-issue a registration_access_token. The
+	// lifespan is not routed through oauth2.GetEffectiveLifespan, so a CustomTokenLifespansClient cannot shorten it.
 	return newClientRegistrationToken(ctx, strategy, store, client, &oauth2.DefaultSession{}, ClientConfigurationURL(config.GetRFC7591ClientRegistrationEndpointURL(ctx), id), NonExpiringTokenLifespan, scopes, audience, resource)
 }
 
@@ -53,10 +50,8 @@ func newClientRegistrationToken(ctx context.Context, strategy ClientRegistration
 	requester := oauth2.NewRequest()
 	requester.Session = session
 
-	// NewRequest supplies a non-nil default client which must be preserved when the caller supplies none: elsewhere in
-	// this module Requester.GetClient is assumed non-nil - TokenValidationStrategy.ValidateIDToken's doc comment calls
-	// out tolerating a nil client as an explicit deviation from that norm - so overwriting the well-formed default
-	// with a nil interface value here would be a foot-gun for any code that later reads this session back.
+	// NewRequest supplies a non-nil default client which is kept when the caller supplies none: Requester.GetClient is
+	// assumed non-nil elsewhere in this module.
 	if client != nil {
 		requester.Client = client
 	}

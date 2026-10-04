@@ -20,12 +20,8 @@ import (
 // include a single '%s' for the purpose of adding the token part (ac, dc, at, rt, and cr; for the Authorize Code,
 // Device Code, Access Token, Refresh Token, and Client Registration Token; respectively).
 //
-// This is the required way to construct a HMACCoreStrategy, not merely a convenience: it is the only place that
-// initialises the unexported strategy client registration tokens are signed and verified with, kept on its own
-// secret so that rotating the global secret never invalidates a client management token, which cannot be re-issued.
-// A struct literal compiles - the other collaborators, Enigma and Config, are exported - but leaves that strategy
-// nil, and GenerateClientRegistrationToken/ValidateClientRegistrationToken then return an error naming this
-// constructor rather than panicking or silently falling back to Enigma's global secret.
+// A HMACCoreStrategy must be constructed with this function: a struct literal leaves the client registration token
+// strategy nil, and GenerateClientRegistrationToken and ValidateClientRegistrationToken then return an error.
 func NewHMACCoreStrategy(config HMACCoreStrategyConfigurator, prefix string) (strategy *HMACCoreStrategy) {
 	if len(prefix) == 0 || strings.Count(prefix, "%s") != 1 {
 		return &HMACCoreStrategy{
@@ -47,11 +43,7 @@ func NewHMACCoreStrategy(config HMACCoreStrategyConfigurator, prefix string) (st
 
 // clientRegistrationSecretConfig adapts an HMACCoreStrategyConfigurator so the embedded hmac.HMACStrategy signs and
 // verifies with the client registration token secrets instead of the global ones. Only the two secret getters are
-// overridden, by shadowing the promoted methods of the same name; entropy and hashing continue to come from the
-// embedded configuration unchanged. HMACCoreStrategyConfigurator is embedded directly, rather than alongside a
-// second field of that same type, because it is already a superset of hmac.HMACStrategyConfigurator (the interface
-// hmac.HMACStrategy.Config requires) - a second field would only duplicate the one embedded value and create two
-// places that must always agree.
+// overridden; entropy and hashing come from the embedded configuration.
 type clientRegistrationSecretConfig struct {
 	HMACCoreStrategyConfigurator
 }
@@ -65,19 +57,14 @@ func (c *clientRegistrationSecretConfig) GetRotatedGlobalSecrets(ctx context.Con
 }
 
 // errHMACCoreStrategyMissingClientRegistrationSecret is returned by GenerateClientRegistrationToken and
-// ValidateClientRegistrationToken when enigmaClientRegistration is nil - i.e. this HMACCoreStrategy was assembled
-// with a struct literal instead of NewHMACCoreStrategy, so the client registration secret strategy was never wired
-// up. This deliberately does not fall back to Enigma's global secret: that fallback is exactly what enigmaClientRegistration
-// exists to remove.
+// ValidateClientRegistrationToken when enigmaClientRegistration is nil, i.e. the HMACCoreStrategy was not built with
+// NewHMACCoreStrategy. There is deliberately no fallback to Enigma's global secret.
 func errHMACCoreStrategyMissingClientRegistrationSecret() error {
 	return errorsx.WithStack(fmt.Errorf("oauth2: HMACCoreStrategy has no client registration token secret strategy configured; construct it with NewHMACCoreStrategy, not a struct literal, so the client registration secret is wired up"))
 }
 
 // HMACCoreStrategy implements the OAuth 2.0 and RFC 7591/7592 opaque token strategies backed by HMAC-signed tokens.
-//
-// Construct it with NewHMACCoreStrategy, not a struct literal: NewHMACCoreStrategy is the only place that
-// initialises enigmaClientRegistration, the unexported strategy client registration tokens are signed and verified
-// with on their own secret, and a struct literal leaves it nil.
+// Construct it with NewHMACCoreStrategy, not a struct literal, which leaves enigmaClientRegistration nil.
 type HMACCoreStrategy struct {
 	Enigma *hmac.HMACStrategy
 
@@ -147,14 +134,8 @@ func (s *HMACCoreStrategy) IsOpaqueClientRegistrationToken(ctx context.Context, 
 }
 
 // ClientRegistrationTokenSignature returns the signature of an RFC 7591 / RFC 7592 client registration token, or an
-// empty string when the token is not one. An empty signature can never be a legitimate storage key, so a caller may
-// reject on it without a storage round trip.
-//
-// A nil enigmaClientRegistration - this HMACCoreStrategy was assembled with a struct literal instead of
-// NewHMACCoreStrategy - is one such case, and is answered here rather than one layer down: no client registration
-// token can have been minted without that strategy, so no signature it computed could resolve to anything, and the
-// same condition already turns GenerateClientRegistrationToken and ValidateClientRegistrationToken into a
-// diagnosable error.
+// empty string when the token is not one or the strategy was not built with NewHMACCoreStrategy. An empty signature
+// is never a valid storage key, so a caller may reject on it without a storage round trip.
 func (s *HMACCoreStrategy) ClientRegistrationTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	if s.enigmaClientRegistration == nil {
 		return ""
@@ -182,10 +163,8 @@ func (s *HMACCoreStrategy) GenerateClientRegistrationToken(ctx context.Context, 
 
 // ValidateClientRegistrationToken validates an RFC 7591 / RFC 7592 client registration token against its session.
 //
-// Unlike ValidateAccessToken there is no fallback to the configured access token lifespan when the session carries no
-// expiry. newClientRegistrationToken always records one - substituting NonExpiringTokenLifespan for a lifespan of zero
-// rather than leaving it unset - so a session reaching here without an expiry is malformed, and treating that as
-// "never expires" is exactly the silent failure that fallback caused for these tokens before.
+// A session with no expiry is rejected as malformed: unlike ValidateAccessToken there is no fallback to the configured
+// access token lifespan.
 func (s *HMACCoreStrategy) ValidateClientRegistrationToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	if s.enigmaClientRegistration == nil {
 		return errHMACCoreStrategyMissingClientRegistrationSecret()

@@ -96,27 +96,24 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	request.SetRequestedAudience(deviceRequester.GetRequestedAudience())
 	request.SetRequestedResource(deviceRequester.GetRequestedResource())
 
-	// The authorization server MUST ensure that the authorization code was issued to the authenticated
-	// confidential client, or if the client is public, ensure that the
-	// code was issued to "client_id" in the request,
+	// The code must have been issued to this client.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	if deviceRequester.GetClient().GetID() != request.GetClient().GetID() {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
 
-	// ensure that the "redirect_uri" parameter is present if the
-	// "redirect_uri" parameter was included in the initial authorization
-	// request as described in Section 4.1.1, and if included ensure that
-	// their values are identical.
+	// The 'redirect_uri' must be identical to the one included in the authorization request.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	forcedRedirectURI := deviceRequester.GetRequestForm().Get(consts.FormParameterRedirectURI)
 	if forcedRedirectURI != "" && forcedRedirectURI != request.GetRequestForm().Get(consts.FormParameterRedirectURI) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
 	}
 
-	// Checking of POST client_id skipped, because:
-	// If the client type is confidential or the client was issued client
-	// credentials (or assigned other authentication requirements), the
-	// client MUST authenticate with the authorization server as described
-	// in Section 3.2.1.
+	// The POST client_id is not checked as the client is already authenticated.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
 	request.SetSession(deviceRequester.GetSession())
 	request.SetID(deviceRequester.GetID())
 
@@ -149,11 +146,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	// This re-read can observe a replay that HandleTokenEndpointRequest could not: two requests bearing the same code
-	// both clear that phase while the code is still active, and only one of them goes on to invalidate it. The loser
-	// arrives here, so this must reach the same conclusion the first phase would have rather than reporting every
-	// error as a server fault, which would answer a replay with a 500 and skip the revocation RFC 6749 Section 4.1.2
-	// mandates.
+	// A concurrent redemption of the same code can surface the replay here rather than in HandleTokenEndpointRequest,
+	// so it is handled the same way.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 	session := request.GetSession()
 
 	request.SetSession(session.Clone())

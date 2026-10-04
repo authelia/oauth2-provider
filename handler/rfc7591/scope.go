@@ -20,28 +20,14 @@ type ScopeCeilingConfig interface {
 	oauth2.RFC7591ClientRegistrationConfigProvider
 }
 
-// CheckGrantableScopes enforces that the scopes requested in metadata are a subset of those the authenticated
-// client registration token was itself granted, and additionally refuses every configured client registration scope
-// even though every client creation token holds one of them: granting one onward would let the registered client
-// obtain creation tokens of its own and register further clients, registration authority replicating itself with no
-// administrator approving the descendants.
+// CheckGrantableScopes enforces that the scopes requested in metadata are a subset of those the authenticated client
+// registration token was itself granted. Every configured client registration scope, and any scope the configured
+// oauth2.ScopeStrategy would match against one, is refused so that a registered client cannot obtain creation tokens of
+// its own.
 //
-// Every configured registration scope is refused, not merely the first. Refusing only one would let a caller
-// authorised by a different registration scope grant that scope onward, which is the same hole by another route. A
-// scope which the configured oauth2.ScopeStrategy would match against a registration scope, such as '*' under the
-// oauth2.WildcardScopeStrategy, is refused as the registration scope itself would be.
-//
-// A request with no authenticated requester has no ceiling to enforce: RFC 7591 permits an open registration
-// endpoint, and such a deployment has no creation token from which a ceiling could come. Deployments wanting a
-// ceiling require authentication on the endpoint.
-//
-// An omitted or empty 'scope' registers the client with no scopes, so there is nothing to check.
-//
-// The comparison always uses the server's configured oauth2.ScopeStrategy, never a client-supplied one. No client is
-// passed to oauth2.GetScopeStrategy for that reason: the ceiling is a server-side control over what a client may be
-// granted, so letting the controlled party supply the comparison function through oauth2.ScopeStrategyProvider would
-// be the wrong shape - and it would additionally make registration and update disagree, since only the latter has a
-// registered client to hand.
+// A request with no authenticated requester has no ceiling to enforce; deployments wanting a ceiling require
+// authentication on the endpoint. The comparison always uses the server's configured oauth2.ScopeStrategy, never a
+// client-supplied one.
 func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authenticated oauth2.Requester, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if authenticated == nil || metadata == nil {
 		return nil
@@ -75,20 +61,10 @@ func CheckGrantableScopes(ctx context.Context, config ScopeCeilingConfig, authen
 }
 
 // ExcludeRegistrationScope removes every configured client registration scope from scopes, along with any scope the
-// configured oauth2.ScopeStrategy would match against one when config provides it. It is the ceiling-side
-// counterpart to the exclusion CheckGrantableScopes enforces on requested scopes: every legitimate creation token
-// carries one of them by design, so without this the management token minted at registration - and every
-// one minted at a later rotation - would carry it forward permanently, letting the registered client obtain creation
-// tokens of its own and register further clients unchecked. Excluding them only from CheckGrantableScopes would close
-// the update path (a request may not ask for the scope) while leaving the management token itself able to carry it,
-// which is the hole that matters most: the scope would sit in the token's own granted scopes regardless of what any
-// future request asks for, observable wherever that token's grant is read back - including client registration
-// token introspection, where opt-in.
-//
-// Callers apply this to whatever scopes they are about to hand to NewClientManagementToken as its ceiling, whether
-// that ceiling came from an authenticated creation token's own grant or, on an unauthenticated (open) registration
-// endpoint, from the request's own metadata. It covers the token half only: the scopes the registered client itself
-// is stored with are covered by ExcludeRegistrationScopeFromMetadata, which every registration path must also call.
+// configured oauth2.ScopeStrategy would match against one when config provides it. Callers apply it to the scopes they
+// hand to NewClientManagementToken as its ceiling, so a management token never carries a registration scope. The scopes
+// the registered client is stored with are covered by ExcludeRegistrationScopeFromMetadata, which every registration
+// path must also call.
 func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRegistrationConfigProvider, scopes oauth2.Arguments) (filtered oauth2.Arguments) {
 	registration := config.GetRFC7591ClientRegistrationScopes(ctx)
 
@@ -102,20 +78,11 @@ func ExcludeRegistrationScope(ctx context.Context, config oauth2.RFC7591ClientRe
 }
 
 // ExcludeRegistrationScopeFromMetadata removes every configured client registration scope from the 'scope' a
-// registration request asks for, so none can end up on the registered client itself.
+// registration request asks for, so none can end up on the registered client itself, including on an unauthenticated
+// registration endpoint where CheckGrantableScopes has no ceiling to enforce.
 //
-// It is the third and last place the exclusion is applied, and the only one that covers an **unauthenticated** (open)
-// registration endpoint, which RFC 7591 permits. On that path there is no creation token, so CheckGrantableScopes has
-// no ceiling to enforce and returns early, and ExcludeRegistrationScope only ever filters the minted management
-// token - leaving the requested scope itself untouched. A deployment running an open endpoint would therefore store a
-// client whose own registered scopes contain the registration scope, and that client can then obtain creation tokens
-// through client_credentials and keep registering clients long after the endpoint is closed again. That is the
-// "tempting half-fix" this package's design warns about, in the one configuration where it still bites.
-//
-// Callers apply this after CheckGrantableScopes, never before: on the authenticated path a request that asks for the
-// registration scope must be rejected outright rather than silently stripped, and CheckGrantableScopes is what
-// rejects it. Applying it here as well is what makes the exclusion unconditional rather than conditional on a ceiling
-// existing.
+// Callers apply this after CheckGrantableScopes, never before: an authenticated request that asks for the registration
+// scope must be rejected rather than silently stripped.
 func ExcludeRegistrationScopeFromMetadata(ctx context.Context, config oauth2.RFC7591ClientRegistrationConfigProvider, metadata *oauth2.ClientRegistrationMetadata) {
 	if metadata == nil || len(metadata.Scope) == 0 {
 		return
@@ -125,18 +92,9 @@ func ExcludeRegistrationScopeFromMetadata(ctx context.Context, config oauth2.RFC
 }
 
 // CheckGrantableAudience enforces that the audiences requested in metadata are a subset of those the authenticated
-// client registration token was itself granted.
-//
-// It mirrors CheckGrantableScopes and carries the same reasoning. No client is passed to oauth2.GetAudienceStrategy:
-// that helper prefers a client-supplied strategy when the client implements oauth2.AudienceStrategyProvider, and the
-// ceiling is a server-side control over what the controlled party may be granted, so letting that party supply the
-// comparison function would let a permissive strategy make every membership test succeed. CheckGrantableScopes passes
-// nil to oauth2.GetScopeStrategy for the identical reason. Passing nil also gives the fallback to
-// oauth2.DefaultAudienceStrategy when none is configured, which calling config.GetAudienceStrategy directly would
-// not.
-//
-// An empty ceiling rejects every requested audience, which is the same shape as the scope ceiling: a token that was
-// issued permitting no audiences may not grant any.
+// client registration token was itself granted. The comparison always uses the server's configured audience strategy,
+// never a client-supplied one, falling back to oauth2.DefaultAudienceStrategy. An empty ceiling rejects every requested
+// audience.
 func CheckGrantableAudience(ctx context.Context, config oauth2.AudienceStrategyProvider, authenticated oauth2.Requester, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if authenticated == nil || metadata == nil {
 		return nil

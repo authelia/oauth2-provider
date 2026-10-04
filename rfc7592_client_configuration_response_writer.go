@@ -35,18 +35,12 @@ func (f *Fosite) WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw
 
 // WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response.
 //
-// The following specs must be considered in any implementation of this method:
-// * https://datatracker.ietf.org/doc/html/rfc7592#section-3
+// It reports 401 with a 'WWW-Authenticate: Bearer' header for a missing or invalid registration access token, 404 for
+// an unknown client_id, and 405 for a method other than GET, PUT, or DELETE. A valid token not authorized for the
+// target client is reported as 401 rather than 403 by DefaultEndpointAuthStrategy (handler/rfc7591), so the status
+// code does not distinguish it from an unknown token.
 //
-//	400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), and 404 (Not Found) status codes are all used, as
-//	appropriate, to indicate errors as described in Section 3.2.
-//
-// This implementation reports 401 (accompanied by a 'WWW-Authenticate: Bearer' header per RFC 6750 Section 3) for a
-// missing or invalid registration access token, 404 for an unknown client_id, and 405 for a method other than GET,
-// PUT, or DELETE. RFC 7592 also describes 403 for a token that is otherwise valid but not authorized for the target
-// client; DefaultEndpointAuthStrategy (handler/rfc7591) deliberately reports that case as 401 as well, the same as
-// any other authentication failure, so an attacker cannot use the status code to distinguish an unknown token from
-// one that is simply not authorized for this client. See that type's doc comment for the rationale.
+// See: https://datatracker.ietf.org/doc/html/rfc7592#section-3
 func (f *Fosite) WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error) {
 	f.writeClientRegistrationError(ctx, rw, requester, err, true)
 }

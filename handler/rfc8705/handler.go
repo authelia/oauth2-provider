@@ -32,12 +32,10 @@ type Handler struct {
 // BindAccessRequest records the thumbprint of the mutual-TLS client certificate presented with this request on the
 // session, and enforces any thumbprint the session already carries. It returns nil when there is nothing to bind.
 //
-// A refresh by a confidential client is re-bound to the presented certificate rather than held to the certificate the
-// grant is bound to, because RFC 8705 Section 4 binds the refresh tokens of public clients only, and those of
-// confidential clients are sender-constrained by the client authentication RFC 6749 Section 6 requires, which RFC 8705
-// Section 7.1 notes for the mutual-TLS client authentication methods. A certificate is still required. The grant of a
-// client for which oauth2.MTLSStrictRefreshTokenBindingProvider or oauth2.MTLSStrictRefreshTokenBindingClient requires
-// strict binding keeps its certificate.
+// A refresh by a confidential client is re-bound to the presented certificate, as RFC 8705 Section 4 binds the refresh
+// tokens of public clients only. A certificate is still required. The grant of a client for which
+// oauth2.MTLSStrictRefreshTokenBindingProvider or oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding
+// keeps its certificate.
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil
@@ -81,14 +79,8 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return nil
 	}
 
-	// A session that cannot carry a binding is only an error when a binding was actually required. This deliberately
-	// differs from the RFC 9449 DPoP handler, which reports the equivalent condition unconditionally: there the
-	// trigger is a 'DPoP' header the client chose to send, so a session that cannot record the proof is a
-	// misconfiguration the deployment asked for. Here the trigger is a certificate that may be entirely incidental, a
-	// proxy forwarding one unconditionally, or an optional-mTLS listener; so failing unconditionally would turn every
-	// request made over such a connection into a 500 for any session type that does not implement
-	// oauth2.MTLSBoundSession. When nothing requires a binding the certificate is simply ignored, matching how client
-	// authentication treats an incidental certificate.
+	// A session that cannot carry a binding is an error only when a binding is required; otherwise the certificate
+	// is incidental and ignored. The RFC 9449 DPoP handler differs, reporting the equivalent condition unconditionally.
 	if session == nil {
 		if required {
 			return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support mutual-TLS certificate binding."))
@@ -103,11 +95,8 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The mutual-TLS client certificate does not match the certificate the grant is bound to."))
 	}
 
-	// Only a required binding is recorded. A certificate that nothing asked to bind is incidental, and binding it
-	// anyway would be self-perpetuating: 'bound' makes the binding required on every subsequent refresh, so a
-	// certificate a proxy happened to forward once would become a permanent condition of using the grant, for a
-	// client that never requested certificate-bound tokens. This is the second half of the asymmetry with RFC 9449
-	// described above, where the trigger is a proof the client chose to send.
+	// Only a required binding is recorded, as a recorded binding makes the certificate mandatory on every subsequent
+	// refresh.
 	if !required {
 		return nil
 	}

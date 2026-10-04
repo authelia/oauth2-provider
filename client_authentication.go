@@ -238,11 +238,9 @@ func getClientCredentialsClientIDValid(post, header string, assertion *ClientAss
 	return id, nil
 }
 
-// EndpointClientAuthStrategy abstracts the per-endpoint client authentication configuration so that a single
-// ClientAuthenticationStrategy implementation can authenticate clients across the various endpoints that support client
-// authentication (i.e. the token, introspection, and revocation endpoints). Each endpoint reads different client
-// metadata (for example the 'token_endpoint_auth_method' versus the 'introspection_endpoint_auth_method') and enforces
-// a different policy, and this strategy resolves the correct values and policy for the endpoint it represents.
+// EndpointClientAuthStrategy resolves the client authentication metadata and policy for the endpoint it represents
+// (i.e. the token, introspection, or revocation endpoint), so that a single ClientAuthenticationStrategy can
+// authenticate clients across them.
 type EndpointClientAuthStrategy interface {
 	// GetAuthMethod returns the registered client authentication method configured for this endpoint (for example the
 	// value of the client's 'token_endpoint_auth_method').

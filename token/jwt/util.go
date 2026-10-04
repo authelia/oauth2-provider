@@ -286,21 +286,13 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 
 // NewClientSecretJWK returns a client secret based JWK from a client secret value.
 //
-// OpenID Connect Core 1.0 Section 10.1 states the MAC key used for a symmetric signature is the octets of the UTF-8
-// representation of the client_secret value, with no derivation applied. Section 16.19 requires such a client_secret
-// to carry at least the octets the algorithm's MAC key needs, being the hash output size RFC 7518 Section 3.2
-// mandates, and gives HS256 needing at least 32 octets as its example.
+// The MAC key for a symmetric signature is the octets of the client_secret with no derivation applied, and the secret
+// must carry at least the octets the algorithm's MAC key needs. The symmetric encryption key is the left-most bits of
+// a truncated SHA-2 hash of the client_secret.
 //
-// The truncated SHA-2 derivation described below is Section 10.2's rule and applies to symmetric encryption only.
-//
-// The symmetric encryption key is derived from the client_secret value by using the left-most bits of a truncated
-// SHA-2 hash of the octets of the UTF-8 representation of the client_secret. For keys of 256 or fewer bits, SHA-256
-// is used; for keys of 257-384 bits, SHA-384 is used; for keys of 385-512 bits, SHA-512 is used. The hash value MUST
-// be truncated retaining the left-most bits to the appropriate bit length for the AES key wrapping or direct
-// encryption algorithm used, for instance, truncating the SHA-256 hash to 128 bits for A128KW. If a symmetric key with
-// greater than 512 bits is needed, a different method of deriving the key from the client_secret would have to be
-// defined by an extension. Symmetric encryption MUST NOT be used by public (non-confidential) Clients because of
-// their inability to keep secrets.
+// See: https://openid.net/specs/openid-connect-core-1_0.html#Signing
+// See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
+// See: https://openid.net/specs/openid-connect-core-1_0.html#SymmetricKeyEntropy
 //
 //nolint:gocyclo
 func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use string) (jwk *jose.JSONWebKey, err error) {

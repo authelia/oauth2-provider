@@ -87,23 +87,16 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		subjectToken, subjectTokenType string
 	)
 
-	// From https://tools.ietf.org/html/rfc8693#section-2.1:
+	// The 'subject_token' is REQUIRED.
 	//
-	//	subject_token
-	//		REQUIRED.  A security token that represents the identity of the
-	//		party on behalf of whom the request is being made.  Typically, the
-	//		subject of this token will be the subject of the security token
-	//		issued in response to the request.
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 	if subjectToken = form.Get(consts.FormParameterSubjectToken); subjectToken == "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("Mandatory parameter '%s' is missing.", "subject_token"))
 	}
 
-	// From https://tools.ietf.org/html/rfc8693#section-2.1:
+	// The 'subject_token_type' is REQUIRED.
 	//
-	//	subject_token_type
-	//		REQUIRED.  An identifier, as described in Section 3, that
-	//		indicates the type of the security token in the "subject_token"
-	//		parameter.
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 	if subjectTokenType = form.Get(consts.FormParameterSubjectTokenType); subjectTokenType == "" {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("Mandatory parameter '%s' is missing.", consts.FormParameterSubjectTokenType))
 	}
@@ -120,19 +113,13 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		actorToken, actorTokenType string
 	)
 
-	// From https://tools.ietf.org/html/rfc8693#section-2.1:
+	// The 'actor_token' is OPTIONAL.
 	//
-	//	actor_token
-	//		OPTIONAL . A security token that represents the identity of the acting party.
-	//		Typically, this will be the party that is authorized to use the requested security
-	//		token and act on behalf of the subject.
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 	if actorToken = form.Get(consts.FormParameterActorToken); actorToken != "" {
-		// From https://tools.ietf.org/html/rfc8693#section-2.1:
+		// The 'actor_token_type' is REQUIRED when the 'actor_token' is present and MUST NOT be included otherwise.
 		//
-		//	actor_token_type
-		//		An identifier, as described in Section 3, that indicates the type of the security token
-		//		in the actor_token parameter. This is REQUIRED when the actor_token parameter is present
-		//		in the request but MUST NOT be included otherwise.
+		// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 		if actorTokenType = form.Get(consts.FormParameterActorTokenType); actorTokenType == "" {
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is empty even though the '%s' is not empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
 		}
@@ -391,17 +378,9 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 	return nil
 }
 
-// buildActClaim derives the RFC 8693 §4.1 'act' claim for the issued token from the session populated by the upstream
-// token-type handlers. It returns nil when no actor_token was supplied (i.e. impersonation, where no 'act' claim is
-// required).
-//
-// The actor's identity is taken from the actor_token's identifying claims ('sub' and 'client_id'), and an actor_token
-// with neither is an error. If the subject_token already carried an 'act' claim, that prior actor is nested under the
-// new 'act' to express the chain of delegation per §4.1: "the outermost act claim represents the current actor while
-// nested act claims represent prior actors".
-//
-// The function does not mutate any of the input maps; the returned map is a fresh allocation safe for the caller to
-// store on the session.
+// buildActClaim derives the RFC 8693 §4.1 'act' claim for the issued token from the actor_token's 'sub' and
+// 'client_id' claims, nesting any 'act' claim the subject_token already carried. It returns nil when no actor_token
+// was supplied (impersonation), and an error when the actor_token has neither claim. The input maps are not mutated.
 func buildActClaim(session Session) (map[string]any, error) {
 	actorToken := session.GetActorToken()
 	if actorToken == nil {
@@ -433,11 +412,8 @@ func buildActClaim(session Session) (map[string]any, error) {
 }
 
 // resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved
-// 'requested_token_type' parameter. When 'requested_token_type' is absent on the request the configured default is
-// substituted (matching the resolution logic in the token-type handlers' PopulateTokenEndpointResponse). Returns
-// nil when the requested type is not registered; callers SHOULD treat that as a server-side configuration error;
-// in practice TokenExchangeGrantHandler.HandleTokenEndpointRequest already rejects requests with unknown
-// requested_token_type values, so this returns nil only when called outside the normal handler ordering.
+// 'requested_token_type' parameter, substituting the configured default when it is absent. Returns nil when the
+// requested type is not registered.
 func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
 	id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
 	if id == "" {

@@ -74,21 +74,9 @@ func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.Re
 // writeClientRegistrationError writes an error response shared by the RFC 7591 client registration endpoint and the
 // RFC 7592 client configuration endpoint. requester may be nil.
 //
-// configuration selects which of the two endpoints is being written for, and drives two behaviours.
-//
-// It maps an ErrInvalidRequest to 405 rather than its usual 400, which the RFC 7592 client configuration endpoint
-// needs: HandleRFC7592ClientConfigurationEndpointRequest (handler/rfc7591) returns ErrInvalidRequest naming the
-// method when requester.GetMethod() is not GET, PUT, or DELETE, and RFC 7592 Section 3 requires that be reported as
-// 405, a status ErrInvalidRequest does not otherwise carry. The client registration endpoint only ever accepts POST,
-// so an analogous method mismatch there is reported as the ordinary 400 - the same treatment NewPushedAuthorizeRequest
-// gives a non-POST pushed authorization request.
-//
-// It also selects the 'WWW-Authenticate' challenge. The client registration endpoint is a full OAuth 2.0 protected
-// resource: it accepts a creation token under the Bearer or the DPoP scheme, so it answers with the challenge
-// WriteBearerAuthorizationChallenge composes, including the RFC 9449 status promotion and the 'DPoP-Nonce' a client
-// needs to complete a nonce handshake. The client configuration endpoint takes a management token that is minted
-// outside the binding machinery and can never be bound, so it keeps the bare Bearer challenge - advertising DPoP
-// there would offer a scheme it cannot honour.
+// When configuration is true an ErrInvalidRequest is written as 405 (RFC 7592 Section 3, unsupported method) and a
+// 401 carries the bare Bearer challenge, as a registration access token can never be DPoP bound. Otherwise the
+// challenge is the one WriteBearerAuthorizationChallenge composes.
 func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, configuration bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)

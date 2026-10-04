@@ -592,13 +592,12 @@ func (e *RFC6749Error) WithDescription(description string) *RFC6749Error {
 	return &err
 }
 
-// WithCode returns a copy of the receiver with the HTTP status code replaced.
+// WithCode returns a copy of the receiver with the HTTP status code replaced, as the same error code carries a
+// different status depending on where it is reported. The receiver is never mutated, as it may be the package-level
+// variable.
 //
-// It exists because the same error code carries a different status depending on where it is reported. RFC 9449 uses
-// 'invalid_dpop_proof' and 'use_dpop_nonce' with HTTP 400 at the token endpoint (Section 5) but HTTP 401 at a
-// protected resource (Section 7.1 Figure 16, Section 9 Figure 24). Returning a copy matters: ErrorToRFC6749Error
-// hands back the very pointer the error chain carries, which for a bare errorsx.WithStack(ErrX) is the package-level
-// variable itself, so assigning CodeField on it would corrupt that variable for the whole process.
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-5
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
 func (e *RFC6749Error) WithCode(code int) *RFC6749Error {
 	err := *e
 	err.CodeField = code

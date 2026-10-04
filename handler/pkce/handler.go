@@ -97,21 +97,13 @@ func validateChallengeSyntax(challenge, method string) (err error) {
 
 func (c *Handler) validate(ctx context.Context, challenge, method string, client oauth2.Client) (err error) {
 	if len(challenge) == 0 {
-		// If the server requires Proof Key for Code Exchange (PKCE) by OAuth
-		// clients and the client does not send the "code_challenge" in
-		// the request, the authorization endpoint MUST return the authorization
-		// error response with the "error" value set to "invalid_request".  The
-		// "error_description" or the response of "error_uri" SHOULD explain the
-		// nature of error, e.g., code challenge required.
+		// A missing 'code_challenge' is 'invalid_request' when PKCE is required.
+		// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
 		return c.validateNoPKCE(ctx, consts.FormParameterCodeChallenge, client)
 	}
 
-	// If the server supporting PKCE does not support the requested
-	// transformation, the authorization endpoint MUST return the
-	// authorization error response with "error" value set to
-	// "invalid_request".  The "error_description" or the response of
-	// "error_uri" SHOULD explain the nature of error, e.g., transform
-	// algorithm not supported.
+	// An unsupported transformation is 'invalid_request'.
+	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
 	switch method {
 	case consts.PKCEChallengeMethodSHA256:
 		break
@@ -153,12 +145,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	// code_verifier
-	// REQUIRED.  Code verifier
-	//
-	// The "code_challenge_method" is bound to the Authorization Code when
-	// the Authorization Code is issued.  That is the method that the token
-	// endpoint MUST use to verify the "code_verifier".
+	// The method bound to the authorization code when it was issued verifies the 'code_verifier'.
+	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.5
 	verifier := request.GetRequestForm().Get(consts.FormParameterCodeVerifier)
 
 	nv := len(verifier)
@@ -197,11 +185,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return nil
 	}
 
-	// NOTE: The code verifier SHOULD have enough entropy to make it
-	// 	impractical to guess the value.  It is RECOMMENDED that the output of
-	// 	a suitable random number generator be used to create a 32-octet
-	// 	sequence.  The octet sequence is then base64url-encoded to produce a
-	// 	43-octet URL safe string to use as the code verifier.
+	// The code verifier must have enough entropy to make it impractical to guess.
+	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
 
 	// Validation
 	switch {
@@ -215,27 +200,9 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
 	}
 
-	// Upon receipt of the request at the token endpoint, the server
-	// verifies it by calculating the code challenge from the received
-	// "code_verifier" and comparing it with the previously associated
-	// "code_challenge", after first transforming it according to the
-	// "code_challenge_method" method specified by the client.
-	//
-	// 	If the "code_challenge_method" from Section 4.3 was "S256", the
-	// received "code_verifier" is hashed by SHA-256, base64url-encoded, and
-	// then compared to the "code_challenge", i.e.:
-	//
-	// BASE64URL-ENCODE(SHA256(ASCII(code_verifier))) == code_challenge
-	//
-	// If the "code_challenge_method" from Section 4.3 was "plain", they are
-	// compared directly, i.e.:
-	//
-	// code_verifier == code_challenge.
-	//
-	// 	If the values are equal, the token endpoint MUST continue processing
-	// as normal (as defined by OAuth 2.0 [RFC6749]).  If the values are not
-	// equal, an error response indicating "invalid_grant" as described in
-	// Section 5.2 of [RFC6749] MUST be returned.
+	// Verify the 'code_verifier' against the stored 'code_challenge' using the stored method; a mismatch is
+	// 'invalid_grant'.
+	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
 	switch method {
 	case consts.PKCEChallengeMethodSHA256:
 		sum := sha256.Sum256([]byte(verifier))

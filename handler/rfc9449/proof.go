@@ -23,16 +23,12 @@ import (
 // least 96 bits of pseudorandom data or a version 4 UUID, both of which are far shorter than this bound.
 const JTIMaxLength = 255
 
-// NonceMaxLength is the longest accepted 'nonce' claim, bounded for the same reason as JTIMaxLength: a DPoPReplayStorage
-// that keys on the nonce retains it alongside the 'jti' for the proof's 'iat' acceptance window, so an unbounded value
-// would let a client exhaust its memory. The bound cannot reject a legitimate value, as a nonce is minted by the server
-// (DefaultStrategy.NewDPoPNonce issues 43 characters) and one that was not is rejected by the nonce check regardless.
+// NonceMaxLength is the longest accepted 'nonce' claim, bounding what a DPoPReplayStorage that keys on the nonce
+// retains. Server issued nonces (DefaultStrategy.NewDPoPNonce) are 43 characters.
 const NonceMaxLength = 255
 
 // RSAMinimumKeySize is the smallest accepted modulus for an RSA DPoP proof key. RFC 7518 Sections 3.3 and 3.5 require
-// a key of at least 2048 bits for the RS* and PS* algorithms, and nothing in the JOSE layer enforces it: a signature
-// from a weak key verifies perfectly well, so without this check a token could be bound to a key that offers no real
-// proof of possession. The client chooses this key freely, so the check costs a conforming client nothing.
+// a key of at least 2048 bits for the RS* and PS* algorithms, which the JOSE layer does not enforce.
 const RSAMinimumKeySize = 2048
 
 // RSAMaximumKeySize is the largest accepted modulus for an RSA DPoP proof key. Neither the JOSE layer nor crypto/rsa
@@ -130,12 +126,8 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 }
 
 // validateProofKeyStrength rejects a proof key too weak for the proof-of-possession binding to be meaningful, or too
-// large to verify at a bounded cost.
-//
-// Only RSA needs checking. The elliptic curve and Ed25519 key types the JOSE layer will accept as a public key all
-// carry a fixed, adequate strength: go-jose parses an 'EC' JWK only for P-256, P-384 and P-521, and its ECDSA verifier
-// derives the expected signature size from the algorithm rather than the key, so a curve weaker than the declared
-// algorithm cannot be smuggled in.
+// large to verify at a bounded cost. Only RSA is checked: the elliptic curve and Ed25519 key types the JOSE layer
+// accepts all carry a fixed, adequate strength.
 func validateProofKeyStrength(jwk *jose.JSONWebKey) (err error) {
 	if key, ok := jwk.Key.(*rsa.PublicKey); ok {
 		switch bits := key.N.BitLen(); {

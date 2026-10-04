@@ -58,6 +58,18 @@ func TestWriteJSONError(t *testing.T) {
 			expectedBody: "{\"error\":\"invalid_token\",\"error_description\":\"The access token expired.\"}\n",
 		},
 		{
+			name:         "ShouldEncodeTheJoinedErrorThatSuppliesTheStatusCode",
+			have:         errors.Join(errJSON("something failed"), &rfc6750Error{ErrorField: "invalid_token", DescriptionField: "The access token expired.", CodeField: http.StatusUnauthorized}),
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "{\"error\":\"invalid_token\",\"error_description\":\"The access token expired.\"}\n",
+		},
+		{
+			name:         "ShouldEncodeTheWrappedJoinedErrorThatSuppliesTheStatusCode",
+			have:         errorsx.WithStack(errors.Join(errJSON("something failed"), errorsx.WithStack(&rfc6750Error{ErrorField: "invalid_token", DescriptionField: "The access token expired.", CodeField: http.StatusUnauthorized}))),
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "{\"error\":\"invalid_token\",\"error_description\":\"The access token expired.\"}\n",
+		},
+		{
 			name:         "ShouldEncodeFirstJoinedJSONMarshaler",
 			have:         errors.Join(errJSON("first"), errJSON("second")),
 			expectedCode: http.StatusInternalServerError,

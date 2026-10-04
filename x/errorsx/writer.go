@@ -18,9 +18,11 @@ import (
 )
 
 // WriteJSONError is a helper function for writing errors in various scenarios. Taken from github.com/ory/herodot.
+// The body is taken from the error that supplies the status code where that error can be encoded, so the two always
+// describe the same error.
 func WriteJSONError(w http.ResponseWriter, r *http.Request, err error) {
 	if c := StatusCodeCarrier(nil); stderr.As(err, &c) {
-		WriteJSONErrorCode(w, r, c.StatusCode(), err)
+		WriteJSONErrorCode(w, r, c.StatusCode(), statusErrorValue(c, err))
 	} else {
 		WriteJSONErrorCode(w, r, http.StatusInternalServerError, err)
 	}
@@ -43,6 +45,16 @@ func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err er
 	w.WriteHeader(code)
 
 	_ = json.NewEncoder(w).Encode(jsonErrorValue(err))
+}
+
+func statusErrorValue(carrier StatusCodeCarrier, err error) error {
+	if e, ok := carrier.(error); ok {
+		if found := findJSONError(e); found != nil {
+			return found
+		}
+	}
+
+	return err
 }
 
 func jsonErrorValue(err error) error {

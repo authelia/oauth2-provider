@@ -53,20 +53,24 @@ func X509CertificateSHA256Thumbprint(cert *x509.Certificate) (x5t string) {
 // The header is fully spoofable by anyone able to reach the server without transiting that proxy, and a forged value
 // authenticates the sender as any client registered with an mTLS authentication method. The caller must therefore opt
 // in by configuring a name, and a deployment that does MUST ensure the proxy overwrites the header on every inbound
-// request and that the server is unreachable except through it.
+// request and that the server is unreachable except through it. A header present on more than one field line is an
+// error, as it is what a proxy that appends rather than overwrites produces.
 func ClientCertificateFromRequest(r *http.Request, header string) (cert *x509.Certificate, err error) {
 	if r == nil {
 		return nil, nil
 	}
 
 	if header != "" {
-		var value string
+		values := r.Header.Values(header)
 
-		if value = r.Header.Get(header); value == "" {
+		switch {
+		case len(values) > 1:
+			return nil, errors.New("the client certificate header was present more than once")
+		case len(values) == 0 || values[0] == "":
 			return nil, nil
+		default:
+			return ParseClientCertificateHeader(values[0])
 		}
-
-		return ParseClientCertificateHeader(value)
 	}
 
 	if r.TLS != nil && len(r.TLS.PeerCertificates) != 0 {
@@ -80,10 +84,10 @@ func ClientCertificateFromRequest(r *http.Request, header string) (cert *x509.Ce
 // was validated before the handler ran. RFC 8705 Section 2.1 requires a validated chain for the 'tls_client_auth'
 // method; Section 2.2's 'self_signed_tls_client_auth' matches a registered key directly and does not.
 //
-// A forwarded certificate is reported verified because the proxy that performed the handshake is what validated it,
-// which Section 6.5 places out of scope. On a direct connection Go populates VerifiedChains only for a listener
-// configured RequireAndVerifyClientCert or VerifyClientCertIfGiven; RequestClientCert and RequireAnyClientCert leave
-// it empty while still populating PeerCertificates.
+// A forwarded certificate is reported verified when ClientCertificateFromRequest returns one, because the proxy that
+// performed the handshake is what validated it, which Section 6.5 places out of scope. On a direct connection Go
+// populates VerifiedChains only for a listener configured RequireAndVerifyClientCert or VerifyClientCertIfGiven;
+// RequestClientCert and RequireAnyClientCert leave it empty while still populating PeerCertificates.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
 func ClientCertificateChainVerified(r *http.Request, header string) (verified bool) {
@@ -92,7 +96,9 @@ func ClientCertificateChainVerified(r *http.Request, header string) (verified bo
 	}
 
 	if header != "" {
-		return r.Header.Get(header) != ""
+		cert, err := ClientCertificateFromRequest(r, header)
+
+		return err == nil && cert != nil
 	}
 
 	return r.TLS != nil && len(r.TLS.VerifiedChains) != 0

@@ -155,6 +155,16 @@ func TestClientCertificateFromRequest(t *testing.T) {
 		assert.ErrorContains(t, err, "the client certificate header could not be decoded")
 	})
 
+	t.Run("ShouldRejectMoreThanOneHeaderValue", func(t *testing.T) {
+		r := newRequest(nil, header, encodeTraefikV3(other))
+		r.Header.Add(header, encodeTraefikV3(cert))
+
+		actual, err := ClientCertificateFromRequest(r, header)
+
+		assert.Nil(t, actual)
+		assert.EqualError(t, err, "the client certificate header was present more than once")
+	})
+
 	t.Run("ShouldIgnoreAnEmptyPeerCertificateSlice", func(t *testing.T) {
 		r := &http.Request{Header: http.Header{}, TLS: &tls.ConnectionState{}}
 		r.Header.Set(header, encodeTraefikV3(cert))
@@ -165,6 +175,85 @@ func TestClientCertificateFromRequest(t *testing.T) {
 		require.NotNil(t, actual)
 		assert.Equal(t, cert.Raw, actual.Raw)
 	})
+}
+
+func TestClientCertificateChainVerified(t *testing.T) {
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	const header = "X-Forwarded-Tls-Client-Cert"
+
+	testCases := []struct {
+		name     string
+		request  func() *http.Request
+		header   string
+		expected bool
+	}{
+		{
+			name: "ShouldReportAForwardedCertificateVerified",
+			request: func() *http.Request {
+				r := &http.Request{Header: http.Header{}}
+				r.Header.Set(header, encodeTraefikV3(cert))
+
+				return r
+			},
+			header:   header,
+			expected: true,
+		},
+		{
+			name: "ShouldRejectAMalformedForwardedCertificate",
+			request: func() *http.Request {
+				r := &http.Request{Header: http.Header{}}
+				r.Header.Set(header, "not-a-certificate")
+
+				return r
+			},
+			header: header,
+		},
+		{
+			name: "ShouldRejectMoreThanOneForwardedCertificate",
+			request: func() *http.Request {
+				r := &http.Request{Header: http.Header{}}
+				r.Header.Add(header, encodeTraefikV3(cert))
+				r.Header.Add(header, encodeTraefikV3(cert))
+
+				return r
+			},
+			header: header,
+		},
+		{
+			name: "ShouldRejectAMissingForwardedCertificate",
+			request: func() *http.Request {
+				return &http.Request{Header: http.Header{}}
+			},
+			header: header,
+		},
+		{
+			name: "ShouldReportAVerifiedPeerChain",
+			request: func() *http.Request {
+				return &http.Request{Header: http.Header{}, TLS: &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}, VerifiedChains: [][]*x509.Certificate{{cert}}}}
+			},
+			expected: true,
+		},
+		{
+			name: "ShouldRejectAnUnverifiedPeerChain",
+			request: func() *http.Request {
+				return &http.Request{Header: http.Header{}, TLS: &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}}
+			},
+		},
+		{
+			name: "ShouldRejectANilRequest",
+			request: func() *http.Request {
+				return nil
+			},
+			header: header,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, ClientCertificateChainVerified(tc.request(), tc.header))
+		})
+	}
 }
 
 func TestValidateClientCertificateBinding(t *testing.T) {

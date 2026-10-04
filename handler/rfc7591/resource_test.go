@@ -15,21 +15,6 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-func grantableFixtureWithResource(clientID string, resource oauth2.Arguments) oauth2.Requester {
-	requester := oauth2.NewRequest()
-	requester.Session = &oauth2.DefaultSession{}
-
-	if clientID != "" {
-		requester.Client = &oauth2.DefaultClient{ID: clientID}
-	}
-
-	for _, r := range resource {
-		requester.GrantResource(r)
-	}
-
-	return requester
-}
-
 func TestCheckGrantableResource(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -188,4 +173,19 @@ func TestClientConfigurationHandlerEnforcesResourceCeiling(t *testing.T) {
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
 	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func grantableFixtureWithResource(clientID string, resource oauth2.Arguments) oauth2.Requester {
+	requester := oauth2.NewRequest()
+	requester.Session = &oauth2.DefaultSession{}
+
+	if clientID != "" {
+		requester.Client = &oauth2.DefaultClient{ID: clientID}
+	}
+
+	for _, r := range resource {
+		requester.GrantResource(r)
+	}
+
+	return requester
 }

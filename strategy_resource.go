@@ -109,8 +109,6 @@ func isMatchingWildcardResource(haystack []string, needle string) bool {
 	return false
 }
 
-// getWildcardResourcePrefix returns the prefix an allowed resource ending with '/*' matches, and false if the value
-// is not a usable wildcard.
 func getWildcardResourcePrefix(resource string) (prefix string, ok bool) {
 	if prefix, ok = strings.CutSuffix(resource, "*"); !ok || !strings.HasSuffix(prefix, "/") {
 		return "", false

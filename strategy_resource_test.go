@@ -392,12 +392,6 @@ func TestGetResourceStrategyFallsBackToExactMatching(t *testing.T) {
 	assert.ErrorIs(t, strategy([]string{"https://api.example.com/users"}, []string{"https://api.example.com/users/123"}), ErrInvalidTarget)
 }
 
-type nilResourceStrategyProvider struct{}
-
-func (nilResourceStrategyProvider) GetResourceStrategy(_ context.Context) ResourceStrategy {
-	return nil
-}
-
 func TestWildcardResourceStrategy(t *testing.T) {
 	const debugPrefix = "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. "
 
@@ -596,4 +590,10 @@ func TestValidateAudienceMatchesResourceAgainstClientResource(t *testing.T) {
 			assert.Equal(t, Arguments{"https://auth.example.com/api"}, request.GetRequestedResource())
 		})
 	}
+}
+
+type nilResourceStrategyProvider struct{}
+
+func (nilResourceStrategyProvider) GetResourceStrategy(_ context.Context) ResourceStrategy {
+	return nil
 }

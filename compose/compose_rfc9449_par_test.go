@@ -161,6 +161,51 @@ func TestPARDPoPProofRejections(t *testing.T) {
 	}
 }
 
+func TestPARDPoPWithoutStrategy(t *testing.T) {
+	// RFC 9449 Section 10.1.
+	t.Run("ShouldRejectProof", func(t *testing.T) {
+		provider, _, config := newPARProvider(t, false)
+
+		config.DPoPStrategy = nil
+
+		r := newPARRequest(defaultPARForm(), signPARProof(t, newPARProofKey(t), "par-no-strategy", parEndpoint, nil))
+
+		requester, err := provider.NewPushedAuthorizeRequest(context.Background(), r)
+		require.Error(t, err)
+
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The request contains a DPoP proof but the DPoP strategy needed to verify it is not configured.")
+		assert.Empty(t, requester.GetRequestForm().Get(consts.FormParameterDPoPJKT))
+	})
+
+	t.Run("ShouldPassThroughBareDPoPJKT", func(t *testing.T) {
+		provider, _, config := newPARProvider(t, false)
+
+		config.DPoPStrategy = nil
+
+		form := defaultPARForm()
+		form.Set(consts.FormParameterDPoPJKT, "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw")
+
+		requester, err := provider.NewPushedAuthorizeRequest(context.Background(), newPARRequest(form))
+		require.NoError(t, err)
+
+		assert.Equal(t, "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw", requester.GetRequestForm().Get(consts.FormParameterDPoPJKT))
+	})
+
+	t.Run("ShouldRejectMalformedBareDPoPJKT", func(t *testing.T) {
+		provider, _, config := newPARProvider(t, false)
+
+		config.DPoPStrategy = nil
+
+		form := defaultPARForm()
+		form.Set(consts.FormParameterDPoPJKT, "not-a-thumbprint")
+
+		_, err := provider.NewPushedAuthorizeRequest(context.Background(), newPARRequest(form))
+		require.Error(t, err)
+
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'dpop_jkt' parameter must be the base64url encoded SHA-256 JWK Thumbprint of the DPoP proof-of-possession public key, which is 43 characters long.")
+	})
+}
+
 func TestPARWithoutDPoPProofIsUnaffected(t *testing.T) {
 	t.Run("ShouldPassThroughBareDPoPJKT", func(t *testing.T) {
 		provider, _, _ := newPARProvider(t, false)

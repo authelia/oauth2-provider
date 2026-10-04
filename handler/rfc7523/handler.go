@@ -394,10 +394,6 @@ func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extende
 	}
 }
 
-var (
-	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
-)
-
 func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	client := request.GetClient()
 	if !isAuthenticatedClient(client) {
@@ -415,8 +411,6 @@ func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.Acces
 	return nil
 }
 
-func isAuthenticatedClient(client oauth2.Client) bool {
-	return client != nil && len(client.GetID()) != 0
-}
-
-const hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."
+var (
+	_ oauth2.TokenEndpointHandler = (*Handler)(nil)
+)

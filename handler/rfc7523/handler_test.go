@@ -31,10 +31,9 @@ import (
 
 func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 	const (
-		testClientID            = "my-client"
-		testWiderScope          = "wider_scope"
-		hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."
-		errKeyNotFoundMessage   = "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s)."
+		testClientID          = "my-client"
+		testWiderScope        = "wider_scope"
+		errKeyNotFoundMessage = "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s)."
 	)
 
 	testCases := []struct {

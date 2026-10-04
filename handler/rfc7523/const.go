@@ -9,3 +9,5 @@ import (
 )
 
 var assertionAlgorithms = []jose.SignatureAlgorithm{jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512}
+
+const hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."

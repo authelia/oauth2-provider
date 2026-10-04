@@ -29,3 +29,7 @@ func IsIDJAGAssertion(assertion string) bool {
 
 	return false
 }
+
+func isAuthenticatedClient(client oauth2.Client) bool {
+	return client != nil && len(client.GetID()) != 0
+}

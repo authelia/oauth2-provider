@@ -446,6 +446,14 @@ func (c *Handler) validateRequestedAudience(ctx context.Context, request oauth2.
 		}
 	}
 
+	if err = oauth2.ExactAudienceStrategy(audience, request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err = oauth2.ExactAudienceStrategy(audience, request.GetRequestedResource()); err != nil {
+		return err
+	}
+
 	if err = oauth2.GetAudienceStrategy(ctx, c.Config, nil)(audience, request.GetRequestedAudience()); err != nil {
 		return err
 	}

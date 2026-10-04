@@ -781,6 +781,44 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
+			name:    "ShouldRejectARequestedResourceOnlyALooseResourceStrategyMatches",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.handler.Config.(*oauth2.Config).ResourceStrategy = oauth2.DefaultResourceStrategy
+				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com/admin"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://leela.example.com/admin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:    "ShouldRejectARequestedAudienceOnlyALooseAudienceStrategyMatches",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.handler.Config.(*oauth2.Config).AudienceStrategy = func(_, _ []string) error { return nil }
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:    "ShouldGrantARegisteredResourceWithALooseResourceStrategy",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.handler.Config.(*oauth2.Config).ResourceStrategy = oauth2.DefaultResourceStrategy
+				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com"})
+			},
+			resource: []string{"https://leela.example.com"},
+		},
+		{
+			name:    "ShouldRejectARegisteredAudienceTheConfiguredStrategyRejects",
+			storage: true,
+			setup: func(f *jwtBearerFixture) {
+				f.handler.Config.(*oauth2.Config).AudienceStrategy = func(_, _ []string) error {
+					return oauth2.ErrInvalidTarget.WithDebug("The configured strategy rejected the audience.")
+				}
+				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})
+			},
+			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The configured strategy rejected the audience.",
+		},
+		{
 			name: "ShouldRejectARequestedAudienceWithoutAudienceStorage",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})

@@ -125,6 +125,7 @@ var store = &storage.MemoryStore{
 			firstKeyID,
 			firstPrivateKey.Public(),
 			[]string{"oauth2", "gitlab", "example.com", "docker"},
+			[]string{tokenURL, "https://example.com"},
 		),
 		secondJWTBearerIssuer: createIssuerPublicKey(
 			secondJWTBearerIssuer,
@@ -132,6 +133,7 @@ var store = &storage.MemoryStore{
 			secondKeyID,
 			secondPrivateKey.Public(),
 			[]string{"oauth2"},
+			[]string{tokenURL, "https://example.com"},
 		),
 	},
 	ClientAssertionJTIs:    map[storage.JTIMarker]time.Time{},

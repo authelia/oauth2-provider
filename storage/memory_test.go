@@ -373,6 +373,32 @@ func TestMemoryStore_CreateDeviceCodeSessionRejectsDuplicateUserCode(t *testing.
 	require.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestMemoryStore_GetRFC7523PublicKeyAudience(t *testing.T) {
+	store := NewMemoryStore()
+	store.IssuerPublicKeys["issuer"] = IssuerPublicKeys{
+		Issuer: "issuer",
+		KeysBySub: map[string]SubjectPublicKeys{
+			"subject": {
+				Subject: "subject",
+				Keys: map[string]PublicKeyScopes{
+					"kid": {Audience: []string{"https://rs.example.com"}},
+				},
+			},
+		},
+	}
+
+	var _ interface {
+		GetRFC7523PublicKeyAudience(ctx context.Context, issuer, subject, keyId string) ([]string, error)
+	} = store
+
+	audience, err := store.GetRFC7523PublicKeyAudience(t.Context(), "issuer", "subject", "kid")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://rs.example.com"}, audience)
+
+	_, err = store.GetRFC7523PublicKeyAudience(t.Context(), "issuer", "subject", "other")
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+}
+
 func TestMemoryStore_InvalidateDeviceCodeSessionKeepsTheRequester(t *testing.T) {
 	store := NewMemoryStore()
 

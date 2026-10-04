@@ -41,6 +41,7 @@ type Handler struct {
 		oauth2.GetJWTMaxDurationProvider
 		oauth2.JWTClockSkewProvider
 		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 		oauth2.ScopeStrategyProvider
 	}
 
@@ -115,12 +116,23 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
+	// RFC 7523 Section 3: the 'aud' claim identifies the authorization server as the intended audience of the
+	// assertion, not the audience of the access token, so only a requested audience or resource registered for the
+	// public key is granted.
+	if err = c.validateRequestedAudience(ctx, request, claims, key); err != nil {
+		return err
+	}
+
 	for _, scope := range request.GetRequestedScopes() {
 		request.GrantScope(scope)
 	}
 
-	for _, audience := range claims.Audience {
+	for _, audience := range request.GetRequestedAudience() {
 		request.GrantAudience(audience)
+	}
+
+	for _, resource := range request.GetRequestedResource() {
+		request.GrantResource(resource)
 	}
 
 	session, err := c.getSessionFromRequest(request)
@@ -423,6 +435,30 @@ func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.Acces
 	}
 
 	return nil
+}
+
+func (c *Handler) validateRequestedAudience(ctx context.Context, request oauth2.AccessRequester, claims jwt.Claims, key *jose.JSONWebKey) (err error) {
+	var audience []string
+
+	if storage, ok := c.Storage.(AudienceStorage); ok {
+		if audience, err = storage.GetRFC7523PublicKeyAudience(ctx, claims.Issuer, claims.Subject, key.KeyID); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	if err = oauth2.ExactAudienceStrategy(audience, request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err = oauth2.ExactAudienceStrategy(audience, request.GetRequestedResource()); err != nil {
+		return err
+	}
+
+	if err = oauth2.GetAudienceStrategy(ctx, c.Config, nil)(audience, request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	return oauth2.GetResourceStrategy(ctx, c.Config, nil)(audience, request.GetRequestedResource())
 }
 
 var (

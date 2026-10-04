@@ -36,8 +36,9 @@ type SubjectPublicKeys struct {
 }
 
 type PublicKeyScopes struct {
-	Key    *jose.JSONWebKey
-	Scopes []string
+	Key      *jose.JSONWebKey
+	Scopes   []string
+	Audience []string
 }
 
 // DPoPProofMarker identifies a used DPoP proof for replay detection. It follows the RFC 9449 Section 11.1
@@ -811,6 +812,23 @@ func (s *MemoryStore) GetRFC7523PublicKeyScopes(ctx context.Context, issuer stri
 		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
 			if keyScopes, ok := subKeys.Keys[keyId]; ok {
 				return keyScopes.Scopes, nil
+			}
+		}
+	}
+
+	return nil, oauth2.ErrNotFound
+}
+
+// GetRFC7523PublicKeyAudience returns the audience registered for the public key of the issuer and subject, which is
+// the audience an assertion signed by that key may request.
+func (s *MemoryStore) GetRFC7523PublicKeyAudience(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
+	s.issuerPublicKeysMutex.RLock()
+	defer s.issuerPublicKeysMutex.RUnlock()
+
+	if issuerKeys, ok := s.IssuerPublicKeys[issuer]; ok {
+		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
+			if keyScopes, ok := subKeys.Keys[keyId]; ok {
+				return keyScopes.Audience, nil
 			}
 		}
 	}

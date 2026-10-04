@@ -18,15 +18,20 @@ import (
 )
 
 // WriteJSONError is a helper function for writing errors in various scenarios. Taken from github.com/ory/herodot.
+// The body is taken from the error that supplies the status code where that error can be encoded, so the two always
+// describe the same error.
 func WriteJSONError(w http.ResponseWriter, r *http.Request, err error) {
 	if c := StatusCodeCarrier(nil); stderr.As(err, &c) {
-		WriteJSONErrorCode(w, r, c.StatusCode(), err)
+		WriteJSONErrorCode(w, r, c.StatusCode(), statusErrorValue(c, err))
 	} else {
 		WriteJSONErrorCode(w, r, http.StatusInternalServerError, err)
 	}
 }
 
 // WriteJSONErrorCode is a helper function for writing errors in various scenarios. Taken from github.com/ory/herodot.
+// The body is the first error in the tree of err, searched depth first as errors.As does, that implements
+// json.Marshaler or RFCError, so a wrapped or joined RFC 6749 error still carries the 'error' member required by
+// RFC 6749 Section 5.2.
 func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err error) {
 	if code == 0 {
 		code = http.StatusInternalServerError
@@ -39,7 +44,51 @@ func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err er
 	w.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 	w.WriteHeader(code)
 
-	_ = json.NewEncoder(w).Encode(err)
+	_ = json.NewEncoder(w).Encode(jsonErrorValue(err))
+}
+
+func statusErrorValue(carrier StatusCodeCarrier, err error) error {
+	if e, ok := carrier.(error); ok {
+		if found := findJSONError(e); found != nil {
+			return found
+		}
+	}
+
+	return err
+}
+
+func jsonErrorValue(err error) error {
+	if found := findJSONError(err); found != nil {
+		return found
+	}
+
+	return err
+}
+
+func findJSONError(err error) error {
+	for err != nil {
+		switch err.(type) {
+		case json.Marshaler, RFCError:
+			return err
+		}
+
+		switch e := err.(type) {
+		case interface{ Unwrap() error }:
+			err = e.Unwrap()
+		case interface{ Unwrap() []error }:
+			for _, joined := range e.Unwrap() {
+				if found := findJSONError(joined); found != nil {
+					return found
+				}
+			}
+
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	return nil
 }
 
 type Fields map[string]string

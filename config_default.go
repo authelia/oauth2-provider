@@ -201,6 +201,10 @@ type Config struct {
 	UseLegacyErrorFormat bool
 
 	// GrantTypeJWTBearerCanSkipClientAuth indicates, if client authentication can be skipped, when using jwt as assertion.
+	//
+	// When enabled an unauthenticated caller can present assertions, and the time taken to reject one can reveal
+	// whether a key is registered for its issuer and subject. Deployments enabling it SHOULD rate limit failed
+	// assertions.
 	GrantTypeJWTBearerCanSkipClientAuth bool
 
 	// GrantTypeJWTBearerIDOptional indicates, if jti (JWT ID) claim required or not in JWT.

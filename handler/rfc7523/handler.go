@@ -21,6 +21,14 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// Handler implements the RFC 7523 JWT Profile for OAuth 2.0 Authorization Grants at the token endpoint.
+//
+// It does not rate limit. The public key for an assertion is looked up before its signature is verified, so the time
+// taken to reject an assertion can reveal whether a key is registered for its issuer and subject, and a caller that
+// may repeat the request can measure it. Deployments SHOULD rate limit failed assertions per client, and per source
+// when oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider allows the client to go unauthenticated.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7523#section-2.1
 type Handler struct {
 	Storage Storage
 

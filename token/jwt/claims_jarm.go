@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// NewJARMClaims returns JARMClaims with the given issuer and audience, a random 'jti', an 'iat' of the current time,
+// and an 'exp' of the current time plus lifespan.
 func NewJARMClaims(issuer string, aud ClaimStrings, lifespan time.Duration) *JARMClaims {
 	now := time.Now()
 
@@ -34,30 +36,38 @@ type JARMClaims struct {
 	Extra          map[string]any `json:"-"`
 }
 
+// GetExpirationTime returns the 'exp' claim.
 func (c *JARMClaims) GetExpirationTime() (exp *NumericDate, err error) {
 	return c.ExpirationTime, nil
 }
 
+// GetIssuedAt returns the 'iat' claim.
 func (c *JARMClaims) GetIssuedAt() (iat *NumericDate, err error) {
 	return c.IssuedAt, nil
 }
 
+// GetNotBefore returns the 'nbf' claim, which is read from the Extra claims.
 func (c *JARMClaims) GetNotBefore() (nbf *NumericDate, err error) {
 	return c.toNumericDate(ClaimNotBefore)
 }
 
+// GetIssuer returns the 'iss' claim.
 func (c *JARMClaims) GetIssuer() (iss string, err error) {
 	return c.Issuer, nil
 }
 
+// GetSubject returns the 'sub' claim, which is read from the Extra claims. It returns an error if the claim is not a
+// string.
 func (c *JARMClaims) GetSubject() (sub string, err error) {
 	return c.toString(ClaimSubject)
 }
 
+// GetAudience returns the 'aud' claim.
 func (c *JARMClaims) GetAudience() (aud ClaimStrings, err error) {
 	return c.Audience, nil
 }
 
+// Valid performs no validation and always returns nil.
 func (c *JARMClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return nil
 }

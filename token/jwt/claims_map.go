@@ -47,10 +47,13 @@ func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
 	return validString(iss, cmp, required)
 }
 
+// GetAuthorizedParty returns the 'azp' claim.
 func (m MapClaims) GetAuthorizedParty() (azp string, err error) {
 	return m.toString(ClaimAuthorizedParty)
 }
 
+// VerifyAuthorizedParty compares the 'azp' claim against cmp.
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyAuthorizedParty(cmp string, required bool) (ok bool) {
 	var (
 		azp string
@@ -228,6 +231,7 @@ func (m MapClaims) VerifyNotBefore(cmp int64, required bool) (ok bool) {
 	return validInt64Past(nbf.Int64(), cmp, required)
 }
 
+// ToMapClaims returns the claims unchanged.
 func (m MapClaims) ToMapClaims() MapClaims {
 	if m == nil {
 		return nil
@@ -236,6 +240,7 @@ func (m MapClaims) ToMapClaims() MapClaims {
 	return m
 }
 
+// ToMap returns the claims as a map.
 func (m MapClaims) ToMap() map[string]any {
 	return m
 }
@@ -329,6 +334,7 @@ func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return vErr
 }
 
+// UnmarshalJSON decodes the JSON data into the map, with each number decoded as either an integer or a float.
 func (m MapClaims) UnmarshalJSON(data []byte) error {
 	decoder := jjson.NewDecoder(bytes.NewReader(data))
 	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)

@@ -12,10 +12,12 @@ type DefaultTokenType struct {
 	Name string
 }
 
+// GetName returns the name of the token type.
 func (c *DefaultTokenType) GetName(ctx context.Context) string {
 	return c.Name
 }
 
+// GetType returns the token type identifier, which is the same value as the name.
 func (c *DefaultTokenType) GetType(ctx context.Context) string {
 	return c.Name
 }

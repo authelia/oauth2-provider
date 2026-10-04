@@ -17,15 +17,6 @@ import (
 	"authelia.com/provider/jose"
 )
 
-func mustRSAKey(t *testing.T, bits int) *rsa.PrivateKey {
-	t.Helper()
-
-	key, err := rsa.GenerateKey(rand.Reader, bits)
-	require.NoError(t, err)
-
-	return key
-}
-
 func TestNewDefaultIssuer(t *testing.T) {
 	rsaKey := mustRSAKey(t, 2048)
 
@@ -292,4 +283,13 @@ func TestDefaultIssuer_GetIssuerJWK(t *testing.T) {
 		_, err := issuer.GetIssuerStrictJWK(t.Context(), "unknown-kid", string(jose.RS256), JSONWebTokenUseSignature)
 		require.Error(t, err)
 	})
+}
+
+func mustRSAKey(t *testing.T, bits int) *rsa.PrivateKey {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, bits)
+	require.NoError(t, err)
+
+	return key
 }

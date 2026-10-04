@@ -151,6 +151,7 @@ type MemoryStore struct {
 
 const memoryStorePruneInterval = time.Minute
 
+// NewMemoryStore returns a new *MemoryStore with every map initialized.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		Clients:                  make(map[string]oauth2.Client),
@@ -191,6 +192,7 @@ type StoreRefreshToken struct {
 	oauth2.Requester
 }
 
+// NewExampleStore returns a new *MemoryStore populated with example clients and an example user.
 func NewExampleStore() *MemoryStore {
 	store := NewMemoryStore()
 
@@ -265,6 +267,7 @@ func exampleLifespans() *oauth2.ClientLifespanConfig {
 	}
 }
 
+// CreateOpenIDConnectSession stores the request against the authorization code.
 func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCode string, request oauth2.Requester) error {
 	s.idSessionsMutex.Lock()
 	defer s.idSessionsMutex.Unlock()
@@ -273,6 +276,8 @@ func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCod
 	return nil
 }
 
+// GetOpenIDConnectSession returns the request stored against the authorization code, or oauth2.ErrNotFound when no
+// session exists for it.
 func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode string, request oauth2.Requester) (oauth2.Requester, error) {
 	s.idSessionsMutex.RLock()
 	defer s.idSessionsMutex.RUnlock()
@@ -293,6 +298,7 @@ func (s *MemoryStore) DeleteOpenIDConnectSession(_ context.Context, authorizeCod
 	return nil
 }
 
+// GetClient returns the client with the given id, or oauth2.ErrNotFound when no such client exists.
 func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, error) {
 	s.clientsMutex.RLock()
 	defer s.clientsMutex.RUnlock()
@@ -304,6 +310,7 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 	return cl, nil
 }
 
+// CreateClient stores the client, returning an error when a client with the same id already exists.
 func (s *MemoryStore) CreateClient(_ context.Context, client oauth2.Client) (err error) {
 	s.clientsMutex.Lock()
 	defer s.clientsMutex.Unlock()
@@ -319,6 +326,8 @@ func (s *MemoryStore) CreateClient(_ context.Context, client oauth2.Client) (err
 	return nil
 }
 
+// UpdateClient replaces the client stored with the given id. It returns an error when no such client exists, or when
+// the id of the given client differs from id.
 func (s *MemoryStore) UpdateClient(_ context.Context, id string, client oauth2.Client) (err error) {
 	s.clientsMutex.Lock()
 	defer s.clientsMutex.Unlock()
@@ -339,6 +348,7 @@ func (s *MemoryStore) UpdateClient(_ context.Context, id string, client oauth2.C
 	return nil
 }
 
+// DeleteClient removes the client with the given id, returning an error when no such client exists.
 func (s *MemoryStore) DeleteClient(_ context.Context, id string) (err error) {
 	s.clientsMutex.Lock()
 	defer s.clientsMutex.Unlock()
@@ -428,6 +438,7 @@ func pruneExpired[K comparable](entries map[K]time.Time, pruneAt *time.Time, now
 	}
 }
 
+// CreateAuthorizeCodeSession stores the request against the authorization code as an active code.
 func (s *MemoryStore) CreateAuthorizeCodeSession(_ context.Context, code string, req oauth2.Requester) error {
 	s.authorizeCodesMutex.Lock()
 	defer s.authorizeCodesMutex.Unlock()
@@ -436,6 +447,9 @@ func (s *MemoryStore) CreateAuthorizeCodeSession(_ context.Context, code string,
 	return nil
 }
 
+// GetAuthorizeCodeSession returns the request stored against the authorization code, or oauth2.ErrNotFound when no
+// session exists for it. When the code has been invalidated it returns the request alongside
+// oauth2.ErrInvalidatedAuthorizeCode.
 func (s *MemoryStore) GetAuthorizeCodeSession(_ context.Context, code string, _ oauth2.Session) (oauth2.Requester, error) {
 	s.authorizeCodesMutex.RLock()
 	defer s.authorizeCodesMutex.RUnlock()
@@ -451,6 +465,8 @@ func (s *MemoryStore) GetAuthorizeCodeSession(_ context.Context, code string, _ 
 	return rel.Requester, nil
 }
 
+// InvalidateAuthorizeCodeSession marks the authorization code as invalidated. It returns oauth2.ErrNotFound when no
+// session exists for the code, and oauth2.ErrInvalidatedAuthorizeCode when the code is already invalidated.
 func (s *MemoryStore) InvalidateAuthorizeCodeSession(ctx context.Context, code string) error {
 	s.authorizeCodesMutex.Lock()
 	defer s.authorizeCodesMutex.Unlock()
@@ -471,6 +487,7 @@ func (s *MemoryStore) InvalidateAuthorizeCodeSession(ctx context.Context, code s
 	return nil
 }
 
+// CreatePKCERequestSession stores the PKCE request against the authorization code.
 func (s *MemoryStore) CreatePKCERequestSession(_ context.Context, code string, req oauth2.Requester) error {
 	s.pkcesMutex.Lock()
 	defer s.pkcesMutex.Unlock()
@@ -479,6 +496,8 @@ func (s *MemoryStore) CreatePKCERequestSession(_ context.Context, code string, r
 	return nil
 }
 
+// GetPKCERequestSession returns the PKCE request stored against the authorization code, or oauth2.ErrNotFound when no
+// session exists for it.
 func (s *MemoryStore) GetPKCERequestSession(_ context.Context, code string, _ oauth2.Session) (oauth2.Requester, error) {
 	s.pkcesMutex.RLock()
 	defer s.pkcesMutex.RUnlock()
@@ -490,6 +509,8 @@ func (s *MemoryStore) GetPKCERequestSession(_ context.Context, code string, _ oa
 	return rel, nil
 }
 
+// DeletePKCERequestSession removes the PKCE request stored against the authorization code. Deleting a code that has no
+// session is not an error.
 func (s *MemoryStore) DeletePKCERequestSession(_ context.Context, code string) error {
 	s.pkcesMutex.Lock()
 	defer s.pkcesMutex.Unlock()
@@ -652,6 +673,8 @@ func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature str
 	return nil
 }
 
+// Authenticate compares the secret to the password stored for the user and returns a new random identifier when they
+// match. It returns oauth2.ErrNotFound when the user does not exist or the secret does not match.
 func (s *MemoryStore) Authenticate(ctx context.Context, name string, secret string) (string, error) {
 	s.usersMutex.RLock()
 	defer s.usersMutex.RUnlock()
@@ -668,6 +691,8 @@ func (s *MemoryStore) Authenticate(ctx context.Context, name string, secret stri
 	return uuid.New().String(), nil
 }
 
+// RevokeRefreshToken deactivates the refresh token recorded against the request ID. A request ID with no recorded
+// refresh token is not an error.
 func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) error {
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
@@ -735,6 +760,8 @@ func (s *MemoryStore) RevokeAccessToken(_ context.Context, requestID string) err
 	return nil
 }
 
+// GetRFC7523PublicKey returns the public key registered for the issuer, subject and key ID, or oauth2.ErrNotFound when
+// none is registered.
 func (s *MemoryStore) GetRFC7523PublicKey(ctx context.Context, issuer string, subject string, keyId string) (*jose.JSONWebKey, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
@@ -750,6 +777,8 @@ func (s *MemoryStore) GetRFC7523PublicKey(ctx context.Context, issuer string, su
 	return nil, oauth2.ErrNotFound
 }
 
+// GetRFC7523PublicKeys returns every public key registered for the issuer and subject, or oauth2.ErrNotFound when none
+// is registered.
 func (s *MemoryStore) GetRFC7523PublicKeys(ctx context.Context, issuer string, subject string) (*jose.JSONWebKeySet, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
@@ -772,6 +801,8 @@ func (s *MemoryStore) GetRFC7523PublicKeys(ctx context.Context, issuer string, s
 	return nil, oauth2.ErrNotFound
 }
 
+// GetRFC7523PublicKeyScopes returns the scopes registered with the public key for the issuer, subject and key ID, or
+// oauth2.ErrNotFound when no such key is registered.
 func (s *MemoryStore) GetRFC7523PublicKeyScopes(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
 	s.issuerPublicKeysMutex.RLock()
 	defer s.issuerPublicKeysMutex.RUnlock()
@@ -933,6 +964,8 @@ func (s *MemoryStore) GetSubjectForTokenExchange(ctx context.Context, request oa
 	return sub, nil
 }
 
+// CreateDeviceCodeSession stores the request against its device code signature and its user code signature. It returns
+// oauth2.ErrDuplicateUserCode when the user code signature is already in use.
 func (s *MemoryStore) CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
@@ -947,6 +980,8 @@ func (s *MemoryStore) CreateDeviceCodeSession(ctx context.Context, signature str
 	return nil
 }
 
+// UpdateDeviceCodeSession replaces the request stored against the device code signature, and against the user code
+// signature of the request. It does nothing when no session exists for the device code signature.
 func (s *MemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
@@ -980,6 +1015,9 @@ func (s *MemoryStore) DecideDeviceCodeSession(_ context.Context, signature strin
 	return nil
 }
 
+// GetDeviceCodeSession returns the request stored against the device code signature, or oauth2.ErrNotFound when no
+// session exists for it. When the device code has been invalidated it returns the request alongside
+// oauth2.ErrInvalidatedDeviceCode.
 func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.DeviceAuthorizeRequester, error) {
 	s.deviceCodesMutex.RLock()
 	defer s.deviceCodesMutex.RUnlock()
@@ -996,6 +1034,9 @@ func (s *MemoryStore) GetDeviceCodeSession(ctx context.Context, signature string
 	return rel, nil
 }
 
+// GetDeviceCodeSessionByUserCode returns the request stored against the user code signature, or oauth2.ErrNotFound when
+// no session exists for it. When the device code of the request has been invalidated it returns the request alongside
+// oauth2.ErrInvalidatedDeviceCode.
 func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
 	s.deviceCodesMutex.RLock()
 	defer s.deviceCodesMutex.RUnlock()
@@ -1012,6 +1053,8 @@ func (s *MemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signat
 	return rel, nil
 }
 
+// InvalidateDeviceCodeSession marks the device code signature as invalidated. It returns oauth2.ErrNotFound when no
+// session exists for the signature, and oauth2.ErrInvalidatedDeviceCode when it is already invalidated.
 func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature string) (err error) {
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
@@ -1052,6 +1095,7 @@ func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti, _, _, htm
 	return false, nil
 }
 
+// CreateDPoPNonce stores the DPoP nonce until exp.
 func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.Time) error {
 	s.dpopNoncesMutex.Lock()
 	defer s.dpopNoncesMutex.Unlock()
@@ -1063,6 +1107,7 @@ func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.
 	return nil
 }
 
+// IsDPoPNonceValid reports whether the DPoP nonce is known and has not expired.
 func (s *MemoryStore) IsDPoPNonceValid(_ context.Context, nonce string) (bool, error) {
 	s.dpopNoncesMutex.RLock()
 	defer s.dpopNoncesMutex.RUnlock()

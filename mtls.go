@@ -169,9 +169,6 @@ func stripPEMArmour(value string) string {
 	return body
 }
 
-// decodeCertificateBase64 decodes value as base64, accepting the standard and URL alphabets with or without padding.
-// Proxies vary and the distinction carries no meaning here, so all four are normalised to one form rather than
-// attempted in turn.
 func decodeCertificateBase64(value string) (der []byte, err error) {
 	compact := strings.Map(func(r rune) rune {
 		switch r {

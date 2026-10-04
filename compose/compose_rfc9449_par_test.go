@@ -318,10 +318,3 @@ func defaultPARForm() url.Values {
 		consts.FormParameterState:        []string{"abcdefghijklmnop"},
 	}
 }
-
-const (
-	parEndpoint    = "https://as.example.com/par"
-	parRedirectURI = "https://rp.example.com/cb"
-	parClientID    = "par-client"
-	parSecret      = "par-client-secret"
-)

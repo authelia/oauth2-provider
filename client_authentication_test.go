@@ -1148,8 +1148,6 @@ func TestAuthenticateClient(t *testing.T) {
 }
 
 func TestAuthenticateClientTwice(t *testing.T) {
-	// newFixture builds an independent provider, registered client, and form values for a
-	// subtest so that JTI state from a prior subtest does not leak across.
 	newFixture := func(t *testing.T) (provider *Fosite, registered *DefaultJARClient, formValues url.Values) {
 		key := gen.MustRSAKey()
 		registered = &DefaultJARClient{
@@ -1224,11 +1222,9 @@ func TestAuthenticateClientTwice(t *testing.T) {
 			check: func(t *testing.T) {
 				provider, _, formValues := newFixture(t)
 
-				// Prime the JTI store with a successful authentication.
 				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-				// Replay the same assertion and expect ErrInvalidClient with the jti-replay debug.
 				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
 				require.Error(t, err)
 				assert.EqualError(t, err, ErrInvalidClient.Error())
@@ -1488,7 +1484,6 @@ func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priv
 	return tokenString
 }
 
-// returns an http basic authorization header, encoded using application/x-www-form-urlencoded
 func clientBasicAuthHeader(clientID, clientSecret string) http.Header {
 	creds := url.QueryEscape(clientID) + ":" + url.QueryEscape(clientSecret)
 	return http.Header{
@@ -1515,10 +1510,3 @@ func mustNewBCryptClientSecretPlain(rawSecret string) *BCryptClientSecret {
 		return secret
 	}
 }
-
-var (
-	testClientSecretFoo     = mustNewBCryptClientSecretPlain("foo")
-	testClientSecretBar     = mustNewBCryptClientSecretPlain("bar")
-	testClientSecret1234    = mustNewBCryptClientSecretPlain("1234")
-	testClientSecretComplex = mustNewBCryptClientSecretPlain("foo %66%6F%6F@$<§!✓") // "foo %66%6F%6F@$<§!✓"
-)

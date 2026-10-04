@@ -20,16 +20,6 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-const (
-	idjagTestIssuer  = "https://idp.example/"
-	idjagTestClient  = "wiki"
-	idjagTestSubject = "U1"
-	idjagTestMutated = "mutated"
-	idjagTestTenant  = "t1"
-	idjagTestAlice   = "alice"
-	idjagTestBob     = "bob"
-)
-
 func TestMemoryStoreIDJAG(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMemoryStore()
@@ -139,3 +129,13 @@ func TestMemoryStoreResolveIDJAGSubject(t *testing.T) {
 		})
 	}
 }
+
+const (
+	idjagTestIssuer  = "https://idp.example/"
+	idjagTestClient  = "wiki"
+	idjagTestSubject = "U1"
+	idjagTestMutated = "mutated"
+	idjagTestTenant  = "t1"
+	idjagTestAlice   = "alice"
+	idjagTestBob     = "bob"
+)

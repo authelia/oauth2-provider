@@ -28,17 +28,11 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-//   - https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
-//     The OAuth 2.0 specification allows for registration of space-separated response_type parameter values.
-//     If a Response Type contains one of more space characters (%20), it is compared as a space-delimited list of
-//     values in which the order of values does not matter.
+// See: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
 func TestNewAuthorizeRequest(t *testing.T) {
 	redir, _ := url.Parse("https://foo.bar/cb")
 	specialCharRedir, _ := url.Parse("web+application://callback")
 
-	// parClient is the OAuth 2.0 client stored within the Pushed Authorization
-	// Request session and is shared between the storage mock and the expected
-	// result so the merged request can be asserted.
 	parClient := &DefaultClient{
 		ID:            "1234",
 		RedirectURIs:  []string{"https://foo.bar/cb"},
@@ -47,8 +41,6 @@ func TestNewAuthorizeRequest(t *testing.T) {
 		Audience:      []string{"https://cloud.authelia.com/api"},
 	}
 
-	// newPARSession builds the AuthorizeRequester that a PAR storage would have
-	// persisted at the 'pushed authorization request' endpoint.
 	newPARSession := func(client Client, session Session) *AuthorizeRequest {
 		par := NewAuthorizeRequest()
 		par.Client = client
@@ -1321,9 +1313,6 @@ func TestNewAuthorizeRequestEarlyErrorResponseMode(t *testing.T) {
 	}
 }
 
-// parStorage combines a mock Storage with a mock PARStorage so the provider's
-// Store satisfies the oauth2.PARStorage interface used when continuing a Pushed
-// Authorization Request.
 type parStorage struct {
 	*mock.MockStorage
 	*mock.MockPARStorage

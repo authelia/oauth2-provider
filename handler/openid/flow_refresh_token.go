@@ -24,6 +24,9 @@ type OpenIDConnectRefreshHandler struct {
 	}
 }
 
+// HandleTokenEndpointRequest handles a refresh token grant which was granted the 'openid' scope. It requires the client
+// to be registered for the 'refresh_token' grant type and clears the 'exp', 'jti', 'at_hash' and 'c_hash' claims of the
+// session so the refreshed ID Token does not inherit them.
 func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -51,6 +54,8 @@ func (c *OpenIDConnectRefreshHandler) HandleTokenEndpointRequest(ctx context.Con
 	return nil
 }
 
+// PopulateTokenEndpointResponse issues a refreshed ID Token for a refresh token grant which was granted the 'openid'
+// scope. The token has a new 'jti', 'iat' and 'at_hash', and no 'c_hash' or 'nonce' claim.
 func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -87,10 +92,12 @@ func (c *OpenIDConnectRefreshHandler) PopulateTokenEndpointResponse(ctx context.
 	return c.IssueExplicitIDToken(ctx, lifespan, request, response)
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *OpenIDConnectRefreshHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'refresh_token'.
 func (c *OpenIDConnectRefreshHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }

@@ -34,6 +34,7 @@ type OpenIDConnectRequestValidator struct {
 	Config   openIDConnectRequestValidatorConfigProvider
 }
 
+// NewOpenIDConnectRequestValidator returns an OpenIDConnectRequestValidator using the given strategy and config.
 func NewOpenIDConnectRequestValidator(strategy jwt.Strategy, config openIDConnectRequestValidatorConfigProvider) *OpenIDConnectRequestValidator {
 	return &OpenIDConnectRequestValidator{
 		Strategy: strategy,
@@ -51,6 +52,10 @@ func (v *OpenIDConnectRequestValidator) getPublicClientIdentityChecker(ctx conte
 	return oauth2.IsPublicClientIdentityAssured
 }
 
+// ValidateRedirectURIs returns an error when the authorize request has no 'redirect_uri' parameter, which OpenID
+// Connect 1.0 requires.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
 func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
 	//

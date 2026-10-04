@@ -23,8 +23,7 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-// RFC 9700 Section 4.14.2: a public client's refresh token that was issued unbound is rotated even when the refresh
-// request binds the new tokens, as the presented refresh token itself is not sender-constrained.
+// RFC 9700 Section 4.14.2: a public client's refresh token that is not sender-constrained is rotated.
 func TestRefreshRotatesAnUnboundPublicClientTokenThatTheRequestBinds(t *testing.T) {
 	stores := []struct {
 		name string
@@ -125,7 +124,6 @@ func newRRBPublicClient() *oauth2.DefaultClient {
 	}
 }
 
-// rrbExchange runs the authorization code flow without any binding and returns the refresh token it issues.
 func rrbExchange(t *testing.T, provider oauth2.Provider) string {
 	t.Helper()
 
@@ -200,9 +198,3 @@ func rrbHTTPRequest(form url.Values, proof string, cert *x509.Certificate) *http
 
 	return r
 }
-
-const (
-	rrbTokenEndpoint = "https://as.example.com/token"
-	rrbClientID      = "rotation-binding-client"
-	rrbRedirectURI   = "https://rp.example.com/cb"
-)

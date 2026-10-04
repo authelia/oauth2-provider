@@ -93,6 +93,8 @@ func findJSONError(err error) error {
 
 type Fields map[string]string
 
+// EncodeRFC6750 returns the fields as an RFC 6750 WWW-Authenticate header value for the Bearer scheme, with each field
+// encoded as a quoted attribute.
 func (f Fields) EncodeRFC6750() string {
 	items := make([]string, 0, len(f))
 

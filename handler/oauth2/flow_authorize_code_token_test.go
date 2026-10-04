@@ -725,7 +725,6 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 	t.Run("ShouldFallBackToAuthorizeGrantedAudienceWhenAccessRequestHasNone", func(t *testing.T) {
 		handler, code := newHandlerAndAuthCode(t, oauth2.Arguments{resourceUsers, resourceTenants})
 		accessRequest := newAccessRequest(code, nil)
-		// Simulate the access request not including the resource parameter.
 		accessRequest.Form.Del(consts.FormParameterResource)
 		accessRequest.RequestedAudience = nil
 
@@ -740,14 +739,7 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 	})
 }
 
-// TestAuthorizeCodeFlow_ResourceParameterSubset exercises the per-request 'resource' (RFC 8707) handling at the
-// token endpoint, separate from the 'audience' check covered by TestAuthorizeCodeFlow_ResourceIndicatorSubset.
-//
-// Per RFC 8707 §2.2 and the new check in flow_authorize_code_token.go HandleTokenEndpointRequest:
-//
-//   - When the token request omits 'resource', it inherits the resources granted at the authorize endpoint.
-//   - When the token request includes 'resource', the supplied values MUST be a subset of those granted at the
-//     authorize endpoint; a superset is rejected with invalid_target.
+// RFC 8707 §2.2: token-endpoint resources must be a subset of those granted at the authorize endpoint.
 func TestAuthorizeCodeFlow_ResourceParameterSubset(t *testing.T) {
 	const (
 		resourceUsers   = "https://api.example.com/users"
@@ -899,7 +891,6 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	request.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 	propagatedContext := context.Background()
 
-	// some storage implementation that has support for transactions, notice the embedded type `storage.Transactional`
 	type transactionalStore struct {
 		storage.Transactional
 		CoreStorage
@@ -1116,10 +1107,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	}
 }
 
-// TestAuthorizeCodeFlow_ConcurrentReplay exercises the window RFC 6749 Section 4.1.2 addresses: two requests bearing
-// the same authorization code both clear HandleTokenEndpointRequest while the code is still active, and the loser
-// reaches PopulateTokenEndpointResponse after the winner has invalidated it. The loser must be refused with
-// invalid_grant, and the revocation the specification mandates must run.
+// RFC 6749 Section 4.1.2: a replayed authorization code is refused and the tokens issued from it are revoked.
 func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
 	store := storage.NewMemoryStore()
 	strategy := &hmacshaStrategy
@@ -1160,7 +1148,6 @@ func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
 
 	require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, authorizeRequest))
 
-	// The tokens the winner of the race was issued from this code.
 	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "at-sig", authorizeRequest))
 	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "at-sig", authorizeRequest))
 
@@ -1177,13 +1164,10 @@ func TestAuthorizeCodeFlow_ConcurrentReplay(t *testing.T) {
 		},
 	}
 
-	// Both racers clear phase one while the code is still active.
 	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
 
-	// The winner completes phase two and invalidates the code.
 	require.NoError(t, store.InvalidateAuthorizeCodeSession(t.Context(), signature))
 
-	// The loser reaches phase two.
 	err = handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, oauth2.NewAccessResponse())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "a replayed authorization code must be refused with invalid_grant, not server_error")
@@ -1330,7 +1314,6 @@ func TestAuthorizeCodeFlow_PopulateTokenEndpointResponseKeepsBinding(t *testing.
 
 			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
 
-			// RFC 9449 Section 5 and RFC 8705 Section 3 binding, recorded between the two phases.
 			accessRequest.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(jkt)
 			accessRequest.GetSession().(oauth2.MTLSBoundSession).SetClientCertificateSHA256Thumbprint(x5t)
 

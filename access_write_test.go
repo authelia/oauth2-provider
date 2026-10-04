@@ -107,7 +107,6 @@ func TestWriteAccessResponseMarshalError(t *testing.T) {
 		{
 			name: "ShouldRespondInternalServerErrorWhenToMapNotMarshalable",
 			toMap: map[string]any{
-				// channels cannot be marshaled to JSON
 				"bad": make(chan int),
 			},
 			contains: "json: unsupported type",

@@ -80,6 +80,7 @@ func (c *JWTClaims) Clone() *JWTClaims {
 	return &cloned
 }
 
+// With sets the expiry, scope, and audience to the given values and returns the claims.
 func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsContainer {
 	c.ExpiresAt = expiry
 	c.Scope = scope
@@ -87,6 +88,7 @@ func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsCo
 	return c
 }
 
+// Sanitize clears the IssuedAt and NotBefore values and returns the claims.
 func (c *JWTClaims) Sanitize() JWTClaimsContainer {
 	c.IssuedAt = time.Time{}
 	c.NotBefore = time.Time{}
@@ -94,6 +96,8 @@ func (c *JWTClaims) Sanitize() JWTClaimsContainer {
 	return c
 }
 
+// WithDefaults sets each of the IssuedAt, NotBefore, and Issuer values which is not already set to the given value and
+// returns the claims.
 func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsContainer {
 	if c.IssuedAt.IsZero() {
 		c.IssuedAt = iat
@@ -109,6 +113,7 @@ func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsCon
 	return c
 }
 
+// WithScopeField sets how the scope is represented in the JWT and returns the claims.
 func (c *JWTClaims) WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContainer {
 	c.ScopeField = scopeField
 	return c

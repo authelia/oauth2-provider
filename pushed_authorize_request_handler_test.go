@@ -26,10 +26,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-//   - https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
-//     The OAuth 2.0 specification allows for registration of space-separated response_type parameter values.
-//     If a Response Type contains one of more space characters (%20), it is compared as a space-delimited list of
-//     values in which the order of values does not matter.
+// See: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
 func TestNewPushedAuthorizeRequest(t *testing.T) {
 	redir, _ := url.Parse("https://foo.bar/cb")
 	specialCharRedir, _ := url.Parse("web+application://callback")
@@ -733,7 +730,6 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			ar, err := provider.NewPushedAuthorizeRequest(ctx, r)
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
-				// https://github.com/ory/hydra/issues/1642
 				AssertObjectKeysEqual(t, &AuthorizeRequest{State: tc.query.Get("state")}, ar, "State")
 			} else {
 				require.NoError(t, err)

@@ -66,8 +66,6 @@ func (f *Fosite) NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Reques
 	return request, nil
 }
 
-// resolveRPInitiatedLogoutClient resolves the client from the 'client_id' parameter or, failing that, from the
-// unverified 'id_token_hint'. A request with neither resolves to no client, which is not an error.
 func (f *Fosite) resolveRPInitiatedLogoutClient(ctx context.Context, request *RPInitiatedLogoutRequest) (err error) {
 	clientID := request.Form.Get(consts.FormParameterClientID)
 
@@ -94,8 +92,6 @@ func (f *Fosite) resolveRPInitiatedLogoutClient(ctx context.Context, request *RP
 	return nil
 }
 
-// unsafeRPInitiatedLogoutClientID reads a client identifier from an unverified ID Token, preferring 'azp' and falling
-// back to 'aud' when it holds exactly one value.
 func (f *Fosite) unsafeRPInitiatedLogoutClientID(ctx context.Context, hint string) (clientID string, err error) {
 	strategy := f.Config.GetIDTokenValidationStrategy(ctx)
 
@@ -179,9 +175,6 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 	return nil
 }
 
-// validateRPInitiatedLogoutRedirectURI matches the 'post_logout_redirect_uri' parameter against the client's
-// registered post logout redirect URIs, using the exact string comparison the authorization endpoint uses for
-// 'redirect_uri'.
 func (f *Fosite) validateRPInitiatedLogoutRedirectURI(request *RPInitiatedLogoutRequest) (err error) {
 	raw := request.Form.Get(consts.FormParameterPostLogoutRedirectURI)
 

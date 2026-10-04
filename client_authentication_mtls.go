@@ -49,8 +49,6 @@ func EqualDistinguishedNames(a, b string) (equal bool) {
 	return slices.Equal(x, y)
 }
 
-// normalizeDistinguishedName splits an RFC 4514 distinguished name into its relative distinguished names, trims
-// insignificant whitespace, and uppercases each attribute type.
 func normalizeDistinguishedName(dn string) (rdns []string) {
 	raw := splitDistinguishedName(dn)
 
@@ -110,8 +108,6 @@ func trimUnescapedSpace(s string) (trimmed string) {
 	return s
 }
 
-// splitDistinguishedName splits an RFC 4514 distinguished name on its unescaped commas. A comma appearing within an
-// attribute value is escaped with a backslash and does not separate relative distinguished names.
 func splitDistinguishedName(dn string) (rdns []string) {
 	var (
 		start   int
@@ -305,8 +301,6 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 		WithDebugf("The client certificate presented by the client with id '%s' does not match any certificate in the 'x5c' of its registered JSON Web Key Set.", client.GetID()))
 }
 
-// isMTLSAuthMethod reports whether client is registered to authenticate at the endpoint strategy represents using one
-// of the two RFC 8705 mutual-TLS methods.
 func isMTLSAuthMethod(client Client, strategy EndpointClientAuthStrategy) bool {
 	c, ok := client.(AuthenticationMethodClient)
 	if !ok {

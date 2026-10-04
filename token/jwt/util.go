@@ -39,6 +39,7 @@ func IsEncryptedJWT(tokenString string) (encrypted bool) {
 	return reEncryptedJWT.MatchString(tokenString)
 }
 
+// IsNoneAlg returns true if the given alg string is empty or 'none'.
 func IsNoneAlg(alg string) (none bool) {
 	return alg == "" || alg == "none"
 }
@@ -64,6 +65,8 @@ func IsEncryptedJWTClientSecretAlgStr(alg string) (csa bool) {
 	return IsEncryptedJWTClientSecretAlg(jose.KeyAlgorithm(alg))
 }
 
+// IsEncryptedJWTClientSecretAlg returns true if a given alg is a client secret based encryption algorithm i.e.
+// symmetric, which includes the Password Based Algorithms.
 func IsEncryptedJWTClientSecretAlg(alg jose.KeyAlgorithm) (csa bool) {
 	switch alg {
 	case jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW:
@@ -170,10 +173,12 @@ type JWKLookupError struct {
 	Errors      uint32 // bitfield.  see JWKLookupError... constants
 }
 
+// GetDescription returns the description of the error.
 func (e *JWKLookupError) GetDescription() string {
 	return e.Description
 }
 
+// Error returns the error message, which includes the description.
 func (e *JWKLookupError) Error() string {
 	return fmt.Sprintf("Error occurred retrieving the JSON Web Key. %s", e.Description)
 }
@@ -209,6 +214,9 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 	return nil, &JWKLookupError{Description: "No JWKs have been registered for the client"}
 }
 
+// SearchJWKS returns the key from the jose.JSONWebKeySet which matches the alg and use values, and the kid value when
+// it is not empty. When more than one key matches the first is returned, unless strict is true in which case an error
+// is returned.
 func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
 	if len(jwks.Keys) == 0 {
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}

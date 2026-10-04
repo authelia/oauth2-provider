@@ -37,6 +37,8 @@ type AuthorizeExplicitGrantHandler struct {
 	}
 }
 
+// GetRedirectSecureChecker returns the configured redirect URI security checker, or oauth2.IsRedirectURISecure when
+// none is configured.
 func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Context) (checker func(context.Context, *url.URL) (secure bool)) {
 	if checker = c.Config.GetRedirectSecureChecker(ctx); checker != nil {
 		return checker
@@ -45,6 +47,9 @@ func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Con
 	return oauth2.IsRedirectURISecure
 }
 
+// HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'code'. It rejects an
+// insecure redirect URI for a public client, validates the requested scopes, audience and resources against the client,
+// and then issues the authorization code.
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
@@ -77,6 +82,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 	return c.IssueAuthorizeCode(ctx, request, response)
 }
 
+// IssueAuthorizeCode generates an authorization code, persists the sanitized authorize request under its signature, and
+// adds the 'code', 'state' and, unless omitted by configuration, 'scope' parameters to the response.
 func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	code, signature, err := c.AuthorizeCodeStrategy.GenerateAuthorizeCode(ctx, request)
 	if err != nil {
@@ -101,6 +108,8 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	return nil
 }
 
+// GetSanitationWhiteList returns the configured form parameters retained when the authorize request is sanitized for
+// storage, or 'scope' and 'redirect_uri' when none are configured.
 func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Context) (whitelist []string) {
 	if allowedList := c.Config.GetSanitationWhiteList(ctx); len(allowedList) > 0 {
 		return allowedList

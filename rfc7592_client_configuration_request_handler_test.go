@@ -21,15 +21,7 @@ import (
 func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 	ctx := context.Background()
 
-	// A request whose final path segment is empty - for example a trailing-slash path with no client_id appended -
-	// MUST be rejected before the auth strategy is consulted. DefaultEndpointAuthStrategy
-	// (handler/rfc7591.DefaultEndpointAuthStrategy) skips its subject check when id is empty, since an empty id also
-	// means "this is a client registration request" there; silently forwarding an empty id here would let that
-	// defence-in-depth check be bypassed on the client configuration endpoint.
 	t.Run("ShouldRejectEmptyClientID", func(t *testing.T) {
-		// Fails the test outright if the auth strategy is ever invoked, rather than merely asserting the final
-		// error; a regression that reordered the empty-id check to run after a successful strategy call, still
-		// rejecting the id afterward, would produce an identical error and leave a weaker assertion unchanged.
 		strategy := &recordingEndpointAuth{
 			requester: NewRequest(),
 			onCall: func(string) {
@@ -67,12 +59,7 @@ func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 		assert.Equal(t, authenticated, requester.GetAuthenticatedRequester())
 	})
 
-	// ClientRegistrationEndpointAuthStrategy is a documented extension point where returning a nil requester with a
-	// nil error reports the endpoint is open. RFC 7592 Section 2 requires a registration access token on every call
-	// to the client configuration endpoint, so that return must be refused here rather than honoured: the client is
-	// named by the request path and its identifier is not a secret, so proceeding would let an unauthenticated
-	// request read, replace, or delete any registered client. It must still not panic - a library must not crash
-	// because a custom strategy took a path the interface documents.
+	// RFC 7592 Section 2: every call to the client configuration endpoint requires a registration access token.
 	t.Run("ShouldRejectWhenAuthStrategyReturnsNoRequester", func(t *testing.T) {
 		provider := &Fosite{Config: &Config{
 			RFC7591ClientRegistrationEndpointAuthStrategy: &staticEndpointAuth{requester: nil},
@@ -157,11 +144,6 @@ func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. 'RFC7591ClientRegistrationConfigProvider' not implemented")
 	})
 
-	// handler/rfc7591.ClientConfigurationURL builds registration_client_uri by appending url.PathEscape(id) to the
-	// endpoint, so an id containing '/' arrives percent-encoded (e.g. 'a%2Fb'). net/http decodes r.URL.Path before
-	// this handler ever sees it, which would turn that back into a literal '/' and truncate the derived id to
-	// whatever followed it - so derivation must work from the still-escaped path and unescape only the final
-	// segment, not split the already-decoded r.URL.Path. This proves that round-trips correctly.
 	t.Run("ShouldRoundTripClientIDContainingSlash", func(t *testing.T) {
 		id := "a/b"
 		escaped := url.PathEscape(id)
@@ -200,9 +182,6 @@ func TestFositeNewRFC7592ClientConfigurationRequest(t *testing.T) {
 	})
 }
 
-// recordingEndpointAuth is a ClientRegistrationEndpointAuthStrategy test double that records the id it was called
-// with, used to assert NewRFC7592ClientConfigurationRequest passes the derived client_id through to the auth
-// strategy (rather than an empty id, which is reserved for client registration requests).
 type recordingEndpointAuth struct {
 	requester Requester
 	onCall    func(id string)

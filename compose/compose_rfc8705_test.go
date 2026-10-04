@@ -350,10 +350,3 @@ func mtlsAuthorizeForCode(t *testing.T, provider oauth2.Provider) string {
 
 	return code
 }
-
-const (
-	mtTokenEndpoint = "https://as.example.com/token"
-	mtClientID      = "mtls-client"
-	mtSecret        = "mtls-client-secret"
-	mtRedirectURI   = "https://rp.example.com/cb"
-)

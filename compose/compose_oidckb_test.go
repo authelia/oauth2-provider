@@ -77,8 +77,6 @@ func TestOpenIDConnectKeyBindingRequiresBindingHandlerOrdering(t *testing.T) {
 		return &oauth2.Config{OIDCKeyBindingEnabled: true, DPoPEnabled: true}
 	}
 
-	// Config.TokenEndpointBindingHandlers is exported and may be assigned directly, bypassing Append's
-	// deduplication, so the check must hold for a list carrying more than one of either handler.
 	testCases := []struct {
 		name      string
 		handlers  oauth2.TokenEndpointBindingHandlers

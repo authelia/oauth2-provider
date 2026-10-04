@@ -18,10 +18,12 @@ type NumericDate struct {
 	time.Time
 }
 
+// Now returns a NumericDate for the current time.
 func Now() *NumericDate {
 	return NewNumericDate(time.Now())
 }
 
+// NewNumericDate returns a NumericDate for t in UTC truncated to TimePrecision.
 func NewNumericDate(t time.Time) *NumericDate {
 	return &NumericDate{t.UTC().Truncate(TimePrecision)}
 }
@@ -42,6 +44,8 @@ func newNumericDateFromSeconds(f float64) *NumericDate {
 	return NewNumericDate(time.Unix(int64(round), int64(frac*1e9)))
 }
 
+// MarshalJSON encodes the date as a JSON number of seconds since the Unix epoch, with fractional digits when
+// TimePrecision is finer than a second.
 func (date NumericDate) MarshalJSON() (b []byte, err error) {
 	var prec int
 
@@ -59,6 +63,7 @@ func (date NumericDate) MarshalJSON() (b []byte, err error) {
 	return output, nil
 }
 
+// UnmarshalJSON decodes a JSON number of seconds since the Unix epoch, which may have a fractional part.
 func (date *NumericDate) UnmarshalJSON(b []byte) (err error) {
 	var (
 		number json.Number
@@ -91,6 +96,8 @@ func (date *NumericDate) Int64() (val int64) {
 
 type ClaimStrings []string
 
+// Valid reports whether any of the values is equal to cmp, using a constant time comparison. When there are no values
+// it returns true only if required is false.
 func (s ClaimStrings) Valid(cmp string, required bool) (valid bool) {
 	if len(s) == 0 {
 		return !required
@@ -105,6 +112,8 @@ func (s ClaimStrings) Valid(cmp string, required bool) (valid bool) {
 	return false
 }
 
+// ValidAny reports whether any of the values is equal to any value in cmp, using a constant time comparison. When there
+// are no values it returns true only if required is false.
 func (s ClaimStrings) ValidAny(cmp ClaimStrings, required bool) (valid bool) {
 	if len(s) == 0 {
 		return !required
@@ -121,6 +130,8 @@ func (s ClaimStrings) ValidAny(cmp ClaimStrings, required bool) (valid bool) {
 	return false
 }
 
+// ValidAll reports whether every value in cmp is equal to one of the values, using a constant time comparison. When
+// there are no values it returns true only if required is false.
 func (s ClaimStrings) ValidAll(cmp ClaimStrings, required bool) (valid bool) {
 	if len(s) == 0 {
 		return !required
@@ -140,6 +151,8 @@ outer:
 	return true
 }
 
+// UnmarshalJSON decodes a JSON string or a JSON array of strings, and returns ErrInvalidType for any other value. A
+// JSON null leaves the values unchanged.
 func (s *ClaimStrings) UnmarshalJSON(data []byte) (err error) {
 	var value interface{}
 
@@ -173,6 +186,8 @@ func (s *ClaimStrings) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// MarshalJSON encodes the values as a JSON array, or as a JSON string when there is a single value and
+// MarshalSingleStringAsArray is false.
 func (s ClaimStrings) MarshalJSON() (b []byte, err error) {
 	if len(s) == 1 && !MarshalSingleStringAsArray {
 		return json.Marshal(s[0])

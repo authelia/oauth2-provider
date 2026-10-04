@@ -56,8 +56,6 @@ func TestErrorTranslation(t *testing.T) {
 func TestAddLocalizerToErrWithLang(t *testing.T) {
 	catalog := newTestCatalog()
 
-	// AddLocalizerToErrWithLang matches errors whose dynamic type is *RFC6749Error,
-	// matching the pointer the package's WithHintIDOrDefaultf actually returns.
 	makeErr := func() *RFC6749Error {
 		return ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 	}
@@ -115,9 +113,6 @@ func TestAddLocalizerToErrWithLang(t *testing.T) {
 	}
 
 	t.Run("ShouldLocalizePointerRFC6749Error", func(t *testing.T) {
-		// AddLocalizerToErrWithLang's errors.As target is *RFC6749Error, so the pointer
-		// returned by the production-facing WithHintIDOrDefaultf matches and a localized
-		// copy is returned. This documents the real API usage pattern.
 		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 
 		actual := AddLocalizerToErrWithLang(catalog, language.Spanish, input)
@@ -159,9 +154,6 @@ func TestAddLocalizerToErr(t *testing.T) {
 	}
 
 	t.Run("ShouldLocalizePointerRFC6749Error", func(t *testing.T) {
-		// Mirrors the real production usage where callers pass the *RFC6749Error returned by
-		// WithHintIDOrDefaultf directly. The function localizes the input per the requester's
-		// language tag.
 		input := ErrInvalidRequest.WithHintIDOrDefaultf("badRequestMethod", "HTTP method is '%s', expected 'POST'.", http.MethodGet)
 
 		actual := AddLocalizerToErr(catalog, input, &Request{Lang: language.Spanish})
@@ -233,15 +225,10 @@ func newTestCatalog() i18n.MessageCatalog {
 	})
 }
 
-// nonG11NRequester is a Requester that intentionally does not implement G11NContext
-// (no GetLang method) so that getLangFromRequester falls back to the default language.
 type nonG11NRequester struct {
 	Requester
 }
 
-// causeOnlyError implements pkg/errors causer but does not implement Unwrap, so errors.As
-// cannot traverse it and the errorsx.Cause fallback branch in AddLocalizerToErrWithLang is
-// exercised.
 type causeOnlyError struct {
 	cause error
 }

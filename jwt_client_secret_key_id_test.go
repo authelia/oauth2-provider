@@ -105,8 +105,6 @@ func TestRequestObjectClientSecretAlgorithmWithKeyID(t *testing.T) {
 	}
 }
 
-const testClientSecretKeyIDSecret = "foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoob"
-
 func testClientSecretKeyIDToken(t *testing.T, alg jose.SignatureAlgorithm, claims jwt.MapClaims) string {
 	t.Helper()
 

@@ -26,10 +26,15 @@ type OpenIDConnectDeviceAuthorizeHandler struct {
 	*IDTokenHandleHelper
 }
 
+// HandleRFC8628UserAuthorizeEndpointRequest always returns oauth2.ErrUnknownRequest as this handler only acts when the
+// user authorization response is populated.
 func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(_ context.Context, _ oauth2.DeviceAuthorizeRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
+// PopulateRFC8628UserAuthorizeEndpointResponse persists the OpenID Connect 1.0 session under the device code signature
+// when the 'openid' scope was granted and the client is registered for the device code grant type, and otherwise does
+// nothing.
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, _ oauth2.DeviceUserAuthorizeResponder) (err error) {
 	if !req.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return nil
@@ -50,10 +55,15 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 	return nil
 }
 
+// HandleTokenEndpointRequest always returns oauth2.ErrUnknownRequest as this handler only acts when the token response
+// is populated.
 func (c *OpenIDConnectDeviceAuthorizeHandler) HandleTokenEndpointRequest(_ context.Context, _ oauth2.AccessRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
+// PopulateTokenEndpointResponse issues an ID Token for a device code grant. It loads the OpenID Connect 1.0 session
+// stored under the device code signature, deletes it, and adds the 'id_token' with an 'at_hash' claim to the response.
+// It returns oauth2.ErrUnknownRequest when no such session exists.
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -105,10 +115,13 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 	return c.IssueExplicitIDToken(ctx, lifespan, ar, response)
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *OpenIDConnectDeviceAuthorizeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly
+// 'urn:ietf:params:oauth:grant-type:device_code'.
 func (c *OpenIDConnectDeviceAuthorizeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode))
 }

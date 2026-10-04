@@ -55,7 +55,6 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 			mock: func(handlers []*mock.MockPushedAuthorizeEndpointHandler, ar *mock.MockAuthorizeRequester) {
 				ar.EXPECT().SetSession(gomock.Eq(new(DefaultSession)))
 				handlers[0].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Eq(ar), gomock.Any()).Return(handlerErr)
-				// Second handler MUST NOT be invoked after the first returns an error.
 				handlers[1].EXPECT().HandlePushedAuthorizeEndpointRequest(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 			},
 			expected: "handler failed",
@@ -239,7 +238,6 @@ func TestWritePushedAuthorizeResponseMarshalError(t *testing.T) {
 				ExpiresIn:  60,
 				Header:     http.Header{},
 				Extra: map[string]any{
-					// channels cannot be marshaled to JSON
 					"bad": make(chan int),
 				},
 			},

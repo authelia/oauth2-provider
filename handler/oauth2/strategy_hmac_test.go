@@ -505,13 +505,3 @@ func mustNewBCryptClientSecretPlain(rawSecret string) *oauth2.BCryptClientSecret
 		return secret
 	}
 }
-
-var hmacshaStrategy = HMACCoreStrategy{
-	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
-	Config: &oauth2.Config{
-		AccessTokenLifespan:   time.Hour * 24,
-		AuthorizeCodeLifespan: time.Hour * 24,
-	},
-	usePrefix: true,
-	prefix:    "authelia_%s_",
-}

@@ -97,27 +97,6 @@ func TestSearchJWKS(t *testing.T) {
 	})
 }
 
-type stubFetcher struct {
-	jwks      *jose.JSONWebKeySet
-	jwksForce *jose.JSONWebKeySet
-	calls     int
-	err       error
-}
-
-func (f *stubFetcher) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
-	f.calls++
-
-	if f.err != nil {
-		return nil, f.err
-	}
-
-	if ignoreCache && f.jwksForce != nil {
-		return f.jwksForce, nil
-	}
-
-	return f.jwks, nil
-}
-
 func TestFindClientPublicJWK(t *testing.T) {
 	rsaKey := mustRSAKey(t, 2048)
 
@@ -688,6 +667,27 @@ func TestNewClientSecretJWKSignatureUsesTheSecretOctets(t *testing.T) {
 		require.True(t, ok, "got %T", key.Key)
 		assert.NotEqual(t, secret, raw, "Section 10.2 derives the encryption key by truncated SHA-2, unlike Section 10.1")
 	})
+}
+
+type stubFetcher struct {
+	jwks      *jose.JSONWebKeySet
+	jwksForce *jose.JSONWebKeySet
+	calls     int
+	err       error
+}
+
+func (f *stubFetcher) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
+	f.calls++
+
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	if ignoreCache && f.jwksForce != nil {
+		return f.jwksForce, nil
+	}
+
+	return f.jwks, nil
 }
 
 type expiringSecretJARClient struct {

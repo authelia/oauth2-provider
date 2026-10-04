@@ -28,6 +28,10 @@ type StatelessJWTValidator struct {
 	}
 }
 
+// IntrospectToken validates the token as an RFC 9068 JWT Profile access token without consulting storage, checks the
+// granted scopes against the required scopes, and merges the request reconstructed from the claims into the given
+// request. It returns oauth2.ErrUnknownRequest for an opaque access or refresh token, and when the context carries
+// ContextKeySkipStatelessIntrospection.
 func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	// This context value allows skipping the StatelessJWTValidator and continuing to the next.
 	if val := ctx.Value(ContextKeySkipStatelessIntrospection); val != nil {

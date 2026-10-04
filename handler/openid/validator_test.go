@@ -406,8 +406,6 @@ func TestValidatePrompt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			form := url.Values{"prompt": {tc.prompt}, "id_token_hint": {tc.idTokenHint}}
 
-			// An absent 'max_age' must be represented by an absent key: a present key with an empty value is a
-			// malformed request rather than a request without the parameter.
 			if tc.maxAge != nil {
 				form["max_age"] = tc.maxAge
 			}
@@ -494,8 +492,3 @@ func parse(u string) *url.URL {
 	o, _ := url.Parse(u)
 	return o
 }
-
-const (
-	errPromptNoneIdentityNotAssured = "The Authorization Server requires End-User consent. OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."
-	testLoopbackRedirectURI         = "http://127.0.0.1:8080/callback"
-)

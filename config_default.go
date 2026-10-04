@@ -543,66 +543,89 @@ type Config struct {
 	revocationEndpointClientAuthStrategyOnce    sync.Once
 }
 
+// GetGlobalSecret returns the global secret used to sign and verify signatures.
 func (c *Config) GetGlobalSecret(ctx context.Context) ([]byte, error) {
 	return c.GlobalSecret, nil
 }
 
+// GetUseLegacyErrorFormat returns whether the legacy error format should be used.
 func (c *Config) GetUseLegacyErrorFormat(ctx context.Context) bool {
 	return c.UseLegacyErrorFormat
 }
 
+// GetRotatedGlobalSecrets returns the rotated global secrets which are only used to verify signatures.
 func (c *Config) GetRotatedGlobalSecrets(ctx context.Context) ([][]byte, error) {
 	return c.RotatedGlobalSecrets, nil
 }
 
+// GetHMACHasher returns the hasher used to generate HMAC signatures.
 func (c *Config) GetHMACHasher(ctx context.Context) func() hash.Hash {
 	return c.HMACHasher
 }
 
+// GetAuthorizeEndpointHandlers returns the handlers called before the authorization endpoint is served.
 func (c *Config) GetAuthorizeEndpointHandlers(ctx context.Context) AuthorizeEndpointHandlers {
 	return c.AuthorizeEndpointHandlers
 }
 
+// GetTokenEndpointHandlers returns the handlers called before the token endpoint is served.
 func (c *Config) GetTokenEndpointHandlers(ctx context.Context) TokenEndpointHandlers {
 	return c.TokenEndpointHandlers
 }
 
+// GetAuthorizeEndpointBindingHandlers returns the handlers that record a proof-of-possession binding on an authorize
+// request before the authorize endpoint handlers run.
 func (c *Config) GetAuthorizeEndpointBindingHandlers(ctx context.Context) AuthorizeEndpointBindingHandlers {
 	return c.AuthorizeEndpointBindingHandlers
 }
 
+// GetTokenEndpointBindingHandlers returns the handlers that record and enforce a proof-of-possession binding on an
+// access request a grant handler has accepted.
 func (c *Config) GetTokenEndpointBindingHandlers(ctx context.Context) TokenEndpointBindingHandlers {
 	return c.TokenEndpointBindingHandlers
 }
 
+// GetRFC8628DeviceAuthorizeEndpointBindingHandlers returns the handlers that record a proof-of-possession binding on a
+// device authorization request before the device authorization endpoint handlers run.
 func (c *Config) GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx context.Context) RFC8628DeviceAuthorizeEndpointBindingHandlers {
 	return c.RFC8628DeviceAuthorizeEndpointBindingHandlers
 }
 
+// GetTokenIntrospectionHandlers returns the handlers called before the token introspection endpoint is served.
 func (c *Config) GetTokenIntrospectionHandlers(ctx context.Context) TokenIntrospectionHandlers {
 	return c.TokenIntrospectionHandlers
 }
 
+// GetRevocationHandlers returns the handlers called before the revocation endpoint is served.
 func (c *Config) GetRevocationHandlers(ctx context.Context) RevocationHandlers {
 	return c.RevocationHandlers
 }
 
+// GetRFC8628DeviceAuthorizeEndpointHandlers returns the handlers called before the device authorization endpoint is
+// served.
 func (c *Config) GetRFC8628DeviceAuthorizeEndpointHandlers(_ context.Context) RFC8628DeviceAuthorizeEndpointHandlers {
 	return c.RFC8628DeviceAuthorizeEndpointHandlers
 }
 
+// GetRFC8628UserAuthorizeEndpointHandlers returns the handlers called before the device grant user interaction endpoint
+// is served.
 func (c *Config) GetRFC8628UserAuthorizeEndpointHandlers(_ context.Context) RFC8628UserAuthorizeEndpointHandlers {
 	return c.RFC8628UserAuthorizeEndpointHandlers
 }
 
+// GetRFC7591ClientRegistrationEndpointHandlers returns the handlers called before the client registration endpoint is
+// served.
 func (c *Config) GetRFC7591ClientRegistrationEndpointHandlers(_ context.Context) RFC7591ClientRegistrationEndpointHandlers {
 	return c.RFC7591ClientRegistrationEndpointHandlers
 }
 
+// GetRFC7592ClientConfigurationEndpointHandlers returns the handlers called before the client configuration endpoint is
+// served.
 func (c *Config) GetRFC7592ClientConfigurationEndpointHandlers(_ context.Context) RFC7592ClientConfigurationEndpointHandlers {
 	return c.RFC7592ClientConfigurationEndpointHandlers
 }
 
+// GetHTTPClient returns the HTTP client to use for requests. Defaults to a new retryablehttp.Client.
 func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	if c.HTTPClient == nil {
 		return retryablehttp.NewClient()
@@ -611,6 +634,7 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	return c.HTTPClient
 }
 
+// GetAllowedJWTAssertionAudiences returns the permitted client assertion audiences.
 func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 	return c.AllowedJWTAssertionAudiences
 }
@@ -638,10 +662,14 @@ func (c *Config) GetClientAssertionClientSecretEncryptionDisabled(ctx context.Co
 	return c.ClientAssertionClientSecretEncryptionDisabled
 }
 
+// GetAllowedIntrospectionAudiences returns the audiences permitted for an Access Token used to authenticate a request
+// to the introspection endpoint.
 func (c *Config) GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string) {
 	return c.AllowedIntrospectionAudiences
 }
 
+// GetAllowedIntrospectionScopes returns the scopes permitted for an Access Token used to authenticate a request to the
+// introspection endpoint. Defaults to consts.ScopeIntrospection.
 func (c *Config) GetAllowedIntrospectionScopes(ctx context.Context) (scopes []string) {
 	if len(c.AllowedIntrospectionScopes) == 0 {
 		return []string{consts.ScopeIntrospection}
@@ -650,10 +678,14 @@ func (c *Config) GetAllowedIntrospectionScopes(ctx context.Context) (scopes []st
 	return c.AllowedIntrospectionScopes
 }
 
+// GetFormPostHTMLTemplate returns the HTML template used to render the authorization response when the 'response_mode'
+// is 'form_post'.
 func (c *Config) GetFormPostHTMLTemplate(ctx context.Context) *template.Template {
 	return c.FormPostHTMLTemplate
 }
 
+// GetFormPostResponseWriter returns the FormPostResponseWriter used to write the form post response. Defaults to
+// DefaultFormPostResponseWriter.
 func (c *Config) GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter {
 	c.formPostResponseWriterOnce.Do(func() {
 		if c.FormPostResponseWriter == nil {
@@ -664,10 +696,13 @@ func (c *Config) GetFormPostResponseWriter(ctx context.Context) FormPostResponse
 	return c.FormPostResponseWriter
 }
 
+// GetMessageCatalog returns the message catalog used for i18n.
 func (c *Config) GetMessageCatalog(ctx context.Context) i18n.MessageCatalog {
 	return c.MessageCatalog
 }
 
+// GetResponseModeHandlers returns the handlers which perform response mode formatting. Defaults to a
+// DefaultResponseModeHandler.
 func (c *Config) GetResponseModeHandlers(ctx context.Context) ResponseModeHandlers {
 	c.responseModeHandlersOnce.Do(func() {
 		if len(c.ResponseModeHandlers) == 0 {
@@ -678,10 +713,13 @@ func (c *Config) GetResponseModeHandlers(ctx context.Context) ResponseModeHandle
 	return c.ResponseModeHandlers
 }
 
+// GetResponseModeParameterHandlers returns the handlers which inject additional parameters into the authorize
+// responses.
 func (c *Config) GetResponseModeParameterHandlers(ctx context.Context) ResponseModeParameterHandlers {
 	return c.ResponseModeParameterHandlers
 }
 
+// GetSendDebugMessagesToClients returns whether error debug messages are included in response payloads.
 func (c *Config) GetSendDebugMessagesToClients(ctx context.Context) bool {
 	return c.SendDebugMessagesToClients
 }
@@ -695,26 +733,35 @@ func (c *Config) GetClientAuthenticationRealm(ctx context.Context) (realm string
 	return c.ClientAuthenticationRealm
 }
 
+// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.
 func (c *Config) GetRevokeRefreshTokensExplicit(ctx context.Context) bool {
 	return c.RevokeRefreshTokensExplicit
 }
 
+// GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient returns true if a RevokeFlowRevokeRefreshTokensExplicitClient
+// returning false should be enforced.
 func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx context.Context) bool {
 	return c.EnforceRevokeFlowRevokeRefreshTokensExplicitClient
 }
 
+// GetIDTokenIssuer returns the issuer of the ID Token.
 func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
 	return c.IDTokenIssuer
 }
 
+// GetIDTokenValidationStrategy returns the strategy which validates ID Tokens presented to the authorization server by
+// a client. Has no default.
 func (c *Config) GetIDTokenValidationStrategy(ctx context.Context) (strategy TokenValidationStrategy) {
 	return c.IDTokenValidationStrategy
 }
 
+// GetBackChannelLogoutTokenStrategy returns the strategy which generates the Logout Tokens for OpenID Connect
+// Back-Channel Logout. Has no default.
 func (c *Config) GetBackChannelLogoutTokenStrategy(ctx context.Context) (strategy BackChannelLogoutTokenStrategy) {
 	return c.BackChannelLogoutTokenStrategy
 }
 
+// GetBackChannelLogoutLifespan returns the lifespan of a Logout Token. Defaults to 5 minutes.
 func (c *Config) GetBackChannelLogoutLifespan(ctx context.Context) (lifespan time.Duration) {
 	if c.BackChannelLogoutLifespan <= 0 {
 		return defaultBackChannelLogoutLifespan
@@ -723,6 +770,8 @@ func (c *Config) GetBackChannelLogoutLifespan(ctx context.Context) (lifespan tim
 	return c.BackChannelLogoutLifespan
 }
 
+// GetBackChannelLogoutConcurrency returns the maximum number of Back-Channel Logout requests delivered concurrently.
+// Defaults to 10.
 func (c *Config) GetBackChannelLogoutConcurrency(ctx context.Context) (n int) {
 	if c.BackChannelLogoutConcurrency <= 0 {
 		return defaultBackChannelLogoutConcurrency
@@ -731,14 +780,17 @@ func (c *Config) GetBackChannelLogoutConcurrency(ctx context.Context) (n int) {
 	return c.BackChannelLogoutConcurrency
 }
 
+// GetAuthorizationServerIdentificationIssuer returns the issuer identifier for authorization responses per RFC 9207.
 func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
 	return c.AuthorizationServerIdentificationIssuer
 }
 
+// GetIntrospectionIssuer returns the issuer used when generating signed introspection responses.
 func (c *Config) GetIntrospectionIssuer(ctx context.Context) string {
 	return c.IntrospectionIssuer
 }
 
+// GetIntrospectionJWTResponseStrategy returns the signer for introspection responses. Has no default.
 func (c *Config) GetIntrospectionJWTResponseStrategy(ctx context.Context) jwt.Strategy {
 	return c.IntrospectionJWTResponseStrategy
 }
@@ -779,6 +831,7 @@ func (c *Config) GetSanitationWhiteList(ctx context.Context) []string {
 	return c.SanitationWhiteList
 }
 
+// GetOmitRedirectScopeParam returns whether the 'scope' parameter should be omitted from the redirect URL.
 func (c *Config) GetOmitRedirectScopeParam(ctx context.Context) bool {
 	return c.OmitRedirectScopeParam
 }
@@ -795,6 +848,7 @@ func (c *Config) GetAccessTokenIssuer(ctx context.Context) string {
 	return c.AccessTokenIssuer
 }
 
+// GetJWTScopeField returns the claim key the scope is set in for a JWT.
 func (c *Config) GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum {
 	return c.JWTScopeClaimKey
 }
@@ -809,10 +863,13 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) s
 	return c.IDTokenIssuer
 }
 
+// GetJWTSecuredAuthorizeResponseModeStrategy returns the signer for the JWT Secured Authorization Response Mode. Has no
+// default.
 func (c *Config) GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy {
 	return c.JWTSecuredAuthorizeResponseModeStrategy
 }
 
+// GetJWTStrategy returns the jwt.Strategy used for less specific cases. Defaults to a jwt.DefaultStrategy.
 func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
 	c.jwtStrategyOnce.Do(func() {
 		if c.JWTStrategy == nil {
@@ -825,10 +882,12 @@ func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
 	return c.JWTStrategy
 }
 
+// GetEnforceJWTProfileAccessTokens returns whether JWT Profile Access Tokens are issued to all clients.
 func (c *Config) GetEnforceJWTProfileAccessTokens(ctx context.Context) (enable bool) {
 	return c.EnforceJWTProfileAccessTokens
 }
 
+// GetAllowedPrompts returns the OpenID Connect prompt values the server supports.
 func (c *Config) GetAllowedPrompts(_ context.Context) []string {
 	return c.AllowedPromptValues
 }
@@ -892,6 +951,8 @@ func (c *Config) GetAuthorizationDetailsMaxObjects(_ context.Context) int {
 	return c.AuthorizationDetailsMaxObjects
 }
 
+// GetClientCredentialsFlowImplicitGrantRequested returns true if the client credentials grant should implicitly grant
+// all requested and validated scopes and audiences.
 func (c *Config) GetClientCredentialsFlowImplicitGrantRequested(_ context.Context) bool {
 	return c.ClientCredentialsFlowImplicitGrantRequested
 }
@@ -1168,10 +1229,14 @@ func (c *Config) GetRequestObjectMaximumLifetime(_ context.Context) time.Duratio
 	}
 }
 
+// GetRFC8693TokenTypes returns the supported token types for RFC 8693 Token Exchange keyed by their token type
+// identifier.
 func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {
 	return c.RFC8693TokenTypes
 }
 
+// GetDefaultRFC8693RequestedTokenType returns the token type identifier used as the 'requested_token_type' when the RFC
+// 8693 Token Exchange request does not specify one.
 func (c *Config) GetDefaultRFC8693RequestedTokenType(ctx context.Context) string {
 	return c.DefaultRequestedTokenType
 }
@@ -1190,10 +1255,13 @@ func (c *Config) GetIDJAGSingleUse(ctx context.Context) (single bool) {
 	return c.IDJAGSingleUse
 }
 
+// GetRFC8628UserVerificationURL returns the URL of the device verification endpoint.
 func (c *Config) GetRFC8628UserVerificationURL(_ context.Context) string {
 	return c.RFC8628UserVerificationURL
 }
 
+// GetRFC8628TokenPollingInterval returns the interval at which clients should poll for device code grants. Defaults to
+// 10 seconds.
 func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration {
 	if c.RFC8628TokenPollingInterval == 0 {
 		return time.Second * 10
@@ -1202,6 +1270,8 @@ func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration
 	return c.RFC8628TokenPollingInterval
 }
 
+// GetAuthorizeErrorFieldResponseStrategy returns the strategy which handles authorize error responses when the user
+// can't be redirected. Defaults to a JSONAuthorizeErrorFieldResponseStrategy.
 func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy) {
 	c.authorizeErrorFieldResponseStrategyOnce.Do(func() {
 		if c.AuthorizeErrorFieldResponseStrategy == nil {
@@ -1212,6 +1282,8 @@ func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (st
 	return c.AuthorizeErrorFieldResponseStrategy
 }
 
+// GetTokenEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the token
+// endpoint. Defaults to a TokenEndpointClientAuthStrategy.
 func (c *Config) GetTokenEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	c.tokenEndpointClientAuthStrategyOnce.Do(func() {
 		if c.TokenEndpointClientAuthStrategy == nil {
@@ -1222,6 +1294,8 @@ func (c *Config) GetTokenEndpointClientAuthStrategy(ctx context.Context) (strate
 	return c.TokenEndpointClientAuthStrategy
 }
 
+// GetIntrospectionEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
+// introspection endpoint. Defaults to an IntrospectionEndpointClientAuthStrategy.
 func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	c.introspectionEndpointClientAuthStrategyOnce.Do(func() {
 		if c.IntrospectionEndpointClientAuthStrategy == nil {
@@ -1232,6 +1306,8 @@ func (c *Config) GetIntrospectionEndpointClientAuthStrategy(ctx context.Context)
 	return c.IntrospectionEndpointClientAuthStrategy
 }
 
+// GetIntrospectionEndpointClientAuthDisabled returns whether client authentication is turned off at the introspection
+// endpoint. See IntrospectionEndpointClientAuthDisabledProvider.
 func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool) {
 	return c.IntrospectionEndpointClientAuthDisabled
 }
@@ -1241,6 +1317,8 @@ func (c *Config) GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled 
 	return c.IntrospectionTokenTypeEnabled
 }
 
+// GetRevocationEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
+// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
 	c.revocationEndpointClientAuthStrategyOnce.Do(func() {
 		if c.RevocationEndpointClientAuthStrategy == nil {
@@ -1251,14 +1329,17 @@ func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (s
 	return c.RevocationEndpointClientAuthStrategy
 }
 
+// GetDPoPEnabled returns true if RFC 9449 DPoP handling is enabled, which is also the case whenever DPoP is enforced.
 func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
 	return c.DPoPEnabled || c.DPoPEnforce
 }
 
+// GetDPoPEnforce returns true if DPoP is required for all clients regardless of client metadata.
 func (c *Config) GetDPoPEnforce(ctx context.Context) (enforce bool) {
 	return c.DPoPEnforce
 }
 
+// GetOIDCKeyBindingEnabled returns true if OpenID Connect Key Binding 1.0 handling is enabled.
 func (c *Config) GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool) {
 	return c.OIDCKeyBindingEnabled
 }
@@ -1276,6 +1357,7 @@ func (c *Config) GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string
 	return c.DPoPAllowedJWSAlgorithms
 }
 
+// GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof. Defaults to 10 seconds.
 func (c *Config) GetDPoPClockSkew(ctx context.Context) (skew time.Duration) {
 	if c.DPoPClockSkew <= 0 {
 		return defaultDPoPClockSkew
@@ -1284,6 +1366,7 @@ func (c *Config) GetDPoPClockSkew(ctx context.Context) (skew time.Duration) {
 	return c.DPoPClockSkew
 }
 
+// GetDPoPProofLifespan returns how long a DPoP proof remains valid after its 'iat' claim. Defaults to 10 seconds.
 func (c *Config) GetDPoPProofLifespan(ctx context.Context) (lifespan time.Duration) {
 	if c.DPoPProofLifespan <= 0 {
 		return defaultDPoPProofLifespan
@@ -1292,10 +1375,12 @@ func (c *Config) GetDPoPProofLifespan(ctx context.Context) (lifespan time.Durati
 	return c.DPoPProofLifespan
 }
 
+// GetDPoPNonceRequired returns true if a server nonce is required in DPoP proofs.
 func (c *Config) GetDPoPNonceRequired(ctx context.Context) (required bool) {
 	return c.DPoPNonceRequired
 }
 
+// GetDPoPNonceLifespan returns the lifespan of issued DPoP server nonces. Defaults to one hour.
 func (c *Config) GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration) {
 	if c.DPoPNonceLifespan <= 0 {
 		return time.Hour
@@ -1304,6 +1389,7 @@ func (c *Config) GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Durati
 	return c.DPoPNonceLifespan
 }
 
+// GetDPoPStrategy returns the configured DPoP strategy.
 func (c *Config) GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy) {
 	return c.DPoPStrategy
 }
@@ -1314,14 +1400,20 @@ func (c *Config) GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict b
 	return c.DPoPStrictRefreshTokenBinding
 }
 
+// GetMTLSEnabled returns true if RFC 8705 Mutual-TLS handling is enabled, which is also the case whenever it is
+// enforced.
 func (c *Config) GetMTLSEnabled(ctx context.Context) (enabled bool) {
 	return c.MTLSEnabled || c.MTLSEnforce
 }
 
+// GetMTLSEnforce returns true if certificate-bound access tokens are required for all clients regardless of client
+// metadata.
 func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
 	return c.MTLSEnforce
 }
 
+// GetMTLSClientCertificateHeader returns the name of the header a trusted TLS terminating proxy forwards the client
+// certificate in. Empty disables the header. See the MTLSClientCertificateHeader field.
 func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
 	return c.MTLSClientCertificateHeader
 }
@@ -1332,38 +1424,52 @@ func (c *Config) GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict b
 	return c.MTLSStrictRefreshTokenBinding
 }
 
+// GetRFC7591ClientRegistrationGlobalSecret returns the secret used to sign client registration tokens.
 func (c *Config) GetRFC7591ClientRegistrationGlobalSecret(ctx context.Context) (secret []byte, err error) {
 	return c.RFC7591ClientRegistrationGlobalSecret, nil
 }
 
+// GetRFC7591ClientRegistrationRotatedGlobalSecrets returns the rotated client registration token secrets which are only
+// used to verify signatures.
 func (c *Config) GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error) {
 	return c.RFC7591ClientRegistrationRotatedGlobalSecrets, nil
 }
 
+// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint.
 func (c *Config) GetRFC7591ClientRegistrationEndpointURL(ctx context.Context) (endpoint string) {
 	return c.RFC7591ClientRegistrationEndpointURL
 }
 
+// GetRFC7591ClientSecretLifespan returns the lifespan used to derive 'client_secret_expires_at'. Zero means the secret
+// does not expire.
 func (c *Config) GetRFC7591ClientSecretLifespan(ctx context.Context) (lifespan time.Duration) {
 	return c.RFC7591ClientSecretLifespan
 }
 
+// GetRFC7591ClientRegistrationStrategy returns the strategy used to construct and patch clients.
 func (c *Config) GetRFC7591ClientRegistrationStrategy(ctx context.Context) (strategy ClientRegistrationStrategy) {
 	return c.RFC7591ClientRegistrationStrategy
 }
 
+// GetRFC7591ClientRegistrationMetadataStrategy returns the strategy used to filter client metadata before it reaches
+// the client registration strategy and before it is returned to the client.
 func (c *Config) GetRFC7591ClientRegistrationMetadataStrategy(ctx context.Context) (strategy ClientRegistrationMetadataStrategy) {
 	return c.RFC7591ClientRegistrationMetadataStrategy
 }
 
+// GetRFC7591ClientRegistrationEndpointAuthStrategy returns the strategy used to authenticate requests at the client
+// registration and client configuration endpoints.
 func (c *Config) GetRFC7591ClientRegistrationEndpointAuthStrategy(ctx context.Context) (strategy ClientRegistrationEndpointAuthStrategy) {
 	return c.RFC7591ClientRegistrationEndpointAuthStrategy
 }
 
+// GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
 func (c *Config) GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator) {
 	return c.RFC7591ClientRegistrationValidators
 }
 
+// GetRFC7591ClientRegistrationEndpointAudiences returns the audiences a client creation token may carry. Empty means
+// the registration endpoint URL is expected.
 func (c *Config) GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string) {
 	return c.RFC7591ClientRegistrationEndpointAudiences
 }
@@ -1385,6 +1491,8 @@ func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (gr
 	return c.RFC7591ClientRegistrationGrantTypes
 }
 
+// GetRFC7591ClientRegistrationScopes returns the scopes a client creation token may carry. Defaults to
+// consts.ScopeClientRegistration.
 func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string) {
 	if len(c.RFC7591ClientRegistrationScopes) == 0 {
 		return []string{consts.ScopeClientRegistration}

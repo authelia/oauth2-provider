@@ -28,13 +28,14 @@ type DefaultLocaleBundle struct {
 	Messages []*DefaultMessage `json:"messages"`
 }
 
-// defaultMessageCatalog is a catalog of all locale bundles.
 type defaultMessageCatalog struct {
 	Bundles []*DefaultLocaleBundle
 
 	matcher language.Matcher
 }
 
+// NewDefaultMessageCatalog returns a MessageCatalog for the given bundles. Each bundle is initialized, and an error
+// from initializing a bundle is ignored.
 func NewDefaultMessageCatalog(bundles []*DefaultLocaleBundle) MessageCatalog {
 	c := &defaultMessageCatalog{
 		Bundles: bundles,

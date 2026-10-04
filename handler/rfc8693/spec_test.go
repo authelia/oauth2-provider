@@ -34,11 +34,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// §4.1 - "act" (Actor) Claim
-//
-// The act claim MUST identify the actor when delegation occurs; nested act
-// claims express a chain of delegation, outermost = most recent actor.
-
 // §4.1: Pure impersonation (no actor_token) MUST NOT add an act claim.
 func TestSpec_4_1_ActClaim_ImpersonationOmitsActClaim(t *testing.T) {
 	cfg := newSpecConfig(t)
@@ -81,12 +76,10 @@ func TestSpec_4_1_ActClaim_IncludesClientIDWhenPresent(t *testing.T) {
 }
 
 // §4.1: "A nested act claim within an act claim MAY be used to express a chain of delegation."
-// Outermost = most recent. When the subject_token already carried an act, the new act nests it as act.act.
 func TestSpec_4_1_ActClaim_ChainsDelegationViaNestedAct(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")
 
-	// Subject token already carried an act claim (e.g. an earlier delegation step).
 	session.SetSubjectToken(map[string]any{
 		consts.ClaimSubject: "alice",
 		consts.ClaimActor: map[string]any{
@@ -121,13 +114,9 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 
 	require.NoError(t, runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil)))
 
-	// The original subject-token act must be unchanged; building the new act must deep-copy nested maps so it
-	// can be mutated/serialized without disturbing the subject_token snapshot.
 	assert.Equal(t, map[string]any{consts.ClaimSubject: "carol"}, priorAct,
 		"buildActClaim must not mutate the subject_token's act map (deep-copy required)")
 
-	// And the issued act's nested act must be a fresh allocation, not the same map header as priorAct, so
-	// downstream mutation of the issued claim cannot corrupt the subject_token snapshot.
 	act := session.Extra[consts.ClaimActor].(map[string]any)
 	nested := act[consts.ClaimActor].(map[string]any)
 	nested["injected"] = true
@@ -190,14 +179,10 @@ func TestSpec_4_1_ActClaim_ActorTokenWithoutIdentity(t *testing.T) {
 	}
 }
 
-// §2.1: the issued JWT's 'aud' MUST reflect this exchange's audience/resource parameters, not any audience the
-// session happened to carry from a prior flow. This test seeds the session with a pre-existing audience and runs
-// a custom-JWT exchange that supplies a different audience via GrantedAudience; the issued JWT's aud must contain
-// only the exchange's audience.
+// §2.1: the issued JWT's 'aud' MUST reflect this exchange's audience/resource parameters.
 func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 	cfg := newSpecConfig(t)
 
-	// Session has a leftover audience from a prior OIDC flow.
 	session := &DefaultSession{
 		DefaultSession: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
@@ -244,15 +229,11 @@ func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 		"RFC 8693 §2.1: issued aud must reflect the exchange's audience/resource only, not session-derived audiences")
 }
 
-// §4.1: The 'act' claim MUST appear in the issued JWT body, not just in internal session state. This test runs a
-// full delegation exchange that produces a custom JWT (which is encoded from session.IDTokenClaims), decodes the
-// resulting token, and confirms the 'act' claim is at the top level of the JWT's claims map.
+// §4.1: the 'act' claim MUST appear in the issued JWT body.
 func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")
 
-	// Seed session with an actor_token as the type handlers would have done during HandleTokenEndpointRequest.
-	// This avoids needing to construct a second valid access token just to drive the actor-token validate() path.
 	session.SetActorToken(map[string]any{
 		consts.ClaimSubject:          "bob",
 		consts.ClaimClientIdentifier: "client-bob",
@@ -262,7 +243,6 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 
 	require.NotEmpty(t, resp.AccessToken, "exchange must produce a custom JWT in access_token")
 
-	// Decode the issued JWT and confirm the 'act' claim is present at the top level.
 	var rawClaims map[string]any
 	_, err := jwt.UnsafeParseSignedAny(resp.AccessToken, &rawClaims)
 	require.NoError(t, err, "issued JWT must be parseable")
@@ -272,12 +252,6 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 	assert.Equal(t, "bob", act[consts.ClaimSubject], "act.sub must come from the actor_token")
 	assert.Equal(t, "client-bob", act[consts.ClaimClientIdentifier], "act.client_id must come from the actor_token when present")
 }
-
-// §2.2 - Successful Response
-//
-// REQUIRED:  access_token, issued_token_type, token_type
-// REQUIRED conditionally:  scope (when issued differs from requested)
-// RECOMMENDED:  expires_in
 
 // §2.2: access-token response carries access_token, token_type=Bearer, expires_in, scope, issued_token_type.
 func TestSpec_2_2_ResponseShape_AccessToken(t *testing.T) {
@@ -352,11 +326,6 @@ func TestSpec_2_2_ResponseShape_CustomJWT(t *testing.T) {
 	assert.Equal(t, "urn:spec:jwt", resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 
-// §2.4 - Error Response (uses RFC 6749 §5.2 codes)
-//
-// The error response uses invalid_grant for grant problems and invalid_target
-// for unresolvable audience/resource per RFC 8707 §2.
-
 // §5.2 'invalid_grant': self-exchange (client exchanges its own subject token) MUST fail.
 func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
 	store := storage.NewExampleStore()
@@ -374,7 +343,7 @@ func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
 	}
 
 	client := store.Clients["my-client"]
-	subjectToken := createAccessToken(context.Background(), coreStrategy, store, client) // same client as the requester
+	subjectToken := createAccessToken(context.Background(), coreStrategy, store, client)
 
 	req := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
@@ -395,10 +364,7 @@ func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "RFC 6749 §5.2: subject token issued to another client MUST yield invalid_grant; self-exchange is the inverse case")
 }
 
-// RefreshTokenTypeHandler must refuse to issue a refresh token if the requesting client is not registered for the
-// refresh_token grant. AccessTokenTypeHandler silently skips refresh-token issuance in this case; when the client
-// EXPLICITLY requests a refresh token via 'requested_token_type', silent downgrade is wrong; refuse with
-// unauthorized_client per RFC 6749 §5.2.
+// RFC 6749 §5.2 'unauthorized_client': a refresh token is refused for a client not registered for the refresh_token grant.
 func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *testing.T) {
 	cfg := newSpecConfig(t)
 	store := storage.NewExampleStore()
@@ -415,7 +381,7 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 	clientWithoutRefresh := &oauth2.DefaultClient{
 		ID:           "no-refresh-client",
 		ClientSecret: oauth2.NewPlainTextClientSecret("secret"),
-		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange}, // no refresh_token
+		GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange},
 		Scopes:       []string{"openid"},
 	}
 
@@ -439,9 +405,6 @@ func TestSpec_RefreshTokenExchange_RejectsClientWithoutRefreshTokenGrant(t *test
 	assert.ErrorIs(t, err, oauth2.ErrUnauthorizedClient)
 }
 
-// RefreshTokenTypeHandler must refuse when configured RefreshTokenScopes are not granted to the session, matching
-// the AccessTokenTypeHandler policy but surfaced as an explicit error (rather than a silent skip) because the
-// client is requesting THIS token type by name.
 func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.T) {
 	cfg := newSpecConfig(t)
 	store := storage.NewExampleStore()
@@ -476,9 +439,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 	assert.ErrorIs(t, err, oauth2.ErrInvalidScope)
 }
 
-// §1.1: custom-JWT issuance with no session subject must fail loudly rather than silently substitute the requesting
-// client's id as the JWT's 'sub' claim. The subject of the issued token represents the user whose authority is
-// being exercised, not the requester.
+// §1.1: custom-JWT issuance with no session subject must fail.
 func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 	cfg := newSpecConfig(t)
 	store := storage.NewExampleStore()
@@ -486,8 +447,6 @@ func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 
 	cjt := &CustomJWTTypeHandler{Config: cfg, Strategy: jwtStrategy, Storage: store}
 
-	// Session intentionally has no subject populated - simulates a misconfigured upstream where the subject_token
-	// resolution didn't write the subject onto the session.
 	session := &DefaultSession{
 		DefaultSession: &openid.DefaultSession{Claims: &jwt.IDTokenClaims{}, Headers: &jwt.Headers{}},
 		SubjectToken:   map[string]any{},
@@ -514,8 +473,7 @@ func TestSpec_2_4_Errors_CustomJWTNoSubjectReturnsServerError(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrServerError, "AS MUST NOT silently substitute requester id as the subject of the issued JWT")
 }
 
-// §5.2 'invalid_target' (RFC 8707): custom-JWT issuance with no audience source must fail loudly rather than
-// silently fall back to the requesting client's id.
+// §5.2 'invalid_target' (RFC 8707): custom-JWT issuance with no audience source must fail.
 func TestSpec_2_4_Errors_CustomJWTUndeterminableAudienceReturnsInvalidTarget(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
@@ -523,7 +481,7 @@ func TestSpec_2_4_Errors_CustomJWTUndeterminableAudienceReturnsInvalidTarget(t *
 	cfg.RFC8693TokenTypes["urn:spec:jwt"] = &JWTType{
 		Name:           "urn:spec:jwt",
 		Issuer:         "https://as.example.com",
-		JWTIssueConfig: JWTIssueConfig{Expiry: 5 * time.Minute}, // no Audience
+		JWTIssueConfig: JWTIssueConfig{Expiry: 5 * time.Minute},
 		JWTValidationConfig: JWTValidationConfig{
 			ValidateFunc: jwt.Keyfunc(func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }),
 		},
@@ -549,8 +507,6 @@ func TestSpec_2_4_Errors_CustomJWTUndeterminableAudienceReturnsInvalidTarget(t *
 		},
 	}
 
-	// Note: the access-token type handler must run first to populate session.SubjectToken; we then drive the
-	// custom-JWT issuance directly to exercise the audience-rejection path.
 	access := &AccessTokenTypeHandler{
 		Config:               cfg,
 		AccessTokenLifespan:  5 * time.Minute,
@@ -593,7 +549,7 @@ func TestSpec_2_1_Errors_ClientWithoutGrantReturnsUnauthorizedClient(t *testing.
 	noGrantClient := &oauth2.DefaultClient{
 		ID:           "no-grant-client",
 		ClientSecret: oauth2.NewPlainTextClientSecret("secret"),
-		GrantTypes:   []string{consts.GrantTypeAuthorizationCode}, // missing token-exchange
+		GrantTypes:   []string{consts.GrantTypeAuthorizationCode},
 		Scopes:       []string{"openid"},
 	}
 
@@ -602,8 +558,6 @@ func TestSpec_2_1_Errors_ClientWithoutGrantReturnsUnauthorizedClient(t *testing.
 	assert.ErrorIs(t, err, oauth2.ErrUnauthorizedClient)
 }
 
-// newSpecConfig builds a Config that registers all four spec token types plus a custom JWT type at "urn:spec:jwt".
-// Tests can mutate the returned config to remove a type or tweak defaults.
 func newSpecConfig(t *testing.T) *oauth2.Config {
 	t.Helper()
 
@@ -629,7 +583,6 @@ func newSpecConfig(t *testing.T) *oauth2.Config {
 	}
 }
 
-// newSpecSession returns a DefaultSession seeded with a subject so the openid.DefaultSession invariants hold.
 func newSpecSession(subject string) *DefaultSession {
 	return &DefaultSession{
 		DefaultSession: &openid.DefaultSession{
@@ -648,7 +601,6 @@ func newValidatedSpecSession(subject string) *DefaultSession {
 	return session
 }
 
-// newSpecRequest produces a baseline RFC 8693 access request with grant_type and the minimum required form params.
 func newSpecRequest(t *testing.T, client oauth2.Client, session *DefaultSession, form url.Values) *oauth2.AccessRequest {
 	t.Helper()
 
@@ -673,9 +625,6 @@ func newSpecRequest(t *testing.T, client oauth2.Client, session *DefaultSession,
 	}
 }
 
-// runGrantHandler runs the TokenExchangeGrantHandler over the request, returning the first error encountered. It
-// short-circuits on the HandleTokenEndpointRequest phase to keep tests focused on the grant-handler's contribution
-// (the act-claim derivation in PopulateTokenEndpointResponse).
 func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest) error {
 	t.Helper()
 
@@ -710,8 +659,6 @@ func runGrantHandler(t *testing.T, cfg *oauth2.Config, req *oauth2.AccessRequest
 	return h.PopulateTokenEndpointResponse(context.Background(), req, oauth2.NewAccessResponse())
 }
 
-// runTokenExchange runs the full handler chain for a request that exchanges an access token for the requested type
-// and returns the resulting AccessResponse.
 func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse {
 	t.Helper()
 
@@ -818,9 +765,6 @@ func newConfidentialClientWithRefresh() *oauth2.DefaultClient {
 	}
 }
 
-// runCustomJWTExchange drives a token-exchange request that issues a custom JWT, with the session pre-seeded by the
-// caller (notably with an actor_token map to exercise the delegation path). The custom-JWT handler is registered
-// after the grant handler so the act claim set by the grant handler is in place before issuance runs.
 func runCustomJWTExchange(t *testing.T, cfg *oauth2.Config, session *DefaultSession) *oauth2.AccessResponse {
 	t.Helper()
 

@@ -223,10 +223,12 @@ type URIComparisonStrategy interface {
 // simple string comparison.
 type BestPracticeURIComparisonStrategy struct{}
 
+// Compare returns true if the string forms of the requested and registered URIs are equal.
 func (BestPracticeURIComparisonStrategy) Compare(pair *uriPair) bool {
 	return pair.uri.String() == pair.registeredURI.String()
 }
 
+// UseSimpleStringComparison returns true as the registered URIs are matched as raw strings without being parsed.
 func (BestPracticeURIComparisonStrategy) UseSimpleStringComparison() bool {
 	return true
 }
@@ -235,6 +237,9 @@ func (BestPracticeURIComparisonStrategy) UseSimpleStringComparison() bool {
 // the comparison is truthy when the scheme and host parts are the same.
 type OriginURIComparisonStrategy struct{}
 
+// Compare returns true if the requested URI matches the registered URI. When the registered URI is an Origin URI only
+// the scheme and host are compared, and the port is ignored when both URIs are loopback addresses. Any other registered
+// URI must be equal in string form.
 func (OriginURIComparisonStrategy) Compare(pair *uriPair) bool {
 	if !isBareOriginURI(pair.registeredURI) {
 		return pair.uri.String() == pair.registeredURI.String()
@@ -247,6 +252,7 @@ func (OriginURIComparisonStrategy) Compare(pair *uriPair) bool {
 	return pair.uri.Scheme == pair.registeredURI.Scheme && pair.uri.Host == pair.registeredURI.Host
 }
 
+// UseSimpleStringComparison returns false as the URIs are parsed and matched with Compare.
 func (OriginURIComparisonStrategy) UseSimpleStringComparison() bool {
 	return false
 }
@@ -305,7 +311,6 @@ func isMatchingLoopbackURI(requested, registered *url.URL) bool {
 	return true
 }
 
-// Determines if the provided address is either an IPv4 loopback or an IPv6 loopback.
 func isLoopbackAddress(uri *url.URL) bool {
 	if uri == nil {
 		return false

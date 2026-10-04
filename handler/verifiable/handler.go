@@ -26,6 +26,8 @@ type Handler struct {
 	NonceManager
 }
 
+// HandleTokenEndpointRequest returns oauth2.ErrUnknownRequest unless the request was granted the scopes this handler
+// acts on. It performs no other validation.
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -34,6 +36,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	return nil
 }
 
+// PopulateTokenEndpointResponse generates a nonce bound to the issued access token and adds it to the response as
+// 'c_nonce_draft_00', along with its lifespan in seconds.
 func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -52,10 +56,13 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	return nil
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the request was granted both the 'openid' and
+// 'userinfo_credential_draft_00' scopes.
 func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
 }

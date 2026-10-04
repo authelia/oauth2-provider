@@ -45,18 +45,22 @@ type BackChannelLogoutRequest struct {
 	Extra     map[string]any
 }
 
+// GetSubject returns the subject whose sessions are being ended.
 func (r *BackChannelLogoutRequest) GetSubject() (subject string) {
 	return r.Subject
 }
 
+// GetSessionID returns the session identifier of the session being ended.
 func (r *BackChannelLogoutRequest) GetSessionID() (sid string) {
 	return r.SessionID
 }
 
+// GetClients returns the clients to notify.
 func (r *BackChannelLogoutRequest) GetClients() (clients []Client) {
 	return r.Clients
 }
 
+// GetExtra returns additional claims to include in every Logout Token.
 func (r *BackChannelLogoutRequest) GetExtra() (extra map[string]any) {
 	return r.Extra
 }
@@ -86,8 +90,6 @@ func (r BackChannelLogoutResult) Success() (ok bool) {
 	return !r.Skipped && r.Err == nil
 }
 
-// backChannelLogoutURI returns the client's back-channel logout URI, or the reason it is ineligible when it has
-// none registered or requires a session identifier that was not supplied.
 func backChannelLogoutURI(client Client, sid string) (uri string, reason string) {
 	c, ok := client.(BackChannelLogoutClient)
 	if !ok {

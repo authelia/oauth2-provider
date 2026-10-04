@@ -1396,9 +1396,3 @@ func (proofOnlyChainDPoPStrategy) NewDPoPNonce(_ context.Context) (nonce string,
 func (proofOnlyChainDPoPStrategy) ValidateDPoPNonce(_ context.Context, _ string) (err error) {
 	return nil
 }
-
-const (
-	chainClientID           = "dpop-chain-client"
-	chainSecret             = "dpop-chain-client-secret"
-	chainIntrospectEndpoint = "https://as.example.com/introspect"
-)

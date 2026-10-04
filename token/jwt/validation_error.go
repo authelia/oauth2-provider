@@ -50,7 +50,6 @@ func (e ValidationError) Error() string {
 	}
 }
 
-// No errors
 func (e *ValidationError) valid() bool {
 	return e.Errors == 0
 }

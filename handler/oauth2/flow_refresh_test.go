@@ -669,7 +669,6 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			check: func(t *testing.T, areq *oauth2.AccessRequest, aresp *oauth2.AccessResponse) {
 				signature := strategy.RefreshTokenSignature(context.Background(), areq.Form.Get(consts.FormParameterRefreshToken))
 
-				// The old refresh token should be deleted
 				_, err := store.GetRefreshTokenSession(t.Context(), signature, nil)
 				require.Error(t, err)
 
@@ -777,7 +776,6 @@ func TestRefreshFlow_WithoutRotation(t *testing.T) {
 				require.NoError(t, store.CreateAccessTokenSession(t.Context(), previousSignature, original))
 				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, previousSignature, original))
 
-				// The same refresh token is presented twice: it must still be valid after the first refresh.
 				for i := range 2 {
 					requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 					requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
@@ -1083,7 +1081,6 @@ func TestRefreshFlow_ConcurrentReplayCaughtAtPopulateRevokesTheGrant(t *testing.
 
 	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
 
-	// The winner of the race rotates the refresh token and is issued a new pair for the grant.
 	require.NoError(t, store.RotateRefreshToken(t.Context(), original.ID, signature))
 	require.NoError(t, store.CreateAccessTokenSession(t.Context(), "winner-at", original))
 	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "winner-rt", "winner-at", original))
@@ -1118,7 +1115,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DisableRefreshTokenRotation: true}
 
-				// Neither RotateRefreshToken nor CreateRefreshTokenSession may be called.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1320,7 +1316,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 
-				// The refresh token session must record the signature of the access token issued alongside it.
 				var accessSignature string
 
 				mockTransactional.
@@ -1842,7 +1837,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			tc.setup(request, mockTransactional, mockRevocationStore)
 
 			handler := RefreshTokenGrantHandler{
-				// Notice how we are passing in a store that has support for transactions!
 				TokenRevocationStorage: transactionalStore{
 					mockTransactional,
 					mockRevocationStore,

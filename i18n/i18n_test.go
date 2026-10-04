@@ -151,7 +151,6 @@ func TestGetLangFromRequest(t *testing.T) {
 			expected: language.English,
 		},
 		{
-			// http.Cookie.String() yields "lang=es", which never parses as a language tag.
 			name:     "ShouldNotDetectLanguageFromLangCookie",
 			catalog:  catalog,
 			request:  newLangRequest("es", ""),
@@ -276,9 +275,6 @@ func TestDefaultLocaleBundleInit(t *testing.T) {
 	}
 }
 
-// newTestCatalog builds a message catalog with English and Spanish bundles used across the
-// translation tests. The 'englishOnly' message is intentionally absent from the Spanish
-// bundle to exercise the per-locale fallback to English.
 func newTestCatalog() MessageCatalog {
 	return NewDefaultMessageCatalog([]*DefaultLocaleBundle{
 		{
@@ -299,8 +295,6 @@ func newTestCatalog() MessageCatalog {
 	})
 }
 
-// newLangRequest builds an HTTP request optionally carrying a 'lang' cookie and an
-// Accept-Language header.
 func newLangRequest(cookie, accept string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 

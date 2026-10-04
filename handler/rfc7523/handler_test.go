@@ -127,7 +127,7 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectWhenNoPublicKeysAreRegistered",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				keyID := "" // provide no hint of what key was used to sign assertion
+				keyID := ""
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
@@ -154,7 +154,7 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectWhenNoneOfThePublicKeysVerify",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				keyID := "" // provide no hint of what key was used to sign assertion
+				keyID := ""
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(f.createJWS(f.createRandomTestJWK(), f.createRandomTestJWK()), nil)
@@ -726,8 +726,6 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 	}
 }
 
-// newJWTBearerFixture builds the mocks, requester and handler a single case runs against. gomock.NewController
-// registers its own cleanup, so the controller is finished when the subtest ends.
 func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 	t.Helper()
 
@@ -784,7 +782,6 @@ func (f *jwtBearerFixture) createTestAssertion(cl jwt.Claims, keyID string) stri
 	return f.createTestAssertionWithType(cl, keyID, "JWT")
 }
 
-// createTestAssertionWithType signs as createTestAssertion does, with a caller-chosen 'typ' header; "" omits it.
 func (f *jwtBearerFixture) createTestAssertionWithType(cl jwt.Claims, keyID, typ string) string {
 	jwk := jose.JSONWebKey{Key: f.privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}
 
@@ -840,7 +837,6 @@ func (f *jwtBearerFixture) createJWS(keys ...jose.JSONWebKey) *jose.JSONWebKeySe
 	return &jose.JSONWebKeySet{Keys: keys}
 }
 
-// jwtBearerKey is generated once because RSA generation dominates the runtime of these cases.
 var jwtBearerKey = func() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

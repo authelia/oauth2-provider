@@ -41,11 +41,10 @@ func TestClientRegistrationResponseToMap(t *testing.T) {
 	assert.Equal(t, "Example", values["client_name"])
 	assert.Equal(t, "x", values["vendor"])
 
-	// A never-expiring secret is reported as 0 per RFC 7591 Section 3.2.1.
+	// RFC 7591 Section 3.2.1: a secret that does not expire is reported as 0.
 	response.SetClientSecretExpiresAt(time.Time{})
 	assert.Equal(t, int64(0), response.ToMap()["client_secret_expires_at"])
 
-	// The secret is omitted entirely when there is none.
 	response.SetClientSecret("")
 	assert.NotContains(t, response.ToMap(), "client_secret")
 	assert.NotContains(t, response.ToMap(), "client_secret_expires_at")

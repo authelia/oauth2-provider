@@ -29,6 +29,8 @@ type DeviceAuthorizeTokenEndpointHandler struct {
 	hoauth2.GenericCodeTokenEndpointHandler
 }
 
+// ValidateGrantTypes returns an error unless the client is registered for the
+// 'urn:ietf:params:oauth:grant-type:device_code' grant type.
 func (c *DeviceCodeTokenHandler) ValidateGrantTypes(_ context.Context, request oauth2.AccessRequester) (err error) {
 	if !request.GetClient().GetGrantTypes().Has(string(oauth2.GrantTypeDeviceCode)) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:device_code'."))
@@ -37,10 +39,18 @@ func (c *DeviceCodeTokenHandler) ValidateGrantTypes(_ context.Context, request o
 	return nil
 }
 
+// ValidateCodeAndSession validates the device code against the device authorization request with the configured
+// strategy.
 func (c *DeviceCodeTokenHandler) ValidateCodeAndSession(ctx context.Context, _ oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) (err error) {
 	return c.Strategy.ValidateRFC8628DeviceCode(ctx, authorizeRequest, code)
 }
 
+// GetCodeAndSession loads the device authorization request for the 'device_code' parameter and decides the outcome of
+// this poll. It returns 'expired_token' for an expired code, 'slow_down' when the device polls faster than the
+// configured interval, 'authorization_pending' while the user has not decided and 'access_denied' when the user has
+// denied the request. Once approved, the user's session is merged into the request.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
 func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.AccessRequester) (code string, signature string, r oauth2.Requester, err error) {
 	code = request.GetRequestForm().Get(consts.FormParameterDeviceCode)
 
@@ -116,6 +126,8 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 	return code, signature, deviceAuthReq, err
 }
 
+// UpdateLastChecked records the time of this request on the device authorization request as the last time the device
+// polled, and persists it.
 func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) (err error) {
 	r, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester)
 	if !ok {
@@ -132,18 +144,23 @@ func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, request 
 	return c.Storage.UpdateDeviceCodeSession(ctx, r.GetDeviceCodeSignature(), r)
 }
 
+// InvalidateSession invalidates the device code session with the given signature.
 func (c *DeviceCodeTokenHandler) InvalidateSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	return c.Storage.InvalidateDeviceCodeSession(ctx, signature)
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *DeviceCodeTokenHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly
+// 'urn:ietf:params:oauth:grant-type:device_code'.
 func (c *DeviceCodeTokenHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode))
 }
 
+// DeviceCodeSignature returns the signature of the device code from the configured strategy.
 func (c *DeviceCodeTokenHandler) DeviceCodeSignature(ctx context.Context, code string) (signature string, err error) {
 	return c.Strategy.RFC8628DeviceCodeSignature(ctx, code)
 }

@@ -115,8 +115,6 @@ func (f *Fosite) bearerAuthorizationChallenge(ctx context.Context, r *http.Reque
 	return challengeScheme(consts.AuthSchemeBearer, params...) + ", " + challengeScheme(consts.AuthSchemeDPoP, algs)
 }
 
-// challengeScheme renders one authentication scheme and its parameters for a 'WWW-Authenticate' value, skipping any
-// empty parameter so callers can pass optional ones unconditionally.
 func challengeScheme(scheme string, params ...string) (value string) {
 	set := make([]string, 0, len(params))
 

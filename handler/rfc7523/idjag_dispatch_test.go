@@ -23,11 +23,6 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-const (
-	idjagTypeUpper     = "OAUTH-ID-JAG+JWT"
-	idjagTypeMediaType = "application/oauth-id-jag+jwt"
-)
-
 func TestIsIDJAGAssertion(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -69,6 +64,11 @@ func TestHandlerStepsAsideForIDJAG(t *testing.T) {
 		})
 	}
 }
+
+const (
+	idjagTypeUpper     = "OAUTH-ID-JAG+JWT"
+	idjagTypeMediaType = "application/oauth-id-jag+jwt"
+)
 
 func signIDJAGDispatchAssertion(t *testing.T, typ string) string {
 	t.Helper()

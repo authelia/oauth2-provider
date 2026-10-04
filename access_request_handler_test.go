@@ -781,7 +781,3 @@ func (h *authorizationDetailsTokenEndpointHandler) CanHandleAuthorizationDetails
 func basicAuth(username, password string) string {
 	return prefixSchemeBasic + base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "%s:%s", username, password))
 }
-
-const (
-	prefixSchemeBasic = "Basic "
-)

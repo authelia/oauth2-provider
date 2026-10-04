@@ -13,6 +13,7 @@ type Headers struct {
 	Extra map[string]any `json:"extra"`
 }
 
+// NewHeaders returns new Headers with an empty Extra map.
 func NewHeaders() *Headers {
 	return &Headers{Extra: map[string]any{}}
 }
@@ -55,6 +56,7 @@ func (h *Headers) Get(key string) any {
 	return h.Extra[key]
 }
 
+// SetDefaultString sets the extra field with the given key to value, unless it already holds a non-empty string.
 func (h *Headers) SetDefaultString(key, value string) {
 	if h.Extra == nil {
 		h.Extra = make(map[string]any)

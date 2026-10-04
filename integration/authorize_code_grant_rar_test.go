@@ -53,7 +53,7 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 
 			clients[testClientIDRAR] = &oauth2.DefaultClient{
 				ID:            testClientIDRAR,
-				ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`), // = "foobar"
+				ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),
 				RedirectURIs:  []string{ts.URL + "/callback"},
 				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
 				GrantTypes:    []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},

@@ -189,15 +189,21 @@ func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
 	return nil
 }
 
+// CanSkipClientAuth reports whether the configuration permits the JWT bearer grant without client authentication.
 func (c *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return c.Config.GetGrantTypeJWTBearerCanSkipClientAuth(ctx)
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly
+// 'urn:ietf:params:oauth:grant-type:jwt-bearer'.
 func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The 'grant_type' parameter is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:jwt-bearer".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTBearer)
 }
 
+// CheckRequest returns oauth2.ErrUnknownRequest when the request is not a JWT bearer grant. When client authentication
+// is required, or the client did authenticate, it also requires the client to be registered for the
+// 'urn:ietf:params:oauth:grant-type:jwt-bearer' grant type.
 func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)

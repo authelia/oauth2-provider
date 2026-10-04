@@ -79,8 +79,6 @@ func TestRequestObjectPasswordBasedEncryption(t *testing.T) {
 	}
 }
 
-const testPBES2RequestObjectSecret = "foobarfoobarfoobarfoobarfoobarfoobar"
-
 func testPBES2RequestObject(t *testing.T) string {
 	t.Helper()
 

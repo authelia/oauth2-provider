@@ -191,7 +191,6 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 				ires.TokenUse = AccessToken
 				session := &DefaultSession{}
 				session.GetExtraClaims()["extra"] = "foobar"
-				// We try to set these, but they should be ignored.
 				for _, field := range []string{consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername} {
 					session.GetExtraClaims()[field] = "invalid"
 				}
@@ -219,8 +218,6 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 				ires.Active = true
 				ires.TokenUse = RefreshToken
 				session := &DefaultSession{}
-				// Only the access token expiry is set, the refresh token has none.
-				// The introspection response must reflect the refresh token, not leak the access token expiry.
 				session.SetExpiresAt(AccessToken, time.Now().Add(time.Hour*2))
 				ires.AccessRequester = NewAccessRequest(session)
 			},
@@ -467,9 +464,6 @@ func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 			},
 		},
 		{
-			// A session restored from storage still carries a binding recorded while DPoP was enabled, but the
-			// handler that would verify it no longer runs. Reporting 'cnf' would tell the resource server a
-			// proof-of-possession check was performed when none was.
 			name: "ShouldNotPopulateCnfWhenTheBindingMethodIsDisabled",
 			setup: func() *IntrospectionResponse {
 				session := &DefaultSession{Subject: "user-123"}
@@ -946,8 +940,6 @@ func (c *introspectionTokenTypeTestClient) GetIntrospectionTokenTypeEnabled() bo
 	return c.enabled
 }
 
-// introspectionJWTTestClient is a minimal IntrospectionJWTResponseClient used to exercise the signed
-// introspection response code paths.
 type introspectionJWTTestClient struct {
 	*DefaultClient
 
@@ -984,8 +976,6 @@ func (c *introspectionJWTTestClient) GetJSONWebKeysURI() string {
 	return ""
 }
 
-// stubIntrospectionStrategy is a jwt.Strategy stub used to drive the signed introspection response
-// code paths without setting up a real signing key.
 type stubIntrospectionStrategy struct {
 	token  string
 	err    error

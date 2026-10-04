@@ -14,37 +14,6 @@ import (
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
-const scopeEmailOffline = "email offline"
-
-var jwtClaims = &JWTClaims{
-	Subject:   "peter",
-	IssuedAt:  time.Now().UTC().Truncate(TimePrecision),
-	Issuer:    "authelia",
-	NotBefore: time.Now().UTC().Truncate(TimePrecision),
-	Audience:  []string{"tests"},
-	ExpiresAt: time.Now().UTC().Add(time.Hour).Truncate(TimePrecision),
-	JTI:       "abcdef",
-	Scope:     []string{consts.ScopeEmail, consts.ScopeOffline},
-	Extra: map[string]any{
-		"foo": "bar",
-		"baz": "bar",
-	},
-	ScopeField: JWTScopeFieldList,
-}
-
-var jwtClaimsMap = map[string]any{
-	ClaimSubject:          jwtClaims.Subject,
-	ClaimIssuedAt:         jwtClaims.IssuedAt.Unix(),
-	ClaimIssuer:           jwtClaims.Issuer,
-	ClaimNotBefore:        jwtClaims.NotBefore.Unix(),
-	ClaimAudience:         jwtClaims.Audience,
-	ClaimExpirationTime:   jwtClaims.ExpiresAt.Unix(),
-	ClaimJWTID:            jwtClaims.JTI,
-	ClaimScopeNonStandard: []string{consts.ScopeEmail, consts.ScopeOffline},
-	"foo":                 jwtClaims.Extra["foo"],
-	"baz":                 jwtClaims.Extra["baz"],
-}
-
 func TestJWTClaims_AddGetString(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -365,4 +334,35 @@ func TestJWTClaimsToMapKeepsAPopulatedAudience(t *testing.T) {
 	ret := claims.ToMap()
 
 	assert.Equal(t, []string{"https://api.example.com"}, ret[ClaimAudience])
+}
+
+const scopeEmailOffline = "email offline"
+
+var jwtClaims = &JWTClaims{
+	Subject:   "peter",
+	IssuedAt:  time.Now().UTC().Truncate(TimePrecision),
+	Issuer:    "authelia",
+	NotBefore: time.Now().UTC().Truncate(TimePrecision),
+	Audience:  []string{"tests"},
+	ExpiresAt: time.Now().UTC().Add(time.Hour).Truncate(TimePrecision),
+	JTI:       "abcdef",
+	Scope:     []string{consts.ScopeEmail, consts.ScopeOffline},
+	Extra: map[string]any{
+		"foo": "bar",
+		"baz": "bar",
+	},
+	ScopeField: JWTScopeFieldList,
+}
+
+var jwtClaimsMap = map[string]any{
+	ClaimSubject:          jwtClaims.Subject,
+	ClaimIssuedAt:         jwtClaims.IssuedAt.Unix(),
+	ClaimIssuer:           jwtClaims.Issuer,
+	ClaimNotBefore:        jwtClaims.NotBefore.Unix(),
+	ClaimAudience:         jwtClaims.Audience,
+	ClaimExpirationTime:   jwtClaims.ExpiresAt.Unix(),
+	ClaimJWTID:            jwtClaims.JTI,
+	ClaimScopeNonStandard: []string{consts.ScopeEmail, consts.ScopeOffline},
+	"foo":                 jwtClaims.Extra["foo"],
+	"baz":                 jwtClaims.Extra["baz"],
 }

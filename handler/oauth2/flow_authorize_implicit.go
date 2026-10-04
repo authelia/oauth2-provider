@@ -31,6 +31,9 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	}
 }
 
+// HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'token'. It requires the
+// client to be registered for the 'implicit' grant type, validates the requested scopes, audience and resources against
+// the client, and then issues the access token.
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// This let's us define multiple response types, for example open id connect's id_token
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowToken) {
@@ -71,6 +74,8 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	return c.IssueImplicitAccessToken(ctx, request, response)
 }
 
+// IssueImplicitAccessToken validates the granted authorization details, generates and persists an access token, and
+// adds the 'access_token', 'expires_in', 'token_type', 'state' and 'scope' parameters to the response.
 func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
 	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails()); err != nil {

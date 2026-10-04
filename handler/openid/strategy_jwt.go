@@ -59,6 +59,7 @@ type DefaultSession struct {
 	RequestedAt                 time.Time                      `json:"requested_at"`
 }
 
+// NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		Claims:      &jwt.IDTokenClaims{},
@@ -67,6 +68,8 @@ func NewDefaultSession() *DefaultSession {
 	}
 }
 
+// Clone returns a copy of the session with its claims, headers, expiration times and public key copied, or nil if the
+// receiver is nil.
 func (s *DefaultSession) Clone() oauth2.Session {
 	if s == nil {
 		return nil
@@ -82,6 +85,7 @@ func (s *DefaultSession) Clone() oauth2.Session {
 	return &cloned
 }
 
+// SetExpiresAt sets the expiration time of the given token type, converted to UTC.
 func (s *DefaultSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[oauth2.TokenType]time.Time)
@@ -90,6 +94,7 @@ func (s *DefaultSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	s.ExpiresAt[key] = exp.UTC()
 }
 
+// GetExpiresAt returns the expiration time of the given token type, or the zero time when none is set.
 func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[oauth2.TokenType]time.Time)
@@ -101,14 +106,17 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	return s.ExpiresAt[key]
 }
 
+// SetRequestedAt sets when this request was originally requested, converted to UTC.
 func (s *DefaultSession) SetRequestedAt(rat time.Time) {
 	s.RequestedAt = rat.UTC()
 }
 
+// GetRequestedAt returns when this request was originally requested, in UTC.
 func (s *DefaultSession) GetRequestedAt() (rat time.Time) {
 	return s.RequestedAt.UTC()
 }
 
+// GetUsername returns the username, or an empty string if the receiver is nil.
 func (s *DefaultSession) GetUsername() string {
 	if s == nil {
 		return ""
@@ -116,10 +124,12 @@ func (s *DefaultSession) GetUsername() string {
 	return s.Username
 }
 
+// SetSubject sets the subject.
 func (s *DefaultSession) SetSubject(subject string) {
 	s.Subject = subject
 }
 
+// GetSubject returns the subject, or an empty string if the receiver is nil.
 func (s *DefaultSession) GetSubject() string {
 	if s == nil {
 		return ""
@@ -128,10 +138,13 @@ func (s *DefaultSession) GetSubject() string {
 	return s.Subject
 }
 
+// SetDPoPJWKThumbprint sets the JWK SHA-256 thumbprint of the DPoP key the session is bound to.
 func (s *DefaultSession) SetDPoPJWKThumbprint(jkt string) {
 	s.JWKThumbprint = jkt
 }
 
+// GetDPoPJWKThumbprint returns the JWK SHA-256 thumbprint of the DPoP key the session is bound to, or an empty string
+// if the receiver is nil.
 func (s *DefaultSession) GetDPoPJWKThumbprint() string {
 	if s == nil {
 		return ""
@@ -182,6 +195,7 @@ func (s *DefaultSession) GetRequestedDPoPJWKThumbprint() (jkt string) {
 	return s.RequestedJWKThumbprint
 }
 
+// IDTokenHeaders returns the ID Token headers, initializing them when unset.
 func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {
 	if s.Headers == nil {
 		s.Headers = &jwt.Headers{}
@@ -189,6 +203,7 @@ func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {
 	return s.Headers
 }
 
+// IDTokenClaims returns the ID Token claims, initializing them when unset.
 func (s *DefaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 	if s.Claims == nil {
 		s.Claims = &jwt.IDTokenClaims{}
@@ -361,6 +376,8 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	return token, err
 }
 
+// GenerateBackChannelLogoutToken generates a signed Logout Token for the client with the given subject, session ID,
+// audience and extra claims. The 'iss' claim defaults to the ID Token issuer and the lifespan to 5 minutes when zero.
 func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
 	if lifespan == 0 {
 		lifespan = defaultBackChannelLogoutExpiryTime

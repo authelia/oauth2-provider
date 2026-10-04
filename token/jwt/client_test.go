@@ -14,189 +14,6 @@ import (
 	"authelia.com/provider/jose"
 )
 
-type testClient struct {
-	id                  string
-	secret              []byte
-	secretNotPlainText  bool
-	secretNotDefined    bool
-	kid, alg            string
-	encKID, encAlg, enc string
-	csigned             bool
-	jwks                *jose.JSONWebKeySet
-	jwksURI             string
-}
-
-func (r *testClient) GetID() string {
-	return r.id
-}
-
-func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
-	if r.secretNotDefined {
-		return nil, false, nil
-	}
-
-	if r.secretNotPlainText {
-		return nil, true, nil
-	}
-
-	if r.secret != nil {
-		return r.secret, true, nil
-	}
-
-	return nil, true, fmt.Errorf("not supported")
-}
-
-func (r *testClient) GetSigningKeyID() (kid string) {
-	return r.kid
-}
-
-func (r *testClient) GetSigningAlg() (alg string) {
-	return r.alg
-}
-
-func (r *testClient) GetEncryptionKeyID() (kid string) {
-	return r.encKID
-}
-
-func (r *testClient) GetEncryptionAlg() (alg string) {
-	return r.encAlg
-}
-
-func (r *testClient) GetEncryptionEnc() (enc string) {
-	return r.enc
-}
-
-func (r *testClient) IsClientSigned() (is bool) {
-	return r.csigned
-}
-
-func (r *testClient) GetJSONWebKeys() (jwks *jose.JSONWebKeySet) {
-	return r.jwks
-}
-
-func (r *testClient) GetJSONWebKeysURI() (uri string) {
-	return r.jwksURI
-}
-
-type stubBase struct {
-	id      string
-	jwks    *jose.JSONWebKeySet
-	jwksURI string
-}
-
-func (s *stubBase) GetID() string { return s.id }
-
-func (s *stubBase) GetClientSecretPlainText() ([]byte, bool, error) { return nil, false, nil }
-
-func (s *stubBase) GetJSONWebKeys() *jose.JSONWebKeySet { return s.jwks }
-
-func (s *stubBase) GetJSONWebKeysURI() string { return s.jwksURI }
-
-type stubJARClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-}
-
-func (s *stubJARClient) GetRequestObjectSigningKeyID() string { return s.sigKID }
-
-func (s *stubJARClient) GetRequestObjectSigningAlg() string { return s.sigAlg }
-
-func (s *stubJARClient) GetRequestObjectEncryptionKeyID() string { return s.encKID }
-
-func (s *stubJARClient) GetRequestObjectEncryptionAlg() string { return s.encAlg }
-
-func (s *stubJARClient) GetRequestObjectEncryptionEnc() string { return s.encEnc }
-
-type stubIDTokenClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-}
-
-func (s *stubIDTokenClient) GetIDTokenSignedResponseKeyID() string { return s.sigKID }
-
-func (s *stubIDTokenClient) GetIDTokenSignedResponseAlg() string { return s.sigAlg }
-
-func (s *stubIDTokenClient) GetIDTokenEncryptedResponseKeyID() string { return s.encKID }
-
-func (s *stubIDTokenClient) GetIDTokenEncryptedResponseAlg() string { return s.encAlg }
-
-func (s *stubIDTokenClient) GetIDTokenEncryptedResponseEnc() string { return s.encEnc }
-
-type stubJARMClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-}
-
-func (s *stubJARMClient) GetAuthorizationSignedResponseKeyID() string { return s.sigKID }
-
-func (s *stubJARMClient) GetAuthorizationSignedResponseAlg() string { return s.sigAlg }
-
-func (s *stubJARMClient) GetAuthorizationEncryptedResponseKeyID() string { return s.encKID }
-
-func (s *stubJARMClient) GetAuthorizationEncryptedResponseAlg() string { return s.encAlg }
-
-func (s *stubJARMClient) GetAuthorizationEncryptedResponseEnc() string { return s.encEnc }
-
-type stubUserInfoClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-}
-
-func (s *stubUserInfoClient) GetUserinfoSignedResponseKeyID() string { return s.sigKID }
-
-func (s *stubUserInfoClient) GetUserinfoSignedResponseAlg() string { return s.sigAlg }
-
-func (s *stubUserInfoClient) GetUserinfoEncryptedResponseKeyID() string { return s.encKID }
-
-func (s *stubUserInfoClient) GetUserinfoEncryptedResponseAlg() string { return s.encAlg }
-
-func (s *stubUserInfoClient) GetUserinfoEncryptedResponseEnc() string { return s.encEnc }
-
-type stubJWTProfileAccessTokenClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-	enable                                 bool
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetAccessTokenSignedResponseKeyID() string {
-	return s.sigKID
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetAccessTokenSignedResponseAlg() string {
-	return s.sigAlg
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseKeyID() string {
-	return s.encKID
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseAlg() string {
-	return s.encAlg
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseEnc() string {
-	return s.encEnc
-}
-
-func (s *stubJWTProfileAccessTokenClient) GetEnableJWTProfileOAuthAccessTokens() bool {
-	return s.enable
-}
-
-type stubIntrospectionClient struct {
-	stubBase
-	sigKID, sigAlg, encKID, encAlg, encEnc string
-}
-
-func (s *stubIntrospectionClient) GetIntrospectionSignedResponseKeyID() string { return s.sigKID }
-
-func (s *stubIntrospectionClient) GetIntrospectionSignedResponseAlg() string { return s.sigAlg }
-
-func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseKeyID() string { return s.encKID }
-
-func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseAlg() string { return s.encAlg }
-
-func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseEnc() string { return s.encEnc }
-
 func TestNewClient(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -438,3 +255,186 @@ func TestNewStatelessJWTProfileIntrospectionClient(t *testing.T) {
 		})
 	}
 }
+
+type testClient struct {
+	id                  string
+	secret              []byte
+	secretNotPlainText  bool
+	secretNotDefined    bool
+	kid, alg            string
+	encKID, encAlg, enc string
+	csigned             bool
+	jwks                *jose.JSONWebKeySet
+	jwksURI             string
+}
+
+func (r *testClient) GetID() string {
+	return r.id
+}
+
+func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
+	if r.secretNotDefined {
+		return nil, false, nil
+	}
+
+	if r.secretNotPlainText {
+		return nil, true, nil
+	}
+
+	if r.secret != nil {
+		return r.secret, true, nil
+	}
+
+	return nil, true, fmt.Errorf("not supported")
+}
+
+func (r *testClient) GetSigningKeyID() (kid string) {
+	return r.kid
+}
+
+func (r *testClient) GetSigningAlg() (alg string) {
+	return r.alg
+}
+
+func (r *testClient) GetEncryptionKeyID() (kid string) {
+	return r.encKID
+}
+
+func (r *testClient) GetEncryptionAlg() (alg string) {
+	return r.encAlg
+}
+
+func (r *testClient) GetEncryptionEnc() (enc string) {
+	return r.enc
+}
+
+func (r *testClient) IsClientSigned() (is bool) {
+	return r.csigned
+}
+
+func (r *testClient) GetJSONWebKeys() (jwks *jose.JSONWebKeySet) {
+	return r.jwks
+}
+
+func (r *testClient) GetJSONWebKeysURI() (uri string) {
+	return r.jwksURI
+}
+
+type stubBase struct {
+	id      string
+	jwks    *jose.JSONWebKeySet
+	jwksURI string
+}
+
+func (s *stubBase) GetID() string { return s.id }
+
+func (s *stubBase) GetClientSecretPlainText() ([]byte, bool, error) { return nil, false, nil }
+
+func (s *stubBase) GetJSONWebKeys() *jose.JSONWebKeySet { return s.jwks }
+
+func (s *stubBase) GetJSONWebKeysURI() string { return s.jwksURI }
+
+type stubJARClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+}
+
+func (s *stubJARClient) GetRequestObjectSigningKeyID() string { return s.sigKID }
+
+func (s *stubJARClient) GetRequestObjectSigningAlg() string { return s.sigAlg }
+
+func (s *stubJARClient) GetRequestObjectEncryptionKeyID() string { return s.encKID }
+
+func (s *stubJARClient) GetRequestObjectEncryptionAlg() string { return s.encAlg }
+
+func (s *stubJARClient) GetRequestObjectEncryptionEnc() string { return s.encEnc }
+
+type stubIDTokenClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+}
+
+func (s *stubIDTokenClient) GetIDTokenSignedResponseKeyID() string { return s.sigKID }
+
+func (s *stubIDTokenClient) GetIDTokenSignedResponseAlg() string { return s.sigAlg }
+
+func (s *stubIDTokenClient) GetIDTokenEncryptedResponseKeyID() string { return s.encKID }
+
+func (s *stubIDTokenClient) GetIDTokenEncryptedResponseAlg() string { return s.encAlg }
+
+func (s *stubIDTokenClient) GetIDTokenEncryptedResponseEnc() string { return s.encEnc }
+
+type stubJARMClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+}
+
+func (s *stubJARMClient) GetAuthorizationSignedResponseKeyID() string { return s.sigKID }
+
+func (s *stubJARMClient) GetAuthorizationSignedResponseAlg() string { return s.sigAlg }
+
+func (s *stubJARMClient) GetAuthorizationEncryptedResponseKeyID() string { return s.encKID }
+
+func (s *stubJARMClient) GetAuthorizationEncryptedResponseAlg() string { return s.encAlg }
+
+func (s *stubJARMClient) GetAuthorizationEncryptedResponseEnc() string { return s.encEnc }
+
+type stubUserInfoClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+}
+
+func (s *stubUserInfoClient) GetUserinfoSignedResponseKeyID() string { return s.sigKID }
+
+func (s *stubUserInfoClient) GetUserinfoSignedResponseAlg() string { return s.sigAlg }
+
+func (s *stubUserInfoClient) GetUserinfoEncryptedResponseKeyID() string { return s.encKID }
+
+func (s *stubUserInfoClient) GetUserinfoEncryptedResponseAlg() string { return s.encAlg }
+
+func (s *stubUserInfoClient) GetUserinfoEncryptedResponseEnc() string { return s.encEnc }
+
+type stubJWTProfileAccessTokenClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+	enable                                 bool
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetAccessTokenSignedResponseKeyID() string {
+	return s.sigKID
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetAccessTokenSignedResponseAlg() string {
+	return s.sigAlg
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseKeyID() string {
+	return s.encKID
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseAlg() string {
+	return s.encAlg
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetAccessTokenEncryptedResponseEnc() string {
+	return s.encEnc
+}
+
+func (s *stubJWTProfileAccessTokenClient) GetEnableJWTProfileOAuthAccessTokens() bool {
+	return s.enable
+}
+
+type stubIntrospectionClient struct {
+	stubBase
+	sigKID, sigAlg, encKID, encAlg, encEnc string
+}
+
+func (s *stubIntrospectionClient) GetIntrospectionSignedResponseKeyID() string { return s.sigKID }
+
+func (s *stubIntrospectionClient) GetIntrospectionSignedResponseAlg() string { return s.sigAlg }
+
+func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseKeyID() string { return s.encKID }
+
+func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseAlg() string { return s.encAlg }
+
+func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseEnc() string { return s.encEnc }

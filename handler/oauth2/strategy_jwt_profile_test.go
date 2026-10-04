@@ -119,10 +119,8 @@ func TestAccessToken(t *testing.T) {
 				require.True(t, ok)
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])
-				// Returned, but will be ignored by the introspect handler.
 				assert.Equal(t, "peter", claims[consts.ClaimSubject])
 				assert.Equal(t, []string{"group0"}, claims[consts.ClaimAudience])
-				// Scope field is always a string.
 				assert.Equal(t, "email offline", claims[consts.ClaimScope])
 
 				assert.WithinRange(t, anyInt64ToTime(claims[consts.ClaimIssuedAt]), before, after)
@@ -196,8 +194,6 @@ func TestGenerateJWTIncludesCnf(t *testing.T) {
 		assert.NotContains(t, payload, jwt.ClaimConfirmation)
 	})
 
-	// The session's extra claims are merged into the token's claims, so a 'cnf.jkt' placed there must not be able to
-	// assert a binding no DPoP proof was ever checked against.
 	t.Run("ShouldNotAllowExtraClaimsToForgeCnfWhenNotDPoPBound", func(t *testing.T) {
 		r := jwtValidCase(oauth2.AccessToken)
 		r.GetSession().(*JWTSession).JWTClaims.Extra[jwt.ClaimConfirmation] = map[string]any{
@@ -357,8 +353,7 @@ func TestSplitN(t *testing.T) {
 	assert.Len(t, split3, 3)
 }
 
-// TestGenerateJWTIncludesClientID covers the 'client_id' claim RFC 9068 Section 2.2 makes REQUIRED of a JWT profile
-// access token.
+// RFC 9068 Section 2.2: the 'client_id' claim is REQUIRED.
 func TestGenerateJWTIncludesClientID(t *testing.T) {
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
@@ -468,160 +463,4 @@ func TestGenerateJWTDefaultsTheSigningAlgorithm(t *testing.T) {
 
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
-}
-
-var rsaKey = gen.MustRSAKey()
-
-// returns a valid JWT type. The JWTClaims.ExpirationTime time is intentionally
-// left empty to ensure it is pulled from the session's ExpirationTime map for
-// the given oauth2.TokenType.
-var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
-	r := &oauth2.Request{
-		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-		},
-		Session: &JWTSession{
-			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "oauth2",
-				Subject:   "peter",
-				IssuedAt:  time.Now().UTC(),
-				NotBefore: time.Now().UTC(),
-				Extra:     map[string]any{"foo": "bar"},
-			},
-			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]any),
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				tokenType: time.Now().UTC().Add(time.Hour),
-			},
-		},
-	}
-	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
-	r.GrantScope(consts.ScopeEmail)
-	r.GrantScope(consts.ScopeOffline)
-	r.SetRequestedAudience([]string{"group0"})
-	r.GrantAudience("group0")
-	return r
-}
-
-var jwtInvalidTypCase = func(tokenType oauth2.TokenType) *oauth2.Request {
-	r := &oauth2.Request{
-		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("xfoobarfoobarfoobarfoobar"),
-		},
-		Session: &JWTSession{
-			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "oauth2",
-				Subject:   "peter",
-				IssuedAt:  time.Now().UTC(),
-				NotBefore: time.Now().UTC(),
-				Extra:     map[string]any{"foo": "bar"},
-			},
-			JWTHeader: &jwt.Headers{
-				Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT},
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				tokenType: time.Now().UTC().Add(time.Hour),
-			},
-		},
-	}
-	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
-	r.GrantScope(consts.ScopeEmail)
-	r.GrantScope(consts.ScopeOffline)
-	r.SetRequestedAudience([]string{"group0"})
-	r.GrantAudience("group0")
-	return r
-}
-
-var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
-	r := &oauth2.Request{
-		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-		},
-		Session: &JWTSession{
-			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "oauth2",
-				Subject:   "peter",
-				IssuedAt:  time.Now().UTC(),
-				NotBefore: time.Now().UTC(),
-				Extra:     map[string]any{"foo": "bar"},
-			},
-			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]any),
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				tokenType:           time.Now().UTC().Add(time.Hour),
-				oauth2.RefreshToken: {},
-			},
-		},
-	}
-	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
-	r.GrantScope(consts.ScopeEmail)
-	r.GrantScope(consts.ScopeOffline)
-	r.SetRequestedAudience([]string{"group0"})
-	r.GrantAudience("group0")
-	return r
-}
-
-var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Request {
-	r := &oauth2.Request{
-		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-		},
-		Session: &JWTSession{
-			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "oauth2",
-				Subject:   "peter",
-				IssuedAt:  time.Now().UTC(),
-				NotBefore: time.Now().UTC(),
-				Extra:     map[string]any{"foo": "bar"},
-			},
-			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]any),
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				tokenType:           time.Now().UTC().Add(time.Hour),
-				oauth2.RefreshToken: time.Now().UTC().Add(time.Hour * 2).Truncate(time.Hour),
-			},
-		},
-	}
-	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
-	r.GrantScope(consts.ScopeEmail)
-	r.GrantScope(consts.ScopeOffline)
-	r.SetRequestedAudience([]string{"group0"})
-	r.GrantAudience("group0")
-	return r
-}
-
-// returns an expired JWT type. The JWTClaims.ExpirationTime time is intentionally
-// left empty to ensure it is pulled from the session's ExpirationTime map for
-// the given oauth2.TokenType.
-var jwtExpiredCase = func(tokenType oauth2.TokenType, now time.Time) *oauth2.Request {
-	r := &oauth2.Request{
-		Client: &oauth2.DefaultClient{
-			ClientSecret: mustNewBCryptClientSecretPlain("foobarfoobarfoobarfoobar"),
-		},
-		Session: &JWTSession{
-			JWTClaims: &jwt.JWTClaims{
-				Issuer:    "oauth2",
-				Subject:   "peter",
-				IssuedAt:  now.UTC().Add(-time.Minute * 10),
-				NotBefore: now.UTC().Add(-time.Minute * 10),
-				ExpiresAt: now.UTC().Add(-time.Minute),
-				Extra:     map[string]any{"foo": "bar"},
-			},
-			JWTHeader: &jwt.Headers{
-				Extra: make(map[string]any),
-			},
-			ExpiresAt: map[oauth2.TokenType]time.Time{
-				tokenType: now.UTC().Add(-time.Hour),
-			},
-		},
-	}
-	r.SetRequestedScopes([]string{consts.ScopeEmail, consts.ScopeOffline})
-	r.GrantScope(consts.ScopeEmail)
-	r.GrantScope(consts.ScopeOffline)
-	r.SetRequestedAudience([]string{"group0"})
-	r.GrantAudience("group0")
-	return r
 }

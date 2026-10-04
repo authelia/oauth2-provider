@@ -100,10 +100,6 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			// Coverage for the new behavior: when the session implements ResourceOwnerSession, the subject
-			// returned by Authenticate MUST be set on the session via SetSubject so it surfaces in the issued
-			// access token's 'sub' claim. oauth2.DefaultSession satisfies ResourceOwnerSession via its embedded
-			// SetSubject method, so the default request session is sufficient to exercise this path.
 			name: "ShouldSetSubjectOnSessionFromAuthenticate",
 			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
@@ -119,10 +115,6 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			},
 		},
 		{
-			// Coverage for the resilience branch: when the session does NOT implement ResourceOwnerSession,
-			// the handler must skip the SetSubject call rather than panic. nonResourceOwnerSession satisfies
-			// oauth2.Session but intentionally omits SetSubject(string), so the type assertion to
-			// ResourceOwnerSession fails and the handler's `if session, ok := ...` branch is exercised.
 			name: "ShouldNotPanicWhenSessionLacksResourceOwnerSession",
 			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
@@ -275,8 +267,6 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	}
 }
 
-// nonResourceOwnerSession is an oauth2.Session implementation that intentionally omits SetSubject(string), so it
-// does NOT satisfy ResourceOwnerSession. Used to exercise the handler's "skip subject propagation" branch.
 type nonResourceOwnerSession struct {
 	expiresAt map[oauth2.TokenType]time.Time
 }

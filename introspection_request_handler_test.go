@@ -702,5 +702,3 @@ func grantCredential(_ context.Context, _ string, _ TokenUse, requester AccessRe
 
 	return TokenUse(""), nil
 }
-
-const introspectionCredentialURL = "https://as.example.com/introspect"

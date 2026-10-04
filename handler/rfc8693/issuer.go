@@ -8,8 +8,6 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-// tokenRole identifies the form-parameter role of a token under validation.
-// It selects which per-client issuer allow-list applies in ValidateIssuer.
 type tokenRole int
 
 const (
@@ -17,7 +15,6 @@ const (
 	tokenRoleActor
 )
 
-// hint returns the name of the role with an article, for use in error hints.
 func (r tokenRole) hint() string {
 	switch r {
 	case tokenRoleActor:
@@ -27,8 +24,6 @@ func (r tokenRole) hint() string {
 	}
 }
 
-// clientAllowedIssuers returns the per-client issuer allow-list for the given role,
-// or nil if the request's client doesn't implement the rfc8693.Client interface.
 func clientAllowedIssuers(client oauth2.Client, role tokenRole) []string {
 	c, ok := client.(Client)
 	if !ok {

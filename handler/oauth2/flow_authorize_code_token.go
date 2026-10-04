@@ -302,10 +302,12 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	return nil
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped for the authorization code grant.
 func (c *AuthorizeExplicitGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'authorization_code'.
 func (c *AuthorizeExplicitGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	// The 'grant_type' parameter is REQUIRED and the value MUST be set to 'authorization_code'.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)

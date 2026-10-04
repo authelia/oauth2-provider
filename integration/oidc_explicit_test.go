@@ -115,7 +115,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				return oauthClient.AuthCodeURL("123") + "&nonce=1234567890"
 			},
 			expectAuthErr:  "invalid_state",
-			authStatusCode: http.StatusNotAcceptable, // code from internal test callback handler when error occurs
+			authStatusCode: http.StatusNotAcceptable,
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{
@@ -168,7 +168,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
 			},
-			authStatusCode: http.StatusNotAcceptable, // code from internal test callback handler when error occurs
+			authStatusCode: http.StatusNotAcceptable,
 			expectAuthErr:  "login_required",
 		},
 		{

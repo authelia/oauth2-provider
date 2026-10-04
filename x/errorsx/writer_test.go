@@ -286,8 +286,6 @@ func TestWriteRFC6750Error(t *testing.T) {
 	}
 }
 
-// decodeRFC6750Header parses a 'Bearer key="value", ...' header into its fields so the
-// result can be compared independently of the non-deterministic map iteration order.
 func decodeRFC6750Header(t *testing.T, header string) errorsx.Fields {
 	t.Helper()
 
@@ -310,8 +308,6 @@ func decodeRFC6750Header(t *testing.T, header string) errorsx.Fields {
 	return fields
 }
 
-// rfc6750Error is a test error implementing the errorsx.RFCError and StatusCodeCarrier
-// interfaces so it can drive both the RFC6750 and JSON writer branches.
 type rfc6750Error struct {
 	ErrorField       string `json:"error,omitempty"`
 	DescriptionField string `json:"error_description,omitempty"`

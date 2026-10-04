@@ -398,6 +398,7 @@ func TestRedeemHandlerLifespan(t *testing.T) {
 		{name: "ShouldCapTheLifespanAtTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, expected: 2 * time.Minute},
 		{name: "ShouldKeepAShorterLifespan", lifespan: time.Minute, expiry: 5 * time.Minute, expected: time.Minute},
 		{name: "ShouldCapTheLifespanAtTheAllowancePastTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 12 * time.Minute},
+		{name: "ShouldCapTheLifespanAtAWholeSecond", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: 10*time.Minute + 500*time.Millisecond, expected: 12 * time.Minute},
 		{name: "ShouldKeepALifespanWithinTheAllowance", lifespan: 5 * time.Minute, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 5 * time.Minute},
 		{name: "ShouldNotCapTheLifespanWhenTheAllowanceIsNegative", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: -1, expected: time.Hour},
 	}
@@ -419,6 +420,7 @@ func TestRedeemHandlerLifespan(t *testing.T) {
 			require.NoError(t, fixture.handler.PopulateTokenEndpointResponse(t.Context(), request, response))
 
 			assert.WithinDuration(t, time.Now().Add(tc.expected), request.GetSession().GetExpiresAt(oauth2.AccessToken), 2*time.Second)
+			assert.Zero(t, request.GetSession().GetExpiresAt(oauth2.AccessToken).Nanosecond())
 			assert.InDelta(t, tc.expected.Seconds(), response.GetExtra(consts.AccessResponseExpiresIn), 2)
 		})
 	}

@@ -237,7 +237,7 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 	// RFC 7521 Section 4.1: the access token SHOULD NOT outlive the assertion by a significant period.
 	if allowance := h.Config.GetIDJAGAccessTokenAllowance(ctx); allowance >= 0 {
 		if limit := expiry.UTC().Add(allowance); limit.Before(expires) {
-			expires = limit
+			expires = limit.Truncate(time.Second)
 		}
 	}
 

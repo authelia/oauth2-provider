@@ -43,6 +43,9 @@ type ClientManager interface {
 	// SetClientAssertionJWT marks a JTI as known for the client until the given expiry time, scoped to the client as
 	// described for ClientAssertionJWTValid. An expired JTI can not be replayed due to the expiry, so an
 	// implementation may remove expired JTIs at any time.
+	//
+	// The mark MUST be atomic and MUST return an error matching ErrJTIKnown when the JTI is already known and has not
+	// expired, as ClientAssertionJWTValid alone can not prevent two concurrent requests using the same JTI.
 	SetClientAssertionJWT(ctx context.Context, clientID, jti string, exp time.Time) (err error)
 
 	ClientRegistrationManager

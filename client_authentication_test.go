@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1276,6 +1277,67 @@ func TestAuthenticateClientTwice(t *testing.T) {
 				assert.Equal(t, other, actual)
 			},
 		},
+		{
+			name: "ShouldFailReplayedAuthenticationCaughtWhenMarkingTheJTI",
+			check: func(t *testing.T) {
+				provider, _, formValues := newFixture(t)
+
+				store, ok := provider.Store.(*storage.MemoryStore)
+				require.True(t, ok)
+
+				racing := &racingClientAssertionStore{MemoryStore: store}
+				racing.arrived.Add(2)
+
+				provider.Store = racing
+
+				var (
+					wg      sync.WaitGroup
+					clients [2]Client
+					errs    [2]error
+				)
+
+				for i := range errs {
+					wg.Add(1)
+
+					go func() {
+						defer wg.Done()
+
+						clients[i], _, errs[i] = provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+					}()
+				}
+
+				wg.Wait()
+
+				winner, loser := 0, 1
+				if errs[winner] != nil {
+					winner, loser = loser, winner
+				}
+
+				require.NoError(t, ErrorToDebugRFC6749Error(errs[winner]))
+				assert.NotNil(t, clients[winner])
+
+				require.ErrorIs(t, errs[loser], ErrInvalidClient)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(errs[loser]), "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Claim 'jti' from 'client_assertion' MUST only be used once.")
+				assert.Nil(t, clients[loser])
+			},
+		},
+		{
+			name: "ShouldFailWithServerErrorWhenMarkingTheJTIFails",
+			check: func(t *testing.T) {
+				provider, _, formValues := newFixture(t)
+
+				store, ok := provider.Store.(*storage.MemoryStore)
+				require.True(t, ok)
+
+				provider.Store = &failingClientAssertionStore{MemoryStore: store}
+
+				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+				require.ErrorIs(t, err, ErrServerError)
+				assert.NotErrorIs(t, err, ErrInvalidClient)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. the store is unavailable")
+				assert.Nil(t, actual)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1509,4 +1571,27 @@ func mustNewBCryptClientSecretPlain(rawSecret string) *BCryptClientSecret {
 	} else {
 		return secret
 	}
+}
+
+type racingClientAssertionStore struct {
+	*storage.MemoryStore
+
+	arrived sync.WaitGroup
+}
+
+func (s *racingClientAssertionStore) ClientAssertionJWTValid(ctx context.Context, clientID, jti string) (err error) {
+	err = s.MemoryStore.ClientAssertionJWTValid(ctx, clientID, jti)
+
+	s.arrived.Done()
+	s.arrived.Wait()
+
+	return err
+}
+
+type failingClientAssertionStore struct {
+	*storage.MemoryStore
+}
+
+func (s *failingClientAssertionStore) SetClientAssertionJWT(_ context.Context, _, _ string, _ time.Time) error {
+	return errors.New("the store is unavailable")
 }

@@ -405,8 +405,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(true, nil)
 			},
-			err:      oauth2.ErrJTIKnown,
-			expected: "The jti was already used.",
+			err:      oauth2.ErrInvalidGrant,
+			expected: errJWTUsedMessage,
 		},
 		{
 			name: "ShouldRejectWhenTheUsedCheckFails",
@@ -664,15 +664,15 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldRejectAnAssertionAlreadyUsed",
+			name: "ShouldRejectAnAssertionMarkedUsedByAConcurrentRequest",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrJTIKnown)
 			},
-			err:      oauth2.ErrJTIKnown,
-			expected: "The jti was already used.",
+			err:      oauth2.ErrInvalidGrant,
+			expected: errJWTUsedMessage,
 		},
 		{
 			name: "ShouldRejectWhenMarkingTheJWTUsedFails",

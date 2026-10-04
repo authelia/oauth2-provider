@@ -53,7 +53,7 @@ func TestTokenEndpointDPoPNonceRoundTripKeepsJWTBearerAssertion(t *testing.T) {
 		signPARProof(t, proofKey, "assertion-proof-3", rtTokenEndpoint, map[string]any{consts.ClaimNonce: nonce}))
 	require.Error(t, err)
 
-	assert.ErrorIs(t, err, oauth2.ErrJTIKnown)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
 func TestTokenEndpointJWTBearerAssertionIsRedeemedOnceByConcurrentRequests(t *testing.T) {
@@ -107,7 +107,7 @@ func TestTokenEndpointJWTBearerAssertionIsRedeemedOnceByConcurrentRequests(t *te
 			continue
 		}
 
-		assert.ErrorIs(t, err, oauth2.ErrJTIKnown)
+		assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 	}
 
 	assert.Equal(t, 1, succeeded)

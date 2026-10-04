@@ -119,7 +119,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 	}
 
 	for _, node := range findElements(doc, "input") {
-		if !isFormOwner(form, node) {
+		if !isFormOwner(form, node) || !isSubmitted(node) {
 			continue
 		}
 
@@ -191,6 +191,37 @@ func isFormOwner(form, node *html.Node) bool {
 	}
 
 	return false
+}
+
+func isSubmitted(node *html.Node) bool {
+	if name, _ := getAttr(node, "name"); name == "" {
+		return false
+	}
+
+	if _, disabled := getAttr(node, "disabled"); disabled {
+		return false
+	}
+
+	for parent := node.Parent; parent != nil; parent = parent.Parent {
+		if parent.Type != html.ElementNode || parent.Data != "fieldset" {
+			continue
+		}
+
+		if _, disabled := getAttr(parent, "disabled"); disabled {
+			return false
+		}
+	}
+
+	switch kind, _ := getAttr(node, "type"); strings.ToLower(kind) {
+	case "submit", "button", "reset", "image":
+		return false
+	case "checkbox", "radio":
+		_, checked := getAttr(node, "checked")
+
+		return checked
+	}
+
+	return true
 }
 
 func findElement(node *html.Node, tag string) *html.Node {

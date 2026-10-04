@@ -6,6 +6,7 @@ package internal_test
 
 import (
 	"io"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -23,11 +24,12 @@ func TestParseFormPostResponse(t *testing.T) {
 	)
 
 	testCases := []struct {
-		name  string
-		html  string
-		code  string
-		state string
-		err   string
+		name   string
+		html   string
+		code   string
+		state  string
+		custom url.Values
+		err    string
 	}{
 		{
 			name: "ShouldParseIndentedTemplate",
@@ -97,6 +99,55 @@ func TestParseFormPostResponse(t *testing.T) {
 			state: state,
 		},
 		{
+			name:  "ShouldIgnoreDisabledInputs",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="hidden" name="state" value="xyz" disabled/></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldIgnoreInputsInADisabledFieldset",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><fieldset disabled><input type="hidden" name="state" value="xyz"/></fieldset></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldParseInputsInAnEnabledFieldset",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><fieldset><input type="hidden" name="state" value="xyz"/></fieldset></form></body></html>`,
+			code:  code,
+			state: state,
+		},
+		{
+			name:  "ShouldIgnoreSubmitInputs",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="submit" name="state" value="xyz"/></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldIgnoreButtonInputsOfAnyCase",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="BUTTON" name="state" value="xyz"/></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldIgnoreUncheckedCheckboxes",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="checkbox" name="state" value="xyz"/></form></body></html>`,
+			code:  code,
+			state: "",
+		},
+		{
+			name:  "ShouldParseCheckedCheckboxes",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="checkbox" name="state" value="xyz" checked/></form></body></html>`,
+			code:  code,
+			state: state,
+		},
+		{
+			name:   "ShouldIgnoreInputsWithoutAName",
+			html:   `<html><body onload="javascript:document.forms[0].submit()"><form method="post" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="hidden" value="xyz"/><input type="hidden" name="" value="xyz"/></form></body></html>`,
+			code:   code,
+			state:  "",
+			custom: url.Values{},
+		},
+		{
 			name: "ShouldErrorWhenBodyHasNoAttributes",
 			html: `<html><body></body></html>`,
 			err:  "onload event is missing",
@@ -125,7 +176,7 @@ func TestParseFormPostResponse(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualCode, actualState, _, _, _, _, err := internal.ParseFormPostResponse(redirectURL, io.NopCloser(strings.NewReader(tc.html)))
+			actualCode, actualState, _, _, actualCustom, _, err := internal.ParseFormPostResponse(redirectURL, io.NopCloser(strings.NewReader(tc.html)))
 
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
@@ -136,6 +187,10 @@ func TestParseFormPostResponse(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.code, actualCode)
 			assert.Equal(t, tc.state, actualState)
+
+			if tc.custom != nil {
+				assert.Equal(t, tc.custom, actualCustom)
+			}
 		})
 	}
 }

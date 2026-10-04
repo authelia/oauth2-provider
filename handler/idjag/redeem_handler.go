@@ -601,8 +601,13 @@ func (h *RedeemHandler) grantAuthorizationDetails(ctx context.Context, request o
 	var granted oauth2.AuthorizationDetails
 
 	for _, detail := range details {
-		if oauth2.ValidateAuthorizationDetails(ctx, h.Config, client, oauth2.AuthorizationDetails{detail}) == nil {
+		err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, client, oauth2.AuthorizationDetails{detail})
+
+		switch {
+		case err == nil:
 			granted = append(granted, detail)
+		case !errors.Is(err, oauth2.ErrInvalidAuthorizationDetails):
+			return err
 		}
 	}
 

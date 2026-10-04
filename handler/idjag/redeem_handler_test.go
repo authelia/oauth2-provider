@@ -683,6 +683,20 @@ func TestRedeemHandlerPopulateBoundTokenEndpointResponse(t *testing.T) {
 	assert.Equal(t, oauth2.BearerAccessToken, response.GetTokenType())
 }
 
+func TestRedeemHandlerAuthorizationDetailsTypeHandlerFailure(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+
+	fixture.config.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{failingTypeHandler{}}
+
+	claims := fixture.claims()
+	claims[consts.ClaimAuthorizationDetails] = []any{map[string]any{redeemMemberType: internal.AuthorizationDetailsTypePaymentInitiation, redeemMemberActions: []any{redeemActionInitiate}}}
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, claims, "", "", ""), nil)
+
+	require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrServerError)
+	assert.Empty(t, request.GetGrantedAuthorizationDetails())
+}
+
 func TestRedeemHandlerAuthorizationDetails(t *testing.T) {
 	payment := map[string]any{redeemMemberType: internal.AuthorizationDetailsTypePaymentInitiation, redeemMemberActions: []any{redeemActionInitiate}}
 	invalid := map[string]any{redeemMemberType: internal.AuthorizationDetailsTypePaymentInitiation, redeemMemberActions: []any{"unknown"}}
@@ -782,6 +796,14 @@ type dpopClient struct {
 
 func (c *dpopClient) GetEnableDPoPBoundAccessTokens() bool {
 	return true
+}
+
+type failingTypeHandler struct {
+	internal.PaymentInitiationTypeHandler
+}
+
+func (failingTypeHandler) Validate(_ context.Context, _ oauth2.Client, _ oauth2.AuthorizationDetail) error {
+	return oauth2.ErrServerError.WithDebug("The backend is unavailable.")
 }
 
 type countingFetcher struct {

@@ -143,6 +143,9 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 
 	scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
 
+	// RFC 9110 Section 11.4: one or more spaces separate the scheme from the token.
+	value = strings.TrimLeft(value, " ")
+
 	// RFC 6750 Section 2 and Section 3.1: a token in both the header and the 'access_token' parameter is
 	// 'invalid_request'. A 'Basic' header is client authentication rather than a token transport, so it may accompany
 	// the parameter. The parameter is read off r.Form, which carries the URI query alongside the form body.

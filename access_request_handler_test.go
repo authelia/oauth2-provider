@@ -20,6 +20,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 )
@@ -584,6 +585,196 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 			assert.NotNil(t, actual.GetRequestedAt())
 		})
 	}
+}
+
+func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
+	client := &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}
+
+	handlers := []AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+	testCases := []struct {
+		name          string
+		handlers      []AuthorizationDetailsTypeHandler
+		grantType     string
+		raw           string
+		omit          bool
+		expectErr     error
+		expectHint    string
+		expectDetails AuthorizationDetails
+		rejectedEarly bool
+		accepts       *bool
+		max           int
+	}{
+		{
+			name:       "ShouldRejectRefreshOverDefaultMaximum",
+			handlers:   handlers,
+			grantType:  consts.GrantTypeRefreshToken,
+			raw:        newRARDetailsJSON(33),
+			expectErr:  ErrInvalidAuthorizationDetails,
+			expectHint: testRARHintMaxObjectsDefault,
+		},
+		{
+			name:       "ShouldRejectCodeOverConfiguredMaximum",
+			handlers:   handlers,
+			grantType:  consts.GrantTypeAuthorizationCode,
+			raw:        newRARDetailsJSON(2),
+			max:        1,
+			expectErr:  ErrInvalidAuthorizationDetails,
+			expectHint: "The 'authorization_details' parameter must not contain more than 1 authorization details objects.",
+		},
+		{
+			name:          "ShouldAcceptCodeAtConfiguredMaximum",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeAuthorizationCode,
+			raw:           newRARDetailsJSON(2),
+			max:           2,
+			expectDetails: newRARDetails(2),
+		},
+		{
+			name:      "ShouldIgnoreAtTokenEndpointWhenDisabled",
+			grantType: consts.GrantTypeAuthorizationCode,
+			raw:       testRARMalformedJSON,
+		},
+		{
+			name:          "ShouldParseForAuthorizationCode",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeAuthorizationCode,
+			raw:           testRARDetailsJSON,
+			expectDetails: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:          "ShouldParseForRefreshToken",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeRefreshToken,
+			raw:           testRARDetailsJSON,
+			expectDetails: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:      "ShouldTreatEmptyAsAbsent",
+			handlers:  handlers,
+			grantType: consts.GrantTypeRefreshToken,
+			raw:       "",
+		},
+		{
+			name:      "ShouldRejectMalformed",
+			handlers:  handlers,
+			grantType: consts.GrantTypeAuthorizationCode,
+			raw:       "{}",
+			expectErr: ErrInvalidAuthorizationDetails,
+		},
+		{
+			name:          "ShouldRejectClientCredentials",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeClientCredentials,
+			raw:           testRARDetailsJSON,
+			expectErr:     ErrInvalidAuthorizationDetails,
+			expectHint:    testRARHintClientCredentials,
+			rejectedEarly: true,
+		},
+		{
+			name:          "ShouldParseForAcceptingHandler",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeClientCredentials,
+			raw:           testRARDetailsJSON,
+			accepts:       new(true),
+			expectDetails: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+		},
+		{
+			name:          "ShouldRejectForDecliningHandler",
+			handlers:      handlers,
+			grantType:     consts.GrantTypeClientCredentials,
+			raw:           testRARDetailsJSON,
+			accepts:       new(false),
+			expectErr:     ErrInvalidAuthorizationDetails,
+			expectHint:    testRARHintClientCredentials,
+			rejectedEarly: true,
+		},
+		{
+			name:      "ShouldAllowClientCredentialsWithoutParameter",
+			handlers:  handlers,
+			grantType: consts.GrantTypeClientCredentials,
+			omit:      true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			handler := mock.NewMockTokenEndpointHandler(ctrl)
+
+			form := url.Values{
+				consts.FormParameterGrantType: {tc.grantType},
+			}
+
+			if !tc.omit {
+				form.Set(consts.FormParameterAuthorizationDetails, tc.raw)
+			}
+
+			var loader TokenEndpointHandler = handler
+
+			if tc.accepts != nil {
+				loader = &authorizationDetailsTokenEndpointHandler{MockTokenEndpointHandler: handler, accepts: *tc.accepts}
+			}
+
+			if tc.rejectedEarly {
+				handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Times(0)
+			} else {
+				store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+				handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+
+				if tc.expectErr == nil {
+					handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
+				} else {
+					handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Times(0)
+				}
+			}
+
+			config := &Config{
+				AudienceStrategy:                 DefaultAudienceStrategy,
+				AuthorizationDetailsTypeHandlers: tc.handlers,
+				AuthorizationDetailsMaxObjects:   tc.max,
+				TokenEndpointHandlers:            TokenEndpointHandlers{loader},
+			}
+			provider := &Fosite{Store: store, Config: config}
+
+			r := &http.Request{
+				Header:   http.Header{consts.HeaderAuthorization: {basicAuth("foo", "bar")}},
+				PostForm: form,
+				Form:     form,
+				Method:   http.MethodPost,
+			}
+
+			actual, err := provider.NewAccessRequest(t.Context(), r, new(DefaultSession))
+
+			if tc.expectErr != nil {
+				assert.EqualError(t, err, tc.expectErr.Error())
+
+				if tc.expectHint != "" {
+					assert.Equal(t, tc.expectHint, ErrorToRFC6749Error(err).HintField)
+				}
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expectDetails, actual.GetRequestedAuthorizationDetails())
+		})
+	}
+}
+
+type authorizationDetailsTokenEndpointHandler struct {
+	*mock.MockTokenEndpointHandler
+
+	accepts bool
+}
+
+func (h *authorizationDetailsTokenEndpointHandler) CanHandleAuthorizationDetails(_ context.Context, _ AccessRequester) bool {
+	return h.accepts
 }
 
 //nolint:unparam

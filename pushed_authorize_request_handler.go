@@ -44,7 +44,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	if client, _, err = f.AuthenticateClient(ctx, r, r.PostForm); err != nil {
 		var rfcerr *RFC6749Error
 		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
-			return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err))
+			return request, withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
 		}
 
 		return request, err
@@ -53,9 +53,9 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 	// RFC 9126 Section 2.1: the request is processed for the authenticated client, so a 'client_id' naming any other
 	// client is rejected rather than resolved.
 	if id := r.Form.Get(consts.FormParameterClientID); len(id) != 0 && id != client.GetID() {
-		return request, errorsx.WithStack(ErrInvalidClient.
+		return request, withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.
 			WithHint("The 'client_id' parameter does not identify the authenticated client.").
-			WithDebugf("The 'client_id' parameter has the value '%s' but the client authenticated as '%s'.", id, client.GetID()))
+			WithDebugf("The 'client_id' parameter has the value '%s' but the client authenticated as '%s'.", id, client.GetID())), f.Config.GetClientAuthenticationRealm(ctx))
 	}
 
 	request.Client = client

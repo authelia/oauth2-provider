@@ -137,6 +137,18 @@ func TestConfigIntrospectionEndpointClientAuthDisabled(t *testing.T) {
 	})
 }
 
+func TestConfigIntrospectionTokenTypeEnabled(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("DefaultsToDisabled", func(t *testing.T) {
+		assert.False(t, (&Config{}).GetIntrospectionTokenTypeEnabled(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		assert.True(t, (&Config{IntrospectionTokenTypeEnabled: true}).GetIntrospectionTokenTypeEnabled(ctx))
+	})
+}
+
 func TestConfigRFC7591ClientRegistrationMetadataStrategy(t *testing.T) {
 	config := &Config{}
 
@@ -316,6 +328,29 @@ func TestConfigJWEPBES2Count(t *testing.T) {
 	}
 }
 
+func TestConfigGetAuthorizationDetailsTypeHandlers(t *testing.T) {
+	config := &Config{}
+	assert.Empty(t, config.GetAuthorizationDetailsTypeHandlers(context.Background()))
+
+	handler := &testAuthorizationDetailsTypeHandler{typ: "a"}
+	config.AuthorizationDetailsTypeHandlers = []AuthorizationDetailsTypeHandler{handler, nil}
+
+	assert.Equal(t, map[string]AuthorizationDetailsTypeHandler{"a": handler}, config.GetAuthorizationDetailsTypeHandlers(context.Background()))
+}
+
+func TestConfig_IDJAG(t *testing.T) {
+	config := &Config{}
+
+	assert.Equal(t, 5*time.Minute, config.GetIDJAGLifespan(context.Background()))
+	assert.False(t, config.GetIDJAGSingleUse(context.Background()))
+
+	config.IDJAGLifespan = time.Minute
+	config.IDJAGSingleUse = true
+
+	assert.Equal(t, time.Minute, config.GetIDJAGLifespan(context.Background()))
+	assert.True(t, config.GetIDJAGSingleUse(context.Background()))
+}
+
 type testClientRegistrationMetadataStrategy struct{}
 
 func (s *testClientRegistrationMetadataStrategy) FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error) {
@@ -326,4 +361,16 @@ type testTokenValidationStrategy struct{}
 
 func (s *testTokenValidationStrategy) ValidateIDToken(ctx context.Context, request Requester, token string, opts ...IDTokenValidationOpt) (claims jwt.MapClaims, err error) {
 	return nil, nil
+}
+
+type testAuthorizationDetailsTypeHandler struct{ typ string }
+
+func (h *testAuthorizationDetailsTypeHandler) Type() string { return h.typ }
+
+func (h *testAuthorizationDetailsTypeHandler) Validate(context.Context, Client, AuthorizationDetail) error {
+	return nil
+}
+
+func (h *testAuthorizationDetailsTypeHandler) Contains(context.Context, AuthorizationDetail, AuthorizationDetail) bool {
+	return true
 }

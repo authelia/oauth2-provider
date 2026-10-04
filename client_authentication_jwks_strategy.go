@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
@@ -28,6 +29,10 @@ type DefaultJWKSFetcherStrategy struct {
 	cache            *ristretto.Cache[string, *jose.JSONWebKeySet]
 	ttl              time.Duration
 	clientSourceFunc func(ctx context.Context) *retryablehttp.Client
+
+	refreshInterval time.Duration
+	refreshes       map[string]time.Time
+	mu              sync.Mutex
 }
 
 // NewDefaultJWKSFetcherStrategy returns a new instance of the DefaultJWKSFetcherStrategy.
@@ -46,9 +51,10 @@ func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) jw
 	}
 
 	s := &DefaultJWKSFetcherStrategy{
-		cache:  dc,
-		client: retryablehttp.NewClient(),
-		ttl:    time.Hour,
+		cache:           dc,
+		client:          retryablehttp.NewClient(),
+		ttl:             time.Hour,
+		refreshInterval: time.Minute,
 	}
 
 	for _, o := range opts {
@@ -62,6 +68,14 @@ func NewDefaultJWKSFetcherStrategy(opts ...func(*DefaultJWKSFetcherStrategy)) jw
 func JKWKSFetcherWithDefaultTTL(ttl time.Duration) func(*DefaultJWKSFetcherStrategy) {
 	return func(s *DefaultJWKSFetcherStrategy) {
 		s.ttl = ttl
+	}
+}
+
+// JWKSFetcherWithRefreshInterval sets the minimum interval between two forced refreshes of a cached location, which
+// is one minute by default. A value that is not positive removes the limit.
+func JWKSFetcherWithRefreshInterval(interval time.Duration) func(*DefaultJWKSFetcherStrategy) {
+	return func(s *DefaultJWKSFetcherStrategy) {
+		s.refreshInterval = interval
 	}
 }
 
@@ -87,11 +101,18 @@ func JWKSFetcherWithHTTPClientSource(clientSourceFunc func(ctx context.Context) 
 }
 
 // Resolve returns the JSON Web Key Set, or an error if something went wrong. The forceRefresh, if true, forces
-// the strategy to fetch the key from the remote. If forceRefresh is false, the strategy may use a caching strategy
-// to fetch the key.
+// the strategy to fetch the key from the remote, except that a cached location is refreshed at most once per refresh
+// interval. If forceRefresh is false, the strategy may use a caching strategy to fetch the key.
 func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
 	cacheKey := defaultJWKSFetcherStrategyCachePrefix + location
 	key, ok := s.cache.Get(cacheKey)
+
+	// A forced refresh follows a key identifier missing from the cached set, which the presenter of an unverified token
+	// chooses, so each location is refreshed at most once per refresh interval.
+	if ignoreCache && !s.claimRefresh(location) && ok {
+		ignoreCache = false
+	}
+
 	if !ok || ignoreCache {
 		req, err := retryablehttp.NewRequest(http.MethodGet, location, nil)
 		if err != nil {
@@ -129,6 +150,35 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	}
 
 	return key, nil
+}
+
+func (s *DefaultJWKSFetcherStrategy) claimRefresh(location string) bool {
+	if s.refreshInterval <= 0 {
+		return true
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+
+	if last, ok := s.refreshes[location]; ok && now.Sub(last) < s.refreshInterval {
+		return false
+	}
+
+	if s.refreshes == nil {
+		s.refreshes = map[string]time.Time{}
+	}
+
+	for other, last := range s.refreshes {
+		if now.Sub(last) >= s.refreshInterval {
+			delete(s.refreshes, other)
+		}
+	}
+
+	s.refreshes[location] = now
+
+	return true
 }
 
 // WaitForCache blocks until the in-flight JWKS fetch (if any) has completed and the cache is consistent. It is intended

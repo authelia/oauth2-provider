@@ -256,6 +256,7 @@ type Configurator interface {
 	ClientAuthenticationStrategyProvider
 	ResponseModeHandlerProvider
 	SendDebugMessagesToClientsProvider
+	ClientAuthenticationRealmProvider
 	RevokeRefreshTokensExplicitlyProvider
 	JWKSFetcherStrategyProvider
 	ClientAuthenticationStrategyProvider
@@ -285,12 +286,17 @@ type Configurator interface {
 	AuthorizeErrorFieldResponseStrategyProvider
 	UseLegacyErrorFormatProvider
 	ResourceStrategyProvider
+	AuthorizationDetailsTypeHandlersProvider
 	TokenEndpointClientAuthStrategyProvider
 	RevocationEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthDisabledProvider
+	IntrospectionTokenTypeEnabledProvider
+	ClientAssertionClientSecretEncryptionDisabledProvider
 	DPoPConfigProvider
+	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider
+	MTLSStrictRefreshTokenBindingProvider
 	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider
 	RFC7591ClientRegistrationEndpointHandlersProvider

@@ -11,37 +11,28 @@ import (
 )
 
 func GetField(obj any, name string) (any, error) {
-	if !hasValidType(obj, []reflect.Kind{reflect.Struct, reflect.Ptr}) {
-		return nil, errors.New("Cannot use GetField on a non-struct interface")
+	objValue := reflect.ValueOf(obj)
+
+	if objValue.Kind() == reflect.Pointer {
+		if objValue.IsNil() {
+			return nil, errors.New("cannot use GetField on a nil pointer")
+		}
+
+		objValue = objValue.Elem()
 	}
 
-	objValue := reflectValue(obj)
+	if objValue.Kind() != reflect.Struct {
+		return nil, errors.New("cannot use GetField on a non-struct interface")
+	}
+
 	field := objValue.FieldByName(name)
 	if !field.IsValid() {
-		return nil, fmt.Errorf("No such field: %s in obj", name)
+		return nil, fmt.Errorf("no such field: %s in obj", name)
+	}
+
+	if !field.CanInterface() {
+		return nil, fmt.Errorf("cannot use GetField on unexported field: %s in obj", name)
 	}
 
 	return field.Interface(), nil
-}
-
-func hasValidType(obj any, types []reflect.Kind) bool {
-	for _, t := range types {
-		if reflect.TypeOf(obj).Kind() == t {
-			return true
-		}
-	}
-
-	return false
-}
-
-func reflectValue(obj any) reflect.Value {
-	var val reflect.Value
-
-	if reflect.TypeOf(obj).Kind() == reflect.Ptr {
-		val = reflect.ValueOf(obj).Elem()
-	} else {
-		val = reflect.ValueOf(obj)
-	}
-
-	return val
 }

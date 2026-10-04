@@ -23,30 +23,41 @@ import (
 )
 
 func TestAuthorizeJWTBearerSuite(t *testing.T) {
-	provider := compose.Compose(
-		&oauth2.Config{
-			GrantTypeJWTBearerCanSkipClientAuth:  true,
-			GrantTypeJWTBearerIDOptional:         true,
-			GrantTypeJWTBearerIssuedDateOptional: true,
-			GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
-			AllowedJWTAssertionAudiences:         []string{tokenURL},
-		},
-		store,
-		jwtStrategy,
-		compose.OAuth2ClientCredentialsGrantFactory,
-		compose.RFC7523AssertionGrantFactory,
-	)
-	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
-	defer testServer.Close()
-
-	client := newJWTBearerAppClient(testServer)
-	if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
-		assert.Nil(t, err)
+	testCases := []struct {
+		name      string
+		factories []compose.Factory
+	}{
+		{name: "ShouldHandleWithRFC7523", factories: []compose.Factory{compose.OAuth2ClientCredentialsGrantFactory, compose.RFC7523AssertionGrantFactory}},
+		{name: "ShouldHandleWithIDJAGRedeemComposed", factories: []compose.Factory{compose.OAuth2ClientCredentialsGrantFactory, compose.RFC7523AssertionGrantFactory, compose.IDJAGRedeemFactory}},
 	}
 
-	suite.Run(t, &authorizeJWTBearerSuite{
-		client: client,
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := compose.Compose(
+				&oauth2.Config{
+					GrantTypeJWTBearerCanSkipClientAuth:  true,
+					GrantTypeJWTBearerIDOptional:         true,
+					GrantTypeJWTBearerIssuedDateOptional: true,
+					GrantTypeJWTBearerMaxDuration:        24 * time.Hour,
+					AllowedJWTAssertionAudiences:         []string{tokenURL},
+				},
+				store,
+				jwtStrategy,
+				tc.factories...,
+			)
+			testServer := mockServer(t, provider, &oauth2.DefaultSession{})
+			defer testServer.Close()
+
+			client := newJWTBearerAppClient(testServer)
+			if err := client.SetPrivateKey(firstKeyID, firstPrivateKey); err != nil {
+				assert.Nil(t, err)
+			}
+
+			suite.Run(t, &authorizeJWTBearerSuite{
+				client: client,
+			})
+		})
+	}
 }
 
 type authorizeJWTBearerSuite struct {

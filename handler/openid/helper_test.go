@@ -131,6 +131,7 @@ func TestGetAccessTokenHash(t *testing.T) {
 		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally. Deriving
 		// the digest from the digits in the algorithm name, as this once did, cannot express that.
 		{"ShouldUseSHA512ForEdDSA", newIDTokenSignedClient("EdDSA"), sha512Hash},
+		{"ShouldUseSHA512ForEd25519", newIDTokenSignedClient("Ed25519"), sha512Hash},
 
 		// An unset 'id_token_signed_response_alg' defaults to RS256 per OpenID Connect Dynamic Client Registration
 		// 1.0 Section 2, and a client that does not implement the ID Token metadata at all falls back the same way.

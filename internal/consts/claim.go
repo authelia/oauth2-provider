@@ -39,6 +39,7 @@ const (
 	ClaimActor                               = "act"
 	ClaimEvents                              = "events"
 	ClaimConfirmation                        = "cnf"
+	ClaimAuthorizationDetails                = valueAuthorizationDetails
 	ClaimConfirmationJWKThumbprint           = "jkt"
 	ClaimConfirmationX509SHA256Thumbprint    = "x5t#S256"
 	ClaimHTTPMethod                          = "htm"
@@ -46,6 +47,11 @@ const (
 	ClaimDPoPAccessTokenHash                 = "ath"
 	ClaimConfirmationJWK                     = "jwk"
 	ClaimDPoPCodeHash                        = "c_s256"
+	ClaimResource                            = "resource"
+	ClaimTenant                              = "tenant"
+	ClaimAudienceTenant                      = "aud_tenant"
+	ClaimAudienceSubject                     = "aud_sub"
+	ClaimSubjectIdentifier                   = "sub_id"
 )
 
 const (

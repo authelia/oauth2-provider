@@ -467,6 +467,37 @@ func TestHMACCoreStrategyRejectsClientRegistrationTokenOpsWithoutNewHMACCoreStra
 	assert.Empty(t, strategy.ClientRegistrationTokenSignature(ctx, "irrelevant-token"))
 }
 
+func TestHMACCoreStrategyRFC8628UserCodeSignature(t *testing.T) {
+	strategy := NewHMACCoreStrategy(&oauth2.Config{
+		GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+	}, "authelia_%s_")
+
+	code, signature, err := strategy.GenerateRFC8628UserCode(t.Context())
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		have     string
+		expected bool
+	}{
+		{"ShouldMatchGeneratedCode", code, true},
+		{"ShouldMatchLowerCase", strings.ToLower(code), true},
+		{"ShouldMatchWithDash", code[:4] + "-" + code[4:], true},
+		{"ShouldMatchWithSpacesAndLowerCase", " " + strings.ToLower(code[:4]) + " " + strings.ToLower(code[4:]) + " ", true},
+		{"ShouldNotMatchDifferentCode", code[1:] + code[:1], false},
+		{"ShouldNotMatchTruncatedCode", code[:7], false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := strategy.RFC8628UserCodeSignature(t.Context(), tc.have)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, actual == signature)
+		})
+	}
+}
+
 func mustNewBCryptClientSecretPlain(rawSecret string) *oauth2.BCryptClientSecret {
 	if secret, err := oauth2.NewBCryptClientSecretPlain(rawSecret, 4); err != nil {
 		panic(err)

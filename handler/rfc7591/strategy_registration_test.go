@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestDefaultClientRegistrationStrategyNewClient(t *testing.T) {
@@ -388,4 +389,23 @@ func TestDefaultClientRegistrationStrategyPreservesDefaultMaxAgePresence(t *test
 			}
 		})
 	}
+}
+
+func TestDefaultClientRegistrationStrategyAuthorizationGrantProfilesRoundTrip(t *testing.T) {
+	strategy := NewDefaultClientRegistrationStrategy()
+
+	client, err := strategy.NewClient(context.Background(), "abc", oauth2.NewPlainTextClientSecret("s"), &oauth2.ClientRegistrationMetadata{
+		AuthorizationGrantProfilesSupported: []string{consts.GrantProfileIDJAG},
+	})
+	require.NoError(t, err)
+
+	registered, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok)
+
+	assert.Equal(t, []string{consts.GrantProfileIDJAG}, registered.GetAuthorizationGrantProfilesSupported())
+
+	metadata, err := strategy.MetadataFromClient(context.Background(), client)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{consts.GrantProfileIDJAG}, metadata.AuthorizationGrantProfilesSupported)
 }

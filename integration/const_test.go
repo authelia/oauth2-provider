@@ -9,4 +9,8 @@ const (
 	testClientIDLifespan     = "custom-lifespan-client"
 	testClientIDResponseMode = "response-mode-client"
 	testState                = "12345678901234567890"
+	testClientIDRAR          = "rar-client"
+	testClientSecret         = "foobar"
+	testSubject              = "foo-sub"
+	testScopeOAuth2          = "oauth2"
 )

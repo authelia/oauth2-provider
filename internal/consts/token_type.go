@@ -20,4 +20,5 @@ const (
 	TokenTypeRFC8693JWT          = "urn:ietf:params:oauth:token-type:jwt"           //nolint:gosec // This is a credential type, not a credential.
 	TokenTypeRFC8693SAML1        = "urn:ietf:params:oauth:token-type:saml1"         //nolint:gosec // This is a credential type, not a credential.
 	TokenTypeRFC8693SAML2        = "urn:ietf:params:oauth:token-type:saml2"         //nolint:gosec // This is a credential type, not a credential.
+	TokenTypeRFC8693IDJAG        = "urn:ietf:params:oauth:token-type:id-jag"        //nolint:gosec // This is a credential type, not a credential.
 )

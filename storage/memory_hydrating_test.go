@@ -66,3 +66,43 @@ func TestHydratingMemoryStoreHydratesClientRegistrationTokenSessions(t *testing.
 	assert.Same(t, atTarget, atGot.GetSession())
 	assert.Equal(t, "at-subject", atTarget.Subject)
 }
+
+func TestHydratingMemoryStoreHydratesRefreshTokenSessions(t *testing.T) {
+	ctx := context.Background()
+	store := NewHydratingMemoryStore()
+
+	const issued, rebound = "issued-subject", "rebound-subject"
+
+	stored := &oauth2.DefaultSession{Subject: issued}
+
+	require.NoError(t, store.CreateRefreshTokenSession(ctx, "rt-sig", "at-sig", &oauth2.AccessRequest{Request: oauth2.Request{ID: "req-id", Session: stored}}))
+
+	stored.Subject = "mutated"
+
+	target := &oauth2.DefaultSession{}
+
+	got, err := store.GetRefreshTokenSession(ctx, "rt-sig", target)
+	require.NoError(t, err)
+
+	assert.Same(t, target, got.GetSession())
+	assert.Equal(t, issued, target.Subject)
+
+	require.NoError(t, store.UpdateRefreshTokenSession(ctx, "rt-sig", &oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{Subject: rebound}}))
+
+	got, err = store.GetRefreshTokenSession(ctx, "rt-sig", &oauth2.DefaultSession{})
+	require.NoError(t, err)
+
+	assert.Equal(t, rebound, got.GetSession().(*oauth2.DefaultSession).Subject)
+
+	require.NoError(t, store.RevokeRefreshToken(ctx, "req-id"))
+
+	got, err = store.GetRefreshTokenSession(ctx, "rt-sig", &oauth2.DefaultSession{})
+	require.ErrorIs(t, err, oauth2.ErrInactiveToken)
+
+	assert.Equal(t, rebound, got.GetSession().(*oauth2.DefaultSession).Subject)
+
+	_, err = store.GetRefreshTokenSession(ctx, "missing", &oauth2.DefaultSession{})
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+	assert.ErrorIs(t, store.UpdateRefreshTokenSession(ctx, "missing", &oauth2.Request{ID: "req-id"}), oauth2.ErrNotFound)
+}

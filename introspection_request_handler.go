@@ -114,6 +114,13 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, err
 	}
 
+	// RFC 7662 Section 2.1 makes 'token' REQUIRED, and RFC 6749 Section 3.1 treats an empty value as omitted. A request
+	// without it is not "a properly formed and authorized query" (RFC 7662 Section 2.3), so it is answered with the
+	// RFC 6749 Section 5.2 'invalid_request' error rather than an inactive introspection response.
+	if token == "" {
+		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'token' parameter is required."))
+	}
+
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err))
@@ -127,12 +134,13 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		// it is derived from that token's own session.
 		//
 		// It must come from the same session ApplyConfirmation reads for 'cnf' (see WriteIntrospectionResponse), or
-		// the response would contradict itself by reporting a 'cnf.jkt' alongside a 'bearer' token type.
+		// the response would contradict itself by reporting a 'cnf.jkt' alongside a 'bearer' token type. For the same
+		// reason it is gated on DPoP being enabled, as ApplyConfirmation omits 'cnf.jkt' otherwise.
 		//
 		// RFC 8705 defines no token type of its own, so a certificate-bound token remains 'bearer'.
 		accessTokenType = BearerAccessToken
 
-		if bound, ok := ar.GetSession().(DPoPBoundSession); ok && bound.GetDPoPJWKThumbprint() != "" {
+		if bound, ok := ar.GetSession().(DPoPBoundSession); ok && bound.GetDPoPJWKThumbprint() != "" && f.Config.GetDPoPEnabled(ctx) {
 			accessTokenType = DPoPAccessToken
 		}
 	}

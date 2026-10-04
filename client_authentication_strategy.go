@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -28,6 +30,7 @@ type DefaultClientAuthenticationStrategy struct {
 		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
 		AllowedJWTAssertionAudiencesProvider
+		ClientAssertionClientSecretEncryptionDisabledProvider
 		JWTClockSkewProvider
 		MTLSConfigProvider
 	}
@@ -55,7 +58,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	var assertion *ClientAssertion
 
 	if hasAssertion {
-		if assertion, err = NewClientAssertion(ctx, s.Config.GetJWTStrategy(ctx), s.Store, assertionValue, assertionType, strategy); err != nil {
+		if assertion, err = s.newClientAssertion(ctx, id, assertionValue, assertionType, strategy); err != nil {
 			return nil, "", err
 		}
 	}
@@ -175,14 +178,13 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	return client, method, nil
 }
 
-// NewClientAssertion converts a raw assertion string into a *ClientAssertion.
+// NewClientAssertion converts a raw assertion string into a *ClientAssertion. A client assertion encrypted with a key
+// derived from the client secret, per OpenID Connect Core 1.0 Section 10.2, is rejected, as the client it identifies
+// through the 'iss' and 'sub' claims per RFC 7523 Section 3 is only known after decryption. The
+// DefaultClientAuthenticationStrategy accepts such an assertion by resolving the client from the 'client_id'
+// parameter first. See ClientAssertionClientSecretEncryptionDisabledProvider.
 func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
-	var (
-		token *jwt.Token
-
-		id, method string
-		client     Client
-	)
+	var token *jwt.Token
 
 	switch assertionType {
 	case consts.ClientAssertionTypeJWTBearer:
@@ -193,9 +195,60 @@ func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store Cli
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
+	if alg, ok := getClientSecretEncryptedJWTAlg(assertion); ok {
+		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion was encrypted with the 'alg' header value '%s' which derives the key from the client secret, but the client cannot be identified until the client assertion is decrypted.", alg))
+	}
+
 	if token, err = strategyJWT.Decode(ctx, assertion, jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
+
+	return newClientAssertionFromToken(ctx, store, token, assertion, assertionType)
+}
+
+func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Context, id, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
+	alg, ok := getClientSecretEncryptedJWTAlg(assertion)
+
+	if !ok || assertionType != consts.ClientAssertionTypeJWTBearer {
+		return NewClientAssertion(ctx, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType, strategy)
+	}
+
+	a = &ClientAssertion{Assertion: assertion, Type: assertionType}
+
+	if s.Config.GetClientAssertionClientSecretEncryptionDisabled(ctx) {
+		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion was encrypted with the 'alg' header value '%s' which derives the key from the client secret, but the authorization server does not permit client assertions encrypted this way.", alg))
+	}
+
+	if len(id) == 0 {
+		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion was encrypted with the 'alg' header value '%s' which derives the key from the client secret, but the request did not include the 'client_id' parameter which is required to identify the client before the client assertion is decrypted.", alg))
+	}
+
+	var (
+		client Client
+		token  *jwt.Token
+	)
+
+	if client, err = s.Store.GetClient(ctx, id); err != nil {
+		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugf("The client with id '%s' from the 'client_id' parameter could not be found.", id))
+	}
+
+	c, ok := client.(AuthenticationMethodClient)
+	if !ok {
+		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
+	}
+
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithms...)); err != nil {
+		return a, resolveJWTErrorToRFCError(err)
+	}
+
+	return newClientAssertionFromToken(ctx, s.Store, token, assertion, assertionType)
+}
+
+func newClientAssertionFromToken(ctx context.Context, store ClientManager, token *jwt.Token, assertion, assertionType string) (a *ClientAssertion, err error) {
+	var (
+		id, method string
+		client     Client
+	)
 
 	if id, err = token.Claims.GetSubject(); err != nil || len(id) == 0 {
 		if id, err = token.Claims.GetIssuer(); err != nil || len(id) == 0 {
@@ -222,6 +275,19 @@ func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store Cli
 		Algorithm: string(token.SignatureAlgorithm),
 		Client:    client,
 	}, nil
+}
+
+func getClientSecretEncryptedJWTAlg(assertion string) (alg string, ok bool) {
+	if !jwt.IsEncryptedJWT(assertion) {
+		return "", false
+	}
+
+	jwe, err := jose.ParseEncryptedCompact(assertion, jwt.EncryptionKeyAlgorithms, jwt.ContentEncryptionAlgorithms)
+	if err != nil {
+		return "", false
+	}
+
+	return jwe.Header.Algorithm, jwt.IsEncryptedJWTClientSecretAlgStr(jwe.Header.Algorithm)
 }
 
 // ClientAssertion represents a client assertion.
@@ -333,11 +399,11 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 			return "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The client assertion was not able to be parsed."))
 		}
 
-		if err = s.Store.ClientAssertionJWTValid(ctx, claims.JTI); err != nil {
+		if err = s.Store.ClientAssertionJWTValid(ctx, client.GetID(), claims.JTI); err != nil {
 			return "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("Claim 'jti' from 'client_assertion' MUST only be used once.").WithWrap(err))
 		}
 
-		if err = s.Store.SetClientAssertionJWT(ctx, claims.JTI, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
+		if err = s.Store.SetClientAssertionJWT(ctx, client.GetID(), claims.JTI, time.Unix(claims.ExpiresAt.Unix(), 0)); err != nil {
 			return "", err
 		}
 
@@ -520,10 +586,8 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'typ' header value '%s' or '%s' but the client assertion was signed with the 'typ' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.Header, jwt.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'typ' header value '%s' but the client assertion was encrypted with the 'typ' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderType))
-		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the client assertions was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", client.GetID(), fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType), fmtHeaderValue(token.HeaderJWE, consts.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' or '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType))
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the client assertion was encrypted with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionKeyID(client), token.EncryptionKeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):

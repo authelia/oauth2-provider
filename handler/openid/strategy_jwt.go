@@ -258,7 +258,8 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
 
-		rat := session.GetRequestedAt()
+		// The auth_time claim has jwt.TimePrecision, so the request time is compared at the same precision.
+		rat := session.GetRequestedAt().Truncate(jwt.TimePrecision)
 
 		if hasMaxAge {
 			switch {
@@ -301,7 +302,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
 
 			var ve *jwt.ValidationError
-			if errors.As(err, &ve) && ve.Is(jwt.ValidationErrorExpired) {
+			if errors.As(err, &ve) && ve.IsExactly(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
 			} else if err != nil {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode ID Token from 'id_token_hint' parameter because %s.", err.Error()))

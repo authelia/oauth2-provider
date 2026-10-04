@@ -7,6 +7,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -55,6 +55,48 @@ type DPoPProofMarker struct {
 	URL    string
 }
 
+// JTIMarker identifies a used JWT for replay detection. RFC 7519 Section 4.1.7 only requires a 'jti' to be unique
+// among the JWTs produced by one issuer, so a 'jti' is known only in the context of the issuer that produced it. For a
+// client assertion the issuer is the client, as RFC 7521 Section 5.2 and OpenID Connect Core 1.0 Section 9 require the
+// 'iss' claim to be the client_id.
+type JTIMarker struct {
+	Issuer string
+	JTI    string
+}
+
+// IDJAGRelationshipKey identifies an ID-JAG relationship by requesting client and requested audience.
+type IDJAGRelationshipKey struct {
+	ClientID string
+	Audience string
+}
+
+// IDJAGSubjectKey identifies an ID-JAG subject within the namespace of its issuer, and of its tenant when the issuer
+// is multi-tenant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+type IDJAGSubjectKey struct {
+	// Issuer is the 'iss' claim of the grant.
+	Issuer string
+
+	// Tenant is the 'tenant' claim of the grant, empty when the grant has none. A grant whose 'tenant' claim is
+	// present but empty or not a string is not resolved.
+	Tenant string
+
+	// Subject is the 'sub' claim of the grant.
+	Subject string
+}
+
+// MemoryStore is a reference storage implementation which keeps every record in memory. It is intended for tests and
+// examples rather than production use.
+//
+// The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
+// RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
+// tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
+// longer recognised once they expire, and are removed by the next insert into the same map once the prune interval
+// has elapsed.
+//
+// AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
+// live access tokens (e.g. the OpenID Connect hybrid flow).
 type MemoryStore struct {
 	Clients                  map[string]oauth2.Client
 	AuthorizeCodes           map[string]StoreAuthorizeCode
@@ -67,13 +109,19 @@ type MemoryStore struct {
 	InvalidatedDeviceCodes   map[string]bool
 	PKCES                    map[string]oauth2.Requester
 	Users                    map[string]MemoryUserRelation
-	BlacklistedJTIs          map[string]time.Time
-	AccessTokenRequestIDs    map[string]string
+	ClientAssertionJTIs      map[JTIMarker]time.Time
+	RFC7523JTIs              map[JTIMarker]time.Time
+	TokenExchangeJTIs        map[JTIMarker]time.Time
+	AccessTokenRequestIDs    map[string]map[string]struct{}
 	RefreshTokenRequestIDs   map[string]string
 	IssuerPublicKeys         map[string]IssuerPublicKeys
 	PARSessions              map[string]oauth2.AuthorizeRequester
 	DPoPProofJTIs            map[DPoPProofMarker]time.Time
 	DPoPNonces               map[string]time.Time
+	IDJAGRelationships       map[IDJAGRelationshipKey]oauth2.IDJAGRelationship
+	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
+	IDJAGSubjects            map[IDJAGSubjectKey]string
+	IDJAGJTIs                map[JTIMarker]time.Time
 
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
@@ -84,14 +132,24 @@ type MemoryStore struct {
 	deviceCodesMutex              sync.RWMutex
 	pkcesMutex                    sync.RWMutex
 	usersMutex                    sync.RWMutex
-	blacklistedJTIsMutex          sync.RWMutex
+	jtisMutex                     sync.RWMutex
 	accessTokenRequestIDsMutex    sync.RWMutex
 	refreshTokenRequestIDsMutex   sync.RWMutex
 	issuerPublicKeysMutex         sync.RWMutex
 	parSessionsMutex              sync.RWMutex
 	dpopProofJTIsMutex            sync.RWMutex
 	dpopNoncesMutex               sync.RWMutex
+	idjagMutex                    sync.RWMutex
+
+	clientAssertionJTIsPruneAt time.Time
+	rfc7523JTIsPruneAt         time.Time
+	tokenExchangeJTIsPruneAt   time.Time
+	dpopProofJTIsPruneAt       time.Time
+	dpopNoncesPruneAt          time.Time
+	idjagJTIsPruneAt           time.Time
 }
+
+const memoryStorePruneInterval = time.Minute
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
@@ -106,13 +164,19 @@ func NewMemoryStore() *MemoryStore {
 		InvalidatedDeviceCodes:   make(map[string]bool),
 		PKCES:                    make(map[string]oauth2.Requester),
 		Users:                    make(map[string]MemoryUserRelation),
-		AccessTokenRequestIDs:    make(map[string]string),
+		AccessTokenRequestIDs:    make(map[string]map[string]struct{}),
 		RefreshTokenRequestIDs:   make(map[string]string),
-		BlacklistedJTIs:          make(map[string]time.Time),
+		ClientAssertionJTIs:      make(map[JTIMarker]time.Time),
+		RFC7523JTIs:              make(map[JTIMarker]time.Time),
+		TokenExchangeJTIs:        make(map[JTIMarker]time.Time),
 		IssuerPublicKeys:         make(map[string]IssuerPublicKeys),
 		PARSessions:              make(map[string]oauth2.AuthorizeRequester),
 		DPoPProofJTIs:            make(map[DPoPProofMarker]time.Time),
 		DPoPNonces:               make(map[string]time.Time),
+		IDJAGRelationships:       make(map[IDJAGRelationshipKey]oauth2.IDJAGRelationship),
+		IDJAGTrustedIssuers:      make(map[string]oauth2.IDJAGTrustedIssuer),
+		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
+		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 	}
 }
 
@@ -128,8 +192,9 @@ type StoreRefreshToken struct {
 }
 
 func NewExampleStore() *MemoryStore {
-	return &MemoryStore{
-		IDSessions: make(map[string]oauth2.Requester),
+	store := NewMemoryStore()
+
+	example := &MemoryStore{
 		Clients: map[string]oauth2.Client{
 			"my-client": &oauth2.DefaultClient{
 				ID:                   "my-client",
@@ -150,7 +215,7 @@ func NewExampleStore() *MemoryStore {
 					GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
 					Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
 				},
-				TokenLifespans: &internal.TestLifespans,
+				TokenLifespans: exampleLifespans(),
 			},
 			"encoded:client": &oauth2.DefaultClient{
 				ID:                   "encoded:client",
@@ -170,17 +235,33 @@ func NewExampleStore() *MemoryStore {
 				Password: "secret",
 			},
 		},
-		AuthorizeCodes:         map[string]StoreAuthorizeCode{},
-		AccessTokens:           map[string]oauth2.Requester{},
-		RefreshTokens:          map[string]StoreRefreshToken{},
-		PKCES:                  map[string]oauth2.Requester{},
-		AccessTokenRequestIDs:  map[string]string{},
-		BlacklistedJTIs:        map[string]time.Time{},
-		RefreshTokenRequestIDs: map[string]string{},
-		IssuerPublicKeys:       map[string]IssuerPublicKeys{},
-		PARSessions:            map[string]oauth2.AuthorizeRequester{},
-		DPoPProofJTIs:          map[DPoPProofMarker]time.Time{},
-		DPoPNonces:             map[string]time.Time{},
+	}
+
+	store.Clients, store.Users = example.Clients, example.Users
+
+	return store
+}
+
+func exampleLifespans() *oauth2.ClientLifespanConfig {
+	ptr := func(d time.Duration) *time.Duration {
+		return &d
+	}
+
+	return &oauth2.ClientLifespanConfig{
+		AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
+		AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
+		AuthorizationCodeGrantRefreshTokenLifespan: ptr(33 * time.Hour),
+		ClientCredentialsGrantAccessTokenLifespan:  ptr(34 * time.Hour),
+		ImplicitGrantAccessTokenLifespan:           ptr(35 * time.Hour),
+		ImplicitGrantIDTokenLifespan:               ptr(36 * time.Hour),
+		JwtBearerGrantAccessTokenLifespan:          ptr(37 * time.Hour),
+		PasswordGrantAccessTokenLifespan:           ptr(38 * time.Hour),
+		PasswordGrantRefreshTokenLifespan:          ptr(39 * time.Hour),
+		RefreshTokenGrantIDTokenLifespan:           ptr(40 * time.Hour),
+		RefreshTokenGrantAccessTokenLifespan:       ptr(41 * time.Hour),
+		RefreshTokenGrantRefreshTokenLifespan:      ptr(42 * time.Hour),
+		TokenExchangeGrantAccessTokenLifespan:      ptr(43 * time.Hour),
+		TokenExchangeGrantRefreshTokenLifespan:     ptr(44 * time.Hour),
 	}
 }
 
@@ -271,13 +352,18 @@ func (s *MemoryStore) DeleteClient(_ context.Context, id string) (err error) {
 	return nil
 }
 
+// SetTokenLifespans replaces the stored client with a copy that has the given lifespans. A client already returned by
+// GetClient is not modified.
 func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.ClientLifespanConfig) error {
-	s.clientsMutex.RLock()
-	defer s.clientsMutex.RUnlock()
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
 
 	if client, ok := s.Clients[clientID]; ok {
 		if clc, ok := client.(*oauth2.DefaultClientWithCustomTokenLifespans); ok {
-			clc.SetTokenLifespans(lifespans)
+			updated := *clc
+			updated.SetTokenLifespans(lifespans)
+
+			s.Clients[clientID] = &updated
 
 			return nil
 		}
@@ -288,34 +374,58 @@ func (s *MemoryStore) SetTokenLifespans(clientID string, lifespans *oauth2.Clien
 	return oauth2.ErrNotFound
 }
 
-func (s *MemoryStore) ClientAssertionJWTValid(_ context.Context, jti string) error {
-	s.blacklistedJTIsMutex.RLock()
-	defer s.blacklistedJTIsMutex.RUnlock()
+// ClientAssertionJWTValid returns oauth2.ErrJTIKnown when the client has already used the 'jti' in an unexpired client
+// assertion. The 'jti' is scoped to the client per RFC 7519 Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) ClientAssertionJWTValid(_ context.Context, clientID, jti string) error {
+	return s.isJTIKnown(s.ClientAssertionJTIs, JTIMarker{Issuer: clientID, JTI: jti})
+}
 
-	if exp, exists := s.BlacklistedJTIs[jti]; exists && exp.After(time.Now()) {
+// SetClientAssertionJWT marks the 'jti' as used by the client until exp, returning oauth2.ErrJTIKnown when it is
+// already marked. The 'jti' is scoped to the client per RFC 7519 Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) SetClientAssertionJWT(_ context.Context, clientID, jti string, exp time.Time) error {
+	return s.setJTI(s.ClientAssertionJTIs, &s.clientAssertionJTIsPruneAt, JTIMarker{Issuer: clientID, JTI: jti}, exp)
+}
+
+func (s *MemoryStore) isJTIKnown(jtis map[JTIMarker]time.Time, marker JTIMarker) error {
+	s.jtisMutex.RLock()
+	defer s.jtisMutex.RUnlock()
+
+	if exp, exists := jtis[marker]; exists && exp.After(time.Now()) {
 		return oauth2.ErrJTIKnown
 	}
 
 	return nil
 }
 
-func (s *MemoryStore) SetClientAssertionJWT(_ context.Context, jti string, exp time.Time) error {
-	s.blacklistedJTIsMutex.Lock()
-	defer s.blacklistedJTIsMutex.Unlock()
+func (s *MemoryStore) setJTI(jtis map[JTIMarker]time.Time, pruneAt *time.Time, marker JTIMarker, exp time.Time) error {
+	s.jtisMutex.Lock()
+	defer s.jtisMutex.Unlock()
 
-	// delete expired jtis
-	for j, e := range s.BlacklistedJTIs {
-		if e.Before(time.Now()) {
-			delete(s.BlacklistedJTIs, j)
-		}
-	}
+	now := time.Now()
 
-	if _, exists := s.BlacklistedJTIs[jti]; exists {
+	pruneExpired(jtis, pruneAt, now)
+
+	if e, exists := jtis[marker]; exists && !e.Before(now) {
 		return oauth2.ErrJTIKnown
 	}
 
-	s.BlacklistedJTIs[jti] = exp
+	jtis[marker] = exp
+
 	return nil
+}
+
+func pruneExpired[K comparable](entries map[K]time.Time, pruneAt *time.Time, now time.Time) {
+	if now.Before(*pruneAt) {
+		return
+	}
+
+	*pruneAt = now.Add(memoryStorePruneInterval)
+
+	for key, exp := range entries {
+		if exp.Before(now) {
+			delete(entries, key)
+		}
+	}
 }
 
 func (s *MemoryStore) CreateAuthorizeCodeSession(_ context.Context, code string, req oauth2.Requester) error {
@@ -388,8 +498,8 @@ func (s *MemoryStore) DeletePKCERequestSession(_ context.Context, code string) e
 	return nil
 }
 
-// CreateAccessTokenSession stores the request against the access token signature and records the signature against the
-// request ID so RevokeAccessToken can find it later.
+// CreateAccessTokenSession stores the request against the access token signature and adds the signature to those
+// recorded against the request ID so RevokeAccessToken can find every access token issued for the request.
 func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
 	// We first lock accessTokenRequestIDsMutex and then accessTokensMutex because this is the same order
 	// locking happens in RevokeAccessToken and using the same order prevents deadlocks.
@@ -399,7 +509,15 @@ func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature stri
 	defer s.accessTokensMutex.Unlock()
 
 	s.AccessTokens[signature] = req
-	s.AccessTokenRequestIDs[req.GetID()] = signature
+
+	signatures, ok := s.AccessTokenRequestIDs[req.GetID()]
+	if !ok {
+		signatures = make(map[string]struct{})
+		s.AccessTokenRequestIDs[req.GetID()] = signatures
+	}
+
+	signatures[signature] = struct{}{}
+
 	return nil
 }
 
@@ -419,10 +537,23 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 // DeleteAccessTokenSession removes the session stored against the access token signature. Deleting a signature that
 // has no session is not an error.
 func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature string) error {
+	s.accessTokenRequestIDsMutex.Lock()
+	defer s.accessTokenRequestIDsMutex.Unlock()
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
+	if req, ok := s.AccessTokens[signature]; ok {
+		if signatures, ok := s.AccessTokenRequestIDs[req.GetID()]; ok {
+			delete(signatures, signature)
+
+			if len(signatures) == 0 {
+				delete(s.AccessTokenRequestIDs, req.GetID())
+			}
+		}
+	}
+
 	delete(s.AccessTokens, signature)
+
 	return nil
 }
 
@@ -491,6 +622,24 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 		return rel, oauth2.ErrInactiveToken
 	}
 	return rel, nil
+}
+
+// UpdateRefreshTokenSession replaces the request stored against the refresh token signature, keeping its active state
+// and the signature of the access token issued alongside it. It returns oauth2.ErrNotFound when no session exists for
+// the signature.
+func (s *MemoryStore) UpdateRefreshTokenSession(_ context.Context, signature string, req oauth2.Requester) error {
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
+	rel, ok := s.RefreshTokens[signature]
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	rel.Requester = req
+	s.RefreshTokens[signature] = rel
+
+	return nil
 }
 
 // DeleteRefreshTokenSession removes the session stored against the refresh token signature. Deleting a signature that
@@ -568,15 +717,21 @@ func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
 	return s.deactivateRefreshToken(requestID)
 }
 
-func (s *MemoryStore) RevokeAccessToken(ctx context.Context, requestID string) error {
-	s.accessTokenRequestIDsMutex.RLock()
-	defer s.accessTokenRequestIDsMutex.RUnlock()
+// RevokeAccessToken removes every access token issued for the request ID. RFC 7009 Section 2.1 requires revoking a
+// refresh token to invalidate all access tokens based on the same authorization grant, and one request ID may own
+// several of them.
+func (s *MemoryStore) RevokeAccessToken(_ context.Context, requestID string) error {
+	s.accessTokenRequestIDsMutex.Lock()
+	defer s.accessTokenRequestIDsMutex.Unlock()
+	s.accessTokensMutex.Lock()
+	defer s.accessTokensMutex.Unlock()
 
-	if signature, exists := s.AccessTokenRequestIDs[requestID]; exists {
-		if err := s.DeleteAccessTokenSession(ctx, signature); err != nil {
-			return err
-		}
+	for signature := range s.AccessTokenRequestIDs[requestID] {
+		delete(s.AccessTokens, signature)
 	}
+
+	delete(s.AccessTokenRequestIDs, requestID)
+
 	return nil
 }
 
@@ -632,24 +787,91 @@ func (s *MemoryStore) GetRFC7523PublicKeyScopes(ctx context.Context, issuer stri
 	return nil, oauth2.ErrNotFound
 }
 
-func (s *MemoryStore) IsRFC7523JWTUsed(ctx context.Context, issuer, jti string) (bool, error) {
-	err := s.ClientAssertionJWTValid(ctx, scopedJTI(issuer, jti))
-	if err != nil {
-		return true, nil
+// IsRFC7523JWTUsed reports whether the issuer has already used the 'jti' in an unexpired RFC 7523 authorization grant.
+// The 'jti' is scoped to the issuer per RFC 7519 Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) IsRFC7523JWTUsed(_ context.Context, issuer, jti string) (bool, error) {
+	return s.isJTIKnown(s.RFC7523JTIs, JTIMarker{Issuer: issuer, JTI: jti}) != nil, nil
+}
+
+// MarkRFC7523JWTUsedForTime marks the issuer's 'jti' as used until exp, returning oauth2.ErrJTIKnown when it is
+// already marked. The 'jti' is scoped to the issuer per RFC 7519 Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) MarkRFC7523JWTUsedForTime(_ context.Context, issuer, jti string, exp time.Time) error {
+	return s.setJTI(s.RFC7523JTIs, &s.rfc7523JTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
+}
+
+// GetIDJAGRelationship returns a copy of the relationship registered for the client and audience.
+func (s *MemoryStore) GetIDJAGRelationship(_ context.Context, request oauth2.AccessRequester, audience string) (*oauth2.IDJAGRelationship, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	relationship, ok := s.IDJAGRelationships[IDJAGRelationshipKey{ClientID: request.GetClient().GetID(), Audience: audience}]
+	if !ok {
+		return nil, oauth2.ErrNotFound
 	}
 
-	return false, nil
+	relationship.Scopes = slices.Clone(relationship.Scopes)
+	relationship.Resources = slices.Clone(relationship.Resources)
+	relationship.AuthorizationDetailsTypes = slices.Clone(relationship.AuthorizationDetailsTypes)
+
+	return &relationship, nil
 }
 
-func (s *MemoryStore) MarkRFC7523JWTUsedForTime(ctx context.Context, issuer, jti string, exp time.Time) error {
-	return s.SetClientAssertionJWT(ctx, scopedJTI(issuer, jti), exp)
+// GetIDJAGTrustedIssuer returns a copy of the trust configuration registered for the issuer.
+func (s *MemoryStore) GetIDJAGTrustedIssuer(_ context.Context, issuer string) (*oauth2.IDJAGTrustedIssuer, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	trusted, ok := s.IDJAGTrustedIssuers[issuer]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	trusted.SigningAlgs = slices.Clone(trusted.SigningAlgs)
+	trusted.Clients = slices.Clone(trusted.Clients)
+
+	if trusted.JSONWebKeys != nil {
+		trusted.JSONWebKeys = &jose.JSONWebKeySet{Keys: slices.Clone(trusted.JSONWebKeys.Keys)}
+	}
+
+	return &trusted, nil
 }
 
-// scopedJTI namespaces a JWT's 'jti' value by its issuer so that the shared
-// BlacklistedJTIs map enforces RFC 7519 §4.1.7 jti-uniqueness-per-issuer semantics
-// rather than treating jti as globally unique.
-func scopedJTI(issuer, jti string) string {
-	return issuer + "\x00" + jti
+// ResolveIDJAGSubject returns the subject registered for the grant's issuer, tenant and subject, or oauth2.ErrNotFound
+// when none is registered.
+func (s *MemoryStore) ResolveIDJAGSubject(_ context.Context, _ oauth2.Client, claims map[string]any) (string, error) {
+	issuer, _ := claims[consts.ClaimIssuer].(string)
+	subject, _ := claims[consts.ClaimSubject].(string)
+
+	if subject == "" {
+		return "", oauth2.ErrNotFound
+	}
+
+	var tenant string
+
+	if value, ok := claims[consts.ClaimTenant]; ok {
+		if tenant, ok = value.(string); !ok || tenant == "" {
+			return "", oauth2.ErrNotFound
+		}
+	}
+
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	if resolved, ok := s.IDJAGSubjects[IDJAGSubjectKey{Issuer: issuer, Tenant: tenant, Subject: subject}]; ok {
+		return resolved, nil
+	}
+
+	return "", oauth2.ErrNotFound
+}
+
+// IsIDJAGUsed reports whether the issuer's 'jti' was already redeemed and is unexpired.
+func (s *MemoryStore) IsIDJAGUsed(_ context.Context, issuer, jti string) (bool, error) {
+	return s.isJTIKnown(s.IDJAGJTIs, JTIMarker{Issuer: issuer, JTI: jti}) != nil, nil
+}
+
+// MarkIDJAGUsed marks the issuer's 'jti' as redeemed until exp, returning oauth2.ErrJTIKnown when it is already marked.
+func (s *MemoryStore) MarkIDJAGUsed(_ context.Context, issuer, jti string, exp time.Time) error {
+	return s.setJTI(s.IDJAGJTIs, &s.idjagJTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
 }
 
 // CreatePARSession stores the pushed authorization request context. The requestURI is used to derive the key.
@@ -676,19 +898,27 @@ func (s *MemoryStore) GetPARSession(ctx context.Context, requestURI string) (oau
 	return r, nil
 }
 
-// DeletePARSession deletes the context.
+// DeletePARSession deletes the context. It returns oauth2.ErrNotFound if the context does not exist, so a request_uri
+// is only consumed once per RFC 9126 Section 4.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9126#section-4
 func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (err error) {
 	s.parSessionsMutex.Lock()
 	defer s.parSessionsMutex.Unlock()
+
+	if _, ok := s.PARSessions[requestURI]; !ok {
+		return oauth2.ErrNotFound
+	}
 
 	delete(s.PARSessions, requestURI)
 
 	return nil
 }
 
-func (s *MemoryStore) SetTokenExchangeCustomJWT(ctx context.Context, jti string, exp time.Time) error {
-	// the memory store implementation is generic, so just re-use
-	return s.SetClientAssertionJWT(ctx, jti, exp)
+// SetTokenExchangeCustomJWT marks the issuer's 'jti' as used until exp, returning oauth2.ErrJTIKnown when it is
+// already marked. The 'jti' is scoped to the issuer per RFC 7519 Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) SetTokenExchangeCustomJWT(_ context.Context, issuer, jti string, exp time.Time) error {
+	return s.setJTI(s.TokenExchangeJTIs, &s.tokenExchangeJTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
 }
 
 // GetSubjectForTokenExchange computes the session subject and is used for token types where there is no way
@@ -726,6 +956,26 @@ func (s *MemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature str
 		s.DeviceCodes[signature] = request
 		s.UserCodes[request.GetUserCodeSignature()] = request
 	}
+
+	return nil
+}
+
+// DecideDeviceCodeSession implements rfc8628.DecisionStorage.
+func (s *MemoryStore) DecideDeviceCodeSession(_ context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	stored, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	if stored.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+		return oauth2.ErrDeviceAuthorizeDecided
+	}
+
+	s.DeviceCodes[signature] = request
+	s.UserCodes[request.GetUserCodeSignature()] = request
 
 	return nil
 }
@@ -795,12 +1045,7 @@ func (s *MemoryStore) CheckAndSetDPoPProofUsed(_ context.Context, jti, _, _, htm
 		return true, nil
 	}
 
-	// delete expired markers
-	for m, e := range s.DPoPProofJTIs {
-		if e.Before(time.Now()) {
-			delete(s.DPoPProofJTIs, m)
-		}
-	}
+	pruneExpired(s.DPoPProofJTIs, &s.dpopProofJTIsPruneAt, time.Now())
 
 	s.DPoPProofJTIs[marker] = exp
 
@@ -811,12 +1056,7 @@ func (s *MemoryStore) CreateDPoPNonce(_ context.Context, nonce string, exp time.
 	s.dpopNoncesMutex.Lock()
 	defer s.dpopNoncesMutex.Unlock()
 
-	// delete expired nonces
-	for n, e := range s.DPoPNonces {
-		if e.Before(time.Now()) {
-			delete(s.DPoPNonces, n)
-		}
-	}
+	pruneExpired(s.DPoPNonces, &s.dpopNoncesPruneAt, time.Now())
 
 	s.DPoPNonces[nonce] = exp
 

@@ -104,6 +104,61 @@ func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 	}
 }
 
+func TestDefaultJWKSFetcherStrategyRefreshInterval(t *testing.T) {
+	testCases := []struct {
+		name     string
+		opts     []func(*DefaultJWKSFetcherStrategy)
+		wait     time.Duration
+		expected int64
+	}{
+		{
+			name:     "ShouldRefreshOnceWithinTheInterval",
+			expected: 2,
+		},
+		{
+			name:     "ShouldRefreshAgainAfterTheInterval",
+			opts:     []func(*DefaultJWKSFetcherStrategy){JWKSFetcherWithRefreshInterval(50 * time.Millisecond)},
+			wait:     100 * time.Millisecond,
+			expected: 3,
+		},
+		{
+			name:     "ShouldRefreshEveryTimeWithoutAnInterval",
+			opts:     []func(*DefaultJWKSFetcherStrategy){JWKSFetcherWithRefreshInterval(0)},
+			expected: 3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var fetches atomic.Int64
+
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fetches.Add(1)
+
+				require.NoError(t, json.NewEncoder(w).Encode(&jose.JSONWebKeySet{}))
+			}))
+			t.Cleanup(ts.Close)
+
+			s := NewDefaultJWKSFetcherStrategy(tc.opts...)
+
+			_, err := s.Resolve(context.Background(), ts.URL, false)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			s.(*DefaultJWKSFetcherStrategy).WaitForCache()
+
+			_, err = s.Resolve(context.Background(), ts.URL, true)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			s.(*DefaultJWKSFetcherStrategy).WaitForCache()
+
+			time.Sleep(tc.wait)
+
+			_, err = s.Resolve(context.Background(), ts.URL, true)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+			assert.Equal(t, tc.expected, fetches.Load())
+		})
+	}
+}
+
 func TestDefaultJWKSFetcherStrategyOptions(t *testing.T) {
 	testCases := []struct {
 		name  string

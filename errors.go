@@ -31,6 +31,10 @@ var (
 	// ErrInvalidatedUserCode is an error indicating that a user code has been used previously.
 	ErrInvalidatedUserCode = errors.New("user code has been invalidated")
 
+	// ErrDeviceAuthorizeDecided is an error indicating that the user already approved or denied a device authorization
+	// request.
+	ErrDeviceAuthorizeDecided = errors.New("device authorization has already been decided")
+
 	// ErrDuplicateUserCode is an error indicating that a user code signature is already held by another device code
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")
@@ -258,6 +262,12 @@ var (
 		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInvalidAuthorizationDetails = &RFC6749Error{
+		ErrorField:       errInvalidAuthorizationDetailsName,
+		DescriptionField: "The requested authorization details are invalid, unknown, or malformed.",
+		HintField:        "Ensure every authorization details object has a type supported by the authorization server, conforms to that type's definition, and is permitted for this client.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrInvalidClientMetadata = &RFC6749Error{
 		ErrorField:       errInvalidClientMetadataName,
 		DescriptionField: "The value of one of the client metadata fields is invalid and the server has rejected this request.",
@@ -319,6 +329,7 @@ const (
 	errDeviceExpiredTokenName          = "expired_token"
 	errSlowDownName                    = "slow_down"
 	errInvalidTargetName               = "invalid_target"
+	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
 	errInvalidDPoPProofName            = "invalid_dpop_proof"
 	errUseDPoPNonceName                = "use_dpop_nonce"
 	errInvalidClientMetadataName       = "invalid_client_metadata"
@@ -362,6 +373,7 @@ type (
 		cause           error
 		useLegacyFormat bool
 		exposeDebug     bool
+		challenge       string
 
 		// Fields for globalization
 		hintIDField string

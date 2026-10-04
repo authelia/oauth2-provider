@@ -327,6 +327,55 @@ func TestCustomJWTSubjectTokenScopeDoesNotConsumeTheJTI(t *testing.T) {
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), newRequest(nil))))
 }
 
+func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
+	store := storage.NewExampleStore()
+	cfg := newSpecConfig(t)
+	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ValidateJTI = true
+
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	client := store.Clients["my-client"]
+
+	handler := &CustomJWTTypeHandler{
+		Config:   cfg,
+		Strategy: jwtStrategy,
+		Storage:  store,
+	}
+
+	jti := uuid.New().String()
+
+	token := createJWT(t.Context(), client, jwtStrategy, jwt.MapClaims{
+		consts.ClaimIssuer:         "https://as.example.com",
+		consts.ClaimSubject:        "peter",
+		consts.ClaimJWTID:          jti,
+		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+		consts.ClaimIssuedAt:       time.Now().Unix(),
+		"subject":                  "peter",
+	})
+
+	request := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+		Request: oauth2.Request{
+			ID:     uuid.New().String(),
+			Client: client,
+			Form: url.Values{
+				consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+				consts.FormParameterSubjectToken:     {token},
+			},
+			Session: newSpecSession("peter"),
+		},
+	}
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+	grant := &TokenExchangeGrantHandler{Config: cfg, Storage: store}
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+
+	assert.Contains(t, store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: jti})
+}
+
 type testPermissiveScopeClient struct {
 	*oauth2.DefaultClient
 }

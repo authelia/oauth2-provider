@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -69,6 +71,27 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
 			},
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token has not been found: Could not find the requested resource(s).",
+		},
+		{
+			name: "ShouldRejectMalformedTokenWithInvalidGrant",
+			setup: func(requester *oauth2.AccessRequest, store *storage.MemoryStore, config *oauth2.Config) {
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+				_, sig, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				requester.Form.Add(consts.FormParameterRefreshToken, "authelia_rt_."+sig)
+				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+					Client:         requester.Client,
+					GrantedScope:   oauth2.Arguments{consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{consts.ScopeOffline},
+					Session:        session,
+					RequestedAt:    time.Now().UTC().Add(-time.Hour).Truncate(time.Hour),
+				})
+				require.NoError(t, err)
+			},
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The token provided is expired, revoked, malformed, or invalid for other reasons. Check that you provided a valid token in the right format.",
 		},
 		{
 			name: "ShouldFailClientMismatches",
@@ -330,7 +353,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			err: "The token was not granted the requested scope. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
+			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client was not granted scope offline and may thus not perform the 'refresh_token' authorization grant.",
 		},
 		{
 			name: "ShouldPassWithoutOfflineScopeWhenConfigured",
@@ -428,6 +451,76 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 			if tc.expect != nil {
 				tc.expect(t, requester)
 			}
+		})
+	}
+}
+
+func TestRefreshFlow_HandleTokenEndpointRequestValidationErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		secret   []byte
+		token    func(token string) string
+		inactive bool
+		expected error
+	}{
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecret",
+			secret:   []byte("short"),
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnServerErrorForUnusableSecretWithInactiveToken",
+			secret:   []byte("short"),
+			inactive: true,
+			expected: oauth2.ErrServerError,
+		},
+		{
+			name:     "ShouldReturnInvalidGrantForCorruptToken",
+			secret:   []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+			token:    func(token string) string { return "authelia_rt_!" + token[len("authelia_rt_"):] },
+			expected: oauth2.ErrInvalidGrant,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			client := &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+
+			token, sig, err := hmacshaStrategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			if tc.token != nil {
+				token = tc.token(token)
+			}
+
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
+				ID:           "request-id",
+				Client:       client,
+				GrantedScope: oauth2.Arguments{consts.ScopeOffline},
+				Session:      &oauth2.DefaultSession{},
+			}))
+
+			if tc.inactive {
+				require.NoError(t, store.RotateRefreshToken(t.Context(), "request-id", sig))
+			}
+
+			strategy := hmacshaStrategy
+			strategy.Enigma = &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: tc.secret}}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   &strategy,
+				Config:                 &oauth2.Config{},
+			}
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+			requester.Client = client
+			requester.Form = url.Values{consts.FormParameterRefreshToken: {token}}
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+			assert.ErrorIs(t, err, tc.expected)
 		})
 	}
 }
@@ -716,6 +809,108 @@ func TestRefreshFlow_WithoutRotation(t *testing.T) {
 	}
 }
 
+func TestRefreshFlow_WithoutRotationKeepsTheOriginalGrant(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	stores := []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	const (
+		audienceA, audienceB = "https://a.example.com", "https://b.example.com"
+		resourceA, resourceB = audienceA, audienceB
+	)
+
+	for _, s := range stores {
+		t.Run(s.name, func(t *testing.T) {
+			store := s.new()
+
+			client := &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
+				Scopes:     []string{"foo", "bar", consts.ScopeOffline},
+				Audience:   []string{audienceA, audienceB},
+			}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   strategy,
+				AccessTokenStrategy:    strategy,
+				Config: &oauth2.Config{
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{consts.ScopeOffline},
+					DisableRefreshTokenRotation: true,
+				},
+			}
+
+			original := &oauth2.Request{
+				ID:                "req-id",
+				Client:            client,
+				RequestedAt:       time.Now().UTC(),
+				RequestedScope:    oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
+				GrantedScope:      oauth2.Arguments{"foo", "bar", consts.ScopeOffline},
+				RequestedAudience: oauth2.Arguments{audienceA, audienceB},
+				GrantedAudience:   oauth2.Arguments{audienceA, audienceB},
+				RequestedResource: oauth2.Arguments{resourceA, resourceB},
+				GrantedResource:   oauth2.Arguments{resourceA, resourceB},
+				Session:           &oauth2.DefaultSession{Subject: "peter"},
+				Form:              url.Values{},
+			}
+
+			refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, "", original))
+
+			refresh := func(form url.Values) *oauth2.AccessRequest {
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = client
+				requester.Form = form
+				requester.Form.Set(consts.FormParameterRefreshToken, refreshToken)
+				requester.SetRequestedScopes(oauth2.RemoveEmpty(strings.Split(form.Get(consts.FormParameterScope), " ")))
+				requester.SetRequestedAudience(form[consts.FormParameterAudience])
+				requester.SetRequestedResource(form[consts.FormParameterResource])
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), requester)))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())))
+
+				return requester
+			}
+
+			narrowed := refresh(url.Values{
+				consts.FormParameterScope:    {"foo " + consts.ScopeOffline},
+				consts.FormParameterAudience: {audienceA},
+				consts.FormParameterResource: {resourceA},
+			})
+
+			assert.Equal(t, oauth2.Arguments{"foo", consts.ScopeOffline}, narrowed.GetGrantedScopes())
+			assert.Equal(t, oauth2.Arguments{audienceA}, narrowed.GetGrantedAudience())
+			assert.Equal(t, oauth2.Arguments{resourceA}, narrowed.GetGrantedResource())
+
+			stored, err := store.GetRefreshTokenSession(t.Context(), refreshSignature, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, original.GrantedScope, stored.GetGrantedScopes())
+			assert.Equal(t, original.GrantedAudience, stored.GetGrantedAudience())
+			assert.Equal(t, original.GrantedResource, stored.GetGrantedResource())
+
+			full := refresh(url.Values{})
+
+			assert.Equal(t, original.GrantedScope, full.GetGrantedScopes())
+			assert.Equal(t, original.GrantedAudience, full.GetGrantedAudience())
+			assert.Equal(t, original.GrantedResource, full.GetGrantedResource())
+		})
+	}
+}
+
 func TestRefreshFlow_RotatesUnboundPublicClientTokens(t *testing.T) {
 	strategy := &hmacshaStrategy
 
@@ -944,6 +1139,11 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					UpdateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					Return(nil).
+					Times(1)
 				mockTransactional.
 					EXPECT().
 					Commit(propagatedContext).
@@ -976,6 +1176,11 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					Return(nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					UpdateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.
@@ -1011,6 +1216,46 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				mockRevocationStore.
 					EXPECT().
 					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					Return(errors.New("Whoops, a nasty database error occurred!")).
+					Times(1)
+				mockTransactional.
+					EXPECT().
+					Rollback(propagatedContext).
+					Return(nil).
+					Times(1)
+			},
+		},
+		{
+			name: "ShouldRollbackWithoutRotationWhenUpdateRefreshTokenSessionReturnsError",
+			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
+			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
+				request.ID = "req-id"
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DisableRefreshTokenRotation: true}
+
+				mockTransactional.
+					EXPECT().
+					BeginTX(propagatedContext).
+					Return(propagatedContext, nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
+					Return(request, nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					RevokeAccessToken(propagatedContext, "req-id").
+					Return(nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					Return(nil).
+					Times(1)
+				mockRevocationStore.
+					EXPECT().
+					UpdateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
 					Return(errors.New("Whoops, a nasty database error occurred!")).
 					Times(1)
 				mockTransactional.
@@ -1618,5 +1863,230 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				assert.NoError(t, err)
 			}
 		})
+	}
+}
+
+func TestRefreshFlow_AuthorizationDetails(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate, testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
+	narrow := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}}}
+	wide := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionCancel}}}
+
+	stores := []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	testCases := []struct {
+		name             string
+		requestedDetails oauth2.AuthorizationDetails
+		err              bool
+		expectGrant      oauth2.AuthorizationDetails
+	}{
+		{"ShouldCarryGrantWhenAbsent", nil, false, granted},
+		{"ShouldNarrowAccessTokenAndRestoreRefreshToken", narrow, false, narrow},
+		{"ShouldRejectNotContained", wide, true, nil},
+		{"ShouldRejectOneGrantedForTwoRequested", oauth2.AuthorizationDetails{granted[0], granted[0]}, true, nil},
+	}
+
+	for _, s := range stores {
+		for _, tc := range testCases {
+			t.Run(s.name+"/"+tc.name, func(t *testing.T) {
+				store := s.new()
+
+				client := &oauth2.DefaultClient{
+					ID:         "foo",
+					GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
+					Scopes:     []string{"foo", consts.ScopeOffline},
+				}
+
+				handler := &RefreshTokenGrantHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   strategy,
+					AccessTokenStrategy:    strategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:              time.Hour,
+						RefreshTokenLifespan:             time.Hour,
+						ScopeStrategy:                    oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:                 oauth2.DefaultAudienceStrategy,
+						RefreshTokenScopes:               []string{consts.ScopeOffline},
+						AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
+					},
+				}
+
+				original := &oauth2.Request{
+					ID:             "req-id",
+					Client:         client,
+					RequestedAt:    time.Now().UTC(),
+					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:        &oauth2.DefaultSession{Subject: "peter"},
+					Form:           url.Values{},
+				}
+				original.SetGrantedAuthorizationDetails(granted)
+
+				refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = client
+				requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+				requester.SetRequestedAuthorizationDetails(tc.requestedDetails)
+
+				err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+
+				if tc.err {
+					assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+					return
+				}
+
+				require.NoError(t, err)
+
+				response := oauth2.NewAccessResponse()
+				require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), requester, response))
+
+				assert.Equal(t, tc.expectGrant, requester.GetGrantedAuthorizationDetails(),
+					"the access token request's granted authorization details must reflect the requested narrowing")
+				assert.Equal(t, tc.expectGrant, response.GetExtra(consts.AccessResponseAuthorizationDetails),
+					"the token response must return the granted authorization details")
+
+				newRefreshToken, ok := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+				require.True(t, ok, "a rotated refresh token must be issued")
+
+				newSignature := strategy.RefreshTokenSignature(t.Context(), newRefreshToken)
+				stored, err := store.GetRefreshTokenSession(t.Context(), newSignature, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				assert.Equal(t, granted, stored.GetGrantedAuthorizationDetails(),
+					"the rotated refresh token session must keep the original grant, not the narrowed access token grant")
+
+				if tc.requestedDetails != nil {
+					// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+					second := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+					second.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+					second.Client = client
+					second.Form = url.Values{consts.FormParameterRefreshToken: {newRefreshToken}}
+
+					require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), second))
+
+					secondResponse := oauth2.NewAccessResponse()
+					require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), second, secondResponse))
+
+					assert.Equal(t, granted, second.GetGrantedAuthorizationDetails(),
+						"a later refresh without 'authorization_details' must recover the full authorize-time grant")
+					assert.Equal(t, granted, secondResponse.GetExtra(consts.AccessResponseAuthorizationDetails))
+				}
+			})
+		}
+	}
+}
+
+func TestRefreshFlow_AuthorizationDetailsRecheckTypes(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}}
+
+	stores := []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	newClient := func(types []string) oauth2.Client {
+		return &internal.AuthorizationDetailsClient{
+			DefaultClient: &oauth2.DefaultClient{
+				ID:         "foo",
+				GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
+				Scopes:     []string{"foo", consts.ScopeOffline},
+			},
+			AuthorizationDetailsTypes: types,
+		}
+	}
+
+	testCases := []struct {
+		name      string
+		handlers  []oauth2.AuthorizationDetailsTypeHandler
+		client    oauth2.Client
+		requested oauth2.AuthorizationDetails
+		hint      string
+	}{
+		{name: "ShouldAcceptUnchanged", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, client: newClient([]string{internal.AuthorizationDetailsTypePaymentInitiation})},
+		{name: "ShouldRejectCarriedWhenAllowListChanged", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, client: newClient([]string{"other"}), hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectNarrowedWhenAllowListChanged", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}, client: newClient([]string{}), requested: granted, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectCarriedWhenHandlerRemoved", client: newClient([]string{internal.AuthorizationDetailsTypePaymentInitiation}), hint: testRARHintTypeNotSupported},
+	}
+
+	for _, s := range stores {
+		for _, tc := range testCases {
+			t.Run(s.name+"/"+tc.name, func(t *testing.T) {
+				store := s.new()
+
+				handler := &RefreshTokenGrantHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   strategy,
+					AccessTokenStrategy:    strategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:              time.Hour,
+						RefreshTokenLifespan:             time.Hour,
+						ScopeStrategy:                    oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:                 oauth2.DefaultAudienceStrategy,
+						RefreshTokenScopes:               []string{consts.ScopeOffline},
+						AuthorizationDetailsTypeHandlers: tc.handlers,
+					},
+				}
+
+				original := &oauth2.Request{
+					ID:             "req-id",
+					Client:         newClient([]string{internal.AuthorizationDetailsTypePaymentInitiation}),
+					RequestedAt:    time.Now().UTC(),
+					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:        &oauth2.DefaultSession{Subject: "peter"},
+					Form:           url.Values{},
+				}
+				original.SetGrantedAuthorizationDetails(granted)
+
+				refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = tc.client
+				requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+				requester.SetRequestedAuthorizationDetails(tc.requested)
+
+				err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+
+				if tc.hint == "" {
+					require.NoError(t, err)
+					assert.Equal(t, granted, requester.GetGrantedAuthorizationDetails())
+
+					return
+				}
+
+				require.Error(t, err)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			})
+		}
 	}
 }

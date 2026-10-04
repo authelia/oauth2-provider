@@ -65,6 +65,22 @@ type ResourceStrategyProvider interface {
 	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
+// AuthorizationDetailsTypeHandlersProvider returns the provider for configuring the RFC 9396 authorization details
+// type handlers.
+type AuthorizationDetailsTypeHandlersProvider interface {
+	// GetAuthorizationDetailsTypeHandlers returns the handlers keyed by authorization details type. RFC 9396 Rich
+	// Authorization Requests are disabled when it is empty. The map must not contain nil handlers.
+	GetAuthorizationDetailsTypeHandlers(ctx context.Context) (handlers map[string]AuthorizationDetailsTypeHandler)
+}
+
+// AuthorizationDetailsMaxObjectsProvider returns the provider for configuring the maximum number of RFC 9396
+// authorization details objects accepted in a single 'authorization_details' parameter.
+type AuthorizationDetailsMaxObjectsProvider interface {
+	// GetAuthorizationDetailsMaxObjects returns the maximum number of authorization details objects accepted in a
+	// single 'authorization_details' parameter.
+	GetAuthorizationDetailsMaxObjects(ctx context.Context) (maximum int)
+}
+
 // ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
 type ClientCredentialsImplicitProvider interface {
 	// GetClientCredentialsFlowImplicitGrantRequested returns true if the PopulateTokenEndpointResponse portion of the
@@ -304,6 +320,13 @@ type SendDebugMessagesToClientsProvider interface {
 	GetSendDebugMessagesToClients(ctx context.Context) (send bool)
 }
 
+// ClientAuthenticationRealmProvider returns the provider for configuring the realm of the 'Basic' challenge sent with a
+// 401 invalid_client response, per RFC 6749 Section 5.2 and RFC 7617 Section 2.
+type ClientAuthenticationRealmProvider interface {
+	// GetClientAuthenticationRealm returns the realm of the 'Basic' client authentication challenge.
+	GetClientAuthenticationRealm(ctx context.Context) (realm string)
+}
+
 // RevokeRefreshTokensExplicitlyProvider returns the provider for configuring the Refresh Token Explicit Revocation policy.
 type RevokeRefreshTokensExplicitlyProvider interface {
 	// GetRevokeRefreshTokensExplicit returns true if a refresh token should only be revoked explicitly.
@@ -374,6 +397,19 @@ type AllowedJWTAssertionAudiencesProvider interface {
 	// issuer identifier as the sole value of its 'aud' claim, per draft-ietf-oauth-rfc7523bis Section 4. The
 	// authorization grant is unaffected: the draft preserves the looser rule for it.
 	GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool)
+}
+
+// ClientAssertionClientSecretEncryptionDisabledProvider returns the provider for turning off client assertions that
+// are encrypted with a key derived from the client secret.
+type ClientAssertionClientSecretEncryptionDisabledProvider interface {
+	// GetClientAssertionClientSecretEncryptionDisabled returns true when a client assertion encrypted with a key derived
+	// from the client secret per OpenID Connect Core 1.0 Section 10.2 must be rejected.
+	//
+	// Such an assertion identifies its client with the 'iss' and 'sub' claims per RFC 7523 Section 3, which are only
+	// readable after decryption. When this returns false the client is resolved from the 'client_id' parameter, which
+	// RFC 7521 Section 4.2 permits alongside the assertion, and the claims must identify that same client. An assertion
+	// of this kind without the 'client_id' parameter is always rejected.
+	GetClientAssertionClientSecretEncryptionDisabled(ctx context.Context) (disabled bool)
 }
 
 // AllowedIntrospectionAudiencesProvider is a provider used in contexts where the permitted audiences for an Access
@@ -573,6 +609,18 @@ type RFC8693ConfigProvider interface {
 	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
+// IDJAGConfigProvider is the configuration provider for the Identity Assertion JWT Authorization Grant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04
+type IDJAGConfigProvider interface {
+	// GetIDJAGLifespan returns the lifespan of an issued grant. Defaults to 5 minutes.
+	GetIDJAGLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetIDJAGSingleUse returns true when a grant may only be redeemed once. Section 4.4.3 permits a client to redeem
+	// the same grant until it expires, so this defaults to false.
+	GetIDJAGSingleUse(ctx context.Context) (single bool)
+}
+
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.
 //
 // Deprecated: Do not use this flag anymore.
@@ -604,6 +652,13 @@ type PushedAuthorizeRequestConfigProvider interface {
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 	GetRequireRedirectURIPushedAuthorizationRequests(ctx context.Context) (require bool)
+
+	// GetDisablePushedAuthorizationRequestClientRefetch indicates if the client stored with a Pushed Authorization
+	// Request is used as is when its 'request_uri' is redeemed at the 'authorize' endpoint, instead of fetching the
+	// current client registration and validating the pushed request against it as RFC 9126 Section 7.4 recommends.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9126#section-7.4
+	GetDisablePushedAuthorizationRequestClientRefetch(ctx context.Context) (disable bool)
 }
 
 // JWTSecuredAuthorizationRequestConfigProvider is the configuration provider for JWT-Secured Authorization
@@ -681,12 +736,34 @@ type IntrospectionEndpointClientAuthDisabledProvider interface {
 	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
 }
 
+// IntrospectionTokenTypeEnabledProvider returns the provider for including 'token_type' in introspection responses.
+type IntrospectionTokenTypeEnabledProvider interface {
+	// GetIntrospectionTokenTypeEnabled returns true if the introspection response for an active access token includes
+	// the OPTIONAL 'token_type' member, the type of the token as defined in RFC 6749 Section 5.1. A DPoP-bound access
+	// token is reported as 'DPoP' as RFC 9449 Section 6.2 requires. A refresh token has no such type, so the member
+	// is omitted for it. An IntrospectionTokenTypeClient calling the endpoint overrides this value.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+	GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool)
+}
+
 // RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
 // revocation endpoint.
 type RevocationEndpointClientAuthStrategyProvider interface {
 	// GetRevocationEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. This endpoint permits public clients to authenticate using the 'none' method.
 	GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy)
+}
+
+// DPoPStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 9449 refresh token binding of
+// confidential clients.
+type DPoPStrictRefreshTokenBindingProvider interface {
+	// GetDPoPStrictRefreshTokenBinding returns true if a confidential client's DPoP bound refresh token may only be
+	// redeemed with a proof for the key it is bound to. When false the grant is re-bound to the key of the presented
+	// proof, as RFC 9449 Section 5 does not bind the refresh tokens of confidential clients to the proof key.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-5
+	GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
 // DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
@@ -719,6 +796,21 @@ type DPoPConfigProvider interface {
 
 	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
+}
+
+// MTLSStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 8705 refresh token binding of
+// confidential clients.
+type MTLSStrictRefreshTokenBindingProvider interface {
+	// GetMTLSStrictRefreshTokenBinding returns true if a confidential client's certificate-bound refresh token may only
+	// be redeemed with the certificate it is bound to. When false the grant is re-bound to the presented certificate,
+	// as RFC 8705 Section 4 binds the refresh tokens of public clients only, and those of confidential clients are
+	// sender-constrained by the client authentication RFC 6749 Section 6 requires, which RFC 8705 Section 7.1 notes
+	// for the mutual-TLS client authentication methods.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-4
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-7.1
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-6
+	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
 // MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.

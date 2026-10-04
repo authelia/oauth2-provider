@@ -19,7 +19,8 @@ import (
 // as defined in RFC8693.
 //
 // An ID Token represents an authentication rather than an authorization and grants no scope, so a token exchange
-// with an ID Token as the 'subject_token' cannot request a scope.
+// with an ID Token as the 'subject_token' cannot request a scope. For the same reason an ID Token is only issued for
+// an ID Token or refresh token 'subject_token'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693
 type IDTokenTypeHandler struct {
@@ -51,6 +52,10 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 	form := request.GetRequestForm()
 
+	if err = c.validateIssuable(ctx, request); err != nil {
+		return err
+	}
+
 	if form.Get(consts.FormParameterSubjectTokenType) != consts.TokenTypeRFC8693IDToken && form.Get(consts.FormParameterActorTokenType) != consts.TokenTypeRFC8693IDToken {
 		return nil
 	}
@@ -62,7 +67,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		prior := bindingOf(request.GetSession())
 
-		if unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+		if unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
 		}
 
@@ -80,12 +85,14 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 
 		prior := bindingOf(request.GetSession())
 
-		if unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+		if unpacked, err = c.validate(ctx, request, token); err != nil {
 			return err
 		}
 
-		if err = validateSubjectTokenScope(request, nil); err != nil {
-			return err
+		if !IsIDJAGRequest(ctx, request, c.Config) {
+			if err = validateSubjectTokenScope(request, nil); err != nil {
+				return err
+			}
 		}
 
 		if err = c.inherit(request, unpacked, tokenRoleSubject, prior); err != nil {
@@ -149,27 +156,26 @@ func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, 
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (claims map[string]any, err error) {
+func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (claims map[string]any, err error) {
 	if claims, err = c.ValidationStrategy.ValidateIDToken(ctx, request, token); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the id_token").WithWrap(err).WithDebugError(err))
 	}
 
 	expectedIssuer := ""
 
-	if config, ok := c.Config.(oauth2.AccessTokenIssuerProvider); ok {
-		expectedIssuer = config.GetAccessTokenIssuer(ctx)
+	// OpenID Connect Core 1.0 Section 3.1.3.7 requires the 'iss' claim to exactly match the Issuer Identifier of the
+	// OpenID Provider, which is the issuer every ID Token from this server is generated with.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+	if config, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		expectedIssuer = config.GetIDTokenIssuer(ctx)
 	}
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
-	allowed := clientAllowedIssuers(request.GetClient(), role)
 
 	var ok bool
 
-	if _, ok = ValidateIssuer(iss, expectedIssuer, allowed); !ok {
-		if len(allowed) > 0 {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
-		}
-
+	if _, ok = ValidateIssuer(iss, expectedIssuer, nil); !ok {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", expectedIssuer))
 	}
 
@@ -210,8 +216,36 @@ func (c *IDTokenTypeHandler) inherit(request oauth2.AccessRequester, claims map[
 	return inheritTokenBinding(request, incoming, role, prior)
 }
 
+func (c *IDTokenTypeHandler) validateIssuable(ctx context.Context, request oauth2.AccessRequester) error {
+	form := request.GetRequestForm()
+
+	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
+	if requestedTokenType == "" {
+		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	// OpenID Connect Core 1.0 Section 2 makes an ID Token a statement about the authentication of the End-User, so one
+	// is only issued from a 'subject_token' that carries such an authentication. Any other subject would assert a
+	// login the client never received.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+	if requestedTokenType == consts.TokenTypeRFC8693IDToken {
+		switch form.Get(consts.FormParameterSubjectTokenType) {
+		case consts.TokenTypeRFC8693IDToken, consts.TokenTypeRFC8693RefreshToken:
+		default:
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An ID Token can only be issued by a token exchange whose '%s' is an ID Token or a refresh token.", consts.FormParameterSubjectTokenType))
+		}
+	}
+
+	return nil
+}
+
 func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
+		return err
+	}
+
+	if err = requireActorToken(request); err != nil {
 		return err
 	}
 

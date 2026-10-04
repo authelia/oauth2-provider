@@ -21,6 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/jose"
+	"authelia.com/provider/jose/jwt"
+
+	"authelia.com/provider/oauth2/internal/gen"
 )
 
 func TestDefaultStrategy(t *testing.T) {
@@ -616,6 +619,39 @@ func TestDefaultStrategy_DecodeEncryptedTokens(t *testing.T) {
 	}
 }
 
+func TestDefaultStrategy_EncodeWithIssuerSigningAlg(t *testing.T) {
+	rsaKey := gen.MustRSAKey()
+	ecKey := gen.MustES256Key()
+
+	rsaJWK := jose.JSONWebKey{Key: rsaKey, KeyID: "rs", Algorithm: string(jose.RS256), Use: JSONWebTokenUseSignature}
+	ecJWK := jose.JSONWebKey{Key: ecKey, KeyID: "es", Algorithm: string(jose.ES256), Use: JSONWebTokenUseSignature}
+
+	issuer, err := NewDefaultIssuer(rsaJWK, ecJWK)
+	require.NoError(t, err)
+
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: issuer}
+
+	testCases := []struct {
+		name string
+		alg  string
+		kid  string
+	}{
+		{"ShouldDefaultToRS256", "", rsaJWK.KeyID},
+		{"ShouldSelectES256", string(jose.ES256), ecJWK.KeyID},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, _, err := strategy.Encode(context.Background(), MapClaims{"sub": "a"}, WithIssuerSigningAlg(tc.alg))
+			require.NoError(t, err)
+
+			parsed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			require.NoError(t, err)
+			assert.Equal(t, tc.kid, parsed.Signatures[0].Header.KeyID)
+		})
+	}
+}
+
 type testConfig struct{}
 
 func (*testConfig) GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy) {
@@ -929,6 +965,73 @@ func TestEncodeNestedCompactEncrypted(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
+
+	t.Run("ShouldSetContentTypeJWT", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, headers, &Headers{}, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, JSONWebTokenTypeJWT, jwe.Header.ExtraHeaders[JSONWebTokenHeaderContentType])
+	})
+
+	t.Run("ShouldUseCallerContentType", func(t *testing.T) {
+		headersJWE := &Headers{Extra: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeAccessToken}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, &Headers{}, headersJWE, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, JSONWebTokenTypeAccessToken, jwe.Header.ExtraHeaders[JSONWebTokenHeaderContentType])
+	})
+}
+
+func TestEncodeHeaderKeyID(t *testing.T) {
+	claims := MapClaims{"sub": "john"}
+	stale := "stale"
+
+	t.Run("ShouldUseSigningKeyID", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+
+		out, _, err := EncodeCompactSigned(t.Context(), claims, headers, &testKeySigECDSA)
+		require.NoError(t, err)
+
+		token, err := jwt.ParseSigned(out, []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+		require.Len(t, token.Headers, 1)
+		assert.Equal(t, testKeySigECDSA.KeyID, token.Headers[0].KeyID)
+	})
+
+	t.Run("ShouldUseSigningAndEncryptionKeyIDs", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+		headersJWE := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: "stale-enc"}}
+
+		out, _, err := EncodeNestedCompactEncrypted(t.Context(), claims, headers, headersJWE, &testKeySigECDSA, &testKeyPublicEncECDSA, jose.A128GCM)
+		require.NoError(t, err)
+
+		jwe, err := jose.ParseEncryptedCompact(out, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+		require.NoError(t, err)
+		assert.Equal(t, testKeyPublicEncECDSA.KeyID, jwe.Header.KeyID)
+
+		raw, err := jwe.Decrypt(&testKeyEncECDSA)
+		require.NoError(t, err)
+
+		token, err := jwt.ParseSigned(string(raw), []jose.SignatureAlgorithm{jose.ES256})
+		require.NoError(t, err)
+		require.Len(t, token.Headers, 1)
+		assert.Equal(t, testKeySigECDSA.KeyID, token.Headers[0].KeyID)
+	})
+
+	t.Run("ShouldNotModifyCallerHeaders", func(t *testing.T) {
+		headers := &Headers{Extra: map[string]any{JSONWebTokenHeaderKeyIdentifier: stale}}
+
+		_, _, err := EncodeCompactSigned(t.Context(), claims, headers, &testKeySigECDSA)
+		require.NoError(t, err)
+		assert.Equal(t, stale, headers.Get(JSONWebTokenHeaderKeyIdentifier))
+	})
 }
 
 func TestDefaultStrategyDecodeAlgNone(t *testing.T) {

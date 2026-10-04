@@ -167,16 +167,50 @@ func TestToken_Valid(t *testing.T) {
 			err:    "token was signed with an invalid typ",
 		},
 		{
-			name: "ShouldErrorInvalidJWEMismatchTypCty",
+			name: "ShouldNotErrorNestedCtyJWT",
 			have: &Token{
 				valid:             true,
 				ContentEncryption: jose.A128CBC_HS256,
 				KeyAlgorithm:      jose.RSA_OAEP_256,
-				Header:            map[string]any{consts.JSONWebTokenHeaderType: "a"},
-				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: "JWT", consts.JSONWebTokenHeaderContentType: "c"},
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT, consts.JSONWebTokenHeaderContentType: consts.JSONWebTokenTypeJWT},
 			},
-			opts:   []HeaderValidationOption{ValidateAllowEmptyType(true), ValidateTypes("a")},
-			errors: ValidationErrorHeaderContentTypeInvalidMismatch + ValidationErrorHeaderContentTypeInvalid,
+			opts: []HeaderValidationOption{ValidateTypes(consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest, consts.JSONWebTokenTypeJWT)},
+		},
+		{
+			name: "ShouldNotErrorNestedCtyJWTWhenTypesExcludeJWT",
+			have: &Token{
+				valid:             true,
+				ContentEncryption: jose.A128CBC_HS256,
+				KeyAlgorithm:      jose.RSA_OAEP_256,
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT, consts.JSONWebTokenHeaderContentType: "jwt"},
+			},
+			opts: []HeaderValidationOption{ValidateTypes(consts.JSONWebTokenTypeAccessToken)},
+		},
+		{
+			name: "ShouldErrorJWECtyMatchingTyp",
+			have: &Token{
+				valid:             true,
+				ContentEncryption: jose.A128CBC_HS256,
+				KeyAlgorithm:      jose.RSA_OAEP_256,
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT, consts.JSONWebTokenHeaderContentType: consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest},
+			},
+			opts:   []HeaderValidationOption{ValidateTypes(consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest)},
+			errors: ValidationErrorHeaderContentTypeInvalid,
+			err:    "token was encrypted with an invalid cty",
+		},
+		{
+			name: "ShouldErrorJWECtyMissing",
+			have: &Token{
+				valid:             true,
+				ContentEncryption: jose.A128CBC_HS256,
+				KeyAlgorithm:      jose.RSA_OAEP_256,
+				Header:            map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT},
+				HeaderJWE:         map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWT},
+			},
+			errors: ValidationErrorHeaderContentTypeInvalid,
 			err:    "token was encrypted with an invalid cty",
 		},
 	}
@@ -802,10 +836,26 @@ func TestToken_IsJWTProfileAccessToken(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "ShouldReturnTrueWithJWEContentTypeAccessToken",
+			name: "ShouldReturnFalseWithJWEContentTypeAccessToken",
 			token: &Token{
 				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
 				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeAccessToken},
+			},
+			expected: false,
+		},
+		{
+			name: "ShouldReturnFalseWithJWEContentTypeMissing",
+			token: &Token{
+				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+				HeaderJWE: map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeJWT},
+			},
+			expected: false,
+		},
+		{
+			name: "ShouldReturnTrueWithJWEContentTypeJWT",
+			token: &Token{
+				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
+				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeJWT},
 			},
 			expected: true,
 		},
@@ -813,7 +863,7 @@ func TestToken_IsJWTProfileAccessToken(t *testing.T) {
 			name: "ShouldReturnFalseWhenJWEContentTypeIsNotAccessToken",
 			token: &Token{
 				Header:    map[string]any{JSONWebTokenHeaderType: JSONWebTokenTypeAccessToken},
-				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeJWT},
+				HeaderJWE: map[string]any{JSONWebTokenHeaderContentType: JSONWebTokenTypeJWTSecuredAuthorizationRequest},
 			},
 			expected: false,
 		},

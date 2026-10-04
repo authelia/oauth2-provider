@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -34,7 +35,8 @@ type Session interface {
 	// GetSubjectToken returns the previously stored subject token claims, or nil if none were set.
 	GetSubjectToken() map[string]any
 
-	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow.
+	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow. A nil act removes
+	// the claim.
 	SetClaimActor(act map[string]any)
 
 	// AccessTokenClaimsMap returns the claims to include in the exchanged access token.
@@ -119,7 +121,19 @@ func (s *DefaultSession) GetSubjectToken() map[string]any {
 //     opaque access tokens stored verbatim.
 //   - s.DefaultSession.Claims.Extra flattened into the JWT body by jwt.IDTokenClaims.ToMap, so the 'act' claim
 //     is included in issued ID tokens and custom JWTs.
+//
+// A nil act removes the claim from both places.
 func (s *DefaultSession) SetClaimActor(act map[string]any) {
+	if act == nil {
+		delete(s.Extra, consts.ClaimActor)
+
+		if s.DefaultSession != nil && s.Claims != nil {
+			delete(s.Claims.Extra, consts.ClaimActor)
+		}
+
+		return
+	}
+
 	if s.Extra == nil {
 		s.Extra = map[string]any{}
 	}
@@ -141,6 +155,29 @@ func (s *DefaultSession) SetClaimActor(act map[string]any) {
 	s.DefaultSession.Claims.Extra[consts.ClaimActor] = act
 }
 
+// GetJWTClaims implements oauth2.JWTSessionContainer. The claims of an RFC 9068 JWT access token issued for the session
+// are its subject and its Extra claims, which include the RFC 8693 Section 4.1 'act' claim.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.2
+func (s *DefaultSession) GetJWTClaims() jwt.JWTClaimsContainer {
+	return &jwt.JWTClaims{
+		Subject: s.GetSubject(),
+		Extra:   clone.Map(s.Extra),
+	}
+}
+
+// GetJWTHeader implements oauth2.JWTSessionContainer. The header of an RFC 9068 JWT access token has a 'typ' of
+// 'at+jwt'.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.1
+func (s *DefaultSession) GetJWTHeader() *jwt.Headers {
+	return &jwt.Headers{
+		Extra: map[string]any{
+			consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken,
+		},
+	}
+}
+
 func (s *DefaultSession) AccessTokenClaimsMap() map[string]any {
 	tokenObject := map[string]any{
 		consts.ClaimSubject:  s.GetSubject(),
@@ -153,3 +190,7 @@ func (s *DefaultSession) AccessTokenClaimsMap() map[string]any {
 
 	return tokenObject
 }
+
+var (
+	_ hoauth2.JWTSessionContainer = (*DefaultSession)(nil)
+)

@@ -254,7 +254,7 @@ func newBindingExchangeConfig() (config *oauth2.Config, coreStrategy hoauth2.Cor
 
 type rfc8693ExchangeStore interface {
 	Storage
-	hoauth2.AccessTokenStorage
+	hoauth2.TokenRevocationStorage
 
 	GetClients() map[string]oauth2.Client
 }

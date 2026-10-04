@@ -45,7 +45,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	// }
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
 	}
 
 	client := request.GetClient()
@@ -72,6 +72,11 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 }
 
 func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
+	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails()); err != nil {
+		return err
+	}
+
 	// Only override expiry if none is set.
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	if request.GetSession().GetExpiresAt(oauth2.AccessToken).IsZero() {

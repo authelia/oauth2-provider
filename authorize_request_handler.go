@@ -49,6 +49,12 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	request := NewAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
+	defer func() {
+		if err != nil {
+			setAuthorizeErrorDefaultResponseMode(request)
+		}
+	}()
+
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 	ctx = context.WithValue(ctx, AuthorizeRequestContextKey, request)
 
@@ -121,6 +127,10 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
+	if err = f.validateAuthorizationDetails(ctx, request); err != nil {
+		return request, err
+	}
+
 	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
 		return request, errorsx.WithStack(ErrRegistrationNotSupported)
 	}
@@ -155,6 +165,18 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	}
 
 	return request, nil
+}
+
+func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {
+	if request.GetResponseMode() != ResponseModeDefault || request.Form == nil {
+		return
+	}
+
+	responseTypes := Arguments(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " ")))
+
+	if responseTypes.HasOneOf(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) {
+		request.SetDefaultResponseMode(ResponseModeFragment)
+	}
 }
 
 // TODO: Refactor time permitting.
@@ -594,6 +616,18 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request
 	return nil
 }
 
+func (f *Fosite) validateAuthorizationDetails(ctx context.Context, request *AuthorizeRequest) (err error) {
+	var details AuthorizationDetails
+
+	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, request.GetClient(), request.Form); err != nil {
+		return err
+	}
+
+	request.SetRequestedAuthorizationDetails(details)
+
+	return nil
+}
+
 func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Requester) error {
 	requested := RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterScope), " "))
 
@@ -714,6 +748,16 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'client_id' must match the one sent in the pushed authorization request."))
 	}
 
+	var client Client
+
+	if !config.GetDisablePushedAuthorizationRequestClientRefetch(ctx) {
+		if client, err = f.Store.GetClient(ctx, clientID); err != nil {
+			return false, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
+		} else if client == nil {
+			return false, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist."))
+		}
+	}
+
 	request.Form = url.Values{
 		consts.FormParameterClientID:   {clientID},
 		consts.FormParameterRequestURI: {requestURI},
@@ -725,7 +769,9 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	request.State = par.GetState()
 	request.ResponseMode = par.GetResponseMode()
 
-	if err = storage.DeletePARSession(ctx, requestURI); err != nil {
+	if err = storage.DeletePARSession(ctx, requestURI); errors.Is(err, ErrNotFound) {
+		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithWrap(err).WithDebug("The Pushed Authorization Request session has already been redeemed."))
+	} else if err != nil {
 		return false, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -733,7 +779,69 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithDebug("The Pushed Authorization Request session is expired."))
 	}
 
+	if client != nil {
+		request.Client = client
+
+		if err = f.validateAuthorizeRequestFromPARClient(ctx, r, request); err != nil {
+			return false, err
+		}
+	}
+
 	return true, nil
+}
+
+func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *http.Request, request *AuthorizeRequest) (err error) {
+	client := request.GetClient()
+
+	var raw string
+
+	if request.RedirectURI != nil {
+		raw = request.RedirectURI.String()
+	}
+
+	if _, err = MatchRedirectURIWithClientRedirectURIs(raw, client); err != nil {
+		return err
+	}
+
+	strategy := GetScopeStrategy(ctx, f.Config, client)
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
+			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+		}
+	}
+
+	if err = GetAudienceStrategy(ctx, f.Config, client)(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if err = GetResourceStrategy(ctx, f.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+		return err
+	}
+
+	if err = ValidateAuthorizationDetails(ctx, f.Config, client, request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	var found bool
+
+	for _, t := range client.GetResponseTypes() {
+		if request.ResponseTypes.Matches(RemoveEmpty(strings.Split(t, " "))...) {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
+	}
+
+	if len(request.Form.Get(consts.FormParameterResponseMode)) == 0 {
+		return nil
+	}
+
+	return f.validateResponseMode(ctx, r, request)
 }
 
 //nolint:gocyclo
@@ -754,8 +862,6 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'typ' header value '%s' but the request object was signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderType, token.Header))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'typ' header value '%s' but the request object was encrypted with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderType, token.HeaderJWE))
-		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalidMismatch):
-			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with a 'cty' header value and signed with a 'typ' value that match but the request object was encrypted with the 'cty' header value '%s' and signed with the 'typ' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), headerValueString(consts.JSONWebTokenHeaderContentType, token.HeaderJWE), headerValueString(consts.JSONWebTokenHeaderType, token.HeaderJWE))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be encrypted with the 'cty' header value '%s' but the request object was encrypted with the 'cty' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), consts.JSONWebTokenTypeJWT, headerValueString(consts.JSONWebTokenHeaderContentType, token.HeaderJWE))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):

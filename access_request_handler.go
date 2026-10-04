@@ -81,12 +81,27 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return requester, errorsx.WithStack(ErrInvalidRequest.WithHint("Request parameter 'grant_type' is missing"))
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if r.PostForm.Get(consts.FormParameterAuthorizationDetails) != "" && IsAuthorizationDetailsEnabled(ctx, f.Config) && !f.canHandleAuthorizationDetails(ctx, requester) {
+		return requester, errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The 'authorization_details' parameter is not supported for grant type '%s'.", strings.Join(requester.GrantTypes, " ")))
+	}
+
 	client, _, clientErr := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetTokenEndpointClientAuthStrategy(ctx))
 	if clientErr == nil {
 		requester.Client = client
 	}
 
 	presented := hasClientCredentials(r, r.PostForm)
+
+	if clientErr == nil {
+		var details AuthorizationDetails
+
+		if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, requester.GetClient(), r.PostForm); err != nil {
+			return requester, err
+		}
+
+		requester.SetRequestedAuthorizationDetails(details)
+	}
 
 	var found = false
 	for _, loader := range f.Config.GetTokenEndpointHandlers(ctx) {
@@ -138,6 +153,20 @@ func hasClientCredentials(r *http.Request, form url.Values) bool {
 
 	for _, parameter := range []string{consts.FormParameterClientSecret, consts.FormParameterClientAssertion, consts.FormParameterClientAssertionType} {
 		if len(form.Get(parameter)) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (f *Fosite) canHandleAuthorizationDetails(ctx context.Context, requester AccessRequester) bool {
+	if grantTypes := requester.GetGrantTypes(); len(grantTypes) == 1 && (grantTypes[0] == consts.GrantTypeAuthorizationCode || grantTypes[0] == consts.GrantTypeRefreshToken) {
+		return true
+	}
+
+	for _, handler := range f.Config.GetTokenEndpointHandlers(ctx) {
+		if h, ok := handler.(AuthorizationDetailsTokenEndpointHandler); ok && handler.CanHandleTokenEndpointRequest(ctx, requester) && h.CanHandleAuthorizationDetails(ctx, requester) {
 			return true
 		}
 	}

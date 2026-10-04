@@ -18,13 +18,13 @@ type Client interface {
 	GetSupportedRequestTokenTypes() (types []string)
 
 	// GetSupportedSubjectTokenIssuers indicates the JWT 'iss' claim values this client is permitted
-	// to submit as subject_token. Returning an empty slice disables the per-client issuer check and
-	// falls back to the token type's global Issuer setting (e.g. JWTType.Issuer).
+	// to submit as a custom JWT subject_token. Returning an empty slice disables the per-client issuer check and
+	// falls back to JWTType.Issuer. An ID Token is always checked against the ID Token issuer.
 	GetSupportedSubjectTokenIssuers() (issuers []string)
 
 	// GetSupportedActorTokenIssuers indicates the JWT 'iss' claim values this client is permitted
-	// to submit as actor_token. Returning an empty slice disables the per-client issuer check and
-	// falls back to the token type's global Issuer setting (e.g. JWTType.Issuer).
+	// to submit as a custom JWT actor_token. Returning an empty slice disables the per-client issuer check and
+	// falls back to JWTType.Issuer. An ID Token is always checked against the ID Token issuer.
 	GetSupportedActorTokenIssuers() (issuers []string)
 
 	// GetTokenExchangePermitted reports whether the subject token's original client authorizes the given requesting

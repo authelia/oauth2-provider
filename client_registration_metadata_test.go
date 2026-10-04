@@ -128,6 +128,20 @@ func TestClientRegistrationMetadataPreservesLargeNumbers(t *testing.T) {
 	assert.Contains(t, string(out), `"vendor_serial":9007199254740993`)
 }
 
+func TestClientRegistrationMetadataAuthorizationDetailsTypes(t *testing.T) {
+	var metadata ClientRegistrationMetadata
+
+	require.NoError(t, json.Unmarshal([]byte(`{"authorization_details_types":["payment_initiation"]}`), &metadata))
+
+	assert.Equal(t, []string{"payment_initiation"}, metadata.AuthorizationDetailsTypes)
+	assert.NotContains(t, metadata.Extra, "authorization_details_types")
+
+	encoded, err := json.Marshal(&metadata)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `{"authorization_details_types":["payment_initiation"]}`, string(encoded))
+}
+
 func pointerTo[T any](value T) *T {
 	return &value
 }

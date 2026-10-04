@@ -6,11 +6,13 @@ package compose
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -103,21 +105,52 @@ func TestBothBindingsAreRecordedWhenAClientPresentsBoth(t *testing.T) {
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The request requires a DPoP proof but none was provided.")
 	})
 
-	t.Run("ShouldRejectARefreshWithAnotherCertificate", func(t *testing.T) {
-		_, _, err := bothTokenRequest(t, provider, form(), other, bothDPoPProof(t, proofKey, "wrong-cert"))
-
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The mutual-TLS client certificate does not match the certificate the grant is bound to.")
-	})
-
-	t.Run("ShouldRejectARefreshWithAnotherProofKey", func(t *testing.T) {
-		rogue, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	t.Run("ShouldRebindARefreshWithAnotherCertificate", func(t *testing.T) {
+		response, _, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+			consts.FormParameterAuthorizationCode: []string{bothAuthorizeForCode(t, provider)},
+			consts.FormParameterRedirectURI:       []string{bothRedirectURI},
+		}, cert, bothDPoPProof(t, proofKey, "rebind-cert-initial"))
 		require.NoError(t, err)
 
-		_, _, err = bothTokenRequest(t, provider, form(), cert, bothDPoPProof(t, rogue, "wrong-key"))
+		refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
 
-		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The DPoP proof is missing or invalid. The DPoP proof key does not match the key the grant is bound to.")
+		_, granted, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+			consts.FormParameterRefreshToken: []string{refreshToken},
+		}, other, bothDPoPProof(t, proofKey, "rebind-cert"))
+		require.NoError(t, err)
+
+		assertBoundToBoth(t, granted, other)
+	})
+
+	t.Run("ShouldRebindARefreshWithAnotherProofKey", func(t *testing.T) {
+		response, _, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
+			consts.FormParameterAuthorizationCode: []string{bothAuthorizeForCode(t, provider)},
+			consts.FormParameterRedirectURI:       []string{bothRedirectURI},
+		}, cert, bothDPoPProof(t, proofKey, "rebind-initial"))
+		require.NoError(t, err)
+
+		rotated, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		refreshToken, _ := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+
+		response, granted, err := bothTokenRequest(t, provider, url.Values{
+			consts.FormParameterGrantType:    []string{consts.GrantTypeRefreshToken},
+			consts.FormParameterRefreshToken: []string{refreshToken},
+		}, cert, bothDPoPProof(t, rotated, "rebind-key"))
+		require.NoError(t, err)
+
+		assert.Equal(t, oauth2.DPoPAccessToken, response.GetTokenType())
+
+		assertBoundToBoth(t, granted, cert)
+
+		jkt, err := (&jose.JSONWebKey{Key: rotated.Public()}).Thumbprint(crypto.SHA256)
+		require.NoError(t, err)
+
+		assert.Equal(t, base64.RawURLEncoding.EncodeToString(jkt), granted.(oauth2.DPoPBoundSession).GetDPoPJWKThumbprint())
 	})
 
 	t.Run("ShouldAcceptARefreshSatisfyingBothAndStayBoundToBoth", func(t *testing.T) {

@@ -37,10 +37,8 @@ func TestClientRegistrationMetadataRoundTrip(t *testing.T) {
 	assert.Equal(t, "web", metadata.ApplicationType)
 	assert.Equal(t, "RS256", metadata.IDTokenSignedResponseAlg)
 
-	// Unregistered parameters survive.
 	require.Contains(t, metadata.Extra, "vendor_specific")
 
-	// Registered parameters must not be duplicated into Extra.
 	assert.NotContains(t, metadata.Extra, "redirect_uris")
 	assert.NotContains(t, metadata.Extra, "client_name")
 
@@ -53,7 +51,6 @@ func TestClientRegistrationMetadataRoundTrip(t *testing.T) {
 	assert.Equal(t, "Example", round["client_name"])
 	assert.Contains(t, round, "vendor_specific")
 
-	// Empty values are omitted.
 	assert.NotContains(t, round, "logo_uri")
 }
 

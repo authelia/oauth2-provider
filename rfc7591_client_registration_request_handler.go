@@ -86,8 +86,6 @@ func (f *Fosite) NewRFC7591ClientRegistrationRequest(ctx context.Context, r *htt
 	return request, nil
 }
 
-// hasJSONContentType returns true when r's Content-Type header names the "application/json" media type, ignoring
-// any parameters such as a charset.
 func hasJSONContentType(r *http.Request) (ok bool) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get(consts.HeaderContentType))
 	if err != nil {

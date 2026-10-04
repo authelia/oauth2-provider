@@ -119,10 +119,12 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	return err
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped for the client credentials grant.
 func (c *ClientCredentialsGrantHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'client_credentials'.
 func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials)
 }

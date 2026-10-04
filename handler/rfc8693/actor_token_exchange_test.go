@@ -90,8 +90,6 @@ func TestSpec_2_4_Errors_RefreshTokenSelfSubjectExchangeReturnsInvalidGrant(t *t
 	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Clients are not allowed to perform a token exchange on their own tokens.")
 }
 
-// A client's own exchange policy is not consulted for its own actor token, otherwise it would have to list itself
-// in its own allow-list to perform delegation.
 func TestSpec_2_1_ActorToken_SelfIssuedSkipsExchangePolicy(t *testing.T) {
 	cfg, store, strategy := newExchangeFixture(t)
 
@@ -109,7 +107,6 @@ func TestSpec_2_1_ActorToken_SelfIssuedSkipsExchangePolicy(t *testing.T) {
 	assert.Equal(t, client.GetID(), session.GetActorToken()[consts.ClaimClientIdentifier])
 }
 
-// An actor token issued to another client is still gated by that client's exchange policy.
 func TestSpec_2_1_ActorToken_ForeignTokenStillGatedByExchangePolicy(t *testing.T) {
 	cfg, store, strategy := newExchangeFixture(t)
 
@@ -135,7 +132,6 @@ func TestSpec_2_1_ActorToken_ForeignTokenStillGatedByExchangePolicy(t *testing.T
 	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 client is not permitted to exchange an actor token issued to client actor-token-client")
 }
 
-// So is a subject token issued to another client.
 func TestSpec_2_1_SubjectToken_ForeignTokenStillGatedByExchangePolicy(t *testing.T) {
 	cfg, store, strategy := newExchangeFixture(t)
 
@@ -159,8 +155,6 @@ func TestSpec_2_1_SubjectToken_ForeignTokenStillGatedByExchangePolicy(t *testing
 	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 client is not permitted to exchange a subject token issued to client subject-token-client")
 }
 
-// The actor token's granted scopes do not constrain the requested scopes. The actor token in the Appendix A.2
-// delegation example carries no scope at all, yet the issued token carries the subject token's scope in full.
 func TestSpec_2_1_ActorToken_GrantedScopesDoNotConstrainRequestedScopes(t *testing.T) {
 	cfg, store, strategy := newExchangeFixture(t)
 
@@ -314,7 +308,6 @@ func TestExchange_ValidatorOperationalErrorIsNotInvalidRequest(t *testing.T) {
 	}
 }
 
-// newExchangeFixture returns a spec config, an example store and the HMAC core strategy wired to that config.
 func newExchangeFixture(t *testing.T) (cfg *oauth2.Config, store *storage.MemoryStore, strategy hoauth2.CoreStrategy) {
 	t.Helper()
 
@@ -345,7 +338,6 @@ func newRefreshTokenTypeHandler(cfg *oauth2.Config, store *storage.MemoryStore, 
 	}
 }
 
-// newExchangeRequest builds a token-exchange AccessRequest whose form is the supplied parameters plus grant_type.
 func newExchangeRequest(t *testing.T, client oauth2.Client, session *DefaultSession, form url.Values) *oauth2.AccessRequest {
 	t.Helper()
 
@@ -362,7 +354,6 @@ func newExchangeRequest(t *testing.T, client oauth2.Client, session *DefaultSess
 	}
 }
 
-// createExchangeAccessToken issues and stores an access token for client, with the given subject and granted scopes.
 func createExchangeAccessToken(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, client oauth2.Client, subject string, scopes ...string) string {
 	t.Helper()
 
@@ -376,7 +367,6 @@ func createExchangeAccessToken(t *testing.T, strategy hoauth2.CoreStrategy, stor
 	return token
 }
 
-// createExchangeRefreshToken issues and stores a refresh token for client, with the given subject and granted scopes.
 func createExchangeRefreshToken(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, client oauth2.Client, subject string, scopes ...string) string {
 	t.Helper()
 

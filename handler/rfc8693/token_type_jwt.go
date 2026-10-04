@@ -41,6 +41,7 @@ type JWTValidationConfig struct {
 	Types []string `json:"types"`
 }
 
+// GetName returns the name of the token type.
 func (c *JWTType) GetName(ctx context.Context) string {
 	return c.Name
 }
@@ -54,6 +55,7 @@ func (c *JWTType) GetTypes() []string {
 	return c.Types
 }
 
+// GetType returns the RFC 8693 JWT token type identifier.
 func (c *JWTType) GetType(ctx context.Context) string {
 	return consts.TokenTypeRFC8693JWT
 }

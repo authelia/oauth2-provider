@@ -26,6 +26,7 @@ type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }
 
+// GetAccessTokenHash returns the 'at_hash' claim value for the access token in the response. See ComputeHash.
 func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (sum string) {
 	var err error
 
@@ -45,6 +46,8 @@ func (i *IDTokenHandleHelper) generateIDToken(ctx context.Context, lifespan time
 	return token, nil
 }
 
+// IssueImplicitIDToken generates an ID Token for the request and adds it to the authorize response as the 'id_token'
+// parameter.
 func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester, response oauth2.AuthorizeResponder) (err error) {
 	var token string
 
@@ -57,6 +60,7 @@ func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan
 	return nil
 }
 
+// IssueExplicitIDToken generates an ID Token for the request and adds it to the token response as the 'id_token' value.
 func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester, response oauth2.AccessResponder) (err error) {
 	var token string
 

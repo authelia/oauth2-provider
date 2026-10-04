@@ -17,7 +17,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,13 +181,6 @@ func TestOIDCKeyBindingPlainDPoPClientCanStillRefresh(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "refresh error: %+v", errBody)
 	require.NotEmpty(t, refreshed.AccessToken)
 }
-
-const (
-	oidckbClientID     = "oidckb-client"
-	oidckbClientSecret = "foobar"
-)
-
-var oidckbProofSeq atomic.Uint64
 
 type oidckbTokenResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -538,7 +530,6 @@ func newOIDCKeyBindingProvider(t *testing.T, oidcKeyBindingEnabled bool) (provid
 		compose.OAuth2RefreshTokenGrantFactory,
 		compose.RFC8628DeviceAuthorizeFactory,
 
-		// MUST precede RFC8628UserAuthorizeFactory: see compose.OpenIDConnectKeyBindingUserAuthorizeFactory's doc comment.
 		compose.OpenIDConnectKeyBindingUserAuthorizeFactory,
 		compose.RFC8628UserAuthorizeFactory,
 		compose.RFC8628DeviceAuthorizeTokenFactory,

@@ -20,8 +20,7 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
-// RFC 8628 Section 3.2 requires a unique end-user code per grant, so the approval found by user code must belong to
-// the device code being redeemed.
+// RFC 8628 Section 3.2: the end-user code is unique per grant.
 func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testing.T) {
 	for name, newStore := range userCodeBindingStores() {
 		t.Run(name, func(t *testing.T) {
@@ -68,7 +67,6 @@ func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testin
 				r.SetUserCodeSignature(uSig)
 				r.SetStatus(oauth2.DeviceAuthorizeStatusNew)
 
-				// CreateDeviceCodeSession rejects a shared user code, so seed the collision directly.
 				memory.DeviceCodes[sig] = r
 				memory.UserCodes[uSig] = r
 

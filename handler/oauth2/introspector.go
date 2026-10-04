@@ -23,6 +23,10 @@ type CoreValidator struct {
 	Config CoreValidatorConfigProvider
 }
 
+// IntrospectToken resolves and validates the token as an access token or a refresh token, trying the kind named by the
+// hint first and the other kind second, and returns the kind it was accepted as. Only the access token path is tried
+// when refresh token validation is disabled. When both paths fail a definite rejection is returned in preference to
+// oauth2.ErrUnknownRequest.
 func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	if len(token) == 0 {
 		return "", oauth2.ErrRequestUnauthorized.WithDebugf("The request either had a malformed Authorization header or didn't include a bearer token.")

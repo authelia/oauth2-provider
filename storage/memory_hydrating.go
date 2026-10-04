@@ -109,6 +109,8 @@ func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, ses
 	}
 }
 
+// CreateAccessTokenSession marshals the session of the request and stores the request against the access token
+// signature.
 func (s *HydratingMemoryStore) CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	if err = s.marshal("at:"+signature, request); err != nil {
 		return err
@@ -117,6 +119,8 @@ func (s *HydratingMemoryStore) CreateAccessTokenSession(ctx context.Context, sig
 	return s.MemoryStore.CreateAccessTokenSession(ctx, signature, request)
 }
 
+// GetAccessTokenSession returns the request stored against the access token signature, carrying the caller-supplied
+// session hydrated from the marshalled session.
 func (s *HydratingMemoryStore) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetAccessTokenSession(ctx, signature, session); err != nil {
 		return nil, err
@@ -125,6 +129,8 @@ func (s *HydratingMemoryStore) GetAccessTokenSession(ctx context.Context, signat
 	return s.hydrate("at:"+signature, request, session)
 }
 
+// CreateClientRegistrationTokenSession marshals the session of the request and stores the request against the client
+// registration token signature.
 func (s *HydratingMemoryStore) CreateClientRegistrationTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	if err = s.marshal("cr:"+signature, request); err != nil {
 		return err
@@ -133,6 +139,8 @@ func (s *HydratingMemoryStore) CreateClientRegistrationTokenSession(ctx context.
 	return s.MemoryStore.CreateClientRegistrationTokenSession(ctx, signature, request)
 }
 
+// GetClientRegistrationTokenSession returns the request stored against the client registration token signature,
+// carrying the caller-supplied session hydrated from the marshalled session.
 func (s *HydratingMemoryStore) GetClientRegistrationTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetClientRegistrationTokenSession(ctx, signature, session); err != nil {
 		return nil, err
@@ -141,6 +149,8 @@ func (s *HydratingMemoryStore) GetClientRegistrationTokenSession(ctx context.Con
 	return s.hydrate("cr:"+signature, request, session)
 }
 
+// CreateRefreshTokenSession marshals the session of the request and stores the request against the refresh token
+// signature.
 func (s *HydratingMemoryStore) CreateRefreshTokenSession(ctx context.Context, signature, accessSignature string, request oauth2.Requester) (err error) {
 	if err = s.marshal("rt:"+signature, request); err != nil {
 		return err
@@ -149,6 +159,8 @@ func (s *HydratingMemoryStore) CreateRefreshTokenSession(ctx context.Context, si
 	return s.MemoryStore.CreateRefreshTokenSession(ctx, signature, accessSignature, request)
 }
 
+// UpdateRefreshTokenSession replaces the request stored against the refresh token signature and, when the request has a
+// session, the marshalled session stored with it.
 func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	var data []byte
 
@@ -171,6 +183,9 @@ func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, si
 	return nil
 }
 
+// GetRefreshTokenSession returns the request stored against the refresh token signature, carrying the caller-supplied
+// session hydrated from the marshalled session. When the refresh token has been deactivated it returns the hydrated
+// request alongside oauth2.ErrInactiveToken.
 func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetRefreshTokenSession(ctx, signature, session); err != nil && !errors.Is(err, oauth2.ErrInactiveToken) {
 		return nil, err

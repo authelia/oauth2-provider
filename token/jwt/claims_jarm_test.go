@@ -15,28 +15,6 @@ import (
 	. "authelia.com/provider/oauth2/token/jwt"
 )
 
-var jarmClaims = &JARMClaims{
-	Issuer:         "authelia",
-	Audience:       []string{"tests"},
-	JTI:            "abcdef",
-	IssuedAt:       Now(),
-	ExpirationTime: NewNumericDate(time.Now().Add(time.Hour)),
-	Extra: map[string]any{
-		"foo": "bar",
-		"baz": "bar",
-	},
-}
-
-var jarmClaimsMap = map[string]any{
-	ClaimIssuer:         jwtClaims.Issuer,
-	ClaimAudience:       jwtClaims.Audience,
-	ClaimJWTID:          jwtClaims.JTI,
-	ClaimIssuedAt:       jwtClaims.IssuedAt.Unix(),
-	ClaimExpirationTime: jwtClaims.ExpiresAt.Unix(),
-	"foo":               jwtClaims.Extra["foo"],
-	"baz":               jwtClaims.Extra["baz"],
-}
-
 func TestJARMClaims_AddGetString(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -318,4 +296,26 @@ func TestJARMClaims_ToMapEdgeCases(t *testing.T) {
 		_, ok = out[ClaimExpirationTime]
 		assert.False(t, ok)
 	})
+}
+
+var jarmClaims = &JARMClaims{
+	Issuer:         "authelia",
+	Audience:       []string{"tests"},
+	JTI:            "abcdef",
+	IssuedAt:       Now(),
+	ExpirationTime: NewNumericDate(time.Now().Add(time.Hour)),
+	Extra: map[string]any{
+		"foo": "bar",
+		"baz": "bar",
+	},
+}
+
+var jarmClaimsMap = map[string]any{
+	ClaimIssuer:         jwtClaims.Issuer,
+	ClaimAudience:       jwtClaims.Audience,
+	ClaimJWTID:          jwtClaims.JTI,
+	ClaimIssuedAt:       jwtClaims.IssuedAt.Unix(),
+	ClaimExpirationTime: jwtClaims.ExpiresAt.Unix(),
+	"foo":               jwtClaims.Extra["foo"],
+	"baz":               jwtClaims.Extra["baz"],
 }

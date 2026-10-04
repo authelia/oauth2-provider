@@ -249,7 +249,6 @@ func TestDefaultSessionClone(t *testing.T) {
 				assert.Equal(t, s.Username, cloned.Username)
 				assert.Equal(t, expiry, cloned.GetExpiresAt(AccessToken))
 
-				// Mutate the original; the clone must be unaffected.
 				newExpiry := time.Now().Add(48 * time.Hour).Truncate(time.Second)
 				s.SetExpiresAt(AccessToken, newExpiry)
 				assert.Equal(t, expiry, cloned.GetExpiresAt(AccessToken))

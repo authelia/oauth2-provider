@@ -76,10 +76,6 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	return nil
 }
 
-var (
-	_ oauth2.RFC8628DeviceAuthorizeEndpointHandler = (*DeviceAuthorizeHandler)(nil)
-)
-
 func (d *DeviceAuthorizeHandler) createWithUniqueUserCode(ctx context.Context, deviceCodeSignature string, request oauth2.DeviceAuthorizeRequester) (code string, err error) {
 	var signature string
 
@@ -114,3 +110,7 @@ func (d *DeviceAuthorizeHandler) createWithUniqueUserCode(ctx context.Context, d
 }
 
 const userCodeGenerationAttempts = 3
+
+var (
+	_ oauth2.RFC8628DeviceAuthorizeEndpointHandler = (*DeviceAuthorizeHandler)(nil)
+)

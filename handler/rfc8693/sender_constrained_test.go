@@ -26,12 +26,6 @@ import (
 	"authelia.com/provider/oauth2/token/hmac"
 )
 
-const (
-	bindingJKT      = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
-	bindingJKTOther = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
-	bindingX5T      = "A4DtL2JmUMhAsvJj5tAtEqYFn7uHnaMbNKmoNcE7dnE"
-)
-
 func TestTokenExchangeInheritsTokenBinding(t *testing.T) {
 	testCases := []struct {
 		name     string

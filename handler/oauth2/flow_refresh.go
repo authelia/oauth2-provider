@@ -435,10 +435,12 @@ func handleRefreshTokenStorageError(ctx context.Context, store TokenRevocationSt
 	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebugError(storageErr))
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped for the refresh token grant.
 func (c *RefreshTokenGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'refresh_token'.
 func (c *RefreshTokenGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	// Value MUST be set to "refresh_token".

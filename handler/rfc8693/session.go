@@ -97,18 +97,22 @@ func (s *DefaultSession) GetExpiryDeadline() time.Time {
 	return s.ExpiryDeadline
 }
 
+// SetActorToken sets the claims of the 'actor_token'.
 func (s *DefaultSession) SetActorToken(token map[string]any) {
 	s.ActorToken = token
 }
 
+// GetActorToken returns the claims of the 'actor_token'.
 func (s *DefaultSession) GetActorToken() map[string]any {
 	return s.ActorToken
 }
 
+// SetSubjectToken sets the claims of the 'subject_token'.
 func (s *DefaultSession) SetSubjectToken(token map[string]any) {
 	s.SubjectToken = token
 }
 
+// GetSubjectToken returns the claims of the 'subject_token'.
 func (s *DefaultSession) GetSubjectToken() map[string]any {
 	return s.SubjectToken
 }
@@ -178,6 +182,8 @@ func (s *DefaultSession) GetJWTHeader() *jwt.Headers {
 	}
 }
 
+// AccessTokenClaimsMap returns the Extra claims together with the 'sub' and 'username' claims of the session. An Extra
+// claim of the same name takes precedence.
 func (s *DefaultSession) AccessTokenClaimsMap() map[string]any {
 	tokenObject := map[string]any{
 		consts.ClaimSubject:  s.GetSubject(),

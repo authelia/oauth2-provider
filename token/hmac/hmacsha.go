@@ -36,10 +36,8 @@ type HMACStrategy struct {
 }
 
 const (
-	// key should be at least 256 bit long, making it
 	minimumEntropy int = 32
 
-	// the secrets (client and global) should each have at least 16 characters making it harder to guess them
 	minimumSecretLength = 32
 )
 
@@ -88,6 +86,7 @@ func (c *HMACStrategy) Generate(ctx context.Context) (string, string, error) {
 	return encodedToken, encodedSignature, nil
 }
 
+// GenerateHMACForString returns the base64url encoded (no padding) HMAC of text, computed with the global secret.
 func (c *HMACStrategy) GenerateHMACForString(ctx context.Context, text string) (string, error) {
 	var signingKey [32]byte
 
@@ -181,6 +180,8 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 	return nil
 }
 
+// Signature returns the signature part of a token, or an empty string if the token does not consist of exactly two
+// parts separated by a period.
 func (c *HMACStrategy) Signature(token string) string {
 	split := strings.SplitN(token, ".", 3)
 

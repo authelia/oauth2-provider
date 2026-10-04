@@ -4,6 +4,22 @@
 
 package integration_test
 
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"sync/atomic"
+	"time"
+
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/hmac"
+	"authelia.com/provider/oauth2/token/jwt"
+)
+
 const (
 	testClientIDPublic       = "public-client"
 	testClientIDLifespan     = "custom-lifespan-client"
@@ -14,3 +30,148 @@ const (
 	testSubject              = "foo-sub"
 	testScopeOAuth2          = "oauth2"
 )
+
+const (
+	firstKeyID  = "123"
+	secondKeyID = "321"
+
+	firstJWTBearerIssuer  = "first@example.com"
+	secondJWTBearerIssuer = "second@example.com"
+
+	firstJWTBearerSubject  = "first-service-client"
+	secondJWTBearerSubject = "second-service-client"
+
+	tokenURL          = "https://www.authelia.com/api" //nolint:gosec
+	tokenRelativePath = "/token"
+)
+
+const (
+	idjagIdPClientID       = "wiki"
+	idjagRSClientID        = "wiki-at-chat"
+	idjagClientSecret      = "foobar"
+	idjagSubject           = "alice"
+	idjagScope             = "chat.read"
+	idjagResourcePath      = "/api"
+	idjagACR               = "urn:example:acr:mfa"
+	idjagAMR               = "otp"
+	idjagAuthAge           = 2 * time.Minute
+	idjagSecretHash        = "$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y" //nolint:gosec
+	idjagStoreMemory       = "MemoryStore"
+	idjagStoreHydrate      = "HydratingMemoryStore"
+	idjagOtherScope        = "chat.write"
+	idjagOtherTarget       = "https://other.example/api"
+	idjagProofMatch        = "matching"
+	idjagProofOther        = "other"
+	idjagEnvironmentTarget = "environment"
+	idjagInitiate          = "initiate"
+	idjagStatus            = "status"
+	idjagDetailsInitiate   = `[{"type":"payment_initiation","actions":["initiate"]}]`
+	idjagDetailsStatus     = `[{"type":"payment_initiation","actions":["status"]}]`
+)
+
+const (
+	oidckbClientID     = "oidckb-client"
+	oidckbClientSecret = "foobar"
+)
+
+var (
+	firstPrivateKey, _  = rsa.GenerateKey(rand.Reader, 2048)
+	secondPrivateKey, _ = rsa.GenerateKey(rand.Reader, 2048)
+)
+
+var store = &storage.MemoryStore{
+	Clients: map[string]oauth2.Client{
+		"my-client": &oauth2.DefaultClient{
+			ID:            "my-client",
+			ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),
+			RedirectURIs:  []string{"http://localhost:3846/callback"},
+			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+			GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
+			Audience:      []string{tokenURL},
+		},
+		testClientIDLifespan: &oauth2.DefaultClientWithCustomTokenLifespans{
+			DefaultClient: &oauth2.DefaultClient{
+				ID:                   testClientIDLifespan,
+				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),
+				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)},
+				RedirectURIs:         []string{"http://localhost:3846/callback"},
+				ResponseTypes:        []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowBoth, consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth},
+				GrantTypes:           []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode, consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeClientCredentials},
+				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+			},
+			TokenLifespans: &internal.TestLifespans,
+		},
+		testClientIDPublic: &oauth2.DefaultClient{
+			ID:            testClientIDPublic,
+			Public:        true,
+			RedirectURIs:  []string{"http://localhost:3846/callback"},
+			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},
+			GrantTypes:    []string{consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode},
+			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
+			Audience:      []string{tokenURL},
+		},
+	},
+	Users: map[string]storage.MemoryUserRelation{
+		"peter": {
+			Username: "peter",
+			Password: "secret",
+		},
+	},
+	IssuerPublicKeys: map[string]storage.IssuerPublicKeys{
+		firstJWTBearerIssuer: createIssuerPublicKey(
+			firstJWTBearerIssuer,
+			firstJWTBearerSubject,
+			firstKeyID,
+			firstPrivateKey.Public(),
+			[]string{"oauth2", "gitlab", "example.com", "docker"},
+		),
+		secondJWTBearerIssuer: createIssuerPublicKey(
+			secondJWTBearerIssuer,
+			secondJWTBearerSubject,
+			secondKeyID,
+			secondPrivateKey.Public(),
+			[]string{"oauth2"},
+		),
+	},
+	ClientAssertionJTIs:    map[storage.JTIMarker]time.Time{},
+	RFC7523JTIs:            map[storage.JTIMarker]time.Time{},
+	TokenExchangeJTIs:      map[storage.JTIMarker]time.Time{},
+	AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
+	PKCES:                  map[string]oauth2.Requester{},
+	AccessTokens:           map[string]oauth2.Requester{},
+	RefreshTokens:          map[string]storage.StoreRefreshToken{},
+	IDSessions:             map[string]oauth2.Requester{},
+	AccessTokenRequestIDs:  map[string]map[string]struct{}{},
+	RefreshTokenRequestIDs: map[string]string{},
+	PARSessions:            map[string]oauth2.AuthorizeRequester{},
+}
+
+var accessTokenLifespan = time.Hour
+
+var authCodeLifespan = time.Minute
+
+var hmacStrategy = &hoauth2.HMACCoreStrategy{
+	Enigma: &hmac.HMACStrategy{
+		Config: &oauth2.Config{
+			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows"),
+		},
+	},
+	Config: &oauth2.Config{
+		AccessTokenLifespan:   accessTokenLifespan,
+		AuthorizeCodeLifespan: authCodeLifespan,
+	},
+}
+
+var defaultRSAKey = gen.MustRSAKey()
+
+var jwtStrategy = &hoauth2.JWTProfileCoreStrategy{
+	Strategy: &jwt.DefaultStrategy{
+		Config: &oauth2.Config{},
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(defaultRSAKey),
+	},
+	Config:           &oauth2.Config{},
+	HMACCoreStrategy: hmacStrategy,
+}
+
+var oidckbProofSeq atomic.Uint64

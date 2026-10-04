@@ -154,7 +154,6 @@ func TestWriteRFC862DeviceAuthorizeResponseMarshalError(t *testing.T) {
 				return &DeviceAuthorizeResponse{
 					Header: http.Header{},
 					Extra: map[string]any{
-						// channels cannot be marshaled to JSON
 						"bad": make(chan int),
 					},
 				}
@@ -205,9 +204,6 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 			},
 		},
 		{
-			// ToMap unconditionally writes every standard claim into the Extra map. Because
-			// map[string]any does not honor JSON's omitempty struct tag, zero-valued optional
-			// fields (interval, verification_uri_complete) are also emitted.
 			name: "ShouldEmitAllStandardClaimsIncludingZeroValuedOptionals",
 			setup: func() *DeviceAuthorizeResponse {
 				resp := &DeviceAuthorizeResponse{Header: http.Header{}, Extra: map[string]any{}}
@@ -268,7 +264,6 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				assert.Equal(t, want, actual[key], "key=%s", key)
 			}
 
-			// Assert no extra/forbidden keys are emitted.
 			for key := range actual {
 				if _, ok := tc.expected[key]; !ok {
 					assert.Failf(t, "unexpected key present", "key=%s value=%v", key, actual[key])

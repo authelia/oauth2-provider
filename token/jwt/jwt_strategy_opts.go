@@ -33,6 +33,8 @@ type (
 	StrategyOpt func(opts *StrategyOpts) (err error)
 )
 
+// WithAllowUnverified permits decoding a token without verifying its signature when no client is supplied. The decoded
+// token is not marked as having a valid signature.
 func WithAllowUnverified() StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.allowUnverified = true
@@ -41,6 +43,7 @@ func WithAllowUnverified() StrategyOpt {
 	}
 }
 
+// WithHeaders sets the JWS headers used when encoding a token.
 func WithHeaders(headers Mapper) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.headers = headers
@@ -49,6 +52,7 @@ func WithHeaders(headers Mapper) StrategyOpt {
 	}
 }
 
+// WithHeadersJWE sets the JWE headers used when encoding a token which is encrypted.
 func WithHeadersJWE(headers Mapper) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.headersJWE = headers
@@ -57,6 +61,7 @@ func WithHeadersJWE(headers Mapper) StrategyOpt {
 	}
 }
 
+// WithClient sets the client whose signing and encryption configuration is used.
 func WithClient(client Client) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.client = client
@@ -65,6 +70,8 @@ func WithClient(client Client) StrategyOpt {
 	}
 }
 
+// WithIDTokenClient sets the client using its ID Token signing and encryption configuration. It has no effect when the
+// client is not an IDTokenClient.
 func WithIDTokenClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(IDTokenClient); ok {
@@ -75,6 +82,8 @@ func WithIDTokenClient(client any) StrategyOpt {
 	}
 }
 
+// WithUserInfoClient sets the client using its UserInfo signing and encryption configuration. It has no effect when the
+// client is not a UserInfoClient.
 func WithUserInfoClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(UserInfoClient); ok {
@@ -85,6 +94,8 @@ func WithUserInfoClient(client any) StrategyOpt {
 	}
 }
 
+// WithIntrospectionClient sets the client using its Introspection signing and encryption configuration. It has no
+// effect when the client is not an IntrospectionClient.
 func WithIntrospectionClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(IntrospectionClient); ok {
@@ -95,6 +106,8 @@ func WithIntrospectionClient(client any) StrategyOpt {
 	}
 }
 
+// WithJARMClient sets the client using its JARM signing and encryption configuration. It has no effect when the client
+// is not a JARMClient.
 func WithJARMClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(JARMClient); ok {
@@ -105,6 +118,8 @@ func WithJARMClient(client any) StrategyOpt {
 	}
 }
 
+// WithJARClient sets the client using its JAR signing and encryption configuration. It has no effect when the client is
+// not a JARClient.
 func WithJARClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(JARClient); ok {
@@ -115,6 +130,8 @@ func WithJARClient(client any) StrategyOpt {
 	}
 }
 
+// WithJWTProfileAccessTokenClient sets the client using its JWT Profile Access Token signing and encryption
+// configuration. It has no effect when the client is not a JWTProfileAccessTokenClient.
 func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(JWTProfileAccessTokenClient); ok {
@@ -125,6 +142,9 @@ func WithJWTProfileAccessTokenClient(client any) StrategyOpt {
 	}
 }
 
+// WithStatelessJWTProfileIntrospectionClient sets the client using its Introspection signing and encryption
+// configuration when it is an IntrospectionClient, otherwise its JWT Profile Access Token configuration when it is a
+// JWTProfileAccessTokenClient. It has no effect when the client is neither.
 func WithStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(IntrospectionClient); ok {
@@ -137,6 +157,7 @@ func WithStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 	}
 }
 
+// WithSigAlgorithm sets the signature algorithms accepted when decoding a signed token.
 func WithSigAlgorithm(algs ...jose.SignatureAlgorithm) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.sigAlgorithm = algs
@@ -145,6 +166,7 @@ func WithSigAlgorithm(algs ...jose.SignatureAlgorithm) StrategyOpt {
 	}
 }
 
+// WithKeyAlgorithm sets the key management algorithms accepted when decoding an encrypted token.
 func WithKeyAlgorithm(algs ...jose.KeyAlgorithm) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.keyAlgorithm = algs
@@ -153,6 +175,7 @@ func WithKeyAlgorithm(algs ...jose.KeyAlgorithm) StrategyOpt {
 	}
 }
 
+// WithContentEncryption sets the content encryption algorithms accepted when decoding an encrypted token.
 func WithContentEncryption(enc ...jose.ContentEncryption) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.contentEncryption = enc
@@ -161,6 +184,7 @@ func WithContentEncryption(enc ...jose.ContentEncryption) StrategyOpt {
 	}
 }
 
+// WithKeyFunc sets the function which returns the key used to verify the signature when decoding a token.
 func WithKeyFunc(f KeyFuncJWS) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.jwsKeyFunc = f
@@ -169,6 +193,7 @@ func WithKeyFunc(f KeyFuncJWS) StrategyOpt {
 	}
 }
 
+// WithKeyFuncJWE sets the function which returns the key used to decrypt an encrypted token.
 func WithKeyFuncJWE(f KeyFuncJWE) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.jweKeyFunc = f

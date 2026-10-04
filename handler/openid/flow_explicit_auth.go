@@ -24,6 +24,9 @@ type OpenIDConnectExplicitHandler struct {
 	*IDTokenHandleHelper
 }
 
+// HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'code' and which was
+// granted the 'openid' scope. It validates the 'redirect_uri' and 'prompt' parameters and persists the OpenID Connect
+// 1.0 session under the authorization code, which must already have been issued.
 func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
@@ -48,11 +51,6 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
-var (
-	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
-)
-
 var oidcParameters = []string{
 	consts.FormParameterGrantType,
 	consts.FormParameterMaximumAge,
@@ -61,3 +59,8 @@ var oidcParameters = []string{
 	consts.FormParameterIDTokenHint,
 	consts.FormParameterNonce,
 }
+
+var (
+	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
+	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
+)

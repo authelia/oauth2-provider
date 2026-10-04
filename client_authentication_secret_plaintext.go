@@ -21,14 +21,18 @@ type PlainTextClientSecret struct {
 	value []byte
 }
 
+// IsPlainText returns true as the secret is held as plaintext.
 func (s *PlainTextClientSecret) IsPlainText() (is bool) {
 	return true
 }
 
+// GetPlainTextValue returns the plaintext secret.
 func (s *PlainTextClientSecret) GetPlainTextValue() (secret []byte, err error) {
 	return s.value, nil
 }
 
+// Compare returns nil if the given secret matches the plaintext secret using a constant time comparison, otherwise it
+// returns an error.
 func (s *PlainTextClientSecret) Compare(ctx context.Context, secret []byte) (err error) {
 	if subtle.ConstantTimeCompare(s.value, secret) == 0 {
 		return errorsx.WithStack(fmt.Errorf("secrets don't match"))
@@ -37,6 +41,7 @@ func (s *PlainTextClientSecret) Compare(ctx context.Context, secret []byte) (err
 	return nil
 }
 
+// Valid returns true if the secret is not nil and has a value.
 func (s *PlainTextClientSecret) Valid() (valid bool) {
 	return s != nil && len(s.value) != 0
 }

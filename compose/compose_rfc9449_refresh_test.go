@@ -431,10 +431,3 @@ func authorizeForCode(t *testing.T, provider oauth2.Provider, jkt string) string
 
 	return code
 }
-
-const (
-	rtTokenEndpoint = "https://as.example.com/token"
-	rtClientID      = "refresh-client"
-	rtSecret        = "refresh-client-secret"
-	rtRedirectURI   = "https://rp.example.com/cb"
-)

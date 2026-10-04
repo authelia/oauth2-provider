@@ -78,8 +78,6 @@ func (s *DefaultClientRegistrationMetadataStrategy) FilterClientRegistrationMeta
 	return nil
 }
 
-// clearMutualTLSAuthMethod returns an empty string when method names one of the two RFC 8705 mutual-TLS client
-// authentication methods, and method unchanged otherwise.
 func clearMutualTLSAuthMethod(method string) string {
 	switch method {
 	case consts.ClientAuthMethodTLSClientAuth, consts.ClientAuthMethodSelfSignedTLSClientAuth:

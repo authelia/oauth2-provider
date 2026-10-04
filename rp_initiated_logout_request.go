@@ -67,48 +67,58 @@ type RPInitiatedLogoutRequest struct {
 	Form                  url.Values
 }
 
+// GetIDTokenHint returns the raw 'id_token_hint' parameter.
 func (r *RPInitiatedLogoutRequest) GetIDTokenHint() (hint string) {
 	return r.IDTokenHint
 }
 
+// GetIDTokenHintClaims returns the claims of the 'id_token_hint'.
 func (r *RPInitiatedLogoutRequest) GetIDTokenHintClaims() (claims jwt.MapClaims) {
 	return r.IDTokenHintClaims
 }
 
+// GetSubject returns the 'sub' claim of the 'id_token_hint', or an empty string when the hint is absent or the claim is
+// not a string.
 func (r *RPInitiatedLogoutRequest) GetSubject() (subject string) {
 	return r.claimString(consts.ClaimSubject)
 }
 
+// GetSessionID returns the 'sid' claim of the 'id_token_hint', or an empty string when the hint is absent or the claim
+// is not a string.
 func (r *RPInitiatedLogoutRequest) GetSessionID() (sid string) {
 	return r.claimString(consts.ClaimSessionID)
 }
 
+// GetLogoutHint returns the raw 'logout_hint' parameter.
 func (r *RPInitiatedLogoutRequest) GetLogoutHint() (hint string) {
 	return r.LogoutHint
 }
 
+// GetClient returns the client of the request.
 func (r *RPInitiatedLogoutRequest) GetClient() (client Client) {
 	return r.Client
 }
 
+// GetPostLogoutRedirectURI returns the 'post_logout_redirect_uri' of the request.
 func (r *RPInitiatedLogoutRequest) GetPostLogoutRedirectURI() (uri *url.URL) {
 	return r.PostLogoutRedirectURI
 }
 
+// GetState returns the raw 'state' parameter, to be echoed back on the redirect.
 func (r *RPInitiatedLogoutRequest) GetState() (state string) {
 	return r.State
 }
 
+// GetUILocales returns the space-delimited 'ui_locales' parameter.
 func (r *RPInitiatedLogoutRequest) GetUILocales() (locales Arguments) {
 	return r.UILocales
 }
 
+// GetRequestForm returns the raw request parameters.
 func (r *RPInitiatedLogoutRequest) GetRequestForm() (form url.Values) {
 	return r.Form
 }
 
-// claimString reads a string claim from the validated hint claims, returning empty when the hint is absent or the
-// claim is missing or not a string.
 func (r *RPInitiatedLogoutRequest) claimString(claim string) (value string) {
 	if r.IDTokenHintClaims == nil {
 		return ""

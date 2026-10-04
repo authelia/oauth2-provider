@@ -10,11 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	testRARActionRead  = "read"
-	testRARActionWrite = "write"
-)
-
 func TestAccessRequest(t *testing.T) {
 	ar := NewAccessRequest(nil)
 	ar.GrantTypes = Arguments{"foobar"}
@@ -69,3 +64,8 @@ func TestSanitizeRestoreRefreshTokenOriginalRequesterRestoresAuthorizationDetail
 	assert.Equal(t, original.GetRequestedAuthorizationDetails(), restored.GetRequestedAuthorizationDetails())
 	assert.Equal(t, original.GetGrantedAuthorizationDetails(), restored.GetGrantedAuthorizationDetails())
 }
+
+const (
+	testRARActionRead  = "read"
+	testRARActionWrite = "write"
+)

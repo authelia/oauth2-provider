@@ -37,8 +37,6 @@ func TestNewClientManagementToken(t *testing.T) {
 	assert.True(t, requester.GetGrantedAudience().Has("https://api.example.com"))
 	assert.Equal(t, oauth2.Arguments{"openid"}, requester.GetGrantedScopes())
 
-	// The subject is deliberately left unset: the client id lives on the requester's client, not a session field, so
-	// an introspected management token no longer surfaces a 'sub' claim.
 	assert.Empty(t, requester.GetSession().GetSubject())
 
 	exp := requester.GetSession().GetExpiresAt(oauth2.AccessToken)
@@ -116,9 +114,6 @@ func TestNewClientManagementTokenNeverExpiresUnderJWTProfile(t *testing.T) {
 	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "forever-jwt"}, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
-	// Client registration tokens are always opaque, even when EnforceJWTProfileAccessTokens is set: that is what
-	// distinguishes them from the ordinary access tokens JWTProfileCoreStrategy otherwise issues as JWTs, so there is
-	// no JWT to decode here.
 	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
 
 	time.Sleep(time.Millisecond)
@@ -159,8 +154,6 @@ func TestNewClientManagementTokenUnderJWTProfile(t *testing.T) {
 	tokenString, err := NewClientManagementToken(ctx, strategy, store, config, managed, oauth2.Arguments{"openid"}, nil)
 	require.NoError(t, err)
 
-	// Unlike the ordinary access tokens JWTProfileCoreStrategy otherwise issues as JWTs, a client registration token
-	// is always opaque.
 	assert.True(t, strategy.IsOpaqueClientRegistrationToken(ctx, tokenString))
 	assert.True(t, strings.HasPrefix(tokenString, "authelia_cr_"))
 
@@ -215,7 +208,6 @@ func TestManagementTokenIgnoresClientLifespanOverride(t *testing.T) {
 	requester, err := store.GetClientRegistrationTokenSession(ctx, strategy.ClientRegistrationTokenSignature(ctx, token), &oauth2.DefaultSession{})
 	require.NoError(t, err)
 
-	// NonExpiringTokenLifespan, not the client's one second.
 	assert.WithinDuration(t, time.Now().UTC().Add(NonExpiringTokenLifespan), requester.GetSession().GetExpiresAt(oauth2.AccessToken), time.Minute)
 }
 

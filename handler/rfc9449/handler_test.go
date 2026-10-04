@@ -375,9 +375,7 @@ func TestAuthorizeHandler_RecordsTheRequestedThumbprint(t *testing.T) {
 	assert.Equal(t, jkt, session.GetRequestedDPoPJWKThumbprint())
 }
 
-// RFC 9449 Section 10 requires the token endpoint to reject a redemption whose proof key does not match the
-// 'dpop_jkt' the authentication request carried. A hybrid flow issuing an access token directly records only the
-// requested thumbprint, so enforcement must reach that and not only the grant binding.
+// RFC 9449 Section 10: the proof key must match the 'dpop_jkt' the authentication request carried.
 func TestHandlerEnforcesTheRequestedThumbprint(t *testing.T) {
 	const endpoint = "https://as.example.com/token"
 
@@ -464,7 +462,6 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 		h, _, _ := newTestHandler(false)
 		key := newTestProofKey(t)
 
-		// 'htm' does not match the request method, so RFC 9449 Section 5 rejects it.
 		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 			jwt.ClaimJWTID: "pub-2", jwt.ClaimHTTPMethod: http.MethodGet,
 			jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),

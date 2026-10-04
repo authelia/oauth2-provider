@@ -42,11 +42,6 @@ func (f *Fosite) WriteRFC7591ClientRegistrationError(ctx context.Context, rw htt
 	f.writeClientRegistrationError(ctx, rw, requester, err, false)
 }
 
-// writeClientRegistrationResponse writes a successful ClientRegistrationResponder, shared by the RFC 7591 client
-// registration endpoint and the RFC 7592 client configuration endpoint since both return the same wire format (see
-// ClientConfigurationResponder's doc comment). It marshals responder.ToMap() to JSON, sets the standard headers, and
-// copies any additional headers set on the responder. A 204 status - written by the RFC 7592 client configuration
-// endpoint's DELETE case - writes no body at all, not '{}'.
 func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, responder ClientRegistrationResponder) {
 	headers := responder.GetHeader()
 	for header := range headers {

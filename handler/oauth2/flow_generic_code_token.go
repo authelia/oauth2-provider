@@ -286,10 +286,12 @@ func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Conte
 	return true
 }
 
+// CanSkipClientAuth returns the result of the wrapped CodeTokenEndpointHandler.
 func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return c.CodeTokenEndpointHandler.CanSkipClientAuth(ctx, request)
 }
 
+// CanHandleTokenEndpointRequest returns the result of the wrapped CodeTokenEndpointHandler.
 func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return c.CodeTokenEndpointHandler.CanHandleTokenEndpointRequest(ctx, request)
 }

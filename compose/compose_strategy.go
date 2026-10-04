@@ -130,6 +130,8 @@ func NewOAuth2HMACStrategy(config HMACSHAStrategyConfigurator) *hoauth2.HMACCore
 	return hoauth2.NewHMACCoreStrategy(config, "")
 }
 
+// NewOAuth2JWTStrategy returns a hoauth2.JWTProfileCoreStrategy which issues JWT Profile access tokens using the given
+// jwt.Strategy and delegates every other token kind to the given HMAC strategy.
 func NewOAuth2JWTStrategy(strategy jwt.Strategy, strategyHMAC *hoauth2.HMACCoreStrategy, config oauth2.Configurator) *hoauth2.JWTProfileCoreStrategy {
 	return &hoauth2.JWTProfileCoreStrategy{
 		Strategy:         strategy,
@@ -138,6 +140,8 @@ func NewOAuth2JWTStrategy(strategy jwt.Strategy, strategyHMAC *hoauth2.HMACCoreS
 	}
 }
 
+// NewOpenIDConnectStrategy returns an openid.DefaultStrategy which issues ID Tokens using the given jwt.Strategy. The
+// 'keyGetter' argument is not used.
 func NewOpenIDConnectStrategy(keyGetter func(context.Context) (any, error), strategy jwt.Strategy, config oauth2.Configurator) *openid.DefaultStrategy {
 	return &openid.DefaultStrategy{
 		Strategy: strategy,

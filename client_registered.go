@@ -163,42 +163,52 @@ type DefaultRegisteredClient struct {
 	Extra map[string]any `json:"-"`
 }
 
+// GetJSONWebKeysURI returns the 'jwks_uri' client metadata value.
 func (c *DefaultRegisteredClient) GetJSONWebKeysURI() string {
 	return c.JSONWebKeysURI
 }
 
+// GetJSONWebKeys returns the 'jwks' client metadata value.
 func (c *DefaultRegisteredClient) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
+// GetRequireSignedRequestObject returns the 'require_signed_request_object' client metadata value.
 func (c *DefaultRegisteredClient) GetRequireSignedRequestObject() bool {
 	return c.RequireSignedRequestObject
 }
 
+// GetRequestObjectSigningKeyID returns the 'request_object_signing_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestObjectSigningKeyID() string {
 	return c.RequestObjectSigningKeyID
 }
 
+// GetRequestObjectSigningAlg returns the 'request_object_signing_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
 }
 
+// GetRequestObjectEncryptionKeyID returns the 'request_object_encryption_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestObjectEncryptionKeyID() string {
 	return c.RequestObjectEncryptionKeyID
 }
 
+// GetRequestObjectEncryptionAlg returns the 'request_object_encryption_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestObjectEncryptionAlg() string {
 	return c.RequestObjectEncryptionAlg
 }
 
+// GetRequestObjectEncryptionEnc returns the 'request_object_encryption_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestObjectEncryptionEnc() string {
 	return c.RequestObjectEncryptionEnc
 }
 
+// GetRequestURIs returns the 'request_uris' client metadata value.
 func (c *DefaultRegisteredClient) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
+// GetIDTokenSignedResponseKeyID returns the 'id_token_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetIDTokenSignedResponseKeyID() string {
 	return c.IDTokenSignedResponseKeyID
 }
@@ -213,54 +223,67 @@ func (c *DefaultRegisteredClient) GetIDTokenSignedResponseAlg() string {
 	return c.IDTokenSignedResponseAlg
 }
 
+// GetIDTokenEncryptedResponseKeyID returns the 'id_token_encrypted_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetIDTokenEncryptedResponseKeyID() string {
 	return c.IDTokenEncryptedResponseKeyID
 }
 
+// GetIDTokenEncryptedResponseAlg returns the 'id_token_encrypted_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetIDTokenEncryptedResponseAlg() string {
 	return c.IDTokenEncryptedResponseAlg
 }
 
+// GetIDTokenEncryptedResponseEnc returns the 'id_token_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetIDTokenEncryptedResponseEnc() string {
 	return c.IDTokenEncryptedResponseEnc
 }
 
+// GetUserinfoSignedResponseKeyID returns the 'userinfo_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetUserinfoSignedResponseKeyID() string {
 	return c.UserinfoSignedResponseKeyID
 }
 
+// GetUserinfoSignedResponseAlg returns the 'userinfo_signed_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetUserinfoSignedResponseAlg() string {
 	return c.UserinfoSignedResponseAlg
 }
 
+// GetUserinfoEncryptedResponseKeyID returns the 'userinfo_encrypted_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetUserinfoEncryptedResponseKeyID() string {
 	return c.UserinfoEncryptedResponseKeyID
 }
 
+// GetUserinfoEncryptedResponseAlg returns the 'userinfo_encrypted_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetUserinfoEncryptedResponseAlg() string {
 	return c.UserinfoEncryptedResponseAlg
 }
 
+// GetUserinfoEncryptedResponseEnc returns the 'userinfo_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetUserinfoEncryptedResponseEnc() string {
 	return c.UserinfoEncryptedResponseEnc
 }
 
+// GetAuthorizationSignedResponseKeyID returns the 'authorization_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetAuthorizationSignedResponseKeyID() string {
 	return c.AuthorizationSignedResponseKeyID
 }
 
+// GetAuthorizationSignedResponseAlg returns the 'authorization_signed_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetAuthorizationSignedResponseAlg() string {
 	return c.AuthorizationSignedResponseAlg
 }
 
+// GetAuthorizationEncryptedResponseKeyID returns the 'authorization_encrypted_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetAuthorizationEncryptedResponseKeyID() string {
 	return c.AuthorizationEncryptedResponseKeyID
 }
 
+// GetAuthorizationEncryptedResponseAlg returns the 'authorization_encrypted_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetAuthorizationEncryptedResponseAlg() string {
 	return c.AuthorizationEncryptedResponseAlg
 }
 
+// GetAuthorizationEncryptedResponseEnc returns the 'authorization_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetAuthorizationEncryptedResponseEnc() string {
 	return c.AuthorizationEncryptedResponseEnc
 }
@@ -275,6 +298,7 @@ func (c *DefaultRegisteredClient) GetTokenEndpointAuthMethod() string {
 	return c.TokenEndpointAuthMethod
 }
 
+// GetTokenEndpointAuthSigningAlg returns the 'token_endpoint_auth_signing_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetTokenEndpointAuthSigningAlg() string {
 	return c.TokenEndpointAuthSigningAlg
 }
@@ -292,6 +316,7 @@ func (c *DefaultRegisteredClient) GetIntrospectionEndpointAuthMethod() string {
 	return c.IntrospectionEndpointAuthMethod
 }
 
+// GetIntrospectionEndpointAuthSigningAlg returns the 'introspection_endpoint_auth_signing_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionEndpointAuthSigningAlg() string {
 	return c.IntrospectionEndpointAuthSigningAlg
 }
@@ -306,150 +331,161 @@ func (c *DefaultRegisteredClient) GetRevocationEndpointAuthMethod() string {
 	return c.RevocationEndpointAuthMethod
 }
 
+// GetRevocationEndpointAuthSigningAlg returns the 'revocation_endpoint_auth_signing_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetRevocationEndpointAuthSigningAlg() string {
 	return c.RevocationEndpointAuthSigningAlg
 }
 
+// GetResponseModes returns the response modes the client is allowed to use.
 func (c *DefaultRegisteredClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
 
+// GetAccessTokenSignedResponseKeyID returns the 'access_token_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetAccessTokenSignedResponseKeyID() string {
 	return c.AccessTokenSignedResponseKeyID
 }
 
+// GetAccessTokenSignedResponseAlg returns the 'access_token_signed_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetAccessTokenSignedResponseAlg() string {
 	return c.AccessTokenSignedResponseAlg
 }
 
+// GetAccessTokenEncryptedResponseKeyID returns the 'access_token_encrypted_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetAccessTokenEncryptedResponseKeyID() string {
 	return c.AccessTokenEncryptedResponseKeyID
 }
 
+// GetAccessTokenEncryptedResponseAlg returns the 'access_token_encrypted_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetAccessTokenEncryptedResponseAlg() string {
 	return c.AccessTokenEncryptedResponseAlg
 }
 
+// GetAccessTokenEncryptedResponseEnc returns the 'access_token_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetAccessTokenEncryptedResponseEnc() string {
 	return c.AccessTokenEncryptedResponseEnc
 }
 
+// GetEnableJWTProfileOAuthAccessTokens returns true if JWT Profile Access Tokens should be issued to this client.
 func (c *DefaultRegisteredClient) GetEnableJWTProfileOAuthAccessTokens() bool {
 	return c.EnableJWTProfileOAuthAccessTokens
 }
 
+// GetIntrospectionSignedResponseKeyID returns the 'introspection_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionSignedResponseKeyID() string {
 	return c.IntrospectionSignedResponseKeyID
 }
 
+// GetIntrospectionSignedResponseAlg returns the 'introspection_signed_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionSignedResponseAlg() string {
 	return c.IntrospectionSignedResponseAlg
 }
 
+// GetIntrospectionEncryptedResponseKeyID returns the 'introspection_encrypted_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionEncryptedResponseKeyID() string {
 	return c.IntrospectionEncryptedResponseKeyID
 }
 
+// GetIntrospectionEncryptedResponseAlg returns the 'introspection_encrypted_response_alg' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionEncryptedResponseAlg() string {
 	return c.IntrospectionEncryptedResponseAlg
 }
 
+// GetIntrospectionEncryptedResponseEnc returns the 'introspection_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionEncryptedResponseEnc() string {
 	return c.IntrospectionEncryptedResponseEnc
 }
 
+// GetEnforcePKCE returns the client policy value which determines if PKCE is enforced for this client.
 func (c *DefaultRegisteredClient) GetEnforcePKCE() bool {
 	return c.EnforcePKCE
 }
 
+// GetEnforcePKCEChallengeMethod returns the client policy value which determines if the PKCE challenge method is
+// enforced for this client.
 func (c *DefaultRegisteredClient) GetEnforcePKCEChallengeMethod() bool {
 	return c.EnforcePKCEChallengeMethod
 }
 
+// GetPKCEChallengeMethod returns the PKCE challenge method of the client policy.
 func (c *DefaultRegisteredClient) GetPKCEChallengeMethod() string {
 	return c.PKCEChallengeMethod
 }
 
+// GetRequirePushedAuthorizationRequests returns the 'require_pushed_authorization_requests' client metadata value.
 func (c *DefaultRegisteredClient) GetRequirePushedAuthorizationRequests() bool {
 	return c.RequirePushedAuthorizationRequests
 }
 
+// GetPushedAuthorizeContextLifespan returns the custom Pushed Authorization Request context lifespan for this client,
+// or 0 to utilize the global lifespan.
 func (c *DefaultRegisteredClient) GetPushedAuthorizeContextLifespan() time.Duration {
 	return c.PushedAuthorizeContextLifespan
 }
 
+// GetRequireRedirectURIPushedAuthorizationRequests returns true if this client must include the 'redirect_uri'
+// parameter in a Pushed Authorization Request.
 func (c *DefaultRegisteredClient) GetRequireRedirectURIPushedAuthorizationRequests() bool {
 	return c.RequireRedirectURIPushedAuthorizationRequests
 }
 
+// GetRequireRequestObjectAudienceAndLifetime returns true if this client's Request Objects must contain the 'aud',
+// 'nbf' and 'exp' claims.
 func (c *DefaultRegisteredClient) GetRequireRequestObjectAudienceAndLifetime() bool {
 	return c.RequireRequestObjectAudienceAndLifetime
 }
 
+// GetRequestObjectMaximumLifetime returns the custom bound for this client's Request Object 'nbf' and 'exp' claims, or
+// 0 to utilize the global lifetime.
 func (c *DefaultRegisteredClient) GetRequestObjectMaximumLifetime() time.Duration {
 	return c.RequestObjectMaximumLifetime
 }
 
+// GetDisableRefreshTokenRotation returns true if the refresh token grant should keep this client's refresh token rather
+// than issue a new one.
 func (c *DefaultRegisteredClient) GetDisableRefreshTokenRotation() bool {
 	return c.DisableRefreshTokenRotation
 }
 
+// GetPostLogoutRedirectURIs returns the 'post_logout_redirect_uris' client metadata value.
 func (c *DefaultRegisteredClient) GetPostLogoutRedirectURIs() (uris []string) {
 	return c.PostLogoutRedirectURIs
 }
 
+// GetBackChannelLogoutURI returns the 'backchannel_logout_uri' client metadata value.
 func (c *DefaultRegisteredClient) GetBackChannelLogoutURI() (uri string) {
 	return c.BackChannelLogoutURI
 }
 
+// GetBackChannelLogoutSessionRequired returns the 'backchannel_logout_session_required' client metadata value.
 func (c *DefaultRegisteredClient) GetBackChannelLogoutSessionRequired() (required bool) {
 	return c.BackChannelLogoutSessionRequired
 }
 
+// GetTLSClientAuthSubjectDN returns the 'tls_client_auth_subject_dn' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSubjectDN() (dn string) {
 	return c.TLSClientAuthSubjectDN
 }
 
+// GetTLSClientAuthSANDNS returns the 'tls_client_auth_san_dns' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSANDNS() (dns string) {
 	return c.TLSClientAuthSANDNS
 }
 
+// GetTLSClientAuthSANURI returns the 'tls_client_auth_san_uri' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSANURI() (uri string) {
 	return c.TLSClientAuthSANURI
 }
 
+// GetTLSClientAuthSANIP returns the 'tls_client_auth_san_ip' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSANIP() (ip string) {
 	return c.TLSClientAuthSANIP
 }
 
+// GetTLSClientAuthSANEmail returns the 'tls_client_auth_san_email' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSANEmail() (email string) {
 	return c.TLSClientAuthSANEmail
 }
-
-var (
-	_ Client                                      = (*DefaultRegisteredClient)(nil)
-	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
-	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
-	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
-	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)
-	_ UserInfoClient                              = (*DefaultRegisteredClient)(nil)
-	_ JARMClient                                  = (*DefaultRegisteredClient)(nil)
-	_ AuthenticationMethodClient                  = (*DefaultRegisteredClient)(nil)
-	_ ResponseModeClient                          = (*DefaultRegisteredClient)(nil)
-	_ DPoPClient                                  = (*DefaultRegisteredClient)(nil)
-	_ JWTProfileClient                            = (*DefaultRegisteredClient)(nil)
-	_ IntrospectionJWTResponseClient              = (*DefaultRegisteredClient)(nil)
-	_ ProofKeyCodeExchangeClient                  = (*DefaultRegisteredClient)(nil)
-	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
-	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
-	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
-	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
-	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
-	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
-	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
-	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
-	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)
-)
 
 // GetAuthorizationDetailsTypes returns the RFC 9396 authorization details types this client may request.
 func (c *DefaultRegisteredClient) GetAuthorizationDetailsTypes() (types []string) {
@@ -524,3 +560,28 @@ func (c *DefaultRegisteredClient) GetTokenExchangePermitted(client Client, reque
 func (c *DefaultRegisteredClient) GetAllowActorTokenWithoutMayAct() (allow bool) {
 	return false
 }
+
+var (
+	_ Client                                      = (*DefaultRegisteredClient)(nil)
+	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
+	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
+	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
+	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)
+	_ UserInfoClient                              = (*DefaultRegisteredClient)(nil)
+	_ JARMClient                                  = (*DefaultRegisteredClient)(nil)
+	_ AuthenticationMethodClient                  = (*DefaultRegisteredClient)(nil)
+	_ ResponseModeClient                          = (*DefaultRegisteredClient)(nil)
+	_ DPoPClient                                  = (*DefaultRegisteredClient)(nil)
+	_ JWTProfileClient                            = (*DefaultRegisteredClient)(nil)
+	_ IntrospectionJWTResponseClient              = (*DefaultRegisteredClient)(nil)
+	_ ProofKeyCodeExchangeClient                  = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
+	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
+	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
+	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
+	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
+	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
+	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
+	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)
+)

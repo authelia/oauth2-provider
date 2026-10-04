@@ -22,26 +22,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-const (
-	idjagSubject        = "peter"
-	idjagClientID       = "my-client"
-	idjagIssuer         = "https://as.example.com"
-	idjagSubjectToken   = "subject"
-	idjagSubjectType    = "urn:spec:jwt"
-	idjagScope          = "chat.read"
-	idjagAudience       = "https://rs.example.com/"
-	idjagOtherClient    = "some-other-client"
-	idjagOtherOwner     = "custom-lifespan-client"
-	idjagOtherScope     = "chat.history"
-	idjagOtherAudience  = "https://other.example.com/"
-	idjagResource       = "https://rs.example.com/api"
-	idjagOtherResource  = "https://other.example.com/api"
-	idjagACR            = "urn:example:acr:mfa"
-	idjagAMR            = "otp"
-	idjagActionInitiate = "initiate"
-	idjagActionStatus   = "status"
-)
-
 func TestIDJAGRequestGrantHandler(t *testing.T) {
 	testCases := []struct {
 		name             string

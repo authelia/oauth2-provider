@@ -29,23 +29,6 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-const (
-	issueSubject     = "peter"
-	issueClient      = "my-client"
-	issueFiles       = "https://api.chat.example/files"
-	issueAudienceURN = "urn:example:chat"
-	issueEmail       = "person@example.com"
-	issueACRGold     = "urn:acr:gold"
-	issueACRSilver   = "urn:acr:silver"
-	issueACRBronze   = "urn:acr:bronze"
-	issueAMRMFA      = "mfa"
-	issueAMRPassword = "pwd"
-
-	issueAudienceTyped = "urn:example:typed"
-	issueAudienceNone  = "urn:example:none"
-	issueOtherType     = "other_type"
-)
-
 func TestIssueHandlerHandle(t *testing.T) {
 	testCases := []struct {
 		name      string

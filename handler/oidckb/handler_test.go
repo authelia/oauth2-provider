@@ -462,8 +462,7 @@ func TestHandler_BindAccessRequestReportsAnUnrecordedDPoPJKT(t *testing.T) {
 		assert.Empty(t, request.GetSession().(oauth2.DPoPBoundSession).GetDPoPPublicKeyJWK())
 	})
 
-	// Section 2.3: without the marker this is a plain RFC 9449 client whose authentication request carried no
-	// 'dpop_jkt', which must be accepted and left unbound rather than reported as a fault.
+	// Section 2.3: a grant without the marker is accepted and left unbound.
 	t.Run("ShouldAcceptAGrantThatWasNotGrantedBoundKey", func(t *testing.T) {
 		request := newRequest(false, consts.GrantTypeAuthorizationCode, consts.FormParameterAuthorizationCode)
 

@@ -126,7 +126,6 @@ func TestFosite_WriteRFC8628UserAuthorizeResponseMarshalError(t *testing.T) {
 			name: "ShouldRespondInternalServerErrorWhenToMapNotMarshalable",
 			setup: func() *RFC8628UserAuthorizeResponse {
 				responder := NewRFC8628UserAuthorizeResponse()
-				// channels cannot be marshaled to JSON
 				responder.SetExtra("bad", make(chan int))
 				return responder
 			},

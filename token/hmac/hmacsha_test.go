@@ -298,7 +298,6 @@ func TestHMACStrategyGenerateHMACForString(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, actual)
 
-			// Same input + secret must be deterministic.
 			again, err := cg.GenerateHMACForString(context.Background(), tc.text)
 			require.NoError(t, err)
 			assert.Equal(t, actual, again)

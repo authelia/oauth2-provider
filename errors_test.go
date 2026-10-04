@@ -155,8 +155,6 @@ func TestRFC6749ErrorWithTrace(t *testing.T) {
 			require.NotNil(t, actual.cause)
 
 			if tc.sameCause {
-				// Cause already had a stack trace, so WithTrace must wrap the raw err
-				// directly without re-wrapping it in another stack-tracer.
 				require.Same(t, tc.err, actual.cause)
 			}
 		})
@@ -556,9 +554,6 @@ func TestRFC6749ErrorUnmarshalJSON(t *testing.T) {
 }
 
 func TestRFC6749ErrorUnmarshalJSONInvalid(t *testing.T) {
-	// Passing a JSON array invokes UnmarshalJSON (the bytes are syntactically valid JSON) but
-	// the inner Unmarshal into oauth2.RFC6749ErrorJSON fails because an array cannot decode into a
-	// struct.
 	actual := &RFC6749Error{}
 	err := actual.UnmarshalJSON([]byte(`[1, 2, 3]`))
 	assert.Error(t, err)
@@ -808,12 +803,6 @@ func TestDPoPErrors(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, ErrUseDPoPNonce.CodeField)
 }
 
-// errPlain is a simple error type used to exercise paths that depend on the absence of
-// stack traces or other carrier interfaces.
-type errPlain string
-
-func (e errPlain) Error() string { return string(e) }
-
 func TestClientRegistrationErrors(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -835,3 +824,7 @@ func TestClientRegistrationErrors(t *testing.T) {
 		})
 	}
 }
+
+type errPlain string
+
+func (e errPlain) Error() string { return string(e) }

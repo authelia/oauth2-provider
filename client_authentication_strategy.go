@@ -36,6 +36,9 @@ type DefaultClientAuthenticationStrategy struct {
 	}
 }
 
+// AuthenticateClient authenticates the client making the request using the credentials presented in the 'Authorization'
+// header, the form, a client assertion, and when mutual TLS is enabled the client certificate. It returns the client
+// and the authentication method used.
 func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	var (
 		id, secret string

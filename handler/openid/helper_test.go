@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -128,17 +127,14 @@ func TestGetAccessTokenHash(t *testing.T) {
 		{"ShouldUseSHA384ForPS384", newIDTokenSignedClient("PS384"), sha384Hash},
 		{"ShouldUseSHA512ForHS512", newIDTokenSignedClient("HS512"), sha512Hash},
 
-		// RFC8037 Section 3.1 defines EdDSA for JOSE in terms of Ed25519, which uses SHA-512 internally. Deriving
-		// the digest from the digits in the algorithm name, as this once did, cannot express that.
+		// RFC 8037 Section 3.1: EdDSA is Ed25519, which uses SHA-512.
 		{"ShouldUseSHA512ForEdDSA", newIDTokenSignedClient("EdDSA"), sha512Hash},
 		{"ShouldUseSHA512ForEd25519", newIDTokenSignedClient("Ed25519"), sha512Hash},
 
-		// An unset 'id_token_signed_response_alg' defaults to RS256 per OpenID Connect Dynamic Client Registration
-		// 1.0 Section 2, and a client that does not implement the ID Token metadata at all falls back the same way.
+		// OpenID Connect Dynamic Client Registration 1.0 Section 2: 'id_token_signed_response_alg' defaults to RS256.
 		{"ShouldDefaultToSHA256WhenAlgUnregistered", newIDTokenSignedClient(""), sha256Hash},
 		{"ShouldDefaultToSHA256WhenClientCarriesNoIDTokenMetadata", &oauth2.DefaultClient{ID: "foo"}, sha256Hash},
 
-		// An algorithm this does not recognise falls back to SHA-256 rather than panicking in GetAccessTokenHash.
 		{"ShouldDefaultToSHA256ForUnknownAlg", newIDTokenSignedClient("XX999"), sha256Hash},
 	}
 
@@ -164,17 +160,3 @@ func TestGetAccessTokenHash(t *testing.T) {
 func newIDTokenSignedClient(alg string) oauth2.Client {
 	return &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, IDTokenSignedResponseAlg: alg}
 }
-
-var strategy = &DefaultStrategy{
-	Strategy: &jwt.DefaultStrategy{
-		Config: &oauth2.Config{
-			MinParameterEntropy: oauth2.MinParameterEntropy,
-		},
-		Issuer: jwt.MustGenDefaultIssuer(),
-	},
-	Config: &oauth2.Config{
-		MinParameterEntropy: oauth2.MinParameterEntropy,
-	},
-}
-
-var fooErr = errors.New("foo")

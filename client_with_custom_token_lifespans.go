@@ -57,10 +57,12 @@ type DefaultClientWithCustomTokenLifespans struct {
 	TokenLifespans *ClientLifespanConfig `json:"token_lifespans"`
 }
 
+// GetTokenLifespans returns the custom token lifespans configured for the client.
 func (c *DefaultClientWithCustomTokenLifespans) GetTokenLifespans() *ClientLifespanConfig {
 	return c.TokenLifespans
 }
 
+// SetTokenLifespans sets the custom token lifespans configured for the client.
 func (c *DefaultClientWithCustomTokenLifespans) SetTokenLifespans(lifespans *ClientLifespanConfig) {
 	c.TokenLifespans = lifespans
 }

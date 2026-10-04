@@ -1159,7 +1159,6 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testin
 			expected := requester.GetSession().GetExpiresAt(oauth2.AccessToken)
 			require.False(t, expected.IsZero())
 
-			// RFC 9449 Section 5 binding, recorded between the two phases.
 			requester.GetSession().(oauth2.DPoPBoundSession).SetDPoPJWKThumbprint(jkt)
 
 			response := oauth2.NewAccessResponse()

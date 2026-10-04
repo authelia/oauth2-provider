@@ -439,7 +439,3 @@ func newLogoutProvider(t *testing.T, clients ...oauth2.Client) *oauth2.Fosite {
 func newLogoutGet(query url.Values) *http.Request {
 	return httptest.NewRequest(http.MethodGet, "https://op.example/logout?"+query.Encode(), nil)
 }
-
-const logoutTestIssuer = "https://issuer.example/"
-
-var logoutTestKey = gen.MustRSAKey()

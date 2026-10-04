@@ -362,8 +362,6 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 			r := &http.Request{Header: http.Header{}, PostForm: tc.form, Form: tc.form}
 
 			if tc.cert != nil {
-				// VerifiedChains stands for a listener configured RequireAndVerifyClientCert, which the PKI method
-				// requires. TestAuthenticateClientMTLSRequiresVerifiedChain covers its absence.
 				r.TLS = &tls.ConnectionState{
 					PeerCertificates: []*x509.Certificate{tc.cert},
 					VerifiedChains:   [][]*x509.Certificate{{tc.cert}},
@@ -387,10 +385,6 @@ func TestAuthenticateClientMTLS(t *testing.T) {
 	}
 }
 
-// TestAuthenticateClientMTLSViaForwardedHeader covers the deployment MTLSClientCertificateHeader exists for: a TLS
-// terminating reverse proxy that forwards the client's certificate in a header while authenticating its own
-// connection to this server with mutual TLS. The peer certificate on such a connection is the proxy's, so the header
-// is the only source of the client's certificate.
 func TestAuthenticateClientMTLSViaForwardedHeader(t *testing.T) {
 	cert := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "test"}, DNSNames: []string{"client.example.com"}})
 	proxy := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: "proxy"}, DNSNames: []string{"proxy.example.com"}, SerialNumber: 3})
@@ -438,8 +432,6 @@ func TestAuthenticateClientMTLSViaForwardedHeader(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectWhenOnlyTheProxyCertificateIsPresent", func(t *testing.T) {
-		// No header means no client certificate. Were the connection's peer certificate consulted instead, this would
-		// fail on the SAN mismatch rather than on there being no credential at all.
 		client, _, err := newStrategy().AuthenticateClient(context.TODO(), newRequest(proxy, ""), form, &TokenEndpointClientAuthStrategy{})
 
 		assert.Nil(t, client)

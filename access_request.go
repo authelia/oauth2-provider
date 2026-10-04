@@ -36,10 +36,12 @@ func NewAccessRequest(session Session) *AccessRequest {
 	return r
 }
 
+// GetGrantTypes returns the grant types of the access request.
 func (a *AccessRequest) GetGrantTypes() Arguments {
 	return a.GrantTypes
 }
 
+// SetGrantedScopes replaces the granted scopes of the access request with the given scopes.
 func (a *AccessRequest) SetGrantedScopes(scopes Arguments) {
 	a.GrantedScope = scopes
 }

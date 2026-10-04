@@ -28,6 +28,7 @@ type ClaimValidationOptions struct {
 	audNotRequired bool
 }
 
+// ValidateTimeFunc sets the function used to obtain the current time, in place of TimeFunc.
 func ValidateTimeFunc(timef func() time.Time) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.timef = timef
@@ -54,48 +55,56 @@ func ValidateMaximumLifetime(lifetime time.Duration) ClaimValidationOption {
 	}
 }
 
+// ValidateIssuer requires the 'iss' claim to equal iss.
 func ValidateIssuer(iss string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.iss = iss
 	}
 }
 
+// ValidateAuthorizedParty requires the 'azp' claim to equal azp when the claim is present.
 func ValidateAuthorizedParty(azp string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.azp = azp
 	}
 }
 
+// ValidateDoNotRequireIssuer makes the 'iss' claim optional for ValidateIssuer.
 func ValidateDoNotRequireIssuer() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.issNotRequired = true
 	}
 }
 
+// ValidateAudienceAny requires the 'aud' claim to contain at least one of the given values.
 func ValidateAudienceAny(aud ...string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.aud = aud
 	}
 }
 
+// ValidateAudienceAll requires the 'aud' claim to contain all of the given values.
 func ValidateAudienceAll(aud ...string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.audAll = aud
 	}
 }
 
+// ValidateDoNotRequireAudience makes the 'aud' claim optional for ValidateAudienceAny and ValidateAudienceAll.
 func ValidateDoNotRequireAudience() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.audNotRequired = true
 	}
 }
 
+// ValidateSubject requires the 'sub' claim to equal sub.
 func ValidateSubject(sub string) ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.sub = sub
 	}
 }
 
+// ValidateRequireExpiresAt requires the 'exp' claim to be present.
 func ValidateRequireExpiresAt() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.expRequired = true
@@ -114,12 +123,14 @@ func ValidateIgnoreExpiration() ClaimValidationOption {
 	}
 }
 
+// ValidateRequireIssuedAt requires the 'iat' claim to be present.
 func ValidateRequireIssuedAt() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.iatRequired = true
 	}
 }
 
+// ValidateRequireNotBefore requires the 'nbf' claim to be present.
 func ValidateRequireNotBefore() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {
 		opts.nbfRequired = true
@@ -175,7 +186,6 @@ outer:
 	return true
 }
 
-// validInt64Future ensures the given value is in the future.
 func validInt64Future(value, now int64, required bool) bool {
 	if value == 0 {
 		return !required
@@ -184,7 +194,6 @@ func validInt64Future(value, now int64, required bool) bool {
 	return now < value
 }
 
-// validInt64Past ensures the given value is in the past or the current value.
 func validInt64Past(value, now int64, required bool) bool {
 	if value == 0 {
 		return !required

@@ -578,30 +578,6 @@ func TestIDJAG(t *testing.T) {
 	}
 }
 
-const (
-	idjagIdPClientID       = "wiki"
-	idjagRSClientID        = "wiki-at-chat"
-	idjagClientSecret      = "foobar"
-	idjagSubject           = "alice"
-	idjagScope             = "chat.read"
-	idjagResourcePath      = "/api"
-	idjagACR               = "urn:example:acr:mfa"
-	idjagAMR               = "otp"
-	idjagAuthAge           = 2 * time.Minute
-	idjagSecretHash        = "$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y" //nolint:gosec // = "foobar"
-	idjagStoreMemory       = "MemoryStore"
-	idjagStoreHydrate      = "HydratingMemoryStore"
-	idjagOtherScope        = "chat.write"
-	idjagOtherTarget       = "https://other.example/api"
-	idjagProofMatch        = "matching"
-	idjagProofOther        = "other"
-	idjagEnvironmentTarget = "environment"
-	idjagInitiate          = "initiate"
-	idjagStatus            = "status"
-	idjagDetailsInitiate   = `[{"type":"payment_initiation","actions":["initiate"]}]`
-	idjagDetailsStatus     = `[{"type":"payment_initiation","actions":["status"]}]`
-)
-
 type idjagTokenResponse struct {
 	AccessToken     string `json:"access_token"`
 	IssuedTokenType string `json:"issued_token_type"`

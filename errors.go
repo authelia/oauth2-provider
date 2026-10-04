@@ -383,15 +383,6 @@ type (
 	}
 )
 
-var (
-	_ errorsx.DebugCarrier      = new(RFC6749Error)
-	_ errorsx.ReasonCarrier     = new(RFC6749Error)
-	_ errorsx.RequestIDCarrier  = new(RFC6749Error)
-	_ errorsx.StatusCarrier     = new(RFC6749Error)
-	_ errorsx.StatusCodeCarrier = new(RFC6749Error)
-	_ errorsx.DetailsCarrier    = new(RFC6749Error)
-)
-
 // ErrorToRFC6749Error returns the *RFC6749Error wrapped by err if one is present, otherwise it returns a synthetic
 // RFC6749Error with the 'unknown_error' code and a 500 status, preserving the original err as the cause and debug
 // message.
@@ -791,3 +782,12 @@ func writeFallbackJSONError(ctx context.Context, config SendDebugMessagesToClien
 		http.Error(rw, fmt.Sprintf(errJSONFormat, errServerErrorName, errServerErrorDescription), http.StatusInternalServerError)
 	}
 }
+
+var (
+	_ errorsx.DebugCarrier      = new(RFC6749Error)
+	_ errorsx.ReasonCarrier     = new(RFC6749Error)
+	_ errorsx.RequestIDCarrier  = new(RFC6749Error)
+	_ errorsx.StatusCarrier     = new(RFC6749Error)
+	_ errorsx.StatusCodeCarrier = new(RFC6749Error)
+	_ errorsx.DetailsCarrier    = new(RFC6749Error)
+)

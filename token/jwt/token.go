@@ -448,42 +448,52 @@ type HeaderValidationOptions struct {
 	contentEnc     string
 }
 
+// ValidateAllowEmptyType sets whether a token without a 'typ' header is accepted as a 'JWT'.
 func ValidateAllowEmptyType(value bool) HeaderValidationOption {
 	return func(opts *HeaderValidationOptions) {
 		opts.allowEmptyType = value
 	}
 }
 
+// ValidateTypes sets the accepted 'typ' header values of the signed token, replacing the default of 'JWT'.
 func ValidateTypes(types ...string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.types = types
 	}
 }
 
+// ValidateKeyID requires the 'kid' header of the signed token to equal kid.
 func ValidateKeyID(kid string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.kid = kid
 	}
 }
 
+// ValidateAlgorithm requires the 'alg' header of the signed token to equal alg.
 func ValidateAlgorithm(alg string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.alg = alg
 	}
 }
 
+// ValidateEncryptionKeyID requires the 'kid' header of the encrypted token to equal kid. A token which is not encrypted
+// is not checked.
 func ValidateEncryptionKeyID(kid string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.kidEnc = kid
 	}
 }
 
+// ValidateKeyAlgorithm requires the 'alg' header of the encrypted token to equal alg. A token which is not encrypted is
+// not checked.
 func ValidateKeyAlgorithm(alg string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.keyAlg = alg
 	}
 }
 
+// ValidateContentEncryption requires the 'enc' header of the encrypted token to equal enc. A token which is not
+// encrypted is not checked.
 func ValidateContentEncryption(enc string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.contentEnc = enc
@@ -543,8 +553,6 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 	return token, nil
 }
 
-// if underline value of v is not a pointer
-// it creates a pointer of it and returns it
 func pointer(v any) any {
 	if reflect.ValueOf(v).Kind() != reflect.Ptr {
 		value := reflect.New(reflect.ValueOf(v).Type())

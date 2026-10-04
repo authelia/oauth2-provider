@@ -17,18 +17,6 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
-type mockNonceManager struct{ t *testing.T }
-
-func (m *mockNonceManager) NewNonce(ctx context.Context, accessToken string, expiresAt time.Time) (string, error) {
-	assert.Equal(m.t, "fake access token", accessToken)
-	assert.WithinDuration(m.t, time.Now().Add(time.Hour), expiresAt, 5*time.Second)
-	return "mocked nonce", nil
-}
-
-func (m *mockNonceManager) IsNonceValid(context.Context, string, string) error {
-	return nil
-}
-
 func TestHandler(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -65,6 +53,18 @@ func TestHandler(t *testing.T) {
 		assert.ErrorIs(t, handler.HandleTokenEndpointRequest(ctx, req), oauth2.ErrUnknownRequest)
 		assert.ErrorIs(t, handler.PopulateTokenEndpointResponse(ctx, req, resp), oauth2.ErrUnknownRequest)
 	})
+}
+
+type mockNonceManager struct{ t *testing.T }
+
+func (m *mockNonceManager) NewNonce(ctx context.Context, accessToken string, expiresAt time.Time) (string, error) {
+	assert.Equal(m.t, "fake access token", accessToken)
+	assert.WithinDuration(m.t, time.Now().Add(time.Hour), expiresAt, 5*time.Second)
+	return "mocked nonce", nil
+}
+
+func (m *mockNonceManager) IsNonceValid(context.Context, string, string) error {
+	return nil
 }
 
 func newHandler(t *testing.T) *Handler {

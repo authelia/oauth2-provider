@@ -127,7 +127,6 @@ func TestOIDCImplicitFlow(t *testing.T) {
 				},
 			}
 
-			// TODO: investigate this.
 			//nolint:staticcheck
 			response, err := c.Get(authURL.String())
 			require.Error(t, err)

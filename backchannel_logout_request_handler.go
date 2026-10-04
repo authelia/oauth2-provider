@@ -98,8 +98,6 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 	return results, nil
 }
 
-// sendBackChannelLogout generates and delivers a single Logout Token, reporting every failure in the result
-// rather than returning it.
 func (f *Fosite) sendBackChannelLogout(ctx context.Context, strategy BackChannelLogoutTokenStrategy, httpClient *retryablehttp.Client, client Client, subject, sid string, extra map[string]any) (result BackChannelLogoutResult) {
 	result.ClientID = client.GetID()
 
@@ -128,7 +126,6 @@ func (f *Fosite) sendBackChannelLogout(ctx context.Context, strategy BackChannel
 	return result
 }
 
-// postBackChannelLogout performs the form encoded POST to a Relying Party's back-channel logout URI.
 func postBackChannelLogout(ctx context.Context, client *retryablehttp.Client, uri, token string) (status int, err error) {
 	body := url.Values{consts.FormParameterLogoutToken: []string{token}}
 

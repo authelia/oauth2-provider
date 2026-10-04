@@ -51,7 +51,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 	refreshCheckClient := &oauth2.DefaultClient{
 		ID:            "refresh-client",
-		ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`), // foobar
+		ClientSecret:  oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),
 		RedirectURIs:  []string{ts.URL + "/callback"},
 		ResponseTypes: []string{"id_token", "code", "token", "token code", "id_token code", "token id_token", "token code id_token"},
 		GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
@@ -273,7 +273,6 @@ func TestRefreshTokenFlow(t *testing.T) {
 
 			tokenSource := oauthClient.TokenSource(t.Context(), token)
 
-			// This sleep guarantees time difference in exp/iat
 			time.Sleep(time.Second * 2)
 
 			refreshed, err := tokenSource.Token()

@@ -30,10 +30,16 @@ type DefaultStrategy struct {
 	Store  Storage
 }
 
+// NewDefaultStrategy returns a DefaultStrategy using the given config and storage.
 func NewDefaultStrategy(config StrategyConfig, store Storage) *DefaultStrategy {
 	return &DefaultStrategy{Config: config, Store: store}
 }
 
+// ValidateDPoPProof parses the DPoP proof and validates it against the request method and URL. The 'htm' and normalized
+// 'htu' claims must match the request, the 'iat' claim must be within the proof lifespan allowing for the clock skew,
+// the 'nonce' claim must be valid when a nonce is required, and the proof must not have been used before.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-4.3
 func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, requestURL, proof string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
 	if parsed, err = ParseProof(proof, s.allowedAlgorithms(ctx)); err != nil {
 		return nil, err
@@ -124,6 +130,7 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	return parsed, nil
 }
 
+// NewDPoPNonce generates a random DPoP nonce and stores it with the configured nonce lifespan.
 func (s *DefaultStrategy) NewDPoPNonce(ctx context.Context) (nonce string, err error) {
 	b := make([]byte, 32)
 
@@ -140,6 +147,7 @@ func (s *DefaultStrategy) NewDPoPNonce(ctx context.Context) (nonce string, err e
 	return nonce, nil
 }
 
+// ValidateDPoPNonce returns oauth2.ErrUseDPoPNonce unless the storage reports the nonce as valid.
 func (s *DefaultStrategy) ValidateDPoPNonce(ctx context.Context, nonce string) (err error) {
 	var valid bool
 

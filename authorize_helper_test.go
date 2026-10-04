@@ -103,7 +103,6 @@ func TestGetPostFormHTMLTemplate(t *testing.T) {
 	}
 }
 
-// templateProvider is a minimal FormPostHTMLTemplateProvider used to drive GetPostFormHTMLTemplate.
 type templateProvider struct {
 	tmpl *template.Template
 }

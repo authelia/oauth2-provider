@@ -59,30 +59,39 @@ func (c *IDTokenClaims) Clone() *IDTokenClaims {
 	return &cloned
 }
 
+// GetExpirationTime returns the 'exp' claim.
 func (c *IDTokenClaims) GetExpirationTime() (exp *NumericDate, err error) {
 	return c.ExpirationTime, nil
 }
 
+// GetIssuedAt returns the 'iat' claim.
 func (c *IDTokenClaims) GetIssuedAt() (iat *NumericDate, err error) {
 	return c.IssuedAt, nil
 }
 
+// GetNotBefore returns the 'nbf' claim, which is read from the Extra claims.
 func (c *IDTokenClaims) GetNotBefore() (nbf *NumericDate, err error) {
 	return toNumericDate(c.Extra[ClaimNotBefore])
 }
 
+// GetIssuer returns the 'iss' claim.
 func (c *IDTokenClaims) GetIssuer() (iss string, err error) {
 	return c.Issuer, nil
 }
 
+// GetSubject returns the 'sub' claim.
 func (c *IDTokenClaims) GetSubject() (sub string, err error) {
 	return c.Subject, nil
 }
 
+// GetAudience returns the 'aud' claim.
 func (c *IDTokenClaims) GetAudience() (aud ClaimStrings, err error) {
 	return c.Audience, nil
 }
 
+// Valid validates the 'exp', 'iat', and 'nbf' claims, and the 'iss', 'sub', 'azp', and 'aud' claims when the respective
+// option is provided.
+//
 //nolint:gocyclo
 func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	vopts := &ClaimValidationOptions{}
@@ -172,6 +181,7 @@ func (c IDTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return vErr
 }
 
+// GetExpirationTimeSafe returns the 'exp' claim as a UTC time, or the Unix epoch if the claim is unset.
 func (c *IDTokenClaims) GetExpirationTimeSafe() time.Time {
 	if c.ExpirationTime == nil {
 		return time.Unix(0, 0).UTC()
@@ -180,6 +190,7 @@ func (c *IDTokenClaims) GetExpirationTimeSafe() time.Time {
 	return c.ExpirationTime.UTC()
 }
 
+// GetIssuedAtSafe returns the 'iat' claim as a UTC time, or the Unix epoch if the claim is unset.
 func (c *IDTokenClaims) GetIssuedAtSafe() time.Time {
 	if c.IssuedAt == nil {
 		return time.Unix(0, 0).UTC()
@@ -188,6 +199,7 @@ func (c *IDTokenClaims) GetIssuedAtSafe() time.Time {
 	return c.IssuedAt.UTC()
 }
 
+// GetAuthTimeSafe returns the 'auth_time' claim as a UTC time, or the Unix epoch if the claim is unset.
 func (c *IDTokenClaims) GetAuthTimeSafe() time.Time {
 	if c.AuthTime == nil {
 		return time.Unix(0, 0).UTC()

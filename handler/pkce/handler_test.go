@@ -1526,7 +1526,7 @@ func TestPKCERequestSessionSurvivesAFailedTokenRequest(t *testing.T) {
 		return provider.NewAccessRequest(t.Context(), r, &oauth2.DefaultSession{})
 	}
 
-	// RFC 9449 Section 8 asks the client to retry with a nonce after the binding phase rejects the first request.
+	// RFC 9449 Section 8: the client retries with a nonce.
 	_, err = post(verifier)
 	require.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
 

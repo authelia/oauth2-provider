@@ -345,7 +345,6 @@ func bothTokenRequest(t *testing.T, provider oauth2.Provider, form url.Values, c
 		r.Header.Set(consts.HeaderDPoP, proof)
 	}
 
-	// A nil r.TLS flips the scheme oauth2.RequestURL derives and so breaks the DPoP 'htu' match.
 	if cert != nil {
 		r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 	} else {
@@ -388,10 +387,3 @@ func bothAuthorizeForCode(t *testing.T, provider oauth2.Provider) string {
 
 	return code
 }
-
-const (
-	bothClientID    = "both-client"
-	bothSecret      = "both-client-secret"
-	bothRedirectURI = "https://rp.example.com/cb"
-	bothTokenURI    = "https://as.example.com/token"
-)

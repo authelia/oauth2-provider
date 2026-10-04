@@ -18,7 +18,6 @@ import (
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
-	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -696,12 +695,4 @@ func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 		s.Claims = &jwt.IDTokenClaims{}
 	}
 	return s.Claims
-}
-
-var hmacStrategy = &hoauth2.HMACCoreStrategy{
-	Enigma: &hmac.HMACStrategy{
-		Config: &oauth2.Config{
-			GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
-		},
-	},
 }

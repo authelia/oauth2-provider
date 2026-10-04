@@ -118,7 +118,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
-				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true
 				assert.Equal(t, "unsupported_response_mode", err["ErrorField"])
 				assert.Equal(t, "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", err["DescriptionField"])
 				assert.Empty(t, err["HintField"])
@@ -176,7 +176,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = false
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
-				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true // reset
+				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true
 
 				assert.Equal(t, "unsupported_response_mode", err["ErrorField"])
 				assert.Equal(t, "The authorization server does not support obtaining a response using this response mode. Insecure response_mode 'query' for the response_type '[code token]'.", err["DescriptionField"])

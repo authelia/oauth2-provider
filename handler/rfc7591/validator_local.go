@@ -104,8 +104,6 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 	return nil
 }
 
-// tlsClientAuthSubject associates an RFC 8705 Section 2.1.2 certificate subject metadata field's value with the
-// parameter name used in error hints.
 type tlsClientAuthSubject struct {
 	name  string
 	value string
@@ -311,9 +309,6 @@ func validateURIList(name string, values []string, secure bool) (err error) {
 	return nil
 }
 
-// validateURI checks that value is an absolute URI with no fragment component, and when secure is set that it uses
-// the 'https' scheme and carries a host. An empty value is not registered and is not checked; validateURIList rejects
-// one appearing among the members of a URI array.
 func validateURI(name, value string, secure bool) (err error) {
 	if value == "" {
 		return nil
@@ -495,14 +490,11 @@ func validateGrantResponseTypeCoherence(metadata *oauth2.ClientRegistrationMetad
 	return nil
 }
 
-// signingOrEncryptionAlgorithm associates a client metadata algorithm field's value with the parameter name used
-// in error hints.
 type signingOrEncryptionAlgorithm struct {
 	name  string
 	value string
 }
 
-// validateAlgorithms checks the declared signing and encryption algorithm metadata.
 func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	for _, algorithm := range []signingOrEncryptionAlgorithm{
 		{consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg},
@@ -543,7 +535,6 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 	return nil
 }
 
-// isToken reports whether s is a non-empty token, i.e. it has no leading, trailing, or embedded whitespace.
 func isToken(s string) bool {
 	if s == "" {
 		return false
@@ -593,10 +584,6 @@ func isValidScopeToken(s string) bool {
 	return true
 }
 
-var (
-	_ oauth2.ClientRegistrationValidator = (*LocalValidator)(nil)
-)
-
 func validateAuthorizationGrantProfiles(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if !slices.Contains(metadata.AuthorizationGrantProfilesSupported, consts.GrantProfileIDJAG) {
 		return nil
@@ -608,3 +595,7 @@ func validateAuthorizationGrantProfiles(metadata *oauth2.ClientRegistrationMetad
 
 	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' authorization grant profile requires the '%s' and '%s' grant types to be present in '%s'.", consts.GrantProfileIDJAG, consts.GrantTypeOAuthTokenExchange, consts.GrantTypeOAuthJWTBearer, consts.ClientMetadataGrantTypes))
 }
+
+var (
+	_ oauth2.ClientRegistrationValidator = (*LocalValidator)(nil)
+)

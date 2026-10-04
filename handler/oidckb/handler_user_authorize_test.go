@@ -14,8 +14,6 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// TestUserAuthorizeHandler_RecordsTheGrantedMarker pins the device flow half. Scopes are granted at this endpoint
-// rather than at the device authorization endpoint, because the end user approves the request here.
 func TestUserAuthorizeHandler_RecordsTheGrantedMarker(t *testing.T) {
 	newRequest := func(granted oauth2.Arguments) (*oauth2.DeviceAuthorizeRequest, *oauth2.DefaultSession) {
 		session := &oauth2.DefaultSession{}

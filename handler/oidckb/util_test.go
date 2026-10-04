@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestCodeHash pins the encoding with the non-normative examples from OpenID Connect Key Binding 1.0. The expected
-// values are the 'c_s256' claims of the example DPoP proofs in those sections, over the codes in the same examples.
 func TestCodeHash(t *testing.T) {
 	testCases := []struct {
 		name     string

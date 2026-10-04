@@ -93,7 +93,6 @@ func assertDisjoint(t *testing.T, a, b reflect.Value, path string) {
 	}
 }
 
-// assertNotShared fails t and returns true when a and b are pointers, maps, or slices that refer to the same memory.
 func assertNotShared(t *testing.T, a, b reflect.Value, path string) (shared bool) {
 	t.Helper()
 

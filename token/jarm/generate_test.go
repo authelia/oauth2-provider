@@ -279,7 +279,6 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
-// stubConfigurator is a minimal Configurator backed by static values.
 type stubConfigurator struct {
 	issuer   string
 	strategy *stubStrategy
@@ -301,7 +300,6 @@ func (c *stubConfigurator) GetJWTSecuredAuthorizeResponseModeLifespan(_ context.
 	return c.lifespan
 }
 
-// stubClient is a minimal Client implementation.
 type stubClient struct {
 	id, alg, kid           string
 	encAlg, encKid, encEnc string
@@ -322,7 +320,6 @@ func (c *stubClient) GetAuthorizationEncryptedResponseAlg() string { return c.en
 
 func (c *stubClient) GetAuthorizationEncryptedResponseEnc() string { return c.encEnc }
 
-// stubStrategy captures the claims passed by Generate and returns a fixed token.
 type stubStrategy struct {
 	token      string
 	signature  string
@@ -350,7 +347,6 @@ func (s *stubStrategy) Validate(_ context.Context, _ *jwt.Token, _ ...jwt.Strate
 	return nil
 }
 
-// openIDSession is a minimal OpenIDSession implementation.
 type openIDSession struct {
 	claims *jwt.IDTokenClaims
 }
@@ -359,7 +355,6 @@ func (s *openIDSession) IDTokenHeaders() *jwt.Headers { return &jwt.Headers{} }
 
 func (s *openIDSession) IDTokenClaims() *jwt.IDTokenClaims { return s.claims }
 
-// jwtSessionContainer is a minimal JWTSessionContainer implementation.
 type jwtSessionContainer struct {
 	claims *jwt.JWTClaims
 }

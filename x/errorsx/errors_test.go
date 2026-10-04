@@ -133,7 +133,6 @@ func TestWithStack(t *testing.T) {
 	}
 }
 
-// errPlain implements neither the stack-trace nor the Cause carrier interface.
 type errPlain string
 
 func (e errPlain) Error() string { return string(e) }

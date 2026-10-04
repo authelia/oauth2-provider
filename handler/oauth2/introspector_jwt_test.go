@@ -208,8 +208,6 @@ func TestIntrospectJWTRecoversDPoPBinding(t *testing.T) {
 }
 
 func TestIntrospectJWTRecoversMTLSBinding(t *testing.T) {
-	// Both methods are enabled because one case binds by both, and ApplyConfirmation asserts a confirmation method
-	// only while that method is enabled.
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,
 		MTLSEnabled:                   true,
@@ -273,8 +271,6 @@ func TestIntrospectJWTRecoversMTLSBinding(t *testing.T) {
 	}
 }
 
-// TestIntrospectJWTRecoversClientID pins the round trip: a stateless access token carries 'client_id', so the request
-// this validator reconstructs names the client the token was issued to rather than an empty one.
 func TestIntrospectJWTRecoversClientID(t *testing.T) {
 	config := &oauth2.Config{
 		EnforceJWTProfileAccessTokens: true,

@@ -15,7 +15,6 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -193,5 +192,3 @@ func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntro
 		Config:                        config,
 	}, store
 }
-
-var key = gen.MustRSAKey()

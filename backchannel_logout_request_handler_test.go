@@ -25,7 +25,6 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -476,7 +475,3 @@ type stubFailingBackChannelLogoutTokenStrategy struct{}
 func (stubFailingBackChannelLogoutTokenStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
 	return "", errors.New("signing failed")
 }
-
-const bclTestIssuer = "https://op.example/"
-
-var bclTestKey = gen.MustRSAKey()

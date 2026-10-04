@@ -20,7 +20,6 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -272,5 +271,3 @@ func introspectAccessToken(ctx context.Context, token string, coreStrategy hoaut
 	or, err := storage.GetAccessTokenSession(ctx, sig, &oauth2.DefaultSession{})
 	return or, err
 }
-
-var key = gen.MustRSAKey()

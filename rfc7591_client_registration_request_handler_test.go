@@ -65,9 +65,7 @@ func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	// RFC 7591 Section 2 defines the request body as a JSON object. A literal 'null' is valid JSON but not an object,
-	// and decoding it into a value would leave a zero-valued struct behind and register a client from a body that
-	// carried no metadata at all.
+	// RFC 7591 Section 2: the request body is a JSON object.
 	t.Run("ShouldRejectNullBody", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`null`))
 		r.Header.Set("Content-Type", "application/json")
@@ -78,8 +76,6 @@ func TestFositeNewRFC7591ClientRegistrationRequest(t *testing.T) {
 		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The request body must be a JSON object.")
 	})
 
-	// A decoder stops at the end of the first value, so without an explicit end-of-input check a second document
-	// would be silently ignored rather than reported.
 	t.Run("ShouldRejectMultipleJSONDocuments", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", strings.NewReader(`{} {}`))
 		r.Header.Set("Content-Type", "application/json")
@@ -181,9 +177,6 @@ func TestFositeWriteRFC7591ClientRegistrationError(t *testing.T) {
 	assert.Contains(t, rw.Body.String(), `"error":"invalid_client_metadata"`)
 }
 
-// staticEndpointAuth is a minimal ClientRegistrationEndpointAuthStrategy test double that always returns the
-// configured requester and error, regardless of the request or id it is called with. It is shared by the RFC 7591
-// and RFC 7592 request handler tests in this package.
 type staticEndpointAuth struct {
 	requester Requester
 	err       error

@@ -123,10 +123,13 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 	return nil
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped for the resource owner password
+// credentials grant.
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanSkipClientAuth(ctx context.Context, _ oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'password'.
 func (c *ResourceOwnerPasswordCredentialsGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	// grant_type REQUIRED.
 	// Value MUST be set to "password".

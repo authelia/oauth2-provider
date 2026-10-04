@@ -270,6 +270,8 @@ func (c *AccessTokenTypeHandler) GetScopeStrategy(ctx context.Context, client oa
 	return c.Config.GetScopeStrategy(ctx)
 }
 
+// GetExpiresIn returns the time remaining until the session's expiration of the given token type, or the default
+// lifespan when the session has none.
 func (c *AccessTokenTypeHandler) GetExpiresIn(r oauth2.Requester, key oauth2.TokenType, defaultLifespan time.Duration, now time.Time) time.Duration {
 	if r.GetSession().GetExpiresAt(key).IsZero() {
 		return defaultLifespan

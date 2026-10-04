@@ -16,10 +16,7 @@ import (
 	"authelia.com/provider/jose"
 )
 
-// TestSignatureAlgorithmsEdDSAValues pins the Edwards-curve 'alg' values the signer accepts against the identifiers
-// the specifications register. RFC 8037 Section 3.1 registers the polymorphic 'EdDSA'; RFC 9864 Table 2 registers the
-// fully-specified 'Ed25519' and 'Ed448', the latter of which authelia.com/provider/jose does not implement and which
-// must therefore not be advertised here.
+// RFC 8037 Section 3.1 registers 'EdDSA'; RFC 9864 Table 2 registers 'Ed25519' and 'Ed448'.
 func TestSignatureAlgorithmsEdDSAValues(t *testing.T) {
 	edDSA := func(algs []jose.SignatureAlgorithm) (out []string) {
 		for _, alg := range algs {
@@ -57,8 +54,6 @@ func TestSignatureAlgorithmsEdDSAValues(t *testing.T) {
 	})
 }
 
-// TestSignatureAlgorithmsEdDSARoundTrip proves the advertised values are ones the signer can actually produce and
-// the parser accept, rather than names alone.
 func TestSignatureAlgorithmsEdDSARoundTrip(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)

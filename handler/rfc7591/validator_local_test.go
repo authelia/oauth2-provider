@@ -473,7 +473,6 @@ func TestLocalValidatorURIs(t *testing.T) {
 			},
 		},
 		{
-			// url.Parse reports a bare scheme as absolute, so only the host check rejects it.
 			name:     "ShouldRejectHostlessJSONWebKeysURI",
 			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.JSONWebKeysURI = "https:" },
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https:' must include a host component.",
@@ -540,7 +539,6 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 		expected  string
 	}{
 		{
-			// Unset permits any grant, so that registering an mTLS client credentials client keeps working.
 			name:     "ShouldPermitAnyGrantWhenUnset",
 			metadata: base([]string{"client_credentials"}, nil),
 		},

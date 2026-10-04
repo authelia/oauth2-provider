@@ -29,6 +29,9 @@ type Handler struct {
 	}
 }
 
+// HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' includes 'code'. It validates the
+// 'code_challenge' and 'code_challenge_method' parameters against the configuration and the client, and when a
+// challenge is present persists it under the signature of the authorization code, which must already have been issued.
 func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	if !request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
@@ -277,10 +280,12 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	return nil
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'authorization_code'.
 func (c *Handler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

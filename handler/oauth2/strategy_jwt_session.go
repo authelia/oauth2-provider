@@ -79,11 +79,7 @@ func (s *JWTSession) GetOIDCKeyBindingGranted() (granted bool) {
 	return s.KeyBindingGranted
 }
 
-var (
-	_ oauth2.DPoPBoundSession = (*JWTSession)(nil)
-	_ oauth2.MTLSBoundSession = (*JWTSession)(nil)
-)
-
+// GetJWTClaims returns the JWT claims container, initializing it when unset.
 func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 	if j.JWTClaims == nil {
 		j.JWTClaims = &jwt.JWTClaims{}
@@ -91,6 +87,8 @@ func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 	return j.JWTClaims
 }
 
+// GetJWTHeader returns the JWT headers, initializing them when unset and setting the 'typ' header to 'at+jwt' when it
+// is absent.
 func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	if j.JWTHeader == nil {
 		j.JWTHeader = &jwt.Headers{
@@ -105,6 +103,7 @@ func (j *JWTSession) GetJWTHeader() *jwt.Headers {
 	return j.JWTHeader
 }
 
+// SetExpiresAt sets the expiration time of the given token type.
 func (j *JWTSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if j.ExpiresAt == nil {
 		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
@@ -112,6 +111,7 @@ func (j *JWTSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	j.ExpiresAt[key] = exp
 }
 
+// GetExpiresAt returns the expiration time of the given token type, or the zero time when none is set.
 func (j *JWTSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if j.ExpiresAt == nil {
 		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
@@ -123,6 +123,7 @@ func (j *JWTSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	return j.ExpiresAt[key]
 }
 
+// GetUsername returns the username, or an empty string if the receiver is nil.
 func (j *JWTSession) GetUsername() string {
 	if j == nil {
 		return ""
@@ -130,10 +131,12 @@ func (j *JWTSession) GetUsername() string {
 	return j.Username
 }
 
+// SetSubject sets the subject.
 func (j *JWTSession) SetSubject(subject string) {
 	j.Subject = subject
 }
 
+// GetSubject returns the subject, or an empty string if the receiver is nil.
 func (j *JWTSession) GetSubject() string {
 	if j == nil {
 		return ""
@@ -142,10 +145,13 @@ func (j *JWTSession) GetSubject() string {
 	return j.Subject
 }
 
+// SetDPoPJWKThumbprint sets the JWK SHA-256 thumbprint of the DPoP key the session is bound to.
 func (j *JWTSession) SetDPoPJWKThumbprint(jkt string) {
 	j.JWKThumbprint = jkt
 }
 
+// GetDPoPJWKThumbprint returns the JWK SHA-256 thumbprint of the DPoP key the session is bound to, or an empty string
+// if the receiver is nil.
 func (j *JWTSession) GetDPoPJWKThumbprint() string {
 	if j == nil {
 		return ""
@@ -154,10 +160,13 @@ func (j *JWTSession) GetDPoPJWKThumbprint() string {
 	return j.JWKThumbprint
 }
 
+// SetClientCertificateSHA256Thumbprint sets the SHA-256 thumbprint of the client certificate the session is bound to.
 func (j *JWTSession) SetClientCertificateSHA256Thumbprint(x5t string) {
 	j.ClientCertificateThumbprint = x5t
 }
 
+// GetClientCertificateSHA256Thumbprint returns the SHA-256 thumbprint of the client certificate the session is bound
+// to, or an empty string if the receiver is nil.
 func (j *JWTSession) GetClientCertificateSHA256Thumbprint() string {
 	if j == nil {
 		return ""
@@ -166,6 +175,8 @@ func (j *JWTSession) GetClientCertificateSHA256Thumbprint() string {
 	return j.ClientCertificateThumbprint
 }
 
+// Clone returns a copy of the session with its claims, headers, expiration times and public key copied, or nil if the
+// receiver is nil.
 func (j *JWTSession) Clone() oauth2.Session {
 	if j == nil {
 		return nil
@@ -191,3 +202,8 @@ func (j *JWTSession) GetExtraClaims() map[string]any {
 	// We make a clone so that WithScopeField does not change the original value.
 	return j.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
 }
+
+var (
+	_ oauth2.DPoPBoundSession = (*JWTSession)(nil)
+	_ oauth2.MTLSBoundSession = (*JWTSession)(nil)
+)

@@ -96,7 +96,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	registered.EnforcePKCEChallengeMethod = true
 	registered.PKCEChallengeMethod = "S256"
 	registered.EnableJWTProfileOAuthAccessTokens = true
-	registered.PushedAuthorizeContextLifespan = 5 * 60 * 1e9 // 5m in time.Duration nanoseconds
+	registered.PushedAuthorizeContextLifespan = 5 * 60 * 1e9
 	registered.RequireRedirectURIPushedAuthorizationRequests = true
 	registered.RequireRequestObjectAudienceAndLifetime = true
 	registered.RequestObjectMaximumLifetime = 10 * time.Minute

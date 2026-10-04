@@ -691,34 +691,44 @@ type DefaultMTLSClient struct {
 	*DefaultJARClient
 }
 
+// GetID returns the client ID.
 func (c *DefaultClient) GetID() string {
 	return c.ID
 }
 
+// IsPublic returns true if the client is marked as public.
 func (c *DefaultClient) IsPublic() bool {
 	return c.Public
 }
 
+// GetAudience returns the allowed audience(s) for the client.
 func (c *DefaultClient) GetAudience() Arguments {
 	return c.Audience
 }
 
+// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value.
 func (c *DefaultClient) GetEnableDPoPBoundAccessTokens() bool {
 	return c.DPoPBoundAccessTokens
 }
 
+// GetEnableTLSClientAuthBoundAccessTokens returns the 'tls_client_certificate_bound_access_tokens' client metadata
+// value.
 func (c *DefaultClient) GetEnableTLSClientAuthBoundAccessTokens() bool {
 	return c.TLSClientCertificateBoundAccessTokens
 }
 
+// GetRedirectURIs returns the client's allowed redirect URIs.
 func (c *DefaultClient) GetRedirectURIs() []string {
 	return c.RedirectURIs
 }
 
+// GetClientSecret returns the ClientSecret.
 func (c *DefaultClient) GetClientSecret() (secret ClientSecret) {
 	return c.ClientSecret
 }
 
+// GetClientSecretPlainText returns the ClientSecret as plaintext if available. See Client for the semantics of the
+// return values.
 func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
 	if c.ClientSecret == nil || !c.ClientSecret.Valid() {
 		return nil, false, nil
@@ -735,14 +745,17 @@ func (c *DefaultClient) GetClientSecretPlainText() (secret []byte, ok bool, err 
 	return secret, true, nil
 }
 
+// GetRotatedClientSecrets returns the rotated client secrets.
 func (c *DefaultClient) GetRotatedClientSecrets() (secrets []ClientSecret) {
 	return c.RotatedClientSecrets
 }
 
+// GetScopes returns the scopes the client is allowed to request.
 func (c *DefaultClient) GetScopes() Arguments {
 	return c.Scopes
 }
 
+// GetGrantTypes returns the client's allowed grant types, defaulting to 'authorization_code' when none are set.
 func (c *DefaultClient) GetGrantTypes() Arguments {
 	// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	//
@@ -756,6 +769,7 @@ func (c *DefaultClient) GetGrantTypes() Arguments {
 	return c.GrantTypes
 }
 
+// GetResponseTypes returns the client's allowed response types, defaulting to 'code' when none are set.
 func (c *DefaultClient) GetResponseTypes() Arguments {
 	// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	//
@@ -769,14 +783,18 @@ func (c *DefaultClient) GetResponseTypes() Arguments {
 	return c.ResponseTypes
 }
 
+// GetJSONWebKeysURI returns the 'jwks_uri' client metadata value.
 func (c *DefaultJARClient) GetJSONWebKeysURI() string {
 	return c.JSONWebKeysURI
 }
 
+// GetJSONWebKeys returns the 'jwks' client metadata value.
 func (c *DefaultJARClient) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
+// GetTokenEndpointAuthSigningAlg returns the 'token_endpoint_auth_signing_alg' client metadata value, defaulting to
+// RS256 when unset.
 func (c *DefaultJARClient) GetTokenEndpointAuthSigningAlg() string {
 	if c.TokenEndpointAuthSigningAlg == "" {
 		return "RS256"
@@ -785,94 +803,119 @@ func (c *DefaultJARClient) GetTokenEndpointAuthSigningAlg() string {
 	}
 }
 
+// GetIntrospectionEndpointAuthSigningAlg returns the 'introspection_endpoint_auth_signing_alg' client metadata value.
 func (c *DefaultJARClient) GetIntrospectionEndpointAuthSigningAlg() string {
 	return c.IntrospectionEndpointAuthSigningAlg
 }
 
+// GetRevocationEndpointAuthSigningAlg returns the 'revocation_endpoint_auth_signing_alg' client metadata value.
 func (c *DefaultJARClient) GetRevocationEndpointAuthSigningAlg() string {
 	return c.RevocationEndpointAuthSigningAlg
 }
 
+// GetRequireSignedRequestObject returns the 'require_signed_request_object' client metadata value.
 func (c *DefaultJARClient) GetRequireSignedRequestObject() bool {
 	return c.RequireSignedRequestObject
 }
 
+// GetRequestObjectSigningKeyID returns the 'request_object_signing_kid' client metadata value.
 func (c *DefaultJARClient) GetRequestObjectSigningKeyID() string {
 	return c.RequestObjectSigningKeyID
 }
 
+// GetRequestObjectSigningAlg returns the 'request_object_signing_alg' client metadata value.
 func (c *DefaultJARClient) GetRequestObjectSigningAlg() string {
 	return c.RequestObjectSigningAlg
 }
 
+// GetRequestObjectEncryptionKeyID returns the 'request_object_encryption_kid' client metadata value.
 func (c *DefaultJARClient) GetRequestObjectEncryptionKeyID() string {
 	return c.RequestObjectEncryptionKeyID
 }
 
+// GetRequestObjectEncryptionAlg returns the 'request_object_encryption_alg' client metadata value.
 func (c *DefaultJARClient) GetRequestObjectEncryptionAlg() string {
 	return c.RequestObjectEncryptionAlg
 }
 
+// GetRequestObjectEncryptionEnc returns the 'request_object_encryption_enc' client metadata value.
 func (c *DefaultJARClient) GetRequestObjectEncryptionEnc() string {
 	return c.RequestObjectEncryptionEnc
 }
 
+// GetTokenEndpointAuthMethod returns the 'token_endpoint_auth_method' client metadata value.
 func (c *DefaultJARClient) GetTokenEndpointAuthMethod() string {
 	return c.TokenEndpointAuthMethod
 }
 
+// GetIntrospectionEndpointAuthMethod returns the 'introspection_endpoint_auth_method' client metadata value.
 func (c *DefaultJARClient) GetIntrospectionEndpointAuthMethod() string {
 	return c.IntrospectionEndpointAuthMethod
 }
 
+// GetRevocationEndpointAuthMethod returns the 'revocation_endpoint_auth_method' client metadata value.
 func (c *DefaultJARClient) GetRevocationEndpointAuthMethod() string {
 	return c.RevocationEndpointAuthMethod
 }
 
+// GetRequestURIs returns the 'request_uris' client metadata value.
 func (c *DefaultJARClient) GetRequestURIs() []string {
 	return c.RequestURIs
 }
 
+// GetRequireRequestObjectAudienceAndLifetime returns true if this client's Request Objects must contain the 'aud',
+// 'nbf' and 'exp' claims.
 func (c *DefaultJARClient) GetRequireRequestObjectAudienceAndLifetime() bool {
 	return c.RequireRequestObjectAudienceAndLifetime
 }
 
+// GetRequestObjectMaximumLifetime returns the custom bound for this client's Request Object 'nbf' and 'exp' claims, or
+// 0 to utilize the global lifetime.
 func (c *DefaultJARClient) GetRequestObjectMaximumLifetime() time.Duration {
 	return c.RequestObjectMaximumLifetime
 }
 
+// GetResponseModes returns the response modes the client is allowed to use.
 func (c *DefaultResponseModeClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
 }
 
+// GetPostLogoutRedirectURIs returns the 'post_logout_redirect_uris' client metadata value.
 func (c *DefaultRPInitiatedLogoutClient) GetPostLogoutRedirectURIs() (uris []string) {
 	return c.PostLogoutRedirectURIs
 }
 
+// GetBackChannelLogoutURI returns the 'backchannel_logout_uri' client metadata value.
 func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutURI() (uri string) {
 	return c.BackChannelLogoutURI
 }
 
+// GetBackChannelLogoutSessionRequired returns the 'backchannel_logout_session_required' client metadata value.
 func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutSessionRequired() (required bool) {
 	return c.BackChannelLogoutSessionRequired
 }
 
+// GetTLSClientAuthSubjectDN returns the 'tls_client_auth_subject_dn' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSubjectDN() string {
 	return c.TLSClientAuthSubjectDN
 }
 
+// GetTLSClientAuthSANDNS returns the 'tls_client_auth_san_dns' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSANDNS() string {
 	return c.TLSClientAuthSANDNS
 }
 
+// GetTLSClientAuthSANURI returns the 'tls_client_auth_san_uri' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSANURI() string {
 	return c.TLSClientAuthSANURI
 }
 
+// GetTLSClientAuthSANIP returns the 'tls_client_auth_san_ip' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSANIP() string {
 	return c.TLSClientAuthSANIP
 }
 
+// GetTLSClientAuthSANEmail returns the 'tls_client_auth_san_email' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSANEmail() string {
 	return c.TLSClientAuthSANEmail
 }

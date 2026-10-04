@@ -324,7 +324,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 		token, _, err := strategy.Encode(context.Background(), jwt.MapClaims{
 			"iss":     iss,
 			"sub":     "alice",
-			"subject": "alice", // MemoryStore.GetSubjectForTokenExchange reads "subject"
+			"subject": "alice",
 			"exp":     time.Now().Add(15 * time.Minute).Unix(),
 		})
 		require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 		client := baseClient()
 		client.subjectTokenIssuers = []string{issuerAccepted, issuerRejected}
 
-		err := run(t, client, issuerRejected) // not the type's static Issuer, but is in the client's list
+		err := run(t, client, issuerRejected)
 		require.NoError(t, err)
 	})
 
@@ -383,7 +383,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 	})
 
 	t.Run("ShouldFallBackToTokenTypeIssuerWhenClientListEmpty", func(t *testing.T) {
-		client := baseClient() // empty subjectTokenIssuers → fallback path
+		client := baseClient()
 
 		err := run(t, client, issuerAccepted)
 		require.NoError(t, err)
@@ -448,8 +448,6 @@ func TestHandleTokenEndpointRequest_StrategyFallback(t *testing.T) {
 	assert.Equal(t, oauth2.Arguments{"my-service"}, req.GetGrantedAudience())
 }
 
-// newTokenExchangeHandler builds a TokenExchangeGrantHandler against a Config whose
-// supported token types include the standard RFC 8693 set.
 func newTokenExchangeHandler() *TokenExchangeGrantHandler {
 	config := &oauth2.Config{
 		ScopeStrategy:    oauth2.HierarchicScopeStrategy,
@@ -470,7 +468,6 @@ func newTokenExchangeHandler() *TokenExchangeGrantHandler {
 	}
 }
 
-// newConfidentialClient returns a confidential client that is allowed to perform token exchange.
 func newConfidentialClient() *oauth2.DefaultClient {
 	return &oauth2.DefaultClient{
 		ID:           "exchange-client",
@@ -481,10 +478,6 @@ func newConfidentialClient() *oauth2.DefaultClient {
 	}
 }
 
-// baseRequest builds an AccessRequest with the token-exchange grant type already set,
-// the given client, and the supplied form values. Required RFC 8693 §2.1 params
-// (subject_token, subject_token_type) are seeded with valid defaults so individual
-// tests only need to override what they care about.
 func baseRequest(t *testing.T, client oauth2.Client, form url.Values) *oauth2.AccessRequest {
 	t.Helper()
 
@@ -508,8 +501,6 @@ func baseRequest(t *testing.T, client oauth2.Client, form url.Values) *oauth2.Ac
 	}
 }
 
-// rfc8693Client is an oauth2.Client that also exposes the rfc8693.Client interface,
-// letting tests assert RFC 8693 §2.1 client-level token-type restrictions.
 type rfc8693Client struct {
 	*oauth2.DefaultClient
 

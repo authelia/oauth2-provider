@@ -80,6 +80,9 @@ func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
 	return &claims.ExpirationTime.Time
 }
 
+// ParseFormPostResponse parses the HTML of a form post response and returns the values of its submitted inputs. It
+// returns an error when the document is not an auto-submitting form which posts to redirectURL.
+//
 //nolint:gocyclo
 func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizationCode, stateFromServer, iDToken string, token xoauth2.Token, customParameters url.Values, rFC6749Error map[string]string, err error) {
 	token = xoauth2.Token{}

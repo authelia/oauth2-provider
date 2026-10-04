@@ -30,10 +30,13 @@ type JWTProfileCoreStrategy struct {
 	}
 }
 
+// IsOpaqueAccessToken reports whether the token has the format of an opaque access token issued by the HMAC strategy.
 func (s *JWTProfileCoreStrategy) IsOpaqueAccessToken(ctx context.Context, tokenString string) bool {
 	return s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString)
 }
 
+// AccessTokenSignature returns the JWS signature segment when the token has the shape of a JWT Profile access token,
+// and the HMAC strategy signature otherwise.
 func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	var possible bool
 
@@ -44,6 +47,8 @@ func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, token
 	return s.HMACCoreStrategy.AccessTokenSignature(ctx, tokenString)
 }
 
+// GenerateAccessToken generates a JWT Profile access token when the configuration enforces them or the client has
+// enabled them, and an opaque access token from the HMAC strategy otherwise.
 func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error) {
 	var (
 		client oauth2.JWTProfileClient
@@ -61,6 +66,8 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 	return s.HMACCoreStrategy.GenerateAccessToken(ctx, request)
 }
 
+// ValidateAccessToken validates the token as a JWT when it has the shape of a JWT Profile access token, and with the
+// HMAC strategy otherwise.
 func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
 		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(request.GetClient()), tokenString)
@@ -79,78 +86,101 @@ func (s *JWTProfileCoreStrategy) IsOpaqueClientRegistrationToken(ctx context.Con
 	return s.HMACCoreStrategy.IsOpaqueClientRegistrationToken(ctx, tokenString)
 }
 
+// ClientRegistrationTokenSignature returns the client registration token signature from the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ClientRegistrationTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	return s.HMACCoreStrategy.ClientRegistrationTokenSignature(ctx, tokenString)
 }
 
+// GenerateClientRegistrationToken generates a client registration token with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) GenerateClientRegistrationToken(ctx context.Context, requester oauth2.Requester) (tokenString string, signature string, err error) {
 	return s.HMACCoreStrategy.GenerateClientRegistrationToken(ctx, requester)
 }
 
+// ValidateClientRegistrationToken validates a client registration token with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ValidateClientRegistrationToken(ctx context.Context, r oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateClientRegistrationToken(ctx, r, tokenString)
 }
 
+// IsOpaqueRefreshToken reports whether the token has the format of an opaque refresh token issued by the HMAC strategy.
 func (s *JWTProfileCoreStrategy) IsOpaqueRefreshToken(ctx context.Context, tokenString string) bool {
 	return s.HMACCoreStrategy.IsOpaqueRefreshToken(ctx, tokenString)
 }
 
+// RefreshTokenSignature returns the refresh token signature from the HMAC strategy.
 func (s *JWTProfileCoreStrategy) RefreshTokenSignature(ctx context.Context, tokenString string) string {
 	return s.HMACCoreStrategy.RefreshTokenSignature(ctx, tokenString)
 }
 
+// GenerateRefreshToken generates a refresh token with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) GenerateRefreshToken(ctx context.Context, request oauth2.Requester) (tokenString string, signature string, err error) {
 	return s.HMACCoreStrategy.GenerateRefreshToken(ctx, request)
 }
 
+// ValidateRefreshToken validates a refresh token with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ValidateRefreshToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateRefreshToken(ctx, request, tokenString)
 }
 
+// AuthorizeCodeSignature returns the authorization code signature from the HMAC strategy.
 func (s *JWTProfileCoreStrategy) AuthorizeCodeSignature(ctx context.Context, tokenString string) string {
 	return s.HMACCoreStrategy.AuthorizeCodeSignature(ctx, tokenString)
 }
 
+// IsOpaqueAuthorizeCode reports whether the token has the format of an opaque authorization code issued by the HMAC
+// strategy.
 func (s *JWTProfileCoreStrategy) IsOpaqueAuthorizeCode(ctx context.Context, tokenString string) bool {
 	return s.HMACCoreStrategy.IsOpaqueAuthorizeCode(ctx, tokenString)
 }
 
+// GenerateAuthorizeCode generates an authorization code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) GenerateAuthorizeCode(ctx context.Context, request oauth2.Requester) (tokenString string, signature string, err error) {
 	return s.HMACCoreStrategy.GenerateAuthorizeCode(ctx, request)
 }
 
+// ValidateAuthorizeCode validates an authorization code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, tokenString string) error {
 	return s.HMACCoreStrategy.ValidateAuthorizeCode(ctx, request, tokenString)
 }
 
+// RFC8628UserCodeSignature returns the RFC 8628 user code signature from the HMAC strategy.
 func (s *JWTProfileCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
 	return s.HMACCoreStrategy.RFC8628UserCodeSignature(ctx, tokenString)
 }
 
+// GenerateRFC8628UserCode generates an RFC 8628 user code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) GenerateRFC8628UserCode(ctx context.Context) (tokenString string, signature string, err error) {
 	return s.HMACCoreStrategy.GenerateRFC8628UserCode(ctx)
 }
 
+// ValidateRFC8628UserCode validates an RFC 8628 user code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ValidateRFC8628UserCode(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateRFC8628UserCode(ctx, request, tokenString)
 }
 
+// IsOpaqueRFC8628DeviceCode reports whether the token has the format of an opaque RFC 8628 device code issued by the
+// HMAC strategy.
 func (s *JWTProfileCoreStrategy) IsOpaqueRFC8628DeviceCode(ctx context.Context, tokenString string) bool {
 	return s.HMACCoreStrategy.IsOpaqueRFC8628DeviceCode(ctx, tokenString)
 }
 
+// RFC8628DeviceCodeSignature returns the RFC 8628 device code signature from the HMAC strategy.
 func (s *JWTProfileCoreStrategy) RFC8628DeviceCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
 	return s.HMACCoreStrategy.RFC8628DeviceCodeSignature(ctx, tokenString)
 }
 
+// GenerateRFC8628DeviceCode generates an RFC 8628 device code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) GenerateRFC8628DeviceCode(ctx context.Context) (tokenString string, signature string, err error) {
 	return s.HMACCoreStrategy.GenerateRFC8628DeviceCode(ctx)
 }
 
+// ValidateRFC8628DeviceCode validates an RFC 8628 device code with the HMAC strategy.
 func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	return s.HMACCoreStrategy.ValidateRFC8628DeviceCode(ctx, request, tokenString)
 }
 
+// IsPossiblyJWTProfileAccessToken reports whether the token has the shape of a JWT Profile access token, that is it is
+// not an opaque access token and has exactly three dot separated segments. The third segment is returned as the
+// signature. The token is not validated.
 func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (jwt bool, signature string) {
 	if s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString) {
 		return false, ""
@@ -165,6 +195,12 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 	return true, parts[2]
 }
 
+// GenerateJWT encodes the claims of the request session, which must be a JWTSessionContainer, as a signed JWT and
+// returns the token and its signature. The 'client_id' claim is taken from the request client, the
+// 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
+// bindings recorded on the session.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
 func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, request oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
 	var (
 		session JWTSessionContainer

@@ -304,7 +304,6 @@ func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
 	}
 }
 
-// A client-supplied 'jwks_uri' is registrant-chosen, so fetching it must not become an SSRF probe.
 func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 	t.Run("ShouldNotFollowRedirects", func(t *testing.T) {
 		var reached atomic.Bool
@@ -328,7 +327,6 @@ func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 	})
 
 	t.Run("ShouldBoundTheResponseBody", func(t *testing.T) {
-		// Well-formed JSON, merely larger than the bound; malformed JSON would fail to decode either way.
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 

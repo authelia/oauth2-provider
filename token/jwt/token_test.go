@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -306,19 +305,6 @@ func TestJWTHeaders(t *testing.T) {
 	}
 }
 
-var errKeyLoading = errors.New("error loading key")
-
-var (
-	jwtTestDefaultKey         = parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	defaultKeyFunc    Keyfunc = func(t *Token) (any, error) { return jwtTestDefaultKey, nil }
-	emptyKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, nil }
-	errorKeyFunc      Keyfunc = func(t *Token) (any, error) { return nil, errKeyLoading }
-	nilKeyFunc        Keyfunc = nil
-)
-
-// Test cases related to json.Number where excluded because that is not supported by go-jose,
-// it is not used here and therefore not supported.
-//
 //nolint:gocyclo
 func TestParser_Parse(t *testing.T) {
 	var (
@@ -340,8 +326,8 @@ func TestParser_Parse(t *testing.T) {
 	}
 	type generate struct {
 		claims     MapClaims
-		signingKey any                     // defaultSigningKey
-		method     jose.SignatureAlgorithm // default RS256
+		signingKey any
+		method     jose.SignatureAlgorithm
 	}
 	type given struct {
 		name        string
@@ -611,27 +597,22 @@ func TestParser_Parse(t *testing.T) {
 		},
 	}
 
-	// Iterate over test data set and run tests
 	for _, data := range jwtTestData {
 		t.Run(data.name, func(t *testing.T) {
 			if data.generate != nil {
 				signingKey := data.generate.signingKey
 				method := data.generate.method
 				if signingKey == nil {
-					// use test defaults
 					signingKey = defaultSigningKey
 					method = jose.RS256
 				}
 				data.tokenString = makeSampleToken(data.generate.claims, method, signingKey)
 			}
 
-			// Parse the token
 			var token *Token
 			var err error
 
-			// Figure out correct claims type
 			token, err = ParseWithClaims(data.tokenString, MapClaims{}, data.keyFunc)
-			// Verify result matches expectation
 			assert.EqualValues(t, data.claims, token.Claims.ToMapClaims())
 			if data.valid && err != nil {
 				t.Errorf("[%v] Error while verifying token: %T:%v", data.name, err, err)
@@ -650,7 +631,6 @@ func TestParser_Parse(t *testing.T) {
 					t.Errorf("[%v] Expecting error.  Didn't get one.", data.name)
 				} else {
 					ve := err.(*ValidationError)
-					// compare the bitfield part of the error
 					if e := ve.Errors; e != data.errors {
 						t.Errorf("[%v] Errors don't match expectation.  %v != %v", data.name, e, data.errors)
 					}
@@ -662,82 +642,6 @@ func TestParser_Parse(t *testing.T) {
 			}
 		})
 	}
-}
-
-func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
-	token := NewWithClaims(m, c)
-	s, e := token.CompactSignedString(key)
-
-	if e != nil {
-		panic(e.Error())
-	}
-
-	return s
-}
-
-func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
-	token := NewWithClaims(m, c)
-	token.Header = headers
-	s, e := token.CompactSignedString(key)
-
-	if e != nil {
-		panic(e.Error())
-	}
-
-	return s
-}
-
-func parseRSAPublicKeyFromPEM(key []byte) *rsa.PublicKey {
-	var err error
-
-	// Parse PEM block
-	var block *pem.Block
-	if block, _ = pem.Decode(key); block == nil {
-		panic("not possible to decode")
-	}
-
-	// Parse the key
-	var parsedKey any
-	if parsedKey, err = x509.ParsePKIXPublicKey(block.Bytes); err != nil {
-		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
-			parsedKey = cert.PublicKey
-		} else {
-			panic(err)
-		}
-	}
-
-	var pkey *rsa.PublicKey
-	var ok bool
-	if pkey, ok = parsedKey.(*rsa.PublicKey); !ok {
-		panic("not an *rsa.PublicKey")
-	}
-
-	return pkey
-}
-
-func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
-	var err error
-
-	// Parse PEM block
-	var block *pem.Block
-	if block, _ = pem.Decode(key); block == nil {
-		panic("unable to decode")
-	}
-
-	var parsedKey any
-	if parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
-		if parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
-			panic(err)
-		}
-	}
-
-	var pkey *rsa.PrivateKey
-	var ok bool
-	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
-		panic("not an rsa private key")
-	}
-
-	return pkey
 }
 
 func TestParse(t *testing.T) {
@@ -1021,43 +925,75 @@ func TestToken_CompactEncrypted_PropagatesSigningError(t *testing.T) {
 	require.Error(t, err)
 }
 
-var (
-	defaultPubKeyPEM = []byte(`
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4f5wg5l2hKsTeNem/V41
-fGnJm6gOdrj8ym3rFkEU/wT8RDtnSgFEZOQpHEgQ7JL38xUfU0Y3g6aYw9QT0hJ7
-mCpz9Er5qLaMXJwZxzHzAahlfA0icqabvJOMvQtzD6uQv6wPEyZtDTWiQi9AXwBp
-HssPnpYGIn20ZZuNlX2BrClciHhCPUIIZOQn/MmqTD31jSyjoQoV7MhhMTATKJx2
-XrHhR+1DcKJzQBSTAGnpYVaqpsARap+nwRipr3nUTuxyGohBTSmjJ2usSeQXHI3b
-ODIRe1AuTyHceAbewn8b462yEWKARdpd9AjQW5SIVPfdsz5B6GlYQ5LdYKtznTuy
-7wIDAQAB
------END PUBLIC KEY-----`)
-	defaultPrivateKeyPEM = []byte(`
------BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA4f5wg5l2hKsTeNem/V41fGnJm6gOdrj8ym3rFkEU/wT8RDtn
-SgFEZOQpHEgQ7JL38xUfU0Y3g6aYw9QT0hJ7mCpz9Er5qLaMXJwZxzHzAahlfA0i
-cqabvJOMvQtzD6uQv6wPEyZtDTWiQi9AXwBpHssPnpYGIn20ZZuNlX2BrClciHhC
-PUIIZOQn/MmqTD31jSyjoQoV7MhhMTATKJx2XrHhR+1DcKJzQBSTAGnpYVaqpsAR
-ap+nwRipr3nUTuxyGohBTSmjJ2usSeQXHI3bODIRe1AuTyHceAbewn8b462yEWKA
-Rdpd9AjQW5SIVPfdsz5B6GlYQ5LdYKtznTuy7wIDAQABAoIBAQCwia1k7+2oZ2d3
-n6agCAbqIE1QXfCmh41ZqJHbOY3oRQG3X1wpcGH4Gk+O+zDVTV2JszdcOt7E5dAy
-MaomETAhRxB7hlIOnEN7WKm+dGNrKRvV0wDU5ReFMRHg31/Lnu8c+5BvGjZX+ky9
-POIhFFYJqwCRlopGSUIxmVj5rSgtzk3iWOQXr+ah1bjEXvlxDOWkHN6YfpV5ThdE
-KdBIPGEVqa63r9n2h+qazKrtiRqJqGnOrHzOECYbRFYhexsNFz7YT02xdfSHn7gM
-IvabDDP/Qp0PjE1jdouiMaFHYnLBbgvlnZW9yuVf/rpXTUq/njxIXMmvmEyyvSDn
-FcFikB8pAoGBAPF77hK4m3/rdGT7X8a/gwvZ2R121aBcdPwEaUhvj/36dx596zvY
-mEOjrWfZhF083/nYWE2kVquj2wjs+otCLfifEEgXcVPTnEOPO9Zg3uNSL0nNQghj
-FuD3iGLTUBCtM66oTe0jLSslHe8gLGEQqyMzHOzYxNqibxcOZIe8Qt0NAoGBAO+U
-I5+XWjWEgDmvyC3TrOSf/KCGjtu0TSv30ipv27bDLMrpvPmD/5lpptTFwcxvVhCs
-2b+chCjlghFSWFbBULBrfci2FtliClOVMYrlNBdUSJhf3aYSG2Doe6Bgt1n2CpNn
-/iu37Y3NfemZBJA7hNl4dYe+f+uzM87cdQ214+jrAoGAXA0XxX8ll2+ToOLJsaNT
-OvNB9h9Uc5qK5X5w+7G7O998BN2PC/MWp8H+2fVqpXgNENpNXttkRm1hk1dych86
-EunfdPuqsX+as44oCyJGFHVBnWpm33eWQw9YqANRI+pCJzP08I5WK3osnPiwshd+
-hR54yjgfYhBFNI7B95PmEQkCgYBzFSz7h1+s34Ycr8SvxsOBWxymG5zaCsUbPsL0
-4aCgLScCHb9J+E86aVbbVFdglYa5Id7DPTL61ixhl7WZjujspeXZGSbmq0Kcnckb
-mDgqkLECiOJW2NHP/j0McAkDLL4tysF8TLDO8gvuvzNC+WQ6drO2ThrypLVZQ+ry
-eBIPmwKBgEZxhqa0gVvHQG/7Od69KWj4eJP28kq13RhKay8JOoN0vPmspXJo1HY3
-CKuHRG+AP579dncdUnOMvfXOtkdM4vk0+hWASBQzM9xzVcztCa+koAugjVaLS9A+
-9uQoqEeVNTckxx0S2bYevRy7hGQmUJTyQm3j1zEUR5jpdbL83Fbq
------END RSA PRIVATE KEY-----`)
-)
+func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
+	token := NewWithClaims(m, c)
+	s, e := token.CompactSignedString(key)
+
+	if e != nil {
+		panic(e.Error())
+	}
+
+	return s
+}
+
+func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
+	token := NewWithClaims(m, c)
+	token.Header = headers
+	s, e := token.CompactSignedString(key)
+
+	if e != nil {
+		panic(e.Error())
+	}
+
+	return s
+}
+
+func parseRSAPublicKeyFromPEM(key []byte) *rsa.PublicKey {
+	var err error
+
+	var block *pem.Block
+	if block, _ = pem.Decode(key); block == nil {
+		panic("not possible to decode")
+	}
+
+	var parsedKey any
+	if parsedKey, err = x509.ParsePKIXPublicKey(block.Bytes); err != nil {
+		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+			parsedKey = cert.PublicKey
+		} else {
+			panic(err)
+		}
+	}
+
+	var pkey *rsa.PublicKey
+	var ok bool
+	if pkey, ok = parsedKey.(*rsa.PublicKey); !ok {
+		panic("not an *rsa.PublicKey")
+	}
+
+	return pkey
+}
+
+func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
+	var err error
+
+	var block *pem.Block
+	if block, _ = pem.Decode(key); block == nil {
+		panic("unable to decode")
+	}
+
+	var parsedKey any
+	if parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
+		if parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
+			panic(err)
+		}
+	}
+
+	var pkey *rsa.PrivateKey
+	var ok bool
+	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
+		panic("not an rsa private key")
+	}
+
+	return pkey
+}

@@ -81,7 +81,7 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// RFC 7592 §2.2: replacement semantics would read a PUT carrying no metadata as "replace everything with nothing".
+// RFC 7592 §2.2: an update replaces the client's metadata, so a PUT carrying none is rejected.
 func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, registrar, config, store := newConfigurationHandler(t)

@@ -17,6 +17,8 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// NewLogoutTokenClaims returns LogoutTokenClaims with the given subject, audience, session ID, and extra claims, an
+// 'iat' of the current time, and an empty back-channel logout event.
 func NewLogoutTokenClaims(subject string, audience []string, sid string, extra map[string]any) (claims *LogoutTokenClaims) {
 	claims = &LogoutTokenClaims{
 		Subject:   subject,
@@ -46,10 +48,12 @@ type LogoutTokenClaims struct {
 	Extra     map[string]any `json:"ext,omitempty"`
 }
 
+// GetExpirationTime returns the 'exp' claim.
 func (c *LogoutTokenClaims) GetExpirationTime() (exp *NumericDate, err error) {
 	return c.ExpirationTime, nil
 }
 
+// GetIssuedAt returns the 'iat' claim.
 func (c *LogoutTokenClaims) GetIssuedAt() (iat *NumericDate, err error) {
 	return c.IssuedAt, nil
 }
@@ -59,18 +63,24 @@ func (c *LogoutTokenClaims) GetNotBefore() (*NumericDate, error) {
 	return nil, nil
 }
 
+// GetIssuer returns the 'iss' claim.
 func (c *LogoutTokenClaims) GetIssuer() (iss string, err error) {
 	return c.Issuer, nil
 }
 
+// GetSubject returns the 'sub' claim.
 func (c *LogoutTokenClaims) GetSubject() (sub string, err error) {
 	return c.Subject, nil
 }
 
+// GetAudience returns the 'aud' claim.
 func (c *LogoutTokenClaims) GetAudience() (aud ClaimStrings, err error) {
 	return c.Audience, nil
 }
 
+// Valid validates the 'exp' and 'iat' claims, and the 'iss', 'sub', and 'aud' claims when the respective option is
+// provided.
+//
 //nolint:gocyclo
 func (c LogoutTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	vopts := &ClaimValidationOptions{}
@@ -146,6 +156,7 @@ func (c LogoutTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return vErr
 }
 
+// GetExpirationTimeSafe returns the 'exp' claim as a UTC time, or the Unix epoch if the claim is unset.
 func (c *LogoutTokenClaims) GetExpirationTimeSafe() time.Time {
 	if c.ExpirationTime == nil {
 		return time.Unix(0, 0).UTC()
@@ -154,6 +165,7 @@ func (c *LogoutTokenClaims) GetExpirationTimeSafe() time.Time {
 	return c.ExpirationTime.UTC()
 }
 
+// GetIssuedAtSafe returns the 'iat' claim as a UTC time, or the Unix epoch if the claim is unset.
 func (c *LogoutTokenClaims) GetIssuedAtSafe() time.Time {
 	if c.IssuedAt == nil {
 		return time.Unix(0, 0).UTC()

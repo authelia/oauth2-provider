@@ -18,20 +18,8 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
-// Test for
-//   - https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
-//     If the request fails due to a missing, invalid, or mismatching
-//     redirection URI, or if the client identifier is missing or invalid,
-//     the authorization server SHOULD inform the resource owner of the
-//     error and MUST NOT automatically redirect the user-agent to the
-//     invalid redirection URI.
-//   - https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
-//     The redirection endpoint URI MUST be an absolute URI as defined by
-//     [RFC3986] Section 4.3.  The endpoint URI MAY include an
-//     "application/x-www-form-urlencoded" formatted (per Appendix B) query
-//     component ([RFC3986] Section 3.4), which MUST be retained when adding
-//     additional query parameters.  The endpoint URI MUST NOT include a
-//     fragment component.
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 func TestWriteAuthorizeError(t *testing.T) {
 	var urls = []string{
 		"https://foobar.com/",

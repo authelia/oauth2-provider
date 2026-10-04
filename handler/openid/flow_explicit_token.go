@@ -14,10 +14,15 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// HandleTokenEndpointRequest always returns oauth2.ErrUnknownRequest as this handler only acts when the token response
+// is populated.
 func (c *OpenIDConnectExplicitHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
+// PopulateTokenEndpointResponse issues an ID Token for an authorization code grant. It loads the OpenID Connect 1.0
+// session stored under the authorization code, deletes it, and adds the 'id_token' with an 'at_hash' claim to the
+// response. It returns oauth2.ErrUnknownRequest when no such session exists.
 func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -68,10 +73,12 @@ func (c *OpenIDConnectExplicitHandler) PopulateTokenEndpointResponse(ctx context
 	return c.IssueExplicitIDToken(ctx, lifespan, authorize, response)
 }
 
+// CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *OpenIDConnectExplicitHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return false
 }
 
+// CanHandleTokenEndpointRequest reports whether the 'grant_type' is exactly 'authorization_code'.
 func (c *OpenIDConnectExplicitHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (handle bool) {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeAuthorizationCode)
 }

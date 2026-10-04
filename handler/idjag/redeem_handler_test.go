@@ -33,6 +33,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -442,9 +443,16 @@ func TestRedeemHandlerKeyResolution(t *testing.T) {
 		fetch  error
 		uri    string
 		forge  bool
+		noKID  bool
 		err    error
 		forced []bool
 	}{
+		{name: "ShouldRefetchWhenAGrantWithoutAKeyIdentifierIsSignedWithARotatedKey", sets: func(f *redeemFixture) []*jose.JSONWebKeySet {
+			return []*jose.JSONWebKeySet{{Keys: []jose.JSONWebKey{{Key: &gen.MustRSAKey().PublicKey, KeyID: redeemKeyID}}}, {Keys: []jose.JSONWebKey{f.public}}}
+		}, uri: redeemJWKSURI, noKID: true, forced: []bool{false, true}},
+		{name: "ShouldRefetchOnceWhenNoKeyVerifiesAGrantWithoutAKeyIdentifier", sets: func(f *redeemFixture) []*jose.JSONWebKeySet {
+			return []*jose.JSONWebKeySet{{Keys: []jose.JSONWebKey{f.public}}, {Keys: []jose.JSONWebKey{f.public}}}
+		}, uri: redeemJWKSURI, forge: true, noKID: true, err: oauth2.ErrInvalidGrant, forced: []bool{false, true}},
 		{name: "ShouldNotRefetchWhenAMatchingKeyRejectsTheSignature", sets: func(f *redeemFixture) []*jose.JSONWebKeySet {
 			return []*jose.JSONWebKeySet{{Keys: []jose.JSONWebKey{f.public}}, {Keys: []jose.JSONWebKey{f.public}}}
 		}, uri: redeemJWKSURI, forge: true, err: oauth2.ErrInvalidGrant, forced: []bool{false}},
@@ -480,7 +488,13 @@ func TestRedeemHandlerKeyResolution(t *testing.T) {
 				signer = &redeemFixture{private: other}
 			}
 
-			request := newRedeemRequest(fixture.store.Clients[redeemClient], signer.sign(t, fixture.claims(), "", "", ""), nil)
+			assertion := signer.sign(t, fixture.claims(), "", "", "")
+
+			if tc.noKID {
+				assertion = signer.signWithoutKeyID(t, fixture.claims())
+			}
+
+			request := newRedeemRequest(fixture.store.Clients[redeemClient], assertion, nil)
 
 			require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), tc.err)
 			assert.Equal(t, tc.forced, fetcher.forced)
@@ -927,4 +941,16 @@ func setGrantType(request *oauth2.AccessRequest, grantType string) {
 
 	request.GrantTypes = oauth2.Arguments{grantType}
 	request.Form.Set(consts.FormParameterGrantType, grantType)
+}
+
+func (f *redeemFixture) signWithoutKeyID(t *testing.T, claims map[string]any) string {
+	t.Helper()
+
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: f.private}, (&jose.SignerOptions{}).WithType(consts.JSONWebTokenTypeIDJAG))
+	require.NoError(t, err)
+
+	raw, err := josejwt.Signed(signer).Claims(claims).Serialize()
+	require.NoError(t, err)
+
+	return raw
 }

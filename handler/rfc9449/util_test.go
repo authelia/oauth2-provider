@@ -184,6 +184,21 @@ func TestNormalizeHTU(t *testing.T) {
 			want: "http://as.example.com/token",
 		},
 		{
+			name: "StripsEmptyPort",
+			raw:  "https://as.example.com:/token",
+			want: "https://as.example.com/token",
+		},
+		{
+			name: "StripsEmptyPortOnIPv6Literal",
+			raw:  "https://[2001:db8::1]:/token",
+			want: "https://[2001:db8::1]/token",
+		},
+		{
+			name: "KeepsIPv6LiteralWithoutPort",
+			raw:  "https://[2001:db8::]/token",
+			want: "https://[2001:db8::]/token",
+		},
+		{
 			name: "KeepsNonDefaultPort",
 			raw:  "https://as.example.com:8443/token",
 			want: "https://as.example.com:8443/token",

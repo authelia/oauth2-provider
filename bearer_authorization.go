@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -62,8 +63,8 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 // The two methods are independent, and for each:
 //
 //   - A bound credential always has the binding verified.
-//   - An unbound credential is rejected with ErrInvalidToken, not ErrInvalidDPoPProof, when the method is enforced,
-//     and is otherwise admitted.
+//   - An unbound credential is rejected with ErrInvalidToken, not ErrInvalidDPoPProof, when the method is enforced
+//     or the credential was presented using the DPoP authentication scheme, and is otherwise admitted.
 //   - A method disabled in configuration contributes neither check, whatever its enforcement setting.
 //
 // Errors from the underlying strategies are returned unwrapped, as the response writers depend on their codes.
@@ -100,6 +101,10 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 			return errorsx.WithStack(ErrInvalidToken.
 				WithHint("The credential used to authenticate the request is not bound to a DPoP key.").
 				WithDebug("DPoP is enforced, so every credential presented to authenticate a request must be bound to a DPoP key, but this credential records no binding."))
+		case isDPoPAuthorizationScheme(r):
+			return errorsx.WithStack(ErrInvalidToken.
+				WithHint("The credential used to authenticate the request is not bound to a DPoP key.").
+				WithDebug("The credential was presented using the DPoP authentication scheme, which requires it to be bound to the key of the DPoP proof, but this credential records no binding."))
 		}
 	}
 
@@ -123,6 +128,16 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 	}
 
 	return nil
+}
+
+func isDPoPAuthorizationScheme(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+
+	scheme, _, _ := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
+
+	return strings.EqualFold(scheme, DPoPAccessToken)
 }
 
 // validateBearerScope enforces that the credential carries at least one of the required scopes.

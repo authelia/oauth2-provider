@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -306,13 +307,13 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
-	if err = c.consume(ctx, request, session); err != nil {
-		return err
-	}
-
 	var act map[string]any
 
 	if act, err = buildActClaim(session); err != nil {
+		return err
+	}
+
+	if err = c.consume(ctx, request, session); err != nil {
 		return err
 	}
 
@@ -335,6 +336,13 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 		{form.Get(consts.FormParameterSubjectTokenType), session.GetSubjectToken()},
 	}
 
+	type marker struct {
+		iss, jti string
+		exp      time.Time
+	}
+
+	var markers []marker
+
 	for _, token := range presented {
 		if jwtType, ok := types[token.kind].(*JWTType); !ok || jwtType == nil || !jwtType.ValidateJTI {
 			continue
@@ -351,9 +359,33 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
 
-		if c.Storage.SetTokenExchangeCustomJWT(ctx, iss, jti, time.Unix(toInt64(token.claims[consts.ClaimExpirationTime]), 0)) != nil {
+		if slices.ContainsFunc(markers, func(m marker) bool { return m.iss == iss && m.jti == jti }) {
+			continue
+		}
+
+		markers = append(markers, marker{iss: iss, jti: jti, exp: time.Unix(toInt64(token.claims[consts.ClaimExpirationTime]), 0)})
+	}
+
+	if len(markers) == 0 {
+		return nil
+	}
+
+	if ctx, err = storage.MaybeBeginTx(ctx, c.Storage); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	for _, m := range markers {
+		if c.Storage.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp) != nil {
+			if err = storage.MaybeRollbackTx(ctx, c.Storage); err != nil {
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+			}
+
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
 		}
+	}
+
+	if err = storage.MaybeCommitTx(ctx, c.Storage); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil

@@ -5,7 +5,9 @@
 package rfc8693_test
 
 import (
+	"context"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,6 +135,143 @@ func TestCustomJWTIsNotConsumedByARequestThatIsNotPopulated(t *testing.T) {
 	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'jti' from the token must be used only once.")
 }
 
+func TestCustomJWTIsNotConsumedWhenTheActorIsNotIdentified(t *testing.T) {
+	f := newCustomJWTConsumeFixture(t, true)
+
+	actor := createJWT(t.Context(), f.client, f.strategy, jwt.MapClaims{
+		consts.ClaimIssuer:         "https://as.example.com",
+		consts.ClaimJWTID:          uuid.New().String(),
+		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+		consts.ClaimIssuedAt:       time.Now().Unix(),
+	})
+
+	request := f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+		consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+		consts.FormParameterActorToken:       {actor},
+	})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+
+	err := f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'actor_token' does not identify the actor as it has neither a 'sub' nor a 'client_id' claim.")
+	assert.Empty(t, f.store.TokenExchangeJTIs)
+}
+
+func TestCustomJWTPresentedInBothRolesIsMarkedOnce(t *testing.T) {
+	f := newCustomJWTConsumeFixture(t, true)
+
+	jti := uuid.New().String()
+	token := f.token(t, jti)
+
+	request := f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {token},
+		consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+		consts.FormParameterActorToken:       {token},
+	})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+
+	assert.Len(t, f.store.TokenExchangeJTIs, 1)
+	assert.Contains(t, f.store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: jti})
+}
+
+func TestCustomJWTMarksAreRolledBackWhenOneWasAlreadyUsed(t *testing.T) {
+	f := newCustomJWTConsumeFixture(t, true)
+
+	store := &transactionalCustomJWTStore{MemoryStore: f.store}
+	f.grant.Storage = store
+
+	subject := f.token(t, uuid.New().String())
+
+	first := f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {subject},
+	})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), first)))
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.grant.PopulateTokenEndpointResponse(t.Context(), first, oauth2.NewAccessResponse())))
+
+	assert.Equal(t, 1, store.commits)
+	assert.Equal(t, 0, store.rollbacks)
+
+	second := f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {subject},
+		consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+		consts.FormParameterActorToken:       {f.token(t, uuid.New().String())},
+	})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), second)))
+
+	err := f.grant.PopulateTokenEndpointResponse(t.Context(), second, oauth2.NewAccessResponse())
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'jti' from the token must be used only once.")
+	assert.Equal(t, 2, store.begins)
+	assert.Equal(t, 1, store.commits)
+	assert.Equal(t, 1, store.rollbacks)
+}
+
+func TestCustomJWTIsConsumedOnceByConcurrentRequests(t *testing.T) {
+	f := newCustomJWTConsumeFixture(t, true)
+
+	token := f.token(t, uuid.New().String())
+
+	const n = 2
+
+	var (
+		ready, done sync.WaitGroup
+		start       = make(chan struct{})
+		errs        = make([]error, n)
+	)
+
+	for i := range n {
+		request := f.request(url.Values{
+			consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+			consts.FormParameterSubjectToken:     {token},
+		})
+
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+
+		ready.Add(1)
+		done.Add(1)
+
+		go func() {
+			defer done.Done()
+
+			ready.Done()
+			<-start
+
+			errs[i] = f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+		}()
+	}
+
+	ready.Wait()
+	close(start)
+	done.Wait()
+
+	var succeeded int
+
+	for _, err := range errs {
+		if err == nil {
+			succeeded++
+
+			continue
+		}
+
+		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'jti' from the token must be used only once.")
+	}
+
+	assert.Equal(t, 1, succeeded)
+}
+
 func newCustomJWTConsumeFixture(t *testing.T, validate bool) *customJWTConsumeFixture {
 	t.Helper()
 
@@ -184,4 +323,28 @@ func (f *customJWTConsumeFixture) request(form url.Values) *oauth2.AccessRequest
 			Session: newSpecSession("peter"),
 		},
 	}
+}
+
+type transactionalCustomJWTStore struct {
+	*storage.MemoryStore
+
+	begins, commits, rollbacks int
+}
+
+func (s *transactionalCustomJWTStore) BeginTX(ctx context.Context) (context.Context, error) {
+	s.begins++
+
+	return ctx, nil
+}
+
+func (s *transactionalCustomJWTStore) Commit(_ context.Context) error {
+	s.commits++
+
+	return nil
+}
+
+func (s *transactionalCustomJWTStore) Rollback(_ context.Context) error {
+	s.rollbacks++
+
+	return nil
 }

@@ -43,9 +43,8 @@ import (
 // The 'iss' claim is the RFC 8414 issuer identifier of the authorization server, which MUST be configured (Section
 // 3.1).
 //
-// The 'sub' claim is the session subject, so a deployment with pairwise subjects sets the subject the Resource
-// Authorization Server knows on the session before the response is issued (Section 5). The 'tenant', 'aud_tenant'
-// and 'aud_sub' claims are supplied through Session.IDJAGClaims (Section 6).
+// The 'sub' claim is the subject identifier IssueStorage.GetIDJAGSubject returns for the Resource Authorization Server
+// (Section 5). The 'tenant', 'aud_tenant' and 'aud_sub' claims are supplied through Session.IDJAGClaims (Section 6).
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
@@ -130,9 +129,9 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The authorization server issuer identifier is not configured."))
 	}
 
-	subject := request.GetSession().GetSubject()
-	if subject == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The session has no subject to issue the grant for."))
+	subject, err := h.subject(ctx, request, relationship)
+	if err != nil {
+		return err
 	}
 
 	now := time.Now().UTC()
@@ -287,6 +286,30 @@ func grantAuthorizationDetails(request oauth2.AccessRequester, relationship *oau
 	}
 
 	request.SetGrantedAuthorizationDetails(granted)
+}
+
+func (h *IssueHandler) subject(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (subject string, err error) {
+	if request.GetSession().GetSubject() == "" {
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("The session has no subject to issue the grant for."))
+	}
+
+	subject, err = h.Storage.GetIDJAGSubject(ctx, request, relationship)
+
+	switch {
+	case errors.Is(err, oauth2.ErrNotFound):
+		return "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The subject has no subject identifier for the audience '%s'.", relationship.Issuer))
+	case err != nil:
+		var rfc *oauth2.RFC6749Error
+		if errors.As(err, &rfc) {
+			return "", errorsx.WithStack(err)
+		}
+
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	case subject == "":
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The subject identifier for the audience '%s' is empty.", relationship.Issuer))
+	}
+
+	return subject, nil
 }
 
 func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRequester) (relationship *oauth2.IDJAGRelationship, err error) {

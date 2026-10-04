@@ -7,6 +7,7 @@ package idjag_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/url"
 	"slices"
@@ -132,7 +133,7 @@ func TestIssueHandlerPopulate(t *testing.T) {
 
 			assert.Equal(t, consts.JSONWebTokenTypeIDJAG, header)
 			assert.Equal(t, cfg.AuthorizationServerIdentificationIssuer, claims[consts.ClaimIssuer])
-			assert.Equal(t, issueSubject, claims[consts.ClaimSubject])
+			assert.Equal(t, issueMapped, claims[consts.ClaimSubject])
 			assert.Equal(t, redeemAudience, claims[consts.ClaimAudience])
 			assert.Equal(t, redeemClient, claims[consts.ClaimClientIdentifier])
 			assert.Equal(t, redeemRead, claims[consts.ClaimScope])
@@ -227,6 +228,47 @@ func TestIssueHandlerRejectsMissingIssuerIdentifier(t *testing.T) {
 
 	require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response), oauth2.ErrServerError)
 	assert.Empty(t, response.GetAccessToken())
+}
+
+func TestIssueHandlerSubject(t *testing.T) {
+	testCases := []struct {
+		name    string
+		storage func(store *storage.MemoryStore) idjag.IssueStorage
+		err     error
+	}{
+		{name: "ShouldRejectASubjectWithoutAnIdentifierForTheAudience", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
+			clear(store.IDJAGAudienceSubjects)
+
+			return store
+		}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldReturnServerErrorForAnEmptyIdentifier", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
+			return &subjectStorage{MemoryStore: store}
+		}, err: oauth2.ErrServerError},
+		{name: "ShouldReturnServerErrorWhenTheStorageFails", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
+			return &subjectStorage{MemoryStore: store, err: errors.New("connection refused")}
+		}, err: oauth2.ErrServerError},
+		{name: "ShouldReturnTheErrorOfTheStorage", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
+			return &subjectStorage{MemoryStore: store, err: oauth2.ErrAccessDenied}
+		}, err: oauth2.ErrAccessDenied},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, _ := newIssueFixture(t, false)
+
+			handler.Storage = tc.storage(handler.Storage.(*storage.MemoryStore))
+
+			request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+			request.RequestedAudience = oauth2.Arguments{redeemAudience}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+			response := oauth2.NewAccessResponse()
+
+			require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response), tc.err)
+			assert.Empty(t, response.GetAccessToken())
+		})
+	}
 }
 
 func TestIssueHandlerSessionCannotOverrideRegisteredClaims(t *testing.T) {
@@ -484,6 +526,7 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 		Resources: []string{redeemResource, issueFiles},
 	}
 
+	store.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: redeemAudience, Subject: issueSubject}] = issueMapped
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: redeemAudience}] = relationship
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceURN}] = relationship
 
@@ -541,4 +584,14 @@ func parseIssued(t *testing.T, token string, key *jose.JSONWebKey) (typ string, 
 	typ, _ = signed.Signatures[0].Header.ExtraHeaders[jose.HeaderType].(string)
 
 	return typ, claims
+}
+
+type subjectStorage struct {
+	*storage.MemoryStore
+
+	err error
+}
+
+func (s *subjectStorage) GetIDJAGSubject(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship) (string, error) {
+	return "", s.err
 }

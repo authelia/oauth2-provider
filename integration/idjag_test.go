@@ -648,6 +648,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 	}
 
 	idpMemory.Clients[idjagIdPClientID] = env.idpClient
+	idpMemory.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: env.rs.URL, Subject: idjagSubject}] = idjagSubject
 	idpMemory.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: idjagIdPClientID, Audience: env.rs.URL}] = oauth2.IDJAGRelationship{
 		Issuer:    env.rs.URL,
 		ClientID:  idjagRSClientID,

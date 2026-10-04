@@ -66,6 +66,18 @@ type IDJAGRelationshipKey struct {
 	Audience string
 }
 
+// IDJAGAudienceSubjectKey identifies the End-User an ID-JAG is issued for by the Resource Authorization Server it is
+// issued to and the subject of the session.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-5
+type IDJAGAudienceSubjectKey struct {
+	// Issuer is the issuer identifier of the Resource Authorization Server.
+	Issuer string
+
+	// Subject is the subject of the session.
+	Subject string
+}
+
 // IDJAGSubjectKey identifies an ID-JAG subject within the namespace of its issuer, and of its tenant when the issuer
 // is multi-tenant.
 //
@@ -117,6 +129,7 @@ type MemoryStore struct {
 	IDJAGRelationships       map[IDJAGRelationshipKey]oauth2.IDJAGRelationship
 	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
 	IDJAGSubjects            map[IDJAGSubjectKey]string
+	IDJAGAudienceSubjects    map[IDJAGAudienceSubjectKey]string
 	IDJAGJTIs                map[JTIMarker]time.Time
 
 	clientsMutex                  sync.RWMutex
@@ -173,6 +186,7 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGRelationships:       make(map[IDJAGRelationshipKey]oauth2.IDJAGRelationship),
 		IDJAGTrustedIssuers:      make(map[string]oauth2.IDJAGTrustedIssuer),
 		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
+		IDJAGAudienceSubjects:    make(map[IDJAGAudienceSubjectKey]string),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 	}
 }
@@ -856,6 +870,19 @@ func (s *MemoryStore) GetIDJAGRelationship(_ context.Context, request oauth2.Acc
 	relationship.AuthorizationDetailsTypes = slices.Clone(relationship.AuthorizationDetailsTypes)
 
 	return &relationship, nil
+}
+
+// GetIDJAGSubject returns the subject identifier registered for the session subject at the Resource Authorization
+// Server of the relationship, or oauth2.ErrNotFound when none is registered.
+func (s *MemoryStore) GetIDJAGSubject(_ context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (string, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	if subject, ok := s.IDJAGAudienceSubjects[IDJAGAudienceSubjectKey{Issuer: relationship.Issuer, Subject: request.GetSession().GetSubject()}]; ok {
+		return subject, nil
+	}
+
+	return "", oauth2.ErrNotFound
 }
 
 // GetIDJAGTrustedIssuer returns a copy of the trust configuration registered for the issuer.

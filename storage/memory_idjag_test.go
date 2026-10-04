@@ -91,6 +91,24 @@ func TestMemoryStoreIDJAG(t *testing.T) {
 	assert.ErrorIs(t, store.MarkIDJAGUsed(ctx, idjagTestIssuer, "j1", time.Now().Add(time.Minute)), oauth2.ErrJTIKnown)
 }
 
+func TestMemoryStoreIDJAGSubject(t *testing.T) {
+	store := storage.NewMemoryStore()
+	request := &oauth2.AccessRequest{Request: oauth2.Request{Session: &oauth2.DefaultSession{Subject: "peter"}}}
+	relationship := &oauth2.IDJAGRelationship{Issuer: "https://chat.example/"}
+
+	_, err := store.GetIDJAGSubject(t.Context(), request, relationship)
+	require.ErrorIs(t, err, oauth2.ErrNotFound)
+
+	store.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: "https://chat.example/", Subject: "peter"}] = "U019488227"
+
+	subject, err := store.GetIDJAGSubject(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Equal(t, "U019488227", subject)
+
+	_, err = store.GetIDJAGSubject(t.Context(), request, &oauth2.IDJAGRelationship{Issuer: "https://pay.example/"})
+	require.ErrorIs(t, err, oauth2.ErrNotFound)
+}
+
 func TestMemoryStoreResolveIDJAGSubject(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: idjagTestIssuer, Subject: idjagTestSubject}] = idjagTestAlice

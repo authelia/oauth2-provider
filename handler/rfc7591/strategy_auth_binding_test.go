@@ -261,7 +261,7 @@ func TestAuthRejectsTheDPoPSchemeAtTheConfigurationEndpoint(t *testing.T) {
 
 	auth, config, store, _ := newAuthFixtures(t)
 
-	token, err := NewClientManagementToken(ctx, hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"), store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(ctx, hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"), store, config, &oauth2.DefaultClient{ID: "client-a"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	r := httptest.NewRequest(http.MethodGet, ClientConfigurationURL("https://auth.example.com/register", "client-a"), nil)

@@ -96,7 +96,7 @@ func newIntrospectionFixture(t *testing.T) (*ClientRegistrationTokenIntrospector
 	store := storage.NewMemoryStore()
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token, err := NewClientManagementToken(context.Background(), strategy, store, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(context.Background(), strategy, store, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	return &ClientRegistrationTokenIntrospector{Store: store, Strategy: strategy, Config: config}, config, store, strategy, token

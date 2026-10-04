@@ -52,6 +52,9 @@ type Client interface {
 
 	// GetAudience returns the allowed audience(s) for this client.
 	GetAudience() (audience Arguments)
+
+	// GetResource returns the allowed RFC 8707 resource indicator(s) for this client.
+	GetResource() (resource Arguments)
 }
 
 // RotatedClientSecretsClient extends Client interface by a method providing a slice of rotated secrets.
@@ -624,6 +627,7 @@ type DefaultClient struct {
 	ResponseTypes                         []string       `json:"response_types"`
 	Scopes                                []string       `json:"scopes"`
 	Audience                              []string       `json:"audience"`
+	Resource                              []string       `json:"resource"`
 	Public                                bool           `json:"public"`
 	DPoPBoundAccessTokens                 bool           `json:"dpop_bound_access_tokens"`
 	TLSClientCertificateBoundAccessTokens bool           `json:"tls_client_certificate_bound_access_tokens"`
@@ -704,6 +708,11 @@ func (c *DefaultClient) IsPublic() bool {
 // GetAudience returns the allowed audience(s) for the client.
 func (c *DefaultClient) GetAudience() Arguments {
 	return c.Audience
+}
+
+// GetResource returns the allowed RFC 8707 resource indicator(s) for the client.
+func (c *DefaultClient) GetResource() Arguments {
+	return c.Resource
 }
 
 // GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value.

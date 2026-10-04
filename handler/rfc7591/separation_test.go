@@ -34,7 +34,7 @@ func TestClientRegistrationTokensAreNotAccessTokens(t *testing.T) {
 
 	client := &oauth2.DefaultClient{ID: "onboarding"}
 
-	token, err := NewClientManagementToken(ctx, strategy, store, config, client, oauth2.Arguments{"openid"}, nil)
+	token, err := NewClientManagementToken(ctx, strategy, store, config, client, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	signature := strategy.ClientRegistrationTokenSignature(ctx, token)

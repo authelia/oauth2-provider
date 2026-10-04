@@ -21,15 +21,17 @@ const (
 	defaultPARKeyLength = 32
 )
 
-// PushedAuthorizeHandler handles the PAR request
+// PushedAuthorizeHandler implements oauth2.PushedAuthorizeEndpointHandler, the RFC 9126 pushed authorization request
+// endpoint. Storage must implement oauth2.PARStorage and Config must implement
+// oauth2.PushedAuthorizeRequestConfigProvider.
 type PushedAuthorizeHandler struct {
 	Storage any
 	Config  oauth2.Configurator
 }
 
-// HandlePushedAuthorizeEndpointRequest handles a pushed authorize endpoint request. To extend the handler's capabilities, the http request
-// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
-// the pushed authorize request, he must return nil and NOT modify session nor response neither request.
+// HandlePushedAuthorizeEndpointRequest validates a pushed authorization request against the client, stores it, and
+// sets the 'request_uri' and 'expires_in' values on the response. It returns nil without modifying the request or
+// response when the response type is not one it is responsible for.
 func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.PushedAuthorizeResponder) (err error) {
 	config, ok := c.Config.(oauth2.PushedAuthorizeRequestConfigProvider)
 	if !ok {
@@ -62,7 +64,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
-	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 

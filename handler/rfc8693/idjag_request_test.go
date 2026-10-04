@@ -135,7 +135,7 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 		// Section 4.3.3: the refresh token is validated as for a refresh_token grant, against the current registration.
 		{name: "ShouldRejectAScopeRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, err: oauth2.ErrInvalidScope},
 		{name: "ShouldRejectAnAudienceRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Audience = []string{idjagResource} }, err: oauth2.ErrInvalidTarget},
-		{name: "ShouldRejectAResourceRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, grantedResources: []string{idjagResource}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, requestedResources: []string{idjagResource}, narrow: func(client *oauth2.DefaultClient) { client.Audience = []string{idjagAudience} }, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectAResourceRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, grantedResources: []string{idjagResource}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, requestedResources: []string{idjagResource}, narrow: func(client *oauth2.DefaultClient) { client.Resource = nil }, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectWhenTheRefreshTokenGrantIsRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.GrantTypes = []string{consts.GrantTypeOAuthTokenExchange} }, err: oauth2.ErrInvalidRequest},
 	}
 
@@ -554,6 +554,7 @@ func newIDJAGRegisteredClient() *oauth2.DefaultClient {
 		ID:         idjagClientID,
 		GrantTypes: []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
 		Scopes:     []string{idjagScope, idjagOtherScope},
-		Audience:   []string{idjagAudience, idjagResource},
+		Audience:   []string{idjagAudience},
+		Resource:   []string{idjagResource},
 	}
 }

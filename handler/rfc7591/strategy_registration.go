@@ -187,6 +187,7 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 
 		AuthorizationGrantProfilesSupported: registered.AuthorizationGrantProfilesSupported,
 		Audience:                            registered.Audience,
+		Resource:                            registered.Resource,
 
 		Extra: registered.Extra,
 	}, nil
@@ -284,6 +285,7 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.RequirePushedAuthorizationRequests = metadata.RequirePushedAuthorizationRequests
 	registered.DPoPBoundAccessTokens = metadata.DPoPBoundAccessTokens
 	registered.Audience = metadata.Audience
+	registered.Resource = metadata.Resource
 
 	registered.ResponseModes = make([]oauth2.ResponseModeType, len(metadata.ResponseModes))
 	for i, mode := range metadata.ResponseModes {

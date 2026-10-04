@@ -326,7 +326,7 @@ func TestRedeemHandlerResource(t *testing.T) {
 	testCases := []struct {
 		name      string
 		claim     any
-		audience  []string
+		permitted []string
 		requested []string
 		err       error
 		granted   []string
@@ -335,13 +335,13 @@ func TestRedeemHandlerResource(t *testing.T) {
 		{name: "ShouldOmitResourceWhenNoneIsGranted", claim: nil},
 		// Section 4.4.1: the granted resource is included in the access token response.
 		{name: "ShouldRespondWithASingleResource", claim: redeemResource, granted: []string{redeemResource}, response: redeemResource},
-		{name: "ShouldRespondWithSeveralResources", claim: []string{redeemResource, redeemOther}, audience: []string{redeemResource, redeemOther}, granted: []string{redeemResource, redeemOther}, response: []string{redeemResource, redeemOther}},
+		{name: "ShouldRespondWithSeveralResources", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, granted: []string{redeemResource, redeemOther}, response: []string{redeemResource, redeemOther}},
 		{name: "ShouldRespondWithOnlyTheGrantedResource", claim: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},
 		// RFC 8707 Section 2: the access token stays audience restricted to the resources of the grant.
 		{name: "ShouldRejectAGrantWhoseResourcesAreNotPermitted", claim: redeemOther, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectARequestedResourceTheClientIsNotPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, err: oauth2.ErrInvalidTarget},
 		// RFC 8707 Section 2.2: a requested resource narrows the grant.
-		{name: "ShouldNarrowToTheRequestedResource", claim: []string{redeemResource, redeemOther}, audience: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, granted: []string{redeemOther}, response: redeemOther},
+		{name: "ShouldNarrowToTheRequestedResource", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, granted: []string{redeemOther}, response: redeemOther},
 		{name: "ShouldNarrowToTheRequestedResourceTheClientIsPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},
 		{name: "ShouldRejectARequestedResourceOutsideTheGrant", claim: redeemResource, requested: []string{redeemEvil}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectARequestedResourceWhenTheGrantHasNone", requested: []string{redeemResource}, err: oauth2.ErrInvalidTarget},
@@ -352,8 +352,8 @@ func TestRedeemHandlerResource(t *testing.T) {
 			fixture := newRedeemFixture(t, false)
 
 			client := fixture.store.Clients[redeemClient].(*oauth2.DefaultClient)
-			if tc.audience != nil {
-				client.Audience = tc.audience
+			if tc.permitted != nil {
+				client.Resource = tc.permitted
 			}
 
 			claims := fixture.claims()
@@ -690,7 +690,7 @@ func TestRedeemHandlerAuthorizationDetails(t *testing.T) {
 		// Section 4.4.1: the Resource AS MAY filter authorization details based on policy.
 		{name: "ShouldDropInvalidDetails", enabled: true, claim: []any{payment, invalid}, expected: granted},
 		{name: "ShouldDropUnsupportedTypes", enabled: true, claim: []any{payment, unsupported}, expected: granted},
-		{name: "ShouldDropTypesTheClientMayNotRequest", enabled: true, claim: []any{payment}, client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{ID: redeemClient, GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer}, Scopes: oauth2.Arguments{redeemRead, redeemHistory, redeemOffline}, Audience: oauth2.Arguments{redeemResource}}, AuthorizationDetailsTypes: []string{"other"}}},
+		{name: "ShouldDropTypesTheClientMayNotRequest", enabled: true, claim: []any{payment}, client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{ID: redeemClient, GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer}, Scopes: oauth2.Arguments{redeemRead, redeemHistory, redeemOffline}, Resource: oauth2.Arguments{redeemResource}}, AuthorizationDetailsTypes: []string{"other"}}},
 		{name: "ShouldGrantNothingWhenEveryDetailIsDropped", enabled: true, claim: []any{invalid}},
 		{name: "ShouldGrantNothingWithoutClaim", enabled: true},
 		{name: "ShouldRejectNullClaim", enabled: true, null: true, err: oauth2.ErrInvalidGrant},
@@ -817,13 +817,13 @@ func newRedeemFixture(t *testing.T, dpop bool) *redeemFixture {
 		ID:         redeemClient,
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer},
 		Scopes:     oauth2.Arguments{redeemRead, redeemHistory, redeemOffline},
-		Audience:   oauth2.Arguments{redeemResource},
+		Resource:   oauth2.Arguments{redeemResource},
 	}
 	store.Clients[redeemDPoP] = &oauth2.DefaultClient{
 		ID:         redeemDPoP,
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTDPoP},
 		Scopes:     oauth2.Arguments{redeemRead, redeemHistory, redeemOffline},
-		Audience:   oauth2.Arguments{redeemResource},
+		Resource:   oauth2.Arguments{redeemResource},
 	}
 	store.Clients[redeemNoGrant] = &oauth2.DefaultClient{ID: redeemNoGrant, GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials}}
 	store.Clients[redeemPublic] = &oauth2.DefaultClient{
@@ -831,7 +831,7 @@ func newRedeemFixture(t *testing.T, dpop bool) *redeemFixture {
 		Public:     true,
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer},
 		Scopes:     oauth2.Arguments{redeemRead, redeemHistory},
-		Audience:   oauth2.Arguments{redeemResource},
+		Resource:   oauth2.Arguments{redeemResource},
 	}
 	store.IDJAGTrustedIssuers[redeemIssuer] = oauth2.IDJAGTrustedIssuer{
 		Issuer:      redeemIssuer,

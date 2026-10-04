@@ -288,7 +288,7 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 
 	resource := oauth2.GetResourceStrategy(ctx, c.Config, client)
 
-	if err = resource(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = resource(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(err)
 	}
 

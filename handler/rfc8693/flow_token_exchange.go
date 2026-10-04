@@ -185,7 +185,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	// Check the requested resource indicators (RFC 8707).
-	if err = c.GetResourceStrategy(ctx, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = c.GetResourceStrategy(ctx, client)(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 

@@ -24,7 +24,7 @@ func TestRegistrationTokenIntrospectionThroughComposedProvider(t *testing.T) {
 	provider, config, memory := newRegistrationTokenIntrospectionFixture(t, true)
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
-	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
+	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	use, requester, err := provider.IntrospectToken(context.Background(), token, oauth2.AccessToken, &oauth2.DefaultSession{})
@@ -39,7 +39,7 @@ func TestRegistrationTokenIntrospectionDisabledByDefaultThroughComposedProvider(
 
 	strategy := compose.NewOAuth2HMACStrategy(config)
 
-	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil)
+	token, err := rfc7591.NewClientManagementToken(context.Background(), strategy, memory, config, &oauth2.DefaultClient{ID: "onboarding"}, oauth2.Arguments{"openid"}, nil, nil)
 	require.NoError(t, err)
 
 	use, _, err := provider.IntrospectToken(context.Background(), token, oauth2.AccessToken, &oauth2.DefaultSession{})

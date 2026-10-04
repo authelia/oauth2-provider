@@ -70,7 +70,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 			return err
 		}
 
-		if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetAudience(), resource); err != nil {
+		if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetResource(), resource); err != nil {
 			return err
 		}
 	}

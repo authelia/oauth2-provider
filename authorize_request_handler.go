@@ -815,7 +815,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 		return err
 	}
 
-	if err = GetResourceStrategy(ctx, f.Config, client)(client.GetAudience(), request.GetRequestedResource()); err != nil {
+	if err = GetResourceStrategy(ctx, f.Config, client)(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
 

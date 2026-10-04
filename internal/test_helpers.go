@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,39 +91,38 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		return "", "", "", token, customParameters, rFC6749Error, err
 	}
 
-	body := findBody(doc.FirstChild.FirstChild)
-	if body.Data != "body" {
+	body := findElement(doc, "body")
+	if body == nil {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("Malformed html")
 	}
 
-	htmlEvent := body.Attr[0].Key
-	if htmlEvent != "onload" {
+	onLoadFunc, ok := getAttr(body, "onload")
+	if !ok {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("onload event is missing")
 	}
 
-	onLoadFunc := body.Attr[0].Val
 	if onLoadFunc != "javascript:document.forms[0].submit()" {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("onload function is missing")
 	}
 
-	form := getNextNoneTextNode(body.FirstChild)
-	if form.Data != "form" {
+	form := findElement(body, "form")
+	if form == nil {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form is missing")
 	}
 
-	for _, attr := range form.Attr {
-		if attr.Key == "method" {
-			if attr.Val != "post" {
-				return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post method is missing")
-			}
-		} else {
-			if attr.Val != redirectURL {
-				return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post url is wrong")
-			}
-		}
+	if method, _ := getAttr(form, "method"); !strings.EqualFold(method, "post") {
+		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post method is missing")
 	}
 
-	for node := getNextNoneTextNode(form.FirstChild); node != nil; node = getNextNoneTextNode(node.NextSibling) {
+	if action, _ := getAttr(form, "action"); action != redirectURL {
+		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post url is wrong")
+	}
+
+	for _, node := range findElements(doc, "input") {
+		if !isFormOwner(form, node) || !isSubmitted(node) {
+			continue
+		}
+
 		var k, v string
 
 		for _, attr := range node.Attr {
@@ -167,22 +167,83 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 	return
 }
 
-func getNextNoneTextNode(node *html.Node) *html.Node {
-	nextNode := node.NextSibling
-	if nextNode != nil && nextNode.Type == html.TextNode {
-		nextNode = getNextNoneTextNode(node.NextSibling)
+func getAttr(node *html.Node, key string) (string, bool) {
+	for _, attr := range node.Attr {
+		if attr.Key == key {
+			return attr.Val, true
+		}
 	}
 
-	return nextNode
+	return "", false
 }
 
-func findBody(node *html.Node) *html.Node {
-	if node != nil {
-		if node.Data == "body" {
-			return node
+func isFormOwner(form, node *html.Node) bool {
+	if owner, ok := getAttr(node, "form"); ok {
+		id, _ := getAttr(form, "id")
+
+		return id != "" && id == owner
+	}
+
+	for parent := node.Parent; parent != nil; parent = parent.Parent {
+		if parent == form {
+			return true
 		}
-		return findBody(node.NextSibling)
+	}
+
+	return false
+}
+
+func isSubmitted(node *html.Node) bool {
+	if name, _ := getAttr(node, "name"); name == "" {
+		return false
+	}
+
+	if _, disabled := getAttr(node, "disabled"); disabled {
+		return false
+	}
+
+	for parent := node.Parent; parent != nil; parent = parent.Parent {
+		if parent.Type != html.ElementNode || parent.Data != "fieldset" {
+			continue
+		}
+
+		if _, disabled := getAttr(parent, "disabled"); disabled {
+			return false
+		}
+	}
+
+	switch kind, _ := getAttr(node, "type"); strings.ToLower(kind) {
+	case "submit", "button", "reset", "image":
+		return false
+	case "checkbox", "radio":
+		_, checked := getAttr(node, "checked")
+
+		return checked
+	}
+
+	return true
+}
+
+func findElement(node *html.Node, tag string) *html.Node {
+	if elements := findElements(node, tag); len(elements) != 0 {
+		return elements[0]
 	}
 
 	return nil
+}
+
+func findElements(node *html.Node, tag string) (elements []*html.Node) {
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.ElementNode && child.Data == "template" {
+			continue
+		}
+
+		if child.Type == html.ElementNode && child.Data == tag {
+			elements = append(elements, child)
+		}
+
+		elements = append(elements, findElements(child, tag)...)
+	}
+
+	return elements
 }

@@ -99,6 +99,27 @@ func TestRequestURL(t *testing.T) {
 			want:   "http://as.example.com/token",
 		},
 		{
+			name:   "ForwardedProtoListUsesFirstElement",
+			xfp:    "https, http",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "https://as.example.com/token",
+		},
+		{
+			name:   "ForwardedProtoListWithoutSpaces",
+			xfp:    "http,https",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "http://as.example.com/token",
+		},
+		{
+			name:   "ForwardedProtoEmptyFirstElementDefaultsHTTP",
+			xfp:    " , https",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "http://as.example.com/token",
+		},
+		{
 			name:   "NoTLSNoForwardedProtoDefaultsHTTP",
 			host:   "as.example.com",
 			rawURL: "http://as.example.com/token",
@@ -182,6 +203,21 @@ func TestNormalizeHTU(t *testing.T) {
 			name: "StripsDefaultHTTPPort",
 			raw:  "http://as.example.com:80/token",
 			want: "http://as.example.com/token",
+		},
+		{
+			name: "StripsEmptyPort",
+			raw:  "https://as.example.com:/token",
+			want: "https://as.example.com/token",
+		},
+		{
+			name: "StripsEmptyPortOnIPv6Literal",
+			raw:  "https://[2001:db8::1]:/token",
+			want: "https://[2001:db8::1]/token",
+		},
+		{
+			name: "KeepsIPv6LiteralWithoutPort",
+			raw:  "https://[2001:db8::]/token",
+			want: "https://[2001:db8::]/token",
 		},
 		{
 			name: "KeepsNonDefaultPort",

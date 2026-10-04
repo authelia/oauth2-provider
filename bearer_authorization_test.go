@@ -187,6 +187,35 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	// RFC 9449 Section 4.3 step 12.
+	t.Run("ShouldRejectAnUnboundCredentialPresentedUsingTheDPoPScheme", func(t *testing.T) {
+		config := &Config{DPoPEnabled: true}
+
+		for _, scheme := range []string{"DPoP", "dpop"} {
+			r := newBearerRequest()
+			r.Header.Set("Authorization", scheme+" token")
+
+			err := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
+				BearerAuthorization{Audiences: []string{"urn:aud"}})
+
+			require.Error(t, err)
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not bound to a DPoP key. The credential was presented using the DPoP authentication scheme, which requires it to be bound to the key of the DPoP proof, but this credential records no binding.")
+			assert.Equal(t, http.StatusUnauthorized, ErrorToRFC6749Error(err).CodeField)
+		}
+	})
+
+	t.Run("ShouldAdmitAnUnboundCredentialPresentedUsingTheBearerScheme", func(t *testing.T) {
+		config := &Config{DPoPEnabled: true}
+
+		r := newBearerRequest()
+		r.Header.Set("Authorization", "Bearer token")
+
+		err := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
+			BearerAuthorization{Audiences: []string{"urn:aud"}})
+
+		assert.NoError(t, err)
+	})
+
 	t.Run("ShouldSkipMTLSBindingWhenDisabled", func(t *testing.T) {
 		config := &Config{MTLSEnabled: false}
 

@@ -369,6 +369,10 @@ func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
 
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
 
+	grant := &TokenExchangeGrantHandler{Config: cfg, Storage: store}
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+
 	assert.Contains(t, store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: jti})
 }
 

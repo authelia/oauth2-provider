@@ -208,16 +208,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, err
 	}
 
-	// Validate the JTI is unique if required.
+	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
 	if jwtType.ValidateJTI {
-		jti, _ := claims[consts.ClaimJWTID].(string)
-
-		if jti == "" {
+		if jti, _ := claims[consts.ClaimJWTID].(string); jti == "" {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
-		}
-
-		if c.SetTokenExchangeCustomJWT(ctx, iss, jti, time.Unix(expiry, 0)) != nil {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
 		}
 	}
 

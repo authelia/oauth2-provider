@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -28,6 +29,10 @@ type TokenExchangeGrantHandler struct {
 	ScopeStrategy    oauth2.ScopeStrategy
 	AudienceStrategy oauth2.AudienceStrategy
 	ResourceStrategy oauth2.ResourceStrategy
+
+	// Storage marks a custom JWT presented as a subject or actor token as used. It is required when a *JWTType
+	// sets ValidateJTI.
+	Storage CustomJWTStorage
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -308,8 +313,79 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return err
 	}
 
+	if err = c.consume(ctx, request, session); err != nil {
+		return err
+	}
+
 	if act != nil {
 		session.SetClaimActor(act)
+	}
+
+	return nil
+}
+
+func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.AccessRequester, session Session) (err error) {
+	form := request.GetRequestForm()
+	types := c.Config.GetRFC8693TokenTypes(ctx)
+
+	presented := []struct {
+		kind   string
+		claims map[string]any
+	}{
+		{form.Get(consts.FormParameterActorTokenType), session.GetActorToken()},
+		{form.Get(consts.FormParameterSubjectTokenType), session.GetSubjectToken()},
+	}
+
+	type marker struct {
+		iss, jti string
+		exp      time.Time
+	}
+
+	var markers []marker
+
+	for _, token := range presented {
+		if jwtType, ok := types[token.kind].(*JWTType); !ok || jwtType == nil || !jwtType.ValidateJTI {
+			continue
+		}
+
+		if c.Storage == nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the storage required to validate the 'jti' claim of a JSON Web Token is not configured."))
+		}
+
+		iss, _ := token.claims[consts.ClaimIssuer].(string)
+		jti, _ := token.claims[consts.ClaimJWTID].(string)
+
+		if jti == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
+		}
+
+		if slices.ContainsFunc(markers, func(m marker) bool { return m.iss == iss && m.jti == jti }) {
+			continue
+		}
+
+		markers = append(markers, marker{iss: iss, jti: jti, exp: time.Unix(toInt64(token.claims[consts.ClaimExpirationTime]), 0)})
+	}
+
+	if len(markers) == 0 {
+		return nil
+	}
+
+	if ctx, err = storage.MaybeBeginTx(ctx, c.Storage); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	for _, m := range markers {
+		if c.Storage.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp) != nil {
+			if err = storage.MaybeRollbackTx(ctx, c.Storage); err != nil {
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+			}
+
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
+		}
+	}
+
+	if err = storage.MaybeCommitTx(ctx, c.Storage); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil

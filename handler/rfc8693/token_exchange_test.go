@@ -79,6 +79,7 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 		ScopeStrategy:    config.ScopeStrategy,
 		AudienceStrategy: config.AudienceStrategy,
 		ResourceStrategy: config.GetResourceStrategy(t.Context()),
+		Storage:          store,
 	}
 
 	accessTokenHandler := &AccessTokenTypeHandler{

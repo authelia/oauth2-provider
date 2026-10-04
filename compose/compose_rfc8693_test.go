@@ -45,6 +45,29 @@ func TestRFC8693RefreshTokenTypeFactoryWiresTokenRevocationStorage(t *testing.T)
 	}
 }
 
+func TestRFC8693TokenExchangeGrantFactoryWiresCustomJWTStorage(t *testing.T) {
+	store := storage.NewMemoryStore()
+
+	testCases := []struct {
+		name     string
+		storage  any
+		expected rfc8693.CustomJWTStorage
+	}{
+		{name: "ShouldWireTheStorageAsCustomJWTStorage", storage: store, expected: store},
+		{name: "ShouldLeaveTheStorageUnsetWhenItCannotMarkCustomJWTs", storage: struct{}{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{GlobalSecret: []byte("some-cool-secret-that-is-32bytes")}
+
+			handler, ok := RFC8693TokenExchangeGrantFactory(config, tc.storage, nil).(*rfc8693.TokenExchangeGrantHandler)
+			require.True(t, ok)
+			assert.Equal(t, tc.expected, handler.Storage)
+		})
+	}
+}
+
 type rfc8693OnlyStorage struct {
 	rfc8693.Storage
 }

@@ -6,6 +6,7 @@ package idjag_test
 
 const (
 	issueSubject     = "peter"
+	issueMapped      = "U019488227"
 	issueClient      = "my-client"
 	issueFiles       = "https://api.chat.example/files"
 	issueAudienceURN = "urn:example:chat"

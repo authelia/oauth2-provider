@@ -403,6 +403,11 @@ type Config struct {
 	// IDJAGSingleUse rejects a second redemption of the same Identity Assertion JWT Authorization Grant.
 	IDJAGSingleUse bool
 
+	// IDJAGAccessTokenAllowance is how long an access token issued for an Identity Assertion JWT Authorization Grant
+	// may outlive the grant. The access token expires no later than the grant when zero, and is not limited by the
+	// grant when negative.
+	IDJAGAccessTokenAllowance time.Duration
+
 	// JWTClockSkew is how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client: a client
 	// assertion, a request object, or an RFC 7523 authorization grant. Defaults to 10 seconds when zero, is disabled
 	// when negative, and is capped at 60 seconds.
@@ -1242,6 +1247,12 @@ func (c *Config) GetIDJAGLifespan(ctx context.Context) (lifespan time.Duration) 
 // GetIDJAGSingleUse returns true when an Identity Assertion JWT Authorization Grant may only be redeemed once.
 func (c *Config) GetIDJAGSingleUse(ctx context.Context) (single bool) {
 	return c.IDJAGSingleUse
+}
+
+// GetIDJAGAccessTokenAllowance returns how long an access token may outlive the Identity Assertion JWT Authorization
+// Grant it was issued for.
+func (c *Config) GetIDJAGAccessTokenAllowance(ctx context.Context) (allowance time.Duration) {
+	return c.IDJAGAccessTokenAllowance
 }
 
 // GetRFC8628UserVerificationURL returns the URL of the device verification endpoint.

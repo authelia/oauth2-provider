@@ -388,20 +388,26 @@ func TestRedeemHandlerResource(t *testing.T) {
 
 func TestRedeemHandlerLifespan(t *testing.T) {
 	testCases := []struct {
-		name     string
-		lifespan time.Duration
-		expiry   time.Duration
-		expected time.Duration
+		name      string
+		lifespan  time.Duration
+		expiry    time.Duration
+		allowance time.Duration
+		expected  time.Duration
 	}{
-		// RFC 7521 Section 4.1: the access token does not outlive the assertion.
+		// RFC 7521 Section 4.1: the access token does not outlive the assertion by a significant period.
 		{name: "ShouldCapTheLifespanAtTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, expected: 2 * time.Minute},
 		{name: "ShouldKeepAShorterLifespan", lifespan: time.Minute, expiry: 5 * time.Minute, expected: time.Minute},
+		{name: "ShouldCapTheLifespanAtTheAllowancePastTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 12 * time.Minute},
+		{name: "ShouldCapTheLifespanAtAWholeSecond", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: 10*time.Minute + 500*time.Millisecond, expected: 12 * time.Minute},
+		{name: "ShouldKeepALifespanWithinTheAllowance", lifespan: 5 * time.Minute, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 5 * time.Minute},
+		{name: "ShouldNotCapTheLifespanWhenTheAllowanceIsNegative", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: -1, expected: time.Hour},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newRedeemFixture(t, false)
 			fixture.config.AccessTokenLifespan = tc.lifespan
+			fixture.config.IDJAGAccessTokenAllowance = tc.allowance
 
 			claims := fixture.claims()
 			claims[consts.ClaimExpirationTime] = time.Now().Add(tc.expiry).Unix()
@@ -414,6 +420,7 @@ func TestRedeemHandlerLifespan(t *testing.T) {
 			require.NoError(t, fixture.handler.PopulateTokenEndpointResponse(t.Context(), request, response))
 
 			assert.WithinDuration(t, time.Now().Add(tc.expected), request.GetSession().GetExpiresAt(oauth2.AccessToken), 2*time.Second)
+			assert.Zero(t, request.GetSession().GetExpiresAt(oauth2.AccessToken).Nanosecond())
 			assert.InDelta(t, tc.expected.Seconds(), response.GetExtra(consts.AccessResponseExpiresIn), 2)
 		})
 	}

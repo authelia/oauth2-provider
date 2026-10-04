@@ -99,6 +99,27 @@ func TestRequestURL(t *testing.T) {
 			want:   "http://as.example.com/token",
 		},
 		{
+			name:   "ForwardedProtoListUsesFirstElement",
+			xfp:    "https, http",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "https://as.example.com/token",
+		},
+		{
+			name:   "ForwardedProtoListWithoutSpaces",
+			xfp:    "http,https",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "http://as.example.com/token",
+		},
+		{
+			name:   "ForwardedProtoEmptyFirstElementDefaultsHTTP",
+			xfp:    " , https",
+			host:   "as.example.com",
+			rawURL: "http://as.example.com/token",
+			want:   "http://as.example.com/token",
+		},
+		{
 			name:   "NoTLSNoForwardedProtoDefaultsHTTP",
 			host:   "as.example.com",
 			rawURL: "http://as.example.com/token",

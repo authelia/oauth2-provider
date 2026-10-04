@@ -615,6 +615,13 @@ type IDJAGConfigProvider interface {
 	// GetIDJAGSingleUse returns true when a grant may only be redeemed once. Section 4.4.3 permits a client to redeem
 	// the same grant until it expires, so this defaults to false.
 	GetIDJAGSingleUse(ctx context.Context) (single bool)
+
+	// GetIDJAGAccessTokenAllowance returns how long an access token issued for a grant may outlive the grant. RFC 7521
+	// Section 4.1 has it not exceed the validity period of the grant by a significant period, so this defaults to
+	// zero, which expires the access token no later than the grant. A negative value removes the limit.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7521#section-4.1
+	GetIDJAGAccessTokenAllowance(ctx context.Context) (allowance time.Duration)
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.

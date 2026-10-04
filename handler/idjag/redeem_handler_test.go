@@ -388,20 +388,25 @@ func TestRedeemHandlerResource(t *testing.T) {
 
 func TestRedeemHandlerLifespan(t *testing.T) {
 	testCases := []struct {
-		name     string
-		lifespan time.Duration
-		expiry   time.Duration
-		expected time.Duration
+		name      string
+		lifespan  time.Duration
+		expiry    time.Duration
+		allowance time.Duration
+		expected  time.Duration
 	}{
-		// RFC 7521 Section 4.1: the access token does not outlive the assertion.
+		// RFC 7521 Section 4.1: the access token does not outlive the assertion by a significant period.
 		{name: "ShouldCapTheLifespanAtTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, expected: 2 * time.Minute},
 		{name: "ShouldKeepAShorterLifespan", lifespan: time.Minute, expiry: 5 * time.Minute, expected: time.Minute},
+		{name: "ShouldCapTheLifespanAtTheAllowancePastTheGrantExpiry", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 12 * time.Minute},
+		{name: "ShouldKeepALifespanWithinTheAllowance", lifespan: 5 * time.Minute, expiry: 2 * time.Minute, allowance: 10 * time.Minute, expected: 5 * time.Minute},
+		{name: "ShouldNotCapTheLifespanWhenTheAllowanceIsNegative", lifespan: time.Hour, expiry: 2 * time.Minute, allowance: -1, expected: time.Hour},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newRedeemFixture(t, false)
 			fixture.config.AccessTokenLifespan = tc.lifespan
+			fixture.config.IDJAGAccessTokenAllowance = tc.allowance
 
 			claims := fixture.claims()
 			claims[consts.ClaimExpirationTime] = time.Now().Add(tc.expiry).Unix()

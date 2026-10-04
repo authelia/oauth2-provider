@@ -343,12 +343,15 @@ func TestConfig_IDJAG(t *testing.T) {
 
 	assert.Equal(t, 5*time.Minute, config.GetIDJAGLifespan(context.Background()))
 	assert.False(t, config.GetIDJAGSingleUse(context.Background()))
+	assert.Equal(t, time.Duration(0), config.GetIDJAGAccessTokenAllowance(context.Background()))
 
 	config.IDJAGLifespan = time.Minute
 	config.IDJAGSingleUse = true
+	config.IDJAGAccessTokenAllowance = time.Hour
 
 	assert.Equal(t, time.Minute, config.GetIDJAGLifespan(context.Background()))
 	assert.True(t, config.GetIDJAGSingleUse(context.Background()))
+	assert.Equal(t, time.Hour, config.GetIDJAGAccessTokenAllowance(context.Background()))
 }
 
 type testClientRegistrationMetadataStrategy struct{}

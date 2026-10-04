@@ -129,8 +129,9 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 }
 
 // PopulateTokenEndpointResponse issues the access token, and includes the granted resources in the response as Section
-// 4.4.1 requires. No refresh token is issued. A single-use grant is consumed here, after the binding phase, so a
-// request that fails any check does not consume it.
+// 4.4.1 requires. The access token expires no later than the grant plus the configured allowance. No refresh token is
+// issued. A single-use grant is consumed here, after the binding phase, so a request that fails any check does not
+// consume it.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.3
 func (h *RedeemHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
@@ -233,9 +234,11 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 	session.SetSubject(subject)
 	expires := time.Now().UTC().Add(h.lifespan(ctx, client)).Round(time.Second)
 
-	// RFC 7521 Section 4.1: the access token SHOULD NOT outlive the assertion.
-	if expiry = expiry.UTC(); expiry.Before(expires) {
-		expires = expiry
+	// RFC 7521 Section 4.1: the access token SHOULD NOT outlive the assertion by a significant period.
+	if allowance := h.Config.GetIDJAGAccessTokenAllowance(ctx); allowance >= 0 {
+		if limit := expiry.UTC().Add(allowance); limit.Before(expires) {
+			expires = limit
+		}
 	}
 
 	session.SetExpiresAt(oauth2.AccessToken, expires)

@@ -91,6 +91,12 @@ func TestParseFormPostResponse(t *testing.T) {
 			err:  "html form is missing",
 		},
 		{
+			name:  "ShouldParseTemplateWithUppercaseMethod",
+			html:  `<html><body onload="javascript:document.forms[0].submit()"><form method="POST" action="https://localhost:8080/cb"><input type="hidden" name="code" value="abc"/><input type="hidden" name="state" value="xyz"/></form></body></html>`,
+			code:  code,
+			state: state,
+		},
+		{
 			name: "ShouldErrorWhenBodyHasNoAttributes",
 			html: `<html><body></body></html>`,
 			err:  "onload event is missing",

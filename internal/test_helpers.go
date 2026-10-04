@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form is missing")
 	}
 
-	if method, _ := getAttr(form, "method"); method != "post" {
+	if method, _ := getAttr(form, "method"); !strings.EqualFold(method, "post") {
 		return "", "", "", token, customParameters, rFC6749Error, errors.New("html form post method is missing")
 	}
 

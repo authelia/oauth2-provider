@@ -247,7 +247,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -260,7 +259,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -273,7 +271,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -315,7 +312,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -420,21 +416,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
 		},
 		{
-			name: "ShouldRejectWhenMarkingTheJWTUsedFails",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
-			},
-			err:      oauth2.ErrServerError,
-			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
-		},
-		{
 			name: "ShouldRejectWhenFetchingThePublicKeyScopesFails",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
@@ -474,7 +455,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -505,7 +485,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", testWiderScope}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -518,7 +497,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -546,7 +524,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 		{
@@ -561,7 +538,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 			},
 		},
 	}
@@ -600,6 +576,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 		setup    func(f *jwtBearerFixture)
 		err      error
 		expected string
+		pattern  string
 		check    func(t *testing.T, f *jwtBearerFixture)
 	}{
 		{
@@ -624,6 +601,9 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 			name: "ShouldIssueAnAccessTokenWithTheHandlerLifespan",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
 				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
 			},
@@ -645,6 +625,9 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 					TokenLifespans: &internal.TestLifespans,
 				}
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
 				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
 			},
@@ -655,6 +638,51 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				assert.Equal(t, "", f.responder.GetExtra(consts.AccessResponseScope))
 				assert.Nil(t, f.responder.GetExtra(consts.AccessResponseRefreshToken))
 			},
+		},
+		{
+			name: "ShouldIssueAnAccessTokenWithoutMarkingAnAssertionWithNoJTI",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				cl := f.createStandardClaim()
+				cl.ID = ""
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
+				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
+			},
+			check: func(t *testing.T, f *jwtBearerFixture) {
+				assert.Equal(t, token, f.responder.AccessToken)
+			},
+		},
+		{
+			name: "ShouldRejectAnAssertionAlreadyUsed",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrJTIKnown)
+			},
+			err:      oauth2.ErrJTIKnown,
+			expected: "The jti was already used.",
+		},
+		{
+			name: "ShouldRejectWhenMarkingTheJWTUsedFails",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				cl := f.createStandardClaim()
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
+			},
+			err:      oauth2.ErrServerError,
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+		},
+		{
+			name: "ShouldRejectAnAssertionThatCanNotBeParsed",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				f.requester.Form.Add(consts.FormParameterAssertion, "not-a-jwt")
+			},
+			err:     oauth2.ErrInvalidGrant,
+			pattern: "^The provided authorization grant .* Unable to parse JSON Web Token passed in 'assertion' request parameter\\.",
 		},
 	}
 
@@ -669,6 +697,13 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 			if tc.err != nil {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.err)
+
+				if tc.pattern != "" {
+					assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())
+
+					return
+				}
+
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 
 				return

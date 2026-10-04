@@ -7,6 +7,8 @@ package errorsx_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,6 +44,24 @@ func TestWriteJSONError(t *testing.T) {
 			have:         errorsx.WithStack(errJSON("something failed")),
 			expectedCode: http.StatusInternalServerError,
 			expectedBody: "{\"error\":\"something failed\"}\n",
+		},
+		{
+			name:         "ShouldEncodeJoinedRFCError",
+			have:         errors.Join(errPlain("something failed"), &rfc6750Error{ErrorField: "invalid_token", DescriptionField: "The access token expired.", CodeField: http.StatusUnauthorized}),
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "{\"error\":\"invalid_token\",\"error_description\":\"The access token expired.\"}\n",
+		},
+		{
+			name:         "ShouldEncodeWrappedJoinedRFCError",
+			have:         fmt.Errorf("context: %w", errors.Join(errPlain("something failed"), errorsx.WithStack(&rfc6750Error{ErrorField: "invalid_token", DescriptionField: "The access token expired.", CodeField: http.StatusUnauthorized}))),
+			expectedCode: http.StatusUnauthorized,
+			expectedBody: "{\"error\":\"invalid_token\",\"error_description\":\"The access token expired.\"}\n",
+		},
+		{
+			name:         "ShouldEncodeFirstJoinedJSONMarshaler",
+			have:         errors.Join(errJSON("first"), errJSON("second")),
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "{\"error\":\"first\"}\n",
 		},
 		{
 			name:         "ShouldDefaultToInternalServerErrorWhenErrorHasNoStatusCode",

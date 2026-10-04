@@ -119,11 +119,6 @@ func (f *Fosite) handlePushedAuthorizeRequestDPoP(ctx context.Context, r *http.R
 		return nil
 	}
 
-	strategy := f.Config.GetDPoPStrategy(ctx)
-	if strategy == nil {
-		return nil
-	}
-
 	// Validated here as well as at the authorization endpoint so a malformed value is reported against the request
 	// that supplied it, rather than surfacing later as a redirect borne error against the redeemed 'request_uri'.
 	if jkt := request.GetRequestForm().Get(consts.FormParameterDPoPJKT); jkt != "" && !IsValidDPoPJWKThumbprint(jkt) {
@@ -139,6 +134,11 @@ func (f *Fosite) handlePushedAuthorizeRequestDPoP(ctx context.Context, r *http.R
 	if proof == "" {
 		// A bare 'dpop_jkt' without a proof is legitimate; it is carried through to the authorization request as sent.
 		return nil
+	}
+
+	strategy := f.Config.GetDPoPStrategy(ctx)
+	if strategy == nil {
+		return errorsx.WithStack(ErrServerError.WithHint("The request contains a DPoP proof but the DPoP strategy needed to verify it is not configured."))
 	}
 
 	var parsed *DPoPProof

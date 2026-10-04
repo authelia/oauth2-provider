@@ -7,6 +7,7 @@ package rfc7523
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"strings"
 	"time"
 
@@ -126,12 +127,6 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
-	if claims.ID != "" {
-		if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		}
-	}
-
 	for _, scope := range request.GetRequestedScopes() {
 		request.GrantScope(scope)
 	}
@@ -153,13 +148,23 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	return nil
 }
 
+// PopulateTokenEndpointResponse issues the access token. An assertion carrying a 'jti' is marked as used here, after
+// the token endpoint binding phase, so a request that fails any check does not consume it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
 func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = c.CheckRequest(ctx, request); err != nil {
 		return err
 	}
 
-	if IsIDJAGAssertion(request.GetRequestForm().Get(consts.FormParameterAssertion)) {
+	assertion := request.GetRequestForm().Get(consts.FormParameterAssertion)
+
+	if IsIDJAGAssertion(assertion) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
+	}
+
+	if err = c.consume(ctx, assertion); err != nil {
+		return err
 	}
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeJWTBearer, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
@@ -167,6 +172,33 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	_, err = c.IssueAccessToken(ctx, atLifespan, request, response)
 
 	return err
+}
+
+func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
+	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
+	if err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
+	}
+
+	claims := jwt.Claims{}
+
+	if err = token.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
+	}
+
+	if claims.ID == "" {
+		return nil
+	}
+
+	if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
+		if errors.Is(err, oauth2.ErrJTIKnown) {
+			return errorsx.WithStack(oauth2.ErrJTIKnown)
+		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	return nil
 }
 
 func (c *Handler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {

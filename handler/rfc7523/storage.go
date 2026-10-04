@@ -15,9 +15,16 @@ import (
 type Storage interface {
 	// GetRFC7523PublicKey returns public key, issued by 'issuer', and assigned for the subject. Public key is used to check
 	// the signature of jwt assertion in authorization grants.
+	//
+	// It is called before the signature of the assertion is verified, with an issuer, subject and key id the caller
+	// chose. Implementations SHOULD take the same time whether or not a key is registered, as the handler cannot
+	// hide a difference in lookup time and it reveals which keys are registered.
 	GetRFC7523PublicKey(ctx context.Context, issuer, subject, keyId string) (key *jose.JSONWebKey, err error)
 
 	// GetRFC7523PublicKeys returns public key, set issued by 'issuer', and assigned for the subject.
+	//
+	// It is called before the signature of the assertion is verified, and the same guidance on lookup time as
+	// GetRFC7523PublicKey applies.
 	GetRFC7523PublicKeys(ctx context.Context, issuer, subject string) (keySet *jose.JSONWebKeySet, err error)
 
 	// GetRFC7523PublicKeyScopes returns the assigned scope for assertion, identified by public key, issued by 'issuer'.

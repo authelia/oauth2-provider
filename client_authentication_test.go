@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1284,15 +1285,40 @@ func TestAuthenticateClientTwice(t *testing.T) {
 				store, ok := provider.Store.(*storage.MemoryStore)
 				require.True(t, ok)
 
-				provider.Store = &racingClientAssertionStore{MemoryStore: store}
+				racing := &racingClientAssertionStore{MemoryStore: store}
+				racing.arrived.Add(2)
 
-				_, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
-				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				provider.Store = racing
 
-				actual, _, err := provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
-				require.ErrorIs(t, err, ErrInvalidClient)
-				assert.EqualError(t, ErrorToDebugRFC6749Error(err), "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Claim 'jti' from 'client_assertion' MUST only be used once.")
-				assert.Nil(t, actual)
+				var (
+					wg      sync.WaitGroup
+					clients [2]Client
+					errs    [2]error
+				)
+
+				for i := range errs {
+					wg.Add(1)
+
+					go func() {
+						defer wg.Done()
+
+						clients[i], _, errs[i] = provider.AuthenticateClient(t.Context(), new(http.Request), formValues)
+					}()
+				}
+
+				wg.Wait()
+
+				winner, loser := 0, 1
+				if errs[winner] != nil {
+					winner, loser = loser, winner
+				}
+
+				require.NoError(t, ErrorToDebugRFC6749Error(errs[winner]))
+				assert.NotNil(t, clients[winner])
+
+				require.ErrorIs(t, errs[loser], ErrInvalidClient)
+				assert.EqualError(t, ErrorToDebugRFC6749Error(errs[loser]), "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Claim 'jti' from 'client_assertion' MUST only be used once.")
+				assert.Nil(t, clients[loser])
 			},
 		},
 		{
@@ -1549,10 +1575,17 @@ func mustNewBCryptClientSecretPlain(rawSecret string) *BCryptClientSecret {
 
 type racingClientAssertionStore struct {
 	*storage.MemoryStore
+
+	arrived sync.WaitGroup
 }
 
-func (s *racingClientAssertionStore) ClientAssertionJWTValid(_ context.Context, _, _ string) error {
-	return nil
+func (s *racingClientAssertionStore) ClientAssertionJWTValid(ctx context.Context, clientID, jti string) (err error) {
+	err = s.MemoryStore.ClientAssertionJWTValid(ctx, clientID, jti)
+
+	s.arrived.Done()
+	s.arrived.Wait()
+
+	return err
 }
 
 type failingClientAssertionStore struct {

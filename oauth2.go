@@ -81,7 +81,7 @@ type Provider interface {
 	// WriteAuthorizeResponse persists the AuthorizeSession in the store and redirects the user agent to the provided
 	// redirect url or returns an error if storage failed.
 	//
-	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.2
 	WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder)
 

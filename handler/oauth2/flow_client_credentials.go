@@ -32,7 +32,7 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	client := request.GetClient()
 
-	// The client is already authenticated, as all token requests are.
+	// The client is already authenticated, as client authentication is never skipped for this grant.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
 	if client.IsPublic() {

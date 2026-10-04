@@ -37,10 +37,11 @@ type RedeemStorage interface {
 	// 'tenant' claim, so the result MUST be scoped by both (Section 3.1).
 	//
 	// An implementation which resolves the subject by the 'sub_id' claim MUST compare every member of the identifier
-	// it uses for resolution, MUST NOT resolve by the 'nameid' member alone unless that is its policy for the SAML
-	// issuer, and MUST return oauth2.ErrNotFound when the claim is absent, malformed or of an unsupported format
-	// (Section 3.2.2). The 'issuer' member of the claim MUST NOT establish trust: it is used only when configuration
-	// associates it with the 'iss' claim of the grant (Section 9.5).
+	// it uses for resolution, and MUST NOT resolve by the 'nameid' member alone unless that is its policy for the SAML
+	// issuer. When its policy requires a SAML NameID Subject Identifier, it MUST return oauth2.ErrNotFound when the
+	// claim is absent, malformed, of an unsupported format, or not authorized by that policy for the validated issuer
+	// of the grant (Section 3.2.2). The 'issuer' member of the claim MUST NOT establish trust: it is used only when
+	// configuration associates it with the 'iss' claim of the grant (Section 9.5).
 	ResolveIDJAGSubject(ctx context.Context, client oauth2.Client, claims map[string]any) (subject string, err error)
 	IsIDJAGUsed(ctx context.Context, issuer, jti string) (used bool, err error)
 	MarkIDJAGUsed(ctx context.Context, issuer, jti string, exp time.Time) (err error)

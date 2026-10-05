@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	stderr "errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -262,6 +263,11 @@ var (
 		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrInsufficientUserAuthentication = &RFC6749Error{
+		ErrorField:       errInsufficientUserAuthenticationName,
+		DescriptionField: "The authentication of the End-User does not meet the requirements of the request.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrInvalidAuthorizationDetails = &RFC6749Error{
 		ErrorField:       errInvalidAuthorizationDetailsName,
 		DescriptionField: "The requested authorization details are invalid, unknown, or malformed.",
@@ -330,6 +336,9 @@ const (
 	errSlowDownName                    = "slow_down"
 	errInvalidTargetName               = "invalid_target"
 	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
+
+	errInsufficientUserAuthenticationName = "insufficient_user_authentication"
+
 	errInvalidDPoPProofName            = "invalid_dpop_proof"
 	errUseDPoPNonceName                = "use_dpop_nonce"
 	errInvalidClientMetadataName       = "invalid_client_metadata"
@@ -371,6 +380,7 @@ type (
 		ScopeField       string `json:"-"`
 
 		cause           error
+		extra           map[string]any
 		useLegacyFormat bool
 		exposeDebug     bool
 		challenge       string
@@ -605,6 +615,20 @@ func (e *RFC6749Error) WithCode(code int) *RFC6749Error {
 	return &err
 }
 
+// WithExtra returns a copy of the receiver with an additional member for the JSON encoded error response, such as the
+// 'max_age' and 'acr_values' members of an insufficient_user_authentication error. A member cannot replace one the
+// error response already defines.
+func (e *RFC6749Error) WithExtra(key string, value any) *RFC6749Error {
+	err := *e
+	err.extra = make(map[string]any, len(e.extra)+1)
+
+	maps.Copy(err.extra, e.extra)
+
+	err.extra[key] = value
+
+	return &err
+}
+
 // WithLocalizer returns a copy of the receiver bound to the given message catalog and language tag so descriptions and
 // hints are translated when serialized.
 func (e *RFC6749Error) WithLocalizer(catalog i18n.MessageCatalog, lang language.Tag) *RFC6749Error {
@@ -683,7 +707,7 @@ func (e *RFC6749Error) UnmarshalJSON(b []byte) error {
 // been set.
 func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 	if !e.useLegacyFormat {
-		return json.Marshal(&RFC6749ErrorJSON{
+		return e.marshalWithExtra(&RFC6749ErrorJSON{
 			Name:        e.ErrorField,
 			Description: e.GetDescription(),
 		})
@@ -694,13 +718,34 @@ func (e RFC6749Error) MarshalJSON() ([]byte, error) {
 		debug = e.DebugField
 	}
 
-	return json.Marshal(&RFC6749ErrorJSON{
+	return e.marshalWithExtra(&RFC6749ErrorJSON{
 		Name:        e.ErrorField,
 		Description: e.DescriptionField,
 		Hint:        e.HintField,
 		Code:        e.CodeField,
 		Debug:       debug,
 	})
+}
+
+func (e RFC6749Error) marshalWithExtra(data *RFC6749ErrorJSON) ([]byte, error) {
+	encoded, err := json.Marshal(data)
+	if err != nil || len(e.extra) == 0 {
+		return encoded, err
+	}
+
+	members := map[string]any{}
+
+	if err = json.Unmarshal(encoded, &members); err != nil {
+		return nil, err
+	}
+
+	for key, value := range e.extra {
+		if _, ok := members[key]; !ok {
+			members[key] = value
+		}
+	}
+
+	return json.Marshal(members)
 }
 
 // ToValues serializes the error into url.Values suitable for use as an authorize endpoint error response in either the

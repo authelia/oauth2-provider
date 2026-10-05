@@ -15,6 +15,7 @@ import (
 type IssueConfig interface {
 	oauth2.RFC8693ConfigProvider
 	oauth2.AuthorizationServerIssuerIdentificationProvider
+	oauth2.JWTClockSkewProvider
 	oauth2.IDJAGConfigProvider
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
 }

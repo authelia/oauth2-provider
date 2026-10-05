@@ -335,10 +335,22 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			expected: map[string]any{consts.ClaimAuthenticationTime: float64(authTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRMFA}},
 		},
 		{
-			name:     "ShouldFallBackToTheIDTokenClaimsPerClaim",
+			name:     "ShouldNotCombineTheSubjectTokenWithTheIDTokenClaims",
 			subject:  map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold},
 			idToken:  &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(time.Unix(idTokenAuthTime, 0)), AuthenticationContextClassReference: issueACRSilver, AuthenticationMethodsReferences: []string{issueAMRPassword}},
-			expected: map[string]any{consts.ClaimAuthenticationTime: float64(idTokenAuthTime), consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationMethodsReference: []any{issueAMRPassword}},
+			expected: map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold},
+		},
+		{
+			name:     "ShouldNotCombineTheSubjectTokenWithTheSessionClaims",
+			subject:  map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold},
+			extra:    map[string]any{consts.ClaimAuthenticationTime: authTime},
+			expected: map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold},
+		},
+		{
+			name:     "ShouldUseTheIDTokenClaimsWhenTheSubjectTokenHasNone",
+			idToken:  &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(time.Unix(idTokenAuthTime, 0)), AuthenticationContextClassReference: issueACRSilver, AuthenticationMethodsReferences: []string{issueAMRPassword}},
+			extra:    map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRBronze},
+			expected: map[string]any{consts.ClaimAuthenticationTime: float64(idTokenAuthTime), consts.ClaimAuthenticationContextClassReference: issueACRSilver, consts.ClaimAuthenticationMethodsReference: []any{issueAMRPassword}},
 		},
 		{
 			name:     "ShouldPermitSessionClaimsWhenNeitherSourceHasThem",
@@ -393,6 +405,132 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 					actual[claim] = value
 				}
 			}
+
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestIssueHandlerAuthenticationRequirements(t *testing.T) {
+	recent, stale := float64(time.Now().Add(-time.Minute).Unix()), float64(time.Now().Add(-time.Hour).Unix())
+	skewed, future := float64(time.Now().Add(5*time.Second).Unix()), float64(time.Now().Add(time.Hour).Unix())
+
+	testCases := []struct {
+		name     string
+		acr      []string
+		maxAge   time.Duration
+		subject  map[string]any
+		idToken  *jwt.IDTokenClaims
+		expected map[string]any
+	}{
+		{
+			name:    "ShouldIssueWhenTheContextClassIsAccepted",
+			acr:     []string{issueACRGold, issueACRSilver},
+			subject: map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRSilver},
+		},
+		{
+			name:    "ShouldIssueWhenTheAuthenticationIsRecent",
+			maxAge:  5 * time.Minute,
+			subject: map[string]any{consts.ClaimAuthenticationTime: recent},
+		},
+		{
+			name:     "ShouldRejectAnotherContextClass",
+			acr:      []string{issueACRGold, issueACRSilver},
+			subject:  map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRBronze},
+			expected: map[string]any{consts.FormParameterAuthenticationContextClassReferenceValues: issueACRGold + " " + issueACRSilver},
+		},
+		{
+			name:     "ShouldRejectAnAbsentContextClass",
+			acr:      []string{issueACRGold},
+			expected: map[string]any{consts.FormParameterAuthenticationContextClassReferenceValues: issueACRGold},
+		},
+		{
+			name:     "ShouldRejectAStaleAuthentication",
+			maxAge:   5 * time.Minute,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: stale},
+			expected: map[string]any{consts.FormParameterMaximumAge: float64(300)},
+		},
+		{
+			name:    "ShouldIssueWhenTheAuthenticationTimeIsWithinTheClockSkew",
+			maxAge:  5 * time.Minute,
+			subject: map[string]any{consts.ClaimAuthenticationTime: skewed},
+		},
+		{
+			name:     "ShouldRejectAnAuthenticationTimeInTheFuture",
+			maxAge:   5 * time.Minute,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: future},
+			expected: map[string]any{consts.FormParameterMaximumAge: float64(300)},
+		},
+		{
+			name:     "ShouldRejectAnAbsentAuthenticationTime",
+			maxAge:   5 * time.Minute,
+			expected: map[string]any{consts.FormParameterMaximumAge: float64(300)},
+		},
+		{
+			name:     "ShouldRejectRequirementsMetOnlyByCombiningSources",
+			acr:      []string{issueACRGold},
+			maxAge:   5 * time.Minute,
+			subject:  map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold},
+			idToken:  &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute))},
+			expected: map[string]any{consts.FormParameterAuthenticationContextClassReferenceValues: issueACRGold, consts.FormParameterMaximumAge: float64(300)},
+		},
+		{
+			name:     "ShouldReportEveryRequirement",
+			acr:      []string{issueACRGold},
+			maxAge:   5 * time.Minute,
+			subject:  map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRGold, consts.ClaimAuthenticationTime: stale},
+			expected: map[string]any{consts.FormParameterAuthenticationContextClassReferenceValues: issueACRGold, consts.FormParameterMaximumAge: float64(300)},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, _ := newIssueFixture(t, false)
+
+			store := handler.Storage.(*storage.MemoryStore)
+			key := storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: redeemAudience}
+
+			relationship := store.IDJAGRelationships[key]
+			relationship.ACRValues, relationship.MaxAge = tc.acr, tc.maxAge
+			store.IDJAGRelationships[key] = relationship
+
+			session := newIssueSession(time.Now().Add(time.Hour))
+
+			maps.Copy(session.SubjectToken, tc.subject)
+
+			if tc.idToken != nil {
+				session.Claims = tc.idToken
+			}
+
+			request := newIssueRequest(t, session, nil)
+			request.RequestedAudience = oauth2.Arguments{redeemAudience}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+			response := oauth2.NewAccessResponse()
+
+			err := handler.PopulateTokenEndpointResponse(t.Context(), request, response)
+
+			if tc.expected == nil {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.NotEmpty(t, response.GetAccessToken())
+
+				return
+			}
+
+			// Section 9.2: the error response conveys the authentication requirements.
+			require.ErrorIs(t, err, oauth2.ErrInsufficientUserAuthentication)
+			assert.Empty(t, response.GetAccessToken())
+
+			encoded, err := json.Marshal(oauth2.ErrorToRFC6749Error(err))
+			require.NoError(t, err)
+
+			actual := map[string]any{}
+
+			require.NoError(t, json.Unmarshal(encoded, &actual))
+
+			delete(actual, "error")
+			delete(actual, "error_description")
 
 			assert.Equal(t, tc.expected, actual)
 		})

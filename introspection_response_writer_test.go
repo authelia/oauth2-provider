@@ -52,6 +52,18 @@ func TestWriteIntrospectionError(t *testing.T) {
 			},
 		},
 		{
+			name:     "ShouldWriteUnauthorizedForErrInvalidClient",
+			err:      errorsx.WithStack(ErrInvalidClient),
+			expected: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
+			code:     http.StatusUnauthorized,
+			body:     `{"error":"invalid_client","error_description":"Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."}`,
+			headers: http.Header{
+				consts.HeaderContentType:  []string{consts.ContentTypeApplicationJSON},
+				consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
+				consts.HeaderPragma:       []string{consts.PragmaNoCache},
+			},
+		},
+		{
 			name:     "ShouldWriteBadRequestForErrInvalidRequest",
 			err:      errorsx.WithStack(ErrInvalidRequest),
 			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",

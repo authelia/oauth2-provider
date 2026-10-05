@@ -413,6 +413,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 
 func TestIssueHandlerAuthenticationRequirements(t *testing.T) {
 	recent, stale := float64(time.Now().Add(-time.Minute).Unix()), float64(time.Now().Add(-time.Hour).Unix())
+	skewed, future := float64(time.Now().Add(5*time.Second).Unix()), float64(time.Now().Add(time.Hour).Unix())
 
 	testCases := []struct {
 		name     string
@@ -447,6 +448,17 @@ func TestIssueHandlerAuthenticationRequirements(t *testing.T) {
 			name:     "ShouldRejectAStaleAuthentication",
 			maxAge:   5 * time.Minute,
 			subject:  map[string]any{consts.ClaimAuthenticationTime: stale},
+			expected: map[string]any{consts.FormParameterMaximumAge: float64(300)},
+		},
+		{
+			name:    "ShouldIssueWhenTheAuthenticationTimeIsWithinTheClockSkew",
+			maxAge:  5 * time.Minute,
+			subject: map[string]any{consts.ClaimAuthenticationTime: skewed},
+		},
+		{
+			name:     "ShouldRejectAnAuthenticationTimeInTheFuture",
+			maxAge:   5 * time.Minute,
+			subject:  map[string]any{consts.ClaimAuthenticationTime: future},
 			expected: map[string]any{consts.FormParameterMaximumAge: float64(300)},
 		},
 		{

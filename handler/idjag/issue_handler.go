@@ -152,7 +152,7 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 
 	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 
-	if err = requireAuthentication(relationship, claims, now); err != nil {
+	if err = requireAuthentication(relationship, claims, now, max(h.Config.GetJWTClockSkew(ctx), 0)); err != nil {
 		return err
 	}
 
@@ -270,7 +270,7 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 	return claims
 }
 
-func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.MapClaims, now time.Time) (err error) {
+func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.MapClaims, now time.Time, skew time.Duration) (err error) {
 	acr, _ := claims[consts.ClaimAuthenticationContextClassReference].(string)
 
 	satisfied := len(relationship.ACRValues) == 0 || slices.Contains(relationship.ACRValues, acr)
@@ -278,7 +278,7 @@ func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.Ma
 	if relationship.MaxAge > 0 {
 		authTime, ok := authenticationTime(claims[consts.ClaimAuthenticationTime])
 
-		satisfied = satisfied && ok && now.Sub(authTime) <= relationship.MaxAge
+		satisfied = satisfied && ok && !authTime.After(now.Add(skew)) && now.Sub(authTime) <= relationship.MaxAge
 	}
 
 	if satisfied {

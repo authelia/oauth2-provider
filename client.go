@@ -780,14 +780,10 @@ func (c *DefaultJARClient) GetJSONWebKeys() *jose.JSONWebKeySet {
 	return c.JSONWebKeys
 }
 
-// GetTokenEndpointAuthSigningAlg returns the 'token_endpoint_auth_signing_alg' client metadata value, defaulting to
-// RS256 when unset.
+// GetTokenEndpointAuthSigningAlg returns the 'token_endpoint_auth_signing_alg' client metadata value. An empty value
+// permits any supported algorithm per OpenID Connect Dynamic Client Registration 1.0 Section 2.
 func (c *DefaultJARClient) GetTokenEndpointAuthSigningAlg() string {
-	if c.TokenEndpointAuthSigningAlg == "" {
-		return "RS256"
-	} else {
-		return c.TokenEndpointAuthSigningAlg
-	}
+	return c.TokenEndpointAuthSigningAlg
 }
 
 // GetIntrospectionEndpointAuthSigningAlg returns the 'introspection_endpoint_auth_signing_alg' client metadata value.
@@ -830,8 +826,13 @@ func (c *DefaultJARClient) GetRequestObjectEncryptionEnc() string {
 	return c.RequestObjectEncryptionEnc
 }
 
-// GetTokenEndpointAuthMethod returns the 'token_endpoint_auth_method' client metadata value.
+// GetTokenEndpointAuthMethod returns the 'token_endpoint_auth_method' client metadata value, defaulting to
+// client_secret_basic when unset per RFC 7591 Section 2.
 func (c *DefaultJARClient) GetTokenEndpointAuthMethod() string {
+	if c.TokenEndpointAuthMethod == "" {
+		return consts.ClientAuthMethodClientSecretBasic
+	}
+
 	return c.TokenEndpointAuthMethod
 }
 

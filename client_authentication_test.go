@@ -136,6 +136,15 @@ func TestAuthenticateClient(t *testing.T) {
 			r:    &http.Request{Header: clientBasicAuthHeader("foo", "")},
 		},
 		{
+			// RFC 9110 Section 11.4.
+			name: "ShouldPassWithRepeatedSpacesAfterTheBasicScheme",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "foo", ClientSecret: testClientSecretBar}, TokenEndpointAuthMethod: "client_secret_basic"}
+			},
+			form: url.Values{},
+			r:    &http.Request{Header: http.Header{consts.HeaderAuthorization: {prefixSchemeBasic + "  " + base64.StdEncoding.EncodeToString([]byte("foo:bar"))}}},
+		},
+		{
 			name:     "ShouldPassBecauseRevocationEndpointPermitsPublicClients",
 			strategy: &RevocationEndpointClientAuthStrategy{},
 			client: func(ts *httptest.Server) Client {

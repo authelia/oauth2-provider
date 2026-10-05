@@ -162,6 +162,9 @@ func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok boo
 		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebug("The header value is either missing a scheme, value, or the separator between them."))
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9110#section-11.4
+	value = strings.TrimLeft(value, " ")
+
 	if !strings.EqualFold(scheme, "Basic") {
 		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The scheme '%s' is not known for client authentication.", scheme))
 	}

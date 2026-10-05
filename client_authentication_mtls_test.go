@@ -223,6 +223,36 @@ func TestMatchSelfSignedCertificate(t *testing.T) {
 		assert.Equal(t, "https://client.example.com/jwks.json", fetcher.location)
 	})
 
+	t.Run("ShouldRefreshTheJWKSURIForACertificateAbsentFromTheCachedSet", func(t *testing.T) {
+		client := newMTLSJWKSClient(nil, "https://client.example.com/jwks.json")
+		fetcher := &staticJWKSFetcher{
+			jwks:      &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: other.PublicKey, Certificates: []*x509.Certificate{other}}}},
+			refreshed: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: registered.PublicKey, Certificates: []*x509.Certificate{registered}}}},
+		}
+
+		assert.NoError(t, matchSelfSignedCertificate(context.TODO(), client, registered, fetcher, "token"))
+		assert.Equal(t, 1, fetcher.refreshes)
+	})
+
+	t.Run("ShouldNotRefreshTheJWKSURIForACertificateInTheCachedSet", func(t *testing.T) {
+		client := newMTLSJWKSClient(nil, "https://client.example.com/jwks.json")
+		fetcher := &staticJWKSFetcher{jwks: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: registered.PublicKey, Certificates: []*x509.Certificate{registered}}}}}
+
+		assert.NoError(t, matchSelfSignedCertificate(context.TODO(), client, registered, fetcher, "token"))
+		assert.Equal(t, 0, fetcher.refreshes)
+	})
+
+	t.Run("ShouldNotMatchACertificateAbsentFromTheRefreshedSet", func(t *testing.T) {
+		client := newMTLSJWKSClient(nil, "https://client.example.com/jwks.json")
+		fetcher := &staticJWKSFetcher{jwks: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: other.PublicKey, Certificates: []*x509.Certificate{other}}}}}
+
+		err := matchSelfSignedCertificate(context.TODO(), client, registered, fetcher, "token")
+
+		require.Error(t, err)
+		assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "does not match any certificate")
+		assert.Equal(t, 1, fetcher.refreshes)
+	})
+
 	t.Run("ShouldRejectANilCertificate", func(t *testing.T) {
 		err := matchSelfSignedCertificate(context.TODO(), newMTLSJWKSClient([]*x509.Certificate{registered}, ""), nil, nil, "token")
 
@@ -602,16 +632,26 @@ type mtlsJWKSClient struct {
 }
 
 type staticJWKSFetcher struct {
-	jwks     *jose.JSONWebKeySet
-	err      error
-	location string
+	jwks      *jose.JSONWebKeySet
+	refreshed *jose.JSONWebKeySet
+	err       error
+	location  string
+	refreshes int
 }
 
-func (f *staticJWKSFetcher) Resolve(_ context.Context, location string, _ bool) (*jose.JSONWebKeySet, error) {
+func (f *staticJWKSFetcher) Resolve(_ context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
 	f.location = location
 
 	if f.err != nil {
 		return nil, f.err
+	}
+
+	if ignoreCache {
+		f.refreshes++
+
+		if f.refreshed != nil {
+			return f.refreshed, nil
+		}
 	}
 
 	return f.jwks, nil

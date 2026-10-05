@@ -150,7 +150,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 
 				return r
 			},
-			err: "The request could not be authorized. The request either did not include a known client authentication method, or contained invalid authentication details. Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
+			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
 			name: "ShouldFailIntrospectionError",
@@ -308,6 +308,26 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewIntrospectionRequestInvalidClientCredentials(t *testing.T) {
+	f := compose.ComposeAllEnabled(&Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}, storage.NewExampleStore(), nil).(*Fosite)
+
+	r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+	r.SetBasicAuth("my-client", "wrong")
+	r.PostForm = url.Values{consts.FormParameterToken: []string{"some-token"}}
+
+	_, err := f.NewIntrospectionRequest(t.Context(), r, &DefaultSession{})
+	require.ErrorIs(t, err, ErrInvalidClient)
+
+	rw := httptest.NewRecorder()
+
+	f.WriteIntrospectionError(t.Context(), rw, err)
+
+	// RFC 7662 Section 2.3, RFC 6749 Section 5.2.
+	assert.Equal(t, http.StatusUnauthorized, rw.Code)
+	assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
+	assert.JSONEq(t, `{"error":"invalid_client","error_description":"Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."}`, rw.Body.String())
 }
 
 func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {

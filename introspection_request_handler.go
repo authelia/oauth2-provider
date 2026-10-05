@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -124,6 +125,11 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		// Section 3 'WWW-Authenticate' challenge.
 		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint."))
 	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetIntrospectionEndpointClientAuthStrategy(ctx)); err != nil {
+		// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.3
+		if errors.Is(err, ErrInvalidClient) {
+			return nil, err
+		}
+
 		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
 	}
 

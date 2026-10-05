@@ -28,7 +28,7 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 	}
 
 	// Inactive token errors should never be written out as an error.
-	if !errors.Is(err, ErrInactiveToken) && (errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrRequestUnauthorized)) {
+	if !errors.Is(err, ErrInactiveToken) && (errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrInvalidClient) || errors.Is(err, ErrRequestUnauthorized)) {
 		f.writeErrorJSON(ctx, rw, nil, err)
 
 		return

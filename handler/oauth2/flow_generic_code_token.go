@@ -103,6 +103,17 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if len(request.GetRequestedAuthorizationDetails()) == 0 {
+		request.SetRequestedAuthorizationDetails(deviceRequester.GetGrantedAuthorizationDetails())
+	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, deviceRequester.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
 	// The 'redirect_uri' must be identical to the one included in the authorization request.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
@@ -194,6 +205,8 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		request.GrantResource(resource)
 	}
 
+	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
+
 	var (
 		access, accessSignature   string
 		refresh, refreshSignature string
@@ -238,7 +251,16 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, request.Sanitize([]string{})); err != nil {
+		rtrequester := request.Sanitize([]string{})
+
+		// The refresh token keeps the authorization details granted by the resource owner, not the narrowed access
+		// token grant.
+		//
+		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+		rtrequester.SetRequestedAuthorizationDetails(ar.GetRequestedAuthorizationDetails())
+		rtrequester.SetGrantedAuthorizationDetails(ar.GetGrantedAuthorizationDetails())
+
+		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, rtrequester); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
@@ -254,6 +276,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
+	setAuthorizationDetailsResponse(response, request)
 
 	if refresh != "" {
 		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
@@ -282,6 +305,14 @@ func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Conte
 	return true
 }
 
+// CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396
+// 'authorization_details' parameter is accepted and checked against the details granted by the resource owner.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+func (c *GenericCodeTokenEndpointHandler) CanHandleAuthorizationDetails(_ context.Context, _ oauth2.AccessRequester) (handle bool) {
+	return true
+}
+
 // CanSkipClientAuth returns the result of the wrapped CodeTokenEndpointHandler.
 func (c *GenericCodeTokenEndpointHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) (skip bool) {
 	return c.CodeTokenEndpointHandler.CanSkipClientAuth(ctx, request)
@@ -293,6 +324,7 @@ func (c *GenericCodeTokenEndpointHandler) CanHandleTokenEndpointRequest(ctx cont
 }
 
 var (
-	_ oauth2.TokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
-	_ CodeTokenEndpointHandler    = (*GenericCodeTokenEndpointHandler)(nil)
+	_ oauth2.TokenEndpointHandler                     = (*GenericCodeTokenEndpointHandler)(nil)
+	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
+	_ CodeTokenEndpointHandler                        = (*GenericCodeTokenEndpointHandler)(nil)
 )

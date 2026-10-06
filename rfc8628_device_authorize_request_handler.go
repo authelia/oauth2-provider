@@ -16,7 +16,8 @@ import (
 // NewRFC862DeviceAuthorizeRequest parses and validates an RFC 8628 device authorization endpoint request. The HTTP
 // method must be POST as specified by section 3.1 of the RFC. The client is authenticated using the token endpoint
 // authentication method (section 3.1 also requires this), the client must hold the device_code grant type, and the
-// requested scopes, audience, and RFC 8707 resource indicators are validated against the client's registration.
+// requested scopes, audience, RFC 8707 resource indicators, and RFC 9396 authorization details are validated against
+// the client's registration.
 func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
@@ -59,6 +60,15 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 	if err = f.validateAudience(ctx, r, request); err != nil {
 		return request, err
 	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-3
+	var details AuthorizationDetails
+
+	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, client, request.Form); err != nil {
+		return request, err
+	}
+
+	request.SetRequestedAuthorizationDetails(details)
 
 	return request, nil
 }

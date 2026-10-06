@@ -446,6 +446,22 @@ func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client 
 	return details, nil
 }
 
+// NarrowAuthorizationDetails settles the authorization details of a token request against the details granted to the
+// underlying grant. A request without the 'authorization_details' parameter takes the granted details, and otherwise
+// the requested details must be contained in the granted details. The settled details are recorded as the requested
+// details of the request, and must be of types the client may request and the authorization server supports.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+func NarrowAuthorizationDetails(ctx context.Context, config any, request Requester, granted AuthorizationDetails) (err error) {
+	if len(request.GetRequestedAuthorizationDetails()) == 0 {
+		request.SetRequestedAuthorizationDetails(granted)
+	} else if err = CheckAuthorizationDetailsContained(ctx, config, granted, request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	return ValidateAuthorizationDetailsTypes(ctx, config, request.GetClient(), request.GetRequestedAuthorizationDetails())
+}
+
 // CheckAuthorizationDetailsContained rejects the requested details unless each one can be assigned a distinct granted
 // detail of the same type which contains it, so one granted detail never justifies more than one requested detail.
 //

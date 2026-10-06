@@ -104,13 +104,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if len(request.GetRequestedAuthorizationDetails()) == 0 {
-		request.SetRequestedAuthorizationDetails(deviceRequester.GetGrantedAuthorizationDetails())
-	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, deviceRequester.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
-	}
-
-	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+	if err = oauth2.NarrowAuthorizationDetails(ctx, c.Config, request, deviceRequester.GetGrantedAuthorizationDetails()); err != nil {
 		return err
 	}
 

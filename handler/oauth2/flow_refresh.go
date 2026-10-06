@@ -177,13 +177,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if len(request.GetRequestedAuthorizationDetails()) == 0 {
-		request.SetRequestedAuthorizationDetails(orequest.GetGrantedAuthorizationDetails())
-	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, orequest.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
-	}
-
-	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+	if err = oauth2.NarrowAuthorizationDetails(ctx, c.Config, request, orequest.GetGrantedAuthorizationDetails()); err != nil {
 		return err
 	}
 
@@ -435,6 +429,14 @@ func handleRefreshTokenStorageError(ctx context.Context, store TokenRevocationSt
 	return errorsx.WithStack(oauth2.ErrServerError.WithWrap(storageErr).WithDebugError(storageErr))
 }
 
+// CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396
+// 'authorization_details' parameter is accepted and checked against the details granted by the resource owner.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+func (c *RefreshTokenGrantHandler) CanHandleAuthorizationDetails(_ context.Context, _ oauth2.AccessRequester) (handle bool) {
+	return true
+}
+
 // CanSkipClientAuth always returns false, client authentication is never skipped for the refresh token grant.
 func (c *RefreshTokenGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
@@ -448,5 +450,6 @@ func (c *RefreshTokenGrantHandler) CanHandleTokenEndpointRequest(ctx context.Con
 }
 
 var (
-	_ oauth2.TokenEndpointHandler = (*RefreshTokenGrantHandler)(nil)
+	_ oauth2.TokenEndpointHandler                     = (*RefreshTokenGrantHandler)(nil)
+	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*RefreshTokenGrantHandler)(nil)
 )

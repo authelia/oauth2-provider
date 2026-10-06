@@ -41,7 +41,7 @@ type DefaultClientAuthenticationStrategy struct {
 // and the authentication method used.
 func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	var (
-		id, secret string
+		id, secretPost string
 
 		idBasic, secretBasic string
 
@@ -55,7 +55,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 		return nil, "", err
 	}
 
-	id, secret, hasPost = s.getClientCredentialsSecretPost(form)
+	id, secretPost, hasPost = s.getClientCredentialsSecretPost(form)
 	assertionValue, assertionType, hasAssertion = getClientCredentialsClientAssertion(form)
 
 	var assertion *ClientAssertion
@@ -68,11 +68,6 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 
 	if id, err = getClientCredentialsClientIDValid(id, idBasic, assertion); err != nil {
 		return nil, "", err
-	}
-
-	// Allow simplification of client authentication.
-	if !hasPost && hasBasic {
-		secret = secretBasic
 	}
 
 	var (
@@ -92,10 +87,10 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 
 	hasNone := !hasPost && !hasBasic && assertion == nil && len(id) != 0
 
-	return s.authenticate(ctx, id, secret, assertion, cert, verified, hasBasic, hasPost, hasNone, strategy)
+	return s.authenticate(ctx, id, secretBasic, secretPost, assertion, cert, verified, hasBasic, hasPost, hasNone, strategy)
 }
 
-func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secret string, assertion *ClientAssertion, cert *x509.Certificate, verified bool, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
+func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secretBasic, secretPost string, assertion *ClientAssertion, cert *x509.Certificate, verified bool, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	if assertion != nil && assertion.Client != nil {
 		client = assertion.Client
 	}
@@ -165,7 +160,15 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	case assertion != nil:
 		method, err = s.doAuthenticateAssertionJWTBearer(ctx, client, assertion, strategy)
 	case hasBasic, hasPost:
-		method, err = s.doAuthenticateClientSecret(ctx, client, secret, hasBasic, hasPost, strategy)
+		secret := secretBasic
+
+		method = consts.ClientAuthMethodClientSecretBasic
+
+		if hasPost && (!hasBasic || isClientSecretPostAuthMethod(client, strategy)) {
+			method, secret = consts.ClientAuthMethodClientSecretPost, secretPost
+		}
+
+		err = s.doAuthenticateClientSecret(ctx, client, secret, method, strategy)
 	default:
 		method, err = s.doAuthenticateNone(ctx, client, strategy)
 	}
@@ -315,19 +318,13 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateNone(_ context.Conte
 	return consts.ClientAuthMethodNone, nil
 }
 
-func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret string, hasBasic, hasPost bool, strategy EndpointClientAuthStrategy) (method string, err error) {
-	method = consts.ClientAuthMethodClientSecretBasic
-
-	if !hasBasic && hasPost {
-		method = consts.ClientAuthMethodClientSecretPost
-	}
-
+func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx context.Context, client Client, rawSecret, method string, strategy EndpointClientAuthStrategy) (err error) {
 	if c, ok := client.(AuthenticationMethodClient); ok {
 		switch cmethod := strategy.GetAuthMethod(c); {
 		case cmethod == "" && strategy.AllowAuthMethodAny():
 			break
 		case cmethod != method:
-			return "", errorsx.WithStack(
+			return errorsx.WithStack(
 				ErrInvalidClient.
 					WithHint(hintClientCredentialsInvalid).
 					WithDebugf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the registered client with id '%s' is configured to only support '%s_endpoint_auth_method' method '%s'. Either the Authorization Server client registration will need to have the '%s_endpoint_auth_method' updated to '%s' or the Relying Party will need to be configured to use '%s'.", strategy.Name(), method, client.GetID(), strategy.Name(), cmethod, strategy.Name(), method, cmethod))
@@ -336,16 +333,22 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateClientSecret(ctx con
 
 	switch err = CompareClientSecret(ctx, client, []byte(rawSecret)); {
 	case err == nil:
-		return method, nil
+		return nil
 	case errors.Is(err, ErrClientSecretNotRegistered):
-		return "", errorsx.WithStack(
+		return errorsx.WithStack(
 			ErrInvalidClient.
 				WithHint(hintClientCredentialsInvalid).
 				WithDebugf("The request was determined to be using '%s_endpoint_auth_method' method '%s', however the registered client with id '%s' has no 'client_secret' which is required to process this method.", strategy.Name(), method, client.GetID()),
 		)
 	default:
-		return "", errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
+		return errorsx.WithStack(ErrInvalidClient.WithWrap(err).WithDebugError(err))
 	}
+}
+
+func isClientSecretPostAuthMethod(client Client, strategy EndpointClientAuthStrategy) bool {
+	c, ok := client.(AuthenticationMethodClient)
+
+	return ok && strategy.GetAuthMethod(c) == consts.ClientAuthMethodClientSecretPost
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(ctx context.Context, client Client, assertion *ClientAssertion, strategy EndpointClientAuthStrategy) (method string, err error) {
@@ -524,7 +527,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(form url.Values) (id, secret string, ok bool) {
 	id, secret = form.Get(consts.FormParameterClientID), form.Get(consts.FormParameterClientSecret)
 
-	return id, secret, len(id) != 0 && len(secret) != 0
+	return id, secret, len(secret) != 0
 }
 
 func resolveJWTErrorToRFCError(err error) (rfc error) {
@@ -573,9 +576,9 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'kid' header value '%s' due to the client registration 'request_object_signing_key_id' value but the client assertion was signed with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthSigningKeyID(client), token.KeyID)
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'kid' header value '%s' but the client assertion was signed with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthSigningKeyID(client), token.KeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderAlgorithmInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'alg' header value '%s' due to the client registration 'request_object_signing_alg' value but the client assertion was signed with the 'alg' header value '%s'.", client.GetID(), strategy.GetAuthSigningAlg(client), token.SignatureAlgorithm)
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'alg' header value '%s' due to the client registration '%s_endpoint_auth_signing_alg' value but the client assertion was signed with the 'alg' header value '%s'.", client.GetID(), strategy.GetAuthSigningAlg(client), strategy.Name(), token.SignatureAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'typ' header value '%s' or '%s' but the client assertion was signed with the 'typ' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeClientAuthentication, jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.Header, jwt.JSONWebTokenHeaderType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
@@ -583,11 +586,11 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'cty' header value '%s' but the client assertion was encrypted with the 'cty' header value '%s'.", client.GetID(), jwt.JSONWebTokenTypeJWT, fmtHeaderValue(token.HeaderJWE, jwt.JSONWebTokenHeaderContentType))
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'kid' header value '%s' due to the client registration 'request_object_encryption_key_id' value but the client assertion was encrypted with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionKeyID(client), token.EncryptionKeyID)
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'kid' header value '%s' but the client assertion was encrypted with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionKeyID(client), token.EncryptionKeyID)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyAlgorithmInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'alg' header value '%s' due to the client registration 'request_object_encryption_alg' value but the client assertion was encrypted with the 'alg' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionAlg(client), token.KeyAlgorithm)
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'alg' header value '%s' but the client assertion was encrypted with the 'alg' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionAlg(client), token.KeyAlgorithm)
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentEncryptionInvalid):
-			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'enc' header value '%s' due to the client registration 'request_object_encryption_enc' value but the client assertion was encrypted with the 'enc' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionEnc(client), token.ContentEncryption)
+			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be encrypted with the 'enc' header value '%s' but the client assertion was encrypted with the 'enc' header value '%s'.", client.GetID(), strategy.GetAuthEncryptionEnc(client), token.ContentEncryption)
 		case errJWTValidation.Has(jwt.ValidationErrorMalformedNotCompactSerialized):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that was malformed. The client assertion does not appear to be a JWE or JWS compact serialized JWT.", client.GetID())
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):

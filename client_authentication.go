@@ -162,6 +162,9 @@ func getClientCredentialsSecretBasic(r *http.Request) (id, secret string, ok boo
 		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebug("The header value is either missing a scheme, value, or the separator between them."))
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9110#section-11.4
+	value = strings.TrimLeft(value, " ")
+
 	if !strings.EqualFold(scheme, "Basic") {
 		return "", "", false, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The scheme '%s' is not known for client authentication.", scheme))
 	}
@@ -406,9 +409,16 @@ func (s *TokenEndpointClientAuthStrategy) AllowMethodNone() bool {
 // permit public clients to authenticate using the 'none' method.
 type IntrospectionEndpointClientAuthStrategy struct{}
 
-// GetAuthMethod returns the client's registered 'introspection_endpoint_auth_method'.
+// GetAuthMethod returns the client's registered 'introspection_endpoint_auth_method', or its 'token_endpoint_auth_method'
+// when that is not set, as the latter is the method registered for direct requests to the authorization server.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9126#section-2
 func (s *IntrospectionEndpointClientAuthStrategy) GetAuthMethod(client AuthenticationMethodClient) string {
-	return client.GetIntrospectionEndpointAuthMethod()
+	if method := client.GetIntrospectionEndpointAuthMethod(); method != "" {
+		return method
+	}
+
+	return client.GetTokenEndpointAuthMethod()
 }
 
 // GetAuthSigningKeyID returns the signing key id used to verify client assertions at the introspection endpoint.
@@ -416,9 +426,14 @@ func (s *IntrospectionEndpointClientAuthStrategy) GetAuthSigningKeyID(client Aut
 	return ""
 }
 
-// GetAuthSigningAlg returns the client's registered 'introspection_endpoint_auth_signing_alg'.
+// GetAuthSigningAlg returns the client's registered 'introspection_endpoint_auth_signing_alg', or its
+// 'token_endpoint_auth_signing_alg' when neither that nor the 'introspection_endpoint_auth_method' is set.
 func (s *IntrospectionEndpointClientAuthStrategy) GetAuthSigningAlg(client AuthenticationMethodClient) string {
-	return client.GetIntrospectionEndpointAuthSigningAlg()
+	if alg := client.GetIntrospectionEndpointAuthSigningAlg(); alg != "" || client.GetIntrospectionEndpointAuthMethod() != "" {
+		return alg
+	}
+
+	return client.GetTokenEndpointAuthSigningAlg()
 }
 
 // GetAuthEncryptionKeyID returns the encryption key id used for client assertions at the introspection endpoint.
@@ -443,7 +458,7 @@ func (s *IntrospectionEndpointClientAuthStrategy) Name() string {
 }
 
 // AllowAuthMethodAny returns true as the introspection endpoint permits any authentication method when the client has
-// not registered a specific 'introspection_endpoint_auth_method'.
+// registered neither an 'introspection_endpoint_auth_method' nor a 'token_endpoint_auth_method'.
 func (s *IntrospectionEndpointClientAuthStrategy) AllowAuthMethodAny() bool {
 	return true
 }
@@ -459,9 +474,16 @@ func (s *IntrospectionEndpointClientAuthStrategy) AllowMethodNone() bool {
 // to authenticate using the 'none' method.
 type RevocationEndpointClientAuthStrategy struct{}
 
-// GetAuthMethod returns the client's registered 'revocation_endpoint_auth_method'.
+// GetAuthMethod returns the client's registered 'revocation_endpoint_auth_method', or its 'token_endpoint_auth_method'
+// when that is not set, as the latter is the method registered for direct requests to the authorization server.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9126#section-2
 func (s *RevocationEndpointClientAuthStrategy) GetAuthMethod(client AuthenticationMethodClient) string {
-	return client.GetRevocationEndpointAuthMethod()
+	if method := client.GetRevocationEndpointAuthMethod(); method != "" {
+		return method
+	}
+
+	return client.GetTokenEndpointAuthMethod()
 }
 
 // GetAuthSigningKeyID returns the signing key id used to verify client assertions at the revocation endpoint.
@@ -469,9 +491,14 @@ func (s *RevocationEndpointClientAuthStrategy) GetAuthSigningKeyID(client Authen
 	return ""
 }
 
-// GetAuthSigningAlg returns the client's registered 'revocation_endpoint_auth_signing_alg'.
+// GetAuthSigningAlg returns the client's registered 'revocation_endpoint_auth_signing_alg', or its
+// 'token_endpoint_auth_signing_alg' when neither that nor the 'revocation_endpoint_auth_method' is set.
 func (s *RevocationEndpointClientAuthStrategy) GetAuthSigningAlg(client AuthenticationMethodClient) string {
-	return client.GetRevocationEndpointAuthSigningAlg()
+	if alg := client.GetRevocationEndpointAuthSigningAlg(); alg != "" || client.GetRevocationEndpointAuthMethod() != "" {
+		return alg
+	}
+
+	return client.GetTokenEndpointAuthSigningAlg()
 }
 
 // GetAuthEncryptionKeyID returns the encryption key id used for client assertions at the revocation endpoint.
@@ -494,8 +521,8 @@ func (s *RevocationEndpointClientAuthStrategy) Name() string {
 	return "revocation"
 }
 
-// AllowAuthMethodAny returns true as the revocation endpoint permits any authentication method when the client has not
-// registered a specific 'revocation_endpoint_auth_method'.
+// AllowAuthMethodAny returns true as the revocation endpoint permits any authentication method when the client has
+// registered neither a 'revocation_endpoint_auth_method' nor a 'token_endpoint_auth_method'.
 func (s *RevocationEndpointClientAuthStrategy) AllowAuthMethodAny() bool {
 	return true
 }

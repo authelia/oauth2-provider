@@ -490,15 +490,19 @@ func TestIDJAG(t *testing.T) {
 			t.Run("ShouldBoundARefreshTokenSubjectAuthorizationDetailsByItsGrant", func(t *testing.T) {
 				initiate := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate}}
 				both := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate, idjagStatus}}
+				account := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate, idjagStatus}, Identifier: new(idjagAccount)}
 
 				testCases := []struct {
 					name      string
 					granted   oauth2.AuthorizationDetails
 					requested string
+					expected  string
 					err       string
 				}{
 					// Section 4.3.3: the requested details remain within the authorization context of the refresh token.
-					{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: idjagDetailsStatus},
+					{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: idjagDetailsStatus, expected: idjagDetailsStatus},
+					{name: "ShouldCarryGrantedMembersOmittedFromRequestedDetails", granted: oauth2.AuthorizationDetails{account}, requested: idjagDetailsStatus, expected: `[{"type":"payment_initiation","actions":["status"],"identifier":"account-1"}]`},
+					{name: "ShouldCarryGrantedDetailsSelectedByType", granted: oauth2.AuthorizationDetails{account}, requested: `[{"type":"payment_initiation"}]`, expected: `[{"type":"payment_initiation","actions":["initiate","status"],"identifier":"account-1"}]`},
 					{name: "ShouldRejectDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: idjagDetailsStatus, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
 					{name: "ShouldRejectDetailsWhenNoneWereGranted", requested: idjagDetailsInitiate, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
 				}
@@ -521,9 +525,30 @@ func TestIDJAG(t *testing.T) {
 						}
 
 						require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
-						assert.JSONEq(t, tc.requested, string(token.AuthorizationDetails))
+						assert.JSONEq(t, tc.expected, string(token.AuthorizationDetails))
+
+						_, claims := env.decodeIDJAG(t, token.AccessToken)
+
+						carried, err := json.Marshal(claims[consts.ClaimAuthorizationDetails])
+						require.NoError(t, err)
+						assert.JSONEq(t, tc.expected, string(carried))
 					})
 				}
+			})
+
+			t.Run("ShouldCarryAuthorizationDetailsNumbersExactly", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new, idjagOptions{rar: true})
+
+				form := env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL)
+				form.Set(consts.FormParameterAuthorizationDetails, `[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"amount":12345678901234567890}}]`)
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+				assert.Contains(t, string(token.AuthorizationDetails), idjagLargeNumber)
+
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), "")
+				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
+				assert.Contains(t, string(redeemed.AuthorizationDetails), idjagLargeNumber)
 			})
 
 			t.Run("ShouldIgnoreAuthorizationDetailsWhenDisabled", func(t *testing.T) {

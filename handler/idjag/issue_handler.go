@@ -37,8 +37,9 @@ import (
 // them from the ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
 // It accepts the RFC 9396 'authorization_details' parameter and grants the requested details whose type the
-// relationship permits. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler also rejects any
-// requested detail not contained in the details granted to the refresh token.
+// relationship permits. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler first replaces the
+// requested details with those the details granted to the refresh token assign, and rejects a request they do not
+// justify.
 //
 // The 'cnf' claim carries the thumbprint bound to the session, which equals the validated DPoP proof key only when
 // rfc9449.Handler is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token.
@@ -101,13 +102,6 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 		}
 	}
 
-	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
-	if err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
-	}
-
-	grantAuthorizationDetails(request, relationship)
-
 	request.GrantAudience(relationship.Issuer)
 
 	return nil
@@ -154,6 +148,13 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	if expires.Sub(now) < time.Second {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token expires too soon to issue an Identity Assertion JWT Authorization Grant."))
 	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
+	if err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	grantAuthorizationDetails(request, relationship)
 
 	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 

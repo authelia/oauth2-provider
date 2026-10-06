@@ -7,6 +7,7 @@ package idjag
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -431,6 +432,28 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 	return nil
 }
 
+func authorizationDetailsClaim(assertion string) (claim []byte, err error) {
+	parts := strings.Split(assertion, ".")
+	if len(parts) != 3 {
+		return nil, errors.New("the assertion is not a compact serialized JWS")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	var claims struct {
+		AuthorizationDetails json.RawMessage `json:"authorization_details"`
+	}
+
+	if err = json.Unmarshal(payload, &claims); err != nil {
+		return nil, err
+	}
+
+	return claims.AuthorizationDetails, nil
+}
+
 func confirmationJWKThumbprint(assertion string) (jkt string, err error) {
 	_, raw, err := unverifiedClaims(assertion)
 	if err != nil {
@@ -578,16 +601,15 @@ func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.Acces
 		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("No resource of the Identity Assertion JWT Authorization Grant is permitted for the OAuth 2.0 Client."))
 	}
 
-	return h.grantAuthorizationDetails(ctx, request, client, raw)
+	return h.grantAuthorizationDetails(ctx, request, raw)
 }
 
-func (h *RedeemHandler) grantAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester, client oauth2.Client, raw map[string]any) (err error) {
-	value, ok := raw[consts.ClaimAuthorizationDetails]
-	if !ok {
+func (h *RedeemHandler) grantAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester, raw map[string]any) (err error) {
+	if _, ok := raw[consts.ClaimAuthorizationDetails]; !ok {
 		return nil
 	}
 
-	encoded, err := json.Marshal(value)
+	encoded, err := authorizationDetailsClaim(request.GetRequestForm().Get(consts.FormParameterAssertion))
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is malformed.", consts.ClaimAuthorizationDetails).WithWrap(err).WithDebugError(err))
 	}

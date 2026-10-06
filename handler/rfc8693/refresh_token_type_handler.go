@@ -297,9 +297,13 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 	}
 
 	if len(request.GetRequestedAuthorizationDetails()) != 0 {
-		if _, err = oauth2.AssignAuthorizationDetails(ctx, c.Config, request, original.GetGrantedAuthorizationDetails()); err != nil {
+		var details oauth2.AuthorizationDetails
+
+		if details, err = oauth2.AssignAuthorizationDetails(ctx, c.Config, request, original.GetGrantedAuthorizationDetails()); err != nil {
 			return err
 		}
+
+		request.SetRequestedAuthorizationDetails(details)
 	}
 
 	return nil

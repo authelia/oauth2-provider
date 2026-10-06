@@ -1336,6 +1336,7 @@ func TestAuthorizeCodeFlow_PopulateTokenEndpointResponseKeepsBinding(t *testing.
 func TestAuthorizeCode_AuthorizationDetails(t *testing.T) {
 	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate, testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
 	narrow := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}}}
+	narrowed := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
 	wide := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionCancel}}}
 
 	newHandlerAndAuthCode := func(t *testing.T, grantedDetails oauth2.AuthorizationDetails) (AuthorizeExplicitGrantHandler, string, *storage.MemoryStore) {
@@ -1427,8 +1428,8 @@ func TestAuthorizeCode_AuthorizationDetails(t *testing.T) {
 		response := oauth2.NewAccessResponse()
 		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
 
-		assert.Equal(t, narrow, accessRequest.GetGrantedAuthorizationDetails())
-		assert.Equal(t, narrow, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+		assert.Equal(t, narrowed, accessRequest.GetGrantedAuthorizationDetails())
+		assert.Equal(t, narrowed, response.GetExtra(consts.AccessResponseAuthorizationDetails))
 
 		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 		refreshToken, ok := response.ToMap()[consts.AccessResponseRefreshToken].(string)

@@ -99,7 +99,7 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 			assert.JSONEq(t, requested, introspected)
 
 			narrowed := refreshWithAuthorizationDetails(t, ts, token.RefreshToken, `[{"type":"payment_initiation","actions":["status"]}]`)
-			assert.JSONEq(t, `[{"type":"payment_initiation","actions":["status"]}]`, string(narrowed["authorization_details"]))
+			assert.JSONEq(t, `[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"123.50"}}]`, string(narrowed["authorization_details"]))
 
 			var next string
 			require.NoError(t, json.Unmarshal(narrowed["refresh_token"], &next))
@@ -107,8 +107,15 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 			restored := refreshWithAuthorizationDetails(t, ts, next, "")
 			assert.JSONEq(t, requested, string(restored["authorization_details"]))
 
+			var selected string
+			require.NoError(t, json.Unmarshal(restored["refresh_token"], &selected))
+
+			// RFC 9396 Section 6.1: a token request may select the granted details without restating them.
+			whole := refreshWithAuthorizationDetails(t, ts, selected, `[{"type":"payment_initiation"}]`)
+			assert.JSONEq(t, requested, string(whole["authorization_details"]))
+
 			var last string
-			require.NoError(t, json.Unmarshal(restored["refresh_token"], &last))
+			require.NoError(t, json.Unmarshal(whole["refresh_token"], &last))
 
 			rejected := refreshWithAuthorizationDetails(t, ts, last, `[{"type":"payment_initiation","actions":["cancel"]}]`)
 			assert.JSONEq(t, `"invalid_authorization_details"`, string(rejected["error"]))

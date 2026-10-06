@@ -75,6 +75,11 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		}
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if err = oauth2.ValidateAuthorizationDetails(ctx, c.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
 	lifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan))

@@ -106,9 +106,13 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if err = oauth2.NarrowAuthorizationDetails(ctx, c.Config, request, authorizeRequest.GetGrantedAuthorizationDetails()); err != nil {
+	var details oauth2.AuthorizationDetails
+
+	if details, err = oauth2.AssignAuthorizationDetails(ctx, c.Config, request, authorizeRequest.GetGrantedAuthorizationDetails()); err != nil {
 		return err
 	}
+
+	request.SetRequestedAuthorizationDetails(details)
 
 	// The 'redirect_uri' must be identical to the one included in the authorization request.
 	//

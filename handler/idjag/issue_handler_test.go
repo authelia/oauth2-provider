@@ -650,6 +650,7 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 		AuthorizationServerIdentificationIssuer: redeemIssuer,
 		ScopeStrategy:                           oauth2.ExactScopeStrategy,
 		DPoPEnabled:                             dpop,
+		AuthorizationDetailsTypeHandlers:        []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}, otherTypeHandler{}},
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693IDToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
 			consts.TokenTypeRFC8693IDJAG:   &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG},
@@ -732,4 +733,16 @@ type subjectStorage struct {
 
 func (s *subjectStorage) GetIDJAGSubject(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship) (string, error) {
 	return "", s.err
+}
+
+type otherTypeHandler struct {
+	internal.PaymentInitiationTypeHandler
+}
+
+func (otherTypeHandler) Type() string {
+	return issueOtherType
+}
+
+func (otherTypeHandler) Validate(_ context.Context, _ oauth2.Requester, _ oauth2.AuthorizationDetail) error {
+	return nil
 }

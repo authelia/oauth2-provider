@@ -593,10 +593,14 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request
 	return nil
 }
 
-func (f *Fosite) validateAuthorizationDetails(ctx context.Context, request *AuthorizeRequest) (err error) {
+func (f *Fosite) validateAuthorizationDetails(ctx context.Context, request Requester) (err error) {
 	var details AuthorizationDetails
 
-	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, request.GetClient(), request.Form); err != nil {
+	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, request.GetClient(), request.GetRequestForm()); err != nil {
+		return err
+	}
+
+	if err = ValidateAuthorizationDetails(ctx, f.Config, request, details); err != nil {
 		return err
 	}
 
@@ -794,7 +798,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 		return err
 	}
 
-	if err = ValidateAuthorizationDetails(ctx, f.Config, client, request.GetRequestedAuthorizationDetails()); err != nil {
+	if err = ValidateAuthorizationDetails(ctx, f.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
 		return err
 	}
 

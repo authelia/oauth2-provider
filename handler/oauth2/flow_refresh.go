@@ -177,9 +177,13 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if err = oauth2.NarrowAuthorizationDetails(ctx, c.Config, request, orequest.GetGrantedAuthorizationDetails()); err != nil {
+	var details oauth2.AuthorizationDetails
+
+	if details, err = oauth2.AssignAuthorizationDetails(ctx, c.Config, request, orequest.GetGrantedAuthorizationDetails()); err != nil {
 		return err
 	}
+
+	request.SetRequestedAuthorizationDetails(details)
 
 	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 

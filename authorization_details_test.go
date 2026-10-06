@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -195,7 +196,7 @@ func TestParseRequestedAuthorizationDetails(t *testing.T) {
 		{name: "ShouldRejectOverDefaultMaximum", config: newRARConfig(), client: &oauth2.DefaultClient{}, raw: newRARDetailsJSON(33), hint: testRARHintMaxObjectsDefault},
 		{name: "ShouldAcceptConfiguredMaximum", config: &oauth2.Config{AuthorizationDetailsTypeHandlers: newRARConfig().AuthorizationDetailsTypeHandlers, AuthorizationDetailsMaxObjects: 2}, client: &oauth2.DefaultClient{}, raw: newRARDetailsJSON(2), expected: newRARDetails(2)},
 		{name: "ShouldRejectOverConfiguredMaximum", config: &oauth2.Config{AuthorizationDetailsTypeHandlers: newRARConfig().AuthorizationDetailsTypeHandlers, AuthorizationDetailsMaxObjects: 2}, client: &oauth2.DefaultClient{}, raw: newRARDetailsJSON(3), hint: "The 'authorization_details' parameter must not contain more than 2 authorization details objects."},
-		{name: "ShouldWrapHandlerValidationError", config: newRARConfig(), client: &oauth2.DefaultClient{}, raw: `[{"type":"payment_initiation","actions":["initiate"],"unknown":1}]`, hint: "The authorization details object of type 'payment_initiation' is invalid."},
+		{name: "ShouldNotCallValidate", config: newRARConfig(), client: &oauth2.DefaultClient{}, raw: `[{"type":"payment_initiation"}]`, expected: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation}}},
 	}
 
 	for _, tc := range testCases {
@@ -236,13 +237,38 @@ func TestGetAuthorizationDetailsMaxObjects(t *testing.T) {
 	}
 }
 
-func TestValidateAuthorizationDetailsPreservesRFC6749Error(t *testing.T) {
-	config := &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{rfcErrorTypeHandler{}}}
+func TestValidateAuthorizationDetails(t *testing.T) {
+	rejecting := &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{rfcErrorTypeHandler{}}}
 
-	err := oauth2.ValidateAuthorizationDetails(context.Background(), config, &oauth2.DefaultClient{}, oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation}})
+	testCases := []struct {
+		name    string
+		config  any
+		client  oauth2.Client
+		details oauth2.AuthorizationDetails
+		hint    string
+	}{
+		{name: "ShouldAcceptEmpty", config: newRARConfig(), client: &oauth2.DefaultClient{}},
+		{name: "ShouldAcceptConforming", config: newRARConfig(), client: &oauth2.DefaultClient{}, details: newRARDetails(1)},
+		{name: "ShouldRejectTypeNotAllowedForClient", config: newRARConfig(), client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}, AuthorizationDetailsTypes: []string{}}, details: newRARDetails(1), hint: testRARHintTypeNotAllowed},
+		{name: "ShouldWrapHandlerError", config: newRARConfig(), client: &oauth2.DefaultClient{}, details: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation}}, hint: "The authorization details object of type 'payment_initiation' is invalid."},
+		{name: "ShouldPreserveRFC6749Error", config: rejecting, client: &oauth2.DefaultClient{}, details: newRARDetails(1), hint: "custom hint"},
+	}
 
-	require.Error(t, err)
-	assert.Equal(t, "custom hint", oauth2.ErrorToRFC6749Error(err).HintField)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := oauth2.ValidateAuthorizationDetails(context.Background(), tc.config, &oauth2.Request{Client: tc.client}, tc.details)
+
+			if tc.hint == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+			assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
 }
 
 func TestValidateAuthorizationDetailsTypes(t *testing.T) {
@@ -280,35 +306,46 @@ func TestValidateAuthorizationDetailsTypes(t *testing.T) {
 	}
 }
 
-func TestCheckAuthorizationDetailsContained(t *testing.T) {
+func TestAssignAuthorizationDetails(t *testing.T) {
 	granted := oauth2.AuthorizationDetails{
-		{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{"https://a.example.com"}},
+		{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationA}},
 		{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate, testRARActionStatus}, Locations: []string{testRARLocationB}},
 	}
 
 	payment := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Extra: map[string]any{testRARMemberCreditorName: testRARCreditorName}}
 	initiate := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}
 	statusB := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Locations: []string{testRARLocationB}}
+	locationB := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Locations: []string{testRARLocationB}}
 
 	testCases := []struct {
 		name      string
+		config    any
+		client    oauth2.Client
 		granted   oauth2.AuthorizationDetails
 		requested oauth2.AuthorizationDetails
+		expected  oauth2.AuthorizationDetails
 		hint      string
 	}{
-		{name: "ShouldAcceptNoneRequested"},
-		{name: "ShouldAcceptSubsetOfFirst", requested: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}}},
-		{name: "ShouldAcceptSubsetOfSecondOnly", requested: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Locations: []string{testRARLocationB}}}},
+		{name: "ShouldAssignNoneWhenNoneGranted", granted: oauth2.AuthorizationDetails{}},
+		{name: "ShouldAssignGrantedWhenNoneRequested", expected: granted},
+		{name: "ShouldAssignGrantedNarrowedToRequestedActions", requested: oauth2.AuthorizationDetails{statusB}, expected: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Locations: []string{testRARLocationB}}}},
+		{name: "ShouldAssignGrantedMembersOmittedFromRequested", requested: oauth2.AuthorizationDetails{locationB}, expected: oauth2.AuthorizationDetails{granted[1]}},
+		{name: "ShouldAssignGrantedExtraOmittedFromRequested", granted: oauth2.AuthorizationDetails{payment}, requested: oauth2.AuthorizationDetails{initiate}, expected: oauth2.AuthorizationDetails{payment}},
 		{name: "ShouldRejectExceedingAll", requested: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{"cancel"}}}, hint: testRARHintNotGranted},
-		{name: "ShouldRejectUnregisteredType", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther}}, hint: "The authorization details type 'other' is not supported."},
+		{name: "ShouldRejectMalformedRequested", requested: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Extra: map[string]any{"unknown": true}}}, hint: testRARHintNotGranted},
+		{name: "ShouldRejectRequestedWhenNoneGranted", granted: oauth2.AuthorizationDetails{}, requested: oauth2.AuthorizationDetails{initiate}, hint: testRARHintNotGranted},
+		{name: "ShouldRejectUnregisteredRequestedType", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther}}, hint: "The authorization details type 'other' is not supported."},
+		{name: "ShouldRejectUnregisteredGrantedType", granted: oauth2.AuthorizationDetails{{Type: testRARTypeOther}}, hint: "The authorization details type 'other' is not supported."},
+		{name: "ShouldRejectGrantedTypeNotAllowedForClient", client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}, AuthorizationDetailsTypes: []string{}}, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectRequestedTypeNotAllowedForClient", client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}, AuthorizationDetailsTypes: []string{}}, requested: oauth2.AuthorizationDetails{initiate}, hint: testRARHintTypeNotAllowed},
 		{name: "ShouldRejectOneGrantedForTwoRequested", granted: oauth2.AuthorizationDetails{payment}, requested: oauth2.AuthorizationDetails{payment, payment}, hint: testRARHintNotGranted},
-		{name: "ShouldRejectOneGrantedForThreeRequested", granted: oauth2.AuthorizationDetails{payment}, requested: oauth2.AuthorizationDetails{payment, payment, payment}, hint: testRARHintNotGranted},
-		{name: "ShouldAcceptTwoGrantedForTwoRequested", granted: oauth2.AuthorizationDetails{payment, payment}, requested: oauth2.AuthorizationDetails{payment, payment}},
-		{name: "ShouldAcceptEachRequestedMatchedToDistinctGranted", requested: oauth2.AuthorizationDetails{initiate, initiate}},
+		{name: "ShouldAssignTwoGrantedForTwoRequested", granted: oauth2.AuthorizationDetails{payment, payment}, requested: oauth2.AuthorizationDetails{payment, payment}, expected: oauth2.AuthorizationDetails{payment, payment}},
 		{name: "ShouldRejectMoreRequestedThanGranted", requested: oauth2.AuthorizationDetails{initiate, initiate, initiate}, hint: testRARHintNotGranted},
-		{name: "ShouldAcceptOverlappingContainment", requested: oauth2.AuthorizationDetails{initiate, statusB}},
-		{name: "ShouldAcceptWhenGreedyFirstFitFails", granted: oauth2.AuthorizationDetails{granted[1], granted[0]}, requested: oauth2.AuthorizationDetails{initiate, statusB}},
+		{name: "ShouldAssignWhenGreedyFirstFitFails", granted: oauth2.AuthorizationDetails{granted[1], granted[0]}, requested: oauth2.AuthorizationDetails{initiate, statusB}, expected: oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationA}}, {Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Locations: []string{testRARLocationB}}}},
 		{name: "ShouldRejectTwoRequestedOnlySecondContains", requested: oauth2.AuthorizationDetails{statusB, statusB}, hint: testRARHintNotGranted},
+		{name: "ShouldPreserveRFC6749Error", config: &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{rfcErrorTypeHandler{}}}, requested: oauth2.AuthorizationDetails{initiate}, hint: "custom hint"},
+		{name: "ShouldRejectEmptyAssignmentForRequested", config: &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{assigningTypeHandler{}}}, requested: oauth2.AuthorizationDetails{initiate}, hint: testRARHintNotGranted},
+		{name: "ShouldAssignNoneWhenTypeAssignsNoneOfGranted", config: &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{assigningTypeHandler{}}}},
 	}
 
 	for _, tc := range testCases {
@@ -319,10 +356,26 @@ func TestCheckAuthorizationDetailsContained(t *testing.T) {
 				g = tc.granted
 			}
 
-			err := oauth2.CheckAuthorizationDetailsContained(context.Background(), newRARConfig(), g, tc.requested)
+			var config any = newRARConfig()
+
+			if tc.config != nil {
+				config = tc.config
+			}
+
+			var client oauth2.Client = &oauth2.DefaultClient{}
+
+			if tc.client != nil {
+				client = tc.client
+			}
+
+			request := &oauth2.AccessRequest{Request: oauth2.Request{Client: client, RequestedAuthorizationDetails: tc.requested}}
+
+			actual, err := oauth2.AssignAuthorizationDetails(context.Background(), config, request, g)
 
 			if tc.hint == "" {
-				assert.NoError(t, err)
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, tc.expected, actual)
+				assert.Equal(t, tc.requested, request.GetRequestedAuthorizationDetails())
 
 				return
 			}
@@ -334,7 +387,15 @@ func TestCheckAuthorizationDetailsContained(t *testing.T) {
 	}
 }
 
-func TestCheckAuthorizationDetailsContainedRejectsWidenedMembers(t *testing.T) {
+func TestAssignAuthorizationDetailsRejectsAssignedTypeMismatch(t *testing.T) {
+	config := &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{assigningTypeHandler{assigned: oauth2.AuthorizationDetails{{Type: testRARTypeOther}}}}}
+
+	_, err := oauth2.AssignAuthorizationDetails(context.Background(), config, &oauth2.AccessRequest{Request: oauth2.Request{Client: &oauth2.DefaultClient{}}}, newRARDetails(1))
+
+	assert.ErrorIs(t, err, oauth2.ErrServerError)
+}
+
+func TestAssignAuthorizationDetailsRejectsWidenedMembers(t *testing.T) {
 	granted := oauth2.AuthorizationDetails{
 		{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Identifier: new("acct-1"), DataTypes: []string{testRARDataTypeBalance}, Privileges: []string{testRARActionRead}},
 	}
@@ -355,10 +416,13 @@ func TestCheckAuthorizationDetailsContainedRejectsWidenedMembers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := oauth2.CheckAuthorizationDetailsContained(context.Background(), newRARConfig(), granted, oauth2.AuthorizationDetails{tc.requested})
+			request := &oauth2.AccessRequest{Request: oauth2.Request{Client: &oauth2.DefaultClient{}, RequestedAuthorizationDetails: oauth2.AuthorizationDetails{tc.requested}}}
+
+			actual, err := oauth2.AssignAuthorizationDetails(context.Background(), newRARConfig(), request, granted)
 
 			if tc.contained {
-				assert.NoError(t, err)
+				require.NoError(t, err)
+				assert.Equal(t, granted, actual)
 
 				return
 			}
@@ -366,6 +430,46 @@ func TestCheckAuthorizationDetailsContainedRejectsWidenedMembers(t *testing.T) {
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, oauth2.ErrInvalidAuthorizationDetails))
 			assert.Equal(t, testRARHintNotGranted, oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
+}
+
+func TestMatchAuthorizationDetails(t *testing.T) {
+	contains := func(granted, requested oauth2.AuthorizationDetail) bool {
+		for _, action := range requested.Actions {
+			if !slices.Contains(granted.Actions, action) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	detail := func(t string, actions ...string) oauth2.AuthorizationDetail {
+		return oauth2.AuthorizationDetail{Type: t, Actions: actions}
+	}
+
+	testCases := []struct {
+		name      string
+		granted   oauth2.AuthorizationDetails
+		requested oauth2.AuthorizationDetails
+		expected  []int
+		ok        bool
+	}{
+		{name: "ShouldMatchNoneRequested", granted: oauth2.AuthorizationDetails{detail("a", "x")}, expected: []int{}, ok: true},
+		{name: "ShouldMatchContained", granted: oauth2.AuthorizationDetails{detail("a", "x"), detail("a", "y")}, requested: oauth2.AuthorizationDetails{detail("a", "y")}, expected: []int{1}, ok: true},
+		{name: "ShouldMatchWhenGreedyFirstFitFails", granted: oauth2.AuthorizationDetails{detail("a", "x", "y"), detail("a", "x")}, requested: oauth2.AuthorizationDetails{detail("a", "x"), detail("a", "y")}, expected: []int{1, 0}, ok: true},
+		{name: "ShouldNotMatchAnotherType", granted: oauth2.AuthorizationDetails{detail("b", "x")}, requested: oauth2.AuthorizationDetails{detail("a", "x")}},
+		{name: "ShouldNotMatchOneGrantedTwice", granted: oauth2.AuthorizationDetails{detail("a", "x")}, requested: oauth2.AuthorizationDetails{detail("a", "x"), detail("a", "x")}},
+		{name: "ShouldNotMatchUncontained", granted: oauth2.AuthorizationDetails{detail("a", "x")}, requested: oauth2.AuthorizationDetails{detail("a", "z")}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, ok := oauth2.MatchAuthorizationDetails(tc.granted, tc.requested, contains)
+
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }
@@ -392,6 +496,20 @@ type rfcErrorTypeHandler struct {
 	internal.PaymentInitiationTypeHandler
 }
 
-func (rfcErrorTypeHandler) Validate(context.Context, oauth2.Client, oauth2.AuthorizationDetail) error {
+func (rfcErrorTypeHandler) Validate(context.Context, oauth2.Requester, oauth2.AuthorizationDetail) error {
 	return oauth2.ErrInvalidAuthorizationDetails.WithHint("custom hint")
+}
+
+func (rfcErrorTypeHandler) Assign(context.Context, oauth2.AccessRequester, oauth2.AuthorizationDetails, oauth2.AuthorizationDetails) (oauth2.AuthorizationDetails, error) {
+	return nil, oauth2.ErrInvalidAuthorizationDetails.WithHint("custom hint")
+}
+
+type assigningTypeHandler struct {
+	internal.PaymentInitiationTypeHandler
+
+	assigned oauth2.AuthorizationDetails
+}
+
+func (h assigningTypeHandler) Assign(context.Context, oauth2.AccessRequester, oauth2.AuthorizationDetails, oauth2.AuthorizationDetails) (oauth2.AuthorizationDetails, error) {
+	return h.assigned, nil
 }

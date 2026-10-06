@@ -612,6 +612,7 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			raw:        newRARDetailsJSON(33),
 			expectErr:  ErrInvalidAuthorizationDetails,
 			expectHint: testRARHintMaxObjectsDefault,
+			accepts:    new(true),
 		},
 		{
 			name:       "ShouldRejectCodeOverConfiguredMaximum",
@@ -621,6 +622,7 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			max:        1,
 			expectErr:  ErrInvalidAuthorizationDetails,
 			expectHint: "The 'authorization_details' parameter must not contain more than 1 authorization details objects.",
+			accepts:    new(true),
 		},
 		{
 			name:          "ShouldAcceptCodeAtConfiguredMaximum",
@@ -629,6 +631,7 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			raw:           newRARDetailsJSON(2),
 			max:           2,
 			expectDetails: newRARDetails(2),
+			accepts:       new(true),
 		},
 		{
 			name:      "ShouldIgnoreAtTokenEndpointWhenDisabled",
@@ -641,6 +644,7 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			grantType:     consts.GrantTypeAuthorizationCode,
 			raw:           testRARDetailsJSON,
 			expectDetails: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+			accepts:       new(true),
 		},
 		{
 			name:          "ShouldParseForRefreshToken",
@@ -648,6 +652,7 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			grantType:     consts.GrantTypeRefreshToken,
 			raw:           testRARDetailsJSON,
 			expectDetails: AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}}},
+			accepts:       new(true),
 		},
 		{
 			name:      "ShouldTreatEmptyAsAbsent",
@@ -661,9 +666,10 @@ func TestNewAccessRequestAuthorizationDetails(t *testing.T) {
 			grantType: consts.GrantTypeAuthorizationCode,
 			raw:       "{}",
 			expectErr: ErrInvalidAuthorizationDetails,
+			accepts:   new(true),
 		},
 		{
-			name:          "ShouldRejectClientCredentials",
+			name:          "ShouldRejectWithoutAcceptingHandler",
 			handlers:      handlers,
 			grantType:     consts.GrantTypeClientCredentials,
 			raw:           testRARDetailsJSON,

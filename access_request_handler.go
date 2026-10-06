@@ -139,10 +139,6 @@ func hasClientCredentials(r *http.Request, form url.Values) bool {
 }
 
 func (f *Fosite) canHandleAuthorizationDetails(ctx context.Context, requester AccessRequester) bool {
-	if grantTypes := requester.GetGrantTypes(); len(grantTypes) == 1 && (grantTypes[0] == consts.GrantTypeAuthorizationCode || grantTypes[0] == consts.GrantTypeRefreshToken) {
-		return true
-	}
-
 	for _, handler := range f.Config.GetTokenEndpointHandlers(ctx) {
 		if h, ok := handler.(AuthorizationDetailsTokenEndpointHandler); ok && handler.CanHandleTokenEndpointRequest(ctx, requester) && h.CanHandleAuthorizationDetails(ctx, requester) {
 			return true

@@ -106,13 +106,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if len(request.GetRequestedAuthorizationDetails()) == 0 {
-		request.SetRequestedAuthorizationDetails(authorizeRequest.GetGrantedAuthorizationDetails())
-	} else if err = oauth2.CheckAuthorizationDetailsContained(ctx, c.Config, authorizeRequest.GetGrantedAuthorizationDetails(), request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
-	}
-
-	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetRequestedAuthorizationDetails()); err != nil {
+	if err = oauth2.NarrowAuthorizationDetails(ctx, c.Config, request, authorizeRequest.GetGrantedAuthorizationDetails()); err != nil {
 		return err
 	}
 
@@ -292,6 +286,14 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	}
 
 	return nil
+}
+
+// CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396
+// 'authorization_details' parameter is accepted and checked against the details granted by the resource owner.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+func (c *AuthorizeExplicitGrantHandler) CanHandleAuthorizationDetails(_ context.Context, _ oauth2.AccessRequester) (handle bool) {
+	return true
 }
 
 // CanSkipClientAuth always returns false, client authentication is never skipped for the authorization code grant.

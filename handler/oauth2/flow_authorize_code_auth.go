@@ -119,6 +119,7 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*AuthorizeExplicitGrantHandler)(nil)
+	_ oauth2.AuthorizeEndpointHandler                 = (*AuthorizeExplicitGrantHandler)(nil)
+	_ oauth2.TokenEndpointHandler                     = (*AuthorizeExplicitGrantHandler)(nil)
+	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*AuthorizeExplicitGrantHandler)(nil)
 )

@@ -232,10 +232,13 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 			WithDebugf("The registered client with id '%s' is configured with the '%s_endpoint_auth_method' method '%s' but the request did not include a client certificate.", client.GetID(), endpoint, consts.ClientAuthMethodSelfSignedTLSClientAuth))
 	}
 
-	var jwks *jose.JSONWebKeySet
+	var (
+		jwks *jose.JSONWebKeySet
+		uri  string
+	)
 
 	if jwks = client.GetJSONWebKeys(); jwks == nil || len(jwks.Keys) == 0 {
-		uri := client.GetJSONWebKeysURI()
+		uri = client.GetJSONWebKeysURI()
 
 		switch {
 		case uri == "":
@@ -248,11 +251,25 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 				WithDebugf("The registered client with id '%s' has a 'jwks_uri' but the authorization server has no JWKS fetcher strategy configured to resolve it.", client.GetID()))
 		}
 
-		if jwks, err = fetcher.Resolve(ctx, uri, false); err != nil {
-			return errorsx.WithStack(ErrInvalidClient.
-				WithHint(hintClientCredentialsInvalid).
-				WithWrap(err).
-				WithDebugf("The registered client with id '%s' has a 'jwks_uri' which could not be resolved. %s.", client.GetID(), ErrorToDebugRFC6749Error(err).Error()))
+		if jwks, err = resolveSelfSignedCertificateJWKS(ctx, client, fetcher, uri, false); err != nil {
+			return err
+		}
+	}
+
+	if matchSelfSignedCertificateJWKS(jwks, cert) {
+		return nil
+	}
+
+	// A certificate absent from the cached 'jwks_uri' may have been added since it was fetched.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.2
+	if uri != "" {
+		if jwks, err = resolveSelfSignedCertificateJWKS(ctx, client, fetcher, uri, true); err != nil {
+			return err
+		}
+
+		if matchSelfSignedCertificateJWKS(jwks, cert) {
+			return nil
 		}
 	}
 
@@ -260,6 +277,27 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 		return errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
 			WithDebugf("The registered client with id '%s' has no 'jwks' or 'jwks_uri' keys from which to determine the certificates it authenticates with.", client.GetID()))
+	}
+
+	return errorsx.WithStack(ErrInvalidClient.
+		WithHint(hintClientCredentialsInvalid).
+		WithDebugf("The client certificate presented by the client with id '%s' does not match any certificate in the 'x5c' of its registered JSON Web Key Set.", client.GetID()))
+}
+
+func resolveSelfSignedCertificateJWKS(ctx context.Context, client AuthenticationMethodClient, fetcher jwt.JWKSFetcherStrategy, uri string, refresh bool) (jwks *jose.JSONWebKeySet, err error) {
+	if jwks, err = fetcher.Resolve(ctx, uri, refresh); err != nil {
+		return nil, errorsx.WithStack(ErrInvalidClient.
+			WithHint(hintClientCredentialsInvalid).
+			WithWrap(err).
+			WithDebugf("The registered client with id '%s' has a 'jwks_uri' which could not be resolved. %s.", client.GetID(), ErrorToDebugRFC6749Error(err).Error()))
+	}
+
+	return jwks, nil
+}
+
+func matchSelfSignedCertificateJWKS(jwks *jose.JSONWebKeySet, cert *x509.Certificate) (match bool) {
+	if jwks == nil {
+		return false
 	}
 
 	presented := []byte(X509CertificateSHA256Thumbprint(cert))
@@ -273,14 +311,12 @@ func matchSelfSignedCertificate(ctx context.Context, client AuthenticationMethod
 			}
 
 			if subtle.ConstantTimeCompare(presented, []byte(thumbprint)) == 1 {
-				return nil
+				return true
 			}
 		}
 	}
 
-	return errorsx.WithStack(ErrInvalidClient.
-		WithHint(hintClientCredentialsInvalid).
-		WithDebugf("The client certificate presented by the client with id '%s' does not match any certificate in the 'x5c' of its registered JSON Web Key Set.", client.GetID()))
+	return false
 }
 
 func isMTLSAuthMethod(client Client, strategy EndpointClientAuthStrategy) bool {

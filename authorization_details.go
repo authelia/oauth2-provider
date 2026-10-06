@@ -306,19 +306,28 @@ type AuthorizationDetailsTypeHandler interface {
 	Type() string
 
 	// Validate returns an error when the detail is not a conforming instance of the type: it contains unknown fields,
-	// fields of the wrong type or with invalid values, or is missing required fields. Errors which are not an
-	// *RFC6749Error are returned to the client as 'invalid_authorization_details'.
+	// fields of the wrong type or with invalid values, or is missing required fields. It is called where the detail
+	// asks for authorization that is yet to be granted: the authorization endpoint, the pushed authorization request
+	// endpoint, the device authorization endpoint, and a grant with no underlying authorization such as the client
+	// credentials grant, where it also applies the policy of the client. It is not called for a token request made
+	// against a grant, which Assign handles. Errors which are not an *RFC6749Error are returned to the client as
+	// 'invalid_authorization_details'.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
-	Validate(ctx context.Context, client Client, detail AuthorizationDetail) (err error)
+	Validate(ctx context.Context, request Requester, detail AuthorizationDetail) (err error)
 
-	// Contains reports whether requested asks for no more than granted. When it returns true, requested is issued
-	// verbatim, so it must return false for any member, common or Extra, that granted does not justify. It must not
-	// mutate its arguments. It compares a single pair; CheckAuthorizationDetailsContained assigns each requested
-	// detail a distinct granted detail, so one granted detail never justifies several requested details.
+	// Assign returns the details of this type to assign to the access token of a token request made against a grant.
+	// The granted details are those of this type the grant carries and are never empty. The requested details are
+	// those of this type in the 'authorization_details' parameter of the token request, and are empty when the
+	// request has no such parameter, in which case the result is at the discretion of the type. A requested detail
+	// need not be a conforming instance of the type, as the type defines how it selects from the granted details. An
+	// error is returned when a requested detail is malformed or asks for more than the granted details justify, and
+	// every assigned detail must carry no more than the granted details justify. Errors which are not an
+	// *RFC6749Error are returned to the client as 'invalid_authorization_details'.
 	//
-	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
-	Contains(ctx context.Context, granted, requested AuthorizationDetail) (contained bool)
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-7
+	Assign(ctx context.Context, request AccessRequester, granted, requested AuthorizationDetails) (assigned AuthorizationDetails, err error)
 }
 
 // AuthorizationDetailsClient restricts the RFC 9396 authorization details types a client may request. A nil list
@@ -398,19 +407,23 @@ func ValidateAuthorizationDetailsTypes(ctx context.Context, config any, client C
 	return nil
 }
 
-// ValidateAuthorizationDetails rejects details which fail ValidateAuthorizationDetailsTypes or which the type's
-// handler does not accept.
+// ValidateAuthorizationDetails rejects details which fail ValidateAuthorizationDetailsTypes for the client of the
+// request or which the type's handler does not accept.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-5
-func ValidateAuthorizationDetails(ctx context.Context, config any, client Client, details AuthorizationDetails) (err error) {
-	if err = ValidateAuthorizationDetailsTypes(ctx, config, client, details); err != nil {
+func ValidateAuthorizationDetails(ctx context.Context, config any, request Requester, details AuthorizationDetails) (err error) {
+	if len(details) == 0 {
+		return nil
+	}
+
+	if err = ValidateAuthorizationDetailsTypes(ctx, config, request.GetClient(), details); err != nil {
 		return err
 	}
 
 	handlers := GetAuthorizationDetailsTypeHandlers(ctx, config)
 
 	for _, detail := range details {
-		if err = handlers[detail.Type].Validate(ctx, client, detail); err != nil {
+		if err = handlers[detail.Type].Validate(ctx, request, detail); err != nil {
 			var rfc *RFC6749Error
 
 			if errors.As(err, &rfc) {
@@ -424,8 +437,10 @@ func ValidateAuthorizationDetails(ctx context.Context, config any, client Client
 	return nil
 }
 
-// ParseRequestedAuthorizationDetails parses and validates the 'authorization_details' parameter of form. It returns
-// nil without reading the parameter when no handlers are configured.
+// ParseRequestedAuthorizationDetails parses the 'authorization_details' parameter of form and rejects details which
+// fail CheckAuthorizationDetailsMaxObjects or ValidateAuthorizationDetailsTypes. It does not call the type handlers:
+// the caller validates the details with ValidateAuthorizationDetails or assigns them with AssignAuthorizationDetails.
+// It returns nil without reading the parameter when no handlers are configured.
 func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client Client, form url.Values) (details AuthorizationDetails, err error) {
 	if !IsAuthorizationDetailsEnabled(ctx, config) {
 		return nil, nil
@@ -439,52 +454,95 @@ func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client 
 		return nil, err
 	}
 
-	if err = ValidateAuthorizationDetails(ctx, config, client, details); err != nil {
+	if err = ValidateAuthorizationDetailsTypes(ctx, config, client, details); err != nil {
 		return nil, err
 	}
 
 	return details, nil
 }
 
-// NarrowAuthorizationDetails settles the authorization details of a token request against the details granted to the
-// underlying grant. A request without the 'authorization_details' parameter takes the granted details, and otherwise
-// the requested details must be contained in the granted details. The settled details are recorded as the requested
-// details of the request, and must be of types the client may request and the authorization server supports.
+// AssignAuthorizationDetails returns the authorization details to assign to the access token of a token request made
+// against a grant which carries the granted details. The handler of each type assigns the details of its type. A
+// request without the 'authorization_details' parameter is assigned details of every granted type, and otherwise only
+// details of the requested types, each of which must have been granted. The types must be ones the client may request
+// and the authorization server supports.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-func NarrowAuthorizationDetails(ctx context.Context, config any, request Requester, granted AuthorizationDetails) (err error) {
-	if len(request.GetRequestedAuthorizationDetails()) == 0 {
-		request.SetRequestedAuthorizationDetails(granted)
-	} else if err = CheckAuthorizationDetailsContained(ctx, config, granted, request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-7
+func AssignAuthorizationDetails(ctx context.Context, config any, request AccessRequester, granted AuthorizationDetails) (assigned AuthorizationDetails, err error) {
+	requested := request.GetRequestedAuthorizationDetails()
+
+	source := requested
+
+	if len(source) == 0 {
+		source = granted
 	}
 
-	return ValidateAuthorizationDetailsTypes(ctx, config, request.GetClient(), request.GetRequestedAuthorizationDetails())
-}
+	if err = ValidateAuthorizationDetailsTypes(ctx, config, request.GetClient(), source); err != nil {
+		return nil, err
+	}
 
-// CheckAuthorizationDetailsContained rejects the requested details unless each one can be assigned a distinct granted
-// detail of the same type which contains it, so one granted detail never justifies more than one requested detail.
-//
-// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-func CheckAuthorizationDetailsContained(ctx context.Context, config any, granted, requested AuthorizationDetails) (err error) {
 	handlers := GetAuthorizationDetailsTypeHandlers(ctx, config)
 
+	var seen []string
+
+	for _, detail := range source {
+		if slices.Contains(seen, detail.Type) {
+			continue
+		}
+
+		seen = append(seen, detail.Type)
+
+		g, r := filterAuthorizationDetails(granted, detail.Type), filterAuthorizationDetails(requested, detail.Type)
+
+		if len(g) == 0 {
+			return nil, errorsx.WithStack(errAuthorizationDetailsNotGranted(detail.Type))
+		}
+
+		var a AuthorizationDetails
+
+		if a, err = handlers[detail.Type].Assign(ctx, request, g, r); err != nil {
+			var rfc *RFC6749Error
+
+			if errors.As(err, &rfc) {
+				return nil, errorsx.WithStack(err)
+			}
+
+			return nil, errorsx.WithStack(errAuthorizationDetailsNotGranted(detail.Type).WithWrap(err).WithDebugError(err))
+		}
+
+		if len(r) != 0 && len(a) == 0 {
+			return nil, errorsx.WithStack(errAuthorizationDetailsNotGranted(detail.Type))
+		}
+
+		for _, d := range a {
+			if d.Type != detail.Type {
+				return nil, errorsx.WithStack(ErrServerError.WithDebugf("The authorization details type handler for type '%s' assigned an authorization details object of type '%s'.", detail.Type, d.Type))
+			}
+		}
+
+		assigned = append(assigned, a...)
+	}
+
+	return assigned, nil
+}
+
+// MatchAuthorizationDetails assigns each requested detail a distinct granted detail for which contains reports true,
+// so one granted detail never justifies more than one requested detail. It returns the index of the granted detail
+// matched to each requested detail, and false when there is no such assignment. It is a building block for an
+// AuthorizationDetailsTypeHandler which assigns details one requested detail at a time.
+func MatchAuthorizationDetails(granted, requested AuthorizationDetails, contains func(granted, requested AuthorizationDetail) bool) (matches []int, ok bool) {
 	candidates := make([][]int, len(requested))
 
 	for i, r := range requested {
-		handler, ok := handlers[r.Type]
-		if !ok {
-			return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The authorization details type '%s' is not supported.", r.Type))
-		}
-
 		for j, g := range granted {
-			if g.Type == r.Type && handler.Contains(ctx, g, r) {
+			if g.Type == r.Type && contains(g, r) {
 				candidates[i] = append(candidates[i], j)
 			}
 		}
 
 		if len(candidates[i]) == 0 {
-			return errAuthorizationDetailsNotGranted(r.Type)
+			return nil, false
 		}
 	}
 
@@ -494,13 +552,31 @@ func CheckAuthorizationDetailsContained(ctx context.Context, config any, granted
 		assigned[j] = -1
 	}
 
-	for i, r := range requested {
+	for i := range requested {
 		if !assignAuthorizationDetail(i, candidates, assigned, make([]bool, len(granted))) {
-			return errAuthorizationDetailsNotGranted(r.Type)
+			return nil, false
 		}
 	}
 
-	return nil
+	matches = make([]int, len(requested))
+
+	for j, i := range assigned {
+		if i != -1 {
+			matches[i] = j
+		}
+	}
+
+	return matches, true
+}
+
+func filterAuthorizationDetails(details AuthorizationDetails, t string) (filtered AuthorizationDetails) {
+	for _, detail := range details {
+		if detail.Type == t {
+			filtered = append(filtered, detail.Clone())
+		}
+	}
+
+	return filtered
 }
 
 func assignAuthorizationDetail(i int, candidates [][]int, assigned []int, visited []bool) bool {
@@ -529,6 +605,6 @@ func assignAuthorizationDetail(i int, candidates [][]int, assigned []int, visite
 	return false
 }
 
-func errAuthorizationDetailsNotGranted(t string) error {
-	return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The requested authorization details of type '%s' were not granted by the resource owner.", t))
+func errAuthorizationDetailsNotGranted(t string) *RFC6749Error {
+	return ErrInvalidAuthorizationDetails.WithHintf("The requested authorization details of type '%s' were not granted by the resource owner.", t)
 }

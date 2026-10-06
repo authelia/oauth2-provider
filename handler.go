@@ -37,7 +37,10 @@ type TokenEndpointHandler interface {
 
 // AuthorizationDetailsTokenEndpointHandler is implemented by a TokenEndpointHandler which processes the RFC 9396
 // 'authorization_details' token request parameter. The parameter is rejected unless a handler which can handle the
-// request implements this interface and accepts it. The accepting handler is responsible for granting the details.
+// request implements this interface and accepts it. The token endpoint only parses the parameter and checks the types
+// of the details. The accepting handler is responsible for the rest: a handler which issues against a grant assigns
+// the details with AssignAuthorizationDetails, a handler with no underlying grant validates them with
+// ValidateAuthorizationDetails, and either grants the result.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-6
 type AuthorizationDetailsTokenEndpointHandler interface {

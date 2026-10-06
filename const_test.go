@@ -30,6 +30,7 @@ const (
 	testRARDataTypeBalance       = "balance"
 	testRARDataTypeAll           = "all"
 	testRARPrivilegeAdmin        = "admin"
+	testRARLocationA             = "https://a.example.com"
 	testRARLocationB             = "https://b.example.com"
 	testRARCreditorName          = "Merchant A"
 	testRARClientID              = "rar-client"

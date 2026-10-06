@@ -62,13 +62,9 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-3
-	var details AuthorizationDetails
-
-	if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, client, request.Form); err != nil {
+	if err = f.validateAuthorizationDetails(ctx, request); err != nil {
 		return request, err
 	}
-
-	request.SetRequestedAuthorizationDetails(details)
 
 	return request, nil
 }

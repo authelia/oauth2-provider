@@ -809,7 +809,7 @@ type failingTypeHandler struct {
 	internal.PaymentInitiationTypeHandler
 }
 
-func (failingTypeHandler) Validate(_ context.Context, _ oauth2.Client, _ oauth2.AuthorizationDetail) error {
+func (failingTypeHandler) Validate(_ context.Context, _ oauth2.Requester, _ oauth2.AuthorizationDetail) error {
 	return oauth2.ErrServerError.WithDebug("The backend is unavailable.")
 }
 

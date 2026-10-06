@@ -1866,6 +1866,7 @@ func TestRefreshFlow_AuthorizationDetails(t *testing.T) {
 
 	granted := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate, testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
 	narrow := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}}}
+	narrowed := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionStatus}, Identifier: new(testRARIdentifierEnriched)}}
 	wide := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionCancel}}}
 
 	stores := []struct {
@@ -1883,7 +1884,7 @@ func TestRefreshFlow_AuthorizationDetails(t *testing.T) {
 		expectGrant      oauth2.AuthorizationDetails
 	}{
 		{"ShouldCarryGrantWhenAbsent", nil, false, granted},
-		{"ShouldNarrowAccessTokenAndRestoreRefreshToken", narrow, false, narrow},
+		{"ShouldNarrowAccessTokenAndRestoreRefreshToken", narrow, false, narrowed},
 		{"ShouldRejectNotContained", wide, true, nil},
 		{"ShouldRejectOneGrantedForTwoRequested", oauth2.AuthorizationDetails{granted[0], granted[0]}, true, nil},
 	}

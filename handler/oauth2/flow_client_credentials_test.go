@@ -97,6 +97,7 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetRequestedScopes().Return([]string{"foo", "bar", "baz.bar"})
 				areq.EXPECT().GetRequestedAudience().Return([]string{})
 				areq.EXPECT().GetRequestedResource().Return([]string{})
+				areq.EXPECT().GetRequestedAuthorizationDetails().Return(nil)
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},

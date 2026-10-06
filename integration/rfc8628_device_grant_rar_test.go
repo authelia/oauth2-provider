@@ -40,7 +40,8 @@ func TestDeviceFlowWithAuthorizationDetails(t *testing.T) {
 
 	const (
 		requested = `[{"type":"payment_initiation","actions":["initiate","status"],"instructedAmount":{"currency":"EUR","amount":"123.50"}}]`
-		narrowed  = `[{"type":"payment_initiation","actions":["status"]}]`
+		narrow    = `[{"type":"payment_initiation","actions":["status"]}]`
+		narrowed  = `[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"123.50"}}]`
 	)
 
 	for _, st := range stores {
@@ -93,7 +94,7 @@ func TestDeviceFlowWithAuthorizationDetails(t *testing.T) {
 			})
 
 			t.Run("ShouldIssueNarrowedDetailsAndKeepTheGrant", func(t *testing.T) {
-				token := postTokenEndpoint(t, ts, deviceCodeForm(approveDevice(t, ts, requested), narrowed))
+				token := postTokenEndpoint(t, ts, deviceCodeForm(approveDevice(t, ts, requested), narrow))
 				assert.JSONEq(t, narrowed, string(token["authorization_details"]))
 
 				var refresh string
@@ -110,7 +111,7 @@ func TestDeviceFlowWithAuthorizationDetails(t *testing.T) {
 			})
 
 			t.Run("ShouldRejectDetailsWhenNoneGranted", func(t *testing.T) {
-				token := postTokenEndpoint(t, ts, deviceCodeForm(approveDevice(t, ts, ""), narrowed))
+				token := postTokenEndpoint(t, ts, deviceCodeForm(approveDevice(t, ts, ""), narrow))
 				assert.JSONEq(t, `"invalid_authorization_details"`, string(token["error"]))
 			})
 		})

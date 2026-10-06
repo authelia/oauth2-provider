@@ -101,6 +101,11 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 		}
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
+	if err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
+		return err
+	}
+
 	grantAuthorizationDetails(request, relationship)
 
 	request.GrantAudience(relationship.Issuer)

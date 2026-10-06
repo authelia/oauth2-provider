@@ -370,10 +370,10 @@ type testAuthorizationDetailsTypeHandler struct{ typ string }
 
 func (h *testAuthorizationDetailsTypeHandler) Type() string { return h.typ }
 
-func (h *testAuthorizationDetailsTypeHandler) Validate(context.Context, Client, AuthorizationDetail) error {
+func (h *testAuthorizationDetailsTypeHandler) Validate(context.Context, Requester, AuthorizationDetail) error {
 	return nil
 }
 
-func (h *testAuthorizationDetailsTypeHandler) Contains(context.Context, AuthorizationDetail, AuthorizationDetail) bool {
-	return true
+func (h *testAuthorizationDetailsTypeHandler) Assign(_ context.Context, _ AccessRequester, granted, _ AuthorizationDetails) (AuthorizationDetails, error) {
+	return granted, nil
 }

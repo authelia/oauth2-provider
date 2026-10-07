@@ -1210,6 +1210,298 @@ func TestAuthorizeRequestFromPARRevalidatesAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestNewAuthorizeRequestClaims(t *testing.T) {
+	client := &DefaultClient{
+		ID:            "1234",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	testCases := []struct {
+		name   string
+		raw    []string
+		err    error
+		expect *ClaimsRequest
+	}{
+		{name: "ShouldLeaveNilWhenAbsent"},
+		{
+			name:   "ShouldParse",
+			raw:    []string{`{"id_token":{"acr":{"essential":true,"values":["gold"]}},"userinfo":{"email":null}}`},
+			expect: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}, UserInfo: map[string]*ClaimRequest{"email": nil}},
+		},
+		{name: "ShouldRejectMalformed", raw: []string{`{"id_token":[]}`}, err: ErrInvalidRequest},
+		{name: "ShouldRejectNotJSON", raw: []string{`acr`}, err: ErrInvalidRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+			form := url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo"},
+			}
+
+			if tc.raw != nil {
+				form[consts.FormParameterClaims] = tc.raw
+			}
+
+			ar, err := provider.NewAuthorizeRequest(context.Background(), &http.Request{Method: http.MethodGet, Header: http.Header{}, Form: form})
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expect, ar.GetClaims())
+		})
+	}
+}
+
+func TestNewAuthorizeRequestClaimsFromRequestObject(t *testing.T) {
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwkPrivateSigRSA := jose.JSONWebKey{Key: keyRSA, KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+	jwkPublicSigRSA := jose.JSONWebKey{Key: keyRSA.Public(), KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+
+	client := &DefaultJARClient{
+		JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPublicSigRSA}},
+		RequestObjectSigningAlg: string(jose.RS256),
+		DefaultClient: &DefaultClient{
+			ID:            "foo",
+			RedirectURIs:  []string{"https://foo.bar/cb"},
+			Scopes:        []string{consts.ScopeOpenID},
+			ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mock.NewMockStorage(ctrl)
+	store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	config := &Config{
+		ScopeStrategy:       ExactScopeStrategy,
+		AudienceStrategy:    DefaultAudienceStrategy,
+		IDTokenIssuer:       testRARIssuer,
+		JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+	}
+
+	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPrivateSigRSA}})}
+	config.JWTStrategy = strategy
+
+	assertion, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
+		consts.ClaimIssuer:               "foo",
+		consts.ClaimAudience:             []string{testRARIssuer},
+		consts.FormParameterClientID:     "foo",
+		consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow,
+		consts.FormParameterScope:        consts.ScopeOpenID,
+		consts.FormParameterState:        "strong-enough-state",
+		consts.FormParameterRedirectURI:  "https://foo.bar/cb",
+		consts.FormParameterClaims: map[string]any{
+			"id_token": map[string]any{"acr": map[string]any{"essential": true, "values": []any{"gold"}}},
+		},
+	})
+	require.NoError(t, err)
+
+	provider := &Fosite{Store: store, Config: config}
+
+	query := url.Values{
+		consts.FormParameterClientID:     {"foo"},
+		consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterScope:        {consts.ScopeOpenID},
+		consts.FormParameterRequest:      {assertion},
+		consts.FormParameterClaims:       {`{"id_token":{"acr":{"values":["bronze"]}}}`},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	// The request object value replaces the query value.
+	assert.Equal(t, &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}, ar.GetClaims())
+}
+
+func TestNewAuthorizeRequestMalformedClaimsFromRequestObject(t *testing.T) {
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwkPrivateSigRSA := jose.JSONWebKey{Key: keyRSA, KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+	jwkPublicSigRSA := jose.JSONWebKey{Key: keyRSA.Public(), KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+
+	client := &DefaultJARClient{
+		JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPublicSigRSA}},
+		RequestObjectSigningAlg: string(jose.RS256),
+		DefaultClient: &DefaultClient{
+			ID:            "foo",
+			RedirectURIs:  []string{"https://foo.bar/cb"},
+			Scopes:        []string{consts.ScopeOpenID},
+			ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mock.NewMockStorage(ctrl)
+	store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	config := &Config{
+		ScopeStrategy:       ExactScopeStrategy,
+		AudienceStrategy:    DefaultAudienceStrategy,
+		IDTokenIssuer:       testRARIssuer,
+		JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+	}
+
+	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPrivateSigRSA}})}
+	config.JWTStrategy = strategy
+
+	assertion, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
+		consts.ClaimIssuer:               "foo",
+		consts.ClaimAudience:             []string{testRARIssuer},
+		consts.FormParameterClientID:     "foo",
+		consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow,
+		consts.FormParameterScope:        consts.ScopeOpenID,
+		consts.FormParameterState:        "strong-enough-state",
+		consts.FormParameterRedirectURI:  "https://foo.bar/cb",
+		consts.FormParameterClaims:       map[string]any{"id_token": []any{}},
+	})
+	require.NoError(t, err)
+
+	provider := &Fosite{Store: store, Config: config}
+
+	query := url.Values{
+		consts.FormParameterClientID:     {"foo"},
+		consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterScope:        {consts.ScopeOpenID},
+		consts.FormParameterRequest:      {assertion},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	_, err = provider.NewAuthorizeRequest(context.Background(), r)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidRequest)
+}
+
+func TestAuthorizeRequestFromPARCarriesClaims(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:claims"
+
+	redir, _ := url.Parse("https://foo.bar/cb")
+
+	client := &DefaultClient{
+		ID:            "foo",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	claims := &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}
+
+	par := NewAuthorizeRequest()
+	par.Client = client
+	par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+	par.State = "strong-enough-state"
+	par.RedirectURI = redir
+	par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+	par.RequestedScope = []string{"foo"}
+	par.SetClaims(claims)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mock.NewMockStorage(ctrl)
+	mockStorage.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	mockPAR := mock.NewMockPARStorage(ctrl)
+	mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+	mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil)
+
+	provider := &Fosite{
+		Store:  &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR},
+		Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+	}
+
+	query := url.Values{
+		consts.FormParameterRequestURI: {requestURI},
+		consts.FormParameterClientID:   {"foo"},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	assert.Equal(t, claims, ar.GetClaims())
+}
+
+func TestAuthorizeRequestFromPARParsesClaimsFromForm(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:claimsform"
+
+	redir, _ := url.Parse("https://foo.bar/cb")
+
+	client := &DefaultClient{
+		ID:            "foo",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	par := NewAuthorizeRequest()
+	par.Client = client
+	par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+	par.State = "strong-enough-state"
+	par.RedirectURI = redir
+	par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+	par.RequestedScope = []string{"foo"}
+	par.Form = url.Values{consts.FormParameterClaims: {`{"id_token":{"acr":{"essential":true,"values":["gold"]}}}`}}
+
+	require.Nil(t, par.GetClaims())
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mock.NewMockStorage(ctrl)
+	mockStorage.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	mockPAR := mock.NewMockPARStorage(ctrl)
+	mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+	mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil)
+
+	provider := &Fosite{
+		Store:  &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR},
+		Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+	}
+
+	query := url.Values{
+		consts.FormParameterRequestURI: {requestURI},
+		consts.FormParameterClientID:   {"foo"},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	assert.Equal(t, &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}, ar.GetClaims())
+}
+
 func TestNewAuthorizeRequestEarlyErrorResponseMode(t *testing.T) {
 	testCases := []struct {
 		name         string

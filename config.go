@@ -81,6 +81,14 @@ type AuthorizationDetailsMaxObjectsProvider interface {
 	GetAuthorizationDetailsMaxObjects(ctx context.Context) (maximum int)
 }
 
+// ClaimsParameterMaxLengthProvider returns the provider for configuring the maximum length of the OpenID Connect 1.0
+// 'claims' request parameter.
+type ClaimsParameterMaxLengthProvider interface {
+	// GetClaimsParameterMaxLength returns the maximum length in bytes of the 'claims' request parameter. A value
+	// which is not positive selects the default.
+	GetClaimsParameterMaxLength(ctx context.Context) (maximum int)
+}
+
 // ClientCredentialsImplicitProvider describes the provider of the Client Credentials Flow Implicit actions.
 type ClientCredentialsImplicitProvider interface {
 	// GetClientCredentialsFlowImplicitGrantRequested returns true if the PopulateTokenEndpointResponse portion of the
@@ -245,6 +253,14 @@ type OmitRedirectScopeParamProvider interface {
 type EnforcePKCEProvider interface {
 	// GetEnforcePKCE returns the enforcement of PKCE.
 	GetEnforcePKCE(ctx context.Context) (enforce bool)
+}
+
+// ClaimsParameterEnforcementProvider returns the provider for configuring the enforcement of the OpenID Connect 1.0
+// 'claims' request parameter.
+type ClaimsParameterEnforcementProvider interface {
+	// GetEnforceClaimsParameter returns true if the requirements the 'claims' request parameter places on the
+	// authorization server are enforced.
+	GetEnforceClaimsParameter(ctx context.Context) (enforce bool)
 }
 
 // EnforcePKCEForPublicClientsProvider returns the provider for configuring the enforcement of PKCE for public clients.

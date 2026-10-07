@@ -622,6 +622,59 @@ func TestHybrid_AuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestHybrid_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
+	testCases := []struct {
+		name    string
+		enforce bool
+		err     error
+	}{
+		{name: "ShouldFailWhenEnforcedAndACRNotMet", enforce: true, err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenNotEnforced"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+			handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{EnforceClaimsParameter: tc.enforce, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+			request := oauth2.NewAuthorizeRequest()
+			request.Form.Set(consts.FormParameterNonce, testNonce)
+			request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+			request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+			request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+			request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+				DefaultClient: &oauth2.DefaultClient{
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+					Scopes:        []string{consts.ScopeOpenID},
+				},
+			}
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.Session = &DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:                             testSubjectPeter,
+					AuthenticationContextClassReference: "bronze",
+				},
+				Headers: &jwt.Headers{},
+				Subject: testSubjectPeter,
+			}
+
+			request.SetClaims(&oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}})
+
+			err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, oauth2.NewAuthorizeResponse())
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {
 	config := &oauth2.Config{
 		ScopeStrategy:         oauth2.HierarchicScopeStrategy,

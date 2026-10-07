@@ -71,6 +71,48 @@ func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context
 	return nil
 }
 
+// ValidateClaims enforces the requirements the 'claims' request parameter places on the authorization server. It does
+// nothing unless the config enables the enforcement.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	provider, ok := v.Config.(oauth2.ClaimsParameterEnforcementProvider)
+	if !ok || !provider.GetEnforceClaimsParameter(ctx) {
+		return nil
+	}
+
+	claims := request.GetClaims()
+	if claims == nil {
+		return nil
+	}
+
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	if claims.UserInfo != nil && !request.GetResponseTypes().HasOneOf(consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'claims' parameter member 'userinfo' requires a 'response_type' which results in an Access Token being issued."))
+	}
+
+	session, ok := request.GetSession().(Session)
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required."))
+	}
+
+	actual := session.IDTokenClaims()
+
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
+	if sub := claims.IDToken[consts.ClaimSubject]; sub.HasValues() && !sub.Matches(actual.Subject) {
+		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("The subject requested by the 'claims' parameter does not match the current session's subject."))
+	}
+
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#acrSemantics
+	if acr := claims.IDToken[consts.ClaimAuthenticationContextClassReference]; acr != nil && acr.Essential && acr.HasValues() {
+		if actual.AuthenticationContextClassReference == "" || !acr.Matches(actual.AuthenticationContextClassReference) {
+			return errorsx.WithStack(oauth2.ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested as an Essential Claim by the 'claims' parameter was not met."))
+		}
+	}
+
+	return nil
+}
+
 // ValidatePrompt ensures the prompt is valid for the OpenID Connect 1.0 Flows.
 //
 // TODO: Refactor time permitting.

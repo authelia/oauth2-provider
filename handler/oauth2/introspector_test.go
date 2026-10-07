@@ -406,6 +406,38 @@ func TestIntrospectToken(t *testing.T) {
 	}
 }
 
+func TestIntrospectTokenReturnsClaimsRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	store := mock.NewMockCoreStorage(ctrl)
+	strategy := mock.NewMockCoreStrategy(ctrl)
+
+	claims := &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}
+
+	stored := oauth2.NewAccessRequest(nil)
+	stored.SetClaims(claims)
+
+	requester := oauth2.NewAccessRequest(nil)
+
+	require.Nil(t, requester.GetClaims())
+
+	gomock.InOrder(
+		strategy.EXPECT().AccessTokenSignature(gomock.Eq(t.Context()), gomock.Eq("1234")).Return("asdf"),
+		store.EXPECT().GetAccessTokenSession(gomock.Eq(t.Context()), gomock.Eq("asdf"), gomock.Eq(nil)).Return(stored, nil),
+		strategy.EXPECT().ValidateAccessToken(gomock.Eq(t.Context()), gomock.Eq(stored), gomock.Eq("1234")).Return(nil),
+	)
+
+	validator := &CoreValidator{CoreStrategy: strategy, CoreStorage: store, Config: &oauth2.Config{}}
+
+	use, err := validator.IntrospectToken(t.Context(), "1234", oauth2.AccessToken, requester, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, oauth2.AccessToken, use)
+	assert.Equal(t, claims, requester.GetClaims())
+}
+
 func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
 	ctx := t.Context()
 

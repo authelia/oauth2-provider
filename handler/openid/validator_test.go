@@ -492,3 +492,100 @@ func parse(u string) *url.URL {
 	o, _ := url.Parse(u)
 	return o
 }
+
+type validateClaimsPromptsOnlyConfig struct{}
+
+func (validateClaimsPromptsOnlyConfig) GetAllowedPrompts(_ context.Context) []string { return nil }
+
+func TestValidateClaims(t *testing.T) {
+	const (
+		essentialGold = `{"id_token":{"acr":{"essential":true,"values":["gold","silver"]}}}`
+		voluntaryGold = `{"id_token":{"acr":{"values":["gold"]}}}`
+		subjectPeter  = `{"id_token":{"sub":{"value":"peter"}}}`
+		subjectValues = `{"id_token":{"sub":{"values":["peter","alice"]}}}`
+		userinfoEmail = `{"userinfo":{"email":null}}`
+	)
+
+	session := func(subject, acr string) *DefaultSession {
+		return &DefaultSession{
+			Subject: subject,
+			Claims:  &jwt.IDTokenClaims{Subject: subject, AuthenticationContextClassReference: acr},
+		}
+	}
+
+	code := oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+
+	testCases := []struct {
+		name          string
+		enforce       bool
+		raw           string
+		responseTypes oauth2.Arguments
+		session       oauth2.Session
+		err           error
+	}{
+		{name: "ShouldPassWithoutClaims", enforce: true, responseTypes: code, session: session("peter", "")},
+		{name: "ShouldPassEssentialACRMatched", enforce: true, raw: essentialGold, responseTypes: code, session: session("peter", "silver")},
+		{name: "ShouldFailEssentialACRNotMatched", enforce: true, raw: essentialGold, responseTypes: code, session: session("peter", "bronze"), err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailEssentialACRMissingFromSession", enforce: true, raw: essentialGold, responseTypes: code, session: session("peter", ""), err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassVoluntaryACRNotMatched", enforce: true, raw: voluntaryGold, responseTypes: code, session: session("peter", "bronze")},
+		{name: "ShouldPassEssentialACRWithoutValues", enforce: true, raw: `{"id_token":{"acr":{"essential":true}}}`, responseTypes: code, session: session("peter", "")},
+		{name: "ShouldPassNullACR", enforce: true, raw: `{"id_token":{"acr":null}}`, responseTypes: code, session: session("peter", "")},
+		{name: "ShouldPassSubjectMatched", enforce: true, raw: subjectPeter, responseTypes: code, session: session("peter", "")},
+		{name: "ShouldFailSubjectNotMatched", enforce: true, raw: subjectPeter, responseTypes: code, session: session("alice", ""), err: oauth2.ErrLoginRequired},
+		{name: "ShouldPassSubjectInValues", enforce: true, raw: subjectValues, responseTypes: code, session: session("alice", "")},
+		{name: "ShouldFailSubjectOutsideValues", enforce: true, raw: subjectValues, responseTypes: code, session: session("bob", ""), err: oauth2.ErrLoginRequired},
+		{name: "ShouldCompareIDTokenClaimsSubject", enforce: true, raw: subjectPeter, responseTypes: code, session: &DefaultSession{Subject: "alice", Claims: &jwt.IDTokenClaims{Subject: "peter"}}},
+		{name: "ShouldPassUserInfoWithCode", enforce: true, raw: userinfoEmail, responseTypes: code, session: session("peter", "")},
+		{name: "ShouldPassUserInfoWithToken", enforce: true, raw: userinfoEmail, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}, session: session("peter", "")},
+		{name: "ShouldFailUserInfoWithIDTokenOnly", enforce: true, raw: userinfoEmail, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}, session: session("peter", ""), err: oauth2.ErrInvalidRequest},
+		{name: "ShouldFailEmptyUserInfoWithIDTokenOnly", enforce: true, raw: `{"userinfo":{}}`, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}, session: session("peter", ""), err: oauth2.ErrInvalidRequest},
+		{name: "ShouldFailUnknownSessionType", enforce: true, raw: essentialGold, responseTypes: code, session: &oauth2.DefaultSession{}, err: oauth2.ErrServerError},
+		{name: "ShouldPassEssentialACRNotMatchedWhenNotEnforced", raw: essentialGold, responseTypes: code, session: session("peter", "bronze")},
+		{name: "ShouldPassSubjectNotMatchedWhenNotEnforced", raw: subjectPeter, responseTypes: code, session: session("alice", "")},
+		{name: "ShouldPassUserInfoWithIDTokenOnlyWhenNotEnforced", raw: userinfoEmail, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}, session: session("peter", "")},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := NewOpenIDConnectRequestValidator(nil, &oauth2.Config{EnforceClaimsParameter: tc.enforce})
+
+			request := &oauth2.AuthorizeRequest{
+				ResponseTypes: tc.responseTypes,
+				Request:       oauth2.Request{Form: url.Values{}, Client: &oauth2.DefaultClient{}, Session: tc.session},
+			}
+
+			if tc.raw != "" {
+				claims, err := oauth2.ParseClaimsRequest(url.Values{consts.FormParameterClaims: {tc.raw}})
+				require.NoError(t, err)
+
+				request.SetClaims(claims)
+			}
+
+			err := v.ValidateClaims(t.Context(), request)
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+
+	t.Run("ShouldNotEnforceWhenTheConfigIsNotAProvider", func(t *testing.T) {
+		v := NewOpenIDConnectRequestValidator(nil, validateClaimsPromptsOnlyConfig{})
+
+		claims, err := oauth2.ParseClaimsRequest(url.Values{consts.FormParameterClaims: {essentialGold}})
+		require.NoError(t, err)
+
+		request := &oauth2.AuthorizeRequest{
+			ResponseTypes: code,
+			Request:       oauth2.Request{Form: url.Values{}, Client: &oauth2.DefaultClient{}, Session: session("peter", "bronze")},
+		}
+		request.SetClaims(claims)
+
+		assert.NoError(t, v.ValidateClaims(t.Context(), request))
+	})
+}

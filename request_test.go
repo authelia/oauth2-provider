@@ -600,3 +600,87 @@ func TestRequestSanitizeKeepsAuthorizationDetails(t *testing.T) {
 
 	assert.Equal(t, r.GetGrantedAuthorizationDetails(), r.Sanitize(nil).GetGrantedAuthorizationDetails())
 }
+
+func TestRequestClaimsSetterCopies(t *testing.T) {
+	claims := &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}
+
+	r := NewRequest()
+	r.SetClaims(claims)
+
+	claims.IDToken["acr"].Values[0] = "silver"
+
+	assert.Equal(t, "gold", r.GetClaims().IDToken["acr"].Values[0])
+
+	r.SetClaims(nil)
+	assert.Nil(t, r.GetClaims())
+}
+
+func TestRequestMergeClaims(t *testing.T) {
+	source := NewRequest()
+	source.SetClaims(&ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}})
+
+	target := NewRequest()
+	target.Merge(source)
+
+	require.Equal(t, source.GetClaims(), target.GetClaims())
+
+	target.GetClaims().IDToken["acr"].Values[0] = "silver"
+	assert.Equal(t, "gold", source.GetClaims().IDToken["acr"].Values[0])
+
+	target.Merge(NewRequest())
+	assert.NotNil(t, target.GetClaims())
+}
+
+func TestRequestClaimsJSONPersistence(t *testing.T) {
+	r := NewRequest()
+	r.SetClaims(&ClaimsRequest{
+		IDToken:  map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}, "auth_time": nil},
+		UserInfo: map[string]*ClaimRequest{},
+	})
+
+	data, err := json.Marshal(r)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(data), `"claims":{`)
+	assert.Contains(t, string(data), `"auth_time":null`)
+	assert.Contains(t, string(data), `"userinfo":{}`)
+
+	decoded := &Request{}
+	require.NoError(t, json.Unmarshal(data, decoded))
+
+	assert.Equal(t, r.GetClaims(), decoded.GetClaims())
+	assert.NotNil(t, decoded.GetClaims().UserInfo)
+	assert.Contains(t, decoded.GetClaims().IDToken, "auth_time")
+
+	empty, err := json.Marshal(NewRequest())
+	require.NoError(t, err)
+	assert.NotContains(t, string(empty), `"claims"`)
+}
+
+func TestRequestSanitizeKeepsClaims(t *testing.T) {
+	r := NewRequest()
+	r.SetClaims(&ClaimsRequest{UserInfo: map[string]*ClaimRequest{"email": nil}})
+
+	sanitized, ok := r.Sanitize(nil).(ClaimsRequester)
+	require.True(t, ok)
+
+	assert.Equal(t, r.GetClaims(), sanitized.GetClaims())
+}
+
+func TestClaimsRequesterInterfaces(t *testing.T) {
+	var (
+		_ ClaimsRequester    = (*Request)(nil)
+		_ AuthorizeRequester = (*AuthorizeRequest)(nil)
+		_ AccessRequester    = (*AccessRequest)(nil)
+	)
+
+	var authorize AuthorizeRequester = NewAuthorizeRequest()
+
+	authorize.SetClaims(&ClaimsRequest{})
+	assert.NotNil(t, authorize.GetClaims())
+
+	var access AccessRequester = NewAccessRequest(nil)
+
+	access.SetClaims(&ClaimsRequest{})
+	assert.NotNil(t, access.GetClaims())
+}

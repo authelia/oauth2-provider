@@ -131,6 +131,15 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	var claims *ClaimsRequest
+
+	if claims, err = ParseRequestedClaims(ctx, f.Config, request.Form); err != nil {
+		return request, err
+	}
+
+	request.SetClaims(claims)
+
 	if len(request.Form.Get(consts.FormParameterRegistration)) > 0 {
 		return request, errorsx.WithStack(ErrRegistrationNotSupported)
 	}
@@ -747,6 +756,16 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	request.ResponseTypes = par.GetResponseTypes()
 	request.State = par.GetState()
 	request.ResponseMode = par.GetResponseMode()
+
+	if request.GetClaims() == nil {
+		var claims *ClaimsRequest
+
+		if claims, err = ParseRequestedClaims(ctx, f.Config, request.Form); err != nil {
+			return false, err
+		}
+
+		request.SetClaims(claims)
+	}
 
 	if err = storage.DeletePARSession(ctx, requestURI); errors.Is(err, ErrNotFound) {
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithWrap(err).WithDebug("The Pushed Authorization Request session has already been redeemed."))

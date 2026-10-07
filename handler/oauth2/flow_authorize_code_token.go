@@ -114,6 +114,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	request.SetRequestedAuthorizationDetails(details)
 
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	if requester, ok := authorizeRequest.(oauth2.ClaimsRequester); ok {
+		request.SetClaims(requester.GetClaims())
+	}
+
 	// The 'redirect_uri' must be identical to the one included in the authorization request.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3

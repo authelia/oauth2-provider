@@ -44,6 +44,10 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
+	if err = c.OpenIDConnectRequestValidator.ValidateClaims(ctx, request); err != nil {
+		return err
+	}
+
 	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, response.GetCode(), request.Sanitize(oidcParameters)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}

@@ -104,7 +104,6 @@ type ClaimsRequest struct {
 	UserInfo map[string]*ClaimRequest `json:"userinfo,omitzero"`
 }
 
-
 // Clone returns a deep copy of the claims request.
 func (c *ClaimsRequest) Clone() *ClaimsRequest {
 	if c == nil {

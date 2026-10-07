@@ -740,6 +740,69 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 	}
 }
 
+func TestNewPushedAuthorizeRequestClaims(t *testing.T) {
+	client := &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}
+
+	testCases := []struct {
+		name     string
+		claims   string
+		expected *ClaimsRequest
+		err      bool
+	}{
+		{
+			name:     "ShouldParseClaims",
+			claims:   `{"id_token":{"acr":{"essential":true,"values":["gold"]}}}`,
+			expected: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}},
+		},
+		{
+			name:   "ShouldRejectMalformedClaims",
+			claims: `{"id_token":[]}`,
+			err:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil).MaxTimes(2)
+
+			provider := &Fosite{
+				Store:  store,
+				Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			}
+
+			r := &http.Request{
+				Header: http.Header{},
+				Method: http.MethodPost,
+				PostForm: url.Values{
+					consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+					consts.FormParameterClientID:     {"1234"},
+					consts.FormParameterClientSecret: {"1234"},
+					consts.FormParameterResponseType: {consts.ResponseTypeHybridFlowToken},
+					consts.FormParameterState:        {"strong-state"},
+					consts.FormParameterScope:        {"foo bar"},
+					consts.FormParameterClaims:       {tc.claims},
+				},
+			}
+
+			ar, err := provider.NewPushedAuthorizeRequest(NewContext(), r)
+
+			if tc.err {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidRequest)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.expected, ar.GetClaims())
+		})
+	}
+}
+
 func TestNewPushedAuthorizeRequestWithRequestObject(t *testing.T) {
 	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)

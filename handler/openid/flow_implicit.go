@@ -57,6 +57,10 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
+	if err = c.OpenIDConnectRequestValidator.ValidateClaims(ctx, request); err != nil {
+		return err
+	}
+
 	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))
 	} else if len(nonce) < c.Config.GetMinParameterEntropy(ctx) {

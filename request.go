@@ -33,6 +33,8 @@ type Request struct {
 
 	RequestedAuthorizationDetails AuthorizationDetails `json:"authorizationDetails"`
 	GrantedAuthorizationDetails   AuthorizationDetails `json:"grantedAuthorizationDetails"`
+
+	Claims *ClaimsRequest `json:"claims,omitempty"`
 }
 
 // NewRequest returns a Request with its slice and map fields initialized, a default empty client, and RequestedAt set
@@ -201,6 +203,17 @@ func (a *Request) SetGrantedAuthorizationDetails(details AuthorizationDetails) {
 	a.GrantedAuthorizationDetails = details.Clone()
 }
 
+// GetClaims returns the OpenID Connect 1.0 'claims' request parameter of the authorization request. The value is
+// shared with the request and must not be modified; use ClaimsRequest.Clone to obtain a copy.
+func (a *Request) GetClaims() *ClaimsRequest {
+	return a.Claims
+}
+
+// SetClaims stores a copy of the OpenID Connect 1.0 'claims' request parameter.
+func (a *Request) SetClaims(claims *ClaimsRequest) {
+	a.Claims = claims.Clone()
+}
+
 // GetGrantedScopes returns the scopes that have been granted to the client.
 func (a *Request) GetGrantedScopes() Arguments {
 	return a.GrantedScope
@@ -229,8 +242,9 @@ func (a *Request) GetSession() Session {
 	return a.Session
 }
 
-// Merge copies the requested and granted scopes, audiences, resource indicators and authorization details from the
-// given Requester into this request alongside its ID, RequestedAt timestamp, client, session, and form values.
+// Merge copies the requested and granted scopes, audiences, resource indicators, authorization details and claims
+// request from the given Requester into this request alongside its ID, RequestedAt timestamp, client, session, and form
+// values.
 func (a *Request) Merge(request Requester) {
 	for _, scope := range request.GetRequestedScopes() {
 		a.AppendRequestedScope(scope)
@@ -262,6 +276,12 @@ func (a *Request) Merge(request Requester) {
 
 	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
 		a.SetGrantedAuthorizationDetails(details)
+	}
+
+	if requester, ok := request.(ClaimsRequester); ok {
+		if claims := requester.GetClaims(); claims != nil {
+			a.SetClaims(claims)
+		}
 	}
 
 	a.ID = request.GetID()

@@ -68,6 +68,20 @@ func (mr *MockAuthorizeRequesterMockRecorder) DidHandleAllResponseTypes() *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DidHandleAllResponseTypes", reflect.TypeOf((*MockAuthorizeRequester)(nil).DidHandleAllResponseTypes))
 }
 
+// GetClaims mocks base method.
+func (m *MockAuthorizeRequester) GetClaims() *oauth2.ClaimsRequest {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClaims")
+	ret0, _ := ret[0].(*oauth2.ClaimsRequest)
+	return ret0
+}
+
+// GetClaims indicates an expected call of GetClaims.
+func (mr *MockAuthorizeRequesterMockRecorder) GetClaims() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClaims", reflect.TypeOf((*MockAuthorizeRequester)(nil).GetClaims))
+}
+
 // GetClient mocks base method.
 func (m *MockAuthorizeRequester) GetClient() oauth2.Client {
 	m.ctrl.T.Helper()
@@ -394,6 +408,18 @@ func (m *MockAuthorizeRequester) Sanitize(allowedParameters []string) oauth2.Req
 func (mr *MockAuthorizeRequesterMockRecorder) Sanitize(allowedParameters any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sanitize", reflect.TypeOf((*MockAuthorizeRequester)(nil).Sanitize), allowedParameters)
+}
+
+// SetClaims mocks base method.
+func (m *MockAuthorizeRequester) SetClaims(claims *oauth2.ClaimsRequest) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetClaims", claims)
+}
+
+// SetClaims indicates an expected call of SetClaims.
+func (mr *MockAuthorizeRequesterMockRecorder) SetClaims(claims any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClaims", reflect.TypeOf((*MockAuthorizeRequester)(nil).SetClaims), claims)
 }
 
 // SetDefaultResponseMode mocks base method.

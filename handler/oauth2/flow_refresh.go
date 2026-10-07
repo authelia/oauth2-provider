@@ -100,6 +100,11 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	request.SetID(orequest.GetID())
 	request.SetSession(orequest.GetSession().Clone())
 
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	if requester, ok := orequest.(oauth2.ClaimsRequester); ok {
+		request.SetClaims(requester.GetClaims())
+	}
+
 	/*
 			There are two key points in the following spec section this addresses:
 				1. If omitted the scope param should be treated as the same as the scope originally granted by the resource owner.

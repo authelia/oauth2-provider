@@ -268,6 +268,11 @@ var (
 		DescriptionField: "The authentication of the End-User does not meet the requirements of the request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	ErrUnmetAuthenticationRequirements = &RFC6749Error{
+		ErrorField:       errUnmetAuthenticationRequirementsName,
+		DescriptionField: "The Authorization Server is unable to meet the requirements of the Relying Party for the authentication of the End-User.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrInvalidAuthorizationDetails = &RFC6749Error{
 		ErrorField:       errInvalidAuthorizationDetailsName,
 		DescriptionField: "The requested authorization details are invalid, unknown, or malformed.",
@@ -337,7 +342,8 @@ const (
 	errInvalidTargetName               = "invalid_target"
 	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
 
-	errInsufficientUserAuthenticationName = "insufficient_user_authentication"
+	errInsufficientUserAuthenticationName  = "insufficient_user_authentication"
+	errUnmetAuthenticationRequirementsName = "unmet_authentication_requirements"
 
 	errInvalidDPoPProofName            = "invalid_dpop_proof"
 	errUseDPoPNonceName                = "use_dpop_nonce"

@@ -1544,3 +1544,101 @@ type invalidatedCodeStore struct {
 func (s *invalidatedCodeStore) InvalidateAuthorizeCodeSession(_ context.Context, _ string) error {
 	return oauth2.ErrInvalidatedAuthorizeCode
 }
+
+func TestAuthorizeCode_CarriesClaimsRequest(t *testing.T) {
+	claims := &oauth2.ClaimsRequest{
+		IDToken:  map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}},
+		UserInfo: map[string]*oauth2.ClaimRequest{"email": nil},
+	}
+
+	stores := []struct {
+		name string
+		new  func() CoreStorage
+	}{
+		{"MemoryStore", func() CoreStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() CoreStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	testCases := []struct {
+		name   string
+		claims *oauth2.ClaimsRequest
+	}{
+		{name: "ShouldCarryClaims", claims: claims},
+		{name: "ShouldLeaveNilWhenAbsent"},
+	}
+
+	for _, s := range stores {
+		for _, tc := range testCases {
+			t.Run(s.name+tc.name, func(t *testing.T) {
+				store := s.new()
+				strategy := &hmacshaStrategy
+
+				handler := AuthorizeExplicitGrantHandler{
+					CoreStorage:           store,
+					AuthorizeCodeStrategy: strategy,
+					AccessTokenStrategy:   strategy,
+					RefreshTokenStrategy:  strategy,
+					Config: &oauth2.Config{
+						ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+						AccessTokenLifespan:   time.Minute,
+						AuthorizeCodeLifespan: time.Minute,
+					},
+				}
+
+				code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+				require.NoError(t, err)
+
+				authorize := &oauth2.AuthorizeRequest{
+					Request: oauth2.Request{
+						Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}},
+						Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+						RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+						GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+						Session:        &oauth2.DefaultSession{},
+						RequestedAt:    time.Now().UTC(),
+					},
+				}
+				authorize.SetClaims(tc.claims)
+
+				require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), signature, authorize.Sanitize([]string{consts.FormParameterRedirectURI})))
+
+				access := &oauth2.AccessRequest{
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					Request: oauth2.Request{
+						Client: &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}},
+						Form: url.Values{
+							consts.FormParameterAuthorizationCode: []string{code},
+							consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+						},
+						Session:     &oauth2.DefaultSession{},
+						RequestedAt: time.Now().UTC(),
+					},
+				}
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), access)))
+				assert.Equal(t, tc.claims, access.GetClaims())
+
+				response := oauth2.NewAccessResponse()
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), access, response)))
+
+				storedAccess, err := store.GetAccessTokenSession(t.Context(), strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				requester, ok := storedAccess.(oauth2.ClaimsRequester)
+				require.True(t, ok)
+				assert.Equal(t, tc.claims, requester.GetClaims())
+
+				refreshToken, ok := response.ToMap()[consts.AccessResponseRefreshToken].(string)
+				require.True(t, ok, "a refresh token must be issued")
+
+				storedRefresh, err := store.GetRefreshTokenSession(t.Context(), strategy.RefreshTokenSignature(t.Context(), refreshToken), &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				requester, ok = storedRefresh.(oauth2.ClaimsRequester)
+				require.True(t, ok)
+				assert.Equal(t, tc.claims, requester.GetClaims())
+			})
+		}
+	}
+}

@@ -30,6 +30,7 @@ const (
 	maxJWTClockSkew                       = 60 * time.Second
 	defaultRequestObjectMaximumLifetime   = 60 * time.Minute
 	defaultAuthorizationDetailsMaxObjects = 32
+	defaultClaimsParameterMaxLength       = 8192
 )
 
 type Config struct {
@@ -130,6 +131,10 @@ type Config struct {
 	// single 'authorization_details' parameter. Defaults to 32.
 	AuthorizationDetailsMaxObjects int
 
+	// ClaimsParameterMaxLength sets the maximum length in bytes of the OpenID Connect 1.0 'claims' request parameter.
+	// Defaults to 8192.
+	ClaimsParameterMaxLength int
+
 	ClientCredentialsFlowImplicitGrantRequested bool
 
 	// EnforcePKCE, if set to true, requires clients to perform authorize code flows with PKCE. Defaults to false.
@@ -137,6 +142,11 @@ type Config struct {
 
 	// EnforcePKCEForPublicClients requires only public clients to use PKCE with the authorize code flow. Defaults to false.
 	EnforcePKCEForPublicClients bool
+
+	// EnforceClaimsParameter enforces the requirements of the OpenID Connect 1.0 'claims' request parameter: a
+	// requested 'sub' value, an Essential 'acr' value, and the access token needed for a 'userinfo' request. Defaults
+	// to false.
+	EnforceClaimsParameter bool
 
 	// EnablePKCEPlainChallengeMethod sets whether or not to allow the plain challenge method (S256 should be used whenever possible, plain is really discouraged). Defaults to false.
 	EnablePKCEPlainChallengeMethod bool
@@ -820,6 +830,11 @@ func (c *Config) GetEnforcePKCEForPublicClients(ctx context.Context) bool {
 	return c.EnforcePKCEForPublicClients
 }
 
+// GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
+func (c *Config) GetEnforceClaimsParameter(ctx context.Context) bool {
+	return c.EnforceClaimsParameter
+}
+
 // GetSanitationWhiteList returns a list of allowed form values that are required by the token endpoint. These values
 // are safe for storage in a database (cleartext).
 func (c *Config) GetSanitationWhiteList(ctx context.Context) []string {
@@ -943,6 +958,16 @@ func (c *Config) GetAuthorizationDetailsMaxObjects(_ context.Context) int {
 	}
 
 	return c.AuthorizationDetailsMaxObjects
+}
+
+// GetClaimsParameterMaxLength returns the maximum length in bytes of the OpenID Connect 1.0 'claims' request
+// parameter. Defaults to 8192.
+func (c *Config) GetClaimsParameterMaxLength(_ context.Context) int {
+	if c.ClaimsParameterMaxLength <= 0 {
+		return defaultClaimsParameterMaxLength
+	}
+
+	return c.ClaimsParameterMaxLength
 }
 
 // GetClientCredentialsFlowImplicitGrantRequested returns true if the client credentials grant should implicitly grant
@@ -1515,6 +1540,7 @@ var (
 	_ SanitationAllowedProvider                             = (*Config)(nil)
 	_ EnforcePKCEForPublicClientsProvider                   = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
+	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)
 	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
 	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)
@@ -1537,6 +1563,7 @@ var (
 	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)
 	_ FormPostResponseProvider                              = (*Config)(nil)
 	_ AllowedJWTAssertionAudiencesProvider                  = (*Config)(nil)
+	_ ClaimsParameterMaxLengthProvider                      = (*Config)(nil)
 	_ ClientAssertionClientSecretEncryptionDisabledProvider = (*Config)(nil)
 	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)

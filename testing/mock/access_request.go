@@ -54,6 +54,20 @@ func (mr *MockAccessRequesterMockRecorder) AppendRequestedScope(scope any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendRequestedScope", reflect.TypeOf((*MockAccessRequester)(nil).AppendRequestedScope), scope)
 }
 
+// GetClaims mocks base method.
+func (m *MockAccessRequester) GetClaims() *oauth2.ClaimsRequest {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClaims")
+	ret0, _ := ret[0].(*oauth2.ClaimsRequest)
+	return ret0
+}
+
+// GetClaims indicates an expected call of GetClaims.
+func (mr *MockAccessRequesterMockRecorder) GetClaims() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClaims", reflect.TypeOf((*MockAccessRequester)(nil).GetClaims))
+}
+
 // GetClient mocks base method.
 func (m *MockAccessRequester) GetClient() oauth2.Client {
 	m.ctrl.T.Helper()
@@ -310,6 +324,18 @@ func (m *MockAccessRequester) Sanitize(allowedParameters []string) oauth2.Reques
 func (mr *MockAccessRequesterMockRecorder) Sanitize(allowedParameters any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sanitize", reflect.TypeOf((*MockAccessRequester)(nil).Sanitize), allowedParameters)
+}
+
+// SetClaims mocks base method.
+func (m *MockAccessRequester) SetClaims(claims *oauth2.ClaimsRequest) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetClaims", claims)
+}
+
+// SetClaims indicates an expected call of SetClaims.
+func (mr *MockAccessRequesterMockRecorder) SetClaims(claims any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClaims", reflect.TypeOf((*MockAccessRequester)(nil).SetClaims), claims)
 }
 
 // SetGrantedAuthorizationDetails mocks base method.

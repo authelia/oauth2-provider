@@ -409,10 +409,26 @@ type Requester interface {
 	Sanitize(allowedParameters []string) (sanitized Requester)
 }
 
+// ClaimsRequester is implemented by the requesters which carry the OpenID Connect 1.0 'claims' request parameter.
+//
+// A storage implementation must persist the claims request with the request. A type which wraps a stored request by
+// embedding the Requester interface must forward both methods, otherwise the value is lost.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+type ClaimsRequester interface {
+	// GetClaims returns the claims request, or nil when the authorization request did not include one.
+	GetClaims() (claims *ClaimsRequest)
+
+	// SetClaims sets the claims request.
+	SetClaims(claims *ClaimsRequest)
+}
+
 // AccessRequester is a token endpoint's request context.
 type AccessRequester interface {
 	// GetGrantTypes returns the requests grant type.
 	GetGrantTypes() (grantTypes Arguments)
+
+	ClaimsRequester
 
 	Requester
 }
@@ -457,6 +473,8 @@ type AuthorizeRequester interface {
 
 	// GetDefaultResponseMode gets default response mode for a response type in a flow.
 	GetDefaultResponseMode() (responseMode ResponseModeType)
+
+	ClaimsRequester
 
 	Requester
 }

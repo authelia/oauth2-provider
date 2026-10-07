@@ -169,6 +169,60 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 }
 
 //nolint:unparam
+func TestExplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
+	testCases := []struct {
+		name    string
+		enforce bool
+		err     error
+	}{
+		{name: "ShouldFailWhenEnforcedAndACRNotMet", enforce: true, err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenNotEnforced"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			handler, store := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+			handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{EnforceClaimsParameter: tc.enforce, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+			responder := mock.NewMockAuthorizeResponder(ctrl)
+			responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
+			store.EXPECT().CreateOpenIDConnectSession(gomock.Any(), "codeexample", gomock.Any()).AnyTimes().Return(nil)
+
+			session := NewDefaultSession()
+			session.Claims.Subject = "foo"
+			session.Claims.AuthenticationContextClassReference = "bronze"
+
+			request := oauth2.NewAuthorizeRequest()
+			request.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Session = session
+			request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+			request.Form = url.Values{
+				consts.FormParameterRedirectURI:  {"https://example.com"},
+				consts.FormParameterScope:        {consts.ScopeOpenID},
+				consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+			}
+
+			request.SetClaims(&oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}})
+
+			err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, responder)
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {
 	store := mock.NewMockOpenIDConnectRequestStorage(ctrl)
 	config := &oauth2.Config{MinParameterEntropy: minParameterEntropy}

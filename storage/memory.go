@@ -196,10 +196,42 @@ type StoreAuthorizeCode struct {
 	oauth2.Requester
 }
 
+// GetClaims returns the claims request of the stored request.
+func (s StoreAuthorizeCode) GetClaims() *oauth2.ClaimsRequest {
+	if requester, ok := s.Requester.(oauth2.ClaimsRequester); ok {
+		return requester.GetClaims()
+	}
+
+	return nil
+}
+
+// SetClaims sets the claims request of the stored request.
+func (s StoreAuthorizeCode) SetClaims(claims *oauth2.ClaimsRequest) {
+	if requester, ok := s.Requester.(oauth2.ClaimsRequester); ok {
+		requester.SetClaims(claims)
+	}
+}
+
 type StoreRefreshToken struct {
 	active               bool
 	accessTokenSignature string
 	oauth2.Requester
+}
+
+// GetClaims returns the claims request of the stored request.
+func (s StoreRefreshToken) GetClaims() *oauth2.ClaimsRequest {
+	if requester, ok := s.Requester.(oauth2.ClaimsRequester); ok {
+		return requester.GetClaims()
+	}
+
+	return nil
+}
+
+// SetClaims sets the claims request of the stored request.
+func (s StoreRefreshToken) SetClaims(claims *oauth2.ClaimsRequest) {
+	if requester, ok := s.Requester.(oauth2.ClaimsRequester); ok {
+		requester.SetClaims(claims)
+	}
 }
 
 // NewExampleStore returns a new *MemoryStore populated with example clients and an example user.

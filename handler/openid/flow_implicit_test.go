@@ -283,6 +283,63 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
+func TestImplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
+	testCases := []struct {
+		name    string
+		enforce bool
+		err     error
+	}{
+		{name: "ShouldFailWhenEnforcedAndACRNotMet", enforce: true, err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenNotEnforced"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
+			handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{EnforceClaimsParameter: tc.enforce, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+			request := oauth2.NewAuthorizeRequest()
+			request.Session = &DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:                             testSubjectPeter,
+					AuthenticationContextClassReference: "bronze",
+				},
+				Headers: &jwt.Headers{},
+				Subject: testSubjectPeter,
+			}
+			request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+				DefaultClient: &oauth2.DefaultClient{
+					Scopes:        oauth2.Arguments{consts.ScopeOpenID},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowBoth},
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+				},
+			}
+			request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}
+			request.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.Form = url.Values{
+				consts.FormParameterRedirectURI: {"https://example.com"},
+				consts.FormParameterState:       {"test-state-value"},
+				consts.FormParameterNonce:       {"test-nonce-value"},
+			}
+			request.RedirectURI, _ = url.Parse("https://example.com")
+
+			request.SetClaims(&oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}})
+
+			err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, oauth2.NewAuthorizeResponse())
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImplicitHandler {
 	config := &oauth2.Config{
 		MinParameterEntropy: minParameterEntropy,

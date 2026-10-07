@@ -69,6 +69,10 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return err
 	}
 
+	if err = c.OpenIDConnectRequestValidator.ValidateClaims(ctx, request); err != nil {
+		return err
+	}
+
 	// The nonce is actually not required for hybrid flows. It fails the OpenID Connect Conformity
 	// Test Module "oidcc-ensure-request-without-nonce-succeeds-for-code-flow" if enabled.
 	//

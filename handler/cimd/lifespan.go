@@ -6,10 +6,15 @@ package cimd
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	maxDeltaSeconds = uint64(math.MaxInt64 / time.Second)
 )
 
 func lifespan(header http.Header, now time.Time, minimum, maximum, fallback time.Duration) (d time.Duration) {
@@ -78,13 +83,11 @@ func deltaSeconds(argument string, maximum time.Duration) (d time.Duration, ok b
 	seconds, err := strconv.ParseUint(strings.Trim(strings.TrimSpace(argument), `"`), 10, 64)
 
 	switch {
-	case errors.Is(err, strconv.ErrRange):
+	case errors.Is(err, strconv.ErrRange), seconds > maxDeltaSeconds:
 		return maximum, true
 	case err != nil:
 		return 0, false
-	case seconds > uint64(maximum/time.Second):
-		return maximum, true
 	default:
-		return time.Duration(seconds) * time.Second, true
+		return min(time.Duration(seconds)*time.Second, maximum), true
 	}
 }

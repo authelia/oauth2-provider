@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -118,6 +119,13 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 
 	if err = s.AccessTokenStrategy.ValidateAccessToken(ctx, requester, tokenString); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
+	}
+
+	// A client resolved from a Client ID Metadata Document is not registered and never registers clients.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02#section-7.1
+	if jwt.IsClientIDMetadataDocumentClient(requester.GetClient()) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithDebug("The Access Token was issued to a client resolved from a Client ID Metadata Document."))
 	}
 
 	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{

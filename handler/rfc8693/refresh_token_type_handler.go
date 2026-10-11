@@ -223,10 +223,10 @@ func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(ctx context.Context, c
 	owner := client
 
 	if id := or.GetClient().GetID(); id != client.GetID() {
-		owner, err = c.GetClient(ctx, id)
+		owner, err = oauth2.GetClient(ctx, c.Config, c.Storage, id)
 
 		switch {
-		case errors.Is(err, oauth2.ErrNotFound):
+		case errors.Is(err, oauth2.ErrNotFound), errors.Is(err, oauth2.ErrInvalidClient):
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The OAuth 2.0 Client the refresh token was issued to is not registered."))
 		case err != nil:
 			return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

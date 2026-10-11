@@ -133,7 +133,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
 		}
-	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, JSONWebTokenUseEncryption, false); err != nil {
+	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, ClientJWKSFetcherStrategy(ctx, j.Config, o.client), kid, alg, JSONWebTokenUseEncryption, false); err != nil {
 		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
 	}
 
@@ -363,7 +363,7 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		} else {
-			if key, err = FindClientPublicJWK(ctx, o.client, j.Config.GetJWKSFetcherStrategy(ctx), kid, alg, JSONWebTokenUseSignature, true); err != nil {
+			if key, err = FindClientPublicJWK(ctx, o.client, ClientJWKSFetcherStrategy(ctx, j.Config, o.client), kid, alg, JSONWebTokenUseSignature, true); err != nil {
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		}

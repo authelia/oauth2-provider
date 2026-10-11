@@ -39,6 +39,12 @@
       ]
     },
     {
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "1 day"
+    },
+    {
       "matchUpdateTypes": [
         "digest",
         "minor",

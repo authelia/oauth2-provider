@@ -84,7 +84,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	var client Client
 
-	if client, err = f.Store.GetClient(ctx, request.GetRequestForm().Get(consts.FormParameterClientID)); err != nil {
+	if client, err = GetClient(ctx, f.Config, f.Store, request.GetRequestForm().Get(consts.FormParameterClientID)); err != nil {
 		return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -288,7 +288,12 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		// checked as request objects are commonly served as 'text/plain'.
 		//
 		// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
-		hc := HTTPClientWithoutRedirects(f.Config.GetHTTPClient(ctx))
+		base, err := httpClientForClient(ctx, f.Config, f.Config.GetHTTPClient(ctx), client)
+		if err != nil {
+			return err
+		}
+
+		hc := HTTPClientWithoutRedirects(base)
 
 		req, err := retryablehttp.NewRequest(http.MethodGet, requestURI, nil)
 		if err != nil {
@@ -739,7 +744,7 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	var client Client
 
 	if !config.GetDisablePushedAuthorizationRequestClientRefetch(ctx) {
-		if client, err = f.Store.GetClient(ctx, clientID); err != nil {
+		if client, err = GetClient(ctx, f.Config, f.Store, clientID); err != nil {
 			return false, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist.").WithWrap(err).WithDebugError(err))
 		} else if client == nil {
 			return false, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client does not exist."))

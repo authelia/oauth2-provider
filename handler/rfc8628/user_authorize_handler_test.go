@@ -168,6 +168,35 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 			},
 		},
 		{
+			name: "claimed",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx:    t.Context(),
+				req:    oauth2.NewDeviceAuthorizeRequest(),
+				resp:   oauth2.NewRFC8628UserAuthorizeResponse(),
+				status: oauth2.DeviceAuthorizeStatusClaimed,
+			},
+			setup: defaultSetupFunc,
+			check: nil,
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				return errors.Is(err, oauth2.ErrInvalidRequest)
+			},
+		},
+		{
 			name: "invalid",
 			fields: fields{
 				Storage:  storage.NewMemoryStore(),
@@ -408,6 +437,72 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			wantErr: func(t assert.TestingT, err error, i ...any) bool {
 				assert.NoError(t, err)
 				return err == nil
+			},
+		},
+		{
+			name: "success claimed",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+						string(oauth2.GrantTypeImplicit),
+						string(oauth2.GrantTypePassword),
+						string(oauth2.GrantTypeClientCredentials),
+					}),
+				status: oauth2.DeviceAuthorizeStatusClaimed,
+			},
+			setup: defaultSetupFunc,
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.NoError(t, err)
+				return err == nil
+			},
+		},
+		{
+			name: "invalid request user code decided",
+			fields: fields{
+				Storage:  storage.NewMemoryStore(),
+				Strategy: strategy,
+				Config: &oauth2.Config{
+					RFC8628CodeLifespan:         time.Minute * 10,
+					RFC8628TokenPollingInterval: time.Second * 10,
+					RFC8628UserVerificationURL:  "https://www.test.com",
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{"offline"},
+				},
+			},
+			args: args{
+				ctx: t.Context(),
+				req: NewDeviceAuthorizeRequest(
+					[]string{
+						string(oauth2.GrantTypeDeviceCode),
+						string(oauth2.GrantTypeImplicit),
+						string(oauth2.GrantTypePassword),
+						string(oauth2.GrantTypeClientCredentials),
+					}),
+				status: oauth2.DeviceAuthorizeStatusApproved,
+			},
+			setup: defaultSetupFunc,
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
+				assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+				return errors.Is(err, oauth2.ErrInvalidGrant)
 			},
 		},
 		{

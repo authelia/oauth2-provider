@@ -1076,7 +1076,7 @@ func (s *MemoryStore) DecideDeviceCodeSession(_ context.Context, signature strin
 		return oauth2.ErrNotFound
 	}
 
-	if stored.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+	if status := stored.GetStatus(); status != oauth2.DeviceAuthorizeStatusNew && status != oauth2.DeviceAuthorizeStatusClaimed {
 		return oauth2.ErrDeviceAuthorizeDecided
 	}
 

@@ -177,6 +177,17 @@ func TestMemoryStoreDecideDeviceCodeSession(t *testing.T) {
 		assert.Equal(t, oauth2.DeviceAuthorizeStatusApproved, stored.GetStatus())
 	})
 
+	t.Run("ShouldRecordADecisionOnAClaimedSession", func(t *testing.T) {
+		store := NewMemoryStore()
+
+		require.NoError(t, store.CreateDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusClaimed)))
+		require.NoError(t, store.DecideDeviceCodeSession(t.Context(), "device-sig", newRequest(oauth2.DeviceAuthorizeStatusDenied)))
+
+		stored, err := store.GetDeviceCodeSession(t.Context(), "device-sig", nil)
+		require.NoError(t, err)
+		assert.Equal(t, oauth2.DeviceAuthorizeStatusDenied, stored.GetStatus())
+	})
+
 	t.Run("ShouldRefuseASecondDecision", func(t *testing.T) {
 		store := NewMemoryStore()
 

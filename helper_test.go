@@ -258,6 +258,11 @@ func TestDeviceAuthorizeStatusToString(t *testing.T) {
 			expected: "New",
 		},
 		{
+			name:     "ShouldReturnClaimed",
+			status:   DeviceAuthorizeStatusClaimed,
+			expected: "Claimed",
+		},
+		{
 			name:     "ShouldReturnInvalidForUnknownStatus",
 			status:   DeviceAuthorizeStatus(99),
 			expected: "Invalid",

@@ -46,8 +46,8 @@ type Storage interface {
 // concurrently for one user code only the first is recorded.
 type DecisionStorage interface {
 	// DecideDeviceCodeSession stores the device code session for the given device code only while the stored session
-	// has the oauth2.DeviceAuthorizeStatusNew status, checking and writing it in one atomic operation. It returns the
-	// oauth2.ErrDeviceAuthorizeDecided error when the stored session was already decided, and the oauth2.ErrNotFound
-	// error when no session is stored for the device code.
+	// has the oauth2.DeviceAuthorizeStatusNew or oauth2.DeviceAuthorizeStatusClaimed status, checking and writing it in
+	// one atomic operation. It returns the oauth2.ErrDeviceAuthorizeDecided error when the stored session was already
+	// decided, and the oauth2.ErrNotFound error when no session is stored for the device code.
 	DecideDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 }

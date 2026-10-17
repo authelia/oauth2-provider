@@ -101,7 +101,7 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))
 	}
 
-	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || request.GetStatus() != oauth2.DeviceAuthorizeStatusNew {
+	if status := request.GetStatus(); session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || (status != oauth2.DeviceAuthorizeStatusNew && status != oauth2.DeviceAuthorizeStatusClaimed) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
 	}
 

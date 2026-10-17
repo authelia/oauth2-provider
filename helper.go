@@ -69,6 +69,8 @@ func DeviceAuthorizeStatusToString(status DeviceAuthorizeStatus) string {
 		return "Denied"
 	case DeviceAuthorizeStatusNew:
 		return "New"
+	case DeviceAuthorizeStatusClaimed:
+		return "Claimed"
 	default:
 		return "Invalid"
 	}

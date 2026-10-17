@@ -109,7 +109,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 			WithHint("The user code for this device code is associated with another device authorization request."))
 	}
 
-	if userAuthReq.GetStatus() == oauth2.DeviceAuthorizeStatusNew {
+	if status := userAuthReq.GetStatus(); status == oauth2.DeviceAuthorizeStatusNew || status == oauth2.DeviceAuthorizeStatusClaimed {
 		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
 
 		return "", "", nil, errorsx.WithStack(oauth2.ErrAuthorizationPending.WithHintf("The user has not authorized the request."))

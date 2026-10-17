@@ -8,12 +8,26 @@ import (
 	"time"
 )
 
+// DeviceAuthorizeStatus is the end user's progress through the RFC 8628 device authorization grant. The values are
+// persisted by storage implementations, so new values are appended rather than inserted.
 type DeviceAuthorizeStatus int
 
 const (
+	// DeviceAuthorizeStatusNew marks a request the device authorization endpoint has issued but no end user has acted
+	// on. It is undecided, so the device keeps receiving 'authorization_pending'.
 	DeviceAuthorizeStatusNew DeviceAuthorizeStatus = iota
+
+	// DeviceAuthorizeStatusApproved marks a request the end user has approved. The device receives tokens on its next
+	// poll of the token endpoint.
 	DeviceAuthorizeStatusApproved
+
+	// DeviceAuthorizeStatusDenied marks a request the end user has denied. The device receives 'access_denied' on its
+	// next poll of the token endpoint.
 	DeviceAuthorizeStatusDenied
+
+	// DeviceAuthorizeStatusClaimed marks a request whose user code an end user has entered but not yet approved or
+	// denied. Like DeviceAuthorizeStatusNew it is undecided, so the device keeps receiving 'authorization_pending'.
+	DeviceAuthorizeStatusClaimed
 )
 
 // DeviceAuthorizeRequest is an implementation of DeviceAuthorizeRequester
@@ -52,12 +66,12 @@ func (d *DeviceAuthorizeRequest) GetUserCodeSignature() string {
 	return d.UserCodeSignature
 }
 
-// SetStatus records the user authorization status (new, approved, or denied) for the device flow.
+// SetStatus records the user authorization status (new, claimed, approved, or denied) for the device flow.
 func (d *DeviceAuthorizeRequest) SetStatus(status DeviceAuthorizeStatus) {
 	d.Status = status
 }
 
-// GetStatus returns the user authorization status (new, approved, or denied) for the device flow.
+// GetStatus returns the user authorization status (new, claimed, approved, or denied) for the device flow.
 func (d *DeviceAuthorizeRequest) GetStatus() DeviceAuthorizeStatus {
 	return d.Status
 }

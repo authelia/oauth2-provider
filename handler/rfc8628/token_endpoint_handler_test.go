@@ -286,6 +286,8 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 
 	expiredAt := time.Now().Add(-time.Hour).UTC().Truncate(jwt.TimePrecision)
 
+	const errPending = "The authorization request is still pending as the end user hasn't yet completed the user-interaction steps. The user has not authorized the request."
+
 	testCases := []struct {
 		requester       *oauth2.AccessRequest
 		deviceRequester *oauth2.DeviceAuthorizeRequest
@@ -406,6 +408,68 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 
 				requester.Form = url.Values{consts.FormParameterDeviceCode: {dCode}}
 			},
+		},
+		{
+			requester: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
+				device := oauth2.NewDeviceAuthorizeRequest()
+				device.SetSession(openid.NewDefaultSession())
+				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
+				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
+				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+				require.NoError(t, err)
+				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+				require.NoError(t, err)
+				device.SetDeviceCodeSignature(dSig)
+				device.SetUserCodeSignature(uSig)
+				device.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, device))
+
+				requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+			},
+			name: "ShouldFailPendingNew",
+			err:  errPending,
+		},
+		{
+			requester: &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Form: url.Values{},
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			},
+			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
+				device := oauth2.NewDeviceAuthorizeRequest()
+				device.SetSession(openid.NewDefaultSession())
+				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
+				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
+				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+				require.NoError(t, err)
+				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+				require.NoError(t, err)
+				device.SetDeviceCodeSignature(dSig)
+				device.SetUserCodeSignature(uSig)
+				device.SetStatus(oauth2.DeviceAuthorizeStatusClaimed)
+				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, device))
+
+				requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+			},
+			name: "ShouldFailPendingClaimed",
+			err:  errPending,
 		},
 		{
 			requester: &oauth2.AccessRequest{

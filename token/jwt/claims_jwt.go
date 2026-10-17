@@ -34,7 +34,7 @@ type JWTClaimsDefaults struct {
 }
 
 type JWTClaimsContainer interface {
-	// Sanitize should clear the IssuedAt and NotBefore values.
+	// Sanitize returns a copy of itself with the IssuedAt and NotBefore values cleared.
 	Sanitize() JWTClaimsContainer
 
 	// With returns a copy of itself with expiresAt, scope, audience set to the given values.
@@ -49,6 +49,17 @@ type JWTClaimsContainer interface {
 
 	// ToMapClaims returns the claims as a MapClaims type.
 	ToMapClaims() MapClaims
+}
+
+// NotBeforeJWTClaimsContainer is a JWTClaimsContainer which exposes its NotBefore value.
+type NotBeforeJWTClaimsContainer interface {
+	// GetNotBefore returns the NotBefore value.
+	GetNotBefore() time.Time
+
+	// SetNotBefore sets the NotBefore value.
+	SetNotBefore(nbf time.Time)
+
+	JWTClaimsContainer
 }
 
 // JWTClaims represent a token's claims.
@@ -80,37 +91,56 @@ func (c *JWTClaims) Clone() *JWTClaims {
 	return &cloned
 }
 
-// With sets the expiry, scope, and audience to the given values and returns the claims.
+// With returns a copy of the claims with expiresAt, scope and audience set to the given values. The receiver is not
+// modified.
 func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsContainer {
-	c.ExpiresAt = expiry
-	c.Scope = scope
-	c.Audience = audience
-	return c
+	cloned := c.Clone()
+
+	cloned.ExpiresAt = expiry
+	cloned.Scope = scope
+	cloned.Audience = audience
+
+	return cloned
 }
 
-// Sanitize clears the IssuedAt and NotBefore values and returns the claims.
+// Sanitize returns a copy of the claims with IssuedAt and NotBefore cleared. The receiver is not modified.
 func (c *JWTClaims) Sanitize() JWTClaimsContainer {
-	c.IssuedAt = time.Time{}
-	c.NotBefore = time.Time{}
+	cloned := c.Clone()
 
-	return c
+	cloned.IssuedAt = time.Time{}
+	cloned.NotBefore = time.Time{}
+
+	return cloned
 }
 
-// WithDefaults sets each of the IssuedAt, NotBefore, and Issuer values which is not already set to the given value and
-// returns the claims.
+// WithDefaults returns a copy of the claims with IssuedAt, NotBefore and Issuer set to the given values where they are
+// unset. The receiver is not modified.
 func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsContainer {
-	if c.IssuedAt.IsZero() {
-		c.IssuedAt = iat
+	cloned := c.Clone()
+
+	if cloned.IssuedAt.IsZero() {
+		cloned.IssuedAt = iat
 	}
 
-	if c.NotBefore.IsZero() {
-		c.NotBefore = nbf
+	if cloned.NotBefore.IsZero() {
+		cloned.NotBefore = nbf
 	}
 
-	if c.Issuer == "" {
-		c.Issuer = issuer
+	if cloned.Issuer == "" {
+		cloned.Issuer = issuer
 	}
-	return c
+
+	return cloned
+}
+
+// GetNotBefore returns the NotBefore value.
+func (c *JWTClaims) GetNotBefore() time.Time {
+	return c.NotBefore
+}
+
+// SetNotBefore sets the NotBefore value.
+func (c *JWTClaims) SetNotBefore(nbf time.Time) {
+	c.NotBefore = nbf
 }
 
 // WithScopeField sets how the scope is represented in the JWT and returns the claims.

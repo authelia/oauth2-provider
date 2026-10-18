@@ -73,8 +73,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Audience:   []string{"https://www.authelia.com/api"},
-				})
-				areq.EXPECT().GetRequestForm().Return(url.Values{})
+				}).Times(2)
+				areq.EXPECT().GetRequestForm().Return(url.Values{}).Times(2)
 			},
 		},
 		{
@@ -101,8 +101,10 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},
-				})
-				areq.EXPECT().GetRequestForm().Return(url.Values{}).Times(2)
+				}).Times(2)
+				areq.EXPECT().GetRequestForm().Return(url.Values{})
+				areq.EXPECT().SetRequestedAudience(oauth2.Arguments{})
+				areq.EXPECT().SetRequestedResource(oauth2.Arguments{})
 			},
 		},
 	}
@@ -263,6 +265,92 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			"",
 		},
 		{
+			"ShouldSuccessfullyGrantAllResources",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					Session: &oauth2.DefaultSession{},
+					Client: &TestRequestedAudienceClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ID:         "test",
+							GrantTypes: []string{consts.GrantTypeClientCredentials},
+							Audience:   []string{"https://example.com"},
+							Resource:   []string{"https://api.example.com"},
+							Scopes:     []string{"openid"},
+						},
+						resource: true,
+					},
+				},
+			},
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					RequestedResource: []string{"https://api.example.com"},
+					GrantedResource:   []string{"https://api.example.com"},
+				},
+			},
+			"",
+		},
+		{
+			"ShouldSuccessfullyGrantAllAudiencesAndResources",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					Session: &oauth2.DefaultSession{},
+					Client: &TestRequestedAudienceClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ID:         "test",
+							GrantTypes: []string{consts.GrantTypeClientCredentials},
+							Audience:   []string{"https://example.com"},
+							Resource:   []string{"https://api.example.com"},
+							Scopes:     []string{"openid"},
+						},
+						audience: true,
+						resource: true,
+					},
+				},
+			},
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					RequestedAudience: []string{"https://example.com"},
+					RequestedResource: []string{"https://api.example.com"},
+					GrantedAudience:   []string{"https://example.com"},
+					GrantedResource:   []string{"https://api.example.com"},
+				},
+			},
+			"",
+		},
+		{
+			"ShouldNotImplicitlyRequestResourcesWhenAudienceRequested",
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					Form:              url.Values{consts.FormParameterAudience: {"https://example.com"}},
+					RequestedAudience: []string{"https://example.com"},
+					Session:           &oauth2.DefaultSession{},
+					Client: &TestRequestedAudienceClient{
+						DefaultClient: &oauth2.DefaultClient{
+							ID:         "test",
+							GrantTypes: []string{consts.GrantTypeClientCredentials},
+							Audience:   []string{"https://example.com"},
+							Resource:   []string{"https://api.example.com"},
+							Scopes:     []string{"openid"},
+						},
+						resource: true,
+					},
+				},
+			},
+			&oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
+				Request: oauth2.Request{
+					RequestedAudience: []string{"https://example.com"},
+					GrantedAudience:   []string{"https://example.com"},
+				},
+			},
+			"",
+		},
+		{
 			"ShouldSuccessfullyGrantAllScopes",
 			&oauth2.AccessRequest{
 				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
@@ -350,8 +438,10 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 
 			assert.Equal(t, tc.expected.GetRequestedScopes(), tc.have.GetRequestedScopes())
 			assert.Equal(t, tc.expected.GetRequestedAudience(), tc.have.GetRequestedAudience())
+			assert.Equal(t, tc.expected.GetRequestedResource(), tc.have.GetRequestedResource())
 			assert.Equal(t, oauth2.Arguments(nil), tc.have.GetGrantedScopes())
 			assert.Equal(t, oauth2.Arguments(nil), tc.have.GetGrantedAudience())
+			assert.Equal(t, oauth2.Arguments(nil), tc.have.GetGrantedResource())
 
 			if len(tc.err) == 0 {
 				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -367,6 +457,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 
 			assert.Equal(t, tc.expected.GetGrantedScopes(), tc.have.GetGrantedScopes())
 			assert.Equal(t, tc.expected.GetGrantedAudience(), tc.have.GetGrantedAudience())
+			assert.Equal(t, tc.expected.GetGrantedResource(), tc.have.GetGrantedResource())
 		})
 	}
 }
@@ -375,11 +466,16 @@ type TestRequestedAudienceClient struct {
 	*oauth2.DefaultClient
 
 	audience bool
+	resource bool
 	scopes   bool
 }
 
 func (c *TestRequestedAudienceClient) GetRequestedAudienceImplicit() bool {
 	return c.audience
+}
+
+func (c *TestRequestedAudienceClient) GetRequestedResourceImplicit() bool {
+	return c.resource
 }
 
 func (c *TestRequestedAudienceClient) GetClientCredentialsFlowRequestedScopeImplicit() bool {

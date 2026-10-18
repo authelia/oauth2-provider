@@ -58,21 +58,8 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		}
 	}
 
-	audience := request.GetRequestedAudience()
-	resource := request.GetRequestedResource()
-
-	if len(audience) == 0 && len(resource) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) && !request.GetRequestForm().Has(consts.FormParameterResource) {
-		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
-			request.SetRequestedAudience(ac.GetAudience())
-		}
-	} else {
-		if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), audience); err != nil {
-			return err
-		}
-
-		if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetResource(), resource); err != nil {
-			return err
-		}
+	if err = oauth2.ValidateRequestedAudienceAndResource(ctx, c.Config, request, request.GetRequestedAudience(), request.GetRequestedResource()); err != nil {
+		return err
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6

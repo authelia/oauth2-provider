@@ -91,8 +91,14 @@ func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request 
 	resource := GetRequestedResources(form)
 
 	if len(audience) == 0 && len(resource) == 0 && !form.Has(consts.FormParameterAudience) && !form.Has(consts.FormParameterResource) {
-		if client, ok := request.GetClient().(RequestedAudienceImplicitClient); ok && client.GetRequestedAudienceImplicit() {
-			audience = client.GetAudience()
+		if client, ok := request.GetClient().(RequestedAudienceResourceImplicitClient); ok {
+			if client.GetRequestedAudienceImplicit() {
+				audience = client.GetAudience()
+			}
+
+			if client.GetRequestedResourceImplicit() {
+				resource = client.GetResource()
+			}
 		}
 	} else {
 		if err := GetAudienceStrategy(ctx, f.Config, request.GetClient())(request.GetClient().GetAudience(), audience); err != nil {

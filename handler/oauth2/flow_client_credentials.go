@@ -62,8 +62,14 @@ func (c *ClientCredentialsGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	resource := request.GetRequestedResource()
 
 	if len(audience) == 0 && len(resource) == 0 && !request.GetRequestForm().Has(consts.FormParameterAudience) && !request.GetRequestForm().Has(consts.FormParameterResource) {
-		if ac, ok := client.(oauth2.RequestedAudienceImplicitClient); ok && ac.GetRequestedAudienceImplicit() {
-			request.SetRequestedAudience(ac.GetAudience())
+		if ac, ok := client.(oauth2.RequestedAudienceResourceImplicitClient); ok {
+			if ac.GetRequestedAudienceImplicit() {
+				request.SetRequestedAudience(ac.GetAudience())
+			}
+
+			if ac.GetRequestedResourceImplicit() {
+				request.SetRequestedResource(ac.GetResource())
+			}
 		}
 	} else {
 		if err = oauth2.GetAudienceStrategy(ctx, c.Config, client)(client.GetAudience(), audience); err != nil {

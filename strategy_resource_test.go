@@ -592,6 +592,88 @@ func TestValidateAudienceMatchesResourceAgainstClientResource(t *testing.T) {
 	}
 }
 
+func TestValidateAudienceImplicit(t *testing.T) {
+	testCases := []struct {
+		name             string
+		audience         bool
+		resource         bool
+		form             url.Values
+		expectedAudience Arguments
+		expectedResource Arguments
+	}{
+		{
+			name: "ShouldNotRequestImplicitly",
+		},
+		{
+			name:             "ShouldRequestAudienceImplicitly",
+			audience:         true,
+			expectedAudience: Arguments{"api"},
+		},
+		{
+			name:             "ShouldRequestResourceImplicitly",
+			resource:         true,
+			expectedResource: Arguments{"https://auth.example.com/api"},
+		},
+		{
+			name:             "ShouldRequestAudienceAndResourceImplicitly",
+			audience:         true,
+			resource:         true,
+			expectedAudience: Arguments{"api"},
+			expectedResource: Arguments{"https://auth.example.com/api"},
+		},
+		{
+			name:             "ShouldNotRequestResourceImplicitlyWhenAudienceRequested",
+			audience:         true,
+			resource:         true,
+			form:             url.Values{consts.FormParameterAudience: {"api"}},
+			expectedAudience: Arguments{"api"},
+		},
+		{
+			name:             "ShouldNotRequestAudienceImplicitlyWhenResourceRequested",
+			audience:         true,
+			resource:         true,
+			form:             url.Values{consts.FormParameterResource: {"https://auth.example.com/api"}},
+			expectedResource: Arguments{"https://auth.example.com/api"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: &Config{}}
+
+			request := NewRequest()
+			request.Client = &implicitAudienceResourceClient{
+				DefaultClient: &DefaultClient{Audience: []string{"api"}, Resource: []string{"https://auth.example.com/api"}},
+				audience:      tc.audience,
+				resource:      tc.resource,
+			}
+
+			if tc.form != nil {
+				request.Form = tc.form
+			}
+
+			require.NoError(t, provider.validateAudience(t.Context(), nil, request))
+			assert.Equal(t, tc.expectedAudience, request.GetRequestedAudience())
+			assert.Equal(t, tc.expectedResource, request.GetRequestedResource())
+		})
+	}
+}
+
+type implicitAudienceResourceClient struct {
+	*DefaultClient
+
+	audience bool
+	resource bool
+}
+
+func (c *implicitAudienceResourceClient) GetRequestedAudienceImplicit() bool {
+	return c.audience
+}
+
+func (c *implicitAudienceResourceClient) GetRequestedResourceImplicit() bool {
+	return c.resource
+}
+
 type nilResourceStrategyProvider struct{}
 
 func (nilResourceStrategyProvider) GetResourceStrategy(_ context.Context) ResourceStrategy {

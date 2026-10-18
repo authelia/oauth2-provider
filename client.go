@@ -543,12 +543,19 @@ type ClientCredentialsFlowRequestedScopeImplicitClient interface {
 	Client
 }
 
-// RequestedAudienceImplicitClient is a client which can potentially implicitly grant permitted audiences given the
-// absence of a request parameter.
-type RequestedAudienceImplicitClient interface {
+// RequestedAudienceResourceImplicitClient is a client which can potentially implicitly request permitted audiences and
+// RFC 8707 resource indicators given the absence of both the 'audience' and 'resource' request parameters.
+type RequestedAudienceResourceImplicitClient interface {
 	// GetRequestedAudienceImplicit is indicative of if a client will implicitly request all audiences it is allowed to
-	// request in the absence of requested audience during an Authorization Endpoint Flow or Client Credentials Flow.
+	// request in the absence of requested audience and resource during an Authorization Endpoint Flow, Device
+	// Authorization Flow, or Client Credentials Flow.
 	GetRequestedAudienceImplicit() (implicit bool)
+
+	// GetRequestedResourceImplicit is indicative of if a client will implicitly request all RFC 8707 resource
+	// indicators it is allowed to request in the absence of requested audience and resource during an Authorization
+	// Endpoint Flow, Device Authorization Flow, or Client Credentials Flow. The values returned by GetResource are
+	// requested as-is, so they must be literal resource indicators rather than patterns such as wildcards.
+	GetRequestedResourceImplicit() (implicit bool)
 
 	Client
 }

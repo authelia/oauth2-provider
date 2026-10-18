@@ -87,25 +87,33 @@ func GetRequestedAudiences(form url.Values) (audiences []string) {
 func (f *Fosite) validateAudience(ctx context.Context, r *http.Request, request Requester) error {
 	form := request.GetRequestForm()
 
-	audience := GetRequestedAudiences(form)
-	resource := GetRequestedResources(form)
+	return ValidateRequestedAudienceAndResource(ctx, f.Config, request, GetRequestedAudiences(form), GetRequestedResources(form))
+}
+
+// ValidateRequestedAudienceAndResource sets the requested audience and RFC 8707 resource indicators on the request.
+// When neither the 'audience' nor the 'resource' parameter is present, a RequestedAudienceResourceImplicitClient may
+// implicitly request all of its permitted audiences and resource indicators. Otherwise the provided values are matched
+// against the client's permitted values using the effective AudienceStrategy and ResourceStrategy.
+func ValidateRequestedAudienceAndResource(ctx context.Context, config AudienceResourceStrategyProvider, request Requester, audience, resource []string) (err error) {
+	client := request.GetClient()
+	form := request.GetRequestForm()
 
 	if len(audience) == 0 && len(resource) == 0 && !form.Has(consts.FormParameterAudience) && !form.Has(consts.FormParameterResource) {
-		if client, ok := request.GetClient().(RequestedAudienceResourceImplicitClient); ok {
-			if client.GetRequestedAudienceImplicit() {
-				audience = client.GetAudience()
+		if c, ok := client.(RequestedAudienceResourceImplicitClient); ok {
+			if c.GetRequestedAudienceImplicit() {
+				audience = c.GetAudience()
 			}
 
-			if client.GetRequestedResourceImplicit() {
-				resource = client.GetResource()
+			if c.GetRequestedResourceImplicit() {
+				resource = c.GetResource()
 			}
 		}
 	} else {
-		if err := GetAudienceStrategy(ctx, f.Config, request.GetClient())(request.GetClient().GetAudience(), audience); err != nil {
+		if err = GetAudienceStrategy(ctx, config, client)(client.GetAudience(), audience); err != nil {
 			return err
 		}
 
-		if err := GetResourceStrategy(ctx, f.Config, request.GetClient())(request.GetClient().GetResource(), resource); err != nil {
+		if err = GetResourceStrategy(ctx, config, client)(client.GetResource(), resource); err != nil {
 			return err
 		}
 	}

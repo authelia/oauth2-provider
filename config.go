@@ -65,6 +65,13 @@ type ResourceStrategyProvider interface {
 	GetResourceStrategy(ctx context.Context) (strategy ResourceStrategy)
 }
 
+// AudienceResourceStrategyProvider returns the provider for configuring both the audience strategy and the RFC 8707
+// resource indicator strategy.
+type AudienceResourceStrategyProvider interface {
+	AudienceStrategyProvider
+	ResourceStrategyProvider
+}
+
 // AuthorizationDetailsTypeHandlersProvider returns the provider for configuring the RFC 9396 authorization details
 // type handlers.
 type AuthorizationDetailsTypeHandlersProvider interface {

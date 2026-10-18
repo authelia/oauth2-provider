@@ -73,8 +73,8 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Audience:   []string{"https://www.authelia.com/api"},
-				})
-				areq.EXPECT().GetRequestForm().Return(url.Values{})
+				}).Times(2)
+				areq.EXPECT().GetRequestForm().Return(url.Values{}).Times(2)
 			},
 		},
 		{
@@ -101,8 +101,10 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 				areq.EXPECT().GetClient().Return(&oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 					Scopes:     []string{"foo", "bar", "baz"},
-				})
-				areq.EXPECT().GetRequestForm().Return(url.Values{}).Times(2)
+				}).Times(2)
+				areq.EXPECT().GetRequestForm().Return(url.Values{})
+				areq.EXPECT().SetRequestedAudience(oauth2.Arguments{})
+				areq.EXPECT().SetRequestedResource(oauth2.Arguments{})
 			},
 		},
 	}

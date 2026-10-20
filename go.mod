@@ -6,7 +6,7 @@ module authelia.com/provider/oauth2
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	authelia.com/provider/jose v0.1.0

@@ -253,9 +253,14 @@ func validateGrantTypesPermitted(ctx context.Context, config LocalValidatorConfi
 // define each as an https URL. The scheme is what keeps a registrant from naming an internal service and reading the
 // outcome through an error message or a delivery status.
 //
+// 'sector_identifier_uri' and 'initiate_login_uri' are defined as https URLs by OpenID Connect Dynamic Client
+// Registration 1.0 Section 2. The former is fetched when SectorIdentifierValidator is configured, and OpenID Connect
+// Core 1.0 Section 8.1 takes its host as the Sector Identifier for pairwise subject identifiers.
+//
 // 'post_logout_redirect_uris' is a browser redirect target rather than something this server fetches, so only the
 // absolute and fragment rules apply to it and a native client's private-use scheme stays registrable.
 //
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 // See: https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRegistration
 func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if err = validateURI(consts.ClientMetadataJSONWebKeysURI, metadata.JSONWebKeysURI, true); err != nil {
@@ -263,6 +268,14 @@ func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	}
 
 	if err = validateURI(consts.ClientMetadataBackChannelLogoutURI, metadata.BackChannelLogoutURI, true); err != nil {
+		return err
+	}
+
+	if err = validateURI(consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI, true); err != nil {
+		return err
+	}
+
+	if err = validateURI(consts.ClientMetadataInitiateLoginURI, metadata.InitiateLoginURI, true); err != nil {
 		return err
 	}
 

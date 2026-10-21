@@ -455,6 +455,36 @@ func TestLocalValidatorURIs(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'backchannel_logout_uri' value 'https://example.com/logout#f' must not contain a fragment component.",
 		},
 		{
+			name:   "ShouldAcceptSecureSectorIdentifierURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.SectorIdentifierURI = "https://example.com/sector.json" },
+		},
+		{
+			name: "ShouldRejectInsecureSectorIdentifierURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.SectorIdentifierURI = "http://127.0.0.1:8080/sector.json"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'http://127.0.0.1:8080/sector.json' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectHostlessSectorIdentifierURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.SectorIdentifierURI = "https:/sector.json" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'https:/sector.json' must include a host component.",
+		},
+		{
+			name:   "ShouldAcceptSecureInitiateLoginURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.InitiateLoginURI = "https://example.com/login" },
+		},
+		{
+			name:     "ShouldRejectInsecureInitiateLoginURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.InitiateLoginURI = "http://example.com/login" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'initiate_login_uri' value 'http://example.com/login' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectInitiateLoginURIWithFragment",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.InitiateLoginURI = "https://example.com/login#f" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'initiate_login_uri' value 'https://example.com/login#f' must not contain a fragment component.",
+		},
+		{
 			name:     "ShouldRejectRelativePostLogoutRedirectURI",
 			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.PostLogoutRedirectURIs = []string{"/after-logout"} },
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'post_logout_redirect_uris' value '/after-logout' must be an absolute URI.",

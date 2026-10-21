@@ -11,6 +11,7 @@ const (
 	HeaderPragma          = "Pragma"
 	HeaderAuthorization   = "Authorization"
 	HeaderLocation        = "Location"
+	HeaderAccept          = "Accept"
 	HeaderAcceptLanguage  = "Accept-Language"
 	HeaderWWWAuthenticate = "WWW-Authenticate"
 	HeaderXForwardedProto = "X-Forwarded-Proto"
@@ -30,6 +31,13 @@ const (
 	// validate an incoming request's Content-Type header via mime.ParseMediaType, which strips any parameters before
 	// comparison.
 	MediaTypeApplicationJSON = "application/json"
+)
+
+const (
+	// WellKnownOpenIDConfiguration is the path suffix of the OpenID Connect Discovery 1.0 metadata of an issuer.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest
+	WellKnownOpenIDConfiguration = "/.well-known/openid-configuration"
 )
 
 const (

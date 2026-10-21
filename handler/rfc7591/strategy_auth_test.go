@@ -18,8 +18,168 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
+
+func TestAuthenticateClientRegistrationSurfacesPolicy(t *testing.T) {
+	ctx := context.Background()
+
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+			}
+
+			claim := config.GetRFC7591ClientRegistrationPolicyClaim(ctx)
+			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+			testCases := []struct {
+				name  string
+				extra map[string]any
+				ok    bool
+			}{
+				{testCaseSurfacePolicy, map[string]any{claim: map[string]any{policyMemberMaxRegistrations: 1}}, true},
+				{"ShouldReportNoPolicyWithoutTheClaim", map[string]any{testAuthorizationDetailsTypeOther: testAuthorizationDetailsTypeUnknown}, false},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store := factory()
+					auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
+
+					request := oauth2.NewRequest()
+					request.Client = &oauth2.DefaultClient{ID: testOnboardingClientID}
+					request.Session = &oauth2.DefaultSession{
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+						Extra:     tc.extra,
+					}
+					request.GrantScope("authelia:oauth2:dynamic-client-registration")
+					request.GrantAudience(testEndpoint)
+
+					token, signature, err := tokens.GenerateAccessToken(ctx, request)
+					require.NoError(t, err)
+					require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+					result, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+					require.NoError(t, err)
+
+					pr, ok := result.(RegistrationPolicyRequester)
+					require.True(t, ok)
+
+					raw, present := pr.GetRegistrationPolicyClaim()
+					assert.Equal(t, tc.ok, present)
+					assert.Equal(t, "session:"+request.GetID(), pr.GetRegistrationCounterKey())
+
+					if tc.ok {
+						policy, err := ParseRegistrationPolicy(raw, nil, true)
+						require.NoError(t, err)
+						assert.Equal(t, int64(1), policy.MaxRegistrations())
+					} else {
+						assert.Nil(t, raw)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestAuthenticateClientRegistrationOmitsCounterKeyWithoutRequestID(t *testing.T) {
+	ctx := context.Background()
+
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+			}
+
+			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+			store := factory()
+			auth := NewDefaultEndpointAuthStrategy(config, &idlessAccessTokenStore{Storage: store}, tokens, tokens)
+
+			request := oauth2.NewRequest()
+			request.Client = &oauth2.DefaultClient{ID: testOnboardingClientID}
+			request.Session = &oauth2.DefaultSession{
+				ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+				Extra:     map[string]any{config.GetRFC7591ClientRegistrationPolicyClaim(ctx): map[string]any{policyMemberMaxRegistrations: 1}},
+			}
+			request.GrantScope("authelia:oauth2:dynamic-client-registration")
+			request.GrantAudience(testEndpoint)
+
+			token, signature, err := tokens.GenerateAccessToken(ctx, request)
+			require.NoError(t, err)
+			require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+			result, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+			require.NoError(t, err)
+
+			pr, ok := result.(RegistrationPolicyRequester)
+			require.True(t, ok)
+			require.Empty(t, pr.GetID())
+			assert.Empty(t, pr.GetRegistrationCounterKey())
+		})
+	}
+}
+
+func TestAuthenticateClientConfigurationSurfacesPolicy(t *testing.T) {
+	ctx := context.Background()
+
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+			}
+
+			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+			testCases := []struct {
+				name  string
+				extra map[string]any
+				ok    bool
+			}{
+				{testCaseSurfacePolicy, map[string]any{consts.ClientRegistrationPolicyInternalKey: map[string]any{policyMemberMaxRegistrations: 1}}, true},
+				{"ShouldReportNoPolicyWithoutTheKey", nil, false},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store := factory()
+					auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
+
+					session := &oauth2.DefaultSession{Extra: tc.extra}
+
+					token, err := newClientRegistrationToken(ctx, tokens, store, &oauth2.DefaultClient{ID: testManagedClientID}, session, ClientConfigurationURL(testEndpoint, testManagedClientID), 0, nil, nil, nil)
+					require.NoError(t, err)
+
+					result, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/client-a", token), "client-a")
+					require.NoError(t, err)
+
+					pr, ok := result.(RegistrationPolicyRequester)
+					require.True(t, ok)
+
+					signature := tokens.ClientRegistrationTokenSignature(ctx, token)
+					assert.Equal(t, signature, pr.GetID())
+					assert.Empty(t, pr.GetRegistrationCounterKey())
+
+					raw, present := pr.GetRegistrationPolicyClaim()
+					assert.Equal(t, tc.ok, present)
+
+					if tc.ok {
+						policy, err := ParseRegistrationPolicy(raw, nil, true)
+						require.NoError(t, err)
+						assert.Equal(t, int64(1), policy.MaxRegistrations())
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestDefaultEndpointAuthStrategy(t *testing.T) {
 	ctx := context.Background()
@@ -64,7 +224,7 @@ func TestAuthRejectsAnAccessTokenAtTheConfigurationEndpoint(t *testing.T) {
 	auth, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://auth.example.com/register/some-client"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:dynamic-client-registration"}, []string{"https://auth.example.com/register/some-client"})
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, "https://auth.example.com/register/some-client", token), "some-client")
 	assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
@@ -135,7 +295,7 @@ func TestAuthRejectsAnExpiredAccessToken(t *testing.T) {
 	request.Session = &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(-time.Hour)},
 	}
-	request.GrantScope("authelia:oauth2:client_registration")
+	request.GrantScope("authelia:oauth2:dynamic-client-registration")
 	request.GrantAudience(testEndpoint)
 
 	token, signature, err := access.GenerateAccessToken(ctx, request)
@@ -153,7 +313,7 @@ func TestAuthAcceptsAnAccessTokenWithTheAudienceAndScope(t *testing.T) {
 	handler, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{testEndpoint})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:dynamic-client-registration"}, []string{testEndpoint})
 
 	requester, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -181,7 +341,7 @@ func TestAuthRejectsAnAccessTokenMissingTheAudience(t *testing.T) {
 	handler, config, store, _ := newAuthFixtures(t)
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://elsewhere.example.com/register"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:dynamic-client-registration"}, []string{"https://elsewhere.example.com/register"})
 
 	_, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -260,7 +420,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			store := storage.NewMemoryStore()
 			strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-			token := mintAccessToken(t, ctx, store, strategy, []string{"authelia:oauth2:client_registration"}, []string{tc.granted})
+			token := mintAccessToken(t, ctx, store, strategy, []string{"authelia:oauth2:dynamic-client-registration"}, []string{tc.granted})
 
 			auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
@@ -292,7 +452,7 @@ func TestAuthHydratesTheAccessTokenSession(t *testing.T) {
 	store := &hydratingAccessTokenStore{MemoryStore: storage.NewMemoryStore()}
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store.MemoryStore, strategy, []string{"authelia:oauth2:client_registration"}, []string{testEndpoint})
+	token := mintAccessToken(t, ctx, store.MemoryStore, strategy, []string{"authelia:oauth2:dynamic-client-registration"}, []string{testEndpoint})
 
 	auth := NewDefaultEndpointAuthStrategy(config, store, strategy, strategy)
 
@@ -317,7 +477,7 @@ func TestAuthRejectsAWildcardScopeAtTheRegistrationEndpoint(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:dynamic-client-registration', at least one of which is required.")
 }
 
 func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *testing.T) {
@@ -328,7 +488,7 @@ func TestAuthRejectsALooseServerAudienceStrategyAtTheRegistrationEndpoint(t *tes
 
 	access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"https://elsewhere.example.com/register"})
+	token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:dynamic-client-registration"}, []string{"https://elsewhere.example.com/register"})
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -348,7 +508,7 @@ func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T
 	request.Session = &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
 	}
-	request.GrantScope("authelia:oauth2:client_registration")
+	request.GrantScope("authelia:oauth2:dynamic-client-registration")
 	request.GrantAudience("https://elsewhere.example.com/register")
 
 	token, signature, err := access.GenerateAccessToken(ctx, request)
@@ -384,7 +544,7 @@ func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInsufficientScope)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:dynamic-client-registration', at least one of which is required.")
 }
 
 func TestAuthAcceptsAManagementTokenBehindAProxy(t *testing.T) {
@@ -484,7 +644,7 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 
 		require.Error(t, err)
 		rfc := oauth2.ErrorToRFC6749Error(err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:dynamic-client-registration', at least one of which is required.")
 		assert.Equal(t, http.StatusForbidden, rfc.CodeField)
 	})
 
@@ -492,7 +652,7 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 		auth, config, store, _ := newAuthFixtures(t)
 		access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-		token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:client_registration"}, []string{"urn:wrong"})
+		token := mintAccessToken(t, ctx, store, access, []string{"authelia:oauth2:dynamic-client-registration"}, []string{"urn:wrong"})
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -511,7 +671,7 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:dynamic-client-registration', at least one of which is required.")
 	})
 
 	t.Run("ShouldReportInvalidTokenForUnknownToken", func(t *testing.T) {
@@ -683,4 +843,31 @@ func (s *hydratingAccessTokenStore) GetAccessTokenSession(ctx context.Context, s
 	}
 
 	return request, nil
+}
+
+func policyTestStores() (stores map[string]func() Storage) {
+	return map[string]func() Storage{
+		"MemoryStore":          func() Storage { return storage.NewMemoryStore() },
+		"HydratingMemoryStore": func() Storage { return storage.NewHydratingMemoryStore() },
+	}
+}
+
+type idlessAccessTokenStore struct {
+	Storage
+}
+
+func (s *idlessAccessTokenStore) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (requester oauth2.Requester, err error) {
+	if requester, err = s.Storage.GetAccessTokenSession(ctx, signature, session); err != nil {
+		return nil, err
+	}
+
+	return &idlessRequester{Requester: requester}, nil
+}
+
+type idlessRequester struct {
+	oauth2.Requester
+}
+
+func (r *idlessRequester) GetID() (id string) {
+	return ""
 }

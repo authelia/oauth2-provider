@@ -167,19 +167,19 @@ func TestCheckGrantableScopesFromTheTokenGrant(t *testing.T) {
 	}{
 		{
 			name:          "ShouldAcceptAScopeInsideTheGrant",
-			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid", "profile"),
+			authenticated: newAuthenticated("authelia:oauth2:dynamic-client-registration", "openid", "profile"),
 			requested:     "openid profile",
 		},
 		{
 			name:          "ShouldRejectAScopeOutsideTheGrant",
-			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid"),
+			authenticated: newAuthenticated("authelia:oauth2:dynamic-client-registration", "openid"),
 			requested:     "openid profile",
 			err:           "invalid_client_metadata",
 		},
 		{
 			name:          "ShouldRejectTheRegistrationScopeEvenThoughTheTokenHoldsIt",
-			authenticated: newAuthenticated("authelia:oauth2:client_registration", "openid"),
-			requested:     "authelia:oauth2:client_registration",
+			authenticated: newAuthenticated("authelia:oauth2:dynamic-client-registration", "openid"),
+			requested:     "authelia:oauth2:dynamic-client-registration",
 			err:           "invalid_client_metadata",
 		},
 		{
@@ -210,11 +210,11 @@ func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
 	ctx := context.Background()
 	config := &oauth2.Config{
 		ScopeStrategy:                   oauth2.ExactScopeStrategy,
-		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:dynamic-client-registration", "urn:example:register"},
 	}
 
 	authenticated := oauth2.NewRequest()
-	authenticated.GrantScope("authelia:oauth2:client_registration")
+	authenticated.GrantScope("authelia:oauth2:dynamic-client-registration")
 	authenticated.GrantScope("urn:example:register")
 	authenticated.GrantScope("read")
 
@@ -225,8 +225,8 @@ func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
 	}{
 		{
 			name:     "ShouldRejectPrimaryRegistrationScope",
-			scope:    "authelia:oauth2:client_registration",
-			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes 'authelia:oauth2:client_registration' which the presented Client Registration Token is not permitted to grant.",
+			scope:    "authelia:oauth2:dynamic-client-registration",
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The request requested the scopes 'authelia:oauth2:dynamic-client-registration' which the presented Client Registration Token is not permitted to grant.",
 		},
 		{
 			name:     "ShouldRejectSecondaryRegistrationScope",
@@ -252,11 +252,11 @@ func TestCheckGrantableScopesRejectsEveryRegistrationScope(t *testing.T) {
 func TestExcludeRegistrationScopeStripsEveryConfiguredScope(t *testing.T) {
 	ctx := context.Background()
 	config := &oauth2.Config{
-		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:dynamic-client-registration", "urn:example:register"},
 	}
 
 	filtered := ExcludeRegistrationScope(ctx, config, oauth2.Arguments{
-		"authelia:oauth2:client_registration", "read", "urn:example:register", "write",
+		"authelia:oauth2:dynamic-client-registration", "read", "urn:example:register", "write",
 	})
 
 	assert.Equal(t, oauth2.Arguments{"read", "write"}, filtered)
@@ -265,10 +265,10 @@ func TestExcludeRegistrationScopeStripsEveryConfiguredScope(t *testing.T) {
 func TestExcludeRegistrationScopeFromMetadataStripsEveryConfiguredScope(t *testing.T) {
 	ctx := context.Background()
 	config := &oauth2.Config{
-		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:client_registration", "urn:example:register"},
+		RFC7591ClientRegistrationScopes: []string{"authelia:oauth2:dynamic-client-registration", "urn:example:register"},
 	}
 
-	metadata := &oauth2.ClientRegistrationMetadata{Scope: "authelia:oauth2:client_registration read urn:example:register write"}
+	metadata := &oauth2.ClientRegistrationMetadata{Scope: "authelia:oauth2:dynamic-client-registration read urn:example:register write"}
 
 	ExcludeRegistrationScopeFromMetadata(ctx, config, metadata)
 

@@ -47,6 +47,14 @@ type ClientRegistrationMetadataStrategy interface {
 	FilterClientRegistrationMetadata(ctx context.Context, client Client, metadata *ClientRegistrationMetadata) (err error)
 }
 
+// ClientRegistrationCustomMetadataStrategy is an optional interface a ClientRegistrationMetadataStrategy implements to
+// declare the custom client metadata attribute names it recognises. RFC 7591 Section 2 permits extension parameters, and
+// a registration policy may constrain a declared name.
+type ClientRegistrationCustomMetadataStrategy interface {
+	// GetClientRegistrationCustomMetadata returns the declared custom client metadata attribute names.
+	GetClientRegistrationCustomMetadata(ctx context.Context) (names []string)
+}
+
 // ClientRegistrationEndpointAuthStrategy authenticates requests made to the client registration and client
 // configuration endpoints.
 type ClientRegistrationEndpointAuthStrategy interface {

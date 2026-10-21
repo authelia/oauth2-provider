@@ -299,6 +299,7 @@ type Configurator interface {
 	MTLSStrictRefreshTokenBindingProvider
 	OIDCKeyBindingConfigProvider
 	RFC7591ClientRegistrationConfigProvider
+	RFC7591ClientRegistrationPolicyProvider
 	RFC7591ClientRegistrationEndpointHandlersProvider
 	RFC7592ClientConfigurationEndpointHandlersProvider
 }

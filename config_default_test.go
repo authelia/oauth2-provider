@@ -83,7 +83,7 @@ func TestConfigRFC7591ClientRegistrationEndpointAudiencesAndScopes(t *testing.T)
 		config := &Config{}
 
 		assert.Empty(t, config.GetRFC7591ClientRegistrationEndpointAudiences(ctx))
-		assert.Equal(t, []string{"authelia:oauth2:client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:dynamic-client-registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 
 	t.Run("Configured", func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestConfigRFC7591ClientRegistrationEndpointAudiencesAndScopes(t *testing.T)
 	t.Run("ExplicitlyEmptyScopesStillDefaults", func(t *testing.T) {
 		config := &Config{RFC7591ClientRegistrationScopes: []string{}}
 
-		assert.Equal(t, []string{"authelia:oauth2:client_registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
+		assert.Equal(t, []string{"authelia:oauth2:dynamic-client-registration"}, config.GetRFC7591ClientRegistrationScopes(ctx))
 	})
 }
 

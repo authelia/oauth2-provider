@@ -130,6 +130,29 @@ func CheckGrantableResource(ctx context.Context, config oauth2.ResourceStrategyP
 	return nil
 }
 
+func rejectRegistrationScopes(ctx context.Context, config ScopeCeilingConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata == nil {
+		return nil
+	}
+
+	var (
+		registration = config.GetRFC7591ClientRegistrationScopes(ctx)
+		excess       []string
+	)
+
+	for _, scope := range metadata.GetScopes() {
+		if isRegistrationScope(ctx, config, registration, scope) {
+			excess = append(excess, scope)
+		}
+	}
+
+	if len(excess) != 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The request requested the scopes '%s' which the presented Client Registration Token is not permitted to grant.", strings.Join(excess, "', '")))
+	}
+
+	return nil
+}
+
 func isRegistrationScope(ctx context.Context, config any, registration []string, scope string) bool {
 	if slices.Contains(registration, scope) {
 		return true

@@ -61,7 +61,7 @@ func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
 		require.Error(t, err)
-		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:client_registration', at least one of which is required.")
+		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'authelia:oauth2:dynamic-client-registration', at least one of which is required.")
 	})
 
 	t.Run("ShouldAcceptARegistrationScopedToken", func(t *testing.T) {

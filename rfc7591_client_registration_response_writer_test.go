@@ -69,7 +69,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 
 	t.Run("ShouldNameTheRequiredScopeOnAnInsufficientScope", func(t *testing.T) {
 		rfc := ErrInsufficientScope.WithHint("nope")
-		rfc.ScopeField = "authelia:oauth2:client_registration"
+		rfc.ScopeField = "authelia:oauth2:dynamic-client-registration"
 
 		rw := httptest.NewRecorder()
 
@@ -77,7 +77,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, rw.Code)
 		assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `error="insufficient_scope"`)
-		assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `scope="authelia:oauth2:client_registration"`)
+		assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `scope="authelia:oauth2:dynamic-client-registration"`)
 	})
 
 	t.Run("ShouldLeaveAMalformedRequestAlone", func(t *testing.T) {

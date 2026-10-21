@@ -212,7 +212,11 @@ func TestClientConfigurationHandlerUpdateRejectsWrongClientSecret(t *testing.T) 
 
 func TestClientConfigurationHandlerUpdateAcceptsCorrectClientSecretAndStripsExtra(t *testing.T) {
 	ctx := context.Background()
-	handler, registrar, _, store := newConfigurationHandler(t)
+	handler, registrar, config, store := newConfigurationHandler(t)
+
+	strategy := NewDefaultClientRegistrationMetadataStrategy(config)
+	strategy.CustomMetadata = []string{"custom_field"}
+	config.RFC7591ClientRegistrationMetadataStrategy = strategy
 
 	created := registerClient(t, ctx, registrar)
 	id := created["client_id"].(string)
@@ -226,9 +230,13 @@ func TestClientConfigurationHandlerUpdateAcceptsCorrectClientSecretAndStripsExtr
 	requester.Metadata = &oauth2.ClientRegistrationMetadata{
 		RedirectURIs: []string{"https://example.com/other"},
 		Extra: map[string]any{
-			"client_id":     id,
-			"client_secret": secret,
-			"custom_field":  "keep-me",
+			"client_id":       id,
+			"client_secret":   secret,
+			"custom_field":    "keep-me",
+			"custom_field#fr": "garde-moi",
+			"client_name#en":  "Example",
+			"jwks_uri#en":     "https://example.com/jwks",
+			"undeclared":      "drop-me",
 		},
 	}
 
@@ -244,7 +252,7 @@ func TestClientConfigurationHandlerUpdateAcceptsCorrectClientSecretAndStripsExtr
 
 	assert.NotContains(t, registered.Extra, "client_id")
 	assert.NotContains(t, registered.Extra, "client_secret")
-	assert.Equal(t, "keep-me", registered.Extra["custom_field"])
+	assert.Equal(t, map[string]any{"custom_field": "keep-me", "custom_field#fr": "garde-moi", "client_name#en": "Example"}, registered.Extra)
 }
 
 func TestClientConfigurationHandlerDeletes(t *testing.T) {
@@ -329,9 +337,9 @@ func TestClientConfigurationHandlerRejectsRegistrationScopeInMetadata(t *testing
 		RedirectURIs:  []string{"https://example.com/cb"},
 		GrantTypes:    []string{"authorization_code"},
 		ResponseTypes: []string{"code"},
-		Scope:         "authelia:oauth2:client_registration",
+		Scope:         "authelia:oauth2:dynamic-client-registration",
 	}
-	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:dynamic-client-registration", "openid"})
 
 	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
@@ -356,7 +364,7 @@ func TestClientConfigurationHandlerRotatedManagementTokenExcludesRegistrationSco
 		ResponseTypes: []string{"code"},
 		Scope:         "openid",
 	}
-	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
+	requester.Authenticated = grantableFixture(id, oauth2.Arguments{"authelia:oauth2:dynamic-client-registration", "openid"})
 
 	responder := oauth2.NewClientRegistrationResponse()
 	require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
@@ -369,7 +377,7 @@ func TestClientConfigurationHandlerRotatedManagementTokenExcludesRegistrationSco
 	require.NoError(t, err)
 
 	granted := next.GetGrantedScopes()
-	assert.NotContains(t, granted, "authelia:oauth2:client_registration")
+	assert.NotContains(t, granted, "authelia:oauth2:dynamic-client-registration")
 	assert.Contains(t, granted, "openid")
 }
 

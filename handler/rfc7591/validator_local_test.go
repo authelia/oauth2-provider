@@ -202,6 +202,63 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'subject_type' value 'sectoral' is not a recognized subject type.",
 		},
 		{
+			name: "ShouldRejectPairwiseWithMultipleRedirectURIHostsAndNoSectorIdentifierURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://a.example.com/cb", "https://b.example.com/cb"},
+				SubjectType:  consts.SubjectTypePairwise,
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'subject_type' value 'pairwise' requires a 'sector_identifier_uri' when the 'redirect_uris' values name more than one host.",
+		},
+		{
+			name: "ShouldAcceptPairwiseWithMultipleRedirectURIHostsAndSectorIdentifierURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:        []string{"https://e.example.com/cb", "https://f.example.com/cb"},
+				SubjectType:         consts.SubjectTypePairwise,
+				SectorIdentifierURI: pairwiseSectorIdentifierURI,
+			},
+		},
+		{
+			name: "ShouldAcceptPairwiseWithOneRedirectURIHost",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb", "https://EXAMPLE.com:8443/other"},
+				SubjectType:  consts.SubjectTypePairwise,
+			},
+		},
+		{
+			name: "ShouldRejectPairwiseWithHostlessRedirectURIAndNoSectorIdentifierURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:    []string{pairwiseHostlessRedirectURI},
+				ApplicationType: consts.ApplicationTypeNative,
+				SubjectType:     consts.SubjectTypePairwise,
+			},
+			expected: pairwiseHostlessExpected,
+		},
+		{
+			name: "ShouldRejectPairwiseWithMixedHostlessRedirectURIAndNoSectorIdentifierURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:    []string{"https://g.example.com/cb", pairwiseHostlessRedirectURI},
+				ApplicationType: consts.ApplicationTypeNative,
+				SubjectType:     consts.SubjectTypePairwise,
+			},
+			expected: pairwiseHostlessExpected,
+		},
+		{
+			name: "ShouldAcceptPairwiseWithHostlessRedirectURIAndSectorIdentifierURI",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:        []string{pairwiseHostlessRedirectURI},
+				ApplicationType:     consts.ApplicationTypeNative,
+				SubjectType:         consts.SubjectTypePairwise,
+				SectorIdentifierURI: pairwiseSectorIdentifierURI,
+			},
+		},
+		{
+			name: "ShouldAcceptPublicWithMultipleRedirectURIHosts",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://c.example.com/cb", "https://d.example.com/cb"},
+				SubjectType:  consts.SubjectTypePublic,
+			},
+		},
+		{
 			name: "ShouldRejectNoneIDTokenSignedResponseAlg",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:             []string{"https://example.com/cb"},
@@ -661,3 +718,9 @@ func TestLocalValidatorAuthorizationGrantProfiles(t *testing.T) {
 		})
 	}
 }
+
+const (
+	pairwiseSectorIdentifierURI = "https://example.com/sector.json"
+	pairwiseHostlessRedirectURI = "com.example.app:/cb"
+	pairwiseHostlessExpected    = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'subject_type' value 'pairwise' requires a 'sector_identifier_uri' when a 'redirect_uris' value has no host."
+)

@@ -81,6 +81,34 @@ func TestClientConfigurationHandlerUpdateReplaces(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestClientConfigurationHandlerUpdateRejectsSectorIdentifierURIByDefault(t *testing.T) {
+	ctx := context.Background()
+	handler, registrar, _, store := newConfigurationHandler(t)
+
+	created := registerClient(t, ctx, registrar)
+	id := created["client_id"].(string)
+
+	requester := oauth2.NewClientConfigurationRequest()
+	requester.Method = http.MethodPut
+	requester.ClientID = id
+	requester.Signature = handler.Strategy.ClientRegistrationTokenSignature(ctx, created["registration_access_token"].(string))
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:        []string{"https://example.com/cb"},
+		SectorIdentifierURI: testSectorIdentifierURI,
+	}
+
+	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'https://example.com/sector.json' is not supported as it cannot be validated by this authorization server.")
+
+	client, err := store.GetClient(ctx, id)
+	require.NoError(t, err)
+
+	registered, ok := client.(*oauth2.DefaultRegisteredClient)
+	require.True(t, ok)
+	assert.Empty(t, registered.SectorIdentifierURI)
+}
+
 // RFC 7592 §2.2: an update replaces the client's metadata, so a PUT carrying none is rejected.
 func TestClientConfigurationHandlerUpdateRejectsNilMetadata(t *testing.T) {
 	ctx := context.Background()

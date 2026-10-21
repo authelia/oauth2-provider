@@ -127,6 +127,40 @@ func TestClientRegistrationHandlerValidatesByDefault(t *testing.T) {
 	assert.Empty(t, store.Clients)
 }
 
+func TestClientRegistrationHandlerRejectsSectorIdentifierURIByDefault(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	require.Nil(t, config.GetRFC7591ClientRegistrationValidators(ctx))
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:        []string{"https://example.com/cb"},
+		SectorIdentifierURI: testSectorIdentifierURI,
+	}
+
+	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+	require.Error(t, err)
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'https://example.com/sector.json' is not supported as it cannot be validated by this authorization server.")
+	assert.Empty(t, store.Clients)
+}
+
+func TestClientRegistrationHandlerLeavesSectorIdentifierURIToConfiguredValidators(t *testing.T) {
+	ctx := context.Background()
+	handler, config, store := newRegistrationHandler(t)
+
+	config.RFC7591ClientRegistrationValidators = []oauth2.ClientRegistrationValidator{NewLocalValidator(config)}
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:        []string{"https://example.com/cb"},
+		SectorIdentifierURI: testSectorIdentifierURI,
+	}
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse()))
+	assert.Len(t, store.Clients, 1)
+}
+
 func TestClientRegistrationHandlerHonoursExplicitlyEmptyValidators(t *testing.T) {
 	ctx := context.Background()
 	handler, config, store := newRegistrationHandler(t)
@@ -660,3 +694,5 @@ type otherTypeHandler struct {
 func (otherTypeHandler) Type() string {
 	return testAuthorizationDetailsTypeOther
 }
+
+const testSectorIdentifierURI = "https://example.com/sector.json"

@@ -14,6 +14,6 @@ const (
 
 // The following scopes are special scopes for particular purposes.
 const (
-	ScopeClientRegistration = "authelia:oauth2:client_registration"
+	ScopeClientRegistration = "authelia:oauth2:dynamic-client-registration"
 	ScopeIntrospection      = "authelia:oauth2:token_introspection"
 )

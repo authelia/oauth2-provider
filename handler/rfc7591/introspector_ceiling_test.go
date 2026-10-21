@@ -103,3 +103,45 @@ func TestManagementTokenKeepsItsCeilingsAfterIntrospection(t *testing.T) {
 	assert.True(t, stored.GetGrantedScopes().Has("admin"))
 	assert.True(t, stored.GetGrantedAudience().Has("https://api.example.com"))
 }
+
+func TestIntrospectionDoesNotReportThePolicyOfAManagementToken(t *testing.T) {
+	ctx := context.Background()
+
+	policy := map[string]any{"client_name": map[string]any{"one_of": []any{"a"}}}
+
+	for name, store := range map[string]Storage{
+		"MemoryStore":          storage.NewMemoryStore(),
+		"HydratingMemoryStore": storage.NewHydratingMemoryStore(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+				TokenEntropy:                          32,
+			}
+
+			strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+			introspector := &ClientRegistrationTokenIntrospector{Store: store, Strategy: strategy, Config: config}
+
+			token, err := NewClientManagementTokenWithPolicy(ctx, strategy, store, config, &oauth2.DefaultClient{ID: "onboarding"}, policy)
+			require.NoError(t, err)
+
+			request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+			_, err = introspector.IntrospectToken(ctx, token, oauth2.AccessToken, request, nil)
+			require.NoError(t, err)
+
+			reported, ok := request.GetSession().(oauth2.ExtraClaimsSession)
+			require.True(t, ok)
+			assert.NotContains(t, reported.GetExtraClaims(), consts.ClientRegistrationPolicyInternalKey)
+
+			stored, err := store.GetClientRegistrationTokenSession(ctx, strategy.ClientRegistrationTokenSignature(ctx, token), &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			session, ok := stored.GetSession().(oauth2.ExtraClaimsSession)
+			require.True(t, ok)
+			assert.Contains(t, session.GetExtraClaims(), consts.ClientRegistrationPolicyInternalKey)
+		})
+	}
+}

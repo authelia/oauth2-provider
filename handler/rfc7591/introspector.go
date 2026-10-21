@@ -7,9 +7,11 @@ package rfc7591
 import (
 	"context"
 	"errors"
+	"maps"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -28,7 +30,8 @@ type ClientRegistrationTokenIntrospector struct {
 // IntrospectToken implements oauth2.TokenIntrospector. A client registration token's granted scopes, audience and
 // resource are the ceilings it may grant to clients (see CheckGrantableScopes), not the token's own access, so the
 // scopes filter is not applied and none of them are reported. RFC 7592 Appendix A limits the token to the client
-// configuration endpoint, which is the only audience reported.
+// configuration endpoint, which is the only audience reported. The registration policy of the token is likewise not
+// reported.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7592#appendix-A
 func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, _ []string) (use oauth2.TokenUse, err error) {
@@ -57,7 +60,7 @@ func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Contex
 		RequestedAt: original.GetRequestedAt(),
 		Client:      original.GetClient(),
 		Form:        original.GetRequestForm(),
-		Session:     original.GetSession(),
+		Session:     reportedManagementSession(original.GetSession()),
 	}
 
 	if audience := ClientConfigurationURL(v.Config.GetRFC7591ClientRegistrationEndpointURL(ctx), original.GetClient().GetID()); original.GetGrantedAudience().Has(audience) {
@@ -69,4 +72,41 @@ func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Contex
 	return oauth2.ClientRegistrationToken, nil
 }
 
-var _ oauth2.TokenIntrospector = (*ClientRegistrationTokenIntrospector)(nil)
+// reportedManagementSession returns session without the stored registration policy. The session is never changed in
+// place as a store may return the value it holds.
+func reportedManagementSession(session oauth2.Session) oauth2.Session {
+	claims, ok := session.(oauth2.ExtraClaimsSession)
+	if !ok {
+		return session
+	}
+
+	if _, ok = claims.GetExtraClaims()[consts.ClientRegistrationPolicyInternalKey]; !ok {
+		return session
+	}
+
+	return &policyOmittedSession{Session: session}
+}
+
+// policyOmittedSession is an oauth2.Session whose extra claims omit the stored registration policy.
+type policyOmittedSession struct {
+	oauth2.Session
+}
+
+// GetExtraClaims implements oauth2.ExtraClaimsSession.
+func (s *policyOmittedSession) GetExtraClaims() (claims map[string]any) {
+	claims = maps.Clone(s.Session.(oauth2.ExtraClaimsSession).GetExtraClaims())
+
+	delete(claims, consts.ClientRegistrationPolicyInternalKey)
+
+	return claims
+}
+
+// Clone implements oauth2.Session.
+func (s *policyOmittedSession) Clone() oauth2.Session {
+	return &policyOmittedSession{Session: s.Session.Clone()}
+}
+
+var (
+	_ oauth2.TokenIntrospector  = (*ClientRegistrationTokenIntrospector)(nil)
+	_ oauth2.ExtraClaimsSession = (*policyOmittedSession)(nil)
+)

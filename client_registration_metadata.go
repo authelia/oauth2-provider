@@ -141,6 +141,7 @@ type ClientRegistrationMetadata struct {
 	Audience                            []string `json:"audience,omitempty"`
 	Resource                            []string `json:"resource,omitempty"`
 	AuthorizationDetailsTypes           []string `json:"authorization_details_types,omitempty"`
+	SoftwareStatementMembers            []string `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter so it survives a registration round trip.
 	Extra map[string]any `json:"-"`

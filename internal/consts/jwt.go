@@ -28,6 +28,11 @@ const (
 	// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.1
 	JSONWebTokenTypeAccessToken = "at+jwt"
 
+	// JSONWebTokenTypeSoftwareStatement is the JWT type value suggested for an RFC 7591 Section 2.3 software statement,
+	// following the RFC 8725 Section 3.11 naming convention. No type is registered for software statements, so which
+	// types are accepted is configurable; this one is allowed by default alongside 'JWT'.
+	JSONWebTokenTypeSoftwareStatement = "software-statement+jwt"
+
 	// JSONWebTokenTypeLogoutToken represents the JWT type value for OpenID Connect Back-Channel Logout 1.0.
 	//
 	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#Security

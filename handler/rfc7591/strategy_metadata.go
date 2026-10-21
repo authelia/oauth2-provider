@@ -6,6 +6,8 @@ package rfc7591
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -29,6 +31,10 @@ type ClientRegistrationMetadataStrategyConfig interface {
 // filtered metadata, so a client registered or updated while a feature is disabled loses that feature's values in
 // storage too.
 type DefaultClientRegistrationMetadataStrategy struct {
+	// CustomMetadata is the list of custom client metadata attribute names this server recognises, which
+	// GetClientRegistrationCustomMetadata returns.
+	CustomMetadata []string
+
 	config ClientRegistrationMetadataStrategyConfig
 }
 
@@ -67,6 +73,11 @@ func (s *DefaultClientRegistrationMetadataStrategy) FilterClientRegistrationMeta
 	return nil
 }
 
+// GetClientRegistrationCustomMetadata implements oauth2.ClientRegistrationCustomMetadataStrategy.
+func (s *DefaultClientRegistrationMetadataStrategy) GetClientRegistrationCustomMetadata(ctx context.Context) (names []string) {
+	return s.CustomMetadata
+}
+
 func clearMutualTLSAuthMethod(method string) string {
 	switch method {
 	case consts.ClientAuthMethodTLSClientAuth, consts.ClientAuthMethodSelfSignedTLSClientAuth:
@@ -86,6 +97,51 @@ func metadataStrategy(ctx context.Context, config Configurator) (strategy oauth2
 	return NewDefaultClientRegistrationMetadataStrategy(config)
 }
 
+func customMetadata(ctx context.Context, config Configurator) (names []string) {
+	if strategy, ok := metadataStrategy(ctx, config).(oauth2.ClientRegistrationCustomMetadataStrategy); ok {
+		return strategy.GetClientRegistrationCustomMetadata(ctx)
+	}
+
+	return nil
+}
+
+// dropUnrecognisedMetadata removes every unregistered client metadata parameter except the custom names the metadata
+// strategy declares and the language tagged variants (RFC 7591 Section 2.2, OpenID Connect Dynamic Client
+// Registration 1.0 Section 2.1) of those names and of the human-readable members. RFC 7591 Section 2 requires metadata
+// the server does not understand to be ignored, and a registration policy can only constrain a name it knows.
+func dropUnrecognisedMetadata(ctx context.Context, config Configurator, metadata *oauth2.ClientRegistrationMetadata) {
+	if len(metadata.Extra) == 0 {
+		return
+	}
+
+	custom := customMetadata(ctx, config)
+
+	for name := range metadata.Extra {
+		if slices.Contains(custom, name) {
+			continue
+		}
+
+		if base, tag, ok := strings.Cut(name, "#"); ok && tag != "" && (slices.Contains(humanReadableMetadata, base) || slices.Contains(custom, base)) {
+			continue
+		}
+
+		delete(metadata.Extra, name)
+	}
+
+	if len(metadata.Extra) == 0 {
+		metadata.Extra = nil
+	}
+}
+
+var humanReadableMetadata = []string{
+	consts.ClientMetadataClientName,
+	consts.ClientMetadataClientURI,
+	consts.ClientMetadataLogoURI,
+	consts.ClientMetadataPolicyURI,
+	consts.ClientMetadataTOSURI,
+}
+
 var (
-	_ oauth2.ClientRegistrationMetadataStrategy = (*DefaultClientRegistrationMetadataStrategy)(nil)
+	_ oauth2.ClientRegistrationMetadataStrategy       = (*DefaultClientRegistrationMetadataStrategy)(nil)
+	_ oauth2.ClientRegistrationCustomMetadataStrategy = (*DefaultClientRegistrationMetadataStrategy)(nil)
 )

@@ -14,6 +14,27 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+func TestDefaultClientRegistrationMetadataStrategyCustomMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	strategy := &DefaultClientRegistrationMetadataStrategy{CustomMetadata: []string{policyTestCustom}}
+
+	assert.Equal(t, []string{policyTestCustom}, strategy.GetClientRegistrationCustomMetadata(ctx))
+	assert.Nil(t, (&DefaultClientRegistrationMetadataStrategy{}).GetClientRegistrationCustomMetadata(ctx))
+
+	var _ oauth2.ClientRegistrationCustomMetadataStrategy = strategy
+}
+
+func TestCustomMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	assert.Nil(t, customMetadata(ctx, &oauth2.Config{}))
+
+	config := &oauth2.Config{RFC7591ClientRegistrationMetadataStrategy: &DefaultClientRegistrationMetadataStrategy{CustomMetadata: []string{policyTestCustom}}}
+
+	assert.Equal(t, []string{policyTestCustom}, customMetadata(ctx, config))
+}
+
 func TestDefaultClientRegistrationMetadataStrategyStripsMTLSWhenDisabled(t *testing.T) {
 	strategy := NewDefaultClientRegistrationMetadataStrategy(&oauth2.Config{DPoPEnabled: true})
 

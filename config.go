@@ -590,6 +590,67 @@ type RFC7591ClientRegistrationConfigProvider interface {
 	GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string)
 }
 
+// RFC7591TrustedIssuer is an issuer trusted to sign JWTs presented at the client registration endpoint, with the
+// location of its JSON Web Key Set: either a JWT client creation token (RFC 7591 Section 3), with or without a
+// registration policy claim, or a software statement (RFC 7591 Section 2.3), depending on the list it appears in. A
+// creation token issuer is only consulted when the registration endpoint has a JWT strategy available. Only keys of
+// the set carrying an 'alg' and a 'use' of 'sig' are used to verify a JWT.
+type RFC7591TrustedIssuer struct {
+	// Issuer is the issuer identifier, compared against the iss claim of the token.
+	Issuer string
+
+	// JSONWebKeysURI is the URI of the issuer's JSON Web Key Set. Each signing key must carry 'alg' and 'use' of 'sig'.
+	// When empty, a creation token issuer's set is located through the 'jwks_uri' of its OpenID Connect Discovery 1.0
+	// metadata; a software statement issuer is skipped.
+	JSONWebKeysURI string
+}
+
+// RFC7591ClientRegistrationPolicyProvider is the configuration provider for the registration policy that constrains
+// the client metadata an authenticated registrant may register.
+type RFC7591ClientRegistrationPolicyProvider interface {
+	// GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim, on the registration access token, that
+	// carries the registration policy. It defaults to the access token issuer suffixed with
+	// ':authelia:authelia:oauth2:dynamic-client-registration:policy'.
+	GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string)
+
+	// GetRFC7591ClientRegistrationTrustedIssuers returns the issuers, other than this server, trusted to issue JWT
+	// client creation tokens, with or without a registration policy claim. They are only consulted when a JWT strategy
+	// is available, and their tokens are only accepted at the client registration endpoint.
+	GetRFC7591ClientRegistrationTrustedIssuers(ctx context.Context) (issuers []RFC7591TrustedIssuer)
+
+	// GetRFC7591ClientRegistrationPatternIssuers returns the trusted issuers whose registration policies may hold
+	// 'pattern' rules. A policy from this server may always hold them.
+	GetRFC7591ClientRegistrationPatternIssuers(ctx context.Context) (issuers []string)
+
+	// GetRFC7591SoftwareStatementIssuers returns the issuers whose software statements (RFC 7591 Section 2.3) are
+	// approved. A registration or update request carrying a software statement from any other issuer is rejected, so
+	// an empty list rejects every software statement.
+	GetRFC7591SoftwareStatementIssuers(ctx context.Context) (issuers []RFC7591TrustedIssuer)
+
+	RFC7591SoftwareStatementJWTValidationProvider
+}
+
+// RFC7591SoftwareStatementJWTValidationProvider is the configuration provider for how strictly a software statement
+// (RFC 7591 Section 2.3) is told apart from other JWTs signed by the same issuer, which RFC 8725 Sections 2.8 and 3.12
+// require of a deployment where such confusion is possible. RFC 7591 registers no JWT type for software statements;
+// issuers are encouraged to use the explicit type 'software-statement+jwt' (RFC 8725 Section 3.11) and deployments to
+// allow only that type once their issuers do.
+type RFC7591SoftwareStatementJWTValidationProvider interface {
+	// GetRFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType returns true if a software statement without a 'typ'
+	// header is accepted. A missing 'typ' is read as 'JWT', so it is only accepted when 'JWT' is an allowed type.
+	GetRFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType(ctx context.Context) (allow bool)
+
+	// GetRFC7591SoftwareStatementJWTValidationHeaderAllowTypes returns the 'typ' header values a software statement may
+	// carry, compared case-insensitively and also accepted with the 'application/' prefix. When empty it defaults to
+	// 'software-statement+jwt' alone, so a generic 'JWT' such as an ID token is not mistaken for a software statement.
+	GetRFC7591SoftwareStatementJWTValidationHeaderAllowTypes(ctx context.Context) (types []string)
+
+	// GetRFC7591SoftwareStatementRequireSoftwareID returns true if a software statement must carry a non-empty
+	// 'software_id' claim, which RFC 7591 Section 2.3 recommends but does not require. A JWT of another kind from the
+	// same issuer, such as an ID Token, typically lacks one.
+	GetRFC7591SoftwareStatementRequireSoftwareID(ctx context.Context) (require bool)
+}
+
 // RFC7591ClientRegistrationEndpointHandlersProvider returns the provider for configuring the client registration
 // endpoint handlers.
 type RFC7591ClientRegistrationEndpointHandlersProvider interface {

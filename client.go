@@ -72,6 +72,16 @@ type ClientIDIssuedAtClient interface {
 	Client
 }
 
+// SoftwareStatementClient extends Client interface by a method naming the metadata members whose values were taken
+// from a verified software statement (RFC 7591 Section 2.3). RFC 7591 Section 5 requires every other value to be
+// treated as self-asserted, so a consent screen or a registration check that relies on a value being vouched for by
+// the statement issuer consults this rather than the presence of a 'software_statement'.
+type SoftwareStatementClient interface {
+	GetSoftwareStatementMembers() (members []string)
+
+	Client
+}
+
 // ExpiringClientSecretClient extends Client interface by a method providing the time the client secret expires. A
 // zero time means the secret does not expire, which RFC 7591 Section 3.2.1 also assigns to a
 // 'client_secret_expires_at' of 0.

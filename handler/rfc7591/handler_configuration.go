@@ -127,6 +127,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
 	}
 
+	if err = applySoftwareStatement(ctx, h.Config, metadata); err != nil {
+		return err
+	}
+
 	filter := metadataStrategy(ctx, h.Config)
 
 	if err = filter.FilterClientRegistrationMetadata(ctx, client, metadata); err != nil {
@@ -137,22 +141,44 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	dropUnrecognisedMetadata(ctx, h.Config, metadata)
+
 	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, client, metadata); err != nil {
 			return err
 		}
 	}
 
-	if err = CheckGrantableScopes(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
+	authenticated := requester.GetAuthenticatedRequester()
+
+	var policy *RegistrationPolicy
+
+	if policy, _, err = registrationPolicy(ctx, h.Config, authenticated); err != nil {
 		return err
 	}
 
-	if err = CheckGrantableAudience(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
-		return err
-	}
+	// A management token minted under a registration policy is bounded by the policy alone, as at registration; a
+	// registration scope stays unobtainable either way. 'max_registrations' is never consulted on update.
+	if policy != nil {
+		if err = policy.Check(metadata); err != nil {
+			return err
+		}
 
-	if err = CheckGrantableResource(ctx, h.Config, requester.GetAuthenticatedRequester(), metadata); err != nil {
-		return err
+		if err = rejectRegistrationScopes(ctx, h.Config, metadata); err != nil {
+			return err
+		}
+	} else {
+		if err = CheckGrantableScopes(ctx, h.Config, authenticated, metadata); err != nil {
+			return err
+		}
+
+		if err = CheckGrantableAudience(ctx, h.Config, authenticated, metadata); err != nil {
+			return err
+		}
+
+		if err = CheckGrantableResource(ctx, h.Config, authenticated, metadata); err != nil {
+			return err
+		}
 	}
 
 	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
@@ -171,25 +197,31 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	registrationClientURI := ClientConfigurationURL(h.Config.GetRFC7591ClientRegistrationEndpointURL(ctx), id)
 
-	grantable := oauth2.Arguments(nil)
-	grantableAudience := oauth2.Arguments(nil)
-	grantableResource := oauth2.Arguments(nil)
-
-	// The authenticated requester carries the client registration token's own grant; a custom
-	// oauth2.ClientRegistrationEndpointAuthStrategy must honour the same contract.
-	if authenticated := requester.GetAuthenticatedRequester(); authenticated != nil {
-		grantable = authenticated.GetGrantedScopes()
-		grantableAudience = authenticated.GetGrantedAudience()
-		grantableResource = authenticated.GetGrantedResource()
-	}
-
-	// The registration scope is never carried forward onto the rotated management token, even if the token
-	// authenticating this update somehow held it: see ExcludeRegistrationScope.
-	grantable = ExcludeRegistrationScope(ctx, h.Config, grantable)
-
 	var token string
 
-	if token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable, grantableAudience, grantableResource); err != nil {
+	if policy != nil {
+		token, err = NewClientManagementTokenWithPolicy(ctx, h.Strategy, h.Store, h.Config, patched, policy.WithoutMaxRegistrations())
+	} else {
+		grantable := oauth2.Arguments(nil)
+		grantableAudience := oauth2.Arguments(nil)
+		grantableResource := oauth2.Arguments(nil)
+
+		// The authenticated requester carries the client registration token's own grant; a custom
+		// oauth2.ClientRegistrationEndpointAuthStrategy must honour the same contract.
+		if authenticated != nil {
+			grantable = authenticated.GetGrantedScopes()
+			grantableAudience = authenticated.GetGrantedAudience()
+			grantableResource = authenticated.GetGrantedResource()
+		}
+
+		// The registration scope is never carried forward onto the rotated management token, even if the token
+		// authenticating this update somehow held it: see ExcludeRegistrationScope.
+		grantable = ExcludeRegistrationScope(ctx, h.Config, grantable)
+
+		token, err = NewClientManagementToken(ctx, h.Strategy, h.Store, h.Config, patched, grantable, grantableAudience, grantableResource)
+	}
+
+	if err != nil {
 		// The replacement client metadata is already persisted, but no replacement token was minted. The client's
 		// existing management token (not yet deleted, see below) still works, so nothing is lost.
 		return err

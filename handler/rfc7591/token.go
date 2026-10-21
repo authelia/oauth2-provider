@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -30,6 +31,16 @@ func NewClientManagementToken(ctx context.Context, strategy ClientRegistrationTo
 	// A management token never expires, as RFC 7592 provides no way to re-issue a registration_access_token. The
 	// lifespan is not routed through oauth2.GetEffectiveLifespan, so a CustomTokenLifespansClient cannot shorten it.
 	return newClientRegistrationToken(ctx, strategy, store, client, &oauth2.DefaultSession{}, ClientConfigurationURL(config.GetRFC7591ClientRegistrationEndpointURL(ctx), id), NonExpiringTokenLifespan, scopes, audience, resource)
+}
+
+// NewClientManagementTokenWithPolicy mints a client management token, as NewClientManagementToken does, for a client
+// registered under a registration policy. It records no scope, audience or resource ceilings and instead carries the
+// policy in its session's extra claims under consts.ClientRegistrationPolicyInternalKey, so an update through it is
+// bounded by the policy alone. The policy must not hold 'max_registrations', which only applies to client creation.
+func NewClientManagementTokenWithPolicy(ctx context.Context, strategy ClientRegistrationTokenStrategy, store Storage, config oauth2.RFC7591ClientRegistrationConfigProvider, client oauth2.Client, policy map[string]any) (tokenString string, err error) {
+	session := &oauth2.DefaultSession{Extra: map[string]any{consts.ClientRegistrationPolicyInternalKey: policy}}
+
+	return newClientRegistrationToken(ctx, strategy, store, client, session, ClientConfigurationURL(config.GetRFC7591ClientRegistrationEndpointURL(ctx), client.GetID()), NonExpiringTokenLifespan, nil, nil, nil)
 }
 
 // newClientRegistrationToken mints and persists a client registration access token. A zero lifespan means the token

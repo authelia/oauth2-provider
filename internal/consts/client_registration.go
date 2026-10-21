@@ -36,6 +36,12 @@ const (
 	ClientMetadataSubjectType                  = "subject_type"
 	ClientMetadataInitiateLoginURI             = "initiate_login_uri"
 	ClientMetadataSoftwareStatement            = "software_statement"
+	ClientMetadataSoftwareID                   = "software_id"
+	ClientMetadataClientName                   = "client_name"
+	ClientMetadataClientURI                    = "client_uri"
+	ClientMetadataLogoURI                      = "logo_uri"
+	ClientMetadataPolicyURI                    = "policy_uri"
+	ClientMetadataTOSURI                       = "tos_uri"
 	ClientMetadataTokenEndpointAuthAlg         = "token_endpoint_auth_signing_alg"
 	ClientMetadataIDTokenSignedResponseAlg     = "id_token_signed_response_alg"
 	ClientMetadataIDTokenEncryptedResponseAlg  = "id_token_encrypted_response_alg"
@@ -87,4 +93,10 @@ const (
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-8
 const (
 	ClientMetadataAuthorizationGrantProfilesSupported = "authorization_grant_profiles_supported"
+)
+
+// ClientRegistrationPolicyInternalKey is the fixed session extra claim key under which a client management token
+// carries the registration policy it inherited, regardless of the configured claim name.
+const (
+	ClientRegistrationPolicyInternalKey = "authelia_registration_policy"
 )

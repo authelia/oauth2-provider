@@ -65,6 +65,67 @@ func TestMemoryStore_Authenticate(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreClientRegistrationCounter(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("ShouldReserveUpToMaxThenReject", func(t *testing.T) {
+		s := NewMemoryStore()
+
+		require.NoError(t, s.ReserveClientRegistration(ctx, "session:a", 2))
+		require.NoError(t, s.ReserveClientRegistration(ctx, "session:a", 2))
+		assert.ErrorIs(t, s.ReserveClientRegistration(ctx, "session:a", 2), oauth2.ErrClientRegistrationLimitReached)
+		assert.NoError(t, s.ReserveClientRegistration(ctx, "session:b", 2))
+	})
+
+	t.Run("ShouldReserveAfterRelease", func(t *testing.T) {
+		s := NewMemoryStore()
+
+		require.NoError(t, s.ReserveClientRegistration(ctx, "session:a", 1))
+		require.ErrorIs(t, s.ReserveClientRegistration(ctx, "session:a", 1), oauth2.ErrClientRegistrationLimitReached)
+		require.NoError(t, s.ReleaseClientRegistration(ctx, "session:a"))
+		assert.NoError(t, s.ReserveClientRegistration(ctx, "session:a", 1))
+	})
+
+	t.Run("ShouldNotGoBelowZeroOnRelease", func(t *testing.T) {
+		s := NewMemoryStore()
+
+		require.NoError(t, s.ReleaseClientRegistration(ctx, "session:a"))
+		assert.Equal(t, int64(0), s.ClientRegistrationCounts["session:a"])
+		require.NoError(t, s.ReserveClientRegistration(ctx, "session:a", 1))
+		assert.ErrorIs(t, s.ReserveClientRegistration(ctx, "session:a", 1), oauth2.ErrClientRegistrationLimitReached)
+	})
+
+	t.Run("ShouldAllowExactlyOneConcurrentReservation", func(t *testing.T) {
+		for name, s := range map[string]oauth2.ClientRegistrationCounterStorage{"memory": NewMemoryStore(), "hydrating": NewHydratingMemoryStore()} {
+			var (
+				wg        sync.WaitGroup
+				mu        sync.Mutex
+				successes int
+			)
+
+			for range 50 {
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+
+					if s.ReserveClientRegistration(ctx, "session:a", 1) == nil {
+						mu.Lock()
+
+						successes++
+
+						mu.Unlock()
+					}
+				}()
+			}
+
+			wg.Wait()
+
+			assert.Equal(t, 1, successes, name)
+		}
+	})
+}
+
 func TestMemoryStoreDPoP(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
@@ -753,6 +814,8 @@ func TestExampleStoreInitialisesEveryMap(t *testing.T) {
 
 	require.NoError(t, s.CreateDeviceCodeSession(t.Context(), "device", request))
 	require.NoError(t, s.InvalidateDeviceCodeSession(t.Context(), "device"))
+
+	require.NoError(t, s.ReserveClientRegistration(t.Context(), "session:example", 1))
 
 	assert.Contains(t, s.Clients, "my-client")
 	assert.Contains(t, s.Users, "peter")

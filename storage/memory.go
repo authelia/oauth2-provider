@@ -162,6 +162,8 @@ type MemoryStore struct {
 	IDJAGResources           map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                map[JTIMarker]time.Time
 
+	ClientRegistrationCounts map[string]int64
+
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
 	idSessionsMutex               sync.RWMutex
@@ -179,6 +181,7 @@ type MemoryStore struct {
 	dpopProofJTIsMutex            sync.RWMutex
 	dpopNoncesMutex               sync.RWMutex
 	idjagMutex                    sync.RWMutex
+	clientRegistrationCountsMutex sync.Mutex
 
 	clientAssertionJTIsPruneAt time.Time
 	rfc7523JTIsPruneAt         time.Time
@@ -220,6 +223,7 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGTenants:             make(map[IDJAGTenantKey]struct{}),
 		IDJAGResources:           make(map[IDJAGResourceKey]struct{}),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
+		ClientRegistrationCounts: make(map[string]int64),
 	}
 }
 
@@ -1270,3 +1274,33 @@ func (s *MemoryStore) IsDPoPNonceValid(_ context.Context, nonce string) (bool, e
 
 	return exp.After(time.Now()), nil
 }
+
+// ReserveClientRegistration implements oauth2.ClientRegistrationCounterStorage.
+func (s *MemoryStore) ReserveClientRegistration(_ context.Context, key string, max int64) (err error) {
+	s.clientRegistrationCountsMutex.Lock()
+	defer s.clientRegistrationCountsMutex.Unlock()
+
+	if s.ClientRegistrationCounts[key] >= max {
+		return oauth2.ErrClientRegistrationLimitReached
+	}
+
+	s.ClientRegistrationCounts[key]++
+
+	return nil
+}
+
+// ReleaseClientRegistration implements oauth2.ClientRegistrationCounterStorage.
+func (s *MemoryStore) ReleaseClientRegistration(_ context.Context, key string) (err error) {
+	s.clientRegistrationCountsMutex.Lock()
+	defer s.clientRegistrationCountsMutex.Unlock()
+
+	if s.ClientRegistrationCounts[key] > 0 {
+		s.ClientRegistrationCounts[key]--
+	}
+
+	return nil
+}
+
+var (
+	_ oauth2.ClientRegistrationCounterStorage = (*MemoryStore)(nil)
+)

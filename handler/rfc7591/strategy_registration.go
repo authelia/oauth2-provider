@@ -113,6 +113,8 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		SoftwareStatement:       registered.SoftwareStatement,
 		SoftwareVersion:         registered.SoftwareVersion,
 
+		SoftwareStatementMembers: registered.SoftwareStatementMembers,
+
 		ApplicationType:              registered.ApplicationType,
 		SectorIdentifierURI:          registered.SectorIdentifierURI,
 		SubjectType:                  registered.SubjectType,
@@ -212,6 +214,7 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.SoftwareID = metadata.SoftwareID
 	registered.SoftwareStatement = metadata.SoftwareStatement
 	registered.SoftwareVersion = metadata.SoftwareVersion
+	registered.SoftwareStatementMembers = metadata.SoftwareStatementMembers
 
 	registered.ApplicationType = metadata.ApplicationType
 	registered.SectorIdentifierURI = metadata.SectorIdentifierURI

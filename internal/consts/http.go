@@ -34,6 +34,13 @@ const (
 )
 
 const (
+	// WellKnownOpenIDConfiguration is the path suffix of the OpenID Connect Discovery 1.0 metadata of an issuer.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest
+	WellKnownOpenIDConfiguration = "/.well-known/openid-configuration"
+)
+
+const (
 	PragmaNoCache       = "no-cache"
 	CacheControlNoStore = "no-store"
 )

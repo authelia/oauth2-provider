@@ -81,6 +81,40 @@ func TestClientRegistrationHandlerOmitsSecretForNoneAuthMethod(t *testing.T) {
 	assert.True(t, responder.ClientSecretExpiresAt.IsZero())
 }
 
+func TestClientRegistrationHandlerDropsUnrecognisedMetadata(t *testing.T) {
+	ctx := context.Background()
+	handler, config, _ := newRegistrationHandler(t)
+
+	strategy := NewDefaultClientRegistrationMetadataStrategy(config)
+	strategy.CustomMetadata = []string{"custom_field"}
+	config.RFC7591ClientRegistrationMetadataStrategy = strategy
+
+	requester := oauth2.NewClientRegistrationRequest()
+	requester.Metadata = &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:            []string{"https://example.com/cb"},
+		TokenEndpointAuthMethod: "none",
+		Extra: map[string]any{
+			"custom_field":     "kept",
+			"custom_field#fr":  "garde",
+			"tos_uri#de":       "https://example.com/agb",
+			"redirect_uris#en": []any{"https://example.com/other"},
+			"undeclared":       "dropped",
+		},
+	}
+
+	responder := oauth2.NewClientRegistrationResponse()
+
+	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
+
+	assert.Equal(t, map[string]any{"custom_field": "kept", "custom_field#fr": "garde", "tos_uri#de": "https://example.com/agb"}, requester.Metadata.Extra)
+
+	response := responder.ToMap()
+
+	assert.NotContains(t, response, "undeclared")
+	assert.NotContains(t, response, "redirect_uris#en")
+	assert.Equal(t, "kept", response["custom_field"])
+}
+
 func TestClientRegistrationHandlerRejectsNilMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, config, store := newRegistrationHandler(t)
@@ -281,9 +315,9 @@ func TestClientRegistrationHandlerRejectsRegistrationScopeInMetadata(t *testing.
 		RedirectURIs:  []string{"https://example.com/cb"},
 		GrantTypes:    []string{"authorization_code"},
 		ResponseTypes: []string{"code"},
-		Scope:         "authelia:oauth2:client_registration",
+		Scope:         "authelia:oauth2:dynamic-client-registration",
 	}
-	requester.Authenticated = grantableFixture("", oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
+	requester.Authenticated = grantableFixture("", oauth2.Arguments{"authelia:oauth2:dynamic-client-registration", "openid"})
 
 	err := handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
 
@@ -303,7 +337,7 @@ func TestClientRegistrationHandlerMintedManagementTokenExcludesRegistrationScope
 		ResponseTypes: []string{"code"},
 		Scope:         "openid",
 	}
-	requester.Authenticated = grantableFixture("", oauth2.Arguments{"authelia:oauth2:client_registration", "openid"})
+	requester.Authenticated = grantableFixture("", oauth2.Arguments{"authelia:oauth2:dynamic-client-registration", "openid"})
 
 	responder := oauth2.NewClientRegistrationResponse()
 	require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
@@ -314,7 +348,7 @@ func TestClientRegistrationHandlerMintedManagementTokenExcludesRegistrationScope
 	require.NoError(t, err)
 
 	granted := tokenRequester.GetGrantedScopes()
-	assert.NotContains(t, granted, "authelia:oauth2:client_registration")
+	assert.NotContains(t, granted, "authelia:oauth2:dynamic-client-registration")
 	assert.Contains(t, granted, "openid")
 }
 
@@ -327,7 +361,7 @@ func TestClientRegistrationHandlerUnauthenticatedExcludesRegistrationScope(t *te
 		RedirectURIs:  []string{"https://example.com/cb"},
 		GrantTypes:    []string{"authorization_code"},
 		ResponseTypes: []string{"code"},
-		Scope:         "authelia:oauth2:client_registration openid",
+		Scope:         "authelia:oauth2:dynamic-client-registration openid",
 		Audience:      []string{testEndpoint},
 	}
 
@@ -341,12 +375,12 @@ func TestClientRegistrationHandlerUnauthenticatedExcludesRegistrationScope(t *te
 
 	client, err := store.GetClient(ctx, values["client_id"].(string))
 	require.NoError(t, err)
-	assert.NotContains(t, client.GetScopes(), "authelia:oauth2:client_registration")
+	assert.NotContains(t, client.GetScopes(), "authelia:oauth2:dynamic-client-registration")
 	assert.Contains(t, client.GetScopes(), "openid")
 
 	tokenRequester, err := store.GetClientRegistrationTokenSession(ctx, handler.Strategy.ClientRegistrationTokenSignature(ctx, values["registration_access_token"].(string)), &oauth2.DefaultSession{})
 	require.NoError(t, err)
-	assert.NotContains(t, tokenRequester.GetGrantedScopes(), "authelia:oauth2:client_registration")
+	assert.NotContains(t, tokenRequester.GetGrantedScopes(), "authelia:oauth2:dynamic-client-registration")
 }
 
 func TestClientRegistrationHandlerEnforcesAudienceCeiling(t *testing.T) {

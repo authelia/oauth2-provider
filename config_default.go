@@ -526,7 +526,10 @@ type Config struct {
 	// registration and client configuration endpoints.
 	RFC7591ClientRegistrationEndpointAuthStrategy ClientRegistrationEndpointAuthStrategy
 
-	// RFC7591ClientRegistrationValidators are the validators run in order against submitted metadata.
+	// RFC7591ClientRegistrationValidators are the validators run in order against submitted metadata. When nil, the
+	// rfc7591 handlers apply rfc7591.LocalValidator and reject any 'sector_identifier_uri', which OpenID Connect
+	// Dynamic Client Registration 1.0 Section 5 requires to be dereferenced at registration; include
+	// rfc7591.SectorIdentifierValidator in a configured list to accept it.
 	RFC7591ClientRegistrationValidators []ClientRegistrationValidator
 
 	// RFC7591ClientRegistrationEndpointAudiences are the audiences a client creation token may carry. The token must

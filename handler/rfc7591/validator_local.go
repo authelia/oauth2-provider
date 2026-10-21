@@ -402,16 +402,53 @@ func validateApplicationType(metadata *oauth2.ClientRegistrationMetadata) (err e
 }
 
 // validateSubjectType implements the OpenID Connect Dynamic Client Registration 1.0 'subject_type' metadata: the
-// value must be absent, 'public', or 'pairwise'.
+// value must be absent, 'public', or 'pairwise'. A 'pairwise' client whose 'redirect_uris' name more than one host
+// must register a 'sector_identifier_uri', per OpenID Connect Core 1.0 Section 8.1.
 //
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+// See: https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
 func validateSubjectType(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	switch metadata.SubjectType {
-	case "", consts.SubjectTypePublic, consts.SubjectTypePairwise:
+	case "", consts.SubjectTypePublic:
+		return nil
+	case consts.SubjectTypePairwise:
+		if metadata.SectorIdentifierURI != "" {
+			return nil
+		}
+
+		hosts, hostless := redirectURIHosts(metadata.RedirectURIs)
+
+		if hostless {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires a '%s' when a '%s' value has no host.", consts.ClientMetadataSubjectType, metadata.SubjectType, consts.ClientMetadataSectorIdentifierURI, consts.ClientMetadataRedirectURIs))
+		}
+
+		if len(hosts) > 1 {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires a '%s' when the '%s' values name more than one host.", consts.ClientMetadataSubjectType, metadata.SubjectType, consts.ClientMetadataSectorIdentifierURI, consts.ClientMetadataRedirectURIs))
+		}
+
 		return nil
 	default:
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not a recognized subject type.", consts.ClientMetadataSubjectType, metadata.SubjectType))
 	}
+}
+
+func redirectURIHosts(redirectURIs []string) (hosts map[string]struct{}, hostless bool) {
+	hosts = map[string]struct{}{}
+
+	for _, raw := range redirectURIs {
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			continue
+		}
+
+		if host := strings.ToLower(parsed.Hostname()); host != "" {
+			hosts[host] = struct{}{}
+		} else {
+			hostless = true
+		}
+	}
+
+	return hosts, hostless
 }
 
 // validateJSONWebKeys implements OpenID Connect Dynamic Client Registration 1.0 Section 2: 'jwks' and 'jwks_uri'

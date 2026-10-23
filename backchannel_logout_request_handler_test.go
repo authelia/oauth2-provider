@@ -383,6 +383,43 @@ func TestSendBackChannelLogout_DoesNotFollowRedirects(t *testing.T) {
 	assert.Zero(t, atomic.LoadInt32(&secondContacted))
 }
 
+func TestSendBackChannelLogout_DocumentClientUsesGuardedClient(t *testing.T) {
+	f, config := newBCLProvider(t)
+
+	server, tokens := bclServer(t, http.StatusOK)
+
+	config.ClientIDMetadataDocumentHTTPClient = oauth2.NewSpecialUseAddressGuardedHTTPClient()
+
+	client := &bclDocumentClient{DefaultBackChannelLogoutClient: bclClient("https://client.example.com/c", server.URL, false)}
+
+	results, err := f.SendBackChannelLogout(t.Context(), oauth2.NewBackChannelLogoutRequest("alice", "session-1", []oauth2.Client{client}))
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	assert.ErrorIs(t, results[0].Err, oauth2.ErrSpecialUseAddress)
+	assert.Empty(t, *tokens)
+}
+
+func TestSendBackChannelLogout_DocumentClientFailsClosedWithoutGuardedClient(t *testing.T) {
+	f, _ := newBCLProvider(t)
+
+	server, tokens := bclServer(t, http.StatusOK)
+
+	document := &bclDocumentClient{DefaultBackChannelLogoutClient: bclClient("https://client.example.com/c", server.URL, false)}
+	registered := bclClient("rp-1", server.URL, false)
+
+	results, err := f.SendBackChannelLogout(t.Context(), oauth2.NewBackChannelLogoutRequest("alice", "session-1", []oauth2.Client{document, registered}))
+
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	assert.ErrorIs(t, results[0].Err, oauth2.ErrServerError)
+	assert.Equal(t, "https://client.example.com/c", results[0].ClientID)
+	assert.True(t, results[1].Success())
+	assert.Len(t, *tokens, 1)
+}
+
 func TestRetryableHTTPClientFieldCount(t *testing.T) {
 	assert.Equal(t, 13, reflect.TypeOf(retryablehttp.Client{}).NumField(),
 		"retryablehttp.Client's field count changed: review backChannelLogoutHTTPClient in backchannel_logout_request_handler.go")
@@ -475,3 +512,9 @@ type stubFailingBackChannelLogoutTokenStrategy struct{}
 func (stubFailingBackChannelLogoutTokenStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
 	return "", errors.New("signing failed")
 }
+
+type bclDocumentClient struct {
+	*oauth2.DefaultBackChannelLogoutClient
+}
+
+func (c *bclDocumentClient) IsClientIDMetadataDocumentClient() bool { return true }

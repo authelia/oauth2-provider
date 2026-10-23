@@ -354,7 +354,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateMTLS(ctx context.Con
 			return "", err
 		}
 	case consts.ClientAuthMethodSelfSignedTLSClientAuth:
-		if err = matchSelfSignedCertificate(ctx, c, cert, s.Config.GetJWKSFetcherStrategy(ctx), strategy.Name()); err != nil {
+		if err = matchSelfSignedCertificate(ctx, c, cert, jwt.ClientJWKSFetcherStrategy(ctx, s.Config, c), strategy.Name()); err != nil {
 			return "", err
 		}
 	default:

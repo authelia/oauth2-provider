@@ -83,7 +83,7 @@ func (f *Fosite) resolveRPInitiatedLogoutClient(ctx context.Context, request *RP
 
 	var client Client
 
-	if client, err = f.Store.GetClient(ctx, clientID); err != nil {
+	if client, err = GetClient(ctx, f.Config, f.Store, clientID); err != nil {
 		return errorsx.WithStack(ErrInvalidClient.WithHint("The provided 'client_id' is unknown.").WithWrap(err).WithDebugError(err))
 	}
 

@@ -161,6 +161,51 @@ func TestAuthAcceptsAnAccessTokenWithTheAudienceAndScope(t *testing.T) {
 	assert.Equal(t, "onboarding", requester.GetClient().GetID())
 }
 
+func TestAuthRejectsAnAccessTokenOfAClientIDMetadataDocumentClient(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name   string
+		client oauth2.Client
+		err    error
+	}{
+		{"ShouldRejectADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "https://client.example.com/metadata.json"}, document: true}, oauth2.ErrInvalidToken},
+		{"ShouldAcceptAClientReportingItIsNotADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "onboarding"}}, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, config, store, _ := newAuthFixtures(t)
+			access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+			request := oauth2.NewRequest()
+			request.Client = tc.client
+			request.Session = &oauth2.DefaultSession{
+				ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+			}
+			request.GrantScope("authelia:oauth2:client_registration")
+			request.GrantAudience(testEndpoint)
+
+			token, signature, err := access.GenerateAccessToken(ctx, request)
+			require.NoError(t, err)
+			require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+			requester, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+
+			if tc.err == nil {
+				require.NoError(t, err)
+				assert.Equal(t, "onboarding", requester.GetClient().GetID())
+
+				return
+			}
+
+			require.ErrorIs(t, err, tc.err)
+			assert.Nil(t, requester)
+			assert.Equal(t, "The provided Access Token is not valid.", oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
+}
+
 func TestAuthRejectsAnAccessTokenMissingTheScope(t *testing.T) {
 	ctx := context.Background()
 
@@ -683,4 +728,14 @@ func (s *hydratingAccessTokenStore) GetAccessTokenSession(ctx context.Context, s
 	}
 
 	return request, nil
+}
+
+type documentClient struct {
+	oauth2.Client
+
+	document bool
+}
+
+func (c *documentClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return c.document
 }

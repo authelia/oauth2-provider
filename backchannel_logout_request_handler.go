@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -70,6 +71,14 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 	// Constructed once, outside the delivery loop, so every delivery shares a single transport and connection pool.
 	client := backChannelLogoutHTTPClient(f.Config.GetHTTPClient(ctx))
 
+	var guarded *retryablehttp.Client
+
+	if provider, ok := f.Config.(ClientIDMetadataDocumentConfigProvider); ok {
+		if hc := provider.GetClientIDMetadataDocumentHTTPClient(ctx); hc != nil {
+			guarded = backChannelLogoutHTTPClient(hc)
+		}
+	}
+
 	var wg sync.WaitGroup
 
 	sem := make(chan struct{}, concurrency)
@@ -86,7 +95,20 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 
 			// Each goroutine writes its own index, so no synchronisation of results is required and the order
 			// always matches the order the clients were supplied in.
-			results[i] = f.sendBackChannelLogout(ctx, strategy, client, c, subject, sid, extra)
+			httpClient := client
+
+			// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02#section-8.6
+			if jwt.IsClientIDMetadataDocumentClient(c) {
+				if guarded == nil {
+					results[i] = BackChannelLogoutResult{ClientID: c.GetID(), Err: errorsx.WithStack(ErrServerError.WithDebug("The client was resolved from a Client ID Metadata Document but no HTTP client is configured to fetch the URLs of such a client."))}
+
+					return
+				}
+
+				httpClient = guarded
+			}
+
+			results[i] = f.sendBackChannelLogout(ctx, strategy, httpClient, c, subject, sid, extra)
 		}()
 	}
 

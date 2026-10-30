@@ -6,6 +6,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"sync"
@@ -132,6 +133,8 @@ type MemoryStore struct {
 	IDJAGAudienceSubjects    map[IDJAGAudienceSubjectKey]string
 	IDJAGJTIs                map[JTIMarker]time.Time
 
+	ClientIDMetadataDocuments map[string][]byte
+
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
 	idSessionsMutex               sync.RWMutex
@@ -149,6 +152,8 @@ type MemoryStore struct {
 	dpopProofJTIsMutex            sync.RWMutex
 	dpopNoncesMutex               sync.RWMutex
 	idjagMutex                    sync.RWMutex
+
+	clientIDMetadataDocumentsMutex sync.RWMutex
 
 	clientAssertionJTIsPruneAt time.Time
 	rfc7523JTIsPruneAt         time.Time
@@ -188,6 +193,8 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
 		IDJAGAudienceSubjects:    make(map[IDJAGAudienceSubjectKey]string),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
+
+		ClientIDMetadataDocuments: make(map[string][]byte),
 	}
 }
 
@@ -350,6 +357,60 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 		return nil, oauth2.ErrNotFound
 	}
 	return cl, nil
+}
+
+// GetClientIDMetadataDocument returns the stored record for id, or oauth2.ErrNotFound.
+func (s *MemoryStore) GetClientIDMetadataDocument(_ context.Context, id string) (record *oauth2.ClientIDMetadataDocumentRecord, err error) {
+	s.clientIDMetadataDocumentsMutex.RLock()
+	data, ok := s.ClientIDMetadataDocuments[id]
+	s.clientIDMetadataDocumentsMutex.RUnlock()
+
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	record = &oauth2.ClientIDMetadataDocumentRecord{}
+
+	if err = json.Unmarshal(data, record); err != nil {
+		return nil, err
+	}
+
+	return record, nil
+}
+
+// SetClientIDMetadataDocument creates or replaces the record for record.ID. The record is stored in its serialized
+// form, as a persistent store would.
+func (s *MemoryStore) SetClientIDMetadataDocument(_ context.Context, record *oauth2.ClientIDMetadataDocumentRecord) (err error) {
+	if record == nil {
+		return errors.New("the client id metadata document record is nil")
+	}
+
+	var data []byte
+
+	if data, err = json.Marshal(record); err != nil {
+		return err
+	}
+
+	s.clientIDMetadataDocumentsMutex.Lock()
+	defer s.clientIDMetadataDocumentsMutex.Unlock()
+
+	if s.ClientIDMetadataDocuments == nil {
+		s.ClientIDMetadataDocuments = map[string][]byte{}
+	}
+
+	s.ClientIDMetadataDocuments[record.ID] = data
+
+	return nil
+}
+
+// DeleteClientIDMetadataDocument removes the record for id.
+func (s *MemoryStore) DeleteClientIDMetadataDocument(_ context.Context, id string) (err error) {
+	s.clientIDMetadataDocumentsMutex.Lock()
+	defer s.clientIDMetadataDocumentsMutex.Unlock()
+
+	delete(s.ClientIDMetadataDocuments, id)
+
+	return nil
 }
 
 // CreateClient stores the client, returning an error when a client with the same id already exists.

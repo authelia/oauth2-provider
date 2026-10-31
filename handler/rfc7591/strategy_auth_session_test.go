@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc9449"
+	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -107,6 +108,16 @@ func TestAuthReadsTheSessionStateOfEverySessionType(t *testing.T) {
 					_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
 
 					assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+				})
+
+				t.Run("ShouldAcceptACertificateBoundTokenPresentedWithTheBoundCertificate", func(t *testing.T) {
+					auth := setup(t)
+					cert := gen.MustCertificate(gen.CertificateOptions{})
+					token := mint(t, auth, newSession(valid, "", oauth2.X509CertificateSHA256Thumbprint(cert)))
+
+					_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", cert), "")
+
+					assert.NoError(t, err)
 				})
 
 				t.Run("ShouldRejectACertificateBoundTokenPresentedWithoutACertificate", func(t *testing.T) {

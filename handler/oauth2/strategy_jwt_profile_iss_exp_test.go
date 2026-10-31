@@ -27,6 +27,7 @@ func TestJWTProfileAccessTokenRequiresIssuerAndExpiry(t *testing.T) {
 		config   string
 		session  string
 		noExpiry bool
+		expiry   time.Time
 		issuer   string
 		err      string
 	}{
@@ -34,7 +35,10 @@ func TestJWTProfileAccessTokenRequiresIssuerAndExpiry(t *testing.T) {
 		{name: "ShouldPreferTheSessionIssuer", config: "https://as.example.com", session: "https://session.example.com", issuer: "https://session.example.com"},
 		{name: "ShouldUseTheSessionIssuerWithoutAConfiguredOne", session: "https://session.example.com", issuer: "https://session.example.com"},
 		{name: "ShouldRefuseWithoutAnIssuer", err: "requires an 'iss' claim"},
-		{name: "ShouldRefuseWithoutAnExpiry", config: "https://as.example.com", noExpiry: true, err: "requires an 'exp' claim"},
+		{name: "ShouldRefuseAZeroExpiry", config: "https://as.example.com", noExpiry: true, err: "requires an 'exp' claim"},
+		{name: "ShouldRefuseTheUnixEpochAsAnExpiry", config: "https://as.example.com", expiry: time.Unix(0, 0).UTC(), err: "requires an 'exp' claim"},
+		{name: "ShouldRefuseAnExpiryBeforeTheUnixEpoch", config: "https://as.example.com", expiry: time.Unix(-1, 0).UTC(), err: "requires an 'exp' claim"},
+		{name: "ShouldAcceptAnExpiryAfterTheUnixEpoch", config: "https://as.example.com", expiry: time.Unix(1, 0).UTC(), issuer: "https://as.example.com"},
 	}
 
 	for _, tc := range testCases {
@@ -53,8 +57,13 @@ func TestJWTProfileAccessTokenRequiresIssuerAndExpiry(t *testing.T) {
 
 			session := &JWTSession{JWTClaims: &jwt.JWTClaims{Issuer: tc.session, Subject: "alice"}}
 
-			if !tc.noExpiry {
+			switch {
+			case tc.noExpiry:
+				session.SetExpiresAt(oauth2.AccessToken, tc.expiry)
+			case tc.expiry.IsZero():
 				session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
+			default:
+				session.SetExpiresAt(oauth2.AccessToken, tc.expiry)
 			}
 
 			request := oauth2.NewAccessRequest(session)

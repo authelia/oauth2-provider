@@ -252,7 +252,7 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires an 'iss' claim, but neither the session nor the configured access token issuer provides one."))
 	}
 
-	if session.GetExpiresAt(tokenType).IsZero() {
+	if session.GetExpiresAt(tokenType).Unix() <= 0 {
 		return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires an 'exp' claim, but the session has no expiry for it."))
 	}
 

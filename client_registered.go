@@ -92,6 +92,10 @@ type DefaultRegisteredClient struct {
 	// RECOMMENDED, see rfc8693.OwnAccessTokenExchangeClient. It has no registration metadata, so a client cannot grant it to itself.
 	TokenExchangeOwnAccessToken bool `json:"token_exchange_own_access_token"`
 
+	// TokenExchangeRefreshToken permits a token exchange to issue a refresh token to this client. It has no registration
+	// metadata, so a client cannot grant it to itself.
+	TokenExchangeRefreshToken bool `json:"token_exchange_refresh_token"`
+
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
 
@@ -594,6 +598,11 @@ func (c *DefaultRegisteredClient) GetRestrictOwnAccessTokenExchangeTargets() (re
 // is NOT RECOMMENDED.
 func (c *DefaultRegisteredClient) GetAllowOwnAccessTokenExchange() (allow bool) {
 	return c.TokenExchangeOwnAccessToken
+}
+
+// GetAllowTokenExchangeRefreshToken reports whether a token exchange may issue a refresh token to this client.
+func (c *DefaultRegisteredClient) GetAllowTokenExchangeRefreshToken() (allow bool) {
+	return c.TokenExchangeRefreshToken
 }
 
 var (

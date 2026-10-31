@@ -73,6 +73,15 @@ type OwnAccessTokenExchangeClient interface {
 	GetAllowOwnAccessTokenExchange() (allow bool)
 }
 
+// RefreshTokenIssuanceClient is an optional client interface. A client which does not implement it is not issued a
+// refresh token by a token exchange.
+type RefreshTokenIssuanceClient interface {
+	// GetAllowTokenExchangeRefreshToken reports whether a token exchange may issue a refresh token to the client. An
+	// issued refresh token also requires a refresh token 'subject_token', the 'refresh_token' grant type, and one of the
+	// configured refresh token scopes.
+	GetAllowTokenExchangeRefreshToken() (allow bool)
+}
+
 // ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.
 // When the request supplies an actor_token but the subject_token carries no 'may_act' (§4.4) claim authorizing
 // delegation, the authorization server has no in-token signal that the actor is permitted to act on behalf of the

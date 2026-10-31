@@ -275,7 +275,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 						subject := client
 
 						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, subject, time.Time{}), tc.requested)
-						request.Client = client
+						request.Client = permittingOwner(client)
 
 						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
 
@@ -448,7 +448,7 @@ func newLifetimeExchangeRequest(store rfc8693ExchangeStore, subjectTokenType, su
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
 			ID:      uuid.New().String(),
-			Client:  store.GetClients()["my-client"],
+			Client:  permittingOwner(store.GetClients()["my-client"]),
 			Form:    form,
 			Session: NewDefaultSession(),
 		},

@@ -540,3 +540,7 @@ func (c *rfc8693Client) GetAllowActorTokenWithoutMayAct() (allow bool) {
 func (c *rfc8693Client) GetAllowOwnAccessTokenExchange() bool {
 	return false
 }
+
+func (c *rfc8693Client) GetAllowTokenExchangeRefreshToken() bool {
+	return true
+}

@@ -7,6 +7,7 @@ package oauth2_test
 import (
 	"encoding/json"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -213,6 +214,77 @@ func TestRequestSetters(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.check)
+	}
+}
+
+func TestRequestSettersDeduplicateInLinearTime(t *testing.T) {
+	values := make(Arguments, 0, 200000)
+
+	for i := range 200000 {
+		values = append(values, strconv.Itoa(i))
+	}
+
+	testCases := []struct {
+		name string
+		have func(r *Request) Arguments
+	}{
+		{
+			name: "ShouldSetRequestedScopes",
+			have: func(r *Request) Arguments {
+				r.SetRequestedScopes(values)
+
+				return r.GetRequestedScopes()
+			},
+		},
+		{
+			name: "ShouldSetRequestedAudience",
+			have: func(r *Request) Arguments {
+				r.SetRequestedAudience(values)
+
+				return r.GetRequestedAudience()
+			},
+		},
+		{
+			name: "ShouldSetRequestedResource",
+			have: func(r *Request) Arguments {
+				r.SetRequestedResource(values)
+
+				return r.GetRequestedResource()
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Now()
+			have := tc.have(NewRequest())
+
+			assert.Less(t, time.Since(start), 5*time.Second)
+			assert.Equal(t, values, have)
+		})
+	}
+}
+
+func TestRequestSetRequestedResource(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     Arguments
+		expected Arguments
+	}{
+		{"ShouldKeepTheFirstOccurrenceInOrder", Arguments{"b", "a", "b", "c", "a"}, Arguments{"b", "a", "c"}},
+		{"ShouldLeaveNilForEmpty", Arguments{}, nil},
+		{"ShouldLeaveNilForNil", nil, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewRequest()
+			r.RequestedResource = Arguments{"stale"}
+
+			r.SetRequestedResource(tc.have)
+
+			assert.Equal(t, tc.expected, r.GetRequestedResource())
+		})
 	}
 }
 

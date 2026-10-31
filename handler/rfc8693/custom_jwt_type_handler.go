@@ -23,12 +23,17 @@ import (
 
 // CustomJWTTypeHandler handles the token types configured as a *JWTType.
 //
+// A custom JWT presented as a 'subject_token' or 'actor_token' must have an 'iss' claim the client's permitted issuer
+// list or JWTType.Issuer trusts, and an 'aud' claim which includes the requesting client or a value of
+// JWTType.ExpectedAudience. RFC 8693 Section 5 requires the token be verified as appropriate for the exchange.
+//
 // A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
 // either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
 // when the token has no such claim. When the 'requested_token_type' is an Identity Assertion JWT Authorization Grant,
 // the 'subject_token' must instead be an assertion whose 'aud' claim includes the requesting client and whose 'typ' is
 // not an access token type, and its 'scope' claim does not limit the requested scopes.
 //
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 type CustomJWTTypeHandler struct {
@@ -220,6 +225,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
 		}
 
+		if jwtType.Issuer == "" {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebugf("The JSON Web Token type '%s' has no 'Issuer' and the OAuth 2.0 Client has no permitted issuer list, so no issuer is trusted.", jwtType.GetName(ctx)))
+		}
+
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
@@ -229,8 +238,14 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		if clientID := request.GetClient().GetID(); !claims.VerifyAudience(clientID, true) {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s'.", clientID))
 		}
-	} else if err = validateCustomJWTScope(request, role, claims); err != nil {
-		return nil, err
+	} else {
+		if err = validateCustomJWTAudience(request, jwtType, claims); err != nil {
+			return nil, err
+		}
+
+		if err = validateCustomJWTScope(request, role, claims); err != nil {
+			return nil, err
+		}
 	}
 
 	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
@@ -560,6 +575,22 @@ func toInt64(claim any) int64 {
 		return int64(vf)
 	}
 	return 0
+}
+
+func validateCustomJWTAudience(request oauth2.AccessRequester, jwtType *JWTType, claims jwt.MapClaims) error {
+	clientID := request.GetClient().GetID()
+
+	if claims.VerifyAudience(clientID, true) {
+		return nil
+	}
+
+	for _, audience := range jwtType.ExpectedAudience {
+		if claims.VerifyAudience(audience, true) {
+			return nil
+		}
+	}
+
+	return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s' or an expected audience of the token type.", clientID))
 }
 
 func validateCustomJWTScope(request oauth2.AccessRequester, role tokenRole, claims map[string]any) (err error) {

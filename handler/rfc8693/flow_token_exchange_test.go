@@ -323,6 +323,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 		t.Helper()
 		token, _, err := strategy.Encode(context.Background(), jwt.MapClaims{
 			"iss":     iss,
+			"aud":     []string{"exchange-client"},
 			"sub":     "alice",
 			"subject": "alice",
 			"exp":     time.Now().Add(15 * time.Minute).Unix(),
@@ -420,10 +421,14 @@ func TestValidateIssuer(t *testing.T) {
 		assert.False(t, ok)
 	})
 
-	t.Run("ShouldPassThroughWhenNoIssuerConfigured", func(t *testing.T) {
-		matched, ok := ValidateIssuer("https://anything.example.com", "", nil)
-		require.True(t, ok)
-		assert.Equal(t, "https://anything.example.com", matched)
+	t.Run("ShouldRejectWhenNoIssuerConfigured", func(t *testing.T) {
+		_, ok := ValidateIssuer("https://anything.example.com", "", nil)
+		assert.False(t, ok)
+	})
+
+	t.Run("ShouldRejectAnEmptyIssuerWhenNoIssuerConfigured", func(t *testing.T) {
+		_, ok := ValidateIssuer("", "", nil)
+		assert.False(t, ok)
 	})
 }
 

@@ -553,6 +553,8 @@ func TestSpec_2_1_Errors_ClientWithoutGrantReturnsUnauthorizedClient(t *testing.
 	assert.ErrorIs(t, err, oauth2.ErrUnauthorizedClient)
 }
 
+const specIDTokenIssuer = "https://op.example.com"
+
 func newSpecConfig(t *testing.T) *oauth2.Config {
 	t.Helper()
 
@@ -561,6 +563,7 @@ func newSpecConfig(t *testing.T) *oauth2.Config {
 		AudienceStrategy: oauth2.DefaultAudienceStrategy,
 		GlobalSecret:     []byte("some-secret-thats-random-some-secret-thats-random-"),
 		IDTokenLifespan:  10 * time.Minute,
+		IDTokenIssuer:    specIDTokenIssuer,
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693AccessToken:  &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},

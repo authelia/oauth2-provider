@@ -509,9 +509,10 @@ func TestIDJAGRequestCustomJWTSubject(t *testing.T) {
 		{name: "ShouldRejectAnApplicationAccessToken", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}, typ: "application/AT+JWT", err: oauth2.ErrInvalidRequest},
 		// Section 4.3.3: the requested scopes are governed by the relationship, not the assertion.
 		{name: "ShouldAllowAScopeTheAssertionDoesNotCarry", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}, scope: idjagScope},
-		{name: "ShouldLeaveOtherExchangesWithoutAudience", requested: consts.TokenTypeRFC8693AccessToken},
-		{name: "ShouldLeaveOtherExchangesWithAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken, typ: consts.JSONWebTokenTypeAccessToken},
-		{name: "ShouldKeepTheScopeRuleForOtherExchanges", requested: consts.TokenTypeRFC8693AccessToken, scope: idjagScope, err: oauth2.ErrInvalidScope},
+		{name: "ShouldRejectOtherExchangesWithoutAudience", requested: consts.TokenTypeRFC8693AccessToken, err: oauth2.ErrInvalidRequest},
+		{name: "ShouldLeaveOtherExchangesAddressedToTheClient", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID},
+		{name: "ShouldLeaveOtherExchangesWithAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID, typ: consts.JSONWebTokenTypeAccessToken},
+		{name: "ShouldKeepTheScopeRuleForOtherExchanges", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID, scope: idjagScope, err: oauth2.ErrInvalidScope},
 	}
 
 	for _, tc := range testCases {

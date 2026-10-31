@@ -37,6 +37,7 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					store := sc.newStore()
 					config, hmacStrategy := newBindingExchangeConfig()
+					config.JWTProfileAccessTokenDefaultAudience = []string{"https://api.example.com"}
 					config.EnforceJWTProfileAccessTokens = true
 					config.AccessTokenIssuer = "https://issuer.example.com"
 

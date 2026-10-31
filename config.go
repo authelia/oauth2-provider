@@ -137,6 +137,14 @@ type DisableRefreshTokenRotationProvider interface {
 	GetDisableRefreshTokenRotation(ctx context.Context) (disable bool)
 }
 
+// JWTProfileAccessTokenDefaultAudienceProvider is optionally implemented by the configuration to provide the default
+// resource indicators of a JWT profile access token.
+type JWTProfileAccessTokenDefaultAudienceProvider interface {
+	// GetJWTProfileAccessTokenDefaultAudience returns the 'aud' values of a JWT profile access token whose request
+	// granted no audience or resource.
+	GetJWTProfileAccessTokenDefaultAudience(ctx context.Context) (audience []string)
+}
+
 // AccessTokenIssuerProvider returns the provider for configuring the JWT issuer.
 type AccessTokenIssuerProvider interface {
 	// GetAccessTokenIssuer returns the access token issuer.

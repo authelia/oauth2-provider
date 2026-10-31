@@ -6,6 +6,7 @@ package rfc8693
 
 import (
 	"context"
+	"encoding/json"
 	"maps"
 	"reflect"
 	"slices"
@@ -594,11 +595,55 @@ func bindingOf(session oauth2.Session) (binding tokenBinding) {
 func newTokenSession(session oauth2.Session) oauth2.Session {
 	if t := reflect.TypeOf(session); t != nil && t.Kind() == reflect.Pointer {
 		if s, ok := reflect.New(t.Elem()).Interface().(oauth2.Session); ok {
-			return s
+			return &storedTokenSession{Session: s}
 		}
 	}
 
 	return session.Clone()
+}
+
+type storedTokenSession struct {
+	oauth2.Session
+}
+
+func (s *storedTokenSession) UnmarshalJSON(data []byte) (err error) {
+	if err = json.Unmarshal(data, s.Session); err != nil {
+		return err
+	}
+
+	var stored struct {
+		ExpiresAt                   map[oauth2.TokenType]time.Time `json:"ExpiresAt"`
+		JWKThumbprint               string                         `json:"JWKThumbprint"`
+		ClientCertificateThumbprint string                         `json:"ClientCertificateThumbprint"`
+	}
+
+	if err = json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+
+	for key, expires := range stored.ExpiresAt {
+		s.SetExpiresAt(key, expires)
+	}
+
+	if bound, ok := s.Session.(oauth2.DPoPBoundSession); ok && stored.JWKThumbprint != "" {
+		bound.SetDPoPJWKThumbprint(stored.JWKThumbprint)
+	}
+
+	if bound, ok := s.Session.(oauth2.MTLSBoundSession); ok && stored.ClientCertificateThumbprint != "" {
+		bound.SetClientCertificateSHA256Thumbprint(stored.ClientCertificateThumbprint)
+	}
+
+	return nil
+}
+
+func restoreTokenSession(request oauth2.Requester) {
+	if request == nil {
+		return
+	}
+
+	if stored, ok := request.GetSession().(*storedTokenSession); ok {
+		request.SetSession(stored.Session)
+	}
 }
 
 func tokenClaimsMap(session oauth2.Session) map[string]any {

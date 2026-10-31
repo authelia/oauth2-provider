@@ -216,7 +216,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 			tc.mock(store)
 			r := tc.r
 			if r == nil {
-				r = &http.Request{Header: http.Header{}, Method: http.MethodPost}
+				r = &http.Request{Header: http.Header{}, Method: http.MethodPost, Body: http.NoBody}
 			} else if r.Method == "" {
 				r.Method = http.MethodPost
 			}

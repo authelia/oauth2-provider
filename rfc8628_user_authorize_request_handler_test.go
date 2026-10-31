@@ -6,8 +6,10 @@ package oauth2_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -112,13 +114,15 @@ func TestFosite_NewRFC8628UserAuthorizeRequest(t *testing.T) {
 		{
 			name: "ShouldFailWhenParseFormErrors",
 			req: &http.Request{
+				Method: http.MethodPost,
 				Header: http.Header{
-					consts.HeaderContentType: {"multipart/form-data"},
+					consts.HeaderContentType: {"application/x-www-form-urlencoded"},
 				},
+				Body: io.NopCloser(strings.NewReader("a=%zz")),
 			},
 			handlers: 1,
 			mock:     func(handlers []*mock.MockRFC8628UserAuthorizeEndpointHandler) {},
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. missing form body",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. invalid URL escape '%zz'",
 		},
 	}
 

@@ -413,7 +413,7 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 		strict   bool
 	}{
 		{
-			name: "ShouldFailMalformedMultipartBody",
+			name: "ShouldFailMultipartBody",
 			req: func() *http.Request {
 				return &http.Request{
 					Method: http.MethodPost,
@@ -422,7 +422,7 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 				}
 			},
 			session:  new(DefaultSession),
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. multipart: NextPart: EOF",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
 		{
 			name: "ShouldFailWhenSessionIsNil",

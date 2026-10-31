@@ -81,7 +81,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			expected: "TokenFromQueryParam",
 		},
 		{
-			name: "ShouldReturnEmptyWhenMultipartFormIsMalformed",
+			name: "ShouldReturnEmptyWhenBodyIsMultipart",
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", io.NopCloser(strings.NewReader("not a real multipart body")))
 				req.Header.Set(consts.HeaderContentType, "multipart/form-data; boundary=foo")

@@ -488,7 +488,11 @@ func (r *decoratedIntrospectionClient) GetSigningKeyID() (kid string) {
 }
 
 func (r *decoratedIntrospectionClient) GetSigningAlg() (alg string) {
-	return r.GetIntrospectionSignedResponseAlg()
+	if alg = r.GetIntrospectionSignedResponseAlg(); alg == "" {
+		return string(jose.RS256)
+	}
+
+	return alg
 }
 
 func (r *decoratedIntrospectionClient) GetEncryptionKeyID() (kid string) {

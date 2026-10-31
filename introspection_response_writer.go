@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -24,6 +26,22 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error) {
 	if err == nil {
+		return
+	}
+
+	// RFC 9701 Section 5: an inactive token is answered in the format the authenticated caller is due.
+	var inactive *inactiveIntrospectionError
+
+	if errors.As(err, &inactive) {
+		f.WriteIntrospectionResponse(ctx, rw, inactive.responder)
+
+		return
+	}
+
+	// A failure of the server says nothing about the token, so it must not be reported as an inactive token.
+	if errors.Is(err, ErrServerError) {
+		f.writeErrorJSON(ctx, rw, nil, err)
+
 		return
 	}
 
@@ -85,6 +103,15 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
 	if client, ok = caller.(IntrospectionJWTResponseClient); ok {
 		alg, kid = client.GetIntrospectionSignedResponseAlg(), client.GetIntrospectionSignedResponseKeyID()
+	}
+
+	// RFC 9701 Section 4: the caller requests a JWT with the 'Accept' header, and Section 6 makes RS256 the default
+	// algorithm. A registered algorithm always applies, so a caller cannot be downgraded by the header being absent.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9701#section-4
+	// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
+	if alg == "" && kid == "" && f.isIntrospectionJWTRequested(ctx, r, caller) {
+		alg = string(jose.RS256)
 	}
 
 	response := map[string]any{jwt.ClaimActive: false}
@@ -223,6 +250,12 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 
 		_ = json.NewEncoder(rw).Encode(response)
 	}
+}
+
+func (f *Fosite) isIntrospectionJWTRequested(ctx context.Context, r IntrospectionResponder, caller Client) (requested bool) {
+	responder, ok := r.(interface{ IsJWTRequested() bool })
+
+	return ok && responder.IsJWTRequested() && caller != nil && f.Config.GetIntrospectionJWTResponseStrategy(ctx) != nil
 }
 
 func (f *Fosite) isIntrospectionTokenTypeEnabled(ctx context.Context, caller Client) (enabled bool) {

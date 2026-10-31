@@ -11,6 +11,7 @@ const (
 	HeaderPragma          = "Pragma"
 	HeaderAuthorization   = "Authorization"
 	HeaderLocation        = "Location"
+	HeaderAccept          = "Accept"
 	HeaderAcceptLanguage  = "Accept-Language"
 	HeaderWWWAuthenticate = "WWW-Authenticate"
 	HeaderXForwardedProto = "X-Forwarded-Proto"

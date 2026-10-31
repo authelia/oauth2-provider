@@ -7,7 +7,9 @@ package oauth2
 import (
 	"context"
 	"errors"
+	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -46,9 +48,18 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'token' parameter is required."))
 	}
 
+	jwtRequested := acceptsIntrospectionJWT(r)
+
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
-		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err))
+		// A failure of the server says nothing about the token, so it is not answered as an inactive token.
+		if errors.Is(err, ErrServerError) {
+			return &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}, errorsx.WithStack(err)
+		}
+
+		inactive := &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}
+
+		return inactive, errorsx.WithStack(&inactiveIntrospectionError{responder: inactive, error: ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err)})
 	}
 
 	accessTokenType := ""
@@ -70,7 +81,37 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		AccessRequester: ar,
 		TokenUse:        use,
 		AccessTokenType: accessTokenType,
+		JWTRequested:    jwtRequested,
 	}, nil
+}
+
+type inactiveIntrospectionError struct {
+	error
+
+	responder IntrospectionResponder
+}
+
+func (e *inactiveIntrospectionError) Unwrap() error {
+	return e.error
+}
+
+func acceptsIntrospectionJWT(r *http.Request) bool {
+	for _, header := range r.Header.Values(consts.HeaderAccept) {
+		for value := range strings.SplitSeq(header, ",") {
+			mediaType, parameters, err := mime.ParseMediaType(value)
+			if err == nil && mediaType == "application/"+consts.JSONWebTokenTypeTokenIntrospection && !isZeroQuality(parameters["q"]) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func isZeroQuality(value string) bool {
+	quality, err := strconv.ParseFloat(value, 64)
+
+	return err == nil && quality == 0
 }
 
 // handleNewIntrospectionRequestClientAuthentication authenticates the caller, by the bearer credential in the
@@ -173,6 +214,16 @@ type IntrospectionResponse struct {
 	TokenUse        TokenUse        `json:"token_use,omitempty"`
 	AccessTokenType string          `json:"token_type,omitempty"`
 	Lang            language.Tag    `json:"-"`
+
+	// JWTRequested records that the caller asked for a JWT response with the 'Accept' header.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9701#section-4
+	JWTRequested bool `json:"-"`
+}
+
+// IsJWTRequested returns whether the caller asked for a JWT response with the 'Accept' header.
+func (r *IntrospectionResponse) IsJWTRequested() bool {
+	return r.JWTRequested
 }
 
 // IsActive returns whether the introspected token is currently active per RFC 7662 section 2.2.

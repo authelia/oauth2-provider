@@ -667,22 +667,22 @@ func TestWriteIntrospectionResponseJWT(t *testing.T) {
 			contentType: consts.ContentTypeApplicationJSON,
 		},
 		{
-			name:        "ShouldWriteInactiveWhenStrategyIsNil",
+			name:        "ShouldWriteServerErrorWhenStrategyIsNil",
 			alg:         "RS256",
 			strategy:    nil,
 			active:      true,
-			expectCode:  http.StatusOK,
+			expectCode:  http.StatusInternalServerError,
 			contentType: consts.ContentTypeApplicationJSON,
-			body:        "{\"active\":false}\n",
+			body:        "{\"error\":\"server_error\",\"error_description\":\"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate the response.\"}",
 		},
 		{
-			name:        "ShouldWriteInactiveWhenStrategyEncodeErrors",
+			name:        "ShouldWriteServerErrorWhenStrategyEncodeErrors",
 			alg:         "RS256",
 			strategy:    &stubIntrospectionStrategy{err: errors.New("signing failed")},
 			active:      true,
-			expectCode:  http.StatusOK,
+			expectCode:  http.StatusInternalServerError,
 			contentType: consts.ContentTypeApplicationJSON,
-			body:        "{\"active\":false}\n",
+			body:        "{\"error\":\"server_error\",\"error_description\":\"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate the response.\"}",
 		},
 	}
 

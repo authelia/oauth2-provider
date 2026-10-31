@@ -536,3 +536,7 @@ func (c *rfc8693Client) GetTokenExchangePermitted(_ oauth2.Client, _ oauth2.RFC8
 func (c *rfc8693Client) GetAllowActorTokenWithoutMayAct() (allow bool) {
 	return c.allow
 }
+
+func (c *rfc8693Client) GetAllowOwnAccessTokenExchange() bool {
+	return false
+}

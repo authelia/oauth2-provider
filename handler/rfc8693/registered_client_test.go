@@ -35,6 +35,9 @@ func TestDefaultRegisteredClientImplementsClient(t *testing.T) {
 
 		assert.False(t, client.GetAllowActorTokenWithoutMayAct(),
 			"delegation without may_act stays opt-in")
+
+		assert.False(t, registered.GetRestrictOwnAccessTokenExchangeTargets(), "limiting the exchange targets stays opt-in")
+		assert.False(t, registered.GetAllowOwnAccessTokenExchange(), "exchanging its own access token stays opt-in")
 	})
 
 	t.Run("ShouldRestrictWhenSet", func(t *testing.T) {

@@ -53,6 +53,26 @@ type ActorTokenExchangeClient interface {
 	GetActorTokenExchangePermitted(client oauth2.Client, requestedTokenType oauth2.RFC8693TokenType) (allowed bool)
 }
 
+// OwnAccessTokenExchangeTargetClient is an optional client interface. A client which does not implement it may request
+// any audience or resource its registration permits when it exchanges an access token issued to itself.
+type OwnAccessTokenExchangeTargetClient interface {
+	// GetRestrictOwnAccessTokenExchangeTargets reports whether the exchange of an access token issued to the client is
+	// limited to the audience and resources that access token was granted. RFC 8693 Section 2.1 leaves this to policy.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+	GetRestrictOwnAccessTokenExchangeTargets() (restrict bool)
+}
+
+// OwnAccessTokenExchangeClient is an optional client interface. A client which does not implement it may not exchange
+// an access token issued to itself.
+type OwnAccessTokenExchangeClient interface {
+	// GetAllowOwnAccessTokenExchange reports whether the client may exchange an access token issued to itself as a
+	// 'subject_token'. Returning true is NOT RECOMMENDED: each exchange leaves another live token for the same grant with
+	// nothing linking it for revocation, and an attacker holding the client's credentials and one of its access tokens
+	// can use it to mint further tokens. A client which only needs a JWT authorization grant does not need this.
+	GetAllowOwnAccessTokenExchange() (allow bool)
+}
+
 // ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.
 // When the request supplies an actor_token but the subject_token carries no 'may_act' (§4.4) claim authorizing
 // delegation, the authorization server has no in-token signal that the actor is permitted to act on behalf of the

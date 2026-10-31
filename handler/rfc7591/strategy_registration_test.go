@@ -103,6 +103,8 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	registered.RequireRequestObjectAudienceAndLifetime = true
 	registered.RequestObjectMaximumLifetime = 10 * time.Minute
 	registered.DisableRefreshTokenRotation = true
+	registered.TokenExchangeOwnAccessTokenRestrictTargets = true
+	registered.TokenExchangeOwnAccessToken = true
 	registered.ClientSecretExpiresAt = registered.ClientIDIssuedAt.Add(24 * 60 * 60 * 1e9)
 	rotatedSecret := oauth2.NewPlainTextClientSecret("rotated-out")
 	registered.RotatedClientSecrets = []oauth2.ClientSecret{rotatedSecret}
@@ -126,6 +128,8 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	assert.True(t, result.RequireRequestObjectAudienceAndLifetime)
 	assert.Equal(t, 10*time.Minute, result.RequestObjectMaximumLifetime)
 	assert.True(t, result.DisableRefreshTokenRotation)
+	assert.True(t, result.TokenExchangeOwnAccessTokenRestrictTargets)
+	assert.True(t, result.TokenExchangeOwnAccessToken)
 	assert.Equal(t, expiresAt, result.ClientSecretExpiresAt)
 	assert.Equal(t, []oauth2.ClientSecret{rotatedSecret}, result.RotatedClientSecrets)
 	assert.Empty(t, result.ClientName)

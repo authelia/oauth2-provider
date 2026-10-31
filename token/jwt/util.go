@@ -19,6 +19,7 @@ import (
 	"hash"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -221,10 +222,12 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 // SearchJWKS returns the key from the jose.JSONWebKeySet which matches the alg and use values, and the kid value when
 // it is not empty. A key naming both the alg and use values is preferred. Otherwise a key that omits either member
 // matches when its key type can be used with the alg value, as RFC 7517 Sections 4.2 and 4.4 make both members optional,
-// and is returned with both members set to these values.
+// and is returned with both members set to these values. Such a key must also permit the operation in its 'key_ops'
+// member when it has one, per RFC 7517 Section 4.3.
 // When more than one key matches the first is returned, unless strict is true in which case an error is returned.
 //
-// See: https://www.rfc-editor.org/rfc/rfc7517#section-4.2 and https://www.rfc-editor.org/rfc/rfc7517#section-4.4
+// See: https://www.rfc-editor.org/rfc/rfc7517#section-4.2, https://www.rfc-editor.org/rfc/rfc7517#section-4.3, and
+// https://www.rfc-editor.org/rfc/rfc7517#section-4.4
 func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
 	return searchJWKS(jwks, kid, alg, use, strict, true)
 }
@@ -278,7 +281,28 @@ func searchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict, optional
 }
 
 func isJWKCompatible(jwk jose.JSONWebKey, alg, use string) bool {
-	return (jwk.Use == "" || jwk.Use == use) && (jwk.Algorithm == "" || jwk.Algorithm == alg) && isJWKUsableWithAlg(jwk, alg, use)
+	return (jwk.Use == "" || jwk.Use == use) && (jwk.Algorithm == "" || jwk.Algorithm == alg) && isJWKOperationPermitted(jwk, alg, use) && isJWKUsableWithAlg(jwk, alg, use)
+}
+
+func isJWKOperationPermitted(jwk jose.JSONWebKey, alg, use string) bool {
+	if jwk.KeyOps == nil {
+		return true
+	}
+
+	var operations []string
+
+	switch {
+	case use == JSONWebTokenUseSignature:
+		operations = []string{"sign", "verify"}
+	case slices.Contains([]jose.KeyAlgorithm{jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW}, jose.KeyAlgorithm(alg)):
+		operations = []string{"deriveKey"}
+	default:
+		operations = []string{"wrapKey", "unwrapKey"}
+	}
+
+	return slices.ContainsFunc(jwk.KeyOps, func(operation string) bool {
+		return slices.Contains(operations, operation)
+	})
 }
 
 func isJWKUsableWithAlg(jwk jose.JSONWebKey, alg, use string) bool {

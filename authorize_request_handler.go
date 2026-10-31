@@ -284,8 +284,8 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		}
 
 		// The 'request_uri' fetch is bounded: the location must be registered, the request carries the caller's
-		// context, redirects are refused, and the body is limited. The response media type is deliberately not
-		// checked as request objects are commonly served as 'text/plain'.
+		// context and FetchTimeout, redirects are refused, and the body is limited. The response media type is
+		// deliberately not checked as request objects are commonly served as 'text/plain'.
 		//
 		// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
 		hc := HTTPClientWithoutRedirects(f.Config.GetHTTPClient(ctx))
@@ -295,7 +295,10 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which could not be used to build a request: %+v.", request.GetClient().GetID(), requestURI, err))
 		}
 
-		response, err := hc.Do(req.WithContext(ctx))
+		fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
+		defer cancel()
+
+		response, err := hc.Do(req.WithContext(fetch))
 		if err != nil {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object from the URI '%s' with an error: %+v.", request.GetClient().GetID(), requestURI, err))
 		}

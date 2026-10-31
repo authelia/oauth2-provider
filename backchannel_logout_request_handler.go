@@ -126,6 +126,9 @@ func (f *Fosite) sendBackChannelLogout(ctx context.Context, strategy BackChannel
 func postBackChannelLogout(ctx context.Context, client *retryablehttp.Client, uri, token string) (status int, err error) {
 	body := url.Values{consts.FormParameterLogoutToken: []string{token}}
 
+	ctx, cancel := context.WithTimeout(ctx, FetchTimeout)
+	defer cancel()
+
 	var request *retryablehttp.Request
 
 	if request, err = retryablehttp.NewRequestWithContext(ctx, http.MethodPost, uri, strings.NewReader(body.Encode())); err != nil {
@@ -181,7 +184,7 @@ func backChannelLogoutHTTPClient(base *retryablehttp.Client) (client *retryableh
 		RequestLogHook:  base.RequestLogHook,
 		ResponseLogHook: base.ResponseLogHook,
 		CheckRetry:      base.CheckRetry,
-		Backoff:         base.Backoff,
+		Backoff:         boundedBackoff(base.Backoff),
 		PrepareRetry:    base.PrepareRetry,
 		ErrorHandler:    retryablehttp.PassthroughErrorHandler,
 	}

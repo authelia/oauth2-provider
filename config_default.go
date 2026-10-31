@@ -552,6 +552,7 @@ type Config struct {
 	audienceStrategyOnce                        sync.Once
 	resourceStrategyOnce                        sync.Once
 	jwksFetcherStrategyOnce                     sync.Once
+	httpClientOnce                              sync.Once
 	authorizeErrorFieldResponseStrategyOnce     sync.Once
 	tokenEndpointClientAuthStrategyOnce         sync.Once
 	introspectionEndpointClientAuthStrategyOnce sync.Once
@@ -640,11 +641,14 @@ func (c *Config) GetRFC7592ClientConfigurationEndpointHandlers(_ context.Context
 	return c.RFC7592ClientConfigurationEndpointHandlers
 }
 
-// GetHTTPClient returns the HTTP client to use for requests. Defaults to a new retryablehttp.Client.
+// GetHTTPClient returns the HTTP client to use for requests. Defaults to a retryablehttp.Client shared by every request,
+// so they share a connection pool.
 func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
-	if c.HTTPClient == nil {
-		return retryablehttp.NewClient()
-	}
+	c.httpClientOnce.Do(func() {
+		if c.HTTPClient == nil {
+			c.HTTPClient = retryablehttp.NewClient()
+		}
+	})
 
 	return c.HTTPClient
 }

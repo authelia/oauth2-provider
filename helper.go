@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 )
@@ -83,9 +84,33 @@ func DeviceAuthorizeStatusToString(status DeviceAuthorizeStatus) string {
 // See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
 const MaxFetchedBodyBytes = 1 << 20
 
+// FetchTimeout limits an outbound request for a location supplied by a client, including its retries and reading the
+// response body. RFC 9101 Section 10.4.1 calls for a timeout on a 'request_uri', and the same reasoning covers a
+// 'jwks_uri', a 'sector_identifier_uri' and a 'backchannel_logout_uri'.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
+const FetchTimeout = 30 * time.Second
+
+func boundedBackoff(backoff retryablehttp.Backoff) retryablehttp.Backoff {
+	if backoff == nil {
+		backoff = retryablehttp.DefaultBackoff
+	}
+
+	return func(minimum, maximum time.Duration, attempt int, response *http.Response) time.Duration {
+		wait := backoff(minimum, maximum, attempt, response)
+
+		if wait > maximum {
+			return maximum
+		}
+
+		return wait
+	}
+}
+
 // HTTPClientWithoutRedirects returns a copy of client that refuses to follow HTTP redirects, returning the first
 // redirect response as-is. client itself, typically the shared instance, is not mutated: the copy is built from its
-// exported fields, and its unexported sync.Once guards are not copied.
+// exported fields, and its unexported sync.Once guards are not copied. The wait between retries never exceeds
+// RetryWaitMax, including one a response asks for with a 'Retry-After' header.
 func HTTPClientWithoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {
 	refuseRedirect := func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -108,7 +133,7 @@ func HTTPClientWithoutRedirects(client *retryablehttp.Client) (scoped *retryable
 		RequestLogHook:  client.RequestLogHook,
 		ResponseLogHook: client.ResponseLogHook,
 		CheckRetry:      client.CheckRetry,
-		Backoff:         client.Backoff,
+		Backoff:         boundedBackoff(client.Backoff),
 		ErrorHandler:    client.ErrorHandler,
 		PrepareRetry:    client.PrepareRetry,
 	}

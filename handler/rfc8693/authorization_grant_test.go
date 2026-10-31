@@ -216,7 +216,7 @@ func TestAuthorizationGrantExpiresTooSoon(t *testing.T) {
 
 	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
 
-	_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectExpires: time.Now().Add(900 * time.Millisecond)})
+	_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectExpires: time.Now().Truncate(time.Second).Add(999 * time.Millisecond)})
 
 	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }

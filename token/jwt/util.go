@@ -188,10 +188,35 @@ func (e *JWKLookupError) Error() string {
 	return fmt.Sprintf("Error occurred retrieving the JSON Web Key. %s", e.Description)
 }
 
+// RSAMaximumKeySize is the largest accepted modulus for an RSA key supplied by a client. Neither the JOSE layer nor
+// crypto/rsa bounds the modulus, and the cost of verifying a signature grows with the square of its size.
+const RSAMaximumKeySize = 16384
+
+// ValidateRSAKeyMaximumSize returns an error if the JSON Web Key is an RSA key larger than RSAMaximumKeySize.
+func ValidateRSAKeyMaximumSize(jwk *jose.JSONWebKey) (err error) {
+	if key, ok := jwk.Public().Key.(*rsa.PublicKey); ok && key.N.BitLen() > RSAMaximumKeySize {
+		return fmt.Errorf("the JSON Web Key is a %d bit RSA key but keys of at most %d bits are permitted", key.N.BitLen(), RSAMaximumKeySize)
+	}
+
+	return nil
+}
+
 // FindClientPublicJWK given a BaseClient, JWKSFetcherStrategy, and search parameters will return a *jose.JSONWebKey on
 // a valid match. The *jose.JSONWebKey is guaranteed to match the alg and use values, and if strict is true it must
-// match the kid value as well.
+// match the kid value as well. An RSA key larger than RSAMaximumKeySize is rejected.
 func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
+	if key, err = findClientPublicJWK(ctx, client, fetcher, kid, alg, use, strict); err != nil {
+		return nil, err
+	}
+
+	if err = ValidateRSAKeyMaximumSize(key); err != nil {
+		return nil, &JWKLookupError{Description: err.Error()}
+	}
+
+	return key, nil
+}
+
+func findClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFetcherStrategy, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
 	var (
 		keys *jose.JSONWebKeySet
 	)

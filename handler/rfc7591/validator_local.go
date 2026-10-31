@@ -13,6 +13,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -467,12 +468,22 @@ func redirectURIHosts(redirectURIs []string) (hosts map[string]struct{}, hostles
 }
 
 // validateJSONWebKeys implements OpenID Connect Dynamic Client Registration 1.0 Section 2: 'jwks' and 'jwks_uri'
-// are mutually exclusive.
+// are mutually exclusive. An RSA key in 'jwks' larger than jwt.RSAMaximumKeySize is rejected.
 //
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if metadata.JSONWebKeys != nil && metadata.JSONWebKeysURI != "" {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' and '%s' parameters are mutually exclusive.", consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
+	}
+
+	if metadata.JSONWebKeys == nil {
+		return nil
+	}
+
+	for i := range metadata.JSONWebKeys.Keys {
+		if err = jwt.ValidateRSAKeyMaximumSize(&metadata.JSONWebKeys.Keys[i]); err != nil {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' parameter is invalid: %s.", consts.ClientMetadataJSONWebKeys, err.Error()))
+		}
 	}
 
 	return nil

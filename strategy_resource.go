@@ -72,14 +72,11 @@ func DefaultResourceStrategy(haystack, needle []string) (err error) {
 	return nil
 }
 
-// WildcardResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list.
-// A requested resource must equal an allowed value exactly, or begin with the prefix of an allowed value which ends
-// with '/*'. The prefix must be an absolute URI with a host and no query, so the wildcard only ever spans a path, and
-// a requested resource carrying a fragment, a dot segment or an encoded slash never matches a wildcard. An allowed
-// value with a wildcard anywhere else is compared exactly. It applies only when configured as the ResourceStrategy.
-func WildcardResourceStrategy(haystack, needle []string) (err error) {
+// ExactResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list with an
+// exact string comparison. It applies only when configured as the ResourceStrategy.
+func ExactResourceStrategy(haystack, needle []string) (err error) {
 	for _, n := range needle {
-		if !isMatchingWildcardResource(haystack, n) {
+		if !slices.Contains(haystack, n) {
 			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested resource '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
 		}
 	}
@@ -87,13 +84,28 @@ func WildcardResourceStrategy(haystack, needle []string) (err error) {
 	return nil
 }
 
-func isMatchingWildcardResource(haystack []string, needle string) bool {
+// WildcardResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list.
+// A requested resource must equal an allowed value exactly, or begin with the prefix of an allowed value which ends
+// with '/*'. The prefix must be an absolute URI with a host and no query, so the wildcard only ever spans a path, and
+// a requested resource carrying a fragment, a dot segment or an encoded slash never matches a wildcard. An allowed
+// value with a wildcard anywhere else is compared exactly. It applies only when configured as the ResourceStrategy.
+func WildcardResourceStrategy(haystack, needle []string) (err error) {
+	for _, n := range needle {
+		if !isMatchingWildcardTarget(haystack, n) {
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested resource '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
+		}
+	}
+
+	return nil
+}
+
+func isMatchingWildcardTarget(haystack []string, needle string) bool {
 	if slices.Contains(haystack, needle) {
 		return true
 	}
 
 	for _, h := range haystack {
-		prefix, ok := getWildcardResourcePrefix(h)
+		prefix, ok := getWildcardTargetPrefix(h)
 		if !ok || !strings.HasPrefix(needle, prefix) {
 			continue
 		}
@@ -109,7 +121,7 @@ func isMatchingWildcardResource(haystack []string, needle string) bool {
 	return false
 }
 
-func getWildcardResourcePrefix(resource string) (prefix string, ok bool) {
+func getWildcardTargetPrefix(resource string) (prefix string, ok bool) {
 	if prefix, ok = strings.CutSuffix(resource, "*"); !ok || !strings.HasSuffix(prefix, "/") {
 		return "", false
 	}

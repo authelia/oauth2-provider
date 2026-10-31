@@ -73,6 +73,21 @@ func ExactAudienceStrategy(haystack, needle []string) (err error) {
 	return nil
 }
 
+// WildcardAudienceStrategy matches requested audiences against the client's allowed audience list. A requested audience
+// must equal an allowed value exactly, or begin with the prefix of an allowed value which ends with '/*'. The prefix must
+// be an absolute URI with a host and no query, so the wildcard only ever spans a path, and a requested audience carrying a
+// fragment, a dot segment or an encoded slash never matches a wildcard. Any other allowed value, including one which is not
+// a URI, is compared exactly. It applies only when configured as the AudienceStrategy.
+func WildcardAudienceStrategy(haystack, needle []string) (err error) {
+	for _, n := range needle {
+		if !isMatchingWildcardTarget(haystack, n) {
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested audience '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
+		}
+	}
+
+	return nil
+}
+
 // GetRequestedAudiences returns the values of the 'audience' form parameter.
 // Multiple audiences can be expressed as repeated parameters or as a single space-delimited value.
 func GetRequestedAudiences(form url.Values) (audiences []string) {

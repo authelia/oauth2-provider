@@ -277,6 +277,136 @@ func TestExactAudienceMatchingStrategy(t *testing.T) {
 	}
 }
 
+func TestWildcardAudienceStrategy(t *testing.T) {
+	const debugPrefix = "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. "
+
+	testCases := []struct {
+		name     string
+		haystack []string
+		needle   []string
+		expected string
+	}{
+		{
+			name:     "ShouldPassEmptyNeedle",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{},
+		},
+		{
+			name:     "ShouldPassExactMatch",
+			haystack: []string{"https://auth.example.com/api"},
+			needle:   []string{"https://auth.example.com/api"},
+		},
+		{
+			name:     "ShouldPassExactMatchOfANonURI",
+			haystack: []string{"my-service"},
+			needle:   []string{"my-service"},
+		},
+		{
+			name:     "ShouldPassBelowAWildcard",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/v1/users"},
+		},
+		{
+			name:     "ShouldFailEmptyHaystack",
+			haystack: []string{},
+			needle:   []string{"https://auth.example.com/api"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailSubPathOfExactEntry",
+			haystack: []string{"https://auth.example.com/api"},
+			needle:   []string{"https://auth.example.com/api/v1"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api/v1' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailPrefixWithoutASegmentBoundary",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/apiv1"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/apiv1' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailTheWildcardParent",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailADifferentHost",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{"https://auth.example.com.evil.example/api"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com.evil.example/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailADifferentScheme",
+			haystack: []string{"https://auth.example.com/*"},
+			needle:   []string{"http://auth.example.com/api"},
+			expected: debugPrefix + "Requested audience 'http://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailADotSegment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/../admin"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api/../admin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailAnEncodedDotSegment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/%2e%2e/admin"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api/%2e%2e/admin' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailAnEncodedSlash",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/a%2fb"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api/a%2fb' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailAFragment",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/v1#fragment"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api/v1#fragment' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldCompareABareWildcardExactly",
+			haystack: []string{"*"},
+			needle:   []string{"my-service"},
+			expected: debugPrefix + "Requested audience 'my-service' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldCompareAWildcardOfANonURIExactly",
+			haystack: []string{"my-service/*"},
+			needle:   []string{"my-service/api"},
+			expected: debugPrefix + "Requested audience 'my-service/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldCompareAMidValueWildcardExactly",
+			haystack: []string{"https://*.example.com/*"},
+			needle:   []string{"https://auth.example.com/api"},
+			expected: debugPrefix + "Requested audience 'https://auth.example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+		{
+			name:     "ShouldFailWhenOneNeedleIsNotAllowed",
+			haystack: []string{"https://auth.example.com/api/*"},
+			needle:   []string{"https://auth.example.com/api/v1", "other"},
+			expected: debugPrefix + "Requested audience 'other' has not been whitelisted by the OAuth 2.0 Client.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := WildcardAudienceStrategy(tc.haystack, tc.needle)
+
+			if tc.expected != "" {
+				assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(actual))
+		})
+	}
+}
+
 func TestGetRequestedAudiences(t *testing.T) {
 	testCases := []struct {
 		name     string

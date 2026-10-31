@@ -264,14 +264,13 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	} else if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		rtrequester := request.Sanitize([]string{})
-
-		// The refresh token keeps the authorization details granted at the authorize endpoint, not the narrowed
-		// access token grant: narrowing the access token does not shrink the resource owner's authorization.
+		// The refresh token keeps the audience, resources and authorization details granted at the authorize endpoint,
+		// not the narrowed access token grant: narrowing the access token does not shrink the resource owner's
+		// authorization.
 		//
+		// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
 		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
-		rtrequester.SetRequestedAuthorizationDetails(ar.GetRequestedAuthorizationDetails())
-		rtrequester.SetGrantedAuthorizationDetails(ar.GetGrantedAuthorizationDetails())
+		rtrequester := refreshTokenRequester(request, ar)
 
 		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, rtrequester); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

@@ -508,6 +508,29 @@ func TestClientRegistrationHandlerSoftwareStatement(t *testing.T) {
 				assert.Equal(t, requester.Metadata.SoftwareStatement, values[consts.ClientMetadataSoftwareStatement])
 			})
 
+			t.Run("ShouldNotRecordMembersThatWereDropped", func(t *testing.T) {
+				handler, store, _ := newPolicyRegistrationHandler(t, factory)
+				fixture.configure(handler.Config.(*oauth2.Config))
+
+				requester := policyRegistrationRequest(policyHandlerExample(0), policyHandlerKey)
+				requester.Metadata.SoftwareStatement = fixture.sign(t, jwt.MapClaims{
+					testMetadataClientName: testStatementClientName,
+					"azp":                  "ordinary-claim",
+					"name":                 "ordinary-claim",
+				})
+
+				responder := oauth2.NewClientRegistrationResponse()
+
+				require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(context.Background(), requester, responder))
+
+				client, err := store.GetClient(context.Background(), responder.ClientID)
+				require.NoError(t, err)
+
+				vouched, ok := client.(oauth2.SoftwareStatementClient)
+				require.True(t, ok)
+				assert.Equal(t, []string{testMetadataClientName, testMetadataSoftwareID}, vouched.GetSoftwareStatementMembers())
+			})
+
 			t.Run("ShouldApplyThePolicyToTheStatementValues", func(t *testing.T) {
 				handler, _, memory := newPolicyRegistrationHandler(t, factory)
 				fixture.configure(handler.Config.(*oauth2.Config))
@@ -549,6 +572,78 @@ func TestClientRegistrationHandlerSoftwareStatement(t *testing.T) {
 				require.ErrorIs(t, err, oauth2.ErrUnapprovedSoftwareStatement)
 				assert.Empty(t, memory.Clients)
 				assert.Zero(t, memory.ClientRegistrationCounts[policyHandlerKey])
+			})
+		})
+	}
+}
+
+func TestClientConfigurationHandlerStoredSoftwareStatement(t *testing.T) {
+	fixture := newSoftwareStatementFixture(t)
+
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			setup := func(t *testing.T) (policy *policyConfigurationFixture, statement string) {
+				policy = newPolicyConfigurationFixture(t, factory, policyHandlerExample(0))
+				fixture.configure(policy.handler.Config.(*oauth2.Config))
+
+				statement = fixture.sign(t, jwt.MapClaims{testMetadataClientName: testStatementClientName})
+
+				metadata := policy.inPolicy("stored")
+				metadata.SoftwareStatement = statement
+
+				responder := oauth2.NewClientRegistrationResponse()
+
+				require.NoError(t, policy.put(t, policy.token, metadata, responder))
+
+				policy.token = responder.ToMap()[consts.ClientRegistrationResponseRegistrationAccessToken].(string)
+				policy.handler.Config.(*oauth2.Config).RFC7591SoftwareStatementIssuers = nil
+
+				return policy, statement
+			}
+
+			t.Run("ShouldAcceptTheStoredStatementOnceItsIssuerIsRetired", func(t *testing.T) {
+				policy, statement := setup(t)
+
+				metadata := policy.inPolicy("self-asserted")
+				metadata.SoftwareStatement = statement
+
+				responder := oauth2.NewClientRegistrationResponse()
+
+				require.NoError(t, policy.put(t, policy.token, metadata, responder))
+				assert.Equal(t, testStatementClientName, responder.ToMap()[testMetadataClientName])
+
+				client, err := policy.store.GetClient(context.Background(), policy.id)
+				require.NoError(t, err)
+
+				vouched, ok := client.(oauth2.SoftwareStatementClient)
+				require.True(t, ok)
+				assert.Equal(t, []string{testMetadataClientName, testMetadataSoftwareID}, vouched.GetSoftwareStatementMembers())
+			})
+
+			t.Run("ShouldVerifyADifferentStatement", func(t *testing.T) {
+				policy, _ := setup(t)
+
+				metadata := policy.inPolicy("different")
+				metadata.SoftwareStatement = fixture.sign(t, jwt.MapClaims{testMetadataClientName: "Another"})
+
+				require.ErrorIs(t, policy.put(t, policy.token, metadata, oauth2.NewClientRegistrationResponse()), oauth2.ErrUnapprovedSoftwareStatement)
+			})
+
+			t.Run("ShouldVerifyAStoredStatementWithNoRecordOfVerification", func(t *testing.T) {
+				policy, statement := setup(t)
+
+				client, err := policy.store.GetClient(context.Background(), policy.id)
+				require.NoError(t, err)
+
+				legacy := *client.(*oauth2.DefaultRegisteredClient)
+				legacy.SoftwareStatementMembers = nil
+
+				require.NoError(t, policy.store.UpdateClient(context.Background(), policy.id, &legacy))
+
+				metadata := policy.inPolicy("legacy")
+				metadata.SoftwareStatement = statement
+
+				require.ErrorIs(t, policy.put(t, policy.token, metadata, oauth2.NewClientRegistrationResponse()), oauth2.ErrUnapprovedSoftwareStatement)
 			})
 		})
 	}

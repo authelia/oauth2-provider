@@ -132,6 +132,10 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 	// reject it with and would otherwise register a client holding it. See ExcludeRegistrationScopeFromMetadata.
 	ExcludeRegistrationScopeFromMetadata(ctx, h.Config, metadata)
 
+	if err = retainPresentSoftwareStatementMembers(metadata); err != nil {
+		return err
+	}
+
 	var idSeq []rune
 
 	if idSeq, err = randx.RuneSequence(ClientIDEntropy, randx.AlphaNum); err != nil {

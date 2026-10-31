@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -131,7 +132,7 @@ func TestAuthenticateClientRegistrationJWTDiscovery(t *testing.T) {
 
 				if tc.err != "" {
 					require.Error(t, err)
-					assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+					assert.ErrorIs(t, err, oauth2.ErrServerError)
 					assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
 
 					continue
@@ -149,6 +150,24 @@ func TestAuthenticateClientRegistrationJWTDiscovery(t *testing.T) {
 			assert.Equal(t, int64(1), server.fetches.Load())
 		})
 	}
+}
+
+func TestAuthenticateClientRegistrationJWTReportsAnUnreachableKeySetAsAServerError(t *testing.T) {
+	auth, config, _, _ := newJWTAuthFixtures(t)
+
+	signer := newJWTAuthKeyedSigner(t, config, gen.MustRSAKey(), "unreachable-1")
+
+	client := retryablehttp.NewClient()
+	client.RetryMax = 0
+
+	config.JWKSFetcherStrategy = oauth2.NewDefaultJWKSFetcherStrategy(oauth2.JWKSFetcherWithHTTPClient(client))
+	config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: testJWTTrustedIssuer, JSONWebKeysURI: "http://127.0.0.1:1/jwks.json"}}
+
+	token := signJWTAuthToken(t, signer, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimIssuer: testJWTTrustedIssuer})
+
+	_, err := auth.AuthenticateClientRegistrationRequest(context.Background(), bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
+
+	require.ErrorIs(t, err, oauth2.ErrServerError)
 }
 
 func TestAuthenticateClientRegistrationJWTPrefersTheConfiguredKeySet(t *testing.T) {

@@ -98,6 +98,32 @@ func applySoftwareStatement(ctx context.Context, config softwareStatementConfig,
 		}
 	}
 
+	return applySoftwareStatementClaims(metadata, claims)
+}
+
+func applyStoredSoftwareStatement(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	metadata.SoftwareStatementMembers = nil
+
+	var parsed *josejwt.JSONWebToken
+
+	if parsed, err = josejwt.ParseSigned(metadata.SoftwareStatement, trustedIssuerSignatureAlgorithms); err != nil {
+		return errInvalidSoftwareStatement(err)
+	}
+
+	claims := jwt.MapClaims{}
+
+	if err = parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
+		return errInvalidSoftwareStatement(err)
+	}
+
+	return applySoftwareStatementClaims(metadata, claims)
+}
+
+func isStoredSoftwareStatement(stored, metadata *oauth2.ClientRegistrationMetadata) bool {
+	return metadata.SoftwareStatement != "" && metadata.SoftwareStatement == stored.SoftwareStatement && len(stored.SoftwareStatementMembers) != 0
+}
+
+func applySoftwareStatementClaims(metadata *oauth2.ClientRegistrationMetadata, claims jwt.MapClaims) (err error) {
 	var (
 		merged  *oauth2.ClientRegistrationMetadata
 		members []string
@@ -107,10 +133,42 @@ func applySoftwareStatement(ctx context.Context, config softwareStatementConfig,
 		return errInvalidSoftwareStatement(err)
 	}
 
-	merged.SoftwareStatement = statement
+	merged.SoftwareStatement = metadata.SoftwareStatement
 	merged.SoftwareStatementMembers = members
 
 	*metadata = *merged
+
+	return nil
+}
+
+func retainPresentSoftwareStatementMembers(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if len(metadata.SoftwareStatementMembers) == 0 {
+		return nil
+	}
+
+	var data []byte
+
+	if data, err = json.Marshal(metadata); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	values := map[string]any{}
+
+	if err = json.Unmarshal(data, &values); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	preserveEmptyMetadataArrays(metadata, values)
+
+	metadata.SoftwareStatementMembers = slices.DeleteFunc(metadata.SoftwareStatementMembers, func(name string) bool {
+		_, present := values[name]
+
+		return !present
+	})
+
+	if len(metadata.SoftwareStatementMembers) == 0 {
+		metadata.SoftwareStatementMembers = nil
+	}
 
 	return nil
 }

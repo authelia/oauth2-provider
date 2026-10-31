@@ -127,7 +127,19 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHint("The request did not contain any client metadata."))
 	}
 
-	if err = applySoftwareStatement(ctx, h.Config, metadata); err != nil {
+	var stored *oauth2.ClientRegistrationMetadata
+
+	if stored, err = strategy.MetadataFromClient(ctx, client); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if isStoredSoftwareStatement(stored, metadata) {
+		err = applyStoredSoftwareStatement(metadata)
+	} else {
+		err = applySoftwareStatement(ctx, h.Config, metadata)
+	}
+
+	if err != nil {
 		return err
 	}
 
@@ -182,6 +194,10 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	}
 
 	if err = CheckAuthorizationDetailsTypes(ctx, h.Config, metadata); err != nil {
+		return err
+	}
+
+	if err = retainPresentSoftwareStatementMembers(metadata); err != nil {
 		return err
 	}
 

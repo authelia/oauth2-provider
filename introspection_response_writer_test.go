@@ -141,7 +141,7 @@ func TestWriteIntrospectionResponse(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := new(Fosite)
+			provider := &Fosite{Config: new(Config)}
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -239,7 +239,7 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := new(Fosite)
+			provider := &Fosite{Config: new(Config)}
 			ires := &IntrospectionResponse{}
 			rw := httptest.NewRecorder()
 
@@ -295,6 +295,28 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 	}
 }
 
+func TestWriteIntrospectionResponseOmitsTheRegistrationPolicy(t *testing.T) {
+	const claim = "https://auth.example.com:authelia:oauth2:dynamic-client-registration:policy"
+
+	provider := &Fosite{Config: &Config{RFC7591ClientRegistrationPolicyClaim: claim}}
+
+	rw := httptest.NewRecorder()
+
+	provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+		Active:   true,
+		TokenUse: AccessToken,
+		AccessRequester: NewAccessRequest(&DefaultSession{
+			Extra: map[string]any{claim: map[string]any{"max_registrations": 1}, "other": "kept"},
+		}),
+	})
+
+	params := map[string]any{}
+
+	require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &params))
+	assert.NotContains(t, params, claim)
+	assert.Equal(t, "kept", params["other"])
+}
+
 func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
 	accessExpiry := time.Now().Add(time.Hour).Truncate(time.Second)
 	refreshExpiry := time.Now().Add(time.Hour * 24).Truncate(time.Second)
@@ -318,7 +340,7 @@ func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := new(Fosite)
+			provider := &Fosite{Config: new(Config)}
 
 			session := &DefaultSession{}
 			session.SetExpiresAt(AccessToken, accessExpiry)

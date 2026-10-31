@@ -204,12 +204,20 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 	)
 
 	if issuer, opts, err = s.clientRegistrationJWTIssuer(ctx, tokenString); err != nil {
+		if errors.Is(err, oauth2.ErrServerError) {
+			return nil, err
+		}
+
 		return nil, errInvalidAccessToken(err)
 	}
 
 	var token *jwt.Token
 
 	if token, err = strategy.Decode(ctx, tokenString, opts...); err != nil {
+		if isKeySourceFailure(err) {
+			return nil, errorsx.WithStack(oauth2.ErrServerError.WithHint("The keys of the access token issuer could not be retrieved.").WithWrap(err).WithDebugError(err))
+		}
+
 		return nil, errInvalidAccessToken(err)
 	}
 
@@ -284,7 +292,7 @@ func (s *DefaultEndpointAuthStrategy) clientRegistrationJWTIssuer(ctx context.Co
 		var location string
 
 		if location, err = s.discovery.resolve(ctx, s.Config, trusted); err != nil {
-			return "", nil, err
+			return "", nil, errorsx.WithStack(oauth2.ErrServerError.WithHint("The keys of the access token issuer could not be retrieved.").WithWrap(err).WithDebugError(err))
 		}
 
 		return trusted.Issuer, []jwt.StrategyOpt{

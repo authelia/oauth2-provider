@@ -289,11 +289,11 @@ func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 			err: oauth2.ErrInvalidToken,
 		},
 		{
-			name: "ShouldRejectATrustedIssuerWhoseKeySetCannotBeDiscovered",
+			name: "ShouldReportATrustedIssuerWhoseKeySetCannotBeDiscoveredAsAServerError",
 			token: func(t *testing.T) string {
 				return signJWTAuthToken(t, trusted, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimIssuer: undiscoverable.URL})
 			},
-			err: oauth2.ErrInvalidToken,
+			err: oauth2.ErrServerError,
 		},
 		{
 			name: "ShouldRejectATrustedIssuerWithTheJWTType",

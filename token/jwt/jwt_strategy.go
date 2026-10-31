@@ -6,6 +6,7 @@ package jwt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"authelia.com/provider/jose"
@@ -36,6 +37,8 @@ type StrategyConfig interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
 	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
 }
+
+var errNoIssuer = errors.New("no issuer is configured")
 
 const (
 	// DefaultJWEPBES2CountMinimum is the default smallest accepted 'p2c' header value of a JWE using a password based
@@ -98,7 +101,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 			alg = string(jose.RS256)
 		}
 
-		if keySig, err = j.Issuer.GetIssuerJWK(ctx, "", alg, JSONWebTokenUseSignature); err != nil {
+		if keySig, err = j.issuerJWK(ctx, "", alg, JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
 	} else {
@@ -108,7 +111,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 			if keySig, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, "", JSONWebTokenUseSignature); err != nil {
 				return "", "", errorsx.WithStack(fmt.Errorf("Failed to sign the JWT using the client secret. %w", err))
 			}
-		} else if keySig, err = j.Issuer.GetIssuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
+		} else if keySig, err = j.issuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
 	}
@@ -188,7 +191,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		if key, err = decryptClientSecretJWK(ctx, o.client, kid, alg, enc); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
+	} else if key, err = j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 
@@ -337,6 +340,22 @@ func (j *DefaultStrategy) Validate(ctx context.Context, token *Token, opts ...St
 	return nil
 }
 
+func (j *DefaultStrategy) issuerJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
+	if j.Issuer == nil {
+		return nil, errNoIssuer
+	}
+
+	return j.Issuer.GetIssuerJWK(ctx, kid, alg, use)
+}
+
+func (j *DefaultStrategy) issuerStrictJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
+	if j.Issuer == nil {
+		return nil, errNoIssuer
+	}
+
+	return j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, use)
+}
+
 func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, dest any, o *StrategyOpts) (err error) {
 	var (
 		key      *jose.JSONWebKey
@@ -367,7 +386,7 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		}
-	} else if key, err = j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
+	} else if key, err = j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
 		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 

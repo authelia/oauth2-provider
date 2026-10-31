@@ -575,6 +575,8 @@ func newSpecConfig(t *testing.T) *oauth2.Config {
 			},
 		},
 		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
+		DPoPEnabled:               true,
+		MTLSEnabled:               true,
 	}
 }
 

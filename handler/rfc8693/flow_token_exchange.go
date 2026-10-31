@@ -720,6 +720,20 @@ func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err err
 	return binding, nil
 }
 
+func validateBindingVerifiable(ctx context.Context, config any, binding tokenBinding, role tokenRole) (err error) {
+	provider, _ := config.(oauth2.ConfirmationConfigProvider)
+
+	if binding.jkt != "" && (provider == nil || !provider.GetDPoPEnabled(ctx)) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Unable to exchange %s bound to a DPoP key because DPoP is not enabled.", role.hint()))
+	}
+
+	if binding.x5t != "" && (provider == nil || !provider.GetMTLSEnabled(ctx)) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Unable to exchange %s bound to a client certificate because mutual-TLS is not enabled.", role.hint()))
+	}
+
+	return nil
+}
+
 func clearInheritedKeyBinding(session oauth2.Session) {
 	bound, ok := session.(oauth2.DPoPBoundSession)
 	if !ok {
@@ -731,7 +745,7 @@ func clearInheritedKeyBinding(session oauth2.Session) {
 	bound.SetRequestedDPoPJWKThumbprint("")
 }
 
-func inheritTokenBinding(request oauth2.AccessRequester, incoming tokenBinding, role tokenRole, prior tokenBinding) (err error) {
+func inheritTokenBinding(ctx context.Context, config any, request oauth2.AccessRequester, incoming tokenBinding, role tokenRole, prior tokenBinding) (err error) {
 	session := request.GetSession()
 
 	clearInheritedKeyBinding(session)
@@ -744,6 +758,12 @@ func inheritTokenBinding(request oauth2.AccessRequester, incoming tokenBinding, 
 	// is what this is; it is not 'invalid_grant', despite the fault lying in the tokens rather than the syntax.
 	if !prior.none() && prior != incoming {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token and the actor token are bound to different keys or certificates, and the issued token can only carry one binding."))
+	}
+
+	// The binding phase verifies a binding only for an enabled method, so a binding of a disabled method could not be
+	// proven. Section 2.2.2 mandates 'invalid_request' for a token that is unacceptable based on policy.
+	if err = validateBindingVerifiable(ctx, config, incoming, role); err != nil {
+		return err
 	}
 
 	if incoming.jkt != "" {

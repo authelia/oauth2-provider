@@ -16,4 +16,6 @@ const (
 const (
 	ScopeClientRegistration = "authelia:oauth2:dynamic-client-registration"
 	ScopeIntrospection      = "authelia:oauth2:token_introspection"
+	ScopeSSFRead            = "ssf.read"
+	ScopeSSFManage          = "ssf.manage"
 )

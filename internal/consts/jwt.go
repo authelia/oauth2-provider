@@ -74,4 +74,9 @@ const (
 	JSONWebTokenAlgHMACSHA256 = "HS256"
 	JSONWebTokenAlgHMACSHA384 = "HS384"
 	JSONWebTokenAlgHMACSHA512 = "HS512"
+
+	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.3
+	JSONWebTokenTypeSecurityEventToken = "secevent+jwt"
 )

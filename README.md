@@ -84,6 +84,17 @@ Legend: ✅ supported, 🟡 partially supported, ❌ not supported.
 | [OpenID Connect Key Binding 1.0](https://openid.net/specs/openid-connect-key-binding-1_0.html)                                         |   ✅   |                                                                                                    |
 | [OpenID Connect Advanced Syntax for Claims (ASC) 1.0](https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0-ID1.html) |   ❌   |                                                                                                    |
 
+### Shared Signals
+
+| Specification                                                                                            | Status | Notes                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------- | :----: | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)  |   🟡   | Security Event Token signing, transmitter metadata, stream management, push and poll; RISC via raw events, subject management not implemented |
+| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)         |   🟡   | Event and subject identifier types only                                                                                                       |
+| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                    |   🟡   | Claims and signing; delivery is RFC 8935 push or RFC 8936 poll                                                                                |
+| [RFC 8935: Push-Based SET Delivery Using HTTP](https://datatracker.ietf.org/doc/html/rfc8935)            |   🟡   | Single push attempt with a typed outcome; queueing and retries are left to the application                                                    |
+| [RFC 8936: Poll-Based SET Delivery Using HTTP](https://datatracker.ietf.org/doc/html/rfc8936)            |   🟡   | Request parsing and response writing only; the SET queue is the application's                                                                 |
+| [RFC 9493: Subject Identifiers for Security Event Tokens](https://datatracker.ietf.org/doc/html/rfc9493) |   🟡   | Subject identifier formats only                                                                                                               |
+
 Planned work and notable differences from ORY Fosite are tracked in [TODO.md](TODO.md).
 
 ## Thanks

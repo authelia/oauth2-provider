@@ -72,6 +72,8 @@ const (
 	ClaimAuthorizedActor                     = consts.ClaimAuthorizedActor
 	ClaimActor                               = consts.ClaimActor
 	ClaimEvents                              = consts.ClaimEvents
+	ClaimSubjectIdentifier                   = consts.ClaimSubjectIdentifier
+	ClaimTransaction                         = consts.ClaimTransaction
 	ClaimEventBackChannelLogout              = consts.ClaimEventBackChannelLogout
 	ClaimConfirmation                        = consts.ClaimConfirmation
 	ClaimAuthorizationDetails                = consts.ClaimAuthorizationDetails
@@ -137,6 +139,11 @@ const (
 	//
 	// See: https://openid.net/specs/openid-connect-key-binding-1_0.html#section-4
 	JSONWebTokenTypeDPoPIDToken = consts.JSONWebTokenTypeDPoPIDToken
+
+	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.3
+	JSONWebTokenTypeSecurityEventToken = consts.JSONWebTokenTypeSecurityEventToken
 )
 
 const (

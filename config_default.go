@@ -318,7 +318,9 @@ type Config struct {
 	// EnforceJWTProfileAccessTokens forces the issuer to return JWT Profile Access Tokens to all clients.
 	EnforceJWTProfileAccessTokens bool
 
-	// HTTPClient is the HTTP client to use for requests.
+	// HTTPClient is the HTTP client to use for requests. URL validation cannot block private addresses because DNS can
+	// change, so a deployment that fetches or delivers to untrusted URLs must also check the resolved address at
+	// connection time in this client's transport.
 	HTTPClient *retryablehttp.Client
 
 	// AuthorizeEndpointHandlers is a list of handlers that are called before the authorization endpoint is served.
@@ -437,6 +439,9 @@ type Config struct {
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 	JWTClockSkew time.Duration
+
+	// SSF is the OpenID Shared Signals Framework transmitter configuration. Has no default and may be nil.
+	SSF *SSFConfig
 
 	// DPoPEnabled enables RFC 9449 DPoP handling.
 	DPoPEnabled bool
@@ -1421,6 +1426,18 @@ func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (s
 	return c.RevocationEndpointClientAuthStrategy
 }
 
+// GetSSFConfig returns a copy of the Shared Signals Framework configuration with the Audience defaulted to the
+// Issuer and MaxRequestBytes defaulted to 64 KiB, or nil if it is not configured.
+func (c *Config) GetSSFConfig(ctx context.Context) (config *SSFConfig) {
+	if c.SSF == nil {
+		return nil
+	}
+
+	cfg := c.SSF.WithDefaults()
+
+	return &cfg
+}
+
 // GetDPoPEnabled returns true if RFC 9449 DPoP handling is enabled, which is also the case whenever DPoP is enforced.
 func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
 	return c.DPoPEnabled || c.DPoPEnforce
@@ -1718,6 +1735,7 @@ var (
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
 	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
+	_ SSFConfigProvider                                     = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)
 	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)

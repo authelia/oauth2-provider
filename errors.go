@@ -132,6 +132,16 @@ var (
 		DescriptionField: "Could not find the requested resource(s).",
 		CodeField:        http.StatusNotFound,
 	}
+	ErrSSFStreamConflict = &RFC6749Error{
+		ErrorField:       errConflictName,
+		DescriptionField: "The client already has a stream.",
+		CodeField:        http.StatusConflict,
+	}
+	ErrSSFVerificationThrottled = &RFC6749Error{
+		ErrorField:       errTooManyRequestsName,
+		DescriptionField: "The stream was verified too recently.",
+		CodeField:        http.StatusTooManyRequests,
+	}
 	ErrRequestUnauthorized = &RFC6749Error{
 		ErrorField:       errRequestUnauthorizedName,
 		DescriptionField: "The request could not be authorized.",
@@ -321,6 +331,8 @@ const (
 	errInvalidGrantName            = "invalid_grant"
 	errInvalidClientName           = "invalid_client"
 	errNotFoundName                = "not_found"
+	errConflictName                = "conflict"
+	errTooManyRequestsName         = "too_many_requests"
 	errInvalidStateName            = "invalid_state"
 	errMisconfigurationName        = "misconfiguration"
 	errInsufficientEntropyName     = "insufficient_entropy"

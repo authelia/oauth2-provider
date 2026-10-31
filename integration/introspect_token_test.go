@@ -26,6 +26,7 @@ func TestIntrospectToken(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                  []byte("some-super-cool-secret-that-nobody-knows"),
 		EnforceJWTProfileAccessTokens: true,
+		AccessTokenIssuer:             "https://as.example.com",
 	}
 
 	strategy := &jwt.DefaultStrategy{

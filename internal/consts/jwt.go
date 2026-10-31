@@ -67,6 +67,11 @@ const (
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt" //nolint:gosec // This is a credential type, not a credential.
+
+	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.3
+	JSONWebTokenTypeSecurityEventToken = "secevent+jwt"
 )
 
 const (
@@ -74,9 +79,4 @@ const (
 	JSONWebTokenAlgHMACSHA256 = "HS256"
 	JSONWebTokenAlgHMACSHA384 = "HS384"
 	JSONWebTokenAlgHMACSHA512 = "HS512"
-
-	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
-	//
-	// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.3
-	JSONWebTokenTypeSecurityEventToken = "secevent+jwt"
 )

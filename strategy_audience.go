@@ -40,19 +40,9 @@ func GetAudienceStrategy(ctx context.Context, config AudienceStrategyProvider, c
 	return strategy
 }
 
-// DefaultAudienceStrategy matches requested audiences against the client's allowed audience list.
+// DefaultAudienceStrategy is an alias for ExactAudienceStrategy.
 func DefaultAudienceStrategy(haystack, needle []string) (err error) {
-	if len(needle) == 0 {
-		return nil
-	}
-
-	for _, n := range needle {
-		if !slices.Contains(haystack, n) {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested audience '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
-		}
-	}
-
-	return nil
+	return ExactAudienceStrategy(haystack, needle)
 }
 
 // ExactAudienceStrategy does not assume that audiences are URIs, but compares strings as-is and
@@ -66,7 +56,7 @@ func ExactAudienceStrategy(haystack, needle []string) (err error) {
 
 	for _, n := range needle {
 		if !slices.Contains(haystack, n) {
-			return errorsx.WithStack(ErrInvalidTarget.WithDebugf(`Requested audience "%s" has not been whitelisted by the OAuth 2.0 Client.`, n))
+			return errorsx.WithStack(ErrInvalidTarget.WithDebugf("Requested audience '%s' has not been whitelisted by the OAuth 2.0 Client.", n))
 		}
 	}
 

@@ -52,6 +52,12 @@ const (
 
 	// RFC8693NAToken is the N/A token.
 	RFC8693NAToken string = "N_A"
+
+	// AuthorizationServerMetadataIdentityChainingRequestedTokenTypesSupported is the authorization server metadata
+	// parameter listing the token types a client can request when performing identity and authorization chaining.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-3
+	AuthorizationServerMetadataIdentityChainingRequestedTokenTypesSupported string = "identity_chaining_requested_token_types_supported"
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.

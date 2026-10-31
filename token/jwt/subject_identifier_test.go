@@ -31,6 +31,7 @@ func TestSubjectIdentifier(t *testing.T) {
 	testCases := []struct {
 		name    string
 		have    func(t *testing.T) *SubjectIdentifier
+		build   func() (*SubjectIdentifier, error)
 		want    string
 		wantErr string
 	}{
@@ -128,40 +129,35 @@ func TestSubjectIdentifier(t *testing.T) {
 		},
 		{
 			name:    "ShouldRejectEmptyEmail",
-			have:    func(t *testing.T) *SubjectIdentifier { s, _ := NewSubjectIdentifierEmail(""); return s },
+			build:   func() (*SubjectIdentifier, error) { return NewSubjectIdentifierEmail("") },
 			wantErr: "email",
 		},
 		{
 			name:    "ShouldRejectMissingIssuer",
-			have:    func(t *testing.T) *SubjectIdentifier { s, _ := NewSubjectIdentifierIssuerSubject("", "b"); return s },
+			build:   func() (*SubjectIdentifier, error) { return NewSubjectIdentifierIssuerSubject("", "b") },
 			wantErr: "iss",
 		},
 		{
-			name: "ShouldRejectMissingSubject",
-			have: func(t *testing.T) *SubjectIdentifier {
-				s, _ := NewSubjectIdentifierIssuerSubject("https://a", "")
-				return s
-			},
+			name:    "ShouldRejectMissingSubject",
+			build:   func() (*SubjectIdentifier, error) { return NewSubjectIdentifierIssuerSubject("https://a", "") },
 			wantErr: "sub",
 		},
 		{
 			name:    "ShouldRejectEmptyOpaque",
-			have:    func(t *testing.T) *SubjectIdentifier { s, _ := NewSubjectIdentifierOpaque(""); return s },
+			build:   func() (*SubjectIdentifier, error) { return NewSubjectIdentifierOpaque("") },
 			wantErr: "id",
 		},
 		{
 			name: "ShouldRejectEmptyComplex",
-			have: func(t *testing.T) *SubjectIdentifier {
-				s, _ := NewSubjectIdentifierComplex(SubjectIdentifierComplexMembers{})
-				return s
+			build: func() (*SubjectIdentifier, error) {
+				return NewSubjectIdentifierComplex(SubjectIdentifierComplexMembers{})
 			},
 			wantErr: "complex",
 		},
 		{
 			name: "ShouldRejectInvalidComplexMember",
-			have: func(t *testing.T) *SubjectIdentifier {
-				s, _ := NewSubjectIdentifierComplex(SubjectIdentifierComplexMembers{User: &SubjectIdentifier{Format: SubjectIdentifierFormatEmail}})
-				return s
+			build: func() (*SubjectIdentifier, error) {
+				return NewSubjectIdentifierComplex(SubjectIdentifierComplexMembers{User: &SubjectIdentifier{Format: SubjectIdentifierFormatEmail}})
 			},
 			wantErr: "user",
 		},
@@ -266,13 +262,18 @@ func TestSubjectIdentifier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.build != nil {
+				s, err := tc.build()
+				assert.Nil(t, s)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+
+				return
+			}
+
 			s := tc.have(t)
 
 			if tc.wantErr != "" {
-				if s == nil {
-					return
-				}
-
 				err := s.Validate()
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErr)

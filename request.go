@@ -321,7 +321,7 @@ func (a *Request) GetLang() language.Tag {
 }
 
 func deduplicateArguments(arguments Arguments) (deduplicated Arguments) {
-	seen := make(map[string]struct{}, len(arguments))
+	seen := map[string]struct{}{}
 
 	for _, argument := range arguments {
 		if _, ok := seen[argument]; ok {

@@ -710,6 +710,10 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], time.Now().UTC().Add(10*time.Minute))
 	}
 
+	if requestedType == consts.TokenTypeRFC8693IDToken {
+		subjectToken = mintScopedRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], oauth2.Arguments{consts.ScopeOpenID})
+	}
+
 	req := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{

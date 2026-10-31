@@ -437,6 +437,15 @@ func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2
 	return requested == consts.TokenTypeRFC8693IDJAG
 }
 
+func isIDTokenRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
+	requested := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
+	if requested == "" {
+		requested = config.GetDefaultRFC8693RequestedTokenType(ctx)
+	}
+
+	return requested == consts.TokenTypeRFC8693IDToken
+}
+
 // RequireSubjectToken returns an error unless a token type handler validated the 'subject_token' of the request.
 func RequireSubjectToken(request oauth2.AccessRequester) (err error) {
 	return requireSubjectToken(request)

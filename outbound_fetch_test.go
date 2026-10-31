@@ -159,6 +159,31 @@ func (o *outboundTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: o.status, Header: header, Body: io.NopCloser(strings.NewReader("{}")), Request: r}, nil
 }
 
+func TestHTTPClientWithoutRedirectsCapsTheRetryWait(t *testing.T) {
+	response := &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{"Retry-After": {"86400"}}}
+
+	backoff := HTTPClientWithoutRedirects(retryablehttp.NewClient()).Backoff
+
+	testCases := []struct {
+		name     string
+		maximum  time.Duration
+		expected time.Duration
+	}{
+		{name: "ShouldCapAtAPositiveMaximum", maximum: 10 * time.Millisecond, expected: 10 * time.Millisecond},
+		{name: "ShouldCapAtAZeroMaximum"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, backoff(time.Millisecond, tc.maximum, 0, response))
+		})
+	}
+
+	t.Run("ShouldNotRaiseAShorterWait", func(t *testing.T) {
+		assert.Equal(t, time.Millisecond, backoff(time.Millisecond, time.Second, 0, nil))
+	})
+}
+
 func TestConfigGetHTTPClientSharesTheDefaultClient(t *testing.T) {
 	config := &Config{}
 

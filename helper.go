@@ -99,7 +99,7 @@ func boundedBackoff(backoff retryablehttp.Backoff) retryablehttp.Backoff {
 	return func(minimum, maximum time.Duration, attempt int, response *http.Response) time.Duration {
 		wait := backoff(minimum, maximum, attempt, response)
 
-		if maximum > 0 && wait > maximum {
+		if wait > maximum {
 			return maximum
 		}
 

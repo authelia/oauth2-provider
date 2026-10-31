@@ -52,7 +52,11 @@ func TestSectorIdentifierValidatorBoundsTheFetch(t *testing.T) {
 	})
 
 	t.Run("ShouldNotWaitForAnUnboundedRetryAfter", func(t *testing.T) {
+		attempts := 0
+
 		transport := sectorRoundTripper(func(r *http.Request) (*http.Response, error) {
+			attempts++
+
 			return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{"Retry-After": {"86400"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 		})
 
@@ -64,6 +68,7 @@ func TestSectorIdentifierValidatorBoundsTheFetch(t *testing.T) {
 		_ = newValidator(transport).ValidateClientRegistrationMetadata(ctx, nil, metadata)
 
 		assert.Less(t, time.Since(start), 2*time.Second)
+		assert.Equal(t, 2, attempts)
 	})
 }
 

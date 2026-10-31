@@ -1,0 +1,116 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package rfc8693_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal/consts"
+)
+
+func TestSubjectActorChainIsNotDropped(t *testing.T) {
+	const hint = "The subject token has an 'act' claim so an 'actor_token' is required"
+
+	for _, sc := range bindingExchangeStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			testCases := []struct {
+				name    string
+				refresh bool
+				act     map[string]any
+				actor   bool
+				err     string
+			}{
+				{name: "ShouldAcceptASubjectWithoutAnActClaim"},
+				{name: "ShouldRejectAnAccessTokenWithAnActClaim", act: map[string]any{consts.ClaimSubject: "service-a"}, err: hint},
+				{name: "ShouldRejectARefreshTokenWithAnActClaim", refresh: true, act: map[string]any{consts.ClaimSubject: "service-a"}, err: hint},
+				{name: "ShouldAcceptAnActClaimWithAnActorToken", act: map[string]any{consts.ClaimSubject: "service-a"}, actor: true},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store := sc.newStore()
+					config, strategy := newBindingExchangeConfig()
+					config.RefreshTokenScopes = []string{}
+					config.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
+
+					owner := store.GetClients()["custom-lifespan-client"]
+					tokenType := consts.TokenTypeRFC8693AccessToken
+
+					if tc.refresh {
+						owner = store.GetClients()["my-client"]
+						tokenType = consts.TokenTypeRFC8693RefreshToken
+					}
+
+					session := NewDefaultSession()
+					session.SetSubject("peter")
+
+					if tc.act != nil {
+						session.SetClaimActor(tc.act)
+					}
+
+					token := chainSubjectToken(t, strategy, store, owner, session, tc.refresh)
+
+					request := newLifetimeExchangeRequest(store, tokenType, token, consts.TokenTypeRFC8693AccessToken)
+
+					if tc.actor {
+						actor := NewDefaultSession()
+						actor.SetSubject("service-b")
+
+						form := request.GetRequestForm()
+						form.Set(consts.FormParameterActorTokenType, consts.TokenTypeRFC8693AccessToken)
+						form.Set(consts.FormParameterActorToken, createSessionAccessToken(t.Context(), strategy, store, store.GetClients()["custom-lifespan-client"], actor))
+					}
+
+					var handler oauth2.TokenEndpointHandler = newLifetimeAccessTokenHandler(config, strategy, store)
+					if tc.refresh {
+						handler = newLifetimeRefreshTokenHandler(config, strategy, store)
+					}
+
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+					if tc.actor {
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(newLifetimeAccessTokenHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), request)))
+					}
+
+					err := (&TokenExchangeGrantHandler{Config: config}).PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+
+					if tc.err != "" {
+						assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+						assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+						return
+					}
+
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				})
+			}
+		})
+	}
+}
+
+func chainSubjectToken(t *testing.T, strategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, owner oauth2.Client, session *DefaultSession, refresh bool) string {
+	t.Helper()
+
+	if !refresh {
+		return createSessionAccessToken(t.Context(), strategy, store, owner, session)
+	}
+
+	session.SetExpiresAt(oauth2.RefreshToken, session.GetExpiresAt(oauth2.AccessToken))
+
+	request := newUnaddressedRequest(owner, "peter", nil, oauth2.RefreshToken)
+	request.Session = session
+
+	token, signature, err := strategy.GenerateRefreshToken(t.Context(), request)
+	require.NoError(t, err)
+	require.NoError(t, store.(hoauth2.TokenRevocationStorage).CreateRefreshTokenSession(t.Context(), signature, "", request.Sanitize(nil)))
+
+	return token
+}

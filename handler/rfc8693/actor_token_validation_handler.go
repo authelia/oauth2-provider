@@ -25,8 +25,9 @@ type ActorTokenValidationHandler struct{}
 //   - No subject token claims recorded → no token type handler claimed the 'subject_token_type', so the
 //     'subject_token' was never validated. Rejected.
 //   - No actor_token and no may_act → impersonation; nothing to validate at this layer.
-//   - may_act present (with or without actor_token) → the actor (or the client itself, when no actor_token is
-//     supplied) MUST match every constraint in may_act.
+//   - may_act present without an actor_token → rejected, as the subject token authorizes delegation and the request
+//     names no actor, so the issued token would not record who is acting.
+//   - may_act present with an actor_token → the actor MUST match every constraint in may_act.
 //   - actor_token present but no may_act → the subject token carries no in-token authorization for delegation.
 //     The request is rejected with invalid_grant unless the client implements Client and opts
 //     into externally-gated authorization via GetAllowActorTokenWithoutMayAct.
@@ -77,16 +78,11 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		// Impersonation. No authorization check required at this layer.
 		return nil
 	case present:
-		// may_act constraint present. Build a virtual actor from the authenticated client when no actor_token was
-		// supplied, then enforce that the actor satisfies every may_act member.
-		actor := actorTokenObject
-		if actor == nil {
-			actor = map[string]any{
-				consts.ClaimSubject:          client.GetID(),
-				consts.ClaimClientIdentifier: client.GetID(),
-			}
+		if actorTokenObject == nil {
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The subject token has a 'may_act' claim so an '%s' is required.", consts.FormParameterActorToken))
 		}
 
+		// may_act constraint present. Enforce that the actor satisfies every may_act member.
 		for k, v := range mayAct {
 			if isUnusedAuthorizedActorClaim(k) {
 				continue
@@ -94,8 +90,8 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 
 			// reflect.DeepEqual handles non-comparable dynamic types (slices, maps, nested objects) which
 			// interface == would panic on per Go spec; may_act values are not constrained to scalars.
-			if value, ok := actor[k]; !ok || !reflect.DeepEqual(value, v) {
-				return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The actor or client is not authorized to act on behalf of the subject."))
+			if value, ok := actorTokenObject[k]; !ok || !reflect.DeepEqual(value, v) {
+				return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("The actor is not authorized to act on behalf of the subject."))
 			}
 		}
 

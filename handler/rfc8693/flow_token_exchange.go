@@ -280,7 +280,9 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 //
 // When the token exchange request includes an 'actor_token' (delegation), this handler is responsible for setting the
 // 'act' claim on the issued token's session per RFC 8693 Section 4.1. Pure impersonation (no actor_token) leaves the
-// session unchanged so the issued token represents the subject acting alone.
+// session unchanged so the issued token represents the subject acting alone. A 'subject_token' with an 'act' claim is
+// rejected without an 'actor_token', as the issued token would no longer record the prior actors, unless it is a JWT
+// authorization grant which carries them over.
 //
 // IMPORTANT ordering note: this handler MUST be registered BEFORE the token-type handlers (AccessTokenTypeHandler,
 // RefreshTokenTypeHandler, IDTokenTypeHandler, CustomJWTTypeHandler) in the TokenEndpointHandlers slice. The token
@@ -316,6 +318,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 
 	if act, err = buildActClaim(session); err != nil {
 		return err
+	}
+
+	if _, delegated := session.GetSubjectToken()[consts.ClaimActor]; delegated && act == nil && authorizationGrantType(ctx, request, c.Config) == nil {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The subject token has an '%s' claim so an '%s' is required.", consts.ClaimActor, consts.FormParameterActorToken))
 	}
 
 	if err = c.consume(ctx, request, session); err != nil {

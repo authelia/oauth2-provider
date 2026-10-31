@@ -61,7 +61,7 @@ func TestActorTokenValidationHandler_DelegationWithMayActMismatchedActor(t *test
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }
 
-func TestActorTokenValidationHandler_MayActWithoutActorTokenUsesClientAsActor(t *testing.T) {
+func TestActorTokenValidationHandler_MayActWithoutActorTokenIsRejected(t *testing.T) {
 	h := &ActorTokenValidationHandler{}
 
 	client := newConfidentialClient()
@@ -77,7 +77,9 @@ func TestActorTokenValidationHandler_MayActWithoutActorTokenUsesClientAsActor(t 
 		nil,
 	)
 
-	require.NoError(t, h.HandleTokenEndpointRequest(context.Background(), req))
+	err := h.HandleTokenEndpointRequest(context.Background(), req)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+	assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), "so an 'actor_token' is required")
 }
 
 func TestActorTokenValidationHandler_HandlesNonScalarMayActWithoutPanic(t *testing.T) {

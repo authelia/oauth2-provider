@@ -39,6 +39,8 @@ type GenericCodeTokenEndpointHandler struct {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
 		oauth2.RefreshTokenScopesProvider
+		oauth2.AudienceStrategyProvider
+		oauth2.ResourceStrategyProvider
 	}
 }
 
@@ -93,8 +95,23 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	}
 
 	request.SetRequestedScopes(deviceRequester.GetRequestedScopes())
-	request.SetRequestedAudience(deviceRequester.GetRequestedAudience())
-	request.SetRequestedResource(deviceRequester.GetRequestedResource())
+
+	// RFC 8707 Section 2.2 applies to the token request of every grant type: when it omits the 'resource' parameter the
+	// values granted to the device code apply, and otherwise they must be a subset of them. The same rule is applied to
+	// the 'audience' parameter.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+	if len(request.GetRequestedAudience()) == 0 {
+		request.SetRequestedAudience(deviceRequester.GetGrantedAudience())
+	} else if err = oauth2.GetAudienceStrategy(ctx, c.Config, request.GetClient())(deviceRequester.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	if len(request.GetRequestedResource()) == 0 {
+		request.SetRequestedResource(deviceRequester.GetGrantedResource())
+	} else if err = oauth2.GetResourceStrategy(ctx, c.Config, request.GetClient())(deviceRequester.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+		return err
+	}
 
 	// The code must have been issued to this client.
 	//
@@ -195,11 +212,11 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		request.GrantScope(scope)
 	}
 
-	for _, audience := range ar.GetGrantedAudience() {
+	for _, audience := range request.GetRequestedAudience() {
 		request.GrantAudience(audience)
 	}
 
-	for _, resource := range ar.GetGrantedResource() {
+	for _, resource := range request.GetRequestedResource() {
 		request.GrantResource(resource)
 	}
 
@@ -249,14 +266,12 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	if err = c.CoreStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize([]string{})); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if refreshSignature != "" {
-		rtrequester := request.Sanitize([]string{})
-
-		// The refresh token keeps the authorization details granted by the resource owner, not the narrowed access
-		// token grant.
+		// The refresh token keeps the audience, resources and authorization details granted by the resource owner, not
+		// the narrowed access token grant.
 		//
+		// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
 		// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
-		rtrequester.SetRequestedAuthorizationDetails(ar.GetRequestedAuthorizationDetails())
-		rtrequester.SetGrantedAuthorizationDetails(ar.GetGrantedAuthorizationDetails())
+		rtrequester := refreshTokenRequester(request, ar)
 
 		if err = c.CoreStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, rtrequester); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

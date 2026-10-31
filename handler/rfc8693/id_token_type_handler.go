@@ -182,6 +182,10 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 	var ok bool
 
 	if _, ok = ValidateIssuer(iss, expectedIssuer, nil); !ok {
+		if expectedIssuer == "" {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebug("The ID Token issuer is not configured, so no issuer is trusted."))
+		}
+
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", expectedIssuer))
 	}
 

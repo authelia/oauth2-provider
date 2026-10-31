@@ -59,6 +59,11 @@ type JWTValidationConfig struct {
 	JWTLifetimeToleranceWindow time.Duration `json:"tolerance_window"`
 	ValidateFunc               jwt.Keyfunc   `json:"-"`
 
+	// ExpectedAudience is the set of 'aud' claim values accepted in addition to the requesting client's ID, such as
+	// this authorization server's own identifier. It does not apply to an Identity Assertion JWT Authorization Grant
+	// request, whose audience is always the requesting client.
+	ExpectedAudience []string `json:"expected_aud"`
+
 	// Types is the set of permitted 'typ' header values, compared per RFC 8725 Section 3.11. An absent 'typ' is
 	// permitted when the set includes 'JWT'. When empty, only 'JWT' or an absent 'typ' is permitted.
 	Types []string `json:"types"`

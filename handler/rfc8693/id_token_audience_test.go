@@ -107,6 +107,7 @@ func TestIDTokenTypeHandlerRejectsOtherJWTTypes(t *testing.T) {
 	newToken := func(t *testing.T, typ string) string {
 		claims := jwt.MapClaims{
 			consts.ClaimSubject:        "peter",
+			consts.ClaimIssuer:         specIDTokenIssuer,
 			consts.ClaimAudience:       []string{client.GetID()},
 			consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 			consts.ClaimIssuedAt:       time.Now().Unix(),

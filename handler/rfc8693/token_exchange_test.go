@@ -260,6 +260,14 @@ func createAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, s
 }
 
 func createJWT(ctx context.Context, client any, strategy jwt.Strategy, claims jwt.MapClaims) string {
+	if _, ok := claims[consts.ClaimAudience]; !ok {
+		claims[consts.ClaimAudience] = []string{"my-client", "requester", "chaining-client", "exchange-client", "exchange-refresh-client"}
+	}
+
+	if _, ok := claims[consts.ClaimIssuer]; !ok {
+		claims[consts.ClaimIssuer] = specIDTokenIssuer
+	}
+
 	token, _, err := strategy.Encode(ctx, claims, jwt.WithIDTokenClient(client))
 
 	if err != nil {

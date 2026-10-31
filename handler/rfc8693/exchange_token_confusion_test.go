@@ -133,6 +133,7 @@ func runCustomJWTSubjectToken(t *testing.T, config *oauth2.Config, issuer, typ s
 	claims := jwt.MapClaims{
 		consts.ClaimIssuer:         issuer,
 		consts.ClaimSubject:        "peter",
+		consts.ClaimAudience:       []string{"my-client"},
 		"subject":                  "peter",
 		consts.ClaimExpirationTime: time.Now().Add(time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),

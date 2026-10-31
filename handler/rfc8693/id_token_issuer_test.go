@@ -26,8 +26,15 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 		name     string
 		issuer   string
 		allowed  []string
+		unset    bool
 		expected string
 	}{
+		{
+			name:     "ShouldRejectAnyIssuerWhenTheIDTokenIssuerIsNotConfigured",
+			issuer:   "https://id.example.com",
+			unset:    true,
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is not a trusted issuer. The ID Token issuer is not configured, so no issuer is trusted.",
+		},
 		{
 			name:   "ShouldAcceptTheIDTokenIssuer",
 			issuer: "https://id.example.com",
@@ -55,6 +62,10 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 			config := newSpecConfig(t)
 			config.IDTokenIssuer = "https://id.example.com"
 			config.AccessTokenIssuer = "https://at.example.com"
+
+			if tc.unset {
+				config.IDTokenIssuer = ""
+			}
 
 			store := storage.NewExampleStore()
 			client := &rfc8693Client{DefaultClient: store.Clients["my-client"].(*oauth2.DefaultClient), subjectTokenIssuers: tc.allowed}

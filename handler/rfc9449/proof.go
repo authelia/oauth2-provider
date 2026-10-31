@@ -34,7 +34,7 @@ const RSAMinimumKeySize = 2048
 // RSAMaximumKeySize is the largest accepted modulus for an RSA DPoP proof key. Neither the JOSE layer nor crypto/rsa
 // bounds the modulus, and the proof key is supplied by the client on every request, so without this check a proof
 // carrying a very large key costs the server a modular exponentiation over that key before the signature is rejected.
-const RSAMaximumKeySize = 16384
+const RSAMaximumKeySize = jwt.RSAMaximumKeySize
 
 // ParseProof parses a compact DPoP proof JWT, validates its structural requirements (typ, alg, embedded public jwk,
 // signature, and required claims), and returns the validated proof. Request-contextual checks (htm/htu/iat/nonce and

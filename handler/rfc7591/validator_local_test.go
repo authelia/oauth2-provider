@@ -6,6 +6,8 @@ package rfc7591
 
 import (
 	"context"
+	"crypto/rsa"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestLocalValidator(t *testing.T) {
@@ -175,6 +178,21 @@ func TestLocalValidator(t *testing.T) {
 				JSONWebKeys:    &jose.JSONWebKeySet{},
 			},
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' and 'jwks_uri' parameters are mutually exclusive.",
+		},
+		{
+			name: "ShouldAcceptAnRSAKeyOfTheMaximumSize",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(jwt.RSAMaximumKeySize)}}},
+			},
+		},
+		{
+			name: "ShouldRejectAnRSAKeyOverTheMaximumSize",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(jwt.RSAMaximumKeySize + 1)}}},
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' parameter is invalid: the JSON Web Key is a 16385 bit RSA key but keys of at most 16384 bits are permitted.",
 		},
 		{
 			name: "ShouldRejectCodeResponseTypeWithoutAuthorizationCodeGrant",
@@ -778,3 +796,9 @@ const (
 	pairwiseHostlessRedirectURI = "com.example.app:/cb"
 	pairwiseHostlessExpected    = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'subject_type' value 'pairwise' requires a 'sector_identifier_uri' when a 'redirect_uris' value has no host."
 )
+
+func rsaPublicKeyOfSize(bits int) *rsa.PublicKey {
+	n := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+
+	return &rsa.PublicKey{N: n.SetBit(n, 0, 1), E: 65537}
+}

@@ -299,7 +299,11 @@ func (r *decoratedJARMClient) GetSigningKeyID() (kid string) {
 }
 
 func (r *decoratedJARMClient) GetSigningAlg() (alg string) {
-	return r.GetAuthorizationSignedResponseAlg()
+	if alg = r.GetAuthorizationSignedResponseAlg(); alg == "" {
+		return string(jose.RS256)
+	}
+
+	return alg
 }
 
 func (r *decoratedJARMClient) GetEncryptionKeyID() (kid string) {

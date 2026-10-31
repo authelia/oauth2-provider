@@ -186,6 +186,10 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, err
 	}
 
+	if err = c.validateIDTokenGrant(ctx, request, or, role); err != nil {
+		return nil, nil, err
+	}
+
 	if role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config) {
 		if err = c.validateIDJAGGrant(ctx, request, or); err != nil {
 			return nil, nil, err
@@ -210,6 +214,18 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	}
 
 	return or.GetSession(), claims, nil
+}
+
+func (c *RefreshTokenTypeHandler) validateIDTokenGrant(ctx context.Context, request oauth2.AccessRequester, or oauth2.Requester, role tokenRole) (err error) {
+	// OpenID Connect Core 1.0 Section 3.1.2.1 requires the 'openid' scope of an OpenID Connect request, so a grant
+	// without it does not carry the authentication an ID Token states.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+	if role == tokenRoleSubject && isIDTokenRequest(ctx, request, c.Config) && !or.GetGrantedScopes().Has(consts.ScopeOpenID) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An ID Token can only be issued from a refresh token that was granted the '%s' scope.", consts.ScopeOpenID))
+	}
+
+	return nil
 }
 
 func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(ctx context.Context, client oauth2.Client, or oauth2.Requester) (err error) {

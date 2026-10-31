@@ -165,6 +165,8 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 
 	or, err = c.GetRefreshTokenSession(ctx, signature, newTokenSession(request.GetSession()))
 
+	restoreTokenSession(or)
+
 	switch {
 	case err == nil:
 		if err = c.ValidateRefreshToken(ctx, or, token); err != nil {

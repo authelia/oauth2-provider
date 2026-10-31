@@ -157,7 +157,11 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 
 	signature := c.AccessTokenSignature(ctx, token)
 
-	if original, err = c.GetAccessTokenSession(ctx, signature, newTokenSession(request.GetSession())); err != nil {
+	original, err = c.GetAccessTokenSession(ctx, signature, newTokenSession(request.GetSession()))
+
+	restoreTokenSession(original)
+
+	if err != nil {
 		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
 	} else if err = c.ValidateAccessToken(ctx, original, token); err != nil {
 		return nil, nil, errExchangeTokenValidation(err)

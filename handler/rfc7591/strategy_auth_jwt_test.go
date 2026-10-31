@@ -32,7 +32,7 @@ func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 
 	auth, config, store, access := newJWTAuthFixtures(t)
 
-	require.Equal(t, testJWTIssuer+":authelia:authelia:oauth2:dynamic-client-registration:policy", config.GetRFC7591ClientRegistrationPolicyClaim(ctx))
+	require.Equal(t, testJWTIssuer+":authelia:oauth2:dynamic-client-registration:policy", config.GetRFC7591ClientRegistrationPolicyClaim(ctx))
 
 	other := newJWTAuthSigner(config)
 	proofKey := newProofKey(t)
@@ -547,7 +547,7 @@ func signJWTAuthClaims(overrides jwt.MapClaims) jwt.MapClaims {
 		jwt.ClaimJWTID:            "j1",
 		jwt.ClaimIssuedAt:         time.Now().Unix(),
 		jwt.ClaimExpirationTime:   time.Now().Add(time.Hour).Unix(),
-		testJWTIssuer + ":authelia:authelia:oauth2:dynamic-client-registration:policy": map[string]any{policyMemberMaxRegistrations: 2},
+		testJWTIssuer + ":authelia:oauth2:dynamic-client-registration:policy": map[string]any{policyMemberMaxRegistrations: 2},
 	}
 
 	for name, value := range overrides {

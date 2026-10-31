@@ -379,7 +379,11 @@ func parsePolicyRule(member string, value any) (rule policyRule, err error) {
 			return rule, policyErrorf("The registration policy member '%s' rule '%s' must be a string.", member, rule.kind)
 		}
 
-		if rule.re, err = regexp.Compile("^(?:" + pattern + ")$"); err != nil {
+		if _, err = regexp.Compile(pattern); err == nil {
+			rule.re, err = regexp.Compile("^(?:" + pattern + ")$")
+		}
+
+		if err != nil {
 			return rule, policyErrorf("The registration policy member '%s' rule '%s' is not a valid regular expression.", member, rule.kind)
 		}
 

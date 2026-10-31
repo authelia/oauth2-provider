@@ -667,6 +667,12 @@ func TestRegistrationPolicyPatternIsAnchoredAlternation(t *testing.T) {
 	assert.Equal(t, policyErrorPrefix+"The 'scope' value 'ab' is not permitted by the registration policy.", oauth2.ErrorToDebugRFC6749Error(err).Error())
 }
 
+func TestParseRegistrationPolicyRejectsPatternEscapingItsAnchors(t *testing.T) {
+	_, err := ParseRegistrationPolicy(map[string]any{consts.ClientMetadataScope: map[string]any{policyRulePattern: "a)|(?:.*"}}, nil, true)
+	require.Error(t, err)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "is not a valid regular expression")
+}
+
 func TestRegistrationPolicyOmittedMembersClassified(t *testing.T) {
 	none := []string{
 		"redirect_uris", "client_name", "client_uri", "logo_uri", policyMemberScope, "contacts", "tos_uri", "policy_uri",

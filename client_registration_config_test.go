@@ -26,8 +26,8 @@ func TestConfigRFC7591ClientRegistrationPolicyClaim(t *testing.T) {
 		explicit string
 		expected string
 	}{
-		{"ShouldDeriveFromIssuer", issuer, "", "https://auth.example.com:authelia:authelia:oauth2:dynamic-client-registration:policy"},
-		{"ShouldDefaultWhenIssuerEmpty", "", "", "policy/oauth2/dynamic-client-registration"},
+		{"ShouldDeriveFromIssuer", issuer, "", "https://auth.example.com:authelia:oauth2:dynamic-client-registration:policy"},
+		{"ShouldDefaultWhenIssuerEmpty", "", "", "authelia:oauth2:dynamic-client-registration:policy"},
 		{"ShouldPreferExplicitValue", issuer, explicit, explicit},
 	}
 

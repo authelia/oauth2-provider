@@ -554,7 +554,7 @@ type Config struct {
 	RFC7591ClientRegistrationGrantTypes []string
 
 	// RFC7591ClientRegistrationPolicyClaim is the name of the claim carrying the registration policy. When empty it
-	// defaults to the access token issuer suffixed with ':authelia:authelia:oauth2:dynamic-client-registration:policy'.
+	// defaults to the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy'.
 	RFC7591ClientRegistrationPolicyClaim string
 
 	// RFC7591ClientRegistrationTrustedIssuers are the issuers trusted to issue JWT client creation tokens, with or
@@ -1556,18 +1556,18 @@ func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (gr
 }
 
 // GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim carrying the registration policy. Defaults to
-// the access token issuer suffixed with ':authelia:authelia:oauth2:dynamic-client-registration:policy', or
-// 'policy/oauth2/dynamic-client-registration' when there is no issuer.
+// the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy', or
+// 'authelia:oauth2:dynamic-client-registration:policy' when there is no issuer.
 func (c *Config) GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string) {
 	if c.RFC7591ClientRegistrationPolicyClaim != "" {
 		return c.RFC7591ClientRegistrationPolicyClaim
 	}
 
 	if issuer := strings.TrimSuffix(c.GetAccessTokenIssuer(ctx), "/"); issuer != "" {
-		return issuer + ":authelia:authelia:oauth2:dynamic-client-registration:policy"
+		return issuer + ":authelia:oauth2:dynamic-client-registration:policy"
 	}
 
-	return "policy/oauth2/dynamic-client-registration"
+	return "authelia:oauth2:dynamic-client-registration:policy"
 }
 
 // GetRFC7591ClientRegistrationTrustedIssuers returns the issuers trusted to issue JWT client creation tokens, with or

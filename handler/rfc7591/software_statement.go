@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -159,16 +161,25 @@ func mergeSoftwareStatement(metadata *oauth2.ClientRegistrationMetadata, claims 
 		return nil, nil, err
 	}
 
-	for name, value := range claims {
+	preserveEmptyMetadataArrays(metadata, values)
+
+	for name := range claims {
 		if slices.Contains(softwareStatementExcludedClaims, name) {
 			continue
 		}
 
-		values[name] = value
+		maps.DeleteFunc(values, func(key string, _ any) bool {
+			return strings.EqualFold(key, name)
+		})
+
 		members = append(members, name)
 	}
 
 	slices.Sort(members)
+
+	for _, name := range members {
+		values[name] = claims[name]
+	}
 
 	if data, err = json.Marshal(values); err != nil {
 		return nil, nil, err
@@ -181,6 +192,22 @@ func mergeSoftwareStatement(metadata *oauth2.ClientRegistrationMetadata, claims 
 	}
 
 	return merged, members, nil
+}
+
+func preserveEmptyMetadataArrays(metadata *oauth2.ClientRegistrationMetadata, values map[string]any) {
+	fields := reflect.ValueOf(metadata).Elem()
+
+	for i := range fields.NumField() {
+		field := fields.Field(i)
+
+		if field.Kind() != reflect.Slice || field.IsNil() || field.Len() != 0 {
+			continue
+		}
+
+		if name, _, _ := strings.Cut(fields.Type().Field(i).Tag.Get("json"), ","); name != "" && name != "-" {
+			values[name] = []any{}
+		}
+	}
 }
 
 func isKeySourceFailure(err error) bool {

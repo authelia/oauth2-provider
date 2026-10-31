@@ -610,7 +610,7 @@ type RFC7591TrustedIssuer struct {
 type RFC7591ClientRegistrationPolicyProvider interface {
 	// GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim, on the registration access token, that
 	// carries the registration policy. It defaults to the access token issuer suffixed with
-	// ':authelia:authelia:oauth2:dynamic-client-registration:policy'.
+	// ':authelia:oauth2:dynamic-client-registration:policy'.
 	GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string)
 
 	// GetRFC7591ClientRegistrationTrustedIssuers returns the issuers, other than this server, trusted to issue JWT

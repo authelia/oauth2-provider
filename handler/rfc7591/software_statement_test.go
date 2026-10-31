@@ -382,6 +382,94 @@ func TestApplySoftwareStatementMergesClaims(t *testing.T) {
 	assert.Equal(t, []string{testMetadataClientName, consts.ClientMetadataGrantTypes, testStatementVendorClaim, testMetadataSoftwareID}, metadata.SoftwareStatementMembers)
 }
 
+func TestApplySoftwareStatementTakesPrecedenceOverCaseVariants(t *testing.T) {
+	fixture := newSoftwareStatementFixture(t)
+
+	testCases := []struct {
+		name    string
+		member  string
+		variant string
+		forged  any
+		claim   any
+		get     func(metadata *oauth2.ClientRegistrationMetadata) any
+		want    any
+	}{
+		{
+			name:    "ShouldIgnoreUnicodeFoldOfScope",
+			member:  consts.ClientMetadataScope,
+			variant: "\u017fcope",
+			forged:  "evil",
+			claim:   "good",
+			get:     func(metadata *oauth2.ClientRegistrationMetadata) any { return metadata.Scope },
+			want:    "good",
+		},
+		{
+			name:    "ShouldIgnoreUpperCaseScope",
+			member:  consts.ClientMetadataScope,
+			variant: "SCOPE",
+			forged:  "evil",
+			claim:   "good",
+			get:     func(metadata *oauth2.ClientRegistrationMetadata) any { return metadata.Scope },
+			want:    "good",
+		},
+		{
+			name:    "ShouldIgnoreUnicodeFoldOfRedirectURIs",
+			member:  "redirect_uris",
+			variant: "redirect_uri\u017f",
+			forged:  []string{"https://evil.example.com/cb"},
+			claim:   []any{testStatementRedirectURI},
+			get:     func(metadata *oauth2.ClientRegistrationMetadata) any { return metadata.RedirectURIs },
+			want:    []string{testStatementRedirectURI},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statement := fixture.sign(t, jwt.MapClaims{tc.member: tc.claim})
+
+			body, err := json.Marshal(map[string]any{tc.variant: tc.forged, consts.ClientMetadataSoftwareStatement: statement})
+			require.NoError(t, err)
+
+			metadata := &oauth2.ClientRegistrationMetadata{}
+			require.NoError(t, json.Unmarshal(body, metadata))
+
+			require.NoError(t, applySoftwareStatement(context.Background(), fixture.config(nil), metadata))
+
+			assert.Equal(t, tc.want, tc.get(metadata))
+			assert.Contains(t, metadata.SoftwareStatementMembers, tc.member)
+			assert.NotContains(t, metadata.Extra, tc.variant)
+		})
+	}
+}
+
+func TestApplySoftwareStatementKeepsEmptyArrays(t *testing.T) {
+	fixture := newSoftwareStatementFixture(t)
+
+	t.Run("ShouldKeepAnEmptyArrayTheStatementDoesNotMention", func(t *testing.T) {
+		metadata := &oauth2.ClientRegistrationMetadata{
+			AuthorizationDetailsTypes: []string{},
+			SoftwareStatement:         fixture.sign(t, jwt.MapClaims{testMetadataClientName: testStatementClientName}),
+		}
+
+		require.NoError(t, applySoftwareStatement(context.Background(), fixture.config(nil), metadata))
+
+		assert.NotNil(t, metadata.AuthorizationDetailsTypes)
+		assert.Empty(t, metadata.AuthorizationDetailsTypes)
+		assert.Nil(t, metadata.Contacts)
+	})
+
+	t.Run("ShouldLetTheStatementReplaceAnEmptyArray", func(t *testing.T) {
+		metadata := &oauth2.ClientRegistrationMetadata{
+			AuthorizationDetailsTypes: []string{},
+			SoftwareStatement:         fixture.sign(t, jwt.MapClaims{"authorization_details_types": []any{"payment_initiation"}}),
+		}
+
+		require.NoError(t, applySoftwareStatement(context.Background(), fixture.config(nil), metadata))
+
+		assert.Equal(t, []string{"payment_initiation"}, metadata.AuthorizationDetailsTypes)
+	})
+}
+
 func TestApplySoftwareStatementWithoutStatement(t *testing.T) {
 	metadata := &oauth2.ClientRegistrationMetadata{ClientName: testStatementUnchanged, SoftwareStatementMembers: []string{testMetadataClientName}}
 

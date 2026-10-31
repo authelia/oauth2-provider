@@ -44,6 +44,8 @@ func TestJWTProfileAccessTokenRequiredClaims(t *testing.T) {
 		{name: "ShouldUseTheGrantedAudience", defaults: []string{fallback}, grant: consts.GrantTypeAuthorizationCode, audience: []string{api}, session: "alice", aud: []any{api}, sub: "alice", granted: []string{api}},
 		{name: "ShouldUseAGrantedResource", defaults: []string{fallback}, grant: consts.GrantTypeAuthorizationCode, resource: []string{api}, session: "alice", aud: []any{api}, sub: "alice", granted: []string{}},
 		{name: "ShouldUseTheDefaultAudienceAndRecordItAsGranted", defaults: []string{fallback}, grant: consts.GrantTypeAuthorizationCode, session: "alice", aud: []any{fallback}, sub: "alice", granted: []string{fallback}},
+		{name: "ShouldIgnoreAnEmptyDefaultAudienceValue", defaults: []string{"", fallback}, grant: consts.GrantTypeAuthorizationCode, session: "alice", aud: []any{fallback}, sub: "alice", granted: []string{fallback}},
+		{name: "ShouldRefuseWithOnlyEmptyDefaultAudienceValues", defaults: []string{"", ""}, grant: consts.GrantTypeAuthorizationCode, session: "alice", err: "requires an 'aud' claim"},
 		{name: "ShouldRefuseWithoutAnAudienceOrDefault", grant: consts.GrantTypeAuthorizationCode, session: "alice", err: "requires an 'aud' claim"},
 		{name: "ShouldPreferTheClaimsSubject", grant: consts.GrantTypeAuthorizationCode, audience: []string{api}, claims: "from-claims", session: "alice", aud: []any{api}, sub: "from-claims", granted: []string{api}},
 		{name: "ShouldUseTheClientForAClientCredentialsGrant", grant: consts.GrantTypeClientCredentials, audience: []string{api}, aud: []any{api}, sub: client, granted: []string{api}},

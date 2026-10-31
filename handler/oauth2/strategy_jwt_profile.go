@@ -284,7 +284,11 @@ func (s *JWTProfileCoreStrategy) applyDefaultAudience(ctx context.Context, reque
 	var audience []string
 
 	if provider, ok := s.Config.(oauth2.JWTProfileAccessTokenDefaultAudienceProvider); ok {
-		audience = provider.GetJWTProfileAccessTokenDefaultAudience(ctx)
+		for _, value := range provider.GetJWTProfileAccessTokenDefaultAudience(ctx) {
+			if value != "" {
+				audience = append(audience, value)
+			}
+		}
 	}
 
 	if len(audience) == 0 {

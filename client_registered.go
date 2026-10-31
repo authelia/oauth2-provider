@@ -84,6 +84,14 @@ type DefaultRegisteredClient struct {
 	// is only ever exchanged by this client.
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
+	// TokenExchangeOwnAccessTokenRestrictTargets limits the exchange of an access token issued to this client to the
+	// audience and resources that access token was granted. It has no registration metadata.
+	TokenExchangeOwnAccessTokenRestrictTargets bool `json:"token_exchange_own_access_token_restrict_targets"`
+
+	// TokenExchangeOwnAccessToken permits this client to exchange an access token issued to itself. This is NOT
+	// RECOMMENDED, see rfc8693.OwnAccessTokenExchangeClient. It has no registration metadata, so a client cannot grant it to itself.
+	TokenExchangeOwnAccessToken bool `json:"token_exchange_own_access_token"`
+
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
 
@@ -574,6 +582,18 @@ func (c *DefaultRegisteredClient) GetActorTokenExchangePermitted(client Client, 
 // an out-of-band authorization mechanism, which registered metadata cannot express.
 func (c *DefaultRegisteredClient) GetAllowActorTokenWithoutMayAct() (allow bool) {
 	return false
+}
+
+// GetRestrictOwnAccessTokenExchangeTargets reports whether the exchange of an access token issued to this client is
+// limited to the audience and resources that access token was granted.
+func (c *DefaultRegisteredClient) GetRestrictOwnAccessTokenExchangeTargets() (restrict bool) {
+	return c.TokenExchangeOwnAccessTokenRestrictTargets
+}
+
+// GetAllowOwnAccessTokenExchange reports whether this client may exchange an access token issued to itself. Enabling it
+// is NOT RECOMMENDED.
+func (c *DefaultRegisteredClient) GetAllowOwnAccessTokenExchange() (allow bool) {
+	return c.TokenExchangeOwnAccessToken
 }
 
 var (

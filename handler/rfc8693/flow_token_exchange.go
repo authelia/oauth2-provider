@@ -522,7 +522,9 @@ func errExchangeTokenValidation(err error) error {
 // client type can express a permission. An actor token identifies the acting party, which its audience does not
 // establish, so its client must explicitly permit the requesting client as described by ActorTokenExchangeClient.
 //
-// A client may not exchange an access token issued to itself as a subject token, except for a JWT authorization grant.
+// A client may not exchange an access token issued to itself as a subject token, except for a JWT authorization grant
+// or when it opts in with GetAllowOwnAccessTokenExchange. It may also opt in with
+// GetRestrictOwnAccessTokenExchangeTargets to only request the audience and resources that access token was granted.
 // A client may only request scopes the subject token was granted. Neither rule applies to an actor token, which
 // identifies the acting party rather than the authority being exchanged: that party is normally the requesting client
 // itself, and the issued token's scopes come from the subject token.
@@ -549,7 +551,15 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.1
 	if self && role == tokenRoleSubject && !refresh && authorizationGrantType(ctx, request, config) == nil {
-		return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own access tokens."))
+		if !allowsOwnAccessTokenExchange(client) {
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own access tokens."))
+		}
+
+		if restrictsOwnAccessTokenTargets(client) {
+			if err := validateOwnAccessTokenTarget(ctx, request, config, original); err != nil {
+				return err
+			}
+		}
 	}
 
 	// A client implicitly authorizes the exchange of its own token.
@@ -583,6 +593,32 @@ func permitsExchange(owner, client oauth2.Client, requested oauth2.RFC8693TokenT
 	}
 
 	return c.GetTokenExchangePermitted(client, requested)
+}
+
+func validateOwnAccessTokenTarget(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, original oauth2.Requester) (err error) {
+	client := request.GetClient()
+
+	if err = oauth2.GetAudienceStrategy(ctx, config, client)(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+	}
+
+	if err = oauth2.GetResourceStrategy(ctx, config, client)(original.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+	}
+
+	return nil
+}
+
+func restrictsOwnAccessTokenTargets(client oauth2.Client) bool {
+	c, ok := client.(OwnAccessTokenExchangeTargetClient)
+
+	return ok && c.GetRestrictOwnAccessTokenExchangeTargets()
+}
+
+func allowsOwnAccessTokenExchange(client oauth2.Client) bool {
+	c, ok := client.(OwnAccessTokenExchangeClient)
+
+	return ok && c.GetAllowOwnAccessTokenExchange()
 }
 
 func validateSubjectTokenScope(request oauth2.AccessRequester, granted []string) (err error) {

@@ -26,6 +26,10 @@ func TestExchangePolicy(t *testing.T) {
 		return &oauth2.DefaultClient{ID: "owner", GrantTypes: grants}
 	}
 
+	basic := func() oauth2.Client {
+		return &basicClient{Client: plain()}
+	}
+
 	registered := func(permitted ...string) func() oauth2.Client {
 		return func() oauth2.Client {
 			return &oauth2.DefaultRegisteredClient{
@@ -49,6 +53,7 @@ func TestExchangePolicy(t *testing.T) {
 		owner     func() oauth2.Client
 		self      bool
 		unaddress bool
+		ownAccess bool
 		requested string
 		hint      string
 	}{
@@ -59,7 +64,9 @@ func TestExchangePolicy(t *testing.T) {
 		{name: "ShouldRejectAnUnaddressedAccessTokenWhenListed", owner: registered(requesterID), unaddress: true, hint: hintNotAudience},
 		{name: "ShouldRejectAnAccessTokenWhenAnotherClientIsListed", owner: registered("someone-else"), hint: hintNotPermitted},
 		{name: "ShouldAcceptAnAccessTokenWhenListed", owner: registered(requesterID)},
+		{name: "ShouldEnforceThePolicyOfAClientWithoutTheOptionalInterfaces", owner: basic, hint: hintNotPermitted},
 		{name: "ShouldRejectTheRequestersOwnAccessToken", self: true, hint: hintOwnAccess},
+		{name: "ShouldAcceptTheRequestersOwnAccessTokenWhenOptedIn", self: true, ownAccess: true},
 		{name: "ShouldRejectAnAddressedActorAccessTokenOfAPlainClient", actor: true, owner: plain, hint: hintNotPermitted},
 		{name: "ShouldRejectAnAddressedActorAccessTokenWithAnEmptyList", actor: true, owner: registered(), hint: hintNotPermitted},
 		{name: "ShouldRejectAnUnaddressedActorAccessTokenWhenListed", actor: true, owner: registered(requesterID), unaddress: true, hint: hintNotAudience},
@@ -84,9 +91,16 @@ func TestExchangePolicy(t *testing.T) {
 				config.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
 				config.RFC8693TokenTypes[consts.TokenTypeRFC8693IDToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken}
 
-				requester := &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants}
+				var requester oauth2.Client = &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants}
 
-				var owner oauth2.Client = requester
+				if tc.ownAccess {
+					requester = &oauth2.DefaultRegisteredClient{
+						DefaultClient:               &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants},
+						TokenExchangeOwnAccessToken: true,
+					}
+				}
+
+				owner := requester
 				if !tc.self {
 					owner = tc.owner()
 				}
@@ -130,6 +144,74 @@ func TestExchangePolicy(t *testing.T) {
 				// RFC 8693 Section 2.2.2.
 				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 				assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), tc.hint)
+			})
+		}
+	}
+}
+
+func TestOwnAccessTokenExchangeTarget(t *testing.T) {
+	const (
+		audience = "https://api.example.com"
+		resource = "https://resource.example.com"
+		other    = "https://other.example.com"
+	)
+
+	testCases := []struct {
+		name     string
+		restrict bool
+		audience []string
+		resource []string
+		err      error
+	}{
+		{name: "ShouldAcceptAnotherAudienceByDefault", audience: []string{other}},
+		{name: "ShouldAcceptAnotherResourceByDefault", resource: []string{other}},
+		{name: "ShouldAcceptNoTarget", restrict: true},
+		{name: "ShouldAcceptTheGrantedAudience", restrict: true, audience: []string{audience}},
+		{name: "ShouldAcceptTheGrantedResource", restrict: true, resource: []string{resource}},
+		{name: "ShouldRejectAnotherAudience", restrict: true, audience: []string{other}, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectAnotherResource", restrict: true, resource: []string{other}, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectTheGrantedResourceAsAnAudience", restrict: true, audience: []string{resource}, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectOneAudienceOutsideTheGrant", restrict: true, audience: []string{audience, other}, err: oauth2.ErrInvalidTarget},
+	}
+
+	for _, sc := range bindingExchangeStores() {
+		for _, tc := range testCases {
+			t.Run(sc.name+"/"+tc.name, func(t *testing.T) {
+				store := sc.newStore()
+				config, strategy := newBindingExchangeConfig()
+
+				client := &oauth2.DefaultRegisteredClient{
+					DefaultClient:               &oauth2.DefaultClient{ID: "requester", GrantTypes: []string{consts.GrantTypeOAuthTokenExchange}},
+					TokenExchangeOwnAccessToken: true,
+
+					TokenExchangeOwnAccessTokenRestrictTargets: tc.restrict,
+				}
+
+				issued := newUnaddressedRequest(client, "peter", []string{consts.ScopeOpenID}, oauth2.AccessToken)
+				issued.GrantAudience(audience)
+				issued.GrantResource(resource)
+
+				token, signature, err := strategy.GenerateAccessToken(t.Context(), issued)
+				require.NoError(t, err)
+				require.NoError(t, store.(hoauth2.AccessTokenStorage).CreateAccessTokenSession(t.Context(), signature, issued.Sanitize(nil)))
+
+				request := newExchangeRequest(t, client, newSpecSession("peter"), url.Values{
+					consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+					consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
+					consts.FormParameterSubjectToken:     {token},
+				})
+				request.RequestedAudience = tc.audience
+				request.RequestedResource = tc.resource
+
+				err = newLifetimeAccessTokenHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), request)
+
+				if tc.err != nil {
+					assert.ErrorIs(t, err, tc.err)
+
+					return
+				}
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 			})
 		}
 	}

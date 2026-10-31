@@ -123,7 +123,7 @@ func TestTokenExchangeReadsMayActFromTheSubjectToken(t *testing.T) {
 
 			validator := &ActorTokenValidationHandler{}
 
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(validator.HandleTokenEndpointRequest(t.Context(), request)))
+			assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(validator.HandleTokenEndpointRequest(t.Context(), request)), "so an 'actor_token' is required")
 		})
 	}
 }

@@ -139,13 +139,13 @@ type DefaultIssuer struct {
 // GetIssuerJWK returns the issuer key which matches the alg and use values, and the kid value when it is not empty.
 // When more than one key matches the first is returned.
 func (i *DefaultIssuer) GetIssuerJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
-	return SearchJWKS(i.jwks, kid, alg, use, false)
+	return searchJWKS(i.jwks, kid, alg, use, false, false)
 }
 
 // GetIssuerStrictJWK returns the issuer key which matches the alg and use values, and the kid value when it is not
 // empty. It returns an error when more than one key matches.
 func (i *DefaultIssuer) GetIssuerStrictJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
-	return SearchJWKS(i.jwks, kid, alg, use, true)
+	return searchJWKS(i.jwks, kid, alg, use, true, false)
 }
 
 type Issuer interface {

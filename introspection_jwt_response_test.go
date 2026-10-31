@@ -23,6 +23,7 @@ import (
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
@@ -56,6 +57,11 @@ func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
 		{name: "ShouldSignAnInactiveResponseForTheAcceptHeader", accept: accept, token: "unknown", content: contentJWT, headerA: "RS256"},
 		{name: "ShouldSignAnInactiveResponseForARegisteredAlgorithm", alg: "RS256", token: "unknown", content: contentJWT, headerA: "RS256"},
 		{name: "ShouldNotTreatARefusedMediaTypeAsARequest", accept: accept + ";q=0", token: introspected, content: contentJSON, active: true},
+		{name: "ShouldNotTreatARefusalWithADecimalZeroAsARequest", accept: accept + ";q=0.0", token: introspected, content: contentJSON, active: true},
+		{name: "ShouldNotTreatARefusalWithALongDecimalZeroAsARequest", accept: accept + ";q=0.000", token: introspected, content: contentJSON, active: true},
+		{name: "ShouldNotTreatAnUppercaseRefusalAsARequest", accept: accept + ";Q=0", token: introspected, content: contentJSON, active: true},
+		{name: "ShouldTreatALowQualityAsARequest", accept: accept + ";q=0.001", token: introspected, content: contentJWT, active: true, headerA: "RS256"},
+		{name: "ShouldTreatAMalformedQualityAsARequest", accept: accept + ";q=high", token: introspected, content: contentJWT, active: true, headerA: "RS256"},
 		{name: "ShouldReturnJSONForTheAcceptHeaderWithoutASigner", accept: accept, noSigner: true, token: introspected, content: contentJSON, active: true},
 	}
 
@@ -134,6 +140,45 @@ func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
 	}
 }
 
+func TestIntrospectionStrategyServerError(t *testing.T) {
+	const secret = "foobarfoobarfoobarfoobarfoobar12"
+
+	testCases := []struct {
+		name     string
+		failure  error
+		code     int
+		contains string
+	}{
+		{name: "ShouldReportAServerError", failure: ErrServerError.WithDebug("the store failed"), code: http.StatusInternalServerError, contains: "server_error"},
+		{name: "ShouldReportAWrappedServerError", failure: errorsx.WithStack(ErrServerError), code: http.StatusInternalServerError, contains: "server_error"},
+		{name: "ShouldAnswerARejectionAsInactive", failure: ErrRequestUnauthorized, code: http.StatusOK, contains: `"active":false`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			store.Clients["rs"] = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "rs", ClientSecret: NewPlainTextClientSecret(secret)}}
+
+			provider := &Fosite{Store: store, Config: &Config{TokenIntrospectionHandlers: TokenIntrospectionHandlers{&fixedIntrospector{failure: tc.failure}}}}
+
+			r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", strings.NewReader(url.Values{consts.FormParameterToken: {"token"}}.Encode()))
+			r.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+			r.SetBasicAuth("rs", secret)
+
+			ctx := context.Background()
+			recorder := httptest.NewRecorder()
+
+			_, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
+			require.Error(t, err)
+
+			provider.WriteIntrospectionError(ctx, recorder, err)
+
+			assert.Equal(t, tc.code, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), tc.contains)
+		})
+	}
+}
+
 func TestIntrospectionServerErrorIsNotReportedAsInactive(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
@@ -145,10 +190,15 @@ func TestIntrospectionServerErrorIsNotReportedAsInactive(t *testing.T) {
 }
 
 type fixedIntrospector struct {
-	token string
+	token   string
+	failure error
 }
 
 func (i *fixedIntrospector) IntrospectToken(_ context.Context, token string, _ TokenUse, request AccessRequester, _ []string) (TokenUse, error) {
+	if i.failure != nil {
+		return "", i.failure
+	}
+
 	if token != i.token {
 		return "", ErrUnknownRequest
 	}

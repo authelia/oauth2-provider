@@ -9,6 +9,7 @@ import (
 	"errors"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -51,6 +52,11 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
+		// A failure of the server says nothing about the token, so it is not answered as an inactive token.
+		if errors.Is(err, ErrServerError) {
+			return &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}, errorsx.WithStack(err)
+		}
+
 		inactive := &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}
 
 		return inactive, errorsx.WithStack(&inactiveIntrospectionError{responder: inactive, error: ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err)})
@@ -93,13 +99,19 @@ func acceptsIntrospectionJWT(r *http.Request) bool {
 	for _, header := range r.Header.Values(consts.HeaderAccept) {
 		for value := range strings.SplitSeq(header, ",") {
 			mediaType, parameters, err := mime.ParseMediaType(value)
-			if err == nil && mediaType == "application/"+consts.JSONWebTokenTypeTokenIntrospection && parameters["q"] != "0" {
+			if err == nil && mediaType == "application/"+consts.JSONWebTokenTypeTokenIntrospection && !isZeroQuality(parameters["q"]) {
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+func isZeroQuality(value string) bool {
+	quality, err := strconv.ParseFloat(value, 64)
+
+	return err == nil && quality == 0
 }
 
 // handleNewIntrospectionRequestClientAuthentication authenticates the caller, by the bearer credential in the

@@ -170,6 +170,12 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return nil
 	}
 
+	if authorizationGrantType(ctx, request, c.Config) != nil {
+		if err = validateAuthorizationGrantTarget(request); err != nil {
+			return err
+		}
+	}
+
 	// Check the requested scope.
 	scopeStrategy := c.GetScopeStrategy(ctx, client)
 	for _, scope := range request.GetRequestedScopes() {
@@ -426,7 +432,7 @@ func buildActClaim(session Session) (map[string]any, error) {
 // resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved
 // 'requested_token_type' parameter, substituting the configured default when it is absent. Returns nil when the
 // requested type is not registered.
-func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
+func resolveRequestedTokenType(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
 	id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
 	if id == "" {
 		id = config.GetDefaultRFC8693RequestedTokenType(ctx)
@@ -446,6 +452,26 @@ func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2
 	}
 
 	return requested == consts.TokenTypeRFC8693IDJAG
+}
+
+func authorizationGrantType(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) *JWTType {
+	if jwtType, ok := resolveRequestedTokenType(ctx, request, config).(*JWTType); ok && jwtType != nil && jwtType.AuthorizationGrant {
+		return jwtType
+	}
+
+	return nil
+}
+
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.3.1
+func validateAuthorizationGrantTarget(request oauth2.Requester) error {
+	switch targets := oauth2.JoinGrantedAudienceAndResource(request.GetRequestedAudience(), request.GetRequestedResource()); len(targets) {
+	case 0:
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("One of '%s' or '%s' is required to identify the intended authorization server of a JWT authorization grant.", consts.FormParameterAudience, consts.FormParameterResource))
+	case 1:
+		return nil
+	default:
+		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("A JWT authorization grant may only identify a single authorization server."))
+	}
 }
 
 func isIDTokenRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
@@ -502,7 +528,8 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 		return nil
 	}
 
-	if self && role == tokenRoleSubject {
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.1
+	if self && role == tokenRoleSubject && authorizationGrantType(ctx, request, config) == nil {
 		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
 	}
 

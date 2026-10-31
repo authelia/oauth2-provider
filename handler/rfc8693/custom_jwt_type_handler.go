@@ -7,6 +7,8 @@ package rfc8693
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -167,6 +169,11 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
 	}
 
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if jwtType.AuthorizationGrant {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A JWT authorization grant of the type '%s' cannot be exchanged.", jwtType.GetName(ctx)))
+	}
+
 	ftoken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, jwtType.ValidateFunc)
 	if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
@@ -288,6 +295,10 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 			oauth2.ErrServerError.WithDebugf("Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
 	}
 
+	if jwtType.AuthorizationGrant {
+		return c.issueAuthorizationGrant(ctx, request, jwtType, response)
+	}
+
 	session, ok := request.GetSession().(openid.Session)
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate JWT because session must be of type 'openid.Session'."))
@@ -314,11 +325,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	// Token. RFC 8725 Section 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
-	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
-		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && claims.Issuer == issuer {
-			return errorsx.WithStack(oauth2.ErrServerError.
-				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the ID Token issuer, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), claims.Issuer))
-		}
+	if err = c.validateIssuedIssuer(ctx, jwtType, claims.Issuer); err != nil {
+		return err
 	}
 
 	// The issued JWT's audience MUST reflect THIS exchange's audience/resource parameters per RFC 8693 §2.1, not
@@ -361,6 +369,139 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
 	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
+
+	return nil
+}
+
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.3.3
+//
+//nolint:gocyclo
+func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, request oauth2.AccessRequester, jwtType *JWTType, response oauth2.AccessResponder) (err error) {
+	session, ok := request.GetSession().(Session)
+	if !ok || session == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	}
+
+	targets := oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
+	if len(targets) != 1 {
+		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("A JWT authorization grant must identify a single authorization server."))
+	}
+
+	if jwtType.Issuer == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", jwtType.GetName(ctx)))
+	}
+
+	if err = c.validateIssuedIssuer(ctx, jwtType, jwtType.Issuer); err != nil {
+		return err
+	}
+
+	if err = c.validateIDTokenIssuerConfigured(ctx, jwtType); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	expires := capToSubjectTokenExpiry(request, now.Add(c.expiry(ctx, jwtType)))
+
+	if expires.Unix() <= now.Unix() {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' expires too soon to issue a JWT authorization grant.", consts.FormParameterSubjectToken))
+	}
+
+	protected := map[string]any{
+		consts.ClaimIssuer:         jwtType.Issuer,
+		consts.ClaimAudience:       slices.Clone([]string(targets)),
+		consts.ClaimExpirationTime: expires.Unix(),
+		consts.ClaimIssuedAt:       now.Unix(),
+		consts.ClaimJWTID:          uuid.New().String(),
+	}
+
+	subject := request.GetSession().GetSubject()
+
+	claims := map[string]any{consts.ClaimSubject: subject}
+
+	if scopes := request.GetGrantedScopes(); len(scopes) > 0 {
+		claims[consts.ClaimScope] = strings.Join(scopes, " ")
+	}
+
+	var act map[string]any
+
+	if act, err = buildActClaim(session); err != nil {
+		return err
+	}
+
+	if act == nil {
+		if prior, ok := session.GetSubjectToken()[consts.ClaimActor].(map[string]any); ok {
+			act = copyClaimMap(prior)
+		}
+	}
+
+	if len(act) > 0 {
+		claims[consts.ClaimActor] = act
+	}
+
+	maps.Copy(claims, protected)
+
+	if jwtType.TranscribeClaims != nil {
+		claims[consts.ClaimAudience] = slices.Clone([]string(targets))
+
+		if err = jwtType.TranscribeClaims(ctx, request, claims); err != nil {
+			return errorsx.WithStack(err)
+		}
+
+		maps.Copy(claims, protected)
+	}
+
+	if transcribed, _ := claims[consts.ClaimSubject].(string); transcribed == "" {
+		// RFC 8693 Section 2.2.2: a subject token that is unacceptable is an 'invalid_request'.
+		if subject == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken))
+		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate the JWT authorization grant because its 'sub' claim is not a non-empty string."))
+	}
+
+	var token string
+
+	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), jwt.WithIssuerSigningAlg(jwtType.SigningAlg)); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	response.SetAccessToken(token)
+	response.SetTokenType(oauth2.RFC8693NAToken)
+	response.SetExpiresIn(time.Until(expires))
+
+	if scopes := scopeClaim(claims); len(scopes) > 0 {
+		response.SetScopes(scopes)
+	}
+
+	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
+
+	return nil
+}
+
+// validateIDTokenIssuerConfigured refuses to issue while the ID Token token type is registered with no issuer, as it
+// would then accept a grant whose 'aud' claim names a client as an ID Token.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+func (c *CustomJWTTypeHandler) validateIDTokenIssuerConfigured(ctx context.Context, jwtType *JWTType) error {
+	if c.Config.GetRFC8693TokenTypes(ctx)[consts.TokenTypeRFC8693IDToken] == nil {
+		return nil
+	}
+
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok && provider.GetIDTokenIssuer(ctx) != "" {
+		return nil
+	}
+
+	return errorsx.WithStack(oauth2.ErrServerError.
+		WithDebugf("The JSON Web Token type '%s' issues JWT authorization grants but the ID Token token type is registered without an ID Token issuer, so a grant would be accepted as an ID Token.", jwtType.GetName(ctx)))
+}
+
+func (c *CustomJWTTypeHandler) validateIssuedIssuer(ctx context.Context, jwtType *JWTType, iss string) error {
+	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
+		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && iss == issuer {
+			return errorsx.WithStack(oauth2.ErrServerError.
+				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the ID Token issuer, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), iss))
+		}
+	}
 
 	return nil
 }

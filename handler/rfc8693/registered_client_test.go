@@ -30,8 +30,8 @@ func TestDefaultRegisteredClientImplementsClient(t *testing.T) {
 		assert.Empty(t, client.GetSupportedActorTokenTypes())
 		assert.Empty(t, client.GetSupportedRequestTokenTypes())
 
-		assert.True(t, client.GetTokenExchangePermitted(&oauth2.DefaultClient{ID: "other"}, nil),
-			"an unset exchange policy must permit, matching the behaviour of a client that did not implement this at all")
+		assert.False(t, client.GetTokenExchangePermitted(&oauth2.DefaultClient{ID: "other"}, nil),
+			"an unset exchange policy must permit no other client")
 
 		assert.False(t, client.GetAllowActorTokenWithoutMayAct(),
 			"delegation without may_act stays opt-in")

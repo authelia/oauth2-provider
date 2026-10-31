@@ -56,7 +56,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 
 				expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
 
-				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], expires), "")
+				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["my-client"], expires), "")
 
 				refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
 				handler := newLifetimeAccessTokenHandler(config, coreStrategy, store)
@@ -78,7 +78,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 
 				expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
 
-				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], expires), consts.TokenTypeRFC8693RefreshToken)
+				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["my-client"], expires), consts.TokenTypeRFC8693RefreshToken)
 				handler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
 
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
@@ -122,7 +122,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 
 						expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
 
-						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], expires), tc.requested)
+						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["my-client"], expires), tc.requested)
 
 						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
 
@@ -181,7 +181,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 						config.RefreshTokenScopes = []string{}
 						config.RefreshTokenLifespan = -1
 
-						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["custom-lifespan-client"], tc.expires), tc.requested)
+						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["my-client"], tc.expires), tc.requested)
 
 						refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
 						refreshHandler.RefreshTokenLifespan = -1
@@ -267,10 +267,12 @@ func TestExchangedTokenLifetime(t *testing.T) {
 						config, coreStrategy := newBindingExchangeConfig()
 						config.RefreshTokenScopes = []string{}
 
-						client, subject := store.GetClients()["my-client"], store.GetClients()["custom-lifespan-client"]
+						client := store.GetClients()["my-client"]
 						if tc.custom {
-							client, subject = subject, client
+							client = store.GetClients()["custom-lifespan-client"]
 						}
+
+						subject := client
 
 						request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, subject, time.Time{}), tc.requested)
 						request.Client = client

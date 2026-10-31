@@ -199,6 +199,8 @@ func runBindingExchange(t *testing.T, store rfc8693ExchangeStore, subject, actor
 }
 
 func createBoundAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, store hoauth2.AccessTokenStorage, client oauth2.Client, bind func(session *oauth2.DefaultSession)) string {
+	client = permittingOwner(client)
+
 	session := &oauth2.DefaultSession{
 		Username: "peter",
 		Subject:  "peter",

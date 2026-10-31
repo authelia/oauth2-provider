@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	refreshOpenIDOwner     = "refresh-openid-owner"
 	refreshOpenIDExchanger = "refresh-openid-exchanger"
 	refreshOpenIDSecret    = "foobarfoobarfoobarfoobarfoobar12"
 )
@@ -59,7 +58,6 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 
 				store, memory := newStore()
 
-				memory.Clients[refreshOpenIDOwner] = &oauth2.DefaultClient{ID: refreshOpenIDOwner, GrantTypes: []string{consts.GrantTypeRefreshToken}, Scopes: granted}
 				memory.Clients[refreshOpenIDExchanger] = &oauth2.DefaultClient{
 					ID:           refreshOpenIDExchanger,
 					ClientSecret: oauth2.NewPlainTextClientSecret(refreshOpenIDSecret),
@@ -94,7 +92,7 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 
 				request := &oauth2.AccessRequest{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
-					Request:    oauth2.Request{ID: uuid.New().String(), RequestedAt: time.Now().UTC(), Client: memory.Clients[refreshOpenIDOwner], GrantedScope: granted, Session: session},
+					Request:    oauth2.Request{ID: uuid.New().String(), RequestedAt: time.Now().UTC(), Client: memory.Clients[refreshOpenIDExchanger], GrantedScope: granted, Session: session},
 				}
 
 				ctx := context.Background()

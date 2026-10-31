@@ -65,7 +65,11 @@ func TestTokenExchangeReadsTheJWTSessionOfASubjectToken(t *testing.T) {
 
 					store := sc.newStore()
 					config, strategy := newBindingExchangeConfig()
-					client := store.GetClients()["custom-lifespan-client"]
+					client := store.GetClients()["my-client"]
+					if kind.tokenType == consts.TokenTypeRFC8693AccessToken {
+						client = store.GetClients()["custom-lifespan-client"]
+					}
+
 					request := newLifetimeExchangeRequest(store, kind.tokenType, kind.mint(t.Context(), strategy, store, client, session), "")
 
 					return request.GetSession().(*DefaultSession), kind.handler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), request)
@@ -109,6 +113,8 @@ func jwtSessionExpiry(expires time.Time) map[oauth2.TokenType]time.Time {
 }
 
 func mintJWTSessionAccessToken(ctx context.Context, strategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, client oauth2.Client, session *hoauth2.JWTSession) string {
+	client = permittingOwner(client)
+
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"password"},
 		Request:    oauth2.Request{ID: uuid.New().String(), RequestedAt: time.Now().UTC(), Session: session, Client: client},

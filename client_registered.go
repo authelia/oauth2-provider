@@ -73,10 +73,13 @@ type DefaultRegisteredClient struct {
 	InitiateLoginURI             string   `json:"initiate_login_uri"`
 	RequestURIs                  []string `json:"request_uris"`
 
-	// RFC 8693 (OAuth 2.0 Token Exchange) restrictions. An empty value applies no restriction.
-	TokenExchangeSubjectTokenTypes  []string `json:"token_exchange_subject_token_types"`
-	TokenExchangeActorTokenTypes    []string `json:"token_exchange_actor_token_types"`
-	TokenExchangeRequestTokenTypes  []string `json:"token_exchange_request_token_types"`
+	// RFC 8693 (OAuth 2.0 Token Exchange) restrictions. An empty token type list applies no restriction.
+	TokenExchangeSubjectTokenTypes []string `json:"token_exchange_subject_token_types"`
+	TokenExchangeActorTokenTypes   []string `json:"token_exchange_actor_token_types"`
+	TokenExchangeRequestTokenTypes []string `json:"token_exchange_request_token_types"`
+
+	// TokenExchangePermittedClientIDs lists the other clients which may exchange an access token issued to this client.
+	// An empty list permits none. A refresh token is only ever exchanged by this client.
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
@@ -549,13 +552,9 @@ func (c *DefaultRegisteredClient) GetAuthorizationGrantProfilesSupported() (prof
 // recommendation that the exchange be restricted "to only those clients explicitly authorized to perform the exchange
 // operation".
 //
-// An empty list permits any client, which is how a client expressing no policy behaves; the requested token type is
-// not consulted, so a deployment needing a rule of that shape supplies its own client type.
+// An empty list permits no other client. The requested token type is not consulted, so a deployment needing a rule of
+// that shape supplies its own client type.
 func (c *DefaultRegisteredClient) GetTokenExchangePermitted(client Client, requestedTokenType RFC8693TokenType) (allowed bool) {
-	if len(c.TokenExchangePermittedClientIDs) == 0 {
-		return true
-	}
-
 	if client == nil {
 		return false
 	}

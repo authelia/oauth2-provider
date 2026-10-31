@@ -218,10 +218,7 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 
 				client := store.GetClients()["my-client"]
 
-				owner := store.GetClients()["custom-lifespan-client"]
-				if tc.actor {
-					owner = client
-				}
+				owner := client
 
 				family := newReuseFamily(ctx, t, coreStrategy, store, owner, tc.granted, tc.replay, tc.expired)
 

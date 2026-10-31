@@ -59,7 +59,8 @@ func (f *Fosite) WriteSSFConfiguration(ctx context.Context, rw http.ResponseWrit
 }
 
 // SSFConfigurationURL returns the Transmitter Configuration Metadata location of the issuer, inserting
-// '/.well-known/ssf-configuration' between the host and the path and removing any terminating '/' first.
+// '/.well-known/ssf-configuration' between the host and the path and removing any terminating '/' first. The issuer must
+// be an https URL with no query or fragment (SSF Section 7.1).
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2
 func SSFConfigurationURL(issuer string) (uri string, err error) {
@@ -71,6 +72,10 @@ func SSFConfigurationURL(issuer string) (uri string, err error) {
 
 	if !u.IsAbs() || u.Host == "" {
 		return "", errors.New("issuer must be an absolute URL")
+	}
+
+	if u.Scheme != "https" {
+		return "", errors.New("issuer must use the https scheme")
 	}
 
 	if u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {

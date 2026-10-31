@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 
 	"golang.org/x/net/http/httpguts"
 
@@ -221,7 +220,7 @@ func (f *Fosite) NewSSFStreamResponse(ctx context.Context, requester SSFStreamRe
 	case http.MethodPut, http.MethodPatch:
 		return f.updateSSFStream(ctx, config, storage, requester)
 	case http.MethodGet:
-		return f.readSSFStreams(ctx, storage, clientID, requester.GetStreamID())
+		return f.readSSFStreams(ctx, config, storage, clientID, requester.GetStreamID())
 	case http.MethodDelete:
 		if requester.GetStreamID() == "" {
 			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'stream_id' query parameter is required."))
@@ -252,10 +251,10 @@ func ssfStreamStorageError(err error) error {
 		return errorsx.WithStack(ErrNotFound.WithHint("The stream does not exist."))
 	}
 
-	return err
+	return errorsx.WithStack(ErrorToRFC6749ErrorFallback(err, ErrServerError))
 }
 
-func (f *Fosite) readSSFStreams(ctx context.Context, storage SSFStreamStorage, clientID, streamID string) (responder SSFStreamResponder, err error) {
+func (f *Fosite) readSSFStreams(ctx context.Context, config *SSFConfig, storage SSFStreamStorage, clientID, streamID string) (responder SSFStreamResponder, err error) {
 	if streamID != "" {
 		var stream *SSFStream
 
@@ -267,13 +266,13 @@ func (f *Fosite) readSSFStreams(ctx context.Context, storage SSFStreamStorage, c
 			return nil, ssfStreamStorageError(ErrNotFound)
 		}
 
-		return &SSFStreamResponse{StatusCode: http.StatusOK, Body: stream}, nil
+		return &SSFStreamResponse{StatusCode: http.StatusOK, Body: config.currentSSFStream(stream)}, nil
 	}
 
 	var streams []*SSFStream
 
 	if streams, err = storage.ListSSFStreams(ctx, clientID); err != nil {
-		return nil, err
+		return nil, ssfStreamStorageError(err)
 	}
 
 	// An empty list is '[]', never 'null' (SSF Section 8.1.1.2).
@@ -281,7 +280,7 @@ func (f *Fosite) readSSFStreams(ctx context.Context, storage SSFStreamStorage, c
 
 	for _, stream := range streams {
 		if stream != nil && stream.ClientID == clientID {
-			owned = append(owned, stream)
+			owned = append(owned, config.currentSSFStream(stream))
 		}
 	}
 
@@ -296,9 +295,14 @@ func (f *Fosite) createSSFStream(ctx context.Context, config *SSFConfig, storage
 		body = &SSFStreamRequestBody{}
 	}
 
-	// Every SET of the stream uses this as 'iss' (SSF Section 4.1.6).
+	// Every SET of the stream uses this as 'iss' (SSF Section 4.1.6), an https URL with no query or fragment (SSF Section
+	// 8.1.1).
 	if config.Issuer == "" {
 		return nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an issuer."))
+	}
+
+	if _, err = SSFConfigurationURL(config.Issuer); err != nil {
+		return nil, errorsx.WithStack(ErrServerError.WithDebugf("The Shared Signals Framework transmitter issuer is invalid: %s.", err.Error()))
 	}
 
 	var policy *SSFClientPolicy
@@ -340,11 +344,11 @@ func (f *Fosite) createSSFStream(ctx context.Context, config *SSFConfig, storage
 		Delivery:                delivery,
 		Description:             ptrString(body.Description),
 		Status:                  SSFStreamStatusEnabled,
-		MinVerificationInterval: int(config.MinVerificationInterval / time.Second),
+		MinVerificationInterval: config.minVerificationIntervalSeconds(),
 	}
 
 	if err = storage.CreateSSFStream(ctx, stream); err != nil {
-		return nil, err
+		return nil, ssfStreamStorageError(err)
 	}
 
 	return &SSFStreamResponse{StatusCode: http.StatusCreated, Body: stream}, nil
@@ -390,6 +394,8 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 	if stored == nil || stored.ClientID != client.GetID() {
 		return nil, ssfStreamStorageError(ErrNotFound)
 	}
+
+	stored = config.currentSSFStream(stored)
 
 	var policy *SSFClientPolicy
 
@@ -672,17 +678,10 @@ func (f *Fosite) writeSSFResponse(ctx context.Context, rw http.ResponseWriter, r
 	_, _ = rw.Write(data)
 }
 
-// WriteSSFError writes an SSF endpoint error with 'Cache-Control: no-store'. A rejected bearer credential is answered
-// with the RFC 6750 and RFC 9449 challenge.
-//
-// See: https://www.rfc-editor.org/rfc/rfc6750#section-3
-// See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
-func (f *Fosite) WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
+func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error, allow string) (rfc *RFC6749Error) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-
-	var rfc *RFC6749Error
 
 	if IsBearerCredentialError(err) {
 		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
@@ -691,8 +690,6 @@ func (f *Fosite) WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *h
 	}
 
 	if rfc.CodeField == http.StatusMethodNotAllowed {
-		allow := ssfStreamAllowedMethods
-
 		var methodErr *ssfMethodNotAllowedError
 
 		if errors.As(err, &methodErr) {
@@ -702,13 +699,24 @@ func (f *Fosite) WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *h
 		rw.Header().Set(consts.HeaderAllow, allow)
 	}
 
-	catalog := f.Config.GetMessageCatalog(ctx)
-
-	rfc = rfc.WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
+	rfc = rfc.WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
 
 	if r != nil {
+		catalog := f.Config.GetMessageCatalog(ctx)
+
 		rfc = rfc.WithLocalizer(catalog, i18n.GetLangFromRequest(catalog, r))
 	}
+
+	return rfc
+}
+
+// WriteSSFError writes an SSF endpoint error with 'Cache-Control: no-store'. A rejected bearer credential is answered
+// with the RFC 6750 and RFC 9449 challenge.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-3
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
+func (f *Fosite) WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
+	rfc := f.prepareSSFError(ctx, rw, r, err, ssfStreamAllowedMethods).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx))
 
 	data, merr := json.Marshal(rfc)
 	if merr != nil {

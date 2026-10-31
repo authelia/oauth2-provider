@@ -259,6 +259,106 @@ func TestSSFStreamHandlerCreateRequiresIssuer(t *testing.T) {
 	assert.Zero(t, h.store.creates.Load())
 }
 
+func TestSSFStreamHandlerCreateRejectsInvalidIssuer(t *testing.T) {
+	for _, issuer := range []string{"http://ssf.example.com", "https://ssf.example.com?x=1", "https://ssf.example.com#x"} {
+		t.Run(issuer, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, func(c *SSFConfig) { c.Issuer = issuer })
+
+			rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{}`)
+			assert.Equal(t, http.StatusInternalServerError, rw.Code)
+			assert.Contains(t, rw.Body.String(), `"error":"server_error"`)
+			assert.Zero(t, h.store.creates.Load())
+		})
+	}
+}
+
+type ssfFailingStore struct{ *storage.MemoryStore }
+
+var errSSFDriver = errors.New("driver failure with secret dsn")
+
+func (ssfFailingStore) CreateSSFStream(context.Context, *SSFStream) error { return errSSFDriver }
+
+func (ssfFailingStore) ListSSFStreams(context.Context, string) ([]*SSFStream, error) {
+	return nil, errSSFDriver
+}
+
+func (ssfFailingStore) GetSSFStream(context.Context, string, string) (*SSFStream, error) {
+	return nil, errSSFDriver
+}
+
+func (ssfFailingStore) DeleteSSFStream(context.Context, string, string) error { return errSSFDriver }
+
+func TestSSFStreamHandlerStorageFailure(t *testing.T) {
+	h := newSSFHandlerHarness(t, nil)
+	h.provider.Store = ssfFailingStore{h.store.MemoryStore}
+
+	testCases := []struct {
+		name, method, target, contentType, body string
+	}{
+		{"Create", http.MethodPost, ssfHandlerURL, "application/json", `{}`},
+		{"List", http.MethodGet, ssfHandlerURL, "", ""},
+		{"Get", http.MethodGet, ssfHandlerURL + "?stream_id=x", "", ""},
+		{"Delete", http.MethodDelete, ssfHandlerURL + "?stream_id=x", "", ""},
+		{"Update", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"x"}`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rw := h.do(t, "a", tc.method, tc.target, tc.contentType, tc.body)
+			assert.Equal(t, http.StatusInternalServerError, rw.Code)
+			assert.Contains(t, rw.Body.String(), `"error":"server_error"`)
+			assert.NotContains(t, rw.Body.String(), "secret dsn")
+		})
+	}
+}
+
+func TestSSFMinVerificationInterval(t *testing.T) {
+	testCases := []struct {
+		name     string
+		interval time.Duration
+		expected float64
+	}{
+		{"ShouldKeepWholeSeconds", time.Minute, 60},
+		{"ShouldRoundUpSubSecond", 500 * time.Millisecond, 1},
+		{"ShouldRoundUpFraction", 1500 * time.Millisecond, 2},
+		{"ShouldTreatNegativeAsDisabled", -time.Minute, 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, func(c *SSFConfig) { c.MinVerificationInterval = tc.interval })
+
+			rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{}`)
+			require.Equal(t, http.StatusCreated, rw.Code)
+
+			var body map[string]any
+
+			require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &body))
+
+			if tc.expected == 0 {
+				assert.NotContains(t, body, "min_verification_interval")
+			} else {
+				assert.Equal(t, tc.expected, body["min_verification_interval"])
+			}
+		})
+	}
+
+	t.Run("ShouldReportAndAcceptChangedConfiguration", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{}`)
+
+		h.config.MinVerificationInterval = time.Hour
+
+		rw := h.do(t, "a", http.MethodGet, ssfHandlerURL+"?stream_id="+id, "", "")
+		require.Equal(t, http.StatusOK, rw.Code)
+		assert.Contains(t, rw.Body.String(), `"min_verification_interval":3600`)
+
+		rw = h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","min_verification_interval":3600}`)
+		require.Equal(t, http.StatusOK, rw.Code)
+		assert.Equal(t, 3600, h.stored(t, "a", id).MinVerificationInterval)
+	})
+}
+
 func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 	push := `{"delivery":{"method":"` + SSFDeliveryMethodPush + `","endpoint_url":"https://rx.example.com/push"}}`
 

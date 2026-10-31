@@ -174,6 +174,22 @@ func TestSSFVerification(t *testing.T) {
 		assert.Equal(t, 1, rec.calls)
 	})
 
+	t.Run("ShouldThrottleExistingStreamAfterConfigurationChange", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		h.config.MinVerificationInterval = time.Hour
+
+		_, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.NoError(t, err)
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusTooManyRequests, rw.Code)
+		assert.Equal(t, 1, rec.calls)
+		assert.Equal(t, 3600, rec.stream.MinVerificationInterval)
+	})
+
 	t.Run("ShouldPassAfterInterval", func(t *testing.T) {
 		h, rec, id := newHarness(t, time.Minute)
 

@@ -88,6 +88,7 @@ func TestSSFConfigurationURL(t *testing.T) {
 		{"ShouldRejectRelative", "tr.example.com/issuer1", "", "issuer must be an absolute URL"},
 		{"ShouldRejectEmpty", "", "", "issuer must be an absolute URL"},
 		{"ShouldRejectPathOnly", "/issuer1", "", "issuer must be an absolute URL"},
+		{"ShouldRejectHTTP", "http://tr.example.com", "", "issuer must use the https scheme"},
 		{"ShouldRejectQuery", "https://tr.example.com/a?b=c", "", "issuer must not contain a query or fragment"},
 		{"ShouldRejectFragment", "https://tr.example.com/a#b", "", "issuer must not contain a query or fragment"},
 		{"ShouldRejectInvalid", "https://tr.example.com/%zz", "", "issuer is not a valid URL"},

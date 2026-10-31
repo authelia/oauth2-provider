@@ -208,3 +208,17 @@ func TestSecurityEventTokenClaims(t *testing.T) {
 	assert.Equal(t, "secevent+jwt", consts.JSONWebTokenTypeSecurityEventToken)
 	assert.Equal(t, "secevent+jwt", JSONWebTokenTypeSecurityEventToken)
 }
+
+func TestNewSecurityEventTokenClaimsShouldKeepIntegerPrecision(t *testing.T) {
+	subject, err := NewSubjectIdentifierEmail("john@example.com")
+	require.NoError(t, err)
+
+	claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, RawSecurityEvent{URI: "https://example.com/event", Claims: map[string]any{"serial": int64(9007199254740993)}}, "")
+	require.NoError(t, err)
+
+	data, err := json.Marshal(claims.Events)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `{"https://example.com/event":{"serial":9007199254740993}}`, string(data))
+	assert.Contains(t, string(data), "9007199254740993")
+}

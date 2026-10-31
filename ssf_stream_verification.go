@@ -28,7 +28,7 @@ type SSFVerificationRequestBody struct {
 // WriteSSFError otherwise.
 //
 // An unknown stream and another client's stream give the same 404. A policy error gives 403, and a stored push endpoint
-// the SSFEndpointValidator no longer permits gives 400. A request inside the stream's MinVerificationInterval gives
+// the SSFEndpointValidator no longer permits gives 400. A request inside the configured MinVerificationInterval gives
 // ErrSSFVerificationThrottled and does not call the handler. The time is recorded before the handler is called, so a
 // failed delivery counts towards the interval and a failure to save the time fails the request; concurrent requests may
 // both pass. The specification does not restrict verification by stream status, so a paused or disabled stream reaches
@@ -89,9 +89,11 @@ func (f *Fosite) HandleSSFVerificationRequest(ctx context.Context, r *http.Reque
 		return err
 	}
 
+	stream = config.currentSSFStream(stream)
+
 	now := time.Now().UTC()
 
-	if interval := time.Duration(stream.MinVerificationInterval) * time.Second; interval > 0 && !stream.LastVerificationAt.IsZero() && now.Sub(stream.LastVerificationAt) < interval {
+	if config.MinVerificationInterval > 0 && !stream.LastVerificationAt.IsZero() && now.Sub(stream.LastVerificationAt) < config.MinVerificationInterval {
 		return errorsx.WithStack(ErrSSFVerificationThrottled.WithHintf("A verification event may be requested once every %d seconds.", stream.MinVerificationInterval))
 	}
 
@@ -99,7 +101,7 @@ func (f *Fosite) HandleSSFVerificationRequest(ctx context.Context, r *http.Reque
 		return ssfStreamStorageError(err)
 	}
 
-	return config.VerificationHandler.HandleSSFVerification(ctx, stream.Clone(), body.State)
+	return config.VerificationHandler.HandleSSFVerification(ctx, stream, body.State)
 }
 
 // NewSSFVerificationSubject returns the sub_id of a verification event, an opaque identifier holding the stream ID.

@@ -496,27 +496,17 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientConfiguration(ctx contex
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
 func endpointToken(r *http.Request, dpop bool) (token string, err error) {
-	values := r.Header.Values(consts.HeaderAuthorization)
+	var scheme, value string
 
-	// RFC 9449 Section 7.2 Figure 19: using more than one method to include an access token is a malformed request,
-	// reported with HTTP 400 and 'invalid_request' rather than as an authentication failure. The detection is
-	// independent of any token, so distinguishing it discloses nothing.
-	if len(values) > 1 {
-		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	if scheme, value, err = oauth2.AuthorizationCredentialFromRequest(r); err != nil {
+		return "", err
 	}
 
-	if len(values) == 0 {
+	if len(r.Header.Values(consts.HeaderAuthorization)) == 0 {
 		return "", errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The request must contain an Authorization header."))
 	}
 
-	scheme, value, ok := strings.Cut(values[0], " ")
-
-	// RFC 6750 Section 2.1 gives 'credentials = "Bearer" 1*SP b64token', so more than one space between the scheme and
-	// the token is well formed and the remainder must be trimmed rather than handed on with a leading space - which
-	// would otherwise be carried into the signature computation and turn a valid credential into an unknown one.
-	value = strings.TrimLeft(value, " ")
-
-	if ok && value != "" {
+	if value != "" {
 		if strings.EqualFold(scheme, oauth2.BearerAccessToken) || (dpop && strings.EqualFold(scheme, oauth2.DPoPAccessToken)) {
 			return value, nil
 		}

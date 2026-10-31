@@ -210,6 +210,29 @@ func TestSubjectIdentifier(t *testing.T) {
 			wantErr: "nested",
 		},
 		{
+			name: "ShouldRejectAliasesNestedThroughComplex",
+			have: func(t *testing.T) *SubjectIdentifier {
+				return &SubjectIdentifier{Format: SubjectIdentifierFormatAliases, Identifiers: []SubjectIdentifier{{
+					Format:                          SubjectIdentifierFormatComplex,
+					SubjectIdentifierComplexMembers: SubjectIdentifierComplexMembers{User: &SubjectIdentifier{Format: SubjectIdentifierFormatAliases, Identifiers: []SubjectIdentifier{*email()}}},
+				}}}
+			},
+			wantErr: "nested",
+		},
+		{
+			name: "ShouldRejectComplexMemberOfComplex",
+			have: func(t *testing.T) *SubjectIdentifier {
+				return &SubjectIdentifier{
+					Format: SubjectIdentifierFormatComplex,
+					SubjectIdentifierComplexMembers: SubjectIdentifierComplexMembers{User: &SubjectIdentifier{
+						Format:                          SubjectIdentifierFormatComplex,
+						SubjectIdentifierComplexMembers: SubjectIdentifierComplexMembers{User: email()},
+					}},
+				}
+			},
+			wantErr: "must not be a complex subject",
+		},
+		{
 			name: "ShouldRejectInvalidAlias",
 			have: func(t *testing.T) *SubjectIdentifier {
 				return &SubjectIdentifier{Format: SubjectIdentifierFormatAliases, Identifiers: []SubjectIdentifier{{Format: SubjectIdentifierFormatEmail}}}

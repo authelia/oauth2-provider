@@ -186,7 +186,7 @@ func (s *SubjectIdentifier) validateAliases() (err error) {
 	}
 
 	for i := range s.Identifiers {
-		if s.Identifiers[i].Format == SubjectIdentifierFormatAliases {
+		if s.Identifiers[i].containsAliases() {
 			return fmt.Errorf("%w: 'aliases' identifiers must not be nested", ErrInvalidSubjectIdentifier)
 		}
 
@@ -200,22 +200,19 @@ func (s *SubjectIdentifier) validateAliases() (err error) {
 
 // validateComplex requires at least one member, each a valid subject identifier (SSF 1.0 §3.3).
 func (s *SubjectIdentifier) validateComplex() (err error) {
-	members := []struct {
-		name  string
-		value *SubjectIdentifier
-	}{
-		{"user", s.User}, {"device", s.Device}, {"session", s.Session}, {"application", s.Application},
-		{"tenant", s.Tenant}, {"org_unit", s.OrgUnit}, {"group", s.Group},
-	}
-
 	var present int
 
-	for _, member := range members {
+	for _, member := range s.complexMembers() {
 		if member.value == nil {
 			continue
 		}
 
 		present++
+
+		// SSF 1.0 §3.3: the value of each member is a simple subject.
+		if member.value.Format == SubjectIdentifierFormatComplex {
+			return fmt.Errorf("%w: complex member '%s' must not be a complex subject", ErrInvalidSubjectIdentifier, member.name)
+		}
 
 		if err = member.value.Validate(); err != nil {
 			return fmt.Errorf("%w: complex member '%s' is invalid: %w", ErrInvalidSubjectIdentifier, member.name, err)
@@ -227,6 +224,36 @@ func (s *SubjectIdentifier) validateComplex() (err error) {
 	}
 
 	return nil
+}
+
+type subjectComplexMember struct {
+	name  string
+	value *SubjectIdentifier
+}
+
+func (s *SubjectIdentifier) complexMembers() (members []subjectComplexMember) {
+	return []subjectComplexMember{
+		{"user", s.User}, {"device", s.Device}, {"session", s.Session}, {"application", s.Application},
+		{"tenant", s.Tenant}, {"org_unit", s.OrgUnit}, {"group", s.Group},
+	}
+}
+
+func (s *SubjectIdentifier) containsAliases() bool {
+	if s.Format == SubjectIdentifierFormatAliases {
+		return true
+	}
+
+	if s.Format != SubjectIdentifierFormatComplex {
+		return false
+	}
+
+	for _, member := range s.complexMembers() {
+		if member.value != nil && member.value.containsAliases() {
+			return true
+		}
+	}
+
+	return false
 }
 
 // validateIPAddresses requires a non-empty array of IP address strings (SSF 1.0 §3.5.3).

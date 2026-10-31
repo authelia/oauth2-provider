@@ -58,7 +58,10 @@ func NewSecurityEventTokenClaims(issuer string, audience []string, subject *Subj
 		return nil, errorsx.WithStack(err)
 	}
 
-	if err = json.Unmarshal(data, &payload); err != nil {
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+
+	if err = decoder.Decode(&payload); err != nil {
 		return nil, errorsx.WithStack(err)
 	}
 

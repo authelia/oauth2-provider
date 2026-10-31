@@ -37,8 +37,8 @@ type SecurityEventTokenStrategy interface {
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html
 type SSFConfig struct {
-	// Issuer is the transmitter issuer, used as the 'iss' of every SET. Required to create a stream; empty gives
-	// ErrServerError.
+	// Issuer is the transmitter issuer, used as the 'iss' of every SET. It must be an https URL with no query or fragment.
+	// Required to create a stream; an empty or invalid value gives ErrServerError.
 	Issuer string
 
 	// Audience is the transmitter audience. Empty means Issuer.
@@ -64,7 +64,9 @@ type SSFConfig struct {
 	// VerificationHandler is called to deliver a verification event.
 	VerificationHandler SSFVerificationHandler
 
-	// MinVerificationInterval is the minimum interval between verification events on a stream.
+	// MinVerificationInterval is the minimum interval between verification events on a stream. It applies to existing
+	// streams as well as new ones, and is reported as 'min_verification_interval' in whole seconds, rounded up. Zero or
+	// less disables the limit.
 	MinVerificationInterval time.Duration
 }
 
@@ -82,6 +84,21 @@ func (c SSFConfig) WithDefaults() (config SSFConfig) {
 	}
 
 	return config
+}
+
+func (c *SSFConfig) minVerificationIntervalSeconds() (seconds int) {
+	if c.MinVerificationInterval <= 0 {
+		return 0
+	}
+
+	return int((c.MinVerificationInterval + time.Second - 1) / time.Second)
+}
+
+func (c *SSFConfig) currentSSFStream(stream *SSFStream) (current *SSFStream) {
+	current = stream.Clone()
+	current.MinVerificationInterval = c.minVerificationIntervalSeconds()
+
+	return current
 }
 
 // getSSFConfig returns the configured SSFConfig with defaults applied, or nil.

@@ -19,6 +19,23 @@ type TokenIntrospector interface {
 	IntrospectToken(ctx context.Context, token string, tokenUseHint TokenUse, request AccessRequester, scopes []string) (tokenUse TokenUse, err error)
 }
 
+// AuthorizationCredentialFromRequest returns the scheme and token of the Authorization header, with both empty when the
+// header is absent or has no separator. More than one header is 'invalid_request' (RFC 9449 Section 7.2), and one or more
+// spaces separate the scheme from the token (RFC 9110 Section 11.4). The caller decides which schemes it permits.
+func AuthorizationCredentialFromRequest(r *http.Request) (scheme, token string, err error) {
+	if len(r.Header.Values(consts.HeaderAuthorization)) > 1 {
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	}
+
+	var found bool
+
+	if scheme, token, found = strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); !found {
+		return "", "", nil
+	}
+
+	return scheme, strings.TrimLeft(token, " "), nil
+}
+
 // AccessTokenFromRequest extracts a bearer access token from an HTTP request. Per RFC 6750 the token may be supplied in
 // the Authorization header (Bearer scheme) or as the 'access_token' form parameter. Returns the empty string if no
 // token can be located.

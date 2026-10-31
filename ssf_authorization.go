@@ -86,17 +86,15 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 // ssfCredentialFromRequest returns the token of the Authorization header, or empty when it has no Bearer or DPoP
 // credential. An 'access_token' query or form parameter is never read (CAEP profile Section 2.7.3).
 func ssfCredentialFromRequest(r *http.Request) (token string, err error) {
-	// RFC 9449 Section 7.2: more than one method of including an access token is a malformed request.
-	if len(r.Header.Values(consts.HeaderAuthorization)) > 1 {
-		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	var scheme, value string
+
+	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
+		return "", err
 	}
 
-	scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
-
-	if !found || (!strings.EqualFold(scheme, BearerAccessToken) && !strings.EqualFold(scheme, DPoPAccessToken)) {
+	if !strings.EqualFold(scheme, BearerAccessToken) && !strings.EqualFold(scheme, DPoPAccessToken) {
 		return "", nil
 	}
 
-	// RFC 9110 Section 11.4: one or more spaces separate the scheme from the token.
-	return strings.TrimLeft(value, " "), nil
+	return value, nil
 }

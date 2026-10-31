@@ -7,10 +7,8 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -165,37 +163,7 @@ func (f *Fosite) WriteSSFPollResponse(ctx context.Context, rw http.ResponseWrite
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5.1
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.6
 func (f *Fosite) WriteSSFPollError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
-	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
-	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
-	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-
-	var rfc *RFC6749Error
-
-	if IsBearerCredentialError(err) {
-		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
-	} else {
-		rfc = ErrorToRFC6749Error(err)
-	}
-
-	if rfc.CodeField == http.StatusMethodNotAllowed {
-		allow := ssfPollAllowedMethods
-
-		var methodErr *ssfMethodNotAllowedError
-
-		if errors.As(err, &methodErr) {
-			allow = methodErr.allow
-		}
-
-		rw.Header().Set(consts.HeaderAllow, allow)
-	}
-
-	catalog := f.Config.GetMessageCatalog(ctx)
-
-	rfc = rfc.WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
-
-	if r != nil {
-		rfc = rfc.WithLocalizer(catalog, i18n.GetLangFromRequest(catalog, r))
-	}
+	rfc := f.prepareSSFError(ctx, rw, r, err, ssfPollAllowedMethods)
 
 	code := ssfPollErrInvalidRequest
 

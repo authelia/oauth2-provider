@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -347,6 +348,8 @@ func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			token := tc.token(t)
 
+			persistJWTAuthToken(t, store, token)
+
 			scheme := tc.scheme
 			if scheme == "" {
 				scheme = oauth2.BearerAccessToken
@@ -428,11 +431,13 @@ func TestAuthenticateClientRegistrationJWTStrategyResolution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			auth, _, _, access := newJWTAuthFixtures(t)
+			auth, _, store, access := newJWTAuthFixtures(t)
 
 			tc.setup(auth, access)
 
 			token := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil)
+
+			persistJWTAuthToken(t, store, token)
 
 			requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
 
@@ -452,12 +457,108 @@ func TestAuthenticateClientRegistrationJWTStrategyResolution(t *testing.T) {
 	}
 }
 
+func TestAuthenticateClientRegistrationJWTStorage(t *testing.T) {
+	ctx := context.Background()
+
+	const policyClaim = testJWTIssuer + ":authelia:oauth2:dynamic-client-registration:policy"
+
+	authenticate := func(auth *DefaultEndpointAuthStrategy, token string) (RegistrationPolicyRequester, error) {
+		requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
+		if err != nil {
+			return nil, err
+		}
+
+		return requester.(RegistrationPolicyRequester), nil
+	}
+
+	t.Run("ShouldRejectATokenAbsentFromStorage", func(t *testing.T) {
+		auth, _, _, access := newJWTAuthFixtures(t)
+
+		_, err := authenticate(auth, signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{policyClaim: nil}))
+
+		require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	})
+
+	t.Run("ShouldRejectARevokedToken", func(t *testing.T) {
+		auth, _, store, access := newJWTAuthFixtures(t)
+
+		token := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil)
+
+		persistJWTAuthToken(t, store, token)
+
+		_, err := authenticate(auth, token)
+		require.NoError(t, err)
+
+		require.NoError(t, store.RevokeAccessToken(ctx, testJWTRequestID))
+
+		_, err = authenticate(auth, token)
+		require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	})
+
+	t.Run("ShouldKeepTheCounterKeyAcrossARefresh", func(t *testing.T) {
+		auth, _, store, access := newJWTAuthFixtures(t)
+
+		original := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimJWTID: "original"})
+		refreshed := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimJWTID: "refreshed"})
+
+		persistJWTAuthToken(t, store, original)
+		persistJWTAuthToken(t, store, refreshed)
+
+		first, err := authenticate(auth, original)
+		require.NoError(t, err)
+
+		second, err := authenticate(auth, refreshed)
+		require.NoError(t, err)
+
+		assert.Equal(t, testJWTCounterKey, first.GetRegistrationCounterKey())
+		assert.Equal(t, first.GetRegistrationCounterKey(), second.GetRegistrationCounterKey())
+	})
+
+	t.Run("ShouldAcceptAnUnstoredTokenWhenStateless", func(t *testing.T) {
+		auth, config, _, access := newJWTAuthFixtures(t)
+
+		config.RFC7591ClientRegistrationStatelessAccessTokens = true
+
+		requester, err := authenticate(auth, signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{policyClaim: map[string]any{testMetadataClientName: map[string]any{policyRuleOneOf: []any{"a"}}}}))
+
+		require.NoError(t, err)
+		assert.Equal(t, `jwt:["https://auth.example.com","j1"]`, requester.GetRegistrationCounterKey())
+	})
+
+	t.Run("ShouldRejectAnUnstoredCountedTokenWhenStateless", func(t *testing.T) {
+		auth, config, _, access := newJWTAuthFixtures(t)
+
+		config.RFC7591ClientRegistrationStatelessAccessTokens = true
+
+		_, err := authenticate(auth, signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil))
+
+		require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	})
+
+	t.Run("ShouldUseTheSessionKeyForAStoredCountedTokenWhenStateless", func(t *testing.T) {
+		auth, config, store, access := newJWTAuthFixtures(t)
+
+		config.RFC7591ClientRegistrationStatelessAccessTokens = true
+
+		token := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil)
+
+		persistJWTAuthToken(t, store, token)
+
+		requester, err := authenticate(auth, token)
+
+		require.NoError(t, err)
+		assert.Equal(t, testJWTCounterKey, requester.GetRegistrationCounterKey())
+	})
+}
+
 func TestAuthenticateClientRegistrationJWTRequiresAnIssuer(t *testing.T) {
 	ctx := context.Background()
 
-	auth, config, _, access := newJWTAuthFixtures(t)
+	auth, config, store, access := newJWTAuthFixtures(t)
 
 	token := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil)
+
+	persistJWTAuthToken(t, store, token)
 
 	config.AccessTokenIssuer = ""
 
@@ -465,6 +566,17 @@ func TestAuthenticateClientRegistrationJWTRequiresAnIssuer(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
+}
+
+func persistJWTAuthToken(t *testing.T, store *storage.MemoryStore, token string) {
+	t.Helper()
+
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return
+	}
+
+	require.NoError(t, store.CreateAccessTokenSession(context.Background(), parts[2], &oauth2.Request{ID: testJWTRequestID, Client: &oauth2.DefaultClient{ID: testOnboardingClientID}, Session: &oauth2.DefaultSession{}}))
 }
 
 func newJWTAuthFixtures(t *testing.T) (auth *DefaultEndpointAuthStrategy, config *oauth2.Config, store *storage.MemoryStore, access *hoauth2.JWTProfileCoreStrategy) {
@@ -561,4 +673,61 @@ func signJWTAuthClaims(overrides jwt.MapClaims) jwt.MapClaims {
 	}
 
 	return claims
+}
+
+func TestAuthenticateClientRegistrationJWTResolvesAnIssuedToken(t *testing.T) {
+	testCases := []struct {
+		name  string
+		setup func(auth *DefaultEndpointAuthStrategy, access *hoauth2.JWTProfileCoreStrategy)
+	}{
+		{
+			name:  "ShouldResolveWithTheAccessTokenStrategy",
+			setup: func(auth *DefaultEndpointAuthStrategy, access *hoauth2.JWTProfileCoreStrategy) {},
+		},
+		{
+			name: "ShouldResolveWithTheConfiguredJWTStrategy",
+			setup: func(auth *DefaultEndpointAuthStrategy, access *hoauth2.JWTProfileCoreStrategy) {
+				auth.AccessTokenStrategy = access.HMACCoreStrategy
+				auth.JWTStrategy = access.Strategy
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		for name, store := range map[string]Storage{
+			"MemoryStore":          storage.NewMemoryStore(),
+			"HydratingMemoryStore": storage.NewHydratingMemoryStore(),
+		} {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				ctx := context.Background()
+
+				auth, config, _, access := newJWTAuthFixtures(t)
+
+				auth.Store = store
+				config.EnforceJWTProfileAccessTokens = true
+
+				tc.setup(auth, access)
+
+				request := &oauth2.Request{
+					ID:     testJWTRequestID,
+					Client: &oauth2.DefaultClient{ID: testOnboardingClientID},
+					Session: &hoauth2.JWTSession{
+						JWTClaims: &jwt.JWTClaims{Subject: "onboarding-bot"},
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().Add(time.Hour)},
+					},
+					GrantedScope:    oauth2.Arguments{testRegistrationScope},
+					GrantedAudience: oauth2.Arguments{testEndpoint},
+				}
+
+				token, signature, err := access.GenerateAccessToken(ctx, request)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+				requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
+				require.NoError(t, err)
+
+				assert.Equal(t, testJWTCounterKey, requester.(RegistrationPolicyRequester).GetRegistrationCounterKey())
+			})
+		}
+	}
 }

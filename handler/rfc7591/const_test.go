@@ -20,7 +20,8 @@ const (
 	testRegistrationScope    = "authelia:oauth2:dynamic-client-registration"
 	testJWTIssuer            = "https://auth.example.com"
 	testJWTOtherIssuer       = "https://auth.example.co"
-	testJWTCounterKey        = `jwt:["https://auth.example.com","j1"]`
+	testJWTCounterKey        = "session:" + testJWTRequestID
+	testJWTRequestID         = "creation-token-request"
 	testJWTTrustedIssuer     = "https://trusted.example.com"
 	testJWTTrustedCounterKey = `jwt:["https://trusted.example.com","j1"]`
 	testScopeRead            = "read"

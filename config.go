@@ -613,6 +613,11 @@ type RFC7591ClientRegistrationPolicyProvider interface {
 	// ':authelia:oauth2:dynamic-client-registration:policy'.
 	GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string)
 
+	// GetRFC7591ClientRegistrationStatelessAccessTokens returns true if a JWT client creation token issued by this
+	// server is accepted without consulting access token storage, in which case it cannot be revoked before it expires.
+	// A token whose registration policy sets 'max_registrations' is always resolved from storage.
+	GetRFC7591ClientRegistrationStatelessAccessTokens(ctx context.Context) (enabled bool)
+
 	// GetRFC7591ClientRegistrationTrustedIssuers returns the issuers, other than this server, trusted to issue JWT
 	// client creation tokens, with or without a registration policy claim. They are only consulted when a JWT strategy
 	// is available, and their tokens are only accepted at the client registration endpoint.

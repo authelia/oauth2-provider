@@ -45,8 +45,9 @@ type EndpointAuthStrategyConfig interface {
 // The two endpoints take two different credentials, from two different storage namespaces:
 //
 //   - The client registration endpoint takes an ordinary access token, obtained through the token endpoint like any
-//     other and resolved from access token storage, or a JWT access token validated without storage per RFC 9068
-//     Section 4. It is authorised by its granted audience containing this endpoint's audience exactly and its granted
+//     other and resolved from access token storage, or a JWT access token validated per RFC 9068 Section 4. A JWT from
+//     this server is also resolved from storage unless GetRFC7591ClientRegistrationStatelessAccessTokens is set, and a
+//     JWT from a trusted issuer never is. It is authorised by its granted audience containing this endpoint's audience exactly and its granted
 //     scopes containing the configured registration scope exactly.
 //   - The client configuration endpoint takes a client management token, which lives in its own storage namespace,
 //     never expires, and is audienced at exactly one client's registration_client_uri.
@@ -132,7 +133,7 @@ func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx 
 // The result is a RegistrationPolicyRequester whose counter key is "session:" followed by the request id, or empty when
 // the stored requester has no id so that a 'max_registrations' policy fails rather than sharing one counter.
 //
-// When a JWT strategy is available, a token with the shape of a JWS is instead validated statelessly by
+// When a JWT strategy is available, a token with the shape of a JWS is instead validated by
 // authenticateClientRegistrationJWT, and a token with the shape of a JWE is rejected.
 func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context.Context, r *http.Request, tokenString string) (requester oauth2.Requester, err error) {
 	if strategy := s.jwtStrategy(); strategy != nil {
@@ -178,7 +179,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 }
 
 // authenticateClientRegistrationJWT authenticates a client registration request (RFC 7591) presenting a JWT access
-// token, validated without consulting storage per RFC 9068 Section 4: the 'typ' header is 'at+jwt', the signature
+// token, validated per RFC 9068 Section 4: the 'typ' header is 'at+jwt', the signature
 // verifies with the keys of strategy, 'iss' equals GetAccessTokenIssuer exactly, 'exp' is present and in the future,
 // and 'jti' is present. The proof-of-possession binding, scope and audience are then checked by
 // oauth2.ValidateBearerAuthorization against the requester rebuilt from the claims, as for an opaque token.
@@ -192,8 +193,12 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 // of the set matches its 'alg'.
 // Only asymmetric algorithms are accepted from a trusted issuer.
 //
-// The result is a RegistrationPolicyRequester carrying the registration policy claim of the token and the counter key
-// "jwt:" followed by the JSON array of the 'iss' and 'jti' claims. Its policy may hold 'pattern' rules when the token
+// A token issued by this server must also resolve from access token storage, so that revoking it takes effect, unless
+// GetRFC7591ClientRegistrationStatelessAccessTokens is set and its policy does not set 'max_registrations'.
+//
+// The result is a RegistrationPolicyRequester carrying the registration policy claim of the token. Its counter key is
+// "session:" followed by the request id when the token was resolved from storage, as that id survives a refresh, and
+// otherwise "jwt:" followed by the JSON array of the 'iss' and 'jti' claims. Its policy may hold 'pattern' rules when the token
 // was issued by this server or by an issuer of GetRFC7591ClientRegistrationPatternIssuers.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-4
@@ -237,6 +242,21 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 		return nil, errInvalidAccessToken(errors.New("the token does not have a 'jti' claim"))
 	}
 
+	claim, hasClaim := claims[s.Config.GetRFC7591ClientRegistrationPolicyClaim(ctx)]
+
+	var (
+		key      string
+		resolved bool
+	)
+
+	if issuer == s.Config.GetAccessTokenIssuer(ctx) && (!s.Config.GetRFC7591ClientRegistrationStatelessAccessTokens(ctx) || policyClaimLimitsRegistrations(claim)) {
+		if key, err = s.storedCounterKey(ctx, tokenString); err != nil {
+			return nil, errInvalidAccessToken(err)
+		}
+
+		resolved = true
+	}
+
 	requester = hoauth2.AccessTokenJWTToRequest(token)
 
 	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
@@ -247,18 +267,50 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 		return nil, err
 	}
 
-	var key []byte
+	if !resolved {
+		var identity []byte
 
-	if key, err = json.Marshal([]string{issuer, jti}); err != nil {
-		return nil, errInvalidAccessToken(err)
+		if identity, err = json.Marshal([]string{issuer, jti}); err != nil {
+			return nil, errInvalidAccessToken(err)
+		}
+
+		key = "jwt:" + string(identity)
 	}
 
 	patterns := issuer == s.Config.GetAccessTokenIssuer(ctx) || slices.Contains(s.Config.GetRFC7591ClientRegistrationPatternIssuers(ctx), issuer)
 
-	wrapped := &policyRequester{Requester: requester, key: "jwt:" + string(key), patterns: patterns}
-	wrapped.claim, wrapped.ok = claims[s.Config.GetRFC7591ClientRegistrationPolicyClaim(ctx)]
+	return &policyRequester{Requester: requester, claim: claim, ok: hasClaim, key: key, patterns: patterns}, nil
+}
 
-	return wrapped, nil
+func (s *DefaultEndpointAuthStrategy) storedCounterKey(ctx context.Context, tokenString string) (key string, err error) {
+	signature := s.AccessTokenStrategy.AccessTokenSignature(ctx, tokenString)
+
+	if signature == "" {
+		signature = tokenString[strings.LastIndexByte(tokenString, '.')+1:]
+	}
+
+	var stored oauth2.Requester
+
+	if stored, err = s.Store.GetAccessTokenSession(ctx, signature, &accessTokenSession{}); err != nil {
+		return "", err
+	}
+
+	if id := stored.GetID(); id != "" {
+		key = "session:" + id
+	}
+
+	return key, nil
+}
+
+func policyClaimLimitsRegistrations(claim any) bool {
+	policy, ok := claim.(map[string]any)
+	if !ok {
+		return false
+	}
+
+	_, ok = policy[policyMemberMaxRegistrations]
+
+	return ok
 }
 
 func (s *DefaultEndpointAuthStrategy) clientRegistrationJWTIssuer(ctx context.Context, tokenString string) (issuer string, opts []jwt.StrategyOpt, err error) {

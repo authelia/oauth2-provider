@@ -557,6 +557,11 @@ type Config struct {
 	// defaults to the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy'.
 	RFC7591ClientRegistrationPolicyClaim string
 
+	// RFC7591ClientRegistrationStatelessAccessTokens accepts a JWT client creation token issued by this server without
+	// consulting access token storage, in which case it cannot be revoked before it expires. A token whose registration
+	// policy sets 'max_registrations' is always resolved from storage.
+	RFC7591ClientRegistrationStatelessAccessTokens bool
+
 	// RFC7591ClientRegistrationTrustedIssuers are the issuers trusted to issue JWT client creation tokens, with or
 	// without a registration policy claim. They are only consulted when a JWT strategy is available.
 	RFC7591ClientRegistrationTrustedIssuers []RFC7591TrustedIssuer
@@ -1568,6 +1573,12 @@ func (c *Config) GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (c
 	}
 
 	return "authelia:oauth2:dynamic-client-registration:policy"
+}
+
+// GetRFC7591ClientRegistrationStatelessAccessTokens returns true if a JWT client creation token issued by this server
+// is accepted without consulting access token storage.
+func (c *Config) GetRFC7591ClientRegistrationStatelessAccessTokens(ctx context.Context) (enabled bool) {
+	return c.RFC7591ClientRegistrationStatelessAccessTokens
 }
 
 // GetRFC7591ClientRegistrationTrustedIssuers returns the issuers trusted to issue JWT client creation tokens, with or

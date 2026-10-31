@@ -109,6 +109,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 					Method: http.MethodPost,
 					Header: http.Header{},
 					Form:   url.Values{},
+					Body:   http.NoBody,
 				}
 			},
 			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",

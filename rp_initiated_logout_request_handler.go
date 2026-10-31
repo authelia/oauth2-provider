@@ -41,7 +41,7 @@ func (f *Fosite) NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Reques
 
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
-	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+	if err = r.ParseForm(); err != nil {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 

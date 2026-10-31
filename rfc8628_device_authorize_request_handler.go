@@ -26,7 +26,7 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'POST'.", r.Method))
 	}
 
-	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+	if err = r.ParseForm(); err != nil {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 

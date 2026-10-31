@@ -47,18 +47,19 @@ func TestNewRevocationRequest(t *testing.T) {
 			name:   "ShouldFailWhenPOSTBodyEmpty",
 			header: http.Header{},
 			method: http.MethodPost,
+			body:   http.NoBody,
 			mock:   func(store *mock.MockStorage, handler *mock.MockRevocationHandler, client *DefaultClient) {},
 			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
 		{
-			name: "ShouldFailWhenMultipartBodyIsMalformed",
+			name: "ShouldFailWhenBodyIsMultipart",
 			header: http.Header{
 				consts.HeaderContentType: {"multipart/form-data; boundary=foo"},
 			},
 			method: http.MethodPost,
 			body:   strings.NewReader("not a real multipart body"),
 			mock:   func(store *mock.MockStorage, handler *mock.MockRevocationHandler, client *DefaultClient) {},
-			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body. multipart: NextPart: EOF",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty.",
 		},
 		{
 			name:   "ShouldFailWhenClientCredentialsMissing",

@@ -22,7 +22,7 @@ func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Req
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
-	if err = r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+	if err = r.ParseForm(); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 

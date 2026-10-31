@@ -37,6 +37,7 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					store := sc.newStore()
 					config, hmacStrategy := newBindingExchangeConfig()
+					config.JWTProfileAccessTokenDefaultAudience = []string{"https://api.example.com"}
 					config.EnforceJWTProfileAccessTokens = true
 					config.AccessTokenIssuer = "https://issuer.example.com"
 
@@ -76,6 +77,7 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 					assert.Equal(t, "peter", claims[consts.ClaimSubject])
 					assert.Equal(t, "https://issuer.example.com", claims[consts.ClaimIssuer])
 					assert.Equal(t, "my-client", claims[consts.ClaimClientIdentifier])
+					assert.Contains(t, claims[consts.ClaimAudience], "https://api.example.com")
 					assert.NotEmpty(t, claims[consts.ClaimJWTID])
 					assert.NotEmpty(t, claims[consts.ClaimIssuedAt])
 					assert.NotEmpty(t, claims[consts.ClaimExpirationTime])

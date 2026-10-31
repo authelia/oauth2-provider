@@ -59,6 +59,13 @@ type Config struct {
 	// AccessTokenIssuer is the issuer to be used when generating access tokens.
 	AccessTokenIssuer string
 
+	// JWTProfileAccessTokenDefaultAudience is the default resource indicators used as the 'aud' claim of a JWT profile
+	// access token whose request granted no audience or resource. Without one such a token cannot be issued, as RFC 9068
+	// Section 2.2 requires the claim.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9068#section-3
+	JWTProfileAccessTokenDefaultAudience []string
+
 	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses (RFC9207).
 	AuthorizationServerIdentificationIssuer string
 
@@ -896,6 +903,11 @@ func (c *Config) GetJWTStrategy(ctx context.Context) jwt.Strategy {
 	})
 
 	return c.JWTStrategy
+}
+
+// GetJWTProfileAccessTokenDefaultAudience returns the default resource indicators of a JWT profile access token.
+func (c *Config) GetJWTProfileAccessTokenDefaultAudience(ctx context.Context) (audience []string) {
+	return c.JWTProfileAccessTokenDefaultAudience
 }
 
 // GetEnforceJWTProfileAccessTokens returns whether JWT Profile Access Tokens are issued to all clients.

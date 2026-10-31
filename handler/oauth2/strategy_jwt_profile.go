@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // JWTProfileCoreStrategy is a JWT RS256 strategy.
@@ -200,7 +201,13 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 // 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
 // bindings recorded on the session.
 //
+// RFC 9068 Section 2.2 requires the 'aud' and 'sub' claims, so a token that would have neither a value for them nor a
+// default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider, which is also
+// recorded as granted. The 'sub' claim defaults to the session subject, then for a grant with no resource owner the
+// client identifier.
+//
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-3
 func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, request oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
 	var (
 		session JWTSessionContainer
@@ -219,6 +226,10 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 
 	header = session.GetJWTHeader()
 
+	if err = s.applyDefaultAudience(ctx, request); err != nil {
+		return "", "", err
+	}
+
 	claims = claims.
 		Sanitize().
 		With(
@@ -236,6 +247,10 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		)
 
 	mapClaims := claims.ToMapClaims()
+
+	if err = applyDefaultSubject(mapClaims, request, session); err != nil {
+		return "", "", err
+	}
 
 	// RFC9068 Section 2.2 requires 'client_id'. It identifies the client the token was issued to, so it is taken
 	// from the request rather than the session, whose extra claims are not authoritative for it. StatelessJWTValidator
@@ -259,6 +274,52 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
 	return s.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))
+}
+
+func (s *JWTProfileCoreStrategy) applyDefaultAudience(ctx context.Context, request oauth2.Requester) (err error) {
+	if len(request.GetGrantedAudience()) != 0 || len(request.GetGrantedResource()) != 0 {
+		return nil
+	}
+
+	var audience []string
+
+	if provider, ok := s.Config.(oauth2.JWTProfileAccessTokenDefaultAudienceProvider); ok {
+		for _, value := range provider.GetJWTProfileAccessTokenDefaultAudience(ctx) {
+			if value != "" {
+				audience = append(audience, value)
+			}
+		}
+	}
+
+	if len(audience) == 0 {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires an 'aud' claim, but the request granted no audience or resource and no default audience is configured."))
+	}
+
+	for _, value := range audience {
+		request.GrantAudience(value)
+	}
+
+	return nil
+}
+
+func applyDefaultSubject(claims jwt.MapClaims, request oauth2.Requester, session oauth2.Session) (err error) {
+	if subject, _ := claims[consts.ClaimSubject].(string); subject != "" {
+		return nil
+	}
+
+	if subject := session.GetSubject(); subject != "" {
+		claims[consts.ClaimSubject] = subject
+
+		return nil
+	}
+
+	if access, ok := request.(oauth2.AccessRequester); ok && access.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials) && request.GetClient() != nil {
+		claims[consts.ClaimSubject] = request.GetClient().GetID()
+
+		return nil
+	}
+
+	return errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires a 'sub' claim, but the session has no subject."))
 }
 
 func validateJWT(ctx context.Context, strategy jwt.Strategy, client jwt.Client, tokenString string) (token *jwt.Token, err error) {

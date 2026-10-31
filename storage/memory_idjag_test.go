@@ -124,7 +124,7 @@ func TestMemoryStoreResolveIDJAGSubject(t *testing.T) {
 		// Section 3.1: a multi-tenant issuer scopes the subject by tenant.
 		{name: "ShouldResolveTheTenantSubject", claims: map[string]any{consts.ClaimIssuer: idjagTestIssuer, consts.ClaimTenant: idjagTestTenant, consts.ClaimSubject: idjagTestSubject}, expected: idjagTestBob},
 		{name: "ShouldNotResolveAnotherTenant", claims: map[string]any{consts.ClaimIssuer: idjagTestIssuer, consts.ClaimTenant: "other", consts.ClaimSubject: idjagTestSubject}, err: oauth2.ErrNotFound},
-		// Section 9.5: an issuer is trusted only for its own subjects.
+		// Section 9.8: an issuer is trusted only for its own subjects.
 		{name: "ShouldNotResolveAnotherIssuer", claims: map[string]any{consts.ClaimIssuer: "https://other.example/", consts.ClaimSubject: idjagTestSubject}, err: oauth2.ErrNotFound},
 		{name: "ShouldNotResolveAnUnmappedSubject", claims: map[string]any{consts.ClaimIssuer: idjagTestIssuer, consts.ClaimSubject: "U2"}, err: oauth2.ErrNotFound},
 		{name: "ShouldNotResolveANonStringTenant", claims: map[string]any{consts.ClaimIssuer: idjagTestIssuer, consts.ClaimTenant: 1, consts.ClaimSubject: idjagTestSubject}, err: oauth2.ErrNotFound},

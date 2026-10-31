@@ -19,7 +19,7 @@ const (
 
 // Authorization grant profile identifiers.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-10.2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-11.2
 const (
 	GrantProfileIDJAG = "urn:ietf:params:oauth:grant-profile:id-jag"
 )

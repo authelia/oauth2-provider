@@ -42,7 +42,7 @@ const (
 	boundSecret   = "foobarfoobarfoobarfoobarfoobar12"
 )
 
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.1
 func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 	signing := gen.MustRSAKey()
 
@@ -71,6 +71,7 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 		proof    *ecdsa.PrivateKey
 		cert     *x509.Certificate
 		code     string
+		member   string
 		expected string
 	}{
 		{name: "ShouldRefuseABoundSubjectWithoutAProof", dpop: true, cnf: map[string]any{jwt.ClaimConfirmationJWKThumbprint: thumbprint(holder)}, code: "invalid_dpop_proof"},
@@ -80,7 +81,10 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 		{name: "ShouldNotBindWithoutAProof", dpop: true},
 		{name: "ShouldRefuseABoundSubjectWhenDPoPIsDisabled", cnf: map[string]any{jwt.ClaimConfirmationJWKThumbprint: thumbprint(holder)}, proof: holder, code: "invalid_request"},
 		{name: "ShouldRefuseACertificateBoundSubjectWithoutTheCertificate", mtls: true, cnf: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: oauth2.X509CertificateSHA256Thumbprint(certificate)}, code: "invalid_request"},
-		{name: "ShouldNotAssertACertificateBindingInTheAssertion", mtls: true, cnf: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: oauth2.X509CertificateSHA256Thumbprint(certificate)}, cert: certificate},
+		// Section 9.11.2.1.
+		{name: "ShouldBindToTheCertificateOfABoundSubject", mtls: true, cnf: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: oauth2.X509CertificateSHA256Thumbprint(certificate)}, cert: certificate, member: consts.ClaimConfirmationX509SHA256Thumbprint, expected: oauth2.X509CertificateSHA256Thumbprint(certificate)},
+		// Section 9.11: a single binding, with the DPoP key preferred.
+		{name: "ShouldBindOnlyToTheDPoPKeyOfASubjectBoundToACertificate", dpop: true, mtls: true, cnf: map[string]any{jwt.ClaimConfirmationX509SHA256Thumbprint: oauth2.X509CertificateSHA256Thumbprint(certificate)}, cert: certificate, proof: holder, expected: thumbprint(holder)},
 	}
 
 	for _, tc := range testCases {
@@ -186,7 +190,12 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, map[string]any{consts.ClaimConfirmationJWKThumbprint: tc.expected}, result[consts.ClaimConfirmation])
+			member := tc.member
+			if member == "" {
+				member = consts.ClaimConfirmationJWKThumbprint
+			}
+
+			assert.Equal(t, map[string]any{member: tc.expected}, result[consts.ClaimConfirmation])
 		})
 	}
 }

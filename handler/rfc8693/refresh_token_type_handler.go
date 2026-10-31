@@ -7,6 +7,7 @@ package rfc8693
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -235,10 +236,10 @@ func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(ctx context.Context, c
 	}
 
 	// A refresh token is only usable while the client it was issued to may use the refresh_token grant, as ID-JAG
-	// draft 04 Section 4.3.3 validates a refresh token subject as the refresh_token grant would. That is the current
+	// draft 06 Section 4.3.3 validates a refresh token subject as the refresh_token grant would. That is the current
 	// registration of the client, which is the requesting client or is loaded by its identifier.
 	//
-	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 	owner := client
 
 	if id := or.GetClient().GetID(); id != client.GetID() {
@@ -283,17 +284,6 @@ func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, o
 
 func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, request oauth2.AccessRequester, original oauth2.Requester) (err error) {
 	client := request.GetClient()
-	strategy := c.GetScopeStrategy(ctx, client)
-
-	if err = validateSubjectTokenScope(request, original.GetGrantedScopes()); err != nil {
-		return err
-	}
-
-	for _, scope := range request.GetRequestedScopes() {
-		if !strategy(client.GetScopes(), scope) {
-			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
-		}
-	}
 
 	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
 
@@ -315,6 +305,24 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 		return errors.WithStack(err)
 	}
 
+	// The requested 'scope' and 'authorization_details' have the meaning of the Authorization Server the audience
+	// identifies, so the RFC 6749 Section 6 comparison applies only when that is this server (Section 4.3.3).
+	if !c.isOwnAudience(ctx, request) {
+		return nil
+	}
+
+	strategy := c.GetScopeStrategy(ctx, client)
+
+	if err = validateSubjectTokenScope(request, original.GetGrantedScopes()); err != nil {
+		return err
+	}
+
+	for _, scope := range request.GetRequestedScopes() {
+		if !strategy(client.GetScopes(), scope) {
+			return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+		}
+	}
+
 	if len(request.GetRequestedAuthorizationDetails()) != 0 {
 		var details oauth2.AuthorizationDetails
 
@@ -326,6 +334,17 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 	}
 
 	return nil
+}
+
+func (c *RefreshTokenTypeHandler) isOwnAudience(ctx context.Context, request oauth2.AccessRequester) bool {
+	config, ok := c.Config.(oauth2.AuthorizationServerIssuerIdentificationProvider)
+	if !ok {
+		return false
+	}
+
+	issuer := config.GetAuthorizationServerIdentificationIssuer(ctx)
+
+	return issuer != "" && slices.Contains(request.GetRequestedAudience(), issuer)
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

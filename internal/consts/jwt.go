@@ -60,7 +60,7 @@ const (
 
 	// JSONWebTokenTypeIDJAG represents the JWT type value for an Identity Assertion JWT Authorization Grant.
 	//
-	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt" //nolint:gosec // This is a credential type, not a credential.
 )
 

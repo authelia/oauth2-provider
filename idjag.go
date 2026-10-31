@@ -16,7 +16,7 @@ import (
 // IDJAGRelationship is the IdP Authorization Server's record of a client's relationship with a Resource Authorization
 // Server, used to issue an Identity Assertion JWT Authorization Grant.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-5
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-5
 type IDJAGRelationship struct {
 	// Issuer is the Resource Authorization Server issuer identifier, issued as the 'aud' claim.
 	Issuer string
@@ -34,7 +34,8 @@ type IDJAGRelationship struct {
 	// when nil, and none when empty.
 	AuthorizationDetailsTypes []string
 
-	// SigningAlg is the JWS algorithm used to sign the grant. RS256 when empty.
+	// SigningAlg is the JWS algorithm used to sign the grant. RS256 when empty. A deployment which publishes
+	// 'id_jag_signing_alg_values_supported' MUST list every algorithm in use and RS256 (Section 7.1).
 	SigningAlg string
 
 	// ACRValues is the set of Authentication Context Class References of which the 'acr' claim of the grant must be
@@ -50,7 +51,7 @@ type IDJAGRelationship struct {
 // Authorization Grants. Authorization details in its grants are limited only by the redeeming client's authorization
 // details types and the configured type handlers.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.1
 type IDJAGTrustedIssuer struct {
 	// Issuer is the issuer identifier matched against the 'iss' claim.
 	Issuer string
@@ -58,12 +59,17 @@ type IDJAGTrustedIssuer struct {
 	// JSONWebKeys is the static key set used to verify grants. It takes precedence over JSONWebKeysURI.
 	JSONWebKeys *jose.JSONWebKeySet
 
-	// JSONWebKeysURI is resolved through the configured JWKS fetcher when JSONWebKeys is nil.
+	// JSONWebKeysURI is resolved through the configured JWKS fetcher when JSONWebKeys is nil. It SHOULD be the
+	// 'jwks_uri' of the RFC 8414 metadata of the issuer (Section 4.4.1).
 	JSONWebKeysURI string
 
 	// SigningAlgs is the set of permitted JWS algorithms. RS256 when empty. Symmetric algorithms and 'none' are always
 	// rejected.
 	SigningAlgs []string
+
+	// MultiTenant marks an issuer whose grants MUST carry a 'tenant' claim that is trusted for the recipient tenant
+	// (Section 4.4.1).
+	MultiTenant bool
 
 	// Clients is the set of client identifiers permitted to present grants from this issuer. Any client when empty.
 	Clients []string
@@ -72,7 +78,7 @@ type IDJAGTrustedIssuer struct {
 // IsIDJAGTokenType returns true when typ is the JOSE 'typ' header value of an Identity Assertion JWT Authorization
 // Grant, compared case-insensitively with or without the 'application/' prefix per RFC 8725 Section 3.11.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 func IsIDJAGTokenType(typ string) bool {
 	return strings.EqualFold(typ, consts.JSONWebTokenTypeIDJAG) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeIDJAG)
 }

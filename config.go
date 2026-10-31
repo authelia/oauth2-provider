@@ -630,12 +630,12 @@ type RFC8693ConfigProvider interface {
 
 // IDJAGConfigProvider is the configuration provider for the Identity Assertion JWT Authorization Grant.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06
 type IDJAGConfigProvider interface {
 	// GetIDJAGLifespan returns the lifespan of an issued grant. Defaults to 5 minutes.
 	GetIDJAGLifespan(ctx context.Context) (lifespan time.Duration)
 
-	// GetIDJAGSingleUse returns true when a grant may only be redeemed once. Section 4.4.3 permits a client to redeem
+	// GetIDJAGSingleUse returns true when a grant may only be redeemed once. Section 4.4.4 permits a client to redeem
 	// the same grant until it expires, so this defaults to false.
 	GetIDJAGSingleUse(ctx context.Context) (single bool)
 

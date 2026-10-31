@@ -71,6 +71,34 @@ func TestIDJAGRequestGrantHandler(t *testing.T) {
 	}
 }
 
+// Section 4.3.3: the IdP MUST respond to more than one audience value with invalid_request.
+func TestIDJAGRequestRejectsMultipleAudiences(t *testing.T) {
+	cfg := newIDJAGSpecConfig(t)
+	store := storage.NewExampleStore()
+
+	request := newExchangeRequest(t, store.Clients[idjagClientID], newSpecSession(idjagSubject), url.Values{
+		consts.FormParameterSubjectToken:       {idjagSubjectToken},
+		consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
+		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693IDJAG},
+	})
+	request.RequestedAudience = oauth2.Arguments{idjagAudience, idjagOtherAudience}
+
+	require.ErrorIs(t, runGrantHandler(t, cfg, request), oauth2.ErrInvalidRequest)
+}
+
+// Section 4.3.3: the IdP MUST reject a request without client authentication with invalid_client.
+func TestIDJAGRequestRejectsAPublicClient(t *testing.T) {
+	cfg := newIDJAGSpecConfig(t)
+
+	request := newExchangeRequest(t, &oauth2.DefaultClient{ID: idjagClientID, Public: true, GrantTypes: []string{consts.GrantTypeOAuthTokenExchange}}, newSpecSession(idjagSubject), url.Values{
+		consts.FormParameterSubjectToken:       {idjagSubjectToken},
+		consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693IDToken},
+		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693IDJAG},
+	})
+
+	require.ErrorIs(t, runGrantHandler(t, cfg, request), oauth2.ErrInvalidClient)
+}
+
 func TestIDJAGRequestIDTokenSubjectAllowsScope(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newIDJAGSpecConfig(t)
@@ -114,17 +142,20 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 		requestedScopes    []string
 		requestedAudience  string
 		requestedResources []string
+		own                bool
 		narrow             func(client *oauth2.DefaultClient)
 		err                error
 	}{
 		// Section 4.3.3: the refresh token is bound to the authenticated client.
 		{name: "ShouldAcceptTheRequestersRefreshToken", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience},
-		{name: "ShouldRejectAnotherClientsRefreshToken", owner: idjagOtherOwner, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidGrant},
-		// Section 4.3.3: the requested scopes remain within the authorization context of the refresh token.
+		{name: "ShouldRejectAnotherClientsRefreshToken", owner: idjagOtherOwner, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidRequest},
+		// Section 4.3.3: the scopes have the meaning of the Resource Authorization Server unless the audience is this server.
+		{name: "ShouldAcceptAScopeNotGrantedForAnotherServer", owner: idjagClientID, grantedScopes: []string{idjagOtherScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience},
+		{name: "ShouldAcceptAScopeNotRegisteredForAnotherServer", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }},
 		{name: "ShouldAcceptAScopeSubset", owner: idjagClientID, grantedScopes: []string{idjagScope, idjagOtherScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience},
 		{name: "ShouldAcceptNoScope", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedAudience: idjagAudience},
-		{name: "ShouldRejectAScopeNotGranted", owner: idjagClientID, grantedScopes: []string{idjagOtherScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidScope},
-		{name: "ShouldRejectAScopeOutsideAPartialGrant", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope, idjagOtherScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidScope},
+		{name: "ShouldRejectAScopeNotGranted", own: true, owner: idjagClientID, grantedScopes: []string{idjagOtherScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidScope},
+		{name: "ShouldRejectAScopeOutsideAPartialGrant", own: true, owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope, idjagOtherScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidScope},
 		// Section 4.3.3: the requested audience remains within the authorization context of the refresh token.
 		{name: "ShouldRejectAnAudienceNotGranted", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagOtherAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectAnAudienceWhenNoneWasGranted", owner: idjagClientID, grantedScopes: []string{idjagScope}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, err: oauth2.ErrInvalidTarget},
@@ -133,7 +164,7 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 		{name: "ShouldRejectAResourceNotGranted", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, grantedResources: []string{idjagOtherResource}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, requestedResources: []string{idjagResource}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectAResourceWhenNoneWasGranted", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, requestedResources: []string{idjagResource}, err: oauth2.ErrInvalidTarget},
 		// Section 4.3.3: the refresh token is validated as for a refresh_token grant, against the current registration.
-		{name: "ShouldRejectAScopeRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, err: oauth2.ErrInvalidScope},
+		{name: "ShouldRejectAScopeRemovedFromTheClient", own: true, owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, err: oauth2.ErrInvalidScope},
 		{name: "ShouldRejectAnAudienceRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.Audience = []string{idjagResource} }, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectAResourceRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, grantedResources: []string{idjagResource}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, requestedResources: []string{idjagResource}, narrow: func(client *oauth2.DefaultClient) { client.Resource = nil }, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectWhenTheRefreshTokenGrantIsRemovedFromTheClient", owner: idjagClientID, grantedScopes: []string{idjagScope}, grantedAudience: []string{idjagAudience}, requestedScopes: []string{idjagScope}, requestedAudience: idjagAudience, narrow: func(client *oauth2.DefaultClient) { client.GrantTypes = []string{consts.GrantTypeOAuthTokenExchange} }, err: oauth2.ErrInvalidRequest},
@@ -143,6 +174,10 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, store, strategy := newExchangeFixture(t)
 			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
+
+			if tc.own {
+				cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+			}
 
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 
@@ -192,15 +227,17 @@ func TestIDJAGRequestRefreshTokenSubjectAuthorizationDetails(t *testing.T) {
 		name      string
 		granted   oauth2.AuthorizationDetails
 		requested oauth2.AuthorizationDetails
+		own       bool
 		err       error
 	}{
 		// Section 4.3.3: the requested details remain within the authorization context of the refresh token.
-		{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{status}},
+		{name: "ShouldAcceptContainedDetails", own: true, granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{status}},
 		{name: "ShouldAcceptNoDetails", granted: oauth2.AuthorizationDetails{both}},
 		{name: "ShouldAcceptNoDetailsWhenNoneWereGranted"},
-		{name: "ShouldRejectDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: oauth2.AuthorizationDetails{status}, err: oauth2.ErrInvalidAuthorizationDetails},
-		{name: "ShouldRejectDetailsWhenNoneWereGranted", requested: oauth2.AuthorizationDetails{initiate}, err: oauth2.ErrInvalidAuthorizationDetails},
-		{name: "ShouldRejectTwoDetailsContainedByOneGrantedDetail", granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{initiate, status}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldAcceptDetailsNotGrantedForAnotherServer", requested: oauth2.AuthorizationDetails{status}, granted: oauth2.AuthorizationDetails{initiate}},
+		{name: "ShouldRejectDetailsNotGranted", own: true, granted: oauth2.AuthorizationDetails{initiate}, requested: oauth2.AuthorizationDetails{status}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldRejectDetailsWhenNoneWereGranted", own: true, requested: oauth2.AuthorizationDetails{initiate}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldRejectTwoDetailsContainedByOneGrantedDetail", own: true, granted: oauth2.AuthorizationDetails{both}, requested: oauth2.AuthorizationDetails{initiate, status}, err: oauth2.ErrInvalidAuthorizationDetails},
 	}
 
 	for _, tc := range testCases {
@@ -208,6 +245,10 @@ func TestIDJAGRequestRefreshTokenSubjectAuthorizationDetails(t *testing.T) {
 			cfg, store, strategy := newExchangeFixture(t)
 			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
 			cfg.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+			if tc.own {
+				cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+			}
 
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 

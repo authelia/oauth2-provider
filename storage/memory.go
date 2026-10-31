@@ -69,7 +69,7 @@ type IDJAGRelationshipKey struct {
 // IDJAGAudienceSubjectKey identifies the End-User an ID-JAG is issued for by the Resource Authorization Server it is
 // issued to and the subject of the session.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-5
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-5
 type IDJAGAudienceSubjectKey struct {
 	// Issuer is the issuer identifier of the Resource Authorization Server.
 	Issuer string
@@ -81,7 +81,7 @@ type IDJAGAudienceSubjectKey struct {
 // IDJAGSubjectKey identifies an ID-JAG subject within the namespace of its issuer, and of its tenant when the issuer
 // is multi-tenant.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 type IDJAGSubjectKey struct {
 	// Issuer is the 'iss' claim of the grant.
 	Issuer string
@@ -92,6 +92,34 @@ type IDJAGSubjectKey struct {
 
 	// Subject is the 'sub' claim of the grant.
 	Subject string
+}
+
+// IDJAGTenantKey identifies the 'iss' and 'tenant' claims trusted together for a recipient tenant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
+type IDJAGTenantKey struct {
+	// Issuer is the 'iss' claim of the grant.
+	Issuer string
+
+	// Tenant is the 'tenant' claim of the grant.
+	Tenant string
+
+	// AudienceTenant is the 'aud_tenant' claim of the grant, empty when the 'aud' claim identifies the recipient tenant.
+	AudienceTenant string
+}
+
+// IDJAGResourceKey identifies a protected resource governed for the issuer of a grant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
+type IDJAGResourceKey struct {
+	// Issuer is the 'iss' claim of the grant.
+	Issuer string
+
+	// AudienceTenant is the 'aud_tenant' claim of the grant, empty when the grant has none.
+	AudienceTenant string
+
+	// Resource is the resource identifier.
+	Resource string
 }
 
 // MemoryStore is a reference storage implementation which keeps every record in memory. It is intended for tests and
@@ -130,6 +158,8 @@ type MemoryStore struct {
 	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
 	IDJAGSubjects            map[IDJAGSubjectKey]string
 	IDJAGAudienceSubjects    map[IDJAGAudienceSubjectKey]string
+	IDJAGTenants             map[IDJAGTenantKey]struct{}
+	IDJAGResources           map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                map[JTIMarker]time.Time
 
 	clientsMutex                  sync.RWMutex
@@ -187,6 +217,8 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGTrustedIssuers:      make(map[string]oauth2.IDJAGTrustedIssuer),
 		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
 		IDJAGAudienceSubjects:    make(map[IDJAGAudienceSubjectKey]string),
+		IDJAGTenants:             make(map[IDJAGTenantKey]struct{}),
+		IDJAGResources:           make(map[IDJAGResourceKey]struct{}),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 	}
 }
@@ -936,6 +968,54 @@ func (s *MemoryStore) GetIDJAGTrustedIssuer(_ context.Context, issuer string) (*
 	}
 
 	return &trusted, nil
+}
+
+// IsIDJAGTenantTrusted reports whether the grant's issuer and tenant are registered for its recipient tenant. A
+// 'aud_tenant' claim that is present but empty or not a string is not trusted.
+func (s *MemoryStore) IsIDJAGTenantTrusted(_ context.Context, claims map[string]any) (bool, error) {
+	issuer, _ := claims[consts.ClaimIssuer].(string)
+	tenant, _ := claims[consts.ClaimTenant].(string)
+
+	audienceTenant, ok := idjagAudienceTenant(claims)
+	if !ok {
+		return false, nil
+	}
+
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	_, trusted := s.IDJAGTenants[IDJAGTenantKey{Issuer: issuer, Tenant: tenant, AudienceTenant: audienceTenant}]
+
+	return trusted, nil
+}
+
+// IsIDJAGResourceGoverned reports whether the resource is registered for the grant's issuer and 'aud_tenant' claim. A
+// 'aud_tenant' claim that is present but empty or not a string governs nothing.
+func (s *MemoryStore) IsIDJAGResourceGoverned(_ context.Context, claims map[string]any, resource string) (bool, error) {
+	issuer, _ := claims[consts.ClaimIssuer].(string)
+
+	audienceTenant, ok := idjagAudienceTenant(claims)
+	if !ok {
+		return false, nil
+	}
+
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	_, governed := s.IDJAGResources[IDJAGResourceKey{Issuer: issuer, AudienceTenant: audienceTenant, Resource: resource}]
+
+	return governed, nil
+}
+
+func idjagAudienceTenant(claims map[string]any) (tenant string, ok bool) {
+	value, present := claims[consts.ClaimAudienceTenant]
+	if !present {
+		return "", true
+	}
+
+	tenant, ok = value.(string)
+
+	return tenant, ok && tenant != ""
 }
 
 // ResolveIDJAGSubject returns the subject registered for the grant's issuer, tenant and subject, or oauth2.ErrNotFound

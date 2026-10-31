@@ -16,7 +16,7 @@ import (
 // RFC8693ActorTokenValidationFactory, and 'urn:ietf:params:oauth:token-type:id-jag' MUST be registered in
 // oauth2.Config.RFC8693TokenTypes as an *rfc8693.DefaultTokenType.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
 func IDJAGIssueFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &idjag.IssueHandler{
 		Config:   config.(idjag.IssueConfig),
@@ -27,11 +27,11 @@ func IDJAGIssueFactory(config oauth2.Configurator, storage any, strategy any) an
 
 // IDJAGRedeemFactory creates the handler that redeems an Identity Assertion JWT Authorization Grant through the
 // 'urn:ietf:params:oauth:grant-type:jwt-bearer' grant, or through the 'urn:ietf:params:oauth:grant-type:jwt-dpop'
-// grant Section 9.8.1.2.1 uses for a DPoP-bound grant. The handler is also a token endpoint binding handler, so the
+// grant Section 9.11.1.2.1 uses for a DPoP-bound grant. The handler is also a token endpoint binding handler, so the
 // factory MUST be registered after DPoPTokenFactory.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4
-// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-01
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4
+// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02
 func IDJAGRedeemFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &idjag.RedeemHandler{
 		Config:  config.(idjag.RedeemConfig),

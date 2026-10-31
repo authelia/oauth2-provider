@@ -22,13 +22,20 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+const (
+	subjectIdentifierNameIDFormat = "nameid_format"
+	nameIDFormatTransient         = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"
+)
+
 // IssueHandler issues an Identity Assertion JWT Authorization Grant for an RFC 8693 token exchange whose
 // 'requested_token_type' is 'urn:ietf:params:oauth:token-type:id-jag'. It MUST be registered after the
 // rfc8693.TokenExchangeGrantHandler and before the rfc8693.ActorTokenValidationHandler.
 //
-// The granted scopes are the requested scopes the relationship permits. For a refresh token 'subject_token' the
-// rfc8693.RefreshTokenTypeHandler also rejects any requested scope, 'audience' or 'resource' outside the grant of the
-// refresh token or the current registration of the client (Section 4.3.3).
+// The granted scopes are the requested scopes the relationship permits. They have the meaning of the Resource
+// Authorization Server rather than the OpenID Connect meaning, so no value requests identity claims. For a refresh
+// token 'subject_token' the rfc8693.RefreshTokenTypeHandler also rejects any requested 'audience' or 'resource' outside
+// the grant of the refresh token or the current registration of the client, and compares the requested scopes only when
+// the 'audience' identifies this server (Section 4.3.3).
 //
 // The 'auth_time', 'acr' and 'amr' claims describe one authentication of the End-User, so they are taken together
 // from a single source: the validated 'subject_token' when it is an ID token or a refresh token and carries any of
@@ -37,30 +44,37 @@ import (
 // them from the ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
 // It accepts the RFC 9396 'authorization_details' parameter and grants the requested details whose type the
-// relationship permits. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler first replaces the
-// requested details with those the details granted to the refresh token assign, and rejects a request they do not
-// justify.
+// relationship permits. For a refresh token 'subject_token' whose 'audience' identifies this server, the
+// rfc8693.RefreshTokenTypeHandler first replaces the requested details with those the details granted to the refresh
+// token assign, and rejects a request they do not justify.
 //
-// The 'cnf' claim carries the thumbprint bound to the session, which equals the validated DPoP proof key only when
-// rfc9449.Handler is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token.
+// The 'cnf' claim carries the single binding recorded on the session, preferring a DPoP key over an X.509 certificate
+// when both are recorded (Section 9.11). The 'jkt' member equals the validated DPoP proof key only when rfc9449.Handler
+// is composed; with DPoP enabled and no rfc9449.Handler it may be the binding of the subject token. The 'x5t#S256'
+// member is the certificate rfc8705.Handler verified, for a client whose certificate-bound access tokens are required
+// or a subject token bound to the certificate. An issuer SHOULD NOT bind a grant to a DPoP key for a Resource
+// Authorization Server unless it knows that server supports the 'jwt-dpop' grant type, as one which does not may accept
+// the grant as a bearer assertion (draft-parecki-oauth-jwt-dpop-grant-02 Section 7.1).
 //
 // The relationship may require an Authentication Context Class Reference and a maximum authentication age. A grant
 // whose 'acr' and 'auth_time' claims do not satisfy them is refused with insufficient_user_authentication, and the
-// error response carries the requirements as 'acr_values' and 'max_age' as RFC 9470 defines them (Section 9.2).
+// error response carries the requirements as 'acr_values' and 'max_age' as RFC 9470 defines them (Section 9.3).
 //
 // The 'iss' claim is the RFC 8414 issuer identifier of the authorization server, which MUST be configured (Section
 // 3.1).
 //
 // The 'sub' claim is the subject identifier IssueStorage.GetIDJAGSubject returns for the Resource Authorization Server
-// (Section 5). The 'tenant', 'aud_tenant' and 'aud_sub' claims are supplied through Session.IDJAGClaims (Section 6).
+// (Section 5.2). The 'tenant', 'aud_tenant' and 'aud_sub' claims are supplied through Session.IDJAGClaims, which MUST
+// supply 'tenant' when the issuer is multi-tenant (Section 6). A 'sub_id' claim using a transient SAML NameID Format is
+// refused (Section 3.2.2).
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-5
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-6
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.2
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-5
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-6
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.1
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-3
 type IssueHandler struct {
 	Config   IssueConfig
@@ -71,7 +85,7 @@ type IssueHandler struct {
 // HandleTokenEndpointRequest resolves the relationship for the 'audience' and grants the permitted scopes and
 // resources.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -109,7 +123,7 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 
 // PopulateTokenEndpointResponse issues the grant.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.4
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.4
 func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -158,6 +172,10 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 
 	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 
+	if isTransientSubjectIdentifier(claims) {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The 'sub_id' claim uses a transient SAML NameID Format."))
+	}
+
 	if err = requireAuthentication(relationship, claims, now, max(h.Config.GetJWTClockSkew(ctx), 0)); err != nil {
 		return err
 	}
@@ -201,7 +219,7 @@ func (h *IssueHandler) CanHandleTokenEndpointRequest(_ context.Context, request 
 // CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. It accepts the RFC 9396
 // 'authorization_details' parameter of a token exchange requesting an ID-JAG.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.1
 func (h *IssueHandler) CanHandleAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester) bool {
 	return rfc8693.IsIDJAGRequest(ctx, request, h.Config)
 }
@@ -267,13 +285,34 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 		claims[consts.ClaimAuthorizationDetails] = details
 	}
 
-	if h.Config.GetDPoPEnabled(ctx) {
-		if session, ok := request.GetSession().(oauth2.DPoPBoundSession); ok && session.GetDPoPJWKThumbprint() != "" {
-			claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationJWKThumbprint: session.GetDPoPJWKThumbprint()}
-		}
+	if member, value := h.confirmation(ctx, request.GetSession()); member != "" {
+		claims[consts.ClaimConfirmation] = map[string]any{member: value}
 	}
 
 	return claims
+}
+
+func (h *IssueHandler) confirmation(ctx context.Context, session oauth2.Session) (member, value string) {
+	if h.Config.GetDPoPEnabled(ctx) {
+		if bound, ok := session.(oauth2.DPoPBoundSession); ok && bound.GetDPoPJWKThumbprint() != "" {
+			return consts.ClaimConfirmationJWKThumbprint, bound.GetDPoPJWKThumbprint()
+		}
+	}
+
+	if h.Config.GetMTLSEnabled(ctx) {
+		if bound, ok := session.(oauth2.MTLSBoundSession); ok && bound.GetClientCertificateSHA256Thumbprint() != "" {
+			return consts.ClaimConfirmationX509SHA256Thumbprint, bound.GetClientCertificateSHA256Thumbprint()
+		}
+	}
+
+	return "", ""
+}
+
+func isTransientSubjectIdentifier(claims map[string]any) bool {
+	identifier, _ := claims[consts.ClaimSubjectIdentifier].(map[string]any)
+	format, _ := identifier[subjectIdentifierNameIDFormat].(string)
+
+	return format == nameIDFormatTransient
 }
 
 func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.MapClaims, now time.Time, skew time.Duration) (err error) {
@@ -371,7 +410,7 @@ func (h *IssueHandler) subject(ctx context.Context, request oauth2.AccessRequest
 
 	switch {
 	case errors.Is(err, oauth2.ErrNotFound):
-		return "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The subject has no subject identifier for the audience '%s'.", relationship.Issuer))
+		return "", errorsx.WithStack(oauth2.ErrAccessDenied.WithHintf("The subject is not authorized for the audience '%s'.", relationship.Issuer))
 	case err != nil:
 		var rfc *oauth2.RFC6749Error
 		if errors.As(err, &rfc) {
@@ -390,7 +429,7 @@ func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRe
 	audiences := request.GetRequestedAudience()
 
 	if len(audiences) != 1 {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidTarget.WithHintf("Exactly one '%s' is required when the '%s' is '%s'.", consts.FormParameterAudience, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Exactly one '%s' is required when the '%s' is '%s'.", consts.FormParameterAudience, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
 	}
 
 	relationship, err = h.Storage.GetIDJAGRelationship(ctx, request, audiences[0])

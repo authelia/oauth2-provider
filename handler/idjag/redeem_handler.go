@@ -26,21 +26,27 @@ import (
 )
 
 // RedeemHandler redeems an Identity Assertion JWT Authorization Grant whose JOSE 'typ' header is 'oauth-id-jag+jwt',
-// presented as an RFC 7523 'jwt-bearer' assertion or, when the grant carries a 'cnf' claim, with the 'jwt-dpop' grant
-// type Section 9.8.1.2.1 uses, which requires a DPoP proof for the key the grant is bound to. The client MUST be
-// registered for the grant type it uses. Every other assertion is left to rfc7523.Handler. It is also a token endpoint
-// binding handler, which enforces the grant's 'cnf' claim and MUST follow rfc9449.Handler. Under 'jwt-dpop' a
-// malformed, expired or replayed proof answers invalid_dpop_proof per RFC 9449, keeping use_dpop_nonce usable, rather
-// than the invalid_grant of draft-parecki-oauth-jwt-dpop-grant-01 Section 4. A requested resource or scope within the
-// grant that the client is not permitted is dropped rather than refused, unless no resource of the grant remains.
+// presented as an RFC 7523 'jwt-bearer' assertion or, when the grant is bound to a DPoP key, with the 'jwt-dpop' grant
+// type, which requires a DPoP proof for that key. A DPoP-bound grant presented as 'jwt-bearer' is refused, whether or
+// not it has a proof. A grant bound to an X.509 certificate uses 'jwt-bearer' and the certificate of the request MUST
+// match; the certificate is taken as validated by the TLS handshake, as for a certificate-bound access token. The
+// client MUST be registered for the grant type it uses. Every other assertion is left to rfc7523.Handler. It is also a
+// token endpoint binding handler, which enforces the grant's 'cnf' claim and MUST follow rfc9449.Handler. A malformed,
+// expired or replayed proof answers invalid_dpop_proof per RFC 9449 and a missing nonce use_dpop_nonce. A missing proof
+// answers invalid_grant per Section 9.11.1.2.2, where draft-parecki-oauth-jwt-dpop-grant-02 Section 5 has
+// invalid_dpop_proof. The client MUST authenticate: Section 4.4 also permits a sender-constrained grant in place of
+// client authentication, which this handler does not offer. A grant it issued itself is always refused, as Section 9.4
+// permits only by explicit configuration. A resource of the grant this server does not govern is refused. A requested
+// resource or scope within the grant that the client is not permitted is dropped rather than refused, unless no resource
+// of the grant remains, which answers access_denied.
 // With RFC 9396 enabled it grants the grant's authorization details that the client may use and the type handlers
 // accept. With RFC 9396 disabled it rejects a grant carrying them. A client whose authorization details types are
 // unrestricted accepts every configured type any trusted issuer grants, so restrict the types of clients that redeem
 // grants carrying authorization details.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.2.1
-// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-01#section-3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.2.1
+// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02#section-4.1
 type RedeemHandler struct {
 	Config  RedeemConfig
 	Storage RedeemStorage
@@ -51,8 +57,7 @@ type RedeemHandler struct {
 var redeemAlgorithms = []jose.SignatureAlgorithm{jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512}
 
 const (
-	accessResponseResource = "resource"
-	hintIDJAGRedeemed      = "The Identity Assertion JWT Authorization Grant was already redeemed."
+	hintIDJAGRedeemed = "The Identity Assertion JWT Authorization Grant was already redeemed."
 )
 
 // HandleTokenEndpointRequest validates the grant. A 'jwt-dpop' grant MUST carry a 'cnf' claim and a DPoP proof. A
@@ -60,9 +65,9 @@ const (
 // or because DPoP bound access tokens are required, and carries no DPoP header is rejected here with invalid_grant,
 // before rfc9449.Handler would answer invalid_dpop_proof. The proof itself is validated by rfc9449.Handler.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.1
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.2.2
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.2.4
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.2.2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.2.4
 func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -77,7 +82,7 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 	}
 
 	if client.IsPublic() {
-		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("An Identity Assertion JWT Authorization Grant is only supported for confidential clients (Section 9.1)."))
+		return errorsx.WithStack(oauth2.ErrInvalidClient.WithHint("An Identity Assertion JWT Authorization Grant requires client authentication."))
 	}
 
 	grantType := request.GetGrantTypes()[0]
@@ -109,6 +114,10 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 		return err
 	}
 
+	if err = h.validateTenant(ctx, trusted, raw); err != nil {
+		return err
+	}
+
 	if err = h.unused(ctx, claims); err != nil {
 		return err
 	}
@@ -119,6 +128,11 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The subject of the Identity Assertion JWT Authorization Grant could not be resolved."))
 	case err != nil:
+		var rfc *oauth2.RFC6749Error
+		if errors.As(err, &rfc) {
+			return errorsx.WithStack(err)
+		}
+
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -129,12 +143,11 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 	return h.finish(ctx, request, client, subject, claims.Expiry.Time(), raw)
 }
 
-// PopulateTokenEndpointResponse issues the access token, and includes the granted resources in the response as Section
-// 4.4.1 requires. The access token expires no later than the grant plus the configured allowance. No refresh token is
+// PopulateTokenEndpointResponse issues the access token. The access token expires no later than the grant plus the configured allowance. No refresh token is
 // issued. A single-use grant is consumed here, after the binding phase, so a request that fails any check does not
 // consume it.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.4
 func (h *RedeemHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -144,22 +157,12 @@ func (h *RedeemHandler) PopulateTokenEndpointResponse(ctx context.Context, reque
 		return err
 	}
 
-	if _, err = h.IssueAccessToken(ctx, h.lifespan(ctx, request.GetClient()), request, response); err != nil {
-		return err
-	}
+	_, err = h.IssueAccessToken(ctx, h.lifespan(ctx, request.GetClient()), request, response)
 
-	switch resources := request.GetGrantedResource(); len(resources) {
-	case 0:
-	case 1:
-		response.SetExtra(accessResponseResource, resources[0])
-	default:
-		response.SetExtra(accessResponseResource, []string(resources))
-	}
-
-	return nil
+	return err
 }
 
-// CanSkipClientAuth implements oauth2.TokenEndpointHandler. Section 9.1 limits the grant to confidential clients.
+// CanSkipClientAuth implements oauth2.TokenEndpointHandler. The client MUST authenticate, see RedeemHandler.
 func (h *RedeemHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
@@ -180,7 +183,7 @@ func (h *RedeemHandler) CanHandleTokenEndpointRequest(_ context.Context, request
 // binding handlers. A malformed proof is rejected by rfc9449.Handler before this runs. rfc9449.Handler also binds the
 // session to the proof key, so the issued access token is bound to the key the grant names.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-9.8.1.2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.2
 func (h *RedeemHandler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return nil
@@ -224,11 +227,15 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The session must implement rfc7523.Session but got type: %T", request.GetSession()))
 	}
 
-	if err := h.confirm(ctx, session, raw); err != nil {
+	if err := h.confirm(ctx, request, session, raw); err != nil {
 		return err
 	}
 
 	if err := h.requireProof(ctx, request, client, raw); err != nil {
+		return err
+	}
+
+	if err := h.requireCertificate(ctx, client); err != nil {
 		return err
 	}
 
@@ -404,11 +411,15 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 	}
 
 	if claims.Issuer == expected {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant was issued by this authorization server, and it must cross a trust domain (Section 9.3)."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant was issued by this authorization server, and it must cross a trust domain (Section 9.4)."))
 	}
 
 	if err = requireClaims(client, claims, raw); err != nil {
 		return err
+	}
+
+	if isTransientSubjectIdentifier(raw) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'sub_id' claim must not use a transient SAML NameID Format."))
 	}
 
 	if _, ok := raw[consts.ClaimAuthorizationDetails]; ok && !oauth2.IsAuthorizationDetailsEnabled(ctx, h.Config) {
@@ -427,6 +438,27 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'iat' claim of the Identity Assertion JWT Authorization Grant is in the future."))
 	case claims.Expiry.Time().Sub(claims.IssuedAt.Time()) > h.Config.GetJWTMaxDuration(ctx):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'exp' claim of the Identity Assertion JWT Authorization Grant is unreasonably far in the future."))
+	}
+
+	return nil
+}
+
+func (h *RedeemHandler) validateTenant(ctx context.Context, trusted *oauth2.IDJAGTrustedIssuer, raw map[string]any) (err error) {
+	if !trusted.MultiTenant {
+		return nil
+	}
+
+	if tenant, _ := raw[consts.ClaimTenant].(string); tenant == "" {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant must contain a 'tenant' claim."))
+	}
+
+	ok, err := h.Storage.IsIDJAGTenantTrusted(ctx, raw)
+
+	switch {
+	case err != nil:
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	case !ok:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'iss' and 'tenant' claims are not trusted for the recipient tenant."))
 	}
 
 	return nil
@@ -555,23 +587,55 @@ func (h *RedeemHandler) grant(ctx context.Context, request oauth2.AccessRequeste
 	return h.grantResources(ctx, request, client, raw)
 }
 
-func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.AccessRequester, client oauth2.Client, raw map[string]any) (err error) {
-	var resources []string
+func resourceClaim(raw map[string]any) (resources []string, err error) {
+	errMalformed := errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'resource' claim must be a string or a non-empty array of unique strings."))
 
-	switch resource := raw[consts.ClaimResource].(type) {
-	case nil:
+	value, ok := raw[consts.ClaimResource]
+	if !ok {
+		return nil, nil
+	}
+
+	switch resource := value.(type) {
 	case string:
 		resources = []string{resource}
 	case []any:
-		for _, value := range resource {
-			if s, ok := value.(string); ok {
-				resources = append(resources, s)
-			} else {
-				return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'resource' claim must be a string or an array of strings."))
+		if len(resource) == 0 {
+			return nil, errMalformed
+		}
+
+		for _, item := range resource {
+			s, ok := item.(string)
+			if !ok || slices.Contains(resources, s) {
+				return nil, errMalformed
 			}
+
+			resources = append(resources, s)
 		}
 	default:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'resource' claim must be a string or an array of strings."))
+		return nil, errMalformed
+	}
+
+	if slices.Contains(resources, "") {
+		return nil, errMalformed
+	}
+
+	return resources, nil
+}
+
+func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.AccessRequester, client oauth2.Client, raw map[string]any) (err error) {
+	resources, err := resourceClaim(raw)
+	if err != nil {
+		return err
+	}
+
+	for _, resource := range resources {
+		var governed bool
+
+		if governed, err = h.Storage.IsIDJAGResourceGoverned(ctx, raw, resource); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		} else if !governed {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The resource '%s' of the Identity Assertion JWT Authorization Grant is not governed by this authorization server.", resource))
+		}
 	}
 
 	if requested := request.GetRequestedResource(); len(requested) != 0 {
@@ -593,12 +657,10 @@ func (h *RedeemHandler) grantResources(ctx context.Context, request oauth2.Acces
 		}
 	}
 
-	// RFC 8707 Section 2 has the access token audience restricted to the indicated resources, so a grant whose
-	// resources are all dropped would issue an access token without the restriction the grant carries.
-	//
-	// See: https://datatracker.ietf.org/doc/html/rfc8707#section-2
+	// Section 4.4.1 restricts the access token to the resources of the grant, so a grant whose resources are all dropped
+	// would issue an access token without that restriction.
 	if len(resources) != 0 && len(request.GetGrantedResource()) == 0 {
-		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("No resource of the Identity Assertion JWT Authorization Grant is permitted for the OAuth 2.0 Client."))
+		return errorsx.WithStack(oauth2.ErrAccessDenied.WithHint("No resource of the Identity Assertion JWT Authorization Grant is permitted for the OAuth 2.0 Client."))
 	}
 
 	return h.grantAuthorizationDetails(ctx, request, raw)
@@ -642,7 +704,7 @@ func (h *RedeemHandler) grantAuthorizationDetails(ctx context.Context, request o
 	return nil
 }
 
-func (h *RedeemHandler) confirm(ctx context.Context, session oauth2.Session, raw map[string]any) (err error) {
+func (h *RedeemHandler) confirm(ctx context.Context, request oauth2.AccessRequester, session oauth2.Session, raw map[string]any) (err error) {
 	value, ok := raw[consts.ClaimConfirmation]
 	if !ok {
 		return nil
@@ -650,10 +712,15 @@ func (h *RedeemHandler) confirm(ctx context.Context, session oauth2.Session, raw
 
 	cnf, _ := value.(map[string]any)
 	jkt, _ := cnf[consts.ClaimConfirmationJWKThumbprint].(string)
+	x5t, _ := cnf[consts.ClaimConfirmationX509SHA256Thumbprint].(string)
 
 	switch {
-	case len(cnf) != 1 || jkt == "":
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'cnf' claim must contain only a 'jkt' member."))
+	case len(cnf) != 1 || (jkt == "" && x5t == ""):
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'cnf' claim must contain only a 'jkt' or an 'x5t#S256' member."))
+	case x5t != "":
+		return h.confirmCertificate(ctx, session, x5t)
+	case !request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTDPoP):
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("An Identity Assertion JWT Authorization Grant bound to a DPoP key requires the '%s' authorization grant.", consts.GrantTypeOAuthJWTDPoP))
 	case !h.Config.GetDPoPEnabled(ctx):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant requires proof of possession, which is not enabled."))
 	case !oauth2.IsValidDPoPJWKThumbprint(jkt):
@@ -667,8 +734,63 @@ func (h *RedeemHandler) confirm(ctx context.Context, session oauth2.Session, raw
 	return nil
 }
 
+func (h *RedeemHandler) confirmCertificate(ctx context.Context, session oauth2.Session, x5t string) (err error) {
+	if !h.Config.GetMTLSEnabled(ctx) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant requires proof of possession, which is not enabled."))
+	}
+
+	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	if r == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The HTTP request needed to read the client certificate is not available."))
+	}
+
+	cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx))
+
+	switch {
+	case err != nil:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The client certificate could not be read.").WithWrap(err).WithDebugError(err))
+	case cert == nil:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Proof of possession is required for this authorization grant."))
+	case subtle.ConstantTimeCompare([]byte(oauth2.X509CertificateSHA256Thumbprint(cert)), []byte(x5t)) != 1:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The client certificate does not match the certificate the authorization grant is bound to."))
+	}
+
+	bound, ok := session.(oauth2.MTLSBoundSession)
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The session does not support mutual-TLS certificate binding."))
+	}
+
+	bound.SetClientCertificateSHA256Thumbprint(x5t)
+
+	return nil
+}
+
+func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Client) (err error) {
+	if !h.Config.GetMTLSEnabled(ctx) {
+		return nil
+	}
+
+	required := h.Config.GetMTLSEnforce(ctx)
+
+	if c, ok := client.(oauth2.MTLSClient); ok && c.GetEnableTLSClientAuthBoundAccessTokens() {
+		required = true
+	}
+
+	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	if !required || r == nil {
+		return nil
+	}
+
+	if cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx)); err == nil && cert == nil {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("A sender-constrained access token is required, and the request has no client certificate."))
+	}
+
+	return nil
+}
+
 func (h *RedeemHandler) requireProof(ctx context.Context, request oauth2.AccessRequester, client oauth2.Client, raw map[string]any) (err error) {
-	_, bound := raw[consts.ClaimConfirmation]
+	cnf, _ := raw[consts.ClaimConfirmation].(map[string]any)
+	_, bound := cnf[consts.ClaimConfirmationJWKThumbprint]
 
 	if request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthJWTDPoP) {
 		if !bound {

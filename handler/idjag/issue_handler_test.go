@@ -43,8 +43,8 @@ func TestIssueHandlerHandle(t *testing.T) {
 	}{
 		{name: "ShouldGrantPermittedScopesOnly", audience: oauth2.Arguments{issueAudienceURN}, scope: oauth2.Arguments{redeemRead, redeemAdmin}, scopes: []string{redeemRead}},
 		{name: "ShouldGrantPermittedResource", audience: oauth2.Arguments{redeemAudience}, resource: oauth2.Arguments{redeemResource}, resources: []string{redeemResource}},
-		{name: "ShouldRejectMissingAudience", err: oauth2.ErrInvalidTarget},
-		{name: "ShouldRejectMultipleAudiences", audience: oauth2.Arguments{redeemAudience, issueAudienceURN}, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldRejectMissingAudience", err: oauth2.ErrInvalidRequest},
+		{name: "ShouldRejectMultipleAudiences", audience: oauth2.Arguments{redeemAudience, issueAudienceURN}, err: oauth2.ErrInvalidRequest},
 		{name: "ShouldRejectUnknownAudience", audience: oauth2.Arguments{redeemOther}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectResourceOutsideRelationship", audience: oauth2.Arguments{redeemAudience}, resource: oauth2.Arguments{redeemEvil}, err: oauth2.ErrInvalidTarget},
 	}
@@ -97,7 +97,7 @@ func TestIssueHandlerPopulate(t *testing.T) {
 	}{
 		{name: "ShouldIssueTheClaimSet", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}},
 		{name: "ShouldIssueResourceArray", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource, issueFiles}},
-		// Section 9.8.1.1: 'cnf' only when a proof was validated on this request.
+		// Section 9.11.1.1: 'cnf' only when a proof was validated on this request.
 		{name: "ShouldBindWhenDPoPEnabled", dpop: true, jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), expectCNF: true},
 		{name: "ShouldNotBindWhenDPoPDisabled", jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour)},
 		{name: "ShouldCapToSubjectTokenExpiry", subjectExp: time.Now().Add(time.Minute), expectExpCap: true},
@@ -240,7 +240,7 @@ func TestIssueHandlerSubject(t *testing.T) {
 			clear(store.IDJAGAudienceSubjects)
 
 			return store
-		}, err: oauth2.ErrInvalidGrant},
+		}, err: oauth2.ErrAccessDenied},
 		{name: "ShouldReturnServerErrorForAnEmptyIdentifier", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
 			return &subjectStorage{MemoryStore: store}
 		}, err: oauth2.ErrServerError},
@@ -269,6 +269,20 @@ func TestIssueHandlerSubject(t *testing.T) {
 			assert.Empty(t, response.GetAccessToken())
 		})
 	}
+}
+
+// Section 3.2.2: a transient NameID Format cannot serve as a cross-trust-domain identifier.
+func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
+	handler, _, _ := newIssueFixture(t, false)
+
+	session := newIssueSession(time.Now().Add(time.Hour))
+	session.extra = map[string]any{consts.ClaimSubjectIdentifier: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}}
+
+	request := newIssueRequest(t, session, nil)
+	request.RequestedAudience = oauth2.Arguments{redeemAudience}
+
+	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+	require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), oauth2.ErrServerError)
 }
 
 func TestIssueHandlerSessionCannotOverrideRegisteredClaims(t *testing.T) {
@@ -518,7 +532,7 @@ func TestIssueHandlerAuthenticationRequirements(t *testing.T) {
 				return
 			}
 
-			// Section 9.2: the error response conveys the authentication requirements.
+			// Section 9.3: the error response conveys the authentication requirements.
 			require.ErrorIs(t, err, oauth2.ErrInsufficientUserAuthentication)
 			assert.Empty(t, response.GetAccessToken())
 

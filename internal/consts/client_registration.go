@@ -84,7 +84,7 @@ const (
 
 // Identity Assertion JWT Authorization Grant client metadata parameters.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-8
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-8
 const (
 	ClientMetadataAuthorizationGrantProfilesSupported = "authorization_grant_profiles_supported"
 )

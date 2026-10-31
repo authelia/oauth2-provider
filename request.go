@@ -95,20 +95,12 @@ func (a *Request) GetRequestedScopes() Arguments {
 
 // SetRequestedScopes replaces the requested scopes, de-duplicating entries.
 func (a *Request) SetRequestedScopes(s Arguments) {
-	a.RequestedScope = nil
-
-	for _, scope := range s {
-		a.AppendRequestedScope(scope)
-	}
+	a.RequestedScope = deduplicateArguments(s)
 }
 
 // SetRequestedAudience replaces the requested audience, de-duplicating entries.
 func (a *Request) SetRequestedAudience(s Arguments) {
-	a.RequestedAudience = nil
-
-	for _, scope := range s {
-		a.AppendRequestedAudience(scope)
-	}
+	a.RequestedAudience = deduplicateArguments(s)
 }
 
 // AppendRequestedScope adds the given scope to the requested scopes if it is not already present.
@@ -145,11 +137,7 @@ func (a *Request) GrantAudience(audience string) {
 
 // SetRequestedResource replaces the requested RFC 8707 resource indicators, de-duplicating entries.
 func (a *Request) SetRequestedResource(s Arguments) {
-	a.RequestedResource = nil
-
-	for _, resource := range s {
-		a.AppendRequestedResource(resource)
-	}
+	a.RequestedResource = deduplicateArguments(s)
 }
 
 // AppendRequestedResource adds the given resource indicator if it is not already present.
@@ -330,4 +318,19 @@ func (a *Request) Sanitize(allowedParameters []string) Requester {
 // GetLang returns the language tag negotiated for the request, used to localize error descriptions.
 func (a *Request) GetLang() language.Tag {
 	return a.Lang
+}
+
+func deduplicateArguments(arguments Arguments) (deduplicated Arguments) {
+	seen := map[string]struct{}{}
+
+	for _, argument := range arguments {
+		if _, ok := seen[argument]; ok {
+			continue
+		}
+
+		seen[argument] = struct{}{}
+		deduplicated = append(deduplicated, argument)
+	}
+
+	return deduplicated
 }

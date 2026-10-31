@@ -38,7 +38,8 @@ type SecurityEventTokenStrategy interface {
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html
 type SSFConfig struct {
 	// Issuer is the transmitter issuer, used as the 'iss' of every SET. It must be an https URL with no query or fragment.
-	// Required to create a stream; an empty or invalid value gives ErrServerError.
+	// Required to create a stream; an empty or invalid value gives ErrServerError. It replaces an invalid issuer stored on
+	// an existing stream, which an update then persists.
 	Issuer string
 
 	// Audience is the transmitter audience. Empty means Issuer.
@@ -94,9 +95,19 @@ func (c *SSFConfig) minVerificationIntervalSeconds() (seconds int) {
 	return int((c.MinVerificationInterval + time.Second - 1) / time.Second)
 }
 
+func isValidSSFIssuer(issuer string) (valid bool) {
+	_, err := SSFConfigurationURL(issuer)
+
+	return err == nil
+}
+
 func (c *SSFConfig) currentSSFStream(stream *SSFStream) (current *SSFStream) {
 	current = stream.Clone()
 	current.MinVerificationInterval = c.minVerificationIntervalSeconds()
+
+	if !isValidSSFIssuer(current.Issuer) && isValidSSFIssuer(c.Issuer) {
+		current.Issuer = c.Issuer
+	}
 
 	return current
 }

@@ -288,6 +288,53 @@ func (ssfFailingStore) GetSSFStream(context.Context, string, string) (*SSFStream
 
 func (ssfFailingStore) DeleteSSFStream(context.Context, string, string) error { return errSSFDriver }
 
+func TestSSFStreamInvalidStoredIssuer(t *testing.T) {
+	const bad = "http://old.example.com?x=1"
+
+	newStream := func(t *testing.T, h *ssfHandlerHarness) string {
+		t.Helper()
+
+		id := h.createStream(t, "a", `{"description":"d"}`)
+
+		stream := h.stored(t, "a", id).Clone()
+		stream.Issuer = bad
+
+		require.NoError(t, h.store.UpdateSSFStream(context.Background(), stream))
+
+		return id
+	}
+
+	t.Run("ShouldReportConfiguredIssuer", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := newStream(t, h)
+
+		rw := h.do(t, "a", http.MethodGet, ssfHandlerURL+"?stream_id="+id, "", "")
+		require.Equal(t, http.StatusOK, rw.Code)
+		assert.Contains(t, rw.Body.String(), `"iss":"https://ssf.example.com"`)
+		assert.Equal(t, bad, h.stored(t, "a", id).Issuer)
+	})
+
+	t.Run("ShouldPersistConfiguredIssuerOnUpdate", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := newStream(t, h)
+
+		rw := h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","iss":"https://ssf.example.com","description":"new"}`)
+		require.Equal(t, http.StatusOK, rw.Code)
+		assert.Equal(t, "https://ssf.example.com", h.stored(t, "a", id).Issuer)
+	})
+
+	t.Run("ShouldKeepValidStoredIssuer", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{}`)
+
+		h.config.Issuer = "https://new.example.com"
+
+		rw := h.do(t, "a", http.MethodGet, ssfHandlerURL+"?stream_id="+id, "", "")
+		require.Equal(t, http.StatusOK, rw.Code)
+		assert.Contains(t, rw.Body.String(), `"iss":"https://ssf.example.com"`)
+	})
+}
+
 func TestSSFStreamHandlerStorageFailure(t *testing.T) {
 	h := newSSFHandlerHarness(t, nil)
 	h.provider.Store = ssfFailingStore{h.store.MemoryStore}

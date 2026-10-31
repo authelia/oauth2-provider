@@ -18,7 +18,8 @@ import (
 // 'ssf.read' or 'ssf.manage' and writes require 'ssf.manage'. The token audience must be the configured audience; the
 // request URL is never a fallback.
 //
-// The token is read only from the Authorization header, using the Bearer or DPoP scheme.
+// The token is read only from the Authorization header, using the Bearer or DPoP scheme. An 'access_token' parameter
+// alongside it is 'invalid_request' (RFC 6750 Section 2).
 //
 // The session passed in must implement DPoPBoundSession and MTLSBoundSession, otherwise a bound token looks unbound and
 // its binding is not enforced.
@@ -84,7 +85,8 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 }
 
 // ssfCredentialFromRequest returns the token of the Authorization header, or empty when it has no Bearer or DPoP
-// credential. An 'access_token' query or form parameter is never read (CAEP profile Section 2.7.3).
+// credential. An 'access_token' parameter is never used as the token (CAEP profile Section 2.7.3), and is rejected
+// alongside a token in the header (RFC 6750 Section 2). A form body is not parsed here, as these endpoints reject one.
 func ssfCredentialFromRequest(r *http.Request) (token string, err error) {
 	var scheme, value string
 
@@ -94,6 +96,10 @@ func ssfCredentialFromRequest(r *http.Request) (token string, err error) {
 
 	if !strings.EqualFold(scheme, BearerAccessToken) && !strings.EqualFold(scheme, DPoPAccessToken) {
 		return "", nil
+	}
+
+	if value != "" && (r.URL.Query().Get(consts.FormParameterAccessToken) != "" || r.Form.Get(consts.FormParameterAccessToken) != "") {
+		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}
 
 	return value, nil

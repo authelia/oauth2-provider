@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -344,7 +345,6 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 		{name: "ShouldRejectQueryToken", method: http.MethodGet, target: target + "?access_token=tok-a", code: http.StatusUnauthorized},
 		{name: "ShouldRejectFormToken", method: http.MethodPost, target: target, contentType: form, body: "access_token=tok-a", code: http.StatusUnauthorized},
 		{name: "ShouldRejectQueryTokenWithBasicHeader", method: http.MethodGet, target: target + "?access_token=tok-a", header: "Basic abc", code: http.StatusUnauthorized},
-		{name: "ShouldAcceptBearerHeaderAndIgnoreQueryToken", method: http.MethodGet, target: target + "?access_token=tok-b", header: "Bearer tok-a", code: http.StatusOK, listed: "a"},
 		{name: "ShouldAcceptBearerHeaderWithSeveralSpaces", method: http.MethodGet, target: target, header: "bearer   tok-a", code: http.StatusOK, listed: "a"},
 	}
 
@@ -390,6 +390,37 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 			assert.Equal(t, id, streams[0].StreamID)
 		})
 	}
+
+	t.Run("ShouldRejectHeaderAndParameterToken", func(t *testing.T) {
+		for _, scheme := range []string{"Bearer", "DPoP"} {
+			h := newSSFHandlerHarness(t, nil)
+
+			r := httptest.NewRequest(http.MethodGet, target+"?access_token=tok-b", nil)
+			r.Header.Set(consts.HeaderAuthorization, scheme+" tok-a")
+
+			_, err := h.provider.NewSSFStreamRequest(context.Background(), r, &DefaultSession{})
+			require.ErrorIs(t, err, ErrInvalidRequest, scheme)
+
+			rw := httptest.NewRecorder()
+
+			h.provider.WriteSSFError(context.Background(), rw, r, err)
+
+			assert.Equal(t, http.StatusBadRequest, rw.Code, scheme)
+			assert.Empty(t, rw.Header().Get(consts.HeaderWWWAuthenticate), scheme)
+			assert.Nil(t, r.Form, scheme)
+		}
+	})
+
+	t.Run("ShouldRejectHeaderAndParsedFormToken", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		r.Header.Set(consts.HeaderAuthorization, "Bearer tok-a")
+		r.Form = url.Values{"access_token": {"tok-b"}}
+
+		_, err := h.provider.NewSSFStreamRequest(context.Background(), r, &DefaultSession{})
+		assert.ErrorIs(t, err, ErrInvalidRequest)
+	})
 
 	t.Run("ShouldRejectMultipleAuthorizationHeaders", func(t *testing.T) {
 		h := newSSFHandlerHarness(t, nil)

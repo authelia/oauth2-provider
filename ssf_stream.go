@@ -73,7 +73,8 @@ type SSFStream struct {
 	// ClientID is the owner of the stream. It is never serialized.
 	ClientID string
 
-	// Issuer is the 'iss' of every SET sent on the stream.
+	// Issuer is the 'iss' of every SET sent on the stream. An invalid value is replaced by SSFConfig.Issuer when the stream
+	// is read, updated, verified, polled or used to generate a SET.
 	Issuer string
 
 	// Audience is the 'aud' of every SET sent on the stream.

@@ -224,3 +224,44 @@ func TestConfigGetSSFConfig(t *testing.T) {
 	assert.Equal(t, "a", c.Audience)
 	assert.Equal(t, int64(10), c.MaxRequestBytes)
 }
+
+func TestGenerateSecurityEventTokenStoredIssuer(t *testing.T) {
+	subject, err := jwt.NewSubjectIdentifierOpaque("abc")
+	require.NoError(t, err)
+
+	event := jwt.RawSecurityEvent{URI: "https://schemas.openid.net/secevent/risc/event-type/account-disabled", Claims: map[string]any{}}
+
+	testCases := []struct {
+		name     string
+		stored   string
+		config   string
+		expected string
+	}{
+		{"ShouldUseConfiguredIssuerForHTTP", "http://old.example.com", "https://tx.example.com", "https://tx.example.com"},
+		{"ShouldUseConfiguredIssuerForQuery", "https://old.example.com?x=1", "https://tx.example.com", "https://tx.example.com"},
+		{"ShouldKeepValidStoredIssuer", "https://old.example.com", "https://tx.example.com", "https://old.example.com"},
+		{"ShouldFailWithNoValidIssuer", "http://old.example.com", "http://tx.example.com", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &ssfTestStrategy{token: ssfTestToken(jwt.JSONWebTokenTypeSecurityEventToken)}
+			f := &oauth2.Fosite{Config: &oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: tc.config, TokenStrategy: strategy}}}
+			stream := &oauth2.SSFStream{Issuer: tc.stored, Audience: []string{"rx"}}
+
+			_, _, err := f.GenerateSecurityEventToken(t.Context(), stream, subject, event, "", "")
+
+			assert.Equal(t, tc.stored, stream.Issuer)
+
+			if tc.expected == "" {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+				assert.Nil(t, strategy.claims)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, strategy.claims.Issuer)
+		})
+	}
+}

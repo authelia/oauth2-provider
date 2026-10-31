@@ -171,6 +171,10 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	if authorizationGrantType(ctx, request, c.Config) != nil {
+		if !allowsAuthorizationGrantIssuance(client) {
+			return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not permitted to be issued a JWT authorization grant via token exchange."))
+		}
+
 		if err = validateAuthorizationGrantTarget(request); err != nil {
 			return err
 		}
@@ -656,6 +660,12 @@ func allowsRefreshTokenIssuance(client oauth2.Client) bool {
 	c, ok := client.(RefreshTokenIssuanceClient)
 
 	return ok && c.GetAllowTokenExchangeRefreshToken()
+}
+
+func allowsAuthorizationGrantIssuance(client oauth2.Client) bool {
+	c, ok := client.(AuthorizationGrantIssuanceClient)
+
+	return ok && c.GetAllowTokenExchangeAuthorizationGrant()
 }
 
 func errRefreshTokenIssuance() error {

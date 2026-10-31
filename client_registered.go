@@ -96,6 +96,10 @@ type DefaultRegisteredClient struct {
 	// metadata, so a client cannot grant it to itself.
 	TokenExchangeRefreshToken bool `json:"token_exchange_refresh_token"`
 
+	// TokenExchangeAuthorizationGrant permits a token exchange to issue a JWT authorization grant to this client. It has
+	// no registration metadata, so a client cannot grant it to itself.
+	TokenExchangeAuthorizationGrant bool `json:"token_exchange_authorization_grant"`
+
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
 
@@ -603,6 +607,12 @@ func (c *DefaultRegisteredClient) GetAllowOwnAccessTokenExchange() (allow bool) 
 // GetAllowTokenExchangeRefreshToken reports whether a token exchange may issue a refresh token to this client.
 func (c *DefaultRegisteredClient) GetAllowTokenExchangeRefreshToken() (allow bool) {
 	return c.TokenExchangeRefreshToken
+}
+
+// GetAllowTokenExchangeAuthorizationGrant reports whether a token exchange may issue a JWT authorization grant to this
+// client.
+func (c *DefaultRegisteredClient) GetAllowTokenExchangeAuthorizationGrant() (allow bool) {
+	return c.TokenExchangeAuthorizationGrant
 }
 
 var (

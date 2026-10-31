@@ -71,7 +71,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		if err = c.inherit(request, unpacked, tokenRoleActor, prior); err != nil {
+		if err = c.inherit(ctx, request, unpacked, tokenRoleActor, prior); err != nil {
 			return err
 		}
 
@@ -95,7 +95,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			}
 		}
 
-		if err = c.inherit(request, unpacked, tokenRoleSubject, prior); err != nil {
+		if err = c.inherit(ctx, request, unpacked, tokenRoleSubject, prior); err != nil {
 			return err
 		}
 
@@ -200,14 +200,14 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 	return claims, nil
 }
 
-func (c *IDTokenTypeHandler) inherit(request oauth2.AccessRequester, claims map[string]any, role tokenRole, prior tokenBinding) (err error) {
+func (c *IDTokenTypeHandler) inherit(ctx context.Context, request oauth2.AccessRequester, claims map[string]any, role tokenRole, prior tokenBinding) (err error) {
 	var incoming tokenBinding
 
 	if incoming, err = bindingOfConfirmation(claims); err != nil {
 		return err
 	}
 
-	return inheritTokenBinding(request, incoming, role, prior)
+	return inheritTokenBinding(ctx, c.Config, request, incoming, role, prior)
 }
 
 func (c *IDTokenTypeHandler) validateIssuable(ctx context.Context, request oauth2.AccessRequester) error {

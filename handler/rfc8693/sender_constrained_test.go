@@ -238,6 +238,8 @@ func newBindingExchangeConfig() (config *oauth2.Config, coreStrategy hoauth2.Cor
 			consts.TokenTypeRFC8693AccessToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 		},
 		DefaultRequestedTokenType: consts.TokenTypeRFC8693AccessToken,
+		DPoPEnabled:               true,
+		MTLSEnabled:               true,
 	}
 
 	return config, &hoauth2.HMACCoreStrategy{

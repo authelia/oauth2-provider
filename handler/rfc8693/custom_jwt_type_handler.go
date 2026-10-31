@@ -65,6 +65,10 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 			return err
 		}
 
+		if err = c.inherit(ctx, request, unpacked, tokenRoleActor); err != nil {
+			return err
+		}
+
 		session.SetActorToken(unpacked)
 	}
 
@@ -74,6 +78,10 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 		token := form.Get(consts.FormParameterSubjectToken)
 
 		if unpacked, err = c.validate(ctx, request, subjectTokenType, token, tokenRoleSubject); err != nil {
+			return err
+		}
+
+		if err = c.inherit(ctx, request, unpacked, tokenRoleSubject); err != nil {
 			return err
 		}
 
@@ -141,6 +149,16 @@ func (c *CustomJWTTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.Acc
 func (c *CustomJWTTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+}
+
+func (c *CustomJWTTypeHandler) inherit(ctx context.Context, request oauth2.AccessRequester, claims map[string]any, role tokenRole) (err error) {
+	var incoming tokenBinding
+
+	if incoming, err = bindingOfConfirmation(claims); err != nil {
+		return err
+	}
+
+	return inheritTokenBinding(ctx, c.Config, request, incoming, role, bindingOf(request.GetSession()))
 }
 
 func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, token string, role tokenRole) (map[string]any, error) {

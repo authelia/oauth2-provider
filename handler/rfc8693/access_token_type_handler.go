@@ -78,7 +78,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 			return err
 		}
 
-		if err = inheritTokenBinding(request, bindingOf(actorTokenSession), tokenRoleActor, priorActor); err != nil {
+		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(actorTokenSession), tokenRoleActor, priorActor); err != nil {
 			return err
 		}
 
@@ -96,7 +96,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 			return err
 		}
 
-		if err = inheritTokenBinding(request, bindingOf(subjectTokenSession), tokenRoleSubject, priorSubject); err != nil {
+		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(subjectTokenSession), tokenRoleSubject, priorSubject); err != nil {
 			return err
 		}
 

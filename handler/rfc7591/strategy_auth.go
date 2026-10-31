@@ -6,8 +6,10 @@ package rfc7591
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -99,10 +101,10 @@ func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx 
 // authenticateClientRegistration authenticates a client registration request (RFC 7591). The credential is an ordinary
 // access token, resolved from access token storage and authorised by oauth2.ValidateBearerAuthorization.
 //
-// Any binding is read off the hydrated oauth2.DefaultSession, so a store that keeps sessions serialized and uses its
-// own session type only surfaces a thumbprint if that type's JSON tags agree with oauth2.DefaultSession's
-// 'jwk_thumbprint' and 'client_certificate_thumbprint'. Otherwise the token looks unbound: nothing is enforced, or with
-// GetDPoPEnforce or GetMTLSEnforce set every registration request is rejected.
+// Any binding is read off the hydrated accessTokenSession, so a store that keeps sessions serialized and uses its own
+// session type only surfaces a thumbprint if that type's JSON keys match those of oauth2.DefaultSession or
+// handler/oauth2.JWTSession. Otherwise the token looks unbound: nothing is enforced, or with GetDPoPEnforce or
+// GetMTLSEnforce set every registration request is rejected.
 func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context.Context, r *http.Request, tokenString string) (requester oauth2.Requester, err error) {
 	signature := s.AccessTokenStrategy.AccessTokenSignature(ctx, tokenString)
 
@@ -112,7 +114,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 
 	// A concrete session is passed, never nil: the store hydrates it and ValidateAccessToken reads the expiry back off
 	// it.
-	if requester, err = s.Store.GetAccessTokenSession(ctx, signature, &oauth2.DefaultSession{}); err != nil {
+	if requester, err = s.Store.GetAccessTokenSession(ctx, signature, &accessTokenSession{}); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -228,3 +230,37 @@ func endpointToken(r *http.Request, dpop bool) (token string, err error) {
 var (
 	_ oauth2.ClientRegistrationEndpointAuthStrategy = (*DefaultEndpointAuthStrategy)(nil)
 )
+
+type accessTokenSession struct {
+	oauth2.DefaultSession
+}
+
+func (s *accessTokenSession) UnmarshalJSON(data []byte) (err error) {
+	if err = json.Unmarshal(data, &s.DefaultSession); err != nil {
+		return err
+	}
+
+	var stored struct {
+		ExpiresAt                   map[oauth2.TokenType]time.Time `json:"ExpiresAt"`
+		JWKThumbprint               string                         `json:"JWKThumbprint"`
+		ClientCertificateThumbprint string                         `json:"ClientCertificateThumbprint"`
+	}
+
+	if err = json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+
+	if len(s.ExpiresAt) == 0 {
+		s.ExpiresAt = stored.ExpiresAt
+	}
+
+	if s.JWKThumbprint == "" {
+		s.JWKThumbprint = stored.JWKThumbprint
+	}
+
+	if s.ClientCertificateThumbprint == "" {
+		s.ClientCertificateThumbprint = stored.ClientCertificateThumbprint
+	}
+
+	return nil
+}

@@ -415,6 +415,18 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			} else if rsyntax != value {
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
 			}
+		case consts.FormParameterResource, consts.FormParameterAudience:
+			// RFC 8707 Section 2.1: multiple values are an array of strings in a request object, which correspond to
+			// repeating the parameter in the request syntax.
+			//
+			// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.1
+			var values []string
+
+			if values, err = requestObjectFormValues(v); err != nil {
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim which must be a string or an array of strings: %s.", request.GetClient().GetID(), k, err.Error()))
+			}
+
+			request.Form[k] = values
 		default:
 			if value, err = requestObjectFormValue(v); err != nil {
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
@@ -524,6 +536,29 @@ func requestObjectFormValue(v any) (value string, err error) {
 		}
 
 		return string(data), nil
+	}
+}
+
+func requestObjectFormValues(v any) (values []string, err error) {
+	switch t := v.(type) {
+	case string:
+		return []string{t}, nil
+	case []string:
+		return t, nil
+	case []any:
+		values = make([]string, len(t))
+
+		for i, item := range t {
+			var ok bool
+
+			if values[i], ok = item.(string); !ok {
+				return nil, fmt.Errorf("the array has a value of type %T where a string is required", item)
+			}
+		}
+
+		return values, nil
+	default:
+		return nil, fmt.Errorf("the value of type %T is neither a string nor an array of strings", v)
 	}
 }
 

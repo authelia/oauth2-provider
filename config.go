@@ -860,6 +860,13 @@ type DPoPStrictRefreshTokenBindingProvider interface {
 	GetDPoPStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
+// SSFConfigProvider is the configuration provider for the OpenID Shared Signals Framework transmitter.
+type SSFConfigProvider interface {
+	// GetSSFConfig returns the Shared Signals Framework configuration. Has no default and may be nil. The provider
+	// applies SSFConfig.WithDefaults to the result.
+	GetSSFConfig(ctx context.Context) (config *SSFConfig)
+}
+
 // DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
 type DPoPConfigProvider interface {
 	// GetDPoPEnabled returns true if DPoP handling is enabled.

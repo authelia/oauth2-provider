@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -161,6 +162,7 @@ type MemoryStore struct {
 	IDJAGTenants             map[IDJAGTenantKey]struct{}
 	IDJAGResources           map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                map[JTIMarker]time.Time
+	SSFStreams               map[string]*oauth2.SSFStream
 
 	ClientRegistrationCounts map[string]int64
 
@@ -182,6 +184,7 @@ type MemoryStore struct {
 	dpopNoncesMutex               sync.RWMutex
 	idjagMutex                    sync.RWMutex
 	clientRegistrationCountsMutex sync.Mutex
+	ssfStreamsMutex               sync.RWMutex
 
 	clientAssertionJTIsPruneAt time.Time
 	rfc7523JTIsPruneAt         time.Time
@@ -224,6 +227,7 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGResources:           make(map[IDJAGResourceKey]struct{}),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 		ClientRegistrationCounts: make(map[string]int64),
+		SSFStreams:               make(map[string]*oauth2.SSFStream),
 	}
 }
 
@@ -1304,3 +1308,128 @@ func (s *MemoryStore) ReleaseClientRegistration(_ context.Context, key string) (
 var (
 	_ oauth2.ClientRegistrationCounterStorage = (*MemoryStore)(nil)
 )
+
+// CreateSSFStream implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) CreateSSFStream(ctx context.Context, stream *oauth2.SSFStream) (err error) {
+	if stream == nil || stream.StreamID == "" || stream.ClientID == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The stream, its ID and its client ID are required."))
+	}
+
+	s.ssfStreamsMutex.Lock()
+	defer s.ssfStreamsMutex.Unlock()
+
+	if s.SSFStreams == nil {
+		s.SSFStreams = make(map[string]*oauth2.SSFStream)
+	}
+
+	if _, ok := s.SSFStreams[stream.StreamID]; ok {
+		return errorsx.WithStack(oauth2.ErrSSFStreamConflict)
+	}
+
+	for _, existing := range s.SSFStreams {
+		if existing.ClientID == stream.ClientID {
+			return errorsx.WithStack(oauth2.ErrSSFStreamConflict)
+		}
+	}
+
+	s.SSFStreams[stream.StreamID] = stream.Clone()
+
+	return nil
+}
+
+// GetSSFStream implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) GetSSFStream(ctx context.Context, clientID, streamID string) (stream *oauth2.SSFStream, err error) {
+	s.ssfStreamsMutex.RLock()
+	defer s.ssfStreamsMutex.RUnlock()
+
+	if stored, ok := s.SSFStreams[streamID]; ok && stored.ClientID == clientID {
+		return stored.Clone(), nil
+	}
+
+	return nil, errorsx.WithStack(oauth2.ErrNotFound)
+}
+
+// ListSSFStreams implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) ListSSFStreams(ctx context.Context, clientID string) (streams []*oauth2.SSFStream, err error) {
+	s.ssfStreamsMutex.RLock()
+	defer s.ssfStreamsMutex.RUnlock()
+
+	for _, stored := range s.SSFStreams {
+		if stored.ClientID == clientID {
+			streams = append(streams, stored.Clone())
+		}
+	}
+
+	slices.SortFunc(streams, func(a, b *oauth2.SSFStream) int { return strings.Compare(a.StreamID, b.StreamID) })
+
+	return streams, nil
+}
+
+// UpdateSSFStream implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) UpdateSSFStream(ctx context.Context, stream *oauth2.SSFStream) (err error) {
+	if stream == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The stream is required."))
+	}
+
+	s.ssfStreamsMutex.Lock()
+	defer s.ssfStreamsMutex.Unlock()
+
+	stored, ok := s.SSFStreams[stream.StreamID]
+	if !ok || stored.ClientID != stream.ClientID {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	updated := stream.Clone()
+
+	updated.Status, updated.StatusReason, updated.LastVerificationAt = stored.Status, stored.StatusReason, stored.LastVerificationAt
+
+	s.SSFStreams[stream.StreamID] = updated
+
+	return nil
+}
+
+// UpdateSSFStreamStatus implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) UpdateSSFStreamStatus(ctx context.Context, clientID, streamID, status, reason string) (err error) {
+	s.ssfStreamsMutex.Lock()
+	defer s.ssfStreamsMutex.Unlock()
+
+	stored, ok := s.SSFStreams[streamID]
+	if !ok || stored.ClientID != clientID {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	stored.Status, stored.StatusReason = status, reason
+
+	return nil
+}
+
+// UpdateSSFStreamLastVerification implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) UpdateSSFStreamLastVerification(ctx context.Context, clientID, streamID string, at time.Time) (err error) {
+	s.ssfStreamsMutex.Lock()
+	defer s.ssfStreamsMutex.Unlock()
+
+	stored, ok := s.SSFStreams[streamID]
+	if !ok || stored.ClientID != clientID {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	stored.LastVerificationAt = at
+
+	return nil
+}
+
+// DeleteSSFStream implements oauth2.SSFStreamStorage.
+func (s *MemoryStore) DeleteSSFStream(ctx context.Context, clientID, streamID string) (err error) {
+	s.ssfStreamsMutex.Lock()
+	defer s.ssfStreamsMutex.Unlock()
+
+	if stored, ok := s.SSFStreams[streamID]; !ok || stored.ClientID != clientID {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	delete(s.SSFStreams, streamID)
+
+	return nil
+}
+
+var _ oauth2.SSFStreamStorage = (*MemoryStore)(nil)

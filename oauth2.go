@@ -150,6 +150,11 @@ type Provider interface {
 	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, response IntrospectionResponder)
 
+	// WriteSSFConfiguration writes the Transmitter Configuration Metadata.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2.3
+	WriteSSFConfiguration(ctx context.Context, rw http.ResponseWriter, configuration *SSFConfiguration)
+
 	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
 	NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error)
 
@@ -271,6 +276,73 @@ type Provider interface {
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken (everything MUST be implemented)
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented)
 	SendBackChannelLogout(ctx context.Context, requester BackChannelLogoutRequester) (results []BackChannelLogoutResult, err error)
+
+	// GenerateSecurityEventToken returns a signed Security Event Token carrying the event for the subject, issued by
+	// and addressed to the audience of the stream, and the 'jti' it used. An empty jti generates one. A retry of the
+	// same event should reuse the same 'jti', which is also the key of a poll response and of an acknowledgement. It
+	// does not deliver the token.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-2 (everything MUST be implemented)
+	GenerateSecurityEventToken(ctx context.Context, stream *SSFStream, subject *jwt.SubjectIdentifier, event jwt.SecurityEvent, jti, txn string) (token, usedJTI string, err error)
+
+	// PushSecurityEventToken makes one RFC 8935 push attempt of the Security Event Token to the delivery endpoint and
+	// returns a typed outcome. It never retries and never follows redirects.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8935.html
+	PushSecurityEventToken(ctx context.Context, delivery SSFDelivery, token string) (result SSFPushResult)
+
+	// NewSSFStreamRequest authorizes a request to the Shared Signals Framework stream configuration endpoint and
+	// decodes its body. The session must implement DPoPBoundSession and MTLSBoundSession.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
+	NewSSFStreamRequest(ctx context.Context, r *http.Request, session Session) (requester SSFStreamRequester, err error)
+
+	// NewSSFStreamResponse creates, reads, lists, updates, replaces or deletes the streams of the requesting client.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
+	NewSSFStreamResponse(ctx context.Context, requester SSFStreamRequester) (responder SSFStreamResponder, err error)
+
+	// WriteSSFStreamResponse writes the stream configuration response.
+	WriteSSFStreamResponse(ctx context.Context, rw http.ResponseWriter, requester SSFStreamRequester, responder SSFStreamResponder)
+
+	// WriteSSFError writes a stream endpoint error, with the bearer challenge for a rejected credential.
+	WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error)
+
+	// NewSSFStreamStatusRequest authorizes a request to the Shared Signals Framework stream status endpoint and decodes
+	// its body. The session must implement DPoPBoundSession and MTLSBoundSession.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
+	NewSSFStreamStatusRequest(ctx context.Context, r *http.Request, session Session) (requester SSFStreamStatusRequester, err error)
+
+	// NewSSFStreamStatusResponse reads or updates the status of a stream of the requesting client.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
+	NewSSFStreamStatusResponse(ctx context.Context, requester SSFStreamStatusRequester) (responder SSFStreamResponder, err error)
+
+	// WriteSSFStreamStatusResponse writes the stream status response.
+	WriteSSFStreamStatusResponse(ctx context.Context, rw http.ResponseWriter, requester SSFStreamStatusRequester, responder SSFStreamResponder)
+
+	// HandleSSFVerificationRequest authorizes a Shared Signals Framework verification request and hands it to the
+	// configured SSFVerificationHandler. The application writes 204 on nil and uses WriteSSFError otherwise.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.4
+	HandleSSFVerificationRequest(ctx context.Context, r *http.Request, session Session) (err error)
+
+	// NewSSFPollRequest authorizes an RFC 8936 poll request for the poll stream of the requesting client and parses its
+	// body. The session must implement DPoPBoundSession and MTLSBoundSession.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
+	NewSSFPollRequest(ctx context.Context, r *http.Request, session Session, streamID string) (request *SSFPollRequest, err error)
+
+	// WriteSSFPollResponse writes the poll response of SETs keyed by 'jti'.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.3
+	WriteSSFPollResponse(ctx context.Context, rw http.ResponseWriter, sets map[string]string, moreAvailable bool)
+
+	// WriteSSFPollError writes a poll endpoint error with the RFC 8936 Section 2.6 'err' and 'description' members,
+	// and the bearer challenge for a rejected credential.
+	WriteSSFPollError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error)
 
 	// RequireRedirectURIPushedAuthorizationRequest determines if the 'redirect_uri' parameter is required in a Pushed
 	// Authorization Request, being when either the provider-wide option or the client's own policy is set.

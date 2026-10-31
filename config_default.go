@@ -31,6 +31,7 @@ const (
 	maxJWTClockSkew                       = 60 * time.Second
 	defaultRequestObjectMaximumLifetime   = 60 * time.Minute
 	defaultAuthorizationDetailsMaxObjects = 32
+	defaultRFC8693MaxActorChainDepth      = 8
 	defaultClaimsParameterMaxLength       = 8192
 )
 
@@ -411,6 +412,10 @@ type Config struct {
 	RequestObjectMaximumLifetime time.Duration
 
 	RFC8693TokenTypes map[string]RFC8693TokenType
+
+	// RFC8693MaxActorChainDepth is the maximum number of actors, including nested 'act' claims, a token issued by Token
+	// Exchange may record. The default is 8 when not positive.
+	RFC8693MaxActorChainDepth int
 
 	DefaultRequestedTokenType string
 
@@ -1305,6 +1310,15 @@ func (c *Config) GetRequestObjectMaximumLifetime(_ context.Context) time.Duratio
 // identifier.
 func (c *Config) GetRFC8693TokenTypes(ctx context.Context) map[string]RFC8693TokenType {
 	return c.RFC8693TokenTypes
+}
+
+// GetRFC8693MaxActorChainDepth returns the maximum number of actors a token issued by Token Exchange may record.
+func (c *Config) GetRFC8693MaxActorChainDepth(ctx context.Context) int {
+	if c.RFC8693MaxActorChainDepth <= 0 {
+		return defaultRFC8693MaxActorChainDepth
+	}
+
+	return c.RFC8693MaxActorChainDepth
 }
 
 // GetDefaultRFC8693RequestedTokenType returns the token type identifier used as the 'requested_token_type' when the RFC

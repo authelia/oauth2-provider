@@ -314,6 +314,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
+	if err = validateActorChainDepth(ctx, c.Config, session); err != nil {
+		return err
+	}
+
 	var act map[string]any
 
 	if act, err = buildActClaim(session); err != nil {
@@ -433,6 +437,29 @@ func buildActClaim(session Session) (map[string]any, error) {
 	}
 
 	return act, nil
+}
+
+// validateActorChainDepth limits the size of an issued token before the chain of the subject token is copied, as RFC
+// 8693 Section 4.1 sets no limit on nesting and each exchange adds an actor. A JWT authorization grant without an
+// 'actor_token' carries the chain of the subject token.
+func validateActorChainDepth(ctx context.Context, config oauth2.RFC8693ConfigProvider, session Session) error {
+	limit, depth := config.GetRFC8693MaxActorChainDepth(ctx), 0
+
+	if session.GetActorToken() != nil {
+		depth++
+	}
+
+	act, _ := session.GetSubjectToken()[consts.ClaimActor].(map[string]any)
+
+	for ; len(act) > 0 && depth <= limit; depth++ {
+		act, _ = act[consts.ClaimActor].(map[string]any)
+	}
+
+	if depth > limit {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' claim would exceed the permitted %d actors.", consts.ClaimActor, limit))
+	}
+
+	return nil
 }
 
 // resolveRequestedTokenType returns the oauth2.RFC8693TokenType registered for the request's resolved

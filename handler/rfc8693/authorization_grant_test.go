@@ -360,10 +360,11 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 	t.Run("ShouldIgnoreTheIDTokenConfigurationOfTheClient", func(t *testing.T) {
 		f := newGrantFixture(t, nil)
 		f.requester = &oauth2.DefaultRegisteredClient{
-			DefaultClient:               f.client,
-			IDTokenSignedResponseAlg:    "HS256",
-			IDTokenEncryptedResponseAlg: "dir",
-			IDTokenEncryptedResponseEnc: "A128CBC-HS256",
+			DefaultClient:                   f.client,
+			TokenExchangeAuthorizationGrant: true,
+			IDTokenSignedResponseAlg:        "HS256",
+			IDTokenEncryptedResponseAlg:     "dir",
+			IDTokenEncryptedResponseEnc:     "A128CBC-HS256",
 		}
 
 		response, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
@@ -579,6 +580,53 @@ func TestAuthorizationGrantPolicyOfOtherClients(t *testing.T) {
 	}
 }
 
+func TestAuthorizationGrantClientOptIn(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requester func(client *oauth2.DefaultClient) oauth2.Client
+		expected  error
+	}{
+		{
+			name: "ShouldIssueWhenOptedIn",
+			requester: func(client *oauth2.DefaultClient) oauth2.Client {
+				return &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeAuthorizationGrant: true}
+			},
+		},
+		{
+			name: "ShouldRefuseAClientWhichHasNotOptedIn",
+			requester: func(client *oauth2.DefaultClient) oauth2.Client {
+				return &oauth2.DefaultRegisteredClient{DefaultClient: client}
+			},
+			expected: oauth2.ErrUnauthorizedClient,
+		},
+		{
+			name: "ShouldRefuseAClientWithoutTheInterface",
+			requester: func(client *oauth2.DefaultClient) oauth2.Client {
+				return client
+			},
+			expected: oauth2.ErrUnauthorizedClient,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGrantFixture(t, nil)
+			f.requester = tc.requester(f.client)
+
+			response, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
+
+			if tc.expected != nil {
+				require.ErrorIs(t, err, tc.expected)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, response.GetAccessToken())
+		})
+	}
+}
+
 func TestAuthorizationGrantRecordsTheBindingOfTheSubjectToken(t *testing.T) {
 	f := newGrantFixture(t, nil)
 	session := newSpecSession("")
@@ -728,7 +776,7 @@ func newGrantFixtureWithStore(t *testing.T, store grantStore, configure func(jwt
 		store:     store,
 		owners:    storage.NewExampleStore().Clients,
 		client:    client,
-		requester: client,
+		requester: &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeAuthorizationGrant: true},
 		core:      core,
 		strategy:  strategy,
 		handlers: []oauth2.TokenEndpointHandler{

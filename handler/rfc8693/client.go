@@ -82,6 +82,14 @@ type RefreshTokenIssuanceClient interface {
 	GetAllowTokenExchangeRefreshToken() (allow bool)
 }
 
+// AuthorizationGrantIssuanceClient is an optional client interface. A client which does not implement it is not issued
+// a JWT authorization grant by a token exchange.
+type AuthorizationGrantIssuanceClient interface {
+	// GetAllowTokenExchangeAuthorizationGrant reports whether a token exchange may issue a JWT authorization grant to the
+	// client. The client's audience and resources then determine the authorization servers a grant may identify.
+	GetAllowTokenExchangeAuthorizationGrant() (allow bool)
+}
+
 // ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.
 // When the request supplies an actor_token but the subject_token carries no 'may_act' (§4.4) claim authorizing
 // delegation, the authorization server has no in-token signal that the actor is permitted to act on behalf of the

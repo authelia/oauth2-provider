@@ -32,8 +32,8 @@ type JWTIssueConfig struct {
 	Expiry time.Duration `json:"exp"`
 
 	// AuthorizationGrant issues the JWT as a JWT authorization grant for an authorization server in another trust
-	// domain. The request must identify exactly one target with 'audience' or 'resource', a client may exchange a token
-	// issued to itself, and the JWT carries only the 'iss', 'sub', 'aud', 'exp', 'iat', 'jti', 'scope' and 'act' claims.
+	// domain. The client must opt in with AuthorizationGrantIssuanceClient, the request must identify exactly one target
+	// with 'audience' or 'resource', a client may exchange a token issued to itself, and the JWT carries only the 'iss', 'sub', 'aud', 'exp', 'iat', 'jti', 'scope' and 'act' claims.
 	// It is signed with the issuer key rather than the ID Token configuration of the client, as the other authorization
 	// server must be able to read and verify it. The type cannot be presented as a 'subject_token' or 'actor_token', and
 	// no other JWTType may trust the key and issuer of its grants, as a grant could then be exchanged for a new target.

@@ -124,7 +124,10 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 			hc = s.clientSourceFunc(ctx)
 		}
 
-		response, err := HTTPClientWithoutRedirects(hc).Do(req.WithContext(ctx))
+		fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
+		defer cancel()
+
+		response, err := HTTPClientWithoutRedirects(hc).Do(req.WithContext(fetch))
 		if err != nil {
 			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
 		}

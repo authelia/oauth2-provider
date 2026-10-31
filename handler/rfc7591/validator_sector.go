@@ -54,6 +54,9 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must use the 'https' scheme.", consts.ClientMetadataSectorIdentifierURI, metadata.SectorIdentifierURI))
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, oauth2.FetchTimeout)
+	defer cancel()
+
 	var req *retryablehttp.Request
 
 	if req, err = retryablehttp.NewRequestWithContext(ctx, http.MethodGet, metadata.SectorIdentifierURI, nil); err != nil {

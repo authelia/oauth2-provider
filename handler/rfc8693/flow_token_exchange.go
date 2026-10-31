@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -698,6 +699,43 @@ func authenticationContextClaims(session oauth2.Session) (claims map[string]any)
 	}
 
 	return claims
+}
+
+// carryIDTokenAuthentication records the End-User and the authentication of a refresh token granted the 'openid' scope
+// on the ID Token claims of the exchange, as the refresh token it issues refreshes an ID Token from these. OpenID
+// Connect Core 1.0 Section 12.2 requires the 'auth_time' claim of a refreshed ID Token to be the original one.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
+func carryIDTokenAuthentication(session, subject any, claims map[string]any) {
+	scopes, _ := claims[consts.ClaimScope].(oauth2.Arguments)
+	if !scopes.Has(consts.ScopeOpenID) {
+		return
+	}
+
+	target, ok := session.(openid.Session)
+	if !ok {
+		return
+	}
+
+	issued := target.IDTokenClaims()
+	issued.Subject = target.GetSubject()
+
+	source, ok := subject.(interface{ IDTokenClaims() *jwt.IDTokenClaims })
+	if !ok {
+		return
+	}
+
+	login := source.IDTokenClaims()
+	if login == nil {
+		return
+	}
+
+	if login.AuthTime != nil {
+		issued.AuthTime = jwt.NewNumericDate(login.AuthTime.Time)
+	}
+
+	issued.AuthenticationContextClassReference = login.AuthenticationContextClassReference
+	issued.AuthenticationMethodsReferences = slices.Clone(login.AuthenticationMethodsReferences)
 }
 
 func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err error) {

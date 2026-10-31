@@ -109,6 +109,7 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 		session.SetSubjectToken(unpacked)
 		session.SetSubject(subjectTokenSession.GetSubject())
+		carryIDTokenAuthentication(session, subjectTokenSession, unpacked)
 	}
 
 	return nil

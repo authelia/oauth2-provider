@@ -30,8 +30,8 @@ type Client interface {
 	// GetTokenExchangePermitted reports whether the original client of an access token presented as a 'subject_token' or
 	// 'actor_token' authorizes the given requesting client to perform a token exchange targeting the supplied
 	// requestedTokenType, which is the resolved 'requested_token_type' (or the configured default when omitted) and is
-	// non-nil at the call site. An original client which does not implement this permits no other client, and a refresh
-	// token is only ever exchanged by its original client.
+	// non-nil at the call site. This restricts, and does not replace, the rule that the token's audience includes the
+	// requesting client. A refresh token is only ever exchanged by its original client.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
 	GetTokenExchangePermitted(client oauth2.Client, requestedTokenType oauth2.RFC8693TokenType) (allowed bool)
@@ -41,6 +41,16 @@ type Client interface {
 	// mechanism (e.g. a policy database or external IGA system) verifies that the actor is permitted to act on
 	// behalf of the subject.
 	GetAllowActorTokenWithoutMayAct() (allow bool)
+}
+
+// ActorTokenExchangeClient is an optional client interface for a client whose GetTokenExchangePermitted permits clients
+// it has not named. An access token of such a client is only accepted as an 'actor_token' when
+// GetActorTokenExchangePermitted permits the requesting client. A client which does not implement this interface uses
+// GetTokenExchangePermitted, and one which does not implement Client permits no other client.
+type ActorTokenExchangeClient interface {
+	// GetActorTokenExchangePermitted reports whether this client explicitly permits the given requesting client to
+	// present an access token issued to this client as an 'actor_token'.
+	GetActorTokenExchangePermitted(client oauth2.Client, requestedTokenType oauth2.RFC8693TokenType) (allowed bool)
 }
 
 // ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.

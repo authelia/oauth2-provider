@@ -511,8 +511,10 @@ func errExchangeTokenValidation(err error) error {
 // unacceptable based on policy.
 //
 // A refresh token is only accepted from the client it was issued to, as RFC 6749 Section 10.4 requires that binding to
-// be verified. A token of another kind issued to another client is only accepted when that client permits the requesting
-// client with GetTokenExchangePermitted, and never when its client type cannot express a permission.
+// be verified. A token of another kind issued to another client is only accepted when its audience includes the
+// requesting client, and when that client also permits the requesting client with GetTokenExchangePermitted if its
+// client type can express a permission. An actor token identifies the acting party, which its audience does not
+// establish, so its client must explicitly permit the requesting client as described by ActorTokenExchangeClient.
 //
 // A client may not exchange an access token issued to itself as a subject token, except for a JWT authorization grant.
 // A client may only request scopes the subject token was granted. Neither rule applies to an actor token, which
@@ -546,7 +548,11 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 
 	// A client implicitly authorizes the exchange of its own token.
 	if !self {
-		if originalClient, ok := original.GetClient().(Client); !ok || !originalClient.GetTokenExchangePermitted(client, resolveRequestedTokenType(ctx, request, config)) {
+		if !slices.Contains(oauth2.JoinGrantedAudienceAndResource(original.GetGrantedAudience(), original.GetGrantedResource()), client.GetID()) {
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The audience of %s does not include the OAuth 2.0 client.", role.hint()))
+		}
+
+		if !permitsExchange(original.GetClient(), client, resolveRequestedTokenType(ctx, request, config), role) {
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), originalClientID))
 		}
 	}
@@ -556,6 +562,21 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 	}
 
 	return validateRequestedScopes(request, strategy, original.GetGrantedScopes())
+}
+
+func permitsExchange(owner, client oauth2.Client, requested oauth2.RFC8693TokenType, role tokenRole) bool {
+	if role == tokenRoleActor {
+		if c, ok := owner.(ActorTokenExchangeClient); ok {
+			return c.GetActorTokenExchangePermitted(client, requested)
+		}
+	}
+
+	c, ok := owner.(Client)
+	if !ok {
+		return role != tokenRoleActor
+	}
+
+	return c.GetTokenExchangePermitted(client, requested)
 }
 
 func validateSubjectTokenScope(request oauth2.AccessRequester, granted []string) (err error) {

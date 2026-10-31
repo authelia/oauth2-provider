@@ -36,6 +36,7 @@ func TestExchangePolicy(t *testing.T) {
 	}
 
 	const (
+		hintNotAudience  = "does not include the OAuth 2.0 client"
 		hintNotPermitted = "not permitted to exchange"
 		hintNotIssued    = "was not issued to the OAuth 2.0 client"
 		hintOwnAccess    = "on their own access tokens"
@@ -47,16 +48,22 @@ func TestExchangePolicy(t *testing.T) {
 		actor     bool
 		owner     func() oauth2.Client
 		self      bool
+		unaddress bool
 		requested string
 		hint      string
 	}{
-		{name: "ShouldRejectAnAccessTokenOfAPlainClient", owner: plain, hint: hintNotPermitted},
-		{name: "ShouldRejectAnAccessTokenWithAnEmptyList", owner: registered(), hint: hintNotPermitted},
+		{name: "ShouldAcceptAnAddressedAccessTokenOfAPlainClient", owner: plain},
+		{name: "ShouldAcceptAnAddressedAccessTokenWithAnEmptyList", owner: registered()},
+		{name: "ShouldRejectAnUnaddressedAccessTokenOfAPlainClient", owner: plain, unaddress: true, hint: hintNotAudience},
+		{name: "ShouldRejectAnUnaddressedAccessTokenWithAnEmptyList", owner: registered(), unaddress: true, hint: hintNotAudience},
+		{name: "ShouldRejectAnUnaddressedAccessTokenWhenListed", owner: registered(requesterID), unaddress: true, hint: hintNotAudience},
 		{name: "ShouldRejectAnAccessTokenWhenAnotherClientIsListed", owner: registered("someone-else"), hint: hintNotPermitted},
 		{name: "ShouldAcceptAnAccessTokenWhenListed", owner: registered(requesterID)},
 		{name: "ShouldRejectTheRequestersOwnAccessToken", self: true, hint: hintOwnAccess},
-		{name: "ShouldRejectAnActorAccessTokenOfAPlainClient", actor: true, owner: plain, hint: hintNotPermitted},
-		{name: "ShouldRejectAnActorAccessTokenWithAnEmptyList", actor: true, owner: registered(), hint: hintNotPermitted},
+		{name: "ShouldRejectAnAddressedActorAccessTokenOfAPlainClient", actor: true, owner: plain, hint: hintNotPermitted},
+		{name: "ShouldRejectAnAddressedActorAccessTokenWithAnEmptyList", actor: true, owner: registered(), hint: hintNotPermitted},
+		{name: "ShouldRejectAnUnaddressedActorAccessTokenWhenListed", actor: true, owner: registered(requesterID), unaddress: true, hint: hintNotAudience},
+		{name: "ShouldRejectAnActorAccessTokenWhenAnotherClientIsListed", actor: true, owner: registered("someone-else"), hint: hintNotPermitted},
 		{name: "ShouldAcceptAnActorAccessTokenWhenListed", actor: true, owner: registered(requesterID)},
 		{name: "ShouldAcceptTheRequestersOwnActorAccessToken", actor: true, self: true},
 		{name: "ShouldAcceptTheRequestersOwnRefreshToken", refresh: true, self: true},
@@ -84,7 +91,7 @@ func TestExchangePolicy(t *testing.T) {
 					owner = tc.owner()
 				}
 
-				token := policyToken(t, strategy, store, owner, tc.refresh)
+				token := policyToken(t, strategy, store, owner, tc.refresh, !tc.unaddress)
 
 				tokenType := consts.TokenTypeRFC8693AccessToken
 				if tc.refresh {
@@ -128,10 +135,14 @@ func TestExchangePolicy(t *testing.T) {
 	}
 }
 
-func policyToken(t *testing.T, strategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, owner oauth2.Client, refresh bool) string {
+func policyToken(t *testing.T, strategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, owner oauth2.Client, refresh, addressed bool) string {
 	t.Helper()
 
-	request := newIssuedRequest(owner, "peter", []string{consts.ScopeOpenID}, oauth2.AccessToken)
+	request := newUnaddressedRequest(owner, "peter", []string{consts.ScopeOpenID}, oauth2.AccessToken)
+
+	if addressed {
+		grantFixtureAudience(request)
+	}
 
 	if refresh {
 		request = newIssuedRequest(owner, "peter", []string{consts.ScopeOpenID}, oauth2.RefreshToken)

@@ -16,8 +16,8 @@ import (
 // which carries any of them, otherwise from the session ID token claims, and from IDJAGClaims only when neither of
 // those carries any of them.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-3.1
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-6
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-6
 type Session interface {
 	IDJAGClaims(ctx context.Context, relationship *oauth2.IDJAGRelationship) (claims map[string]any)
 }
@@ -26,7 +26,7 @@ type Session interface {
 // as issued, not what was granted: 'scope', 'resource' and 'authorization_details' may have been narrowed, so they
 // must not be copied into tokens as granted values.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 type RedeemSession interface {
 	SetIDJAGClaims(claims map[string]any)
 }

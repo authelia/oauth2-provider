@@ -151,6 +151,7 @@ func TestIDTokenTypeHandlerRejectsOtherJWTTypes(t *testing.T) {
 			}{
 				{"ShouldRejectAccessToken", consts.JSONWebTokenTypeAccessToken},
 				{"ShouldRejectLogoutToken", consts.JSONWebTokenTypeLogoutToken},
+				{"ShouldRejectIDJAG", consts.JSONWebTokenTypeIDJAG},
 			}
 
 			for _, tc := range rejected {

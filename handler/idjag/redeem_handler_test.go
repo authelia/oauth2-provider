@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -71,7 +73,7 @@ func TestRedeemHandlerValidation(t *testing.T) {
 			trusted.Clients = []string{"someone-else"}
 			store.IDJAGTrustedIssuers[redeemIssuer] = trusted
 		}, err: oauth2.ErrInvalidGrant},
-		// Section 9.3: the server MUST NOT redeem an ID-JAG it issued itself.
+		// Section 9.4: the server MUST NOT redeem an ID-JAG it issued itself.
 		{name: "ShouldRejectSelfIssued", setup: func(store *storage.MemoryStore) {
 			trusted := store.IDJAGTrustedIssuers[redeemIssuer]
 			trusted.Issuer = redeemAudience
@@ -130,14 +132,20 @@ func TestRedeemHandlerValidation(t *testing.T) {
 		}, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectUnknownKeyID", kid: "rotated-away", err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectClientWithoutGrantType", client: redeemNoGrant, err: oauth2.ErrUnauthorizedClient},
-		// Section 9.1: the grant is for confidential clients.
-		{name: "ShouldRejectPublicClient", client: redeemPublic, mutate: func(c map[string]any) { c["client_id"] = redeemPublic }, err: oauth2.ErrUnauthorizedClient},
-		// Section 9.8.1.2: the binding is enforced in the binding phase, not recorded by the grant.
-		{name: "ShouldAcceptConfirmation", dpop: true, mutate: func(c map[string]any) { c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT} }, subject: redeemSubject, scopes: []string{redeemRead, redeemHistory}},
-		{name: "ShouldFailClosedWhenDPoPDisabled", mutate: func(c map[string]any) { c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT} }, err: oauth2.ErrInvalidGrant},
+		// Section 4.4: the Resource Authorization Server SHOULD require client authentication.
+		{name: "ShouldRejectPublicClient", client: redeemPublic, mutate: func(c map[string]any) { c["client_id"] = redeemPublic }, err: oauth2.ErrInvalidClient},
+		// Section 9.11.1.2: the binding is enforced in the binding phase, not recorded by the grant.
+		{name: "ShouldAcceptConfirmation", grant: consts.GrantTypeOAuthJWTDPoP, client: redeemDPoP, dpop: true, mutate: func(c map[string]any) {
+			c["client_id"] = redeemDPoP
+			c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT}
+		}, subject: redeemSubject, scopes: []string{redeemRead, redeemHistory}},
+		{name: "ShouldFailClosedWhenDPoPDisabled", grant: consts.GrantTypeOAuthJWTDPoP, client: redeemDPoP, mutate: func(c map[string]any) {
+			c["client_id"] = redeemDPoP
+			c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT}
+		}, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectUnsupportedConfirmation", dpop: true, mutate: func(c map[string]any) { c["cnf"] = map[string]any{"x5t#S256": "abc"} }, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectMalformedThumbprint", dpop: true, mutate: func(c map[string]any) { c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: "short"} }, err: oauth2.ErrInvalidGrant},
-		// Section 9.8.1.2.1: a DPoP-bound grant presented with the 'jwt-dpop' grant type.
+		// Section 9.11.1.2.1: a DPoP-bound grant presented with the 'jwt-dpop' grant type.
 		{name: "ShouldRedeemBoundGrantWithJWTDPoP", grant: consts.GrantTypeOAuthJWTDPoP, client: redeemDPoP, dpop: true, mutate: func(c map[string]any) {
 			c["client_id"] = redeemDPoP
 			c["cnf"] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT}
@@ -210,7 +218,7 @@ func TestRedeemHandlerReplay(t *testing.T) {
 		singleUse bool
 		steps     []step
 	}{
-		// Section 4.4.3: the client MAY present the same grant again until it expires.
+		// Section 4.4.4: the client MAY present the same grant again until it expires.
 		{name: "ShouldPermitReuseByDefault", steps: []step{{request: 0, populate: true}, {request: 1, populate: true}}},
 		// RFC 7521 Section 4.1.1: a replayed assertion is an invalid grant.
 		{name: "ShouldRejectReuseWhenSingleUse", singleUse: true, steps: []step{{request: 0, populate: true}, {request: 1, err: oauth2.ErrInvalidGrant}}},
@@ -266,7 +274,7 @@ func TestRedeemHandlerDispatch(t *testing.T) {
 		{name: "ShouldLeaveAnotherJWTBearerAssertion", grants: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer}, typ: consts.JSONWebTokenTypeJWT, err: oauth2.ErrUnknownRequest},
 		{name: "ShouldLeaveAnotherJWTDPoPAssertion", grants: oauth2.Arguments{consts.GrantTypeOAuthJWTDPoP}, typ: consts.JSONWebTokenTypeJWT, err: oauth2.ErrUnknownRequest},
 		{name: "ShouldHandleJWTBearer", grants: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer}, can: true},
-		// Section 9.8.1.2.1: the 'jwt-dpop' grant type.
+		// Section 9.11.1.2.1: the 'jwt-dpop' grant type.
 		{name: "ShouldHandleJWTDPoP", grants: oauth2.Arguments{consts.GrantTypeOAuthJWTDPoP}, can: true},
 		{name: "ShouldNotHandleOtherGrantTypes", grants: oauth2.Arguments{consts.GrantTypeClientCredentials}, err: oauth2.ErrUnknownRequest},
 		{name: "ShouldNotHandleSeveralGrantTypes", grants: oauth2.Arguments{consts.GrantTypeOAuthJWTBearer, consts.GrantTypeOAuthJWTDPoP}, err: oauth2.ErrUnknownRequest},
@@ -279,7 +287,9 @@ func TestRedeemHandlerDispatch(t *testing.T) {
 			client.GrantTypes = oauth2.Arguments{consts.GrantTypeOAuthJWTBearer, consts.GrantTypeOAuthJWTDPoP}
 
 			claims := fixture.claims()
-			claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT}
+			if tc.grants.ExactOne(consts.GrantTypeOAuthJWTDPoP) {
+				claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationJWKThumbprint: redeemJKT}
+			}
 
 			request := newRedeemRequest(client, fixture.sign(t, claims, tc.typ, "", ""), nil)
 			request.GrantTypes = tc.grants
@@ -317,7 +327,7 @@ func TestRedeemHandlerPopulate(t *testing.T) {
 
 	assert.NotEmpty(t, response.GetAccessToken())
 	assert.Equal(t, oauth2.BearerAccessToken, response.GetTokenType())
-	// Section 4.4.3: no refresh token, even when 'offline_access' is granted.
+	// Section 4.4.4: no refresh token, even when 'offline_access' is granted.
 	assert.Empty(t, response.GetExtra(consts.AccessResponseRefreshToken))
 	assert.Equal(t, []string{redeemOffline, redeemRead}, []string(request.GetGrantedScopes()))
 	assert.Equal(t, redeemSubject, request.GetSession().(*redeemSession).claims[consts.ClaimSubject])
@@ -331,19 +341,24 @@ func TestRedeemHandlerResource(t *testing.T) {
 		requested []string
 		err       error
 		granted   []string
-		response  any
 	}{
 		{name: "ShouldOmitResourceWhenNoneIsGranted", claim: nil},
-		// Section 4.4.1: the granted resource is included in the access token response.
-		{name: "ShouldRespondWithASingleResource", claim: redeemResource, granted: []string{redeemResource}, response: redeemResource},
-		{name: "ShouldRespondWithSeveralResources", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, granted: []string{redeemResource, redeemOther}, response: []string{redeemResource, redeemOther}},
-		{name: "ShouldRespondWithOnlyTheGrantedResource", claim: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},
-		// RFC 8707 Section 2: the access token stays audience restricted to the resources of the grant.
-		{name: "ShouldRejectAGrantWhoseResourcesAreNotPermitted", claim: redeemOther, err: oauth2.ErrInvalidTarget},
-		{name: "ShouldRejectARequestedResourceTheClientIsNotPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, err: oauth2.ErrInvalidTarget},
+		{name: "ShouldGrantASingleResource", claim: redeemResource, granted: []string{redeemResource}},
+		{name: "ShouldGrantSeveralResources", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, granted: []string{redeemResource, redeemOther}},
+		{name: "ShouldGrantOnlyThePermittedResource", claim: []string{redeemResource, redeemOther}, granted: []string{redeemResource}},
+		// Section 4.4.1: none of the resources are acceptable.
+		{name: "ShouldRejectAGrantWhoseResourcesAreNotPermitted", claim: redeemOther, err: oauth2.ErrAccessDenied},
+		{name: "ShouldRejectARequestedResourceTheClientIsNotPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, err: oauth2.ErrAccessDenied},
+		// Section 4.4.1: a resource this server does not govern, which stops a relayed grant (Section 9.5).
+		{name: "ShouldRejectAResourceThatIsNotGoverned", claim: redeemEvil, permitted: []string{redeemEvil}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAGrantWithAnyResourceThatIsNotGoverned", claim: []string{redeemResource, redeemEvil}, permitted: []string{redeemResource, redeemEvil}, err: oauth2.ErrInvalidGrant},
+		// Section 3.1: a string or a non-empty array of unique strings.
+		{name: "ShouldRejectAnEmptyResourceArray", claim: []string{}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectDuplicateResources", claim: []string{redeemResource, redeemResource}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAnEmptyResource", claim: "", err: oauth2.ErrInvalidGrant},
 		// RFC 8707 Section 2.2: a requested resource narrows the grant.
-		{name: "ShouldNarrowToTheRequestedResource", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, granted: []string{redeemOther}, response: redeemOther},
-		{name: "ShouldNarrowToTheRequestedResourceTheClientIsPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemResource, redeemOther}, granted: []string{redeemResource}, response: redeemResource},
+		{name: "ShouldNarrowToTheRequestedResource", claim: []string{redeemResource, redeemOther}, permitted: []string{redeemResource, redeemOther}, requested: []string{redeemOther}, granted: []string{redeemOther}},
+		{name: "ShouldNarrowToTheRequestedResourceTheClientIsPermitted", claim: []string{redeemResource, redeemOther}, requested: []string{redeemResource, redeemOther}, granted: []string{redeemResource}},
 		{name: "ShouldRejectARequestedResourceOutsideTheGrant", claim: redeemResource, requested: []string{redeemEvil}, err: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectARequestedResourceWhenTheGrantHasNone", requested: []string{redeemResource}, err: oauth2.ErrInvalidTarget},
 	}
@@ -381,7 +396,8 @@ func TestRedeemHandlerResource(t *testing.T) {
 			require.NoError(t, fixture.handler.PopulateTokenEndpointResponse(t.Context(), request, response))
 
 			assert.ElementsMatch(t, tc.granted, request.GetGrantedResource())
-			assert.Equal(t, tc.response, response.GetExtra(consts.FormParameterResource))
+			// Section 4.4.1: the response carries no 'resource' parameter.
+			assert.Nil(t, response.GetExtra(consts.FormParameterResource))
 		})
 	}
 }
@@ -559,12 +575,12 @@ func TestRedeemHandlerBindAccessRequest(t *testing.T) {
 	}{
 		{name: "ShouldIgnoreOtherGrantTypes", grantType: consts.GrantTypeClientCredentials, mutate: cnf},
 		{name: "ShouldIgnoreOtherAssertionTypes", typ: "JWT", mutate: cnf},
-		// Section 9.8.1.2.3 and Section 9.8.1.2.4: a grant without 'cnf' is left to RFC 9449.
+		// Section 9.11.1.2.3 and Section 9.11.1.2.4: a grant without 'cnf' is left to RFC 9449.
 		{name: "ShouldAcceptUnboundGrantWithoutProof"},
 		{name: "ShouldAcceptUnboundGrantWithProof", proof: &oauth2.DPoPProof{Thumbprint: redeemJKT}},
-		// Section 9.8.1.2.2.
+		// Section 9.11.1.2.2.
 		{name: "ShouldRejectMissingProof", mutate: cnf, err: oauth2.ErrInvalidGrant},
-		// Section 9.8.1.2.1 step 4.
+		// Section 9.11.1.2.1 step 4.
 		{name: "ShouldRejectMismatchedProof", mutate: cnf, proof: &oauth2.DPoPProof{Thumbprint: redeemOtherJKT}, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldAcceptMatchingProof", mutate: cnf, proof: &oauth2.DPoPProof{Thumbprint: redeemJKT}},
 		{name: "ShouldRejectMissingProofWithJWTDPoP", grantType: consts.GrantTypeOAuthJWTDPoP, mutate: cnf, err: oauth2.ErrInvalidGrant},
@@ -614,18 +630,21 @@ func TestRedeemHandlerProofRequired(t *testing.T) {
 		grant   string
 		err     error
 	}{
-		// Section 9.8.1.2.2.
-		{name: "ShouldRejectBoundGrantWithoutProof", dpop: true, bound: true, err: oauth2.ErrInvalidGrant},
-		{name: "ShouldRejectBoundGrantWithoutProofWhenEnforced", dpop: true, enforce: true, bound: true, err: oauth2.ErrInvalidGrant},
-		{name: "ShouldLeaveTheProofToTheBindingPhase", dpop: true, enforce: true, bound: true, header: true},
-		{name: "ShouldRejectBoundGrantWithAnEmptyProof", dpop: true, bound: true, empty: true, err: oauth2.ErrInvalidGrant},
+		// Section 9.11.1.2.2.
+		{name: "ShouldRejectBoundGrantWithoutProof", dpop: true, bound: true, grant: consts.GrantTypeOAuthJWTDPoP, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectBoundGrantWithoutProofWhenEnforced", dpop: true, enforce: true, bound: true, grant: consts.GrantTypeOAuthJWTDPoP, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldLeaveTheProofToTheBindingPhase", dpop: true, enforce: true, bound: true, header: true, grant: consts.GrantTypeOAuthJWTDPoP},
+		{name: "ShouldRejectBoundGrantWithAnEmptyProof", dpop: true, bound: true, empty: true, grant: consts.GrantTypeOAuthJWTDPoP, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectJWTDPoPWithoutProof", dpop: true, bound: true, grant: consts.GrantTypeOAuthJWTDPoP, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldLeaveTheJWTDPoPProofToTheBindingPhase", dpop: true, bound: true, header: true, grant: consts.GrantTypeOAuthJWTDPoP},
-		{name: "ShouldLeaveTheBindingPhaseToEnforceWithoutTheHTTPRequest", dpop: true, bound: true, noHTTP: true},
-		// Section 9.8.1.2.4 item 2.
+		{name: "ShouldLeaveTheBindingPhaseToEnforceWithoutTheHTTPRequest", dpop: true, bound: true, noHTTP: true, grant: consts.GrantTypeOAuthJWTDPoP},
+		// draft-parecki-oauth-jwt-dpop-grant-02 Section 5.2: whether or not the request has a proof.
+		{name: "ShouldRejectBoundGrantPresentedAsJWTBearer", dpop: true, bound: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectBoundGrantPresentedAsJWTBearerWithAProof", dpop: true, bound: true, header: true, err: oauth2.ErrInvalidGrant},
+		// Section 9.11.1.2.4 item 2.
 		{name: "ShouldRejectUnboundGrantWithoutProofWhenEnforced", dpop: true, enforce: true, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldRejectUnboundGrantWithoutProofWhenTheClientRequiresDPoP", dpop: true, client: true, err: oauth2.ErrInvalidGrant},
-		// Section 9.8.1.2.4 item 1.
+		// Section 9.11.1.2.4 item 1.
 		{name: "ShouldAcceptUnboundGrantWithoutProofByDefault", dpop: true},
 		{name: "ShouldAcceptUnboundGrantWhenDPoPIsDisabled", client: true},
 	}
@@ -678,6 +697,167 @@ func TestRedeemHandlerProofRequired(t *testing.T) {
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 		})
 	}
+}
+
+func TestRedeemHandlerCertificateBinding(t *testing.T) {
+	certificate := gen.MustCertificate(gen.CertificateOptions{})
+	other := gen.MustCertificate(gen.CertificateOptions{})
+	thumbprint := oauth2.X509CertificateSHA256Thumbprint(certificate)
+
+	testCases := []struct {
+		name    string
+		mtls    bool
+		enforce bool
+		bound   bool
+		cert    *x509.Certificate
+		grant   string
+		noHTTP  bool
+		err     error
+	}{
+		// Section 9.11.2.2.
+		{name: "ShouldAcceptAMatchingCertificate", mtls: true, bound: true, cert: certificate},
+		{name: "ShouldRejectAMismatchedCertificate", mtls: true, bound: true, cert: other, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAMissingCertificate", mtls: true, bound: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectACertificateBoundGrantWithJWTDPoP", mtls: true, bound: true, cert: certificate, grant: consts.GrantTypeOAuthJWTDPoP, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldAcceptAnUnboundGrantWithACertificate", mtls: true, cert: certificate},
+		{name: "ShouldAcceptAnUnboundGrantWithoutACertificate", mtls: true},
+		{name: "ShouldRejectAnUnboundGrantWithoutACertificateWhenEnforced", mtls: true, enforce: true, err: oauth2.ErrInvalidGrant},
+		// Section 9.11: an unsupported confirmation method.
+		{name: "ShouldRejectACertificateBoundGrantWhenMTLSIsDisabled", bound: true, cert: certificate, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldFailClosedWithoutTheHTTPRequest", mtls: true, bound: true, noHTTP: true, err: oauth2.ErrServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newRedeemFixture(t, false)
+			fixture.config.MTLSEnabled = tc.mtls
+			fixture.config.MTLSEnforce = tc.enforce
+
+			claims := fixture.claims()
+			if tc.bound {
+				claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationX509SHA256Thumbprint: thumbprint}
+			}
+
+			client := fixture.store.Clients[redeemClient]
+			if tc.grant != "" {
+				client = fixture.store.Clients[redeemDPoP]
+				claims[consts.ClaimClientIdentifier] = redeemDPoP
+			}
+
+			request := newRedeemRequest(client, fixture.sign(t, claims, "", "", ""), nil)
+			setGrantType(request, tc.grant)
+
+			ctx := t.Context()
+
+			if !tc.noHTTP {
+				r := httptest.NewRequest(http.MethodPost, redeemEndpoint, nil)
+				if tc.cert != nil {
+					r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{tc.cert}}
+				}
+
+				ctx = context.WithValue(ctx, oauth2.RequestContextKey, r)
+			}
+
+			err := fixture.handler.HandleTokenEndpointRequest(ctx, request)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			session, ok := request.GetSession().(oauth2.MTLSBoundSession)
+			require.True(t, ok)
+
+			if tc.bound {
+				assert.Equal(t, thumbprint, session.GetClientCertificateSHA256Thumbprint())
+			} else {
+				assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())
+			}
+		})
+	}
+}
+
+func TestRedeemHandlerTenant(t *testing.T) {
+	const (
+		tenantAcme  = "acme"
+		tenantOther = "other"
+	)
+
+	testCases := []struct {
+		name   string
+		multi  bool
+		mutate func(map[string]any)
+		err    error
+	}{
+		{name: "ShouldIgnoreTheTenantOfASingleTenantIssuer"},
+		// Section 4.4.1.
+		{name: "ShouldRejectAMissingTenant", multi: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectATenantThatIsNotAString", multi: true, mutate: func(c map[string]any) { c[consts.ClaimTenant] = 1 }, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAnUntrustedTenant", multi: true, mutate: func(c map[string]any) { c[consts.ClaimTenant] = tenantOther }, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectATrustedTenantForAnotherRecipient", multi: true, mutate: func(c map[string]any) {
+			c[consts.ClaimTenant] = tenantAcme
+			c[consts.ClaimAudienceTenant] = tenantOther
+		}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAnAmbiguousRecipient", multi: true, mutate: func(c map[string]any) {
+			c[consts.ClaimTenant] = tenantAcme
+			c[consts.ClaimAudienceTenant] = 1
+		}, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldAcceptATrustedTenant", multi: true, mutate: func(c map[string]any) { c[consts.ClaimTenant] = tenantAcme }},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newRedeemFixture(t, false)
+
+			trusted := fixture.store.IDJAGTrustedIssuers[redeemIssuer]
+			trusted.MultiTenant = tc.multi
+			fixture.store.IDJAGTrustedIssuers[redeemIssuer] = trusted
+			fixture.store.IDJAGTenants[storage.IDJAGTenantKey{Issuer: redeemIssuer, Tenant: tenantAcme}] = struct{}{}
+			fixture.store.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: redeemIssuer, Tenant: tenantAcme, Subject: redeemSubject}] = redeemSubject
+
+			claims := fixture.claims()
+			if tc.mutate != nil {
+				tc.mutate(claims)
+			}
+
+			request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, claims, "", "", ""), nil)
+
+			err := fixture.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
+// Section 3.2.2: a transient NameID Format cannot serve as a cross-trust-domain identifier.
+func TestRedeemHandlerRejectsATransientSubjectIdentifier(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+
+	claims := fixture.claims()
+	claims[consts.ClaimSubjectIdentifier] = map[string]any{issueMemberFormat: issueNameIDFormat, "issuer": redeemIssuer, "nameid": redeemSubject, issueMemberNameIDFormat: issueNameIDTransient}
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, claims, "", "", ""), nil)
+
+	require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrInvalidGrant)
+}
+
+// Section 4.4.3: storage may answer access_denied for a valid grant.
+func TestRedeemHandlerSurfacesAccessDeniedFromStorage(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+	fixture.handler.Storage = deniedSubjectStorage{RedeemStorage: fixture.store}
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, fixture.claims(), "", "", ""), nil)
+
+	require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrAccessDenied)
 }
 
 func TestRedeemHandlerPopulateBoundTokenEndpointResponse(t *testing.T) {
@@ -838,6 +1018,14 @@ type redeemFixture struct {
 	claimsScope string
 }
 
+type deniedSubjectStorage struct {
+	idjag.RedeemStorage
+}
+
+func (deniedSubjectStorage) ResolveIDJAGSubject(context.Context, oauth2.Client, map[string]any) (string, error) {
+	return "", oauth2.ErrAccessDenied
+}
+
 func newRedeemFixture(t *testing.T, dpop bool) *redeemFixture {
 	t.Helper()
 
@@ -882,6 +1070,8 @@ func newRedeemFixture(t *testing.T, dpop bool) *redeemFixture {
 		SigningAlgs: []string{string(jose.RS256)},
 	}
 	store.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: redeemIssuer, Subject: redeemSubject}] = redeemSubject
+	store.IDJAGResources[storage.IDJAGResourceKey{Issuer: redeemIssuer, Resource: redeemResource}] = struct{}{}
+	store.IDJAGResources[storage.IDJAGResourceKey{Issuer: redeemIssuer, Resource: redeemOther}] = struct{}{}
 
 	strategy := compose.NewOAuth2HMACStrategy(config)
 

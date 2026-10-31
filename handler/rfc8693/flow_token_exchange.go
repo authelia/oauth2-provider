@@ -47,6 +47,11 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	client := request.GetClient()
 
 	if client.IsPublic() {
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+		if IsIDJAGRequest(ctx, request, c.Config) {
+			return errors.WithStack(oauth2.ErrInvalidClient.WithHintf("A '%s' requires client authentication.", consts.TokenTypeRFC8693IDJAG))
+		}
+
 		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:token-exchange'."))
 	}
 
@@ -154,6 +159,11 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		switch subjectTokenType {
 		case consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693IDJAG:
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+		}
+
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+		if len(request.GetRequestedAudience()) != 1 {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Exactly one '%s' is required when the '%s' is '%s'.", consts.FormParameterAudience, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
 		}
 
 		return nil
@@ -427,7 +437,7 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.AccessRequest
 // IsIDJAGRequest returns true when the resolved 'requested_token_type' of the request is an Identity Assertion JWT
 // Authorization Grant.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
 func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
 	requested := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
 	if requested == "" {
@@ -485,7 +495,7 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 
 	if role == tokenRoleSubject && IsIDJAGRequest(ctx, request, config) {
 		if !self {
-			return errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The subject token was not issued to the OAuth 2.0 client requesting a '%s'.", consts.TokenTypeRFC8693IDJAG))
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The subject token was not issued to the OAuth 2.0 client requesting a '%s'.", consts.TokenTypeRFC8693IDJAG))
 		}
 
 		return nil

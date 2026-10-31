@@ -22,7 +22,13 @@ import (
 // with an ID Token as the 'subject_token' cannot request a scope. For the same reason an ID Token is only issued for
 // an ID Token or refresh token 'subject_token'.
 //
+// OpenID Connect defines no 'typ' value for an ID Token, so openid.DefaultIDTokenValidationStrategy only rejects a token
+// whose 'typ' identifies another type. A deployment that signs other JWTs for the client with the ID Token key and issuer
+// MUST positively identify an ID Token with its own openid.TokenValidationStrategy, for example by a claim or a reserved
+// key.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc8693
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 type IDTokenTypeHandler struct {
 	Config oauth2.Configurator
 

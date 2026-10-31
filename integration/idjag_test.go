@@ -7,6 +7,8 @@ package integration_test
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -88,14 +90,14 @@ func TestIDJAG(t *testing.T) {
 				assert.Equal(t, []any{idjagAMR}, claims[consts.ClaimAuthenticationMethodsReference])
 				assert.InDelta(t, float64(time.Now().Add(-idjagAuthAge).Unix()), claims[consts.ClaimAuthenticationTime], 5)
 
-				// Section 4.4: redemption at the Resource AS, and again per Section 4.4.3.
+				// Section 4.4: redemption at the Resource AS, and again per Section 4.4.4.
 				for range 2 {
 					status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), "")
 
 					require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
 					assert.Equal(t, oauth2.BearerAccessToken, redeemed.TokenType)
 					assert.Equal(t, idjagScope, redeemed.Scope)
-					assert.Equal(t, env.rs.URL+idjagResourcePath, redeemed.Resource)
+					assert.Nil(t, redeemed.Resource)
 					assert.LessOrEqual(t, redeemed.ExpiresIn, int64(time.Until(time.Unix(int64(claims[consts.ClaimExpirationTime].(float64)), 0)).Seconds())+1)
 					assert.NotEmpty(t, redeemed.AccessToken)
 					assert.Empty(t, redeemed.RefreshToken)
@@ -173,14 +175,15 @@ func TestIDJAG(t *testing.T) {
 					expected        string
 					err             string
 				}{
-					// Section 4.3.3: the requested scopes, audience and resources remain within the authorization context of the refresh token.
-					{name: "ShouldRejectAScopeNotGranted", grantedScopes: []string{idjagOtherScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidScope.ErrorField},
+					// Section 4.3.3: the scopes have the meaning of the Resource Authorization Server.
+					{name: "ShouldAcceptAScopeNotGranted", grantedScopes: []string{idjagOtherScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, expected: idjagScope},
+					// Section 4.3.3: the audience and resources are not restricted by the IdP.
 					{name: "ShouldRejectAnAudienceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagOtherTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
 					{name: "ShouldRejectAnAudienceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
 					{name: "ShouldRejectAResourceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagOtherTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
 					{name: "ShouldRejectAResourceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
 					// Section 4.3.3: the refresh token is validated as for a refresh_token grant, against the current registration.
-					{name: "ShouldRejectAScopeRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(_ *idjagEnvironment, client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, err: oauth2.ErrInvalidScope.ErrorField},
+					{name: "ShouldAcceptAScopeRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(_ *idjagEnvironment, client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, expected: idjagScope},
 					{name: "ShouldRejectAnAudienceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) {
 						client.Audience = []string{env.rs.URL + idjagResourcePath}
 					}, err: oauth2.ErrInvalidTarget.ErrorField},
@@ -243,7 +246,7 @@ func TestIDJAG(t *testing.T) {
 
 				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
 
-				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), proof)
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 
 				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
 				assert.Equal(t, oauth2.DPoPAccessToken, redeemed.TokenType)
@@ -256,9 +259,9 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, newDPoPProofKey(t))
 
-				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "")
+				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), "")
 
-				// Section 9.8.1.2.2.
+				// Section 9.11.1.2.2.
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_grant", errBody.Error)
 			})
@@ -270,14 +273,14 @@ func TestIDJAG(t *testing.T) {
 
 				proof := signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, env.rs.URL+tokenRelativePath, nil)
 
-				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), proof)
+				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 
-				// Section 9.8.1.2.1.
+				// Section 9.11.1.2.1.
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_grant", errBody.Error)
 			})
 
-			// Section 9.8.1.2.1 and draft-parecki-oauth-jwt-dpop-grant-01 Section 4.
+			// Section 9.11.1.2.1 and draft-parecki-oauth-jwt-dpop-grant-02 Section 4.
 			t.Run("ShouldRedeemWithJWTDPoP", func(t *testing.T) {
 				testCases := []struct {
 					name      string
@@ -300,9 +303,9 @@ func TestIDJAG(t *testing.T) {
 						env := newIDJAGEnvironment(t, s.new)
 						key := newDPoPProofKey(t)
 
-						if !tc.withheld {
+						if tc.withheld {
 							client := env.rsMemory.Clients[idjagRSClientID].(*oauth2.DefaultClient)
-							client.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer, consts.GrantTypeOAuthJWTDPoP}
+							client.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 						}
 
 						var grant string
@@ -333,18 +336,18 @@ func TestIDJAG(t *testing.T) {
 				}
 			})
 
-			// Section 9.8.1.2.2: the Resource Server requires DPoP.
+			// Section 9.11.1.2.2: the Resource Server requires DPoP.
 			t.Run("ShouldRejectMissingProofWhenEnforced", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new, idjagOptions{enforce: true})
 
 				grant := env.exchangeWithDPoP(t, newDPoPProofKey(t))
 
-				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "")
+				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), "")
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, errBody.Error, "%+v", errBody)
 			})
 
-			// Section 9.8.1.2.4 item 2.
+			// Section 9.11.1.2.4 item 2.
 			t.Run("ShouldRejectUnboundGrantWithoutProofWhenEnforced", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new, idjagOptions{enforce: true})
 
@@ -359,7 +362,7 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, newDPoPProofKey(t))
 
-				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "not-a-proof")
+				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), "not-a-proof")
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, oauth2.ErrInvalidDPoPProof.ErrorField, errBody.Error, "%+v", errBody)
 			})
@@ -372,12 +375,12 @@ func TestIDJAG(t *testing.T) {
 
 				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
 
-				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), proof)
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
 				assert.Equal(t, oauth2.DPoPAccessToken, redeemed.TokenType)
 			})
 
-			// Section 9.8.1.2.3: an unbound grant presented with a proof yields a DPoP-bound access token.
+			// Section 9.11.1.2.3: an unbound grant presented with a proof yields a DPoP-bound access token.
 			t.Run("ShouldBindUnboundGrantPresentedWithProof", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)
 
@@ -428,13 +431,13 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, key)
 
-				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "")
+				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), "")
 				require.Equal(t, http.StatusBadRequest, status)
 				require.Equal(t, oauth2.ErrInvalidGrant.ErrorField, errBody.Error)
 
 				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
 
-				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), proof)
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
 				assert.Equal(t, oauth2.DPoPAccessToken, redeemed.TokenType)
 			})
@@ -487,24 +490,19 @@ func TestIDJAG(t *testing.T) {
 				assert.Equal(t, oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate}}}, ar.GetGrantedAuthorizationDetails())
 			})
 
-			t.Run("ShouldBoundARefreshTokenSubjectAuthorizationDetailsByItsGrant", func(t *testing.T) {
+			// Section 4.3.3: the details have the meaning of the Resource Authorization Server, so policy evaluates them.
+			t.Run("ShouldEvaluateRefreshTokenSubjectAuthorizationDetailsByPolicy", func(t *testing.T) {
 				initiate := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate}}
-				both := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate, idjagStatus}}
-				account := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagInitiate, idjagStatus}, Identifier: new(idjagAccount)}
 
 				testCases := []struct {
 					name      string
 					granted   oauth2.AuthorizationDetails
 					requested string
-					expected  string
 					err       string
 				}{
-					// Section 4.3.3: the requested details remain within the authorization context of the refresh token.
-					{name: "ShouldAcceptContainedDetails", granted: oauth2.AuthorizationDetails{both}, requested: idjagDetailsStatus, expected: idjagDetailsStatus},
-					{name: "ShouldCarryGrantedMembersOmittedFromRequestedDetails", granted: oauth2.AuthorizationDetails{account}, requested: idjagDetailsStatus, expected: `[{"type":"payment_initiation","actions":["status"],"identifier":"account-1"}]`},
-					{name: "ShouldCarryGrantedDetailsSelectedByType", granted: oauth2.AuthorizationDetails{account}, requested: `[{"type":"payment_initiation"}]`, expected: `[{"type":"payment_initiation","actions":["initiate","status"],"identifier":"account-1"}]`},
-					{name: "ShouldRejectDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: idjagDetailsStatus, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
-					{name: "ShouldRejectDetailsWhenNoneWereGranted", requested: idjagDetailsInitiate, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
+					{name: "ShouldAcceptDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: idjagDetailsStatus},
+					{name: "ShouldAcceptDetailsWhenNoneWereGranted", requested: idjagDetailsInitiate},
+					{name: "ShouldRejectDetailsTheTypeHandlerRefuses", requested: `[{"type":"payment_initiation"}]`, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
 				}
 
 				for _, tc := range testCases {
@@ -525,15 +523,42 @@ func TestIDJAG(t *testing.T) {
 						}
 
 						require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
-						assert.JSONEq(t, tc.expected, string(token.AuthorizationDetails))
-
-						_, claims := env.decodeIDJAG(t, token.AccessToken)
-
-						carried, err := json.Marshal(claims[consts.ClaimAuthorizationDetails])
-						require.NoError(t, err)
-						assert.JSONEq(t, tc.expected, string(carried))
+						assert.JSONEq(t, tc.requested, string(token.AuthorizationDetails))
 					})
 				}
+			})
+
+			// Section 9.11.2: a certificate-bound grant, issued and redeemed through the composed providers.
+			t.Run("ShouldBindWithACertificate", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new, idjagOptions{mtls: true})
+
+				certificate, other := gen.MustCertificate(gen.CertificateOptions{}), gen.MustCertificate(gen.CertificateOptions{})
+				thumbprint := oauth2.X509CertificateSHA256Thumbprint(certificate)
+
+				status, token, errBody := postIDJAGTokenWithCertificate(t, env.idp, idjagIdPClientID, env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL), certificate)
+				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+
+				_, claims := env.decodeIDJAG(t, token.AccessToken)
+				assert.Equal(t, map[string]any{consts.ClaimConfirmationX509SHA256Thumbprint: thumbprint}, claims[consts.ClaimConfirmation])
+
+				status, _, errBody = postIDJAGTokenWithCertificate(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), nil)
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, errBody.Error)
+
+				status, _, errBody = postIDJAGTokenWithCertificate(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), other)
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, errBody.Error)
+
+				status, redeemed, errBody := postIDJAGTokenWithCertificate(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), certificate)
+				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
+				assert.Equal(t, oauth2.BearerAccessToken, redeemed.TokenType)
+
+				_, requester, err := env.rsProvider.IntrospectToken(t.Context(), redeemed.AccessToken, oauth2.AccessToken, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				session, ok := requester.GetSession().(oauth2.MTLSBoundSession)
+				require.True(t, ok)
+				assert.Equal(t, thumbprint, session.GetClientCertificateSHA256Thumbprint())
 			})
 
 			t.Run("ShouldCarryAuthorizationDetailsNumbersExactly", func(t *testing.T) {
@@ -565,7 +590,7 @@ func TestIDJAG(t *testing.T) {
 				assert.NotContains(t, claims, consts.ClaimAuthorizationDetails)
 			})
 
-			// Section 9.1: the grant is for confidential clients.
+			// Section 4.4: the Resource Authorization Server SHOULD require client authentication.
 			t.Run("ShouldRejectPublicClient", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)
 
@@ -585,8 +610,8 @@ func TestIDJAG(t *testing.T) {
 
 				status, redeemed, errBody := postIDJAGToken(t, env.rs, "", form, "")
 
-				assert.Equal(t, http.StatusBadRequest, status)
-				assert.Equal(t, "unauthorized_client", errBody.Error)
+				assert.Equal(t, http.StatusUnauthorized, status)
+				assert.Equal(t, "invalid_client", errBody.Error)
 				assert.Empty(t, redeemed.AccessToken)
 			})
 
@@ -620,6 +645,7 @@ type idjagOptions struct {
 	singleUse      bool
 	skipClientAuth bool
 	rar            bool
+	mtls           bool
 }
 
 type idjagEnvironment struct {
@@ -700,6 +726,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		compose.IDJAGIssueFactory,
 		compose.RFC8693ActorTokenValidationFactory,
 		compose.DPoPTokenFactory,
+		compose.RFC8705Factory,
 	)
 
 	idpMux.HandleFunc(tokenRelativePath, idjagTokenHandler(idpProvider, func() oauth2.Session { return rfc8693.NewDefaultSession() }))
@@ -715,6 +742,11 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		rsConfig.IDJAGSingleUse = opts[0].singleUse
 		rsConfig.GrantTypeJWTBearerCanSkipClientAuth = opts[0].skipClientAuth
 
+		if opts[0].mtls {
+			idpConfig.MTLSEnabled, idpConfig.MTLSEnforce, idpConfig.MTLSClientCertificateHeader = true, true, idjagCertificateHeader
+			rsConfig.MTLSEnabled, rsConfig.MTLSClientCertificateHeader = true, idjagCertificateHeader
+		}
+
 		if opts[0].rar {
 			idpConfig.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
 			rsConfig.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
@@ -728,7 +760,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 	rsMemory.Clients[idjagRSClientID] = &oauth2.DefaultClient{
 		ID:           idjagRSClientID,
 		ClientSecret: oauth2.NewBCryptClientSecret(idjagSecretHash),
-		GrantTypes:   []string{consts.GrantTypeOAuthJWTBearer},
+		GrantTypes:   []string{consts.GrantTypeOAuthJWTBearer, consts.GrantTypeOAuthJWTDPoP},
 		Scopes:       []string{idjagScope},
 		Resource:     []string{env.rs.URL + idjagResourcePath},
 	}
@@ -744,6 +776,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		SigningAlgs: []string{string(jose.RS256)},
 	}
 	rsMemory.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: env.idp.URL, Subject: idjagSubject}] = idjagSubject
+	rsMemory.IDJAGResources[storage.IDJAGResourceKey{Issuer: env.idp.URL, Resource: env.rs.URL + idjagResourcePath}] = struct{}{}
 
 	rsJWT := &jwt.DefaultStrategy{Config: rsConfig, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
@@ -756,6 +789,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 		},
 		compose.RFC7523AssertionGrantFactory,
 		compose.DPoPTokenFactory,
+		compose.RFC8705Factory,
 		compose.IDJAGRedeemFactory,
 		compose.OAuth2TokenIntrospectionFactory,
 	)
@@ -887,6 +921,13 @@ func (env *idjagEnvironment) decodeIDJAG(t *testing.T, raw string) (typ string, 
 	return typ, claims
 }
 
+func idjagDPoPRedeemForm(assertion string) url.Values {
+	form := idjagRedeemForm(assertion)
+	form.Set(consts.FormParameterGrantType, consts.GrantTypeOAuthJWTDPoP)
+
+	return form
+}
+
 func idjagRedeemForm(assertion string) url.Values {
 	return url.Values{
 		consts.FormParameterGrantType: {consts.GrantTypeOAuthJWTBearer},
@@ -914,6 +955,38 @@ func idjagTokenHandler(provider oauth2.Provider, newSession func() oauth2.Sessio
 
 		provider.WriteAccessResponse(ctx, rw, request, response)
 	}
+}
+
+const idjagCertificateHeader = "X-Client-Certificate"
+
+func postIDJAGTokenWithCertificate(t *testing.T, ts *httptest.Server, clientID string, form url.Values, certificate *x509.Certificate) (status int, token idjagTokenResponse, errBody oidckbErrorResponse) {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+tokenRelativePath, strings.NewReader(form.Encode()))
+	require.NoError(t, err)
+
+	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+	req.SetBasicAuth(clientID, idjagClientSecret)
+
+	if certificate != nil {
+		req.Header.Set(idjagCertificateHeader, base64.StdEncoding.EncodeToString(certificate.Raw))
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		require.NoError(t, json.Unmarshal(body, &errBody), "error response: %s", body)
+	} else {
+		require.NoError(t, json.Unmarshal(body, &token), "token response: %s", body)
+	}
+
+	return resp.StatusCode, token, errBody
 }
 
 func postIDJAGToken(t *testing.T, ts *httptest.Server, clientID string, form url.Values, dpopProof string) (status int, token idjagTokenResponse, errBody oidckbErrorResponse) {

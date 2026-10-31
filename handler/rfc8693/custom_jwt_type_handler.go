@@ -28,7 +28,7 @@ import (
 // not an access token type, and its 'scope' claim does not limit the requested scopes.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.3.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 type CustomJWTTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 

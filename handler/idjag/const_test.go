@@ -20,6 +20,11 @@ const (
 	issueAudienceTyped = "urn:example:typed"
 	issueAudienceNone  = "urn:example:none"
 	issueOtherType     = "other_type"
+
+	issueMemberFormat       = "format"
+	issueMemberNameIDFormat = "nameid_format"
+	issueNameIDFormat       = "saml-nameid"
+	issueNameIDTransient    = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"
 )
 
 const (

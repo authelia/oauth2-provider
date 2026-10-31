@@ -14,7 +14,7 @@ import (
 // IsIDJAGAssertion returns true when the JOSE 'typ' header of assertion identifies an Identity Assertion JWT
 // Authorization Grant, which this handler leaves to the handler for that profile.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-04#section-4.4.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 func IsIDJAGAssertion(assertion string) bool {
 	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
 	if err != nil {

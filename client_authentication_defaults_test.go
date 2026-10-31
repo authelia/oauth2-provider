@@ -93,6 +93,50 @@ func TestDefaultJARClientTokenEndpointAuthDefaults(t *testing.T) {
 			method: consts.ClientAuthMethodPrivateKeyJWT,
 		},
 		{
+			// RFC 7517 Section 4.2 and Section 4.4.
+			name: "ShouldAuthenticatePrivateKeyJWTWithABareKey",
+			client: &DefaultJARClient{
+				DefaultClient:           &DefaultClient{ID: "test"},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			},
+			form:   formAssertion(mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "", key)),
+			method: consts.ClientAuthMethodPrivateKeyJWT,
+		},
+		{
+			// RFC 7517 Section 4.2 and Section 4.4.
+			name: "ShouldAuthenticatePrivateKeyJWTWithAKeyWithoutUseOrAlg",
+			client: &DefaultJARClient{
+				DefaultClient:           &DefaultClient{ID: "test"},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			},
+			form:   formAssertion(mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)),
+			method: consts.ClientAuthMethodPrivateKeyJWT,
+		},
+		{
+			// RFC 7517 Section 4.2 and Section 4.4.
+			name: "ShouldAuthenticatePrivateKeyJWTWithAKeyWithoutUse",
+			client: &DefaultJARClient{
+				DefaultClient:           &DefaultClient{ID: "test"},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Algorithm: "ES256", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			},
+			form:   formAssertion(mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)),
+			method: consts.ClientAuthMethodPrivateKeyJWT,
+		},
+		{
+			// RFC 7517 Section 4.2 and Section 4.4.
+			name: "ShouldAuthenticatePrivateKeyJWTWithAKeyWithoutAlg",
+			client: &DefaultJARClient{
+				DefaultClient:           &DefaultClient{ID: "test"},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Use: "sig", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			},
+			form:   formAssertion(mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)),
+			method: consts.ClientAuthMethodPrivateKeyJWT,
+		},
+		{
 			name: "ShouldRejectAnAlgorithmOtherThanTheRegisteredSigningAlg",
 			client: &DefaultJARClient{
 				DefaultClient:               &DefaultClient{ID: "test"},

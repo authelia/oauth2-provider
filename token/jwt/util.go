@@ -8,6 +8,10 @@ import (
 	"context"
 	"crypto"
 	"crypto/aes"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -15,6 +19,7 @@ import (
 	"hash"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -215,9 +220,19 @@ func FindClientPublicJWK(ctx context.Context, client BaseClient, fetcher JWKSFet
 }
 
 // SearchJWKS returns the key from the jose.JSONWebKeySet which matches the alg and use values, and the kid value when
-// it is not empty. When more than one key matches the first is returned, unless strict is true in which case an error
-// is returned.
+// it is not empty. A key naming both the alg and use values is preferred. Otherwise a key that omits either member
+// matches when its key type can be used with the alg value, as RFC 7517 Sections 4.2 and 4.4 make both members optional,
+// and is returned with both members set to these values. Such a key must also permit the operation in its 'key_ops'
+// member when it has one, per RFC 7517 Section 4.3.
+// When more than one key matches the first is returned, unless strict is true in which case an error is returned.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7517#section-4.2, https://www.rfc-editor.org/rfc/rfc7517#section-4.3, and
+// https://www.rfc-editor.org/rfc/rfc7517#section-4.4
 func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (key *jose.JSONWebKey, err error) {
+	return searchJWKS(jwks, kid, alg, use, strict, true)
+}
+
+func searchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict, optional bool) (key *jose.JSONWebKey, err error) {
 	if len(jwks.Keys) == 0 {
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}
 	}
@@ -234,18 +249,21 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 		return nil, &JWKLookupError{Description: fmt.Sprintf("The JSON Web Token uses signing key with kid '%s' which was not found", kid)}
 	}
 
-	var matched []jose.JSONWebKey
+	var matched, compatible []jose.JSONWebKey
 
 	for _, k := range keys {
-		if k.Use != use {
-			continue
-		}
+		switch {
+		case k.Use == use && k.Algorithm == alg:
+			matched = append(matched, k)
+		case optional && isJWKCompatible(k, alg, use):
+			k.Use, k.Algorithm = use, alg
 
-		if k.Algorithm != alg {
-			continue
+			compatible = append(compatible, k)
 		}
+	}
 
-		matched = append(matched, k)
+	if len(matched) == 0 {
+		matched = compatible
 	}
 
 	switch len(matched) {
@@ -260,6 +278,73 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 
 		return &matched[0], nil
 	}
+}
+
+func isJWKCompatible(jwk jose.JSONWebKey, alg, use string) bool {
+	return (jwk.Use == "" || jwk.Use == use) && (jwk.Algorithm == "" || jwk.Algorithm == alg) && isJWKOperationPermitted(jwk, alg, use) && isJWKUsableWithAlg(jwk, alg, use)
+}
+
+func isJWKOperationPermitted(jwk jose.JSONWebKey, alg, use string) bool {
+	if jwk.KeyOps == nil {
+		return true
+	}
+
+	var operations []string
+
+	switch {
+	case use == JSONWebTokenUseSignature:
+		operations = []string{"sign", "verify"}
+	case slices.Contains([]jose.KeyAlgorithm{jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW}, jose.KeyAlgorithm(alg)):
+		operations = []string{"deriveKey"}
+	default:
+		operations = []string{"wrapKey", "unwrapKey"}
+	}
+
+	return slices.ContainsFunc(jwk.KeyOps, func(operation string) bool {
+		return slices.Contains(operations, operation)
+	})
+}
+
+func isJWKUsableWithAlg(jwk jose.JSONWebKey, alg, use string) bool {
+	switch use {
+	case JSONWebTokenUseSignature:
+		switch public := jwk.Public().Key.(type) {
+		case *rsa.PublicKey:
+			switch jose.SignatureAlgorithm(alg) {
+			case jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512:
+				return true
+			}
+		case *ecdsa.PublicKey:
+			switch jose.SignatureAlgorithm(alg) {
+			case jose.ES256:
+				return public.Curve == elliptic.P256()
+			case jose.ES384:
+				return public.Curve == elliptic.P384()
+			case jose.ES512:
+				return public.Curve == elliptic.P521()
+			}
+		case ed25519.PublicKey:
+			switch jose.SignatureAlgorithm(alg) {
+			case jose.EdDSA, jose.Ed25519:
+				return true
+			}
+		}
+	case JSONWebTokenUseEncryption:
+		switch jwk.Public().Key.(type) {
+		case *rsa.PublicKey:
+			switch jose.KeyAlgorithm(alg) {
+			case jose.RSA1_5, jose.RSA_OAEP, jose.RSA_OAEP_256:
+				return true
+			}
+		case *ecdsa.PublicKey:
+			switch jose.KeyAlgorithm(alg) {
+			case jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW:
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // NewClientSecretJWKFromClient returns a client secret based JWK from a client.

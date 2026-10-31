@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -44,7 +45,7 @@ func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Contex
 			return "", errorsx.WithStack(oauth2.ErrUnknownRequest)
 		}
 
-		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
+		return "", errorsx.WithStack(hoauth2.IntrospectionStorageError(err))
 	}
 
 	if err = v.Strategy.ValidateClientRegistrationToken(ctx, original, token); err != nil {

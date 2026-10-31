@@ -145,7 +145,9 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		// covering "expired, revoked, malformed, or invalid for other reasons", so an unresolvable credential and
 		// one of the wrong kind stay indistinguishable on the wire; the distinction goes in the debug field, which
 		// only a deployment that opts in surfaces.
-		if use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); err != nil {
+		if use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); errors.Is(err, ErrServerError) {
+			return nil, err
+		} else if err != nil {
 			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithWrap(err).WithDebugError(err))
 		} else if use != "" && use != AccessToken {
 			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithDebugf("The HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))

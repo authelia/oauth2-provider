@@ -120,6 +120,8 @@ func mintJWTSessionAccessToken(ctx context.Context, strategy hoauth2.CoreStrateg
 		Request:    oauth2.Request{ID: uuid.New().String(), RequestedAt: time.Now().UTC(), Session: session, Client: client},
 	}
 
+	grantFixtureAudience(request)
+
 	token, signature, err := strategy.GenerateAccessToken(ctx, request)
 	if err != nil {
 		panic(err.Error())

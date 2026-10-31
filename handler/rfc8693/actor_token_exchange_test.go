@@ -381,6 +381,20 @@ func createExchangeRefreshToken(t *testing.T, strategy hoauth2.CoreStrategy, sto
 }
 
 func newIssuedRequest(client oauth2.Client, subject string, scopes []string, key oauth2.TokenType) *oauth2.AccessRequest {
+	request := newUnaddressedRequest(client, subject, scopes, key)
+
+	grantFixtureAudience(request)
+
+	return request
+}
+
+func grantFixtureAudience(request *oauth2.AccessRequest) {
+	for _, audience := range []string{"my-client", "requester", "chaining-client", "exchange-client", "exchange-refresh-client"} {
+		request.GrantAudience(audience)
+	}
+}
+
+func newUnaddressedRequest(client oauth2.Client, subject string, scopes []string, key oauth2.TokenType) *oauth2.AccessRequest {
 	return &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
 		Request: oauth2.Request{

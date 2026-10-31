@@ -78,8 +78,10 @@ type DefaultRegisteredClient struct {
 	TokenExchangeActorTokenTypes   []string `json:"token_exchange_actor_token_types"`
 	TokenExchangeRequestTokenTypes []string `json:"token_exchange_request_token_types"`
 
-	// TokenExchangePermittedClientIDs lists the other clients which may exchange an access token issued to this client.
-	// An empty list permits none. A refresh token is only ever exchanged by this client.
+	// TokenExchangePermittedClientIDs restricts the other clients which may exchange an access token issued to this
+	// client. An empty list applies no restriction to a subject token, as the access token's audience must include the
+	// other client either way, and permits no actor token, which requires the other client to be listed. A refresh token
+	// is only ever exchanged by this client.
 	TokenExchangePermittedClientIDs []string `json:"token_exchange_permitted_client_ids"`
 
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
@@ -552,14 +554,20 @@ func (c *DefaultRegisteredClient) GetAuthorizationGrantProfilesSupported() (prof
 // recommendation that the exchange be restricted "to only those clients explicitly authorized to perform the exchange
 // operation".
 //
-// An empty list permits no other client. The requested token type is not consulted, so a deployment needing a rule of
-// that shape supplies its own client type.
+// An empty list applies no restriction, as the token's audience must include the client either way. The requested token
+// type is not consulted, so a deployment needing a rule of that shape supplies its own client type.
 func (c *DefaultRegisteredClient) GetTokenExchangePermitted(client Client, requestedTokenType RFC8693TokenType) (allowed bool) {
 	if client == nil {
 		return false
 	}
 
-	return slices.Contains(c.TokenExchangePermittedClientIDs, client.GetID())
+	return len(c.TokenExchangePermittedClientIDs) == 0 || slices.Contains(c.TokenExchangePermittedClientIDs, client.GetID())
+}
+
+// GetActorTokenExchangePermitted reports whether client is listed as permitted to present an access token issued to this
+// client as an 'actor_token'. An empty list permits no other client.
+func (c *DefaultRegisteredClient) GetActorTokenExchangePermitted(client Client, requestedTokenType RFC8693TokenType) (allowed bool) {
+	return client != nil && slices.Contains(c.TokenExchangePermittedClientIDs, client.GetID())
 }
 
 // GetAllowActorTokenWithoutMayAct reports false: delegation on a subject token carrying no 'may_act' claim requires

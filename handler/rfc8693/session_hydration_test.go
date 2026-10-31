@@ -189,6 +189,8 @@ func createSessionAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStra
 		Client:     client,
 	}
 
+	grantFixtureAudience(request)
+
 	token, signature, err := coreStrategy.GenerateAccessToken(ctx, request)
 	if err != nil {
 		panic(err.Error())

@@ -554,7 +554,7 @@ func TestAuthorizationGrantPolicyOfOtherClients(t *testing.T) {
 	}{
 		{name: "ShouldAcceptAPermittedClient", permitted: []string{"chaining-client"}},
 		{name: "ShouldRejectAClientNotPermitted", permitted: []string{"someone-else"}, expected: oauth2.ErrInvalidRequest},
-		{name: "ShouldRejectWithAnEmptyList", expected: oauth2.ErrInvalidRequest},
+		{name: "ShouldAcceptAnAddressedTokenWithAnEmptyList"},
 	}
 
 	for _, tc := range testCases {
@@ -759,6 +759,8 @@ func (f *grantFixture) mint(t *testing.T, client oauth2.Client, subject string, 
 		GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 		Request:    oauth2.Request{ID: uuid.New().String(), Client: client, Session: session, GrantedScope: scopes},
 	}
+
+	grantFixtureAudience(request)
 
 	token, signature, err := f.core.GenerateAccessToken(t.Context(), request)
 	require.NoError(t, err)

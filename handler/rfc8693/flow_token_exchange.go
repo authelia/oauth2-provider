@@ -328,6 +328,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The subject token has an '%s' claim so an '%s' is required.", consts.ClaimActor, consts.FormParameterActorToken))
 	}
 
+	if requestedTokenType == consts.TokenTypeRFC8693RefreshToken && !allowsRefreshTokenIssuance(request.GetClient()) {
+		return errRefreshTokenIssuance()
+	}
+
 	if err = c.consume(ctx, request, session); err != nil {
 		return err
 	}
@@ -646,6 +650,16 @@ func allowsOwnAccessTokenExchange(client oauth2.Client) bool {
 	c, ok := client.(OwnAccessTokenExchangeClient)
 
 	return ok && c.GetAllowOwnAccessTokenExchange()
+}
+
+func allowsRefreshTokenIssuance(client oauth2.Client) bool {
+	c, ok := client.(RefreshTokenIssuanceClient)
+
+	return ok && c.GetAllowTokenExchangeRefreshToken()
+}
+
+func errRefreshTokenIssuance() error {
+	return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not permitted to be issued a refresh token via token exchange."))
 }
 
 func validateSubjectTokenScope(request oauth2.AccessRequester, granted []string) (err error) {

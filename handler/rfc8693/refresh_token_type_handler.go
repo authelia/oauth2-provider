@@ -23,7 +23,8 @@ import (
 // RefreshTokenTypeHandler validates a refresh token 'subject_token' or 'actor_token' and issues refresh tokens.
 //
 // A refresh token is only issued when the 'subject_token' is itself a refresh token, the case RFC 8693 Section 2.2.1
-// describes of a client that needs access once the original credential is no longer valid, and never outlives it.
+// describes of a client that needs access once the original credential is no longer valid, and the client opts in with
+// GetAllowTokenExchangeRefreshToken. It never outlives the 'subject_token'.
 //
 // RefreshTokenLifespan applies unless the client sets its own lifespan for the token exchange grant. A value of -1
 // removes the configured limit, but the refresh token still expires with the 'subject_token'.
@@ -348,6 +349,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	// AS must refuse with the spec-appropriate code if policy disallows it rather than silently downgrading.
 	if !isRefreshTokenSubject(request) {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("A refresh token can only be issued by a token exchange whose '%s' is a refresh token.", consts.FormParameterSubjectToken))
+	}
+
+	if !allowsRefreshTokenIssuance(request.GetClient()) {
+		return errRefreshTokenIssuance()
 	}
 
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {

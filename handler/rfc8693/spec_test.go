@@ -418,7 +418,7 @@ func TestSpec_RefreshTokenExchange_RejectsWhenRefreshScopeNotGranted(t *testing.
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
 			ID:     uuid.New().String(),
-			Client: newConfidentialClientWithRefresh(),
+			Client: permittingOwner(newConfidentialClientWithRefresh()),
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
@@ -723,7 +723,7 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
 			ID:     uuid.New().String(),
-			Client: store.Clients["my-client"],
+			Client: permittingOwner(store.Clients["my-client"]),
 			Form: url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterSubjectTokenType:   {subjectTokenType},

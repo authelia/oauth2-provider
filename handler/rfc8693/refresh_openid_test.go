@@ -58,12 +58,12 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 
 				store, memory := newStore()
 
-				memory.Clients[refreshOpenIDExchanger] = &oauth2.DefaultClient{
+				memory.Clients[refreshOpenIDExchanger] = &oauth2.DefaultRegisteredClient{TokenExchangeRefreshToken: true, DefaultClient: &oauth2.DefaultClient{
 					ID:           refreshOpenIDExchanger,
 					ClientSecret: oauth2.NewPlainTextClientSecret(refreshOpenIDSecret),
 					GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
 					Scopes:       granted,
-				}
+				}}
 
 				config := &oauth2.Config{
 					GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),

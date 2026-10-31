@@ -21,8 +21,9 @@ import (
 //
 // An issued access token, and any refresh token issued with it, never outlives the 'subject_token', as RFC 8693
 // Section 5 suggests a limited token lifetime to mitigate abuse of delegated rights. A refresh token is only issued
-// with the access token when the 'subject_token' is itself a refresh token: RFC 8693 Section 2.2.1 states one will
-// typically not be issued when a temporary credential is exchanged for another.
+// with the access token when the 'subject_token' is itself a refresh token and the client opts in with
+// GetAllowTokenExchangeRefreshToken: RFC 8693 Section 2.2.1 states one will typically not be issued when a temporary
+// credential is exchanged for another.
 //
 // AccessTokenLifespan and RefreshTokenLifespan apply unless the client sets its own lifespans for the token exchange
 // grant. A RefreshTokenLifespan of -1 removes the configured limit, but the refresh token still expires with the
@@ -241,6 +242,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 func (c *AccessTokenTypeHandler) canIssueRefreshToken(request oauth2.Requester) bool {
 	if !isRefreshTokenSubject(request) {
+		return false
+	}
+
+	if !allowsRefreshTokenIssuance(request.GetClient()) {
 		return false
 	}
 

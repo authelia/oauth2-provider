@@ -45,6 +45,8 @@ func (c *permittingOwnerClient) GetAllowActorTokenWithoutMayAct() bool { return 
 
 func (c *permittingOwnerClient) GetAllowOwnAccessTokenExchange() bool { return false }
 
+func (c *permittingOwnerClient) GetAllowTokenExchangeRefreshToken() bool { return true }
+
 type basicClient struct {
 	oauth2.Client
 }

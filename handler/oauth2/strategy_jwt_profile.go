@@ -201,10 +201,10 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 // 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
 // bindings recorded on the session.
 //
-// RFC 9068 Section 2.2 requires the 'aud' and 'sub' claims, so a token that would have neither a value for them nor a
-// default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider, which is also
-// recorded as granted. The 'sub' claim defaults to the session subject, then for a grant with no resource owner the
-// client identifier.
+// RFC 9068 Section 2.2 requires the 'iss', 'exp', 'aud' and 'sub' claims, so a token that would have no value for one of
+// them nor a default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider,
+// which is also recorded as granted. The 'sub' claim defaults to the session subject, then for a grant with no resource
+// owner the client identifier.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-3
@@ -247,6 +247,14 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 		)
 
 	mapClaims := claims.ToMapClaims()
+
+	if issuer, _ := mapClaims[consts.ClaimIssuer].(string); issuer == "" {
+		return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires an 'iss' claim, but neither the session nor the configured access token issuer provides one."))
+	}
+
+	if session.GetExpiresAt(tokenType).Unix() <= 0 {
+		return "", "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("A JWT profile access token requires an 'exp' claim, but the session has no expiry for it."))
+	}
 
 	if err = applyDefaultSubject(mapClaims, request, session); err != nil {
 		return "", "", err

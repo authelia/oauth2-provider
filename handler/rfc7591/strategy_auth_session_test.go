@@ -16,8 +16,10 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc9449"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 type sessionBindingStore interface {
@@ -60,7 +62,7 @@ func TestAuthReadsTheSessionStateOfEverySessionType(t *testing.T) {
 					request := oauth2.NewRequest()
 					request.Client = &oauth2.DefaultClient{ID: "onboarding"}
 					request.Session = session
-					request.GrantScope("authelia:oauth2:client_registration")
+					request.GrantScope(consts.ScopeClientRegistration)
 					request.GrantAudience(testEndpoint)
 
 					token, signature, err := auth.AccessTokenStrategy.GenerateAccessToken(ctx, request)
@@ -146,6 +148,60 @@ func TestAuthReadsTheSessionStateOfEverySessionType(t *testing.T) {
 
 					assert.NoError(t, err)
 				})
+			})
+		}
+	}
+}
+
+func TestAuthReadsThePolicyClaimOfEverySessionType(t *testing.T) {
+	stores := map[string]func() sessionBindingStore{
+		"MemoryStore":          func() sessionBindingStore { return storage.NewMemoryStore() },
+		"HydratingMemoryStore": func() sessionBindingStore { return storage.NewHydratingMemoryStore() },
+	}
+
+	policy := map[string]any{"client_name": map[string]any{"one_of": []any{"a"}}}
+	claim := "https://auth.example.com/registration_policy"
+	expiry := map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)}
+
+	sessions := map[string]oauth2.Session{
+		"DefaultSession": &oauth2.DefaultSession{ExpiresAt: expiry, Extra: map[string]any{claim: policy}},
+		"JWTSession":     &hoauth2.JWTSession{ExpiresAt: expiry, JWTClaims: &jwt.JWTClaims{Extra: map[string]any{claim: policy}}},
+	}
+
+	for storeName, newStore := range stores {
+		for sessionName, session := range sessions {
+			t.Run(storeName+"/"+sessionName, func(t *testing.T) {
+				ctx := context.Background()
+
+				config := &oauth2.Config{
+					GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+					RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+					RFC7591ClientRegistrationPolicyClaim:  claim,
+					TokenEntropy:                          32,
+				}
+
+				store := newStore()
+				access := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+				auth := NewDefaultEndpointAuthStrategy(config, store, access, access)
+
+				request := oauth2.NewRequest()
+				request.Client = &oauth2.DefaultClient{ID: "onboarding"}
+				request.Session = session
+				request.GrantScope(consts.ScopeClientRegistration)
+				request.GrantAudience(testEndpoint)
+
+				token, signature, err := access.GenerateAccessToken(ctx, request)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+				requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
+				require.NoError(t, err)
+
+				actual, ok := requester.(RegistrationPolicyRequester).GetRegistrationPolicyClaim()
+
+				assert.True(t, ok)
+				assert.Equal(t, policy, actual)
 			})
 		}
 	}

@@ -127,10 +127,12 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	extraClaimsSession, ok := r.GetAccessRequester().GetSession().(ExtraClaimsSession)
 	if ok {
 		extraClaims := extraClaimsSession.GetExtraClaims()
+		policyClaim := f.Config.GetRFC7591ClientRegistrationPolicyClaim(ctx)
+
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails:
+			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails, policyClaim:
 				continue
 			default:
 				response[name] = value

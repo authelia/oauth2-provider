@@ -46,6 +46,10 @@ type DefaultRegisteredClient struct {
 	SoftwareStatement       string              `json:"software_statement"`
 	SoftwareVersion         string              `json:"software_version"`
 
+	// SoftwareStatementMembers names the metadata members whose values were taken from a verified software statement
+	// (RFC 7591 Section 2.3), sorted. Every other value is self-asserted by the registrant (RFC 7591 Section 5).
+	SoftwareStatementMembers []string `json:"software_statement_members,omitempty"`
+
 	// OpenID Connect Dynamic Client Registration 1.0 Section 2 client metadata not already covered by DefaultClient.
 	//
 	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
@@ -211,6 +215,12 @@ func (c *DefaultRegisteredClient) GetRequestURIs() []string {
 // GetIDTokenSignedResponseKeyID returns the 'id_token_signed_response_kid' client metadata value.
 func (c *DefaultRegisteredClient) GetIDTokenSignedResponseKeyID() string {
 	return c.IDTokenSignedResponseKeyID
+}
+
+// GetSoftwareStatementMembers returns the metadata members whose values were taken from a verified software
+// statement.
+func (c *DefaultRegisteredClient) GetSoftwareStatementMembers() (members []string) {
+	return c.SoftwareStatementMembers
 }
 
 // GetIDTokenSignedResponseAlg returns the 'id_token_signed_response_alg' value, defaulting to RS256 when unset per
@@ -562,6 +572,7 @@ func (c *DefaultRegisteredClient) GetAllowActorTokenWithoutMayAct() (allow bool)
 var (
 	_ Client                                      = (*DefaultRegisteredClient)(nil)
 	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
+	_ SoftwareStatementClient                     = (*DefaultRegisteredClient)(nil)
 	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
 	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
 	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)

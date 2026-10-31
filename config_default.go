@@ -9,6 +9,7 @@ import (
 	"hash"
 	"html/template"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -551,6 +552,39 @@ type Config struct {
 	// RFC7591ClientRegistrationGrantTypes are the grant types a client may register for. Empty permits any grant.
 	// See GetRFC7591ClientRegistrationGrantTypes for why, and when a deployment should set it.
 	RFC7591ClientRegistrationGrantTypes []string
+
+	// RFC7591ClientRegistrationPolicyClaim is the name of the claim carrying the registration policy. When empty it
+	// defaults to the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy'.
+	RFC7591ClientRegistrationPolicyClaim string
+
+	// RFC7591ClientRegistrationStatelessAccessTokens accepts a JWT client creation token issued by this server without
+	// consulting access token storage, in which case it cannot be revoked before it expires. A token whose registration
+	// policy sets 'max_registrations' is always resolved from storage.
+	RFC7591ClientRegistrationStatelessAccessTokens bool
+
+	// RFC7591ClientRegistrationTrustedIssuers are the issuers trusted to issue JWT client creation tokens, with or
+	// without a registration policy claim. They are only consulted when a JWT strategy is available.
+	RFC7591ClientRegistrationTrustedIssuers []RFC7591TrustedIssuer
+
+	// RFC7591ClientRegistrationPatternIssuers are the trusted issuers whose registration policies may hold 'pattern'
+	// rules. A policy from this server may always hold them.
+	RFC7591ClientRegistrationPatternIssuers []string
+
+	// RFC7591SoftwareStatementIssuers are the issuers whose software statements (RFC 7591 Section 2.3) are approved.
+	// A request carrying a software statement from any other issuer is rejected; when empty every software statement
+	// is rejected.
+	RFC7591SoftwareStatementIssuers []RFC7591TrustedIssuer
+
+	// RFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType accepts a software statement without a 'typ' header,
+	// provided 'JWT' is one of RFC7591SoftwareStatementJWTValidationHeaderAllowTypes.
+	RFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType bool
+
+	// RFC7591SoftwareStatementJWTValidationHeaderAllowTypes are the 'typ' header values a software statement may carry.
+	// When empty it defaults to 'software-statement+jwt' alone.
+	RFC7591SoftwareStatementJWTValidationHeaderAllowTypes []string
+
+	// RFC7591SoftwareStatementRequireSoftwareID requires a software statement to carry a non-empty 'software_id'.
+	RFC7591SoftwareStatementRequireSoftwareID bool
 
 	formPostResponseWriterOnce                  sync.Once
 	responseModeHandlersOnce                    sync.Once
@@ -1526,6 +1560,66 @@ func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (gr
 	return c.RFC7591ClientRegistrationGrantTypes
 }
 
+// GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim carrying the registration policy. Defaults to
+// the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy', or
+// 'authelia:oauth2:dynamic-client-registration:policy' when there is no issuer.
+func (c *Config) GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string) {
+	if c.RFC7591ClientRegistrationPolicyClaim != "" {
+		return c.RFC7591ClientRegistrationPolicyClaim
+	}
+
+	if issuer := strings.TrimSuffix(c.GetAccessTokenIssuer(ctx), "/"); issuer != "" {
+		return issuer + ":authelia:oauth2:dynamic-client-registration:policy"
+	}
+
+	return "authelia:oauth2:dynamic-client-registration:policy"
+}
+
+// GetRFC7591ClientRegistrationStatelessAccessTokens returns true if a JWT client creation token issued by this server
+// is accepted without consulting access token storage.
+func (c *Config) GetRFC7591ClientRegistrationStatelessAccessTokens(ctx context.Context) (enabled bool) {
+	return c.RFC7591ClientRegistrationStatelessAccessTokens
+}
+
+// GetRFC7591ClientRegistrationTrustedIssuers returns the issuers trusted to issue JWT client creation tokens, with or
+// without a registration policy claim.
+func (c *Config) GetRFC7591ClientRegistrationTrustedIssuers(ctx context.Context) (issuers []RFC7591TrustedIssuer) {
+	return c.RFC7591ClientRegistrationTrustedIssuers
+}
+
+// GetRFC7591ClientRegistrationPatternIssuers returns the trusted issuers whose registration policies may hold 'pattern'
+// rules.
+func (c *Config) GetRFC7591ClientRegistrationPatternIssuers(ctx context.Context) (issuers []string) {
+	return c.RFC7591ClientRegistrationPatternIssuers
+}
+
+// GetRFC7591SoftwareStatementIssuers returns the issuers whose software statements are approved.
+func (c *Config) GetRFC7591SoftwareStatementIssuers(ctx context.Context) (issuers []RFC7591TrustedIssuer) {
+	return c.RFC7591SoftwareStatementIssuers
+}
+
+// GetRFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType returns true if a software statement without a 'typ'
+// header is accepted.
+func (c *Config) GetRFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType(ctx context.Context) (allow bool) {
+	return c.RFC7591SoftwareStatementJWTValidationHeaderAllowEmptyType
+}
+
+// GetRFC7591SoftwareStatementJWTValidationHeaderAllowTypes returns the 'typ' header values a software statement may
+// carry, defaulting to 'software-statement+jwt' alone.
+func (c *Config) GetRFC7591SoftwareStatementJWTValidationHeaderAllowTypes(ctx context.Context) (types []string) {
+	if len(c.RFC7591SoftwareStatementJWTValidationHeaderAllowTypes) == 0 {
+		return []string{consts.JSONWebTokenTypeSoftwareStatement}
+	}
+
+	return c.RFC7591SoftwareStatementJWTValidationHeaderAllowTypes
+}
+
+// GetRFC7591SoftwareStatementRequireSoftwareID returns true if a software statement must carry a non-empty
+// 'software_id'.
+func (c *Config) GetRFC7591SoftwareStatementRequireSoftwareID(ctx context.Context) (require bool) {
+	return c.RFC7591SoftwareStatementRequireSoftwareID
+}
+
 // GetRFC7591ClientRegistrationScopes returns the scopes a client creation token may carry. Defaults to
 // consts.ScopeClientRegistration.
 func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string) {
@@ -1616,6 +1710,7 @@ var (
 	_ MTLSConfigProvider                                    = (*Config)(nil)
 	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
+	_ RFC7591ClientRegistrationPolicyProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
 	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)
 )

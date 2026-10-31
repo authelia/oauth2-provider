@@ -15,7 +15,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-func TestDefaultResourceMatchingStrategy(t *testing.T) {
+func TestPrefixResourceStrategy(t *testing.T) {
 	const debugPrefix = "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. "
 
 	testCases := []struct {
@@ -124,17 +124,29 @@ func TestDefaultResourceMatchingStrategy(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := DefaultResourceStrategy(tc.haystack, tc.needle)
+	strategies := []struct {
+		name     string
+		strategy ResourceStrategy
+	}{
+		{name: "PrefixResourceStrategy", strategy: PrefixResourceStrategy},
+		{name: "DefaultResourceStrategy", strategy: DefaultResourceStrategy},
+	}
 
-			if tc.expected != "" {
-				assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+	for _, s := range strategies {
+		t.Run(s.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					actual := s.strategy(tc.haystack, tc.needle)
 
-				return
+					if tc.expected != "" {
+						assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.expected)
+
+						return
+					}
+
+					require.NoError(t, ErrorToDebugRFC6749Error(actual))
+				})
 			}
-
-			require.NoError(t, ErrorToDebugRFC6749Error(actual))
 		})
 	}
 }

@@ -36,10 +36,17 @@ func GetResourceStrategy(ctx context.Context, config ResourceStrategyProvider, c
 	return strategy
 }
 
-// DefaultResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list,
-// accepting a requested resource at or below a registered one as IsMatchingResourceIndicator describes. It is not the
-// default; it applies only when configured as the ResourceStrategy.
+// DefaultResourceStrategy is an alias for PrefixResourceStrategy. It is not the default; it applies only when configured
+// as the ResourceStrategy.
 func DefaultResourceStrategy(haystack, needle []string) (err error) {
+	return PrefixResourceStrategy(haystack, needle)
+}
+
+// PrefixResourceStrategy matches requested RFC 8707 resource indicators against the client's allowed resource list,
+// accepting a requested resource at or below a registered one as IsMatchingResourceIndicator describes. The prefix ends
+// on a path segment boundary, so 'https://example.com/api' covers 'https://example.com/api/users' and not
+// 'https://example.com/api2'. It applies only when configured as the ResourceStrategy.
+func PrefixResourceStrategy(haystack, needle []string) (err error) {
 	if len(needle) == 0 {
 		return nil
 	}

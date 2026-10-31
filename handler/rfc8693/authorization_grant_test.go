@@ -147,7 +147,7 @@ func TestAuthorizationGrantSubjectToken(t *testing.T) {
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
 
-		require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	})
 
 	t.Run("ShouldStillRejectAPublicClient", func(t *testing.T) {
@@ -553,7 +553,8 @@ func TestAuthorizationGrantPolicyOfOtherClients(t *testing.T) {
 		expected  error
 	}{
 		{name: "ShouldAcceptAPermittedClient", permitted: []string{"chaining-client"}},
-		{name: "ShouldRejectAClientNotPermitted", permitted: []string{"someone-else"}, expected: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectAClientNotPermitted", permitted: []string{"someone-else"}, expected: oauth2.ErrInvalidRequest},
+		{name: "ShouldRejectWithAnEmptyList", expected: oauth2.ErrInvalidRequest},
 	}
 
 	for _, tc := range testCases {
@@ -776,7 +777,7 @@ func (f *grantFixture) exchange(t *testing.T, e grantExchange) (*oauth2.AccessRe
 
 	owner := f.requester
 	if e.subjectClient != "" {
-		owner = f.owners[e.subjectClient]
+		owner = permittingOwner(f.owners[e.subjectClient])
 	}
 
 	if e.subjectOwner != nil {

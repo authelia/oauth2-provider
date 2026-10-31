@@ -340,8 +340,8 @@ func TestIDJAGRequestRefreshTokenAuthenticationContext(t *testing.T) {
 		{name: "ShouldCarryOnlyThePresentAuthenticationContext", owner: idjagClientID, requested: consts.TokenTypeRFC8693IDJAG, login: &jwt.IDTokenClaims{Subject: idjagSubject, AuthenticationContextClassReference: idjagACR}, expected: map[string]any{consts.ClaimAuthenticationContextClassReference: idjagACR}},
 		{name: "ShouldOmitAnAuthenticationContextTheLoginLacks", owner: idjagClientID, requested: consts.TokenTypeRFC8693IDJAG, login: &jwt.IDTokenClaims{Subject: idjagSubject}},
 		{name: "ShouldOmitTheAuthenticationContextWithoutIDTokenClaims", owner: idjagClientID, requested: consts.TokenTypeRFC8693IDJAG},
-		{name: "ShouldNotCarryTheAuthenticationContextIntoAnAccessToken", owner: idjagOtherOwner, requested: consts.TokenTypeRFC8693AccessToken, login: login},
-		{name: "ShouldNotCarryTheAuthenticationContextIntoARefreshToken", owner: idjagOtherOwner, requested: consts.TokenTypeRFC8693RefreshToken, login: login},
+		{name: "ShouldNotCarryTheAuthenticationContextIntoAnAccessToken", owner: idjagClientID, requested: consts.TokenTypeRFC8693AccessToken, login: login},
+		{name: "ShouldNotCarryTheAuthenticationContextIntoARefreshToken", owner: idjagClientID, requested: consts.TokenTypeRFC8693RefreshToken, login: login},
 	}
 
 	for _, tc := range testCases {
@@ -415,7 +415,7 @@ func TestIDJAGRequestOtherExchangesKeepTheRefreshTokenAudience(t *testing.T) {
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 
 			request := newExchangeRequest(t, store.Clients[idjagClientID], newSpecSession(idjagSubject), url.Values{
-				consts.FormParameterSubjectToken:       {createIDJAGRefreshToken(t, strategy, store, store.Clients[idjagOtherOwner], []string{idjagScope}, nil, nil)},
+				consts.FormParameterSubjectToken:       {createIDJAGRefreshToken(t, strategy, store, store.Clients[idjagClientID], []string{idjagScope}, nil, nil)},
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterRequestedTokenType: {tc.requested},
 			})
@@ -440,7 +440,7 @@ func TestIDJAGRequestOtherRequestedTypesUnchanged(t *testing.T) {
 		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693AccessToken},
 	})
 
-	require.ErrorIs(t, handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrInvalidGrant)
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
 }
 
 func TestIDJAGCustomJWTSubjectRejected(t *testing.T) {

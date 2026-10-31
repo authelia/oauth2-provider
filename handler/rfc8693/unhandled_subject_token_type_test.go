@@ -364,6 +364,7 @@ func TestExchangeWithoutActorTokenValidationRejectsAnUnvalidatedActorToken(t *te
 	cfg, store, strategy := newExchangeFixture(t)
 
 	client := &rfc8693Client{DefaultClient: newConfidentialClient(), exchangePermitted: true, allow: true}
+	client.GrantTypes = append(client.GrantTypes, consts.GrantTypeRefreshToken)
 
 	handlers := []oauth2.TokenEndpointHandler{
 		newAccessTokenTypeHandler(cfg, store, strategy),
@@ -382,7 +383,7 @@ func TestExchangeWithoutActorTokenValidationRejectsAnUnvalidatedActorToken(t *te
 		consts.FormParameterActorTokenType:     {consts.TokenTypeRFC8693AccessToken},
 		consts.FormParameterActorToken:         {createExchangeAccessToken(t, strategy, store, client, "bob")},
 		consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
-		consts.FormParameterSubjectToken:       {createExchangeRefreshToken(t, strategy, store, store.Clients["custom-lifespan-client"], "alice")},
+		consts.FormParameterSubjectToken:       {createExchangeRefreshToken(t, strategy, store, client, "alice")},
 		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693AccessToken},
 	})
 

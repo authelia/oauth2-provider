@@ -20,11 +20,10 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 	const hintNoGrant = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not allowed to use authorization grant 'refresh_token'."
 
 	testCases := []struct {
-		name         string
-		actor        bool
-		grantTypes   []string
-		unregistered bool
-		expected     string
+		name       string
+		actor      bool
+		grantTypes []string
+		expected   string
 	}{
 		{
 			name:       "ShouldAcceptASubjectTokenOfAClientWithTheGrant",
@@ -46,11 +45,6 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			grantTypes: []string{consts.GrantTypeAuthorizationCode},
 			expected:   hintNoGrant,
 		},
-		{
-			name:         "ShouldRejectATokenOfAClientNoLongerRegistered",
-			unregistered: true,
-			expected:     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The OAuth 2.0 Client the refresh token was issued to is not registered.",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -67,11 +61,7 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original.Sanitize(nil)))
 
-			if tc.unregistered {
-				delete(store.Clients, owner.ID)
-			} else {
-				store.Clients[owner.ID] = &oauth2.DefaultClient{ID: owner.ID, GrantTypes: tc.grantTypes, Scopes: owner.Scopes}
-			}
+			requester := &oauth2.DefaultClient{ID: owner.ID, GrantTypes: tc.grantTypes, Scopes: owner.Scopes}
 
 			form := url.Values{
 				consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},
@@ -87,7 +77,7 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 				}
 			}
 
-			request := newExchangeRequest(t, store.Clients["my-client"], newSpecSession(""), form)
+			request := newExchangeRequest(t, requester, newSpecSession(""), form)
 
 			err = newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(t.Context(), request)
 

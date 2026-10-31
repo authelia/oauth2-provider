@@ -179,6 +179,8 @@ func TestTokenExchangeReadsExtraClaimsFromAForeignSession(t *testing.T) {
 }
 
 func createSessionAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, store hoauth2.AccessTokenStorage, client oauth2.Client, session oauth2.Session) string {
+	client = permittingOwner(client)
+
 	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(10*time.Minute))
 
 	request := &oauth2.AccessRequest{

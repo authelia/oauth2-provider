@@ -76,7 +76,7 @@ func TestTokenExchangeRequiresAnEnabledVerifierForABinding(t *testing.T) {
 					config, strategy := newBindingExchangeConfig()
 					config.DPoPEnabled, config.MTLSEnabled = tc.dpop, tc.mtls
 
-					token := createBoundRefreshToken(t.Context(), strategy, store, store.GetClients()["custom-lifespan-client"], bind)
+					token := createBoundRefreshToken(t.Context(), strategy, store, store.GetClients()["my-client"], bind)
 
 					check(t, newLifetimeRefreshTokenHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, token, "")))
 				})
@@ -161,7 +161,7 @@ func TestTokenExchangeRequiresAnEnabledVerifierForARefreshTokenActor(t *testing.
 				config, strategy := newBindingExchangeConfig()
 				config.DPoPEnabled = tc.enabled
 
-				token := createBoundRefreshToken(t.Context(), strategy, store, store.GetClients()["custom-lifespan-client"], func(session *oauth2.DefaultSession) {
+				token := createBoundRefreshToken(t.Context(), strategy, store, store.GetClients()["my-client"], func(session *oauth2.DefaultSession) {
 					session.SetDPoPJWKThumbprint(bindingJKT)
 				})
 

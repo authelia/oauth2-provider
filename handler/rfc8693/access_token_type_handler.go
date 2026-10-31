@@ -167,7 +167,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 		return nil, nil, errExchangeTokenValidation(err)
 	}
 
-	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), original, role); err != nil {
+	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), original, role, false); err != nil {
 		return nil, nil, err
 	}
 

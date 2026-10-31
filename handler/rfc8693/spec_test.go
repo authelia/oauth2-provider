@@ -322,7 +322,7 @@ func TestSpec_2_2_ResponseShape_CustomJWT(t *testing.T) {
 }
 
 // §5.2 'invalid_grant': self-exchange (client exchanges its own subject token) MUST fail.
-func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
+func TestSpec_2_2_2_Errors_OwnAccessTokenExchangeReturnsInvalidRequest(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
 
@@ -356,7 +356,7 @@ func TestSpec_2_4_Errors_SelfExchangeReturnsInvalidGrant(t *testing.T) {
 
 	err := handler.HandleTokenEndpointRequest(context.Background(), req)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant, "RFC 6749 §5.2: subject token issued to another client MUST yield invalid_grant; self-exchange is the inverse case")
+	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }
 
 // RFC 6749 §5.2 'unauthorized_client': a refresh token is refused for a client not registered for the refresh_token grant.
@@ -709,11 +709,11 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 	// RFC 8693 Section 2.2.1: a refresh token is only issued in exchange for a refresh token. An ID Token is only issued
 	// in exchange for an ID Token or a refresh token.
 	if requestedType == consts.TokenTypeRFC8693RefreshToken || requestedType == consts.TokenTypeRFC8693IDToken {
-		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], time.Now().UTC().Add(10*time.Minute))
+		subjectTokenType, subjectToken = consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["my-client"], time.Now().UTC().Add(10*time.Minute))
 	}
 
 	if requestedType == consts.TokenTypeRFC8693IDToken {
-		subjectToken = mintScopedRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["custom-lifespan-client"], oauth2.Arguments{consts.ScopeOpenID})
+		subjectToken = mintScopedRefreshToken(context.Background(), coreStrategy, &exchangeMemoryStore{store}, store.Clients["my-client"], oauth2.Arguments{consts.ScopeOpenID})
 	}
 
 	req := &oauth2.AccessRequest{

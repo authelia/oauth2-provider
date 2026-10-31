@@ -27,9 +27,11 @@ type Client interface {
 	// falls back to JWTType.Issuer. An ID Token is always checked against the ID Token issuer.
 	GetSupportedActorTokenIssuers() (issuers []string)
 
-	// GetTokenExchangePermitted reports whether the subject token's original client authorizes the given requesting
-	// client to perform a token exchange targeting the supplied requestedTokenType, which is the resolved
-	// 'requested_token_type' (or the configured default when omitted) and is non-nil at the call site.
+	// GetTokenExchangePermitted reports whether the original client of an access token presented as a 'subject_token' or
+	// 'actor_token' authorizes the given requesting client to perform a token exchange targeting the supplied
+	// requestedTokenType, which is the resolved 'requested_token_type' (or the configured default when omitted) and is
+	// non-nil at the call site. An original client which does not implement this permits no other client, and a refresh
+	// token is only ever exchanged by its original client.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
 	GetTokenExchangePermitted(client oauth2.Client, requestedTokenType oauth2.RFC8693TokenType) (allowed bool)

@@ -507,15 +507,22 @@ func errExchangeTokenValidation(err error) error {
 }
 
 // validateExchangeTokenPolicy applies the client and scope policy for a 'subject_token' or 'actor_token' resolved
-// back to the request it was issued for.
+// back to the request it was issued for. RFC 8693 Section 2.2.2 mandates 'invalid_request' for a token that is
+// unacceptable based on policy.
 //
-// A client may not exchange a subject token issued to itself, and may only request scopes the subject token was
-// granted. Neither rule applies to an actor token, which identifies the acting party rather than the authority
-// being exchanged: that party is normally the requesting client itself, and the issued token's scopes come from
-// the subject token.
+// A refresh token is only accepted from the client it was issued to, as RFC 6749 Section 10.4 requires that binding to
+// be verified. A token of another kind issued to another client is only accepted when that client permits the requesting
+// client with GetTokenExchangePermitted, and never when its client type cannot express a permission.
 //
-// See https://datatracker.ietf.org/doc/html/rfc8693#section-2.1.
-func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole) (err error) {
+// A client may not exchange an access token issued to itself as a subject token, except for a JWT authorization grant.
+// A client may only request scopes the subject token was granted. Neither rule applies to an actor token, which
+// identifies the acting party rather than the authority being exchanged: that party is normally the requesting client
+// itself, and the issued token's scopes come from the subject token.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-10.4
+func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) error {
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()
 	self := client.GetID() == originalClientID
@@ -528,17 +535,19 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 		return nil
 	}
 
+	if refresh && !self {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token presented as %s was not issued to the OAuth 2.0 client.", role.hint()))
+	}
+
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.1
-	if self && role == tokenRoleSubject && authorizationGrantType(ctx, request, config) == nil {
-		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("Clients are not allowed to perform a token exchange on their own tokens."))
+	if self && role == tokenRoleSubject && !refresh && authorizationGrantType(ctx, request, config) == nil {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own access tokens."))
 	}
 
 	// A client implicitly authorizes the exchange of its own token.
 	if !self {
-		if originalClient, ok := original.GetClient().(Client); ok {
-			if !originalClient.GetTokenExchangePermitted(client, resolveRequestedTokenType(ctx, request, config)) {
-				return errors.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), originalClientID))
-			}
+		if originalClient, ok := original.GetClient().(Client); !ok || !originalClient.GetTokenExchangePermitted(client, resolveRequestedTokenType(ctx, request, config)) {
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), originalClientID))
 		}
 	}
 

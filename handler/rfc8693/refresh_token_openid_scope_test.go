@@ -49,7 +49,7 @@ func TestTokenExchangeRequiresOpenIDScopeForAnIDTokenFromARefreshToken(t *testin
 			t.Run(sc.name+"/"+tc.name, func(t *testing.T) {
 				store := sc.newStore()
 				config, strategy := newBindingExchangeConfig()
-				token := mintScopedRefreshToken(t.Context(), strategy, store, store.GetClients()["custom-lifespan-client"], tc.scopes)
+				token := mintScopedRefreshToken(t.Context(), strategy, store, store.GetClients()["my-client"], tc.scopes)
 
 				err := newLifetimeRefreshTokenHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, token, tc.requested))
 

@@ -231,6 +231,8 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 }
 
 func createAccessToken(ctx context.Context, coreStrategy hoauth2.CoreStrategy, storage hoauth2.AccessTokenStorage, client oauth2.Client) string {
+	client = permittingOwner(client)
+
 	request := &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{"password"},
 		Request: oauth2.Request{

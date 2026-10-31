@@ -68,14 +68,45 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 }
 
 // preferDefiniteIntrospectionError chooses which of two introspection failures IntrospectToken should return when
-// neither path succeeded. It returns secondary when primary is oauth2.ErrUnknownRequest and secondary is a definite
-// rejection, otherwise primary, so a token one path recognised and rejected is not reported as merely unknown.
+// neither path succeeded. A rejection of a token one path recognised is preferred, as it holds whatever the other path
+// reports. Otherwise an oauth2.ErrServerError is preferred, as the path that failed could have been the one to accept
+// the token, followed by primary.
 func preferDefiniteIntrospectionError(primary, secondary error) error {
-	if errors.Is(primary, oauth2.ErrUnknownRequest) && !errors.Is(secondary, oauth2.ErrUnknownRequest) {
+	switch {
+	case !isUnrecognizedIntrospectionError(primary) && !errors.Is(primary, oauth2.ErrServerError):
+		return primary
+	case !isUnrecognizedIntrospectionError(secondary) && !errors.Is(secondary, oauth2.ErrServerError):
 		return secondary
+	case errors.Is(primary, oauth2.ErrServerError):
+		return primary
+	case errors.Is(secondary, oauth2.ErrServerError):
+		return secondary
+	default:
+		return primary
+	}
+}
+
+func isUnrecognizedIntrospectionError(err error) bool {
+	return errors.Is(err, oauth2.ErrUnknownRequest) || errors.Is(err, oauth2.ErrNotFound)
+}
+
+// IntrospectionStorageError classifies an error from looking up a token session other than oauth2.ErrNotFound. An
+// oauth2.RFC6749Error is the store's statement about the token, such as oauth2.ErrInactiveToken for a revoked token, and
+// is reported as oauth2.ErrRequestUnauthorized unless it is oauth2.ErrServerError. Any other error is a failure of the
+// store, which says nothing about the token and is reported as oauth2.ErrServerError rather than as an inactive token.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
+func IntrospectionStorageError(err error) *oauth2.RFC6749Error {
+	var (
+		pointer *oauth2.RFC6749Error
+		value   oauth2.RFC6749Error
+	)
+
+	if (errors.As(err, &pointer) || errors.As(err, &value)) && !errors.Is(err, oauth2.ErrServerError) {
+		return oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err)
 	}
 
-	return primary
+	return oauth2.ErrServerError.WithWrap(err).WithDebugError(err)
 }
 
 func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
@@ -132,7 +163,7 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 			return errorsx.WithStack(oauth2.ErrUnknownRequest)
 		}
 
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
+		return errorsx.WithStack(IntrospectionStorageError(err))
 	}
 
 	if err = c.ValidateAccessToken(ctx, original, token); err != nil {
@@ -171,7 +202,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 			return errorsx.WithStack(oauth2.ErrUnknownRequest)
 		}
 
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err))
+		return errorsx.WithStack(IntrospectionStorageError(err))
 	}
 
 	if err = c.ValidateRefreshToken(ctx, original, token); err != nil {

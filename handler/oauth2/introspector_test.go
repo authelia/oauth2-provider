@@ -39,7 +39,7 @@ func TestIntrospectToken(t *testing.T) {
 			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. The request either had a malformed Authorization header or didn't include a bearer token.",
 		},
 		{
-			name: "ShouldFailBecauseTokenSessionCantBeFoundAccessTokenHint",
+			name: "ShouldFailBecauseTheStoreFailsAccessTokenHint",
 			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
 
@@ -63,11 +63,11 @@ func TestIntrospectToken(t *testing.T) {
 				)
 			},
 			hint:     oauth2.AccessToken,
-			error:    oauth2.ErrRequestUnauthorized,
-			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Failed to lookup the Access Token Session.",
+			error:    oauth2.ErrServerError,
+			errorStr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to lookup the Access Token Session.",
 		},
 		{
-			name: "ShouldFailBecauseTokenSessionCantBeFoundRefreshTokenHint",
+			name: "ShouldFailBecauseTheStoreFailsRefreshTokenHint",
 			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
 
@@ -91,8 +91,8 @@ func TestIntrospectToken(t *testing.T) {
 				)
 			},
 			hint:     oauth2.RefreshToken,
-			error:    oauth2.ErrRequestUnauthorized,
-			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Failed to lookup the Refresh Token Session.",
+			error:    oauth2.ErrServerError,
+			errorStr: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to lookup the Refresh Token Session.",
 		},
 		{
 			name: "ShouldFailBecauseValidationFails",

@@ -24,9 +24,12 @@ type ClientRegistrationTokenIntrospector struct {
 	Config   oauth2.RFC7591ClientRegistrationConfigProvider
 }
 
-// IntrospectToken implements oauth2.TokenIntrospector. The scopes filter is intentionally not applied: a client
-// registration token's granted scopes are the ceiling it may grant to clients (see CheckGrantableScopes), not the
-// token's own access.
+// IntrospectToken implements oauth2.TokenIntrospector. A client registration token's granted scopes, audience and
+// resource are the ceilings it may grant to clients (see CheckGrantableScopes), not the token's own access, so the
+// scopes filter is not applied and none of them are reported. RFC 7592 Appendix A limits the token to the client
+// configuration endpoint, which is the only audience reported.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7592#appendix-A
 func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, _ []string) (use oauth2.TokenUse, err error) {
 	signature := v.Strategy.ClientRegistrationTokenSignature(ctx, token)
 
@@ -48,7 +51,19 @@ func (v *ClientRegistrationTokenIntrospector) IntrospectToken(ctx context.Contex
 		return "", err
 	}
 
-	request.Merge(original)
+	reported := &oauth2.Request{
+		ID:          original.GetID(),
+		RequestedAt: original.GetRequestedAt(),
+		Client:      original.GetClient(),
+		Form:        original.GetRequestForm(),
+		Session:     original.GetSession(),
+	}
+
+	if audience := ClientConfigurationURL(v.Config.GetRFC7591ClientRegistrationEndpointURL(ctx), original.GetClient().GetID()); original.GetGrantedAudience().Has(audience) {
+		reported.GrantAudience(audience)
+	}
+
+	request.Merge(reported)
 
 	return oauth2.ClientRegistrationToken, nil
 }
